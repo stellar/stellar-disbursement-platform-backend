@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,44 +37,76 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 	di := NewDisbursementInstructionModel(dbConnectionPool)
 
-	instruction1 := DisbursementInstruction{
+	smsInstruction1 := DisbursementInstruction{
 		Phone:             utils.StringPtr("+380-12-345-671"),
 		Amount:            "100.01",
 		ID:                "123456781",
 		VerificationValue: "1990-01-01",
 	}
 
-	instruction2 := DisbursementInstruction{
+	smsInstruction2 := DisbursementInstruction{
 		Phone:             utils.StringPtr("+380-12-345-672"),
 		Amount:            "100.02",
 		ID:                "123456782",
 		VerificationValue: "1990-01-02",
 	}
 
-	externalPaymentID := "abc123"
-	instruction3 := DisbursementInstruction{
+	smsInstruction3 := DisbursementInstruction{
 		Phone:             utils.StringPtr("+380-12-345-673"),
 		Amount:            "100.03",
 		ID:                "123456783",
 		VerificationValue: "1990-01-03",
-		ExternalPaymentId: &externalPaymentID,
+		ExternalPaymentId: utils.StringPtr("abc123"),
 	}
-	instructions := []*DisbursementInstruction{&instruction1, &instruction2, &instruction3}
-	expectedPhoneNumbers := []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone}
-	expectedExternalIDs := []string{instruction1.ID, instruction2.ID, instruction3.ID}
-	expectedPayments := []string{instruction1.Amount, instruction2.Amount, instruction3.Amount}
-	expectedExternalPaymentIDs := []string{*instruction3.ExternalPaymentId}
+
+	emailInstruction1 := DisbursementInstruction{
+		Email:             utils.StringPtr("receiver1@stellar.org"),
+		Amount:            "100.01",
+		ID:                "123456781",
+		VerificationValue: "1990-01-01",
+	}
+
+	emailInstruction2 := DisbursementInstruction{
+		Email:             utils.StringPtr("receiver2@stellar.org"),
+		Amount:            "100.02",
+		ID:                "123456782",
+		VerificationValue: "1990-01-02",
+	}
+
+	emailInstruction3 := DisbursementInstruction{
+		Email:             utils.StringPtr("receiver3@stellar.org"),
+		Amount:            "100.03",
+		ID:                "123456783",
+		VerificationValue: "1990-01-03",
+	}
+
+	smsInstructions := []*DisbursementInstruction{&smsInstruction1, &smsInstruction2, &smsInstruction3}
+	emailInstructions := []*DisbursementInstruction{&emailInstruction1, &emailInstruction2, &emailInstruction3}
+	expectedPhoneNumbers := []string{*smsInstruction1.Phone, *smsInstruction2.Phone, *smsInstruction3.Phone}
+	expectedEmails := []string{*emailInstruction1.Email, *emailInstruction2.Email, *emailInstruction3.Email}
+	expectedExternalIDs := []string{smsInstruction1.ID, smsInstruction2.ID, smsInstruction3.ID}
+	expectedPayments := []string{smsInstruction1.Amount, smsInstruction2.Amount, smsInstruction3.Amount}
+	expectedExternalPaymentIDs := []string{*smsInstruction3.ExternalPaymentId}
 
 	disbursementUpdate := &DisbursementUpdate{
 		ID:          disbursement.ID,
 		FileName:    "instructions.csv",
-		FileContent: CreateInstructionsFixture(t, instructions),
+		FileContent: CreateInstructionsFixture(t, smsInstructions),
 	}
 
-	t.Run("success", func(t *testing.T) {
+	cleanup := func() {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+	}
+
+	t.Run("success - sms instructions", func(t *testing.T) {
+		defer cleanup()
+
 		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
-			Instructions:            instructions,
+			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
 			ReceiverContactType:     ReceiverContactTypeSMS,
@@ -82,14 +115,14 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify Receivers
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*smsInstruction1.Phone, *smsInstruction2.Phone, *smsInstruction3.Phone})
 		require.NoError(t, err)
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
 		// Verify ReceiverVerifications
 		receiverVerifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, VerificationFieldDateOfBirth)
 		require.NoError(t, err)
-		assertEqualVerifications(t, instructions, receiverVerifications, receivers)
+		assertEqualVerifications(t, smsInstructions, receiverVerifications, receivers)
 
 		// Verify ReceiverWallets
 		receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, wallet.ID)
@@ -116,16 +149,77 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.Equal(t, disbursementUpdate.FileName, actualDisbursement.FileName)
 	})
 
+	t.Run("success - email instructions", func(t *testing.T) {
+		defer cleanup()
+
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            emailInstructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeEmail,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
+		require.NoError(t, err)
+
+		// Verify Receivers
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, []string{*emailInstruction1.Email, *emailInstruction2.Email, *emailInstruction3.Email})
+		require.NoError(t, err)
+		assert.Len(t, receivers, len(expectedEmails))
+		for _, actual := range receivers {
+			assert.NotNil(t, actual.Email)
+			assert.Nil(t, actual.PhoneNumber)
+			assert.Contains(t, expectedEmails, *actual.Email)
+			assert.Contains(t, expectedExternalIDs, actual.ExternalID)
+		}
+	})
+
+	t.Run("failure - email instructions without email fields", func(t *testing.T) {
+		defer cleanup()
+
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            smsInstructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeEmail,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
+		require.ErrorContains(t, err, "receiver does not have an email")
+	})
+
+	t.Run("failure - email instructions with email and phone fields", func(t *testing.T) {
+		defer cleanup()
+
+		emailAndSMSInstructions := []*DisbursementInstruction{
+			{
+				Phone:             utils.StringPtr("+380-12-345-671"),
+				Email:             utils.StringPtr("receiver1@stellar.org"),
+				Amount:            "100.01",
+				ID:                "123456781",
+				VerificationValue: "1990-01-01",
+			},
+		}
+
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            emailAndSMSInstructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeEmail,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
+		errorMsg := "processing receivers: resolving contact information for instruction with ID %s: phone and email are both provided"
+		assert.ErrorContains(t, err, fmt.Sprintf(errorMsg, emailAndSMSInstructions[0].ID))
+	})
+
 	t.Run("success - Not confirmed Verification Value updated", func(t *testing.T) {
-		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer cleanup()
 
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
-			Instructions:            instructions,
+			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
 			ReceiverContactType:     ReceiverContactTypeSMS,
@@ -133,10 +227,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		instruction1.VerificationValue = "1990-01-04"
+		smsInstruction1.VerificationValue = "1990-01-04"
 		err = di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
-			Instructions:            instructions,
+			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
 			ReceiverContactType:     ReceiverContactTypeSMS,
@@ -145,14 +239,14 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify Receivers
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*smsInstruction1.Phone, *smsInstruction2.Phone, *smsInstruction3.Phone})
 		require.NoError(t, err)
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
 		// Verify ReceiverVerifications
 		receiverVerifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, VerificationFieldDateOfBirth)
 		require.NoError(t, err)
-		assertEqualVerifications(t, instructions, receiverVerifications, receivers)
+		assertEqualVerifications(t, smsInstructions, receiverVerifications, receivers)
 
 		// Verify Disbursement
 		actualDisbursement, err := di.disbursementModel.Get(ctx, dbConnectionPool, disbursement.ID)
@@ -163,6 +257,8 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	})
 
 	t.Run("success - existing receiver wallet", func(t *testing.T) {
+		defer cleanup()
+
 		// New instructions
 		readyDisbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, &DisbursementModel{dbConnectionPool: dbConnectionPool}, &Disbursement{
 			Name:    "readyDisbursement",
@@ -275,7 +371,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	t.Run("failure - Too many instructions", func(t *testing.T) {
 		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
-			Instructions:            instructions,
+			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
 			MaxNumberOfInstructions: 2,
@@ -284,17 +380,14 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	})
 
 	t.Run("failure - Confirmed Verification Value not matching", func(t *testing.T) {
-		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer cleanup()
 
 		instruction4 := DisbursementInstruction{
 			Phone:             utils.StringPtr("+380-12-345-674"),
 			Amount:            "100.04",
 			ID:                "123456784",
 			VerificationValue: "1990-01-04",
-			ExternalPaymentId: &externalPaymentID,
+			ExternalPaymentId: utils.StringPtr("abc123"),
 		}
 
 		instruction5 := DisbursementInstruction{
@@ -302,7 +395,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Amount:            "100.05",
 			ID:                "123456785",
 			VerificationValue: "1990-01-05",
-			ExternalPaymentId: &externalPaymentID,
+			ExternalPaymentId: utils.StringPtr("abc123"),
 		}
 
 		instruction6 := DisbursementInstruction{
@@ -310,13 +403,13 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Amount:            "100.06",
 			ID:                "123456786",
 			VerificationValue: "1990-01-06",
-			ExternalPaymentId: &externalPaymentID,
+			ExternalPaymentId: utils.StringPtr("abc123"),
 		}
 
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
-			Instructions:            instructions,
+			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
 			ReceiverContactType:     ReceiverContactTypeSMS,
@@ -324,7 +417,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone, *instruction4.Phone, *instruction5.Phone, *instruction6.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*smsInstruction1.Phone, *smsInstruction2.Phone, *smsInstruction3.Phone, *instruction4.Phone, *instruction5.Phone, *instruction6.Phone})
 		require.NoError(t, err)
 		receiversMap := make(map[string]*Receiver)
 		for _, receiver := range receivers {
@@ -332,13 +425,13 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		// confirm a verification
-		ConfirmVerificationForRecipient(t, ctx, dbConnectionPool, receiversMap[*instruction3.Phone].ID)
+		ConfirmVerificationForRecipient(t, ctx, dbConnectionPool, receiversMap[*smsInstruction3.Phone].ID)
 
 		// process instructions with mismatched verification values
-		instruction3.VerificationValue = "1990-01-07"
+		smsInstruction3.VerificationValue = "1990-01-07"
 		err = di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
-			Instructions:            instructions,
+			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
 			ReceiverContactType:     ReceiverContactTypeSMS,

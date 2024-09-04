@@ -116,20 +116,20 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, opts Disb
 
 	// We need all the following logic to be executed in one transaction.
 	return db.RunInTransaction(ctx, di.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		// Step 1: Fetch all receivers by phone number and create missing ones
-		receiverMap, err := di.processReceivers(ctx, dbTx, opts.Instructions, opts.ReceiverContactType)
+		// Step 1: Fetch all receivers by contact information (phone, email, etc.) and create missing ones
+		receiversByIDMap, err := di.reconcileExistingReceiversWithInstructions(ctx, dbTx, opts.Instructions, opts.ReceiverContactType)
 		if err != nil {
 			return fmt.Errorf("processing receivers: %w", err)
 		}
 
 		// Step 2: Fetch all receiver verifications and create missing ones.
-		err = di.processReceiverVerifications(ctx, dbTx, receiverMap, opts.Instructions, opts.Disbursement, opts.ReceiverContactType)
+		err = di.processReceiverVerifications(ctx, dbTx, receiversByIDMap, opts.Instructions, opts.Disbursement, opts.ReceiverContactType)
 		if err != nil {
 			return fmt.Errorf("processing receiver verifications: %w", err)
 		}
 
 		// Step 3: Fetch all receiver wallets and create missing ones
-		receiverIDToReceiverWalletIDMap, err := di.processReceiverWallets(ctx, dbTx, receiverMap, opts.Disbursement)
+		receiverIDToReceiverWalletIDMap, err := di.processReceiverWallets(ctx, dbTx, receiversByIDMap, opts.Disbursement)
 		if err != nil {
 			return fmt.Errorf("processing receiver wallets: %w", err)
 		}
@@ -140,7 +140,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, opts Disb
 		}
 
 		// Step 5: Create payments for all receivers
-		if err = di.createPayments(ctx, dbTx, receiverMap, receiverIDToReceiverWalletIDMap, opts.Instructions, opts.Disbursement); err != nil {
+		if err = di.createPayments(ctx, dbTx, receiversByIDMap, receiverIDToReceiverWalletIDMap, opts.Instructions, opts.Disbursement); err != nil {
 			return fmt.Errorf("creating payments: %w", err)
 		}
 
@@ -158,7 +158,8 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, opts Disb
 	})
 }
 
-func (di DisbursementInstructionModel) processReceivers(ctx context.Context, dbTx db.DBTransaction, instructions []*DisbursementInstruction, contactType ReceiverContactType) (map[string]*Receiver, error) {
+// reconcileExistingReceiversWithInstructions fetches all existing receivers by their contact information and creates missing ones.
+func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstructions(ctx context.Context, dbTx db.DBTransaction, instructions []*DisbursementInstruction, contactType ReceiverContactType) (map[string]*Receiver, error) {
 	// Step 1: Fetch existing receivers
 	contacts := make([]string, 0, len(instructions))
 	for _, instruction := range instructions {
@@ -175,20 +176,19 @@ func (di DisbursementInstructionModel) processReceivers(ctx context.Context, dbT
 	}
 
 	// Step 2: Create maps for quick lookup
-	existingReceiversMap := make(map[string]*Receiver)
+	existingReceiversByContactMap := make(map[string]*Receiver)
 	for _, receiver := range existingReceivers {
 		contact, contactErr := receiver.ContactByType(contactType)
 		if contactErr != nil {
 			return nil, fmt.Errorf("receiver with ID %s has no contact information: %w", receiver.ID, contactErr)
 		}
-		existingReceiversMap[contact] = receiver
+		existingReceiversByContactMap[contact] = receiver
 	}
 
-	// Step 3: Process each instruction
+	// Step 3: Create missing receivers from instructions
 	for _, instruction := range instructions {
-		processErr := di.processInstruction(ctx, dbTx, instruction, existingReceiversMap)
-		if processErr != nil {
-			return nil, fmt.Errorf("processing instruction: %w", processErr)
+		if createErr := di.createReceiverFromInstructionIfNeeded(ctx, dbTx, instruction, existingReceiversByContactMap); createErr != nil {
+			return nil, fmt.Errorf("creating receiver from instruction: %w", createErr)
 		}
 	}
 
@@ -202,23 +202,25 @@ func (di DisbursementInstructionModel) processReceivers(ctx context.Context, dbT
 		return nil, fmt.Errorf("receiver count mismatch after processing instructions")
 	}
 
-	receiversMap := make(map[string]*Receiver)
+	receiversByIDMap := make(map[string]*Receiver)
 	for _, receiver := range receivers {
-		receiversMap[receiver.ID] = receiver
+		receiversByIDMap[receiver.ID] = receiver
 	}
 
-	return receiversMap, nil
+	return receiversByIDMap, nil
 }
 
-func (di DisbursementInstructionModel) processInstruction(ctx context.Context, dbTx db.DBTransaction, instruction *DisbursementInstruction, receiverMap map[string]*Receiver) error {
+// createReceiverFromInstructionIfNeeded create a new receiver if it doesn't exist for the given instruction.
+func (di DisbursementInstructionModel) createReceiverFromInstructionIfNeeded(ctx context.Context, dbTx db.DBTransaction, instruction *DisbursementInstruction, existingReceiversByContactMap map[string]*Receiver) error {
 	contact, err := instruction.Contact()
 	if err != nil {
 		return fmt.Errorf("resolving contact information for instruction with ID %s: %w", instruction.ID, err)
 	}
 
-	_, exists := receiverMap[contact]
+	_, exists := existingReceiversByContactMap[contact]
 	if !exists {
 		receiverInsert := ReceiverInsert{
+			Email:       instruction.Email,
 			PhoneNumber: instruction.Phone,
 			ExternalId:  &instruction.ID,
 		}
