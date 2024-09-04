@@ -275,3 +275,50 @@ func TestStringPtr(t *testing.T) {
 		assert.Equal(t, "initial string", *result)
 	})
 }
+
+func Test_StringPtrEq(t *testing.T) {
+	tests := []struct {
+		name     string
+		sp       *string
+		s        string
+		expected bool
+	}{
+		{
+			name:     "nil pointer",
+			sp:       nil,
+			s:        "test",
+			expected: false,
+		},
+		{
+			name:     "equal strings",
+			sp:       StringPtr("test"),
+			s:        "test",
+			expected: true,
+		},
+		{
+			name:     "different strings",
+			sp:       StringPtr("hello"),
+			s:        "world",
+			expected: false,
+		},
+		{
+			name:     "empty string pointer",
+			sp:       StringPtr(""),
+			s:        "",
+			expected: true,
+		},
+		{
+			name:     "empty string value",
+			sp:       StringPtr("not empty"),
+			s:        "",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StringPtrEq(tt.sp, tt.s)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

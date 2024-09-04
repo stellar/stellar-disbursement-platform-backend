@@ -155,6 +155,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			return fmt.Errorf("executing registration message template: %w", err)
 		}
 
+		// TODO: SDP-1316 - add a Title. Consider if we should make the title configurable.
 		msg := message.Message{
 			Message: content.String(),
 		}

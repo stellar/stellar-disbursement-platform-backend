@@ -364,8 +364,7 @@ func findReceiverByInstruction(receiverMap map[string]*Receiver, instruction *Di
 	}
 
 	for _, receiver := range receiverMap {
-		if (receiver.PhoneNumber != nil && contact == *receiver.PhoneNumber) ||
-			(receiver.Email != nil && contact == *receiver.Email) {
+		if utils.StringPtrEq(receiver.Email, contact) || utils.StringPtrEq(receiver.PhoneNumber, contact) {
 			return receiver
 		}
 	}

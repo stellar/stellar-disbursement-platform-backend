@@ -375,7 +375,7 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 	query := `
 		INSERT INTO receivers (
 			phone_number,
-		    email,
+			email,
 			external_id
 		) VALUES (
 			$1,

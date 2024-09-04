@@ -97,7 +97,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			}
 		}
 
-		receiverUpdate := data.ReceiverUpdate{}
+		var receiverUpdate data.ReceiverUpdate
 		if reqBody.Email != "" {
 			receiverUpdate.Email = &reqBody.Email
 		}

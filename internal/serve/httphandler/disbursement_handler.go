@@ -484,14 +484,12 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, verificatio
 
 // resolveReceiverContactType determines the type of contact information in the CSV file
 func resolveReceiverContactType(file io.Reader) (data.ReceiverContactType, error) {
-	csvReader := csv.NewReader(file)
-	headers, err := csvReader.Read()
+	headers, err := csv.NewReader(file).Read()
 	if err != nil {
 		return "", fmt.Errorf("reading csv headers: %w", err)
 	}
 
-	hasPhone := false
-	hasEmail := false
+	var hasPhone, hasEmail bool
 	for _, header := range headers {
 		switch strings.ToLower(strings.TrimSpace(header)) {
 		case "phone":
@@ -499,20 +497,20 @@ func resolveReceiverContactType(file io.Reader) (data.ReceiverContactType, error
 		case "email":
 			hasEmail = true
 		}
-		if hasPhone && hasEmail {
-			return "", fmt.Errorf("csv file must contain either a phone or email column, not both")
-		}
 	}
 
 	if !hasPhone && !hasEmail {
-		return "", fmt.Errorf("csv file must contain at least one of the following columns: phone, email")
+		return "", fmt.Errorf("csv file must contain at least one of the following columns [phone, email]")
 	}
 
-	if hasPhone {
+	switch {
+	case hasPhone && hasEmail:
+		return "", fmt.Errorf("csv file must contain either a phone or email column, not both")
+	case hasPhone:
 		return data.ReceiverContactTypeSMS, nil
-	}
-	if hasEmail {
+	case hasEmail:
 		return data.ReceiverContactTypeEmail, nil
+	default:
+		return "", fmt.Errorf("csv file must contain either a phone or email column")
 	}
-	return "", fmt.Errorf("csv file must contain either a phone or email column")
 }
