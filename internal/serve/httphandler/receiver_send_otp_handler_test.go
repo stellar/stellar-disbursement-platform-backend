@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/sirupsen/logrus"
+	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,7 +26,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
@@ -390,4 +395,261 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 	mockMessageDispatcher.AssertExpectations(t)
 	reCAPTCHAValidator.AssertExpectations(t)
+}
+
+func Test_newReceiverSendOTPResponseBody(t *testing.T) {
+	for _, otpType := range getAllowedOTPRegistrationTypes() {
+		for _, verificationType := range data.GetAllVerificationTypes() {
+			t.Run(fmt.Sprintf("%s/%s", otpType, verificationType), func(t *testing.T) {
+				gotBody := newReceiverSendOTPResponseBody(otpType, verificationType)
+				wantBody := ReceiverSendOTPResponseBody{
+					Message:           fmt.Sprintf("if your %s is registered, you'll receive an OTP", otpType),
+					VerificationField: verificationType,
+				}
+				require.Equal(t, wantBody, gotBody)
+			})
+		}
+	}
+}
+
+func Test_ReceiverSendOTPHandler_sendSMSMessage(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	organization, err := models.Organizations.Get(ctx)
+	require.NoError(t, err)
+	defaultOTPMessageTemplate := organization.OTPMessageTemplate
+
+	phoneNumber := "+380443973607"
+	otp := "246810"
+
+	testCases := []struct {
+		name                   string
+		overrideOrgOTPTemplate string
+		wantMessage            string
+		shouldDispatcherFail   bool
+	}{
+		{
+			name:                   "dispacher fails",
+			overrideOrgOTPTemplate: defaultOTPMessageTemplate,
+			wantMessage:            fmt.Sprintf("246810 is your %s phone verification code. If you did not request this code, please ignore. Do not share your code with anyone.", organization.Name),
+		},
+		{
+			name:                   "🎉 successful with default message",
+			overrideOrgOTPTemplate: defaultOTPMessageTemplate,
+			wantMessage:            fmt.Sprintf("246810 is your %s phone verification code. If you did not request this code, please ignore. Do not share your code with anyone.", organization.Name),
+		},
+		{
+			name:                   "🎉 successful with custom message and pre-existing OTP tag",
+			overrideOrgOTPTemplate: "Here's your code: {{.OTP}}.",
+			wantMessage:            "Here's your code: 246810. If you did not request this code, please ignore. Do not share your code with anyone.",
+		},
+		{
+			name:                   "🎉 successful with custom message and NO pre-existing OTP tag",
+			overrideOrgOTPTemplate: "is your one-time password.",
+			wantMessage:            "246810 is your one-time password. If you did not request this code, please ignore. Do not share your code with anyone.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockMessageDispatcher := message.NewMockMessageDispatcher(t)
+			mockCall := mockMessageDispatcher.
+				On("SendMessage",
+					mock.Anything,
+					message.Message{ToPhoneNumber: phoneNumber, Message: tc.wantMessage},
+					[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail})
+			if !tc.shouldDispatcherFail {
+				mockCall.Return(nil).Once()
+			} else {
+				mockCall.Return(errors.New("error sending message")).Once()
+			}
+
+			handler := ReceiverSendOTPHandler{
+				Models:            models,
+				MessageDispatcher: mockMessageDispatcher,
+			}
+
+			err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				OTPMessageTemplate: &tc.overrideOrgOTPTemplate,
+			})
+			require.NoError(t, err)
+
+			err := handler.sendSMSMessage(ctx, phoneNumber, otp)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func Test_ReceiverSendOTPHandler_handleOTPForSMSReceiver(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
+	phoneNumberWithWallet := "+41555551111"
+	phoneNumberWithoutWallet := "+41555551010"
+	notFoundPhoneNumber := "+41555550000"
+	// incorrectDoB := "2024-09-07"
+
+	testCases := []struct {
+		name                  string
+		phoneNumber           string
+		dateOfBirth           string
+		sep24ClientDomain     string
+		prepareMocksFn        func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher)
+		assertLogsFn          func(t *testing.T, entries []logrus.Entry)
+		wantVerificationField data.VerificationType
+		wantHttpErr           *httperror.HTTPError
+	}{
+		{
+			name:                  "🔴 error if phone_number is empty",
+			phoneNumber:           "",
+			wantVerificationField: data.VerificationTypeDateOfBirth,
+			wantHttpErr: httperror.BadRequest("", utils.ErrEmptyPhoneNumber, map[string]interface{}{
+				"phone_number": utils.ErrEmptyPhoneNumber.Error(),
+			}),
+		},
+		{
+			name:                  "🔴 error if phone_number is invalid",
+			phoneNumber:           "invalid",
+			wantVerificationField: data.VerificationTypeDateOfBirth,
+			wantHttpErr: httperror.BadRequest("", utils.ErrInvalidE164PhoneNumber, map[string]interface{}{
+				"phone_number": utils.ErrInvalidE164PhoneNumber.Error(),
+			}),
+		},
+		{
+			name:        "🟡 false positive if GetLatestByPhoneNumber returns no results",
+			phoneNumber: notFoundPhoneNumber,
+			assertLogsFn: func(t *testing.T, entries []logrus.Entry) {
+				truncatedPhoneNumber := utils.TruncateString(notFoundPhoneNumber, 3)
+				wantLog := fmt.Sprintf("cannot find latest receiver verification for phone number %s: %v", truncatedPhoneNumber, data.ErrRecordNotFound)
+				assert.Contains(t, entries[0].Message, wantLog)
+			},
+			wantVerificationField: data.VerificationTypeDateOfBirth,
+			wantHttpErr:           nil,
+		},
+		{
+			name:              "🟡 false positive if UpdateOTPByReceiverPhoneNumberAndWalletDomain doesn't find a {phone_number,client_domain} match (client_domain)",
+			phoneNumber:       phoneNumberWithWallet,
+			sep24ClientDomain: "incorrect.test",
+			assertLogsFn: func(t *testing.T, entries []logrus.Entry) {
+				truncatedPhoneNumber := utils.TruncateString(phoneNumberWithWallet, 3)
+				wantLog := fmt.Sprintf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client domain (%s) are valid", truncatedPhoneNumber, "incorrect.test")
+				assert.Contains(t, entries[0].Message, wantLog)
+			},
+			wantVerificationField: data.VerificationTypeDateOfBirth,
+			wantHttpErr:           nil,
+		},
+		{
+			name:              "🟡 false positive if UpdateOTPByReceiverPhoneNumberAndWalletDomain doesn't find a {phone_number,client_domain} match (phone_number)",
+			phoneNumber:       phoneNumberWithoutWallet,
+			sep24ClientDomain: "correct.test",
+			assertLogsFn: func(t *testing.T, entries []logrus.Entry) {
+				truncatedPhoneNumber := utils.TruncateString(phoneNumberWithoutWallet, 3)
+				wantLog := fmt.Sprintf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client domain (%s) are valid", truncatedPhoneNumber, "correct.test")
+				assert.Contains(t, entries[0].Message, wantLog)
+			},
+			wantVerificationField: data.VerificationTypeDateOfBirth,
+			wantHttpErr:           nil,
+		},
+		{
+			name:              "🔴 error if sendSMSMessage fails",
+			phoneNumber:       phoneNumberWithWallet,
+			sep24ClientDomain: "correct.test",
+			prepareMocksFn: func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher) {
+				mockMessageDispatcher.
+					On("SendMessage",
+						mock.Anything,
+						mock.AnythingOfType("message.Message"),
+						[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+					Return(errors.New("error sending message")).
+					Once()
+			},
+			wantVerificationField: data.VerificationTypeDateOfBirth,
+			wantHttpErr: func() *httperror.HTTPError {
+				err := fmt.Errorf("sending SMS message: %w", fmt.Errorf("cannot send OTP message: %w", errors.New("error sending message")))
+				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
+			}(),
+		},
+		{
+			name:              "🟢 successful",
+			phoneNumber:       phoneNumberWithWallet,
+			sep24ClientDomain: "correct.test",
+			prepareMocksFn: func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher) {
+				mockMessageDispatcher.
+					On("SendMessage",
+						mock.Anything,
+						mock.AnythingOfType("message.Message"),
+						[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+					Return(nil).
+					Once()
+			},
+			wantVerificationField: data.VerificationTypePin,
+			wantHttpErr:           nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+
+			handler := ReceiverSendOTPHandler{Models: models}
+			if tc.prepareMocksFn != nil {
+				mockMessageDispatcher := message.NewMockMessageDispatcher(t)
+				tc.prepareMocksFn(t, mockMessageDispatcher)
+				handler.MessageDispatcher = mockMessageDispatcher
+			}
+
+			// Setup receiver with Verification but without wallet:
+			receiverWithoutWallet := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumberWithoutWallet})
+			_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+				ReceiverID:        receiverWithoutWallet.ID,
+				VerificationField: data.VerificationTypePin,
+				VerificationValue: "123456",
+			})
+
+			// Setup receiver with Verification AND wallet:
+			receiverWithWallet := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumberWithWallet})
+			_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+				ReceiverID:        receiverWithWallet.ID,
+				VerificationField: data.VerificationTypePin,
+				VerificationValue: "123456",
+			})
+			_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithWallet.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+			getEntries := log.DefaultLogger.StartTest(logrus.DebugLevel)
+
+			phoneNumber := tc.phoneNumber
+			verificationField, httpErr := handler.handleOTPForSMSReceiver(ctx, phoneNumber, tc.sep24ClientDomain)
+			if tc.wantHttpErr != nil {
+				require.NotNil(t, httpErr)
+				assert.Equal(t, *tc.wantHttpErr, *httpErr)
+				assert.Equal(t, tc.wantVerificationField, verificationField)
+			} else {
+				require.Nil(t, httpErr)
+				assert.Equal(t, tc.wantVerificationField, verificationField)
+			}
+
+			entries := getEntries()
+			if tc.assertLogsFn != nil {
+				tc.assertLogsFn(t, entries)
+			}
+		})
+	}
 }

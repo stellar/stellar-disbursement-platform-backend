@@ -20,16 +20,24 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-// OTPMessageDisclaimer contains disclaimer text that needs to be added as part of the OTP message to remind the
-// receiver how sensitive the data is.
-const OTPMessageDisclaimer = " If you did not request this code, please ignore. Do not share your code with anyone."
-
 type OTPRegistrationType string
 
 const (
 	OTPRegistrationTypeSMS   OTPRegistrationType = "phone_number"
 	OTPRegistrationTypeEmail OTPRegistrationType = "email"
 )
+
+func (t OTPRegistrationType) String() string {
+	return strings.ReplaceAll(string(t), "_", " ")
+}
+
+func getAllowedOTPRegistrationTypes() []OTPRegistrationType {
+	return []OTPRegistrationType{OTPRegistrationTypeSMS, OTPRegistrationTypeEmail}
+}
+
+// OTPMessageDisclaimer contains disclaimer text that needs to be added as part of the OTP message to remind the
+// receiver how sensitive the data is.
+const OTPMessageDisclaimer = " If you did not request this code, please ignore. Do not share your code with anyone."
 
 type ReceiverSendOTPHandler struct {
 	Models             *data.Models
@@ -110,7 +118,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	var httpErr *httperror.HTTPError
 	if receiverSendOTPRequest.PhoneNumber != "" {
 		otpRegistrationType = OTPRegistrationTypeSMS
-		verificationField, httpErr = h.handleOTPForSMSReceiver(ctx, sep24Claims, receiverSendOTPRequest)
+		verificationField, httpErr = h.handleOTPForSMSReceiver(ctx, receiverSendOTPRequest.PhoneNumber, sep24Claims.ClientDomainClaim)
 	} else {
 		otpRegistrationType = OTPRegistrationTypeEmail
 		verificationField, httpErr = h.HandleOTPForEmailReceiver(ctx, sep24Claims, receiverSendOTPRequest)
@@ -141,51 +149,53 @@ func newReceiverSendOTPResponseBody(otpRegistrationType OTPRegistrationType, ver
 }
 
 // handleOTPForSMSReceiver handles the OTP generation and sending for a receiver with a phone number through SMS.
-func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(ctx context.Context, sep24Claims *anchorplatform.SEP24JWTClaims, receiverSendOTPRequest ReceiverSendOTPRequest) (data.VerificationType, *httperror.HTTPError) {
-	verificationField := data.VerificationTypeDateOfBirth
+func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(
+	ctx context.Context,
+	phoneNumber string,
+	sep24ClientDomain string,
+) (data.VerificationType, *httperror.HTTPError) {
+	placeholderVerificationField := data.VerificationTypeDateOfBirth
 	var err error
 
 	// Validate phone number
-	truncatedPhoneNumber := utils.TruncateString(receiverSendOTPRequest.PhoneNumber, 3)
-	if receiverSendOTPRequest.PhoneNumber != "" {
-		if err = utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); err != nil {
-			extras := map[string]interface{}{"phone_number": err.Error()}
-			return verificationField, httperror.BadRequest("request invalid", err, extras)
-		}
+	truncatedPhoneNumber := utils.TruncateString(phoneNumber, 3)
+	if err = utils.ValidatePhoneNumber(phoneNumber); err != nil {
+		extras := map[string]interface{}{"phone_number": err.Error()}
+		return placeholderVerificationField, httperror.BadRequest("", err, extras)
 	}
 
 	// get receiverVerification by that value phoneNumber
-	if receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber); err != nil {
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, phoneNumber)
+	if err != nil {
 		err = fmt.Errorf("cannot find latest receiver verification for phone number %s: %w", truncatedPhoneNumber, err)
 		log.Ctx(ctx).Warn(err)
-		return verificationField, nil
-	} else {
-		verificationField = receiverVerification.VerificationField
+		return placeholderVerificationField, nil
 	}
 
 	// Generate a new 6 digits OTP
 	newOTP, err := utils.RandomString(6, utils.NumberBytes)
 	if err != nil {
-		return verificationField, httperror.InternalError(ctx, "Cannot generate OTP for receiver wallet", err, nil)
+		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot generate OTP for receiver wallet", err, nil)
 	}
 
 	// Update OTP for receiver wallet
-	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiverSendOTPRequest.PhoneNumber, sep24Claims.ClientDomainClaim, newOTP)
+	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, phoneNumber, sep24ClientDomain, newOTP)
 	if err != nil {
-		return verificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil)
+		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil)
 	}
 	if numberOfUpdatedRows < 1 {
-		log.Ctx(ctx).Warnf("updated no rows in ReceiverSendOTPHandler, please verify if the provided OTP, phone number (%s) and client domain (%s) are valid", truncatedPhoneNumber, sep24Claims.ClientDomainClaim)
-		return verificationField, nil
+		log.Ctx(ctx).Warnf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client domain (%s) are valid", truncatedPhoneNumber, sep24ClientDomain)
+		return placeholderVerificationField, nil
 	}
 
 	// Send OTP message
-	err = h.sendSMSMessage(ctx, receiverSendOTPRequest.PhoneNumber, newOTP)
+	err = h.sendSMSMessage(ctx, phoneNumber, newOTP)
 	if err != nil {
-		return verificationField, httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
+		err = fmt.Errorf("sending SMS message: %w", err)
+		return placeholderVerificationField, httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
 	}
 
-	return verificationField, nil
+	return receiverVerification.VerificationField, nil
 }
 
 // sendSMSMessage sends an OTP through an SMS message to the provided phone number.
