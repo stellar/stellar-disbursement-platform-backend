@@ -93,7 +93,7 @@ type DisbursementInstructionsOpts struct {
 
 // ProcessAll Processes all disbursement instructions and persists the data to the database.
 //
-//	|--- For line in the instructions:
+//	|--- For each line in the instructions:
 //	|    |--- Check if a receiver exists by their contact information (phone, email).
 //	|    |    |--- If a receiver does not exist, create one.
 //	|    |--- For each receiver:
