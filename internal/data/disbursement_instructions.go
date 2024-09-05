@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -110,7 +112,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, opts Disb
 			return fmt.Errorf("processing receiver wallets: %w", err)
 		}
 
-		// Step 4: Delete all payments tied to this disbursement for each receiver in one call
+		// Step 4: Delete all pre-existing payments tied to this disbursement for each receiver in one call
 		if err = di.paymentModel.DeleteAllForDisbursement(ctx, dbTx, opts.Disbursement.ID); err != nil {
 			return fmt.Errorf("deleting payments: %w", err)
 		}
@@ -146,7 +148,7 @@ func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstruction
 		contacts = append(contacts, contact)
 	}
 
-	existingReceivers, err := di.receiverModel.GetByContacts(ctx, dbTx, contacts)
+	existingReceivers, err := di.receiverModel.GetByContacts(ctx, dbTx, contacts...)
 	if err != nil {
 		return nil, fmt.Errorf("fetching receivers by contacts: %w", err)
 	}
@@ -156,7 +158,7 @@ func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstruction
 	for _, receiver := range existingReceivers {
 		contact := receiver.ContactByType(contactType)
 		if contact == "" {
-			return nil, fmt.Errorf("receiver with ID %s has no contact information for contact type %s: %w", receiver.ID, contactType, err)
+			return nil, fmt.Errorf("receiver with ID %s has no contact information for contact type %s", receiver.ID, contactType)
 		}
 		existingReceiversByContactMap[contact] = receiver
 	}
@@ -169,7 +171,7 @@ func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstruction
 	}
 
 	// Step 4: Fetch all receivers again
-	receivers, err := di.receiverModel.GetByContacts(ctx, dbTx, contacts)
+	receivers, err := di.receiverModel.GetByContacts(ctx, dbTx, contacts...)
 	if err != nil {
 		return nil, fmt.Errorf("fetching receivers by contact information: %w", err)
 	}
@@ -215,10 +217,7 @@ func (di DisbursementInstructionModel) createReceiverFromInstructionIfNeeded(ctx
 }
 
 func (di DisbursementInstructionModel) processReceiverVerifications(ctx context.Context, dbTx db.DBTransaction, receiversByIDMap map[string]*Receiver, instructions []*DisbursementInstruction, disbursement *Disbursement, contactType ReceiverContactType) error {
-	receiverIDs := make([]string, 0, len(receiversByIDMap))
-	for id := range receiversByIDMap {
-		receiverIDs = append(receiverIDs, id)
-	}
+	receiverIDs := maps.Keys(receiversByIDMap)
 
 	verifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbTx, receiverIDs, disbursement.VerificationField)
 	if err != nil {
@@ -274,11 +273,8 @@ func (di DisbursementInstructionModel) processReceiverVerifications(ctx context.
 	return nil
 }
 
-func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Context, dbTx db.DBTransaction, receiverMap map[string]*Receiver, disbursement *Disbursement) (map[string]string, error) {
-	receiverIDs := make([]string, 0, len(receiverMap))
-	for id := range receiverMap {
-		receiverIDs = append(receiverIDs, id)
-	}
+func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Context, dbTx db.DBTransaction, receiversByIDMap map[string]*Receiver, disbursement *Disbursement) (map[string]string, error) {
+	receiverIDs := maps.Keys(receiversByIDMap)
 
 	receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbTx, receiverIDs, disbursement.Wallet.ID)
 	if err != nil {
@@ -289,20 +285,20 @@ func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Contex
 		receiverIDToReceiverWalletIDMap[receiverWallet.Receiver.ID] = receiverWallet.ID
 	}
 
-	for receiverId := range receiverMap {
-		receiverWalletId, exists := receiverIDToReceiverWalletIDMap[receiverId]
+	for receiverID := range receiversByIDMap {
+		receiverWalletID, exists := receiverIDToReceiverWalletIDMap[receiverID]
 		if !exists {
 			receiverWalletInsert := ReceiverWalletInsert{
-				ReceiverID: receiverId,
+				ReceiverID: receiverID,
 				WalletID:   disbursement.Wallet.ID,
 			}
 			rwID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
 			if insertErr != nil {
-				return nil, fmt.Errorf("inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
+				return nil, fmt.Errorf("inserting receiver wallet for receiver id %s: %w", receiverID, insertErr)
 			}
-			receiverIDToReceiverWalletIDMap[receiverId] = rwID
+			receiverIDToReceiverWalletIDMap[receiverID] = rwID
 		} else {
-			_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
+			_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletID)
 			if retryErr != nil {
 				if !errors.Is(retryErr, ErrRecordNotFound) {
 					return nil, fmt.Errorf("retrying invitation: %w", retryErr)

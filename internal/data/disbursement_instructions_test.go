@@ -114,7 +114,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify Receivers
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone})
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone)
 		require.NoError(t, err)
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
@@ -162,7 +162,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify Receivers
-		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, []string{emailInstruction1.Email, emailInstruction2.Email, emailInstruction3.Email})
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, emailInstruction1.Email, emailInstruction2.Email, emailInstruction3.Email)
 		require.NoError(t, err)
 		assert.Len(t, receivers, len(expectedEmails))
 		for _, actual := range receivers {
@@ -237,7 +237,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify Receivers
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone})
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone)
 		require.NoError(t, err)
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
@@ -306,7 +306,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{newInstruction1.Phone, newInstruction2.Phone, newInstruction3.Phone})
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, newInstruction1.Phone, newInstruction2.Phone, newInstruction3.Phone)
 		require.NoError(t, err)
 		assertEqualReceivers(t, newExpectedPhoneNumbers, newExpectedExternalIDs, receivers)
 
@@ -415,7 +415,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone, instruction4.Phone, instruction5.Phone, instruction6.Phone})
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone, instruction4.Phone, instruction5.Phone, instruction6.Phone)
 		require.NoError(t, err)
 		receiversMap := make(map[string]*Receiver)
 		for _, receiver := range receivers {

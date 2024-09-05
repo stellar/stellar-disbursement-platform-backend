@@ -284,7 +284,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		DBConnectionPool: v.Models.DBConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
 			// STEP 2: find the receivers with the given phone number
-			receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
+			receivers, err := v.Models.Receiver.GetByContacts(ctx, dbTx, receiverRegistrationRequest.PhoneNumber)
 			if err != nil {
 				err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
 				return nil, err

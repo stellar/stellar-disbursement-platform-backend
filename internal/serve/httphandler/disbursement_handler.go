@@ -500,11 +500,9 @@ func resolveReceiverContactType(file io.Reader) (data.ReceiverContactType, error
 		}
 	}
 
-	if !hasPhone && !hasEmail {
-		return "", fmt.Errorf("csv file must contain at least one of the following columns [phone, email]")
-	}
-
 	switch {
+	case !hasPhone && !hasEmail:
+		return "", fmt.Errorf("csv file must contain at least one of the following columns [phone, email]")
 	case hasPhone && hasEmail:
 		return "", fmt.Errorf("csv file must contain either a phone or email column, not both")
 	case hasPhone:

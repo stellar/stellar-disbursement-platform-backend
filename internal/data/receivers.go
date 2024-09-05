@@ -84,11 +84,7 @@ type ReceiverInsert struct {
 	ExternalId  *string `db:"external_id"`
 }
 
-type ReceiverUpdate struct {
-	PhoneNumber *string `db:"phone_number"`
-	Email       *string `db:"email"`
-	ExternalId  *string `db:"external_id"`
-}
+type ReceiverUpdate ReceiverInsert
 
 func (ru ReceiverUpdate) IsEmpty() bool {
 	return ru.Email == nil && ru.ExternalId == nil && ru.PhoneNumber == nil
@@ -435,30 +431,8 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 	return nil
 }
 
-// GetByPhoneNumbers search for receivers by phone numbers
-func (r *ReceiverModel) GetByPhoneNumbers(ctx context.Context, sqlExec db.SQLExecuter, ids []string) ([]*Receiver, error) {
-	receivers := []*Receiver{}
-
-	query := `
-	SELECT
-		r.id,
-		COALESCE(r.phone_number, '') as phone_number,
-		COALESCE(r.email, '') as email,
-		r.external_id,
-		r.created_at,
-		r.updated_at
-	FROM receivers r
-	WHERE r.phone_number = ANY($1)
-	`
-	err := sqlExec.SelectContext(ctx, &receivers, query, pq.Array(ids))
-	if err != nil {
-		return nil, fmt.Errorf("error fetching receiver ids by phone numbers: %w", err)
-	}
-	return receivers, nil
-}
-
-// GetByContacts search for receivers by phone numbers and email
-func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecuter, contacts []string) ([]*Receiver, error) {
+// GetByContacts search for receivers by phone numbers and email.
+func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecuter, contacts ...string) ([]*Receiver, error) {
 	receivers := []*Receiver{}
 
 	if len(contacts) == 0 {
@@ -474,9 +448,9 @@ func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecute
 		r.created_at,
 		r.updated_at
 	FROM receivers r
-	WHERE r.phone_number = ANY($1) OR r.email = ANY($2)
+	WHERE r.phone_number = ANY($1) OR r.email = ANY($1)
 	`
-	err := sqlExec.SelectContext(ctx, &receivers, query, pq.Array(contacts), pq.Array(contacts))
+	err := sqlExec.SelectContext(ctx, &receivers, query, pq.Array(contacts))
 	if err != nil {
 		return nil, fmt.Errorf("fetching receivers by phone numbers or email: %w", err)
 	}

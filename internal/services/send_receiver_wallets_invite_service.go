@@ -245,9 +245,8 @@ func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistrati
 }
 
 // shouldSendInvitationSMS returns true if we should send the invitation SMS to the receiver. It will be used to either
-// send the invitation for the first time, or to resend it automatically according with the organization's SMS Resend
+// send the invitation for the first time, or to resend it automatically according to the organization's SMS Resend
 // Interval and the maximum number of SMS resend attempts.
-
 func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
 	receiver := rwa.ReceiverWallet.Receiver
 

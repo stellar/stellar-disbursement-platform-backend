@@ -17,7 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-func Test_ReceiversModelGet(t *testing.T) {
+func Test_ReceiversModel_Get(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -338,7 +338,7 @@ func Test_ReceiversModelGet(t *testing.T) {
 	})
 }
 
-func Test_ReceiversModelCount(t *testing.T) {
+func Test_ReceiversModel_Count(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -428,7 +428,7 @@ func Test_ReceiversModelCount(t *testing.T) {
 	})
 }
 
-func Test_ReceiversModelGetAll(t *testing.T) {
+func Test_ReceiversModel_GetAll(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -1177,4 +1177,74 @@ func Test_ReceiversModel_Update(t *testing.T) {
 		assert.NotEqual(t, externalID, receiver.ExternalID)
 		assert.Equal(t, "newExternalID", receiver.ExternalID)
 	})
+}
+
+func Test_ReceiversModel_GetByContacts(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiverModel := ReceiverModel{}
+
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+		Email:       "receiver1@stellar.org",
+		PhoneNumber: "+99991111",
+		ExternalID:  "external-id-1",
+	})
+
+	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+		Email:      "receiver2@stellar.org",
+		ExternalID: "external-id-2",
+	})
+
+	receiver3 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+		PhoneNumber: "+99992222",
+		ExternalID:  "external-id-3",
+	})
+
+	testCases := []struct {
+		name     string
+		contacts []string
+		want     []*Receiver
+		wantErr  error
+	}{
+		{
+			name:     "list of contacts is empty",
+			contacts: []string{},
+			want:     []*Receiver{},
+			wantErr:  nil,
+		},
+		{
+			name:     "successfully get receivers by email and phone",
+			contacts: []string{receiver1.PhoneNumber, receiver2.Email, receiver3.PhoneNumber},
+			want:     []*Receiver{receiver1, receiver2, receiver3},
+		},
+		{
+			name:     "successfully get receivers by email",
+			contacts: []string{receiver1.Email, receiver2.Email},
+			want:     []*Receiver{receiver1, receiver2},
+		},
+		{
+			name:     "successfully get receivers by phone",
+			contacts: []string{receiver1.PhoneNumber, receiver3.PhoneNumber},
+			want:     []*Receiver{receiver1, receiver3},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			receivers, err := receiverModel.GetByContacts(ctx, dbConnectionPool, tc.contacts...)
+			if tc.wantErr != nil {
+				assert.EqualError(t, err, tc.wantErr.Error())
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, receivers)
+			}
+		})
+	}
 }
