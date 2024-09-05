@@ -229,8 +229,8 @@ const getPendingRegistrationReceiverWalletsBaseQuery = `
 		rw.id,
 		rw.invitation_sent_at,
 		r.id AS "receiver.id",
-		r.phone_number AS "receiver.phone_number",
-		r.email AS "receiver.email",
+		COALESCE(r.phone_number, '') as "receiver.phone_number",
+		COALESCE(r.email, '') as "receiver.email",
 		w.id AS "wallet.id",
 		w.name AS "wallet.name"
 	FROM
