@@ -236,12 +236,14 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			Twice().
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
+				ToEmail:       receiver1.Email,
 				Message:       contentWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(mockErr).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
+				ToEmail:       receiver2.Email,
 				Message:       contentWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).

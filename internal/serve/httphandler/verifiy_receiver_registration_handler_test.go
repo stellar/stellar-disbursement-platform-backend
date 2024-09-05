@@ -491,7 +491,7 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	handler := &VerifyReceiverRegistrationHandler{Models: models}
 
 	// creeate fixtures
-	const phoneNumber = "+380445555555"
+	phoneNumber := "+380445555555"
 	defer data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
@@ -774,7 +774,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		},
 	}
 
-	const phoneNumber = "+380445555555"
+	phoneNumber := "+380445555555"
 	receiverRegistrationRequest := data.ReceiverRegistrationRequest{
 		PhoneNumber:       phoneNumber,
 		OTP:               "123456",

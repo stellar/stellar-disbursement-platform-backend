@@ -290,9 +290,8 @@ func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 	randomSuffix, err := utils.RandomString(5)
 	require.NoError(t, err)
 
-	if r.Email == nil {
-		email := fmt.Sprintf("email%s@randomemail.com", randomSuffix)
-		r.Email = &email
+	if r.Email == "" {
+		r.Email = fmt.Sprintf("email%s@randomemail.com", randomSuffix)
 	}
 
 	if r.PhoneNumber == "" {

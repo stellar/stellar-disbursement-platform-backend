@@ -18,7 +18,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		expectedErrors    map[string]interface{}
 	}{
 		{
-			name: "error if phone number is empty",
+			name: "error if phone number and email are empty",
 			instruction: &data.DisbursementInstruction{
 				ID:                "123456789",
 				Amount:            "100.5",
@@ -28,7 +28,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationTypeDateOfBirth,
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
-				"line 2 - phone": "phone cannot be empty",
+				"line 2 - contact": "phone or email must be provided",
 			},
 		},
 		{
@@ -41,7 +41,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				"line 2 - amount":        "invalid amount. Amount must be a positive number",
 				"line 2 - date of birth": "date of birth cannot be empty",
 				"line 2 - id":            "id cannot be empty",
-				"line 2 - phone":         "phone cannot be empty",
+				"line 2 - contact":       "phone or email must be provided",
 			},
 		},
 		{
@@ -72,6 +72,21 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - amount": "invalid amount. Amount must be a positive number",
+			},
+		},
+		{
+			name: "error if email is not valid",
+			instruction: &data.DisbursementInstruction{
+				Email:             "invalidemail",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "1990-01-01",
+			},
+			lineNumber:        3,
+			verificationField: data.VerificationTypeDateOfBirth,
+			hasErrors:         true,
+			expectedErrors: map[string]interface{}{
+				"line 3 - email": "invalid email format",
 			},
 		},
 		{
@@ -243,6 +258,30 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationTypePin,
 			hasErrors:         false,
 		},
+		{
+			name: "🎉 successfully validates instructions (Email)",
+			instruction: &data.DisbursementInstruction{
+				Email:             "myemail@stellar.org",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "1234",
+			},
+			lineNumber:        3,
+			verificationField: data.VerificationTypePin,
+			hasErrors:         false,
+		},
+		{
+			name: "🎉 successfully validates instructions (Phone)",
+			instruction: &data.DisbursementInstruction{
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "1234",
+			},
+			lineNumber:        3,
+			verificationField: data.VerificationTypePin,
+			hasErrors:         false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -280,7 +319,7 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 				ID:                "123456789",
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
-				ExternalPaymentId: nil,
+				ExternalPaymentId: "",
 			},
 		},
 		{
@@ -290,14 +329,29 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 				ID:                "  123456789  ",
 				Amount:            "  100.5  ",
 				VerificationValue: "  1990-01-01  ",
-				ExternalPaymentId: &externalPaymentIDWithSpaces,
+				ExternalPaymentId: externalPaymentIDWithSpaces,
 			},
 			expectedInstruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
-				ExternalPaymentId: &externalPaymentID,
+				ExternalPaymentId: externalPaymentID,
+			},
+		},
+		{
+			name: "Sanitized instruction with email",
+			actual: &data.DisbursementInstruction{
+				Email:             "   MyEmail@stellar.org  ",
+				ID:                "  123456789  ",
+				Amount:            "  100.5  ",
+				VerificationValue: "  1990-01-01  ",
+			},
+			expectedInstruction: &data.DisbursementInstruction{
+				Email:             "myemail@stellar.org",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "1990-01-01",
 			},
 		},
 	}

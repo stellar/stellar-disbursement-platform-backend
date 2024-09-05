@@ -21,15 +21,29 @@ func NewDisbursementInstructionsValidator(verificationField data.VerificationTyp
 }
 
 func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *data.DisbursementInstruction, lineNumber int) {
-	phone := strings.TrimSpace(instruction.Phone)
+	var phone, email string
+	if instruction.Phone != "" {
+		phone = strings.TrimSpace(instruction.Phone)
+	}
+	if instruction.Email != "" {
+		email = strings.TrimSpace(instruction.Email)
+	}
+
 	id := strings.TrimSpace(instruction.ID)
 	amount := strings.TrimSpace(instruction.Amount)
 	verification := strings.TrimSpace(instruction.VerificationValue)
 
+	// validate contact field provided
+	iv.Check(phone != "" || email != "", fmt.Sprintf("line %d - contact", lineNumber), "phone or email must be provided")
+
 	// validate phone field
-	iv.Check(phone != "", fmt.Sprintf("line %d - phone", lineNumber), "phone cannot be empty")
 	if phone != "" {
 		iv.CheckError(utils.ValidatePhoneNumber(phone), fmt.Sprintf("line %d - phone", lineNumber), "invalid phone format. Correct format: +380445555555")
+	}
+
+	// validate email field
+	if email != "" {
+		iv.CheckError(utils.ValidateEmail(email), fmt.Sprintf("line %d - email", lineNumber), "invalid email format")
 	}
 
 	// validate id field
@@ -53,14 +67,21 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 
 func (iv *DisbursementInstructionsValidator) SanitizeInstruction(instruction *data.DisbursementInstruction) *data.DisbursementInstruction {
 	var sanitizedInstruction data.DisbursementInstruction
-	sanitizedInstruction.Phone = strings.TrimSpace(instruction.Phone)
+	if instruction.Phone != "" {
+		sanitizedInstruction.Phone = strings.ToLower(strings.TrimSpace(instruction.Phone))
+	}
+
+	if instruction.Email != "" {
+		sanitizedInstruction.Email = strings.ToLower(strings.TrimSpace(instruction.Email))
+	}
+
+	if instruction.ExternalPaymentId != "" {
+		sanitizedInstruction.ExternalPaymentId = strings.TrimSpace(instruction.ExternalPaymentId)
+	}
+
 	sanitizedInstruction.ID = strings.TrimSpace(instruction.ID)
 	sanitizedInstruction.Amount = strings.TrimSpace(instruction.Amount)
 	sanitizedInstruction.VerificationValue = strings.TrimSpace(instruction.VerificationValue)
 
-	if instruction.ExternalPaymentId != nil {
-		externalPaymentId := strings.TrimSpace(*instruction.ExternalPaymentId)
-		sanitizedInstruction.ExternalPaymentId = &externalPaymentId
-	}
 	return &sanitizedInstruction
 }

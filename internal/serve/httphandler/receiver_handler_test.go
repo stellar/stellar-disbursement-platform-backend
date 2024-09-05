@@ -92,7 +92,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
     		"remaining_payments": "0",
 			"registered_wallets": "0",
 			"wallets": []
-		}`, receiver.ID, receiver.ExternalID, *receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano), receiver.UpdatedAt.Format(time.RFC3339Nano))
+		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano), receiver.UpdatedAt.Format(time.RFC3339Nano))
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
@@ -196,7 +196,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"anchor_platform_transaction_id": %q
 				}
 			]
-		}`, receiver.ID, receiver.ExternalID, *receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
+		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
 			receiver.UpdatedAt.Format(time.RFC3339Nano), receiverWallet1.ID, receiverWallet1.Receiver.ID, receiverWallet1.Wallet.ID,
 			receiverWallet1.StellarAddress, receiverWallet1.StellarMemo, receiverWallet1.StellarMemoType,
 			receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
@@ -340,7 +340,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"anchor_platform_transaction_id": %q
 				}
 			]
-		}`, receiver.ID, receiver.ExternalID, *receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
+		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
 			receiver.UpdatedAt.Format(time.RFC3339Nano), receiverWallet1.ID, receiverWallet1.Receiver.ID,
 			receiverWallet1.Wallet.ID, receiverWallet1.StellarAddress, receiverWallet1.StellarMemo, receiverWallet1.StellarMemoType,
 			receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
@@ -505,7 +505,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	date := time.Date(2022, 12, 10, 23, 40, 20, 1431, time.UTC)
 	receiver1Email := "receiver1@mock.com"
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver1Email,
+		Email:       receiver1Email,
 		ExternalID:  "external_id_1",
 		PhoneNumber: "+99991111",
 		CreatedAt:   &date,
@@ -515,7 +515,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	date = time.Date(2023, 1, 10, 23, 40, 20, 1431, time.UTC)
 	receiver2Email := "receiver2@mock.com"
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver2Email,
+		Email:       receiver2Email,
 		ExternalID:  "external_id_2",
 		PhoneNumber: "+99992222",
 		CreatedAt:   &date,
@@ -546,7 +546,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	date = time.Date(2023, 2, 10, 23, 40, 21, 1431, time.UTC)
 	receiver3Email := "receiver3@mock.com"
 	receiver3 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver3Email,
+		Email:       receiver3Email,
 		ExternalID:  "external_id_3",
 		PhoneNumber: "+99993333",
 		CreatedAt:   &date,
@@ -575,9 +575,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	})
 
 	date = time.Date(2023, 3, 10, 23, 40, 20, 1431, time.UTC)
-	receiver4Email := "receiver4@mock.com"
 	receiver4 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver4Email,
+		Email:       "receiver4@mock.com",
 		ExternalID:  "external_id_4",
 		PhoneNumber: "+99994444",
 		CreatedAt:   &date,
@@ -1439,13 +1438,13 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 
 	receiver1Email := "receiver1@mock.com"
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver1Email,
+		Email:       receiver1Email,
 		ExternalID:  "external_id_1",
 		PhoneNumber: "+99991111",
 	})
 	receiver2Email := "receiver2@mock.com"
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver2Email,
+		Email:       receiver2Email,
 		ExternalID:  "external_id_2",
 		PhoneNumber: "+99992222",
 	})
