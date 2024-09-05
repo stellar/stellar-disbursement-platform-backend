@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 const mfaMessageTitle = "Verification code to access your account"
@@ -26,9 +27,19 @@ type LoginRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
-func (r LoginRequest) validate() *httperror.HTTPError {
+func (r *LoginRequest) validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
 
+	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(r.Email)
+	if err != nil {
+		if errors.Is(err, authUtils.ErrEmptyEmail) {
+			validator.Check(false, "email", "email is required")
+		} else {
+			validator.CheckError(err, "email", "email is invalid")
+		}
+	} else {
+		r.Email = sanitizedEmail
+	}
 	validator.Check(r.Email != "", "email", "email is required")
 	validator.Check(r.Password != "", "password", "password is required")
 
@@ -63,7 +74,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := reqBody.validate(); err != nil {
+	if err := (&reqBody).validate(); err != nil {
 		err.Render(rw)
 		return
 	}

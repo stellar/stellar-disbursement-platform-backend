@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,24 +57,24 @@ func Test_message_Validate(t *testing.T) {
 			name:          "Email types need a valid email address",
 			messengerType: MessengerTypeAWSEmail,
 			message:       Message{ToEmail: "invalid-email"},
-			wantErr:       fmt.Errorf("invalid e-mail: invalid email format: the provided email is not valid"),
+			wantErr:       fmt.Errorf("invalid e-mail: invalid email format: the provided email %q is not valid", "invalid-email"),
 		},
 		{
 			name:          "Email types need a title",
 			messengerType: MessengerTypeAWSEmail,
-			message:       Message{ToEmail: "foo@test.com", Title: "   "},
+			message:       Message{ToEmail: "FOO@test.com", Title: "   "},
 			wantErr:       fmt.Errorf("invalid e-mail: title is empty"),
 		},
 		{
 			name:          "[sms] message cannot be empty",
 			messengerType: MessengerTypeAWSEmail,
-			message:       Message{ToEmail: "foo@test.com", Title: "My title"},
+			message:       Message{ToEmail: "FOO@test.com", Title: "My title"},
 			wantErr:       fmt.Errorf("message is empty"),
 		},
 		{
 			name:          "[email] all fields are present for AWS email 🎉",
 			messengerType: MessengerTypeAWSEmail,
-			message:       Message{ToEmail: "foo@test.com", Title: "My title", Message: "foo bar"},
+			message:       Message{ToEmail: "FOO@test.com", Title: "My title", Message: "foo bar"},
 			wantErr:       nil,
 		},
 	}
@@ -85,6 +86,9 @@ func Test_message_Validate(t *testing.T) {
 				require.EqualError(t, err, tc.wantErr.Error())
 			} else {
 				require.NoError(t, err)
+				if !slices.Contains([]string{"", "invalid-email"}, tc.message.ToEmail) {
+					require.Equal(t, "foo@test.com", tc.message.ToEmail)
+				}
 			}
 		})
 	}

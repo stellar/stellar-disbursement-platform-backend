@@ -1,11 +1,12 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 const defaultExpirationTimeInMinutes = 15
@@ -21,11 +22,14 @@ type User struct {
 }
 
 func (u *User) Validate() error {
-	if u.Email == "" {
-		return fmt.Errorf("email is required")
-	} else if err := utils.ValidateEmail(u.Email); err != nil {
+	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(u.Email)
+	if err != nil {
+		if errors.Is(err, authUtils.ErrEmptyEmail) {
+			return fmt.Errorf("email is required")
+		}
 		return fmt.Errorf("email is invalid: %w", err)
 	}
+	u.Email = sanitizedEmail
 
 	if u.FirstName == "" {
 		return fmt.Errorf("first name is required")

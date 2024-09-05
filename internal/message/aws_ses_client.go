@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 // awsSESInterface is used to send emails.
@@ -96,8 +97,8 @@ func NewAWSSESClient(accessKeyID, secretAccessKey, region, senderID string) (*aw
 		return nil, fmt.Errorf("aws region is empty")
 	}
 
-	senderID = strings.TrimSpace(senderID)
-	if err := utils.ValidateEmail(senderID); err != nil {
+	senderID, err := authUtils.SanitizeAndValidateEmail(senderID)
+	if err != nil {
 		return nil, fmt.Errorf("aws SES (email) senderID is invalid: %w", err)
 	}
 

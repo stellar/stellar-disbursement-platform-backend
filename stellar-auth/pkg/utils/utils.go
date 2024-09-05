@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strings"
 )
+
+var ErrEmptyEmail = fmt.Errorf("email cannot be empty")
 
 const (
 	// Default charset to be used with StringWithCharset function
@@ -32,9 +35,14 @@ func StringWithCharset(length int, charset string) (string, error) {
 // It's free to use under the [MIT License](https://opensource.org/licenses/MIT)
 var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 
+func SanitizeAndValidateEmail(email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	return email, ValidateEmail(email)
+}
+
 func ValidateEmail(email string) error {
 	if email == "" {
-		return fmt.Errorf("email cannot be empty")
+		return ErrEmptyEmail
 	}
 
 	if !rxEmail.MatchString(email) {

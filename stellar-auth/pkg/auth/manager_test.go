@@ -29,4 +29,8 @@ func Test_User_Validate(t *testing.T) {
 
 	user.LastName = "Last"
 	assert.NoError(t, user.Validate())
+
+	user.Email = " EMAIL@email.com "
+	assert.NoError(t, user.Validate())
+	assert.Equal(t, "email@email.com", user.Email)
 }

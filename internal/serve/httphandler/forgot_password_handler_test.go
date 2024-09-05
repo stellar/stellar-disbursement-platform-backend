@@ -218,7 +218,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		expectedBody := `
 			{
-				"error":"request invalid",
+				"error":"Request invalid",
 				"extras": {
 					"email":"email is required"
 				}
@@ -315,6 +315,74 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			}
 		`
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, expectedBody, string(respBody))
+	})
+
+	t.Run("Should return http status 400 when empty email is provided", func(t *testing.T) {
+		requestBody := `
+		{ 
+			"email": "",
+			"recaptcha_token": "validToken"
+		}`
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
+
+		reCAPTCHAValidatorMock.
+			On("IsTokenValid", mock.Anything, "validToken").
+			Return(true, nil).
+			Once()
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		expectedBody := `
+			{
+				"error": "Request invalid",
+				"extras": {
+					"email": "email is required"
+				}
+			}
+		`
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, expectedBody, string(respBody))
+	})
+
+	t.Run("Should return http status 400 when invalid email is provided", func(t *testing.T) {
+		requestBody := `
+		{ 
+			"email": "invalid",
+			"recaptcha_token": "validToken"
+		}`
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
+
+		reCAPTCHAValidatorMock.
+			On("IsTokenValid", mock.Anything, "validToken").
+			Return(true, nil).
+			Once()
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		expectedBody := `
+			{
+				"error": "Request invalid",
+				"extras": {
+					"email": "email is invalid"
+				}
+			}
+		`
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, expectedBody, string(respBody))
 	})
 

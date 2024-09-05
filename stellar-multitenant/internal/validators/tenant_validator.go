@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -58,14 +60,22 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	}
 
 	tv.Check(validTenantName.MatchString(reqBody.Name), "name", "invalid tenant name. It should only contains lower case letters and dash (-)")
-	tv.CheckError(utils.ValidateEmail(reqBody.OwnerEmail), "owner_email", "invalid email")
 	tv.Check(reqBody.OwnerFirstName != "", "owner_first_name", "owner_first_name is required")
 	tv.Check(reqBody.OwnerLastName != "", "owner_last_name", "owner_last_name is required")
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
 
 	tv.validateDistributionAccountType(reqBody.DistributionAccountType)
 
-	var err error
+	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(reqBody.OwnerEmail)
+	if err != nil {
+		if errors.Is(err, authUtils.ErrEmptyEmail) {
+			tv.addError("owner_email", "owner_email is required")
+		} else {
+			tv.addError("owner_email", "owner_email is invalid")
+		}
+	}
+	reqBody.OwnerEmail = sanitizedEmail
+
 	if reqBody.BaseURL != nil {
 		if _, err = url.ParseRequestURI(*reqBody.BaseURL); err != nil {
 			tv.Check(false, "base_url", "invalid base URL value")

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func Test_DefaultAuthenticator_ValidateCredential(t *testing.T) {
 			Return(false, errUnexpectedError).
 			Once()
 
-		user, err := authenticator.ValidateCredentials(ctx, randUser.Email, password)
+		user, err := authenticator.ValidateCredentials(ctx, strings.ToLower(randUser.Email), password)
 
 		assert.EqualError(t, err, "comparing password: unexpected error")
 		assert.Nil(t, user)
@@ -87,7 +88,7 @@ func Test_DefaultAuthenticator_ValidateCredential(t *testing.T) {
 			Return(false, nil).
 			Once()
 
-		user, err := authenticator.ValidateCredentials(ctx, randUser.Email, password)
+		user, err := authenticator.ValidateCredentials(ctx, strings.ToLower(randUser.Email), password)
 
 		assert.EqualError(t, err, ErrInvalidCredentials.Error())
 		assert.Nil(t, user)
@@ -105,7 +106,7 @@ func Test_DefaultAuthenticator_ValidateCredential(t *testing.T) {
 		err := authenticator.updateIsActive(ctx, randUser.ID, false)
 		require.NoError(t, err)
 
-		user, err := authenticator.ValidateCredentials(ctx, randUser.Email, randUser.Password)
+		user, err := authenticator.ValidateCredentials(ctx, strings.ToLower(randUser.Email), randUser.Password)
 
 		assert.EqualError(t, err, ErrInvalidCredentials.Error())
 		assert.Nil(t, user)
@@ -241,7 +242,7 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 
 	t.Run("creates a new user correctly", func(t *testing.T) {
 		user := &User{
-			Email:     "email-test@email.com",
+			Email:     "EMAIL-test@email.com",
 			FirstName: "First",
 			LastName:  "Last",
 		}
@@ -260,7 +261,7 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 
 		var newUser User
 		var encryptedPassword string
-		err = dbConnectionPool.QueryRowxContext(ctx, query, user.Email).Scan(&newUser.ID, &newUser.Email, &newUser.FirstName, &newUser.LastName, &encryptedPassword, &newUser.IsActive)
+		err = dbConnectionPool.QueryRowxContext(ctx, query, strings.ToLower(user.Email)).Scan(&newUser.ID, &newUser.Email, &newUser.FirstName, &newUser.LastName, &encryptedPassword, &newUser.IsActive)
 		require.NoError(t, err)
 
 		assert.Equal(t, newUser.ID, u.ID)
@@ -273,7 +274,7 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 
 	t.Run("creates a user successfully with an OTP", func(t *testing.T) {
 		user := &User{
-			Email:     "emailotp@email.com",
+			Email:     "EMAILotp@email.com",
 			FirstName: "First",
 			LastName:  "Last",
 		}
@@ -290,7 +291,7 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 
 		var newUser User
 		var encryptedPassword string
-		err = dbConnectionPool.QueryRowxContext(ctx, query, user.Email).Scan(&newUser.ID, &newUser.Email, &newUser.FirstName, &newUser.LastName, &encryptedPassword)
+		err = dbConnectionPool.QueryRowxContext(ctx, query, strings.ToLower(user.Email)).Scan(&newUser.ID, &newUser.Email, &newUser.FirstName, &newUser.LastName, &encryptedPassword)
 		require.NoError(t, err)
 
 		assert.Equal(t, newUser.ID, u.ID)
@@ -824,8 +825,8 @@ func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 		assert.Equal(t, randUser.EncryptedPassword, u.EncryptedPassword)
 	})
 
-	t.Run("updates email successfully", func(t *testing.T) {
-		email := "email@email.com"
+	t.Run("sanitizes and updates email successfully", func(t *testing.T) {
+		email := "EMAIL@email.com"
 
 		passwordEncrypterMock.
 			On("Encrypt", ctx, mock.AnythingOfType("string")).
@@ -840,7 +841,7 @@ func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 
 		u := getUser(t, ctx, randUser.ID)
 
-		assert.Equal(t, email, u.Email)
+		assert.Equal(t, strings.ToLower(email), u.Email)
 		assert.Equal(t, randUser.FirstName, u.FirstName)
 		assert.Equal(t, randUser.LastName, u.LastName)
 		assert.Equal(t, randUser.EncryptedPassword, u.EncryptedPassword)

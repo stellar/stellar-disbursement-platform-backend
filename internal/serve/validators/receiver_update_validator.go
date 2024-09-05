@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 type UpdateReceiverRequest struct {
@@ -57,7 +58,9 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	}
 
 	if updateReceiverRequest.Email != "" {
-		ur.Check(utils.ValidateEmail(email) == nil, "email", "invalid email format")
+		var err error
+		email, err = authUtils.SanitizeAndValidateEmail(email)
+		ur.CheckError(err, "email", "invalid email format")
 	}
 
 	if updateReceiverRequest.ExternalID != "" {

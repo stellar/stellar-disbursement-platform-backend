@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,13 +68,13 @@ func CreateRandomAuthUserFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		INSERT INTO auth_users
 			(email, encrypted_password, is_owner, roles, first_name, last_name)
 		VALUES
-			($1, $2, $3, $4, $5, $6)
+			(LOWER($1), $2, $3, $4, $5, $6)
 		RETURNING
 			id, created_at
 	`
 
 	user := &RandomAuthUser{
-		Email:             email,
+		Email:             strings.ToLower(email),
 		FirstName:         firstName,
 		LastName:          lastName,
 		Password:          password,
