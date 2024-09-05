@@ -152,13 +152,13 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 	ctx := context.Background()
 
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
-		PhoneNumber: utils.StringPtr("+13334445555"),
+		PhoneNumber: "+13334445555",
 	})
 
 	t.Run("returns error when the receiver has no verifications registered", func(t *testing.T) {
 		receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
-		_, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, *receiver.PhoneNumber)
-		require.Error(t, err, fmt.Errorf("cannot query any receiver verifications for phone number %s", *receiver.PhoneNumber))
+		_, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
+		require.Error(t, err, fmt.Errorf("cannot query any receiver verifications for phone number %s", receiver.PhoneNumber))
 	})
 
 	t.Run("returns the latest receiver verification for a list of receiver verifications", func(t *testing.T) {
@@ -191,7 +191,7 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 		})
 
 		receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
-		actualVerification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, *receiver.PhoneNumber)
+		actualVerification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
 		require.NoError(t, err)
 
 		assert.Equal(t,
@@ -497,7 +497,7 @@ func Test_ReceiverVerificationModel_GetLatestByPhoneNumber(t *testing.T) {
 	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldPin, "123456")
 	require.NoError(t, err)
 
-	verification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, *receiver.PhoneNumber)
+	verification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
 	require.NoError(t, err)
 
 	assert.Equal(t, VerificationFieldPin, verification.VerificationField)

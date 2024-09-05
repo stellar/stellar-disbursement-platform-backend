@@ -159,11 +159,11 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		msg := message.Message{
 			Message: content.String(),
 		}
-		if rwa.ReceiverWallet.Receiver.PhoneNumber != nil {
-			msg.ToPhoneNumber = *rwa.ReceiverWallet.Receiver.PhoneNumber
+		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
+			msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
 		}
-		if rwa.ReceiverWallet.Receiver.Email != nil {
-			msg.ToEmail = *rwa.ReceiverWallet.Receiver.Email
+		if rwa.ReceiverWallet.Receiver.Email != "" {
+			msg.ToEmail = rwa.ReceiverWallet.Receiver.Email
 		}
 
 		assetID := rwa.Asset.ID
@@ -253,10 +253,10 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 
 	// TODO: SDP-1316 - add support for other contact information in this method.
 	var phoneNumber string
-	if receiver.PhoneNumber == nil {
+	if receiver.PhoneNumber == "" {
 		return false
 	} else {
-		phoneNumber = *receiver.PhoneNumber
+		phoneNumber = receiver.PhoneNumber
 	}
 
 	truncatedReceiverContact := utils.TruncateString(phoneNumber, 3)

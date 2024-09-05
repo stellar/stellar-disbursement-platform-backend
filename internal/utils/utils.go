@@ -95,11 +95,6 @@ func StringPtr(s string) *string {
 	return &s
 }
 
-// StringPtrEq compares a string pointer with a string value and returns true if they are equal.
-func StringPtrEq(sp *string, s string) bool {
-	return sp != nil && *sp == s
-}
-
 // IntPtr returns a pointer to an int
 func IntPtr(i int) *int {
 	return &i

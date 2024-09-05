@@ -166,9 +166,8 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, receivers, len(expectedEmails))
 		for _, actual := range receivers {
-			assert.NotNil(t, actual.Email)
-			assert.Nil(t, actual.PhoneNumber)
-			assert.Contains(t, expectedEmails, *actual.Email)
+			assert.Empty(t, actual.PhoneNumber)
+			assert.Contains(t, expectedEmails, actual.Email)
 			assert.Contains(t, expectedExternalIDs, actual.ExternalID)
 		}
 	})
@@ -184,7 +183,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			ReceiverContactType:     ReceiverContactTypeEmail,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
-		require.ErrorContains(t, err, "receiver does not have an email")
+		require.ErrorContains(t, err, "has no contact information for contact type EMAIL")
 	})
 
 	t.Run("failure - email instructions with email and phone fields", func(t *testing.T) {
@@ -420,7 +419,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 		receiversMap := make(map[string]*Receiver)
 		for _, receiver := range receivers {
-			receiversMap[*receiver.PhoneNumber] = receiver
+			receiversMap[receiver.PhoneNumber] = receiver
 		}
 
 		// confirm a verification
@@ -446,7 +445,7 @@ func assertEqualReceivers(t *testing.T, expectedPhones, expectedExternalIDs []st
 
 	for _, actual := range actualReceivers {
 		assert.NotNil(t, actual.PhoneNumber)
-		assert.Contains(t, expectedPhones, *actual.PhoneNumber)
+		assert.Contains(t, expectedPhones, actual.PhoneNumber)
 		assert.Contains(t, expectedExternalIDs, actual.ExternalID)
 	}
 }
@@ -460,7 +459,7 @@ func assertEqualVerifications(t *testing.T, expectedInstructions []*Disbursement
 	}
 	phonesByReceiverId := make(map[string]string)
 	for _, receiver := range receivers {
-		phonesByReceiverId[receiver.ID] = *receiver.PhoneNumber
+		phonesByReceiverId[receiver.ID] = receiver.PhoneNumber
 	}
 
 	for _, actual := range actualVerifications {

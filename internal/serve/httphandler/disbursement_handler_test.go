@@ -1176,8 +1176,8 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	expectedDisbursementReceivers := []data.DisbursementReceiver{
 		{
 			ID:             receiver3.ID,
-			PhoneNumber:    *receiver3.PhoneNumber,
-			Email:          *receiver3.Email,
+			PhoneNumber:    receiver3.PhoneNumber,
+			Email:          receiver3.Email,
 			ExternalID:     receiver3.ExternalID,
 			ReceiverWallet: receiverWallet3,
 			Payment:        payment3,
@@ -1186,8 +1186,8 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		},
 		{
 			ID:             receiver2.ID,
-			PhoneNumber:    *receiver2.PhoneNumber,
-			Email:          *receiver2.Email,
+			PhoneNumber:    receiver2.PhoneNumber,
+			Email:          receiver2.Email,
 			ExternalID:     receiver2.ExternalID,
 			ReceiverWallet: receiverWallet2,
 			Payment:        payment2,
@@ -1196,8 +1196,8 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		},
 		{
 			ID:             receiver1.ID,
-			PhoneNumber:    *receiver1.PhoneNumber,
-			Email:          *receiver1.Email,
+			PhoneNumber:    receiver1.PhoneNumber,
+			Email:          receiver1.Email,
 			ExternalID:     receiver1.ExternalID,
 			ReceiverWallet: receiverWallet1,
 			Payment:        payment1,

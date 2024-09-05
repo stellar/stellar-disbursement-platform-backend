@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type DisbursementInstruction struct {
@@ -155,9 +154,9 @@ func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstruction
 	// Step 2: Create maps for quick lookup
 	existingReceiversByContactMap := make(map[string]*Receiver)
 	for _, receiver := range existingReceivers {
-		contact, contactErr := receiver.ContactByType(contactType)
-		if contactErr != nil {
-			return nil, fmt.Errorf("receiver with ID %s has no contact information: %w", receiver.ID, contactErr)
+		contact := receiver.ContactByType(contactType)
+		if contact == "" {
+			return nil, fmt.Errorf("receiver with ID %s has no contact information for contact type %s: %w", receiver.ID, contactType, err)
 		}
 		existingReceiversByContactMap[contact] = receiver
 	}
@@ -241,9 +240,9 @@ func (di DisbursementInstructionModel) processReceiverVerifications(ctx context.
 	}
 
 	for _, receiver := range receiversByIDMap {
-		contact, err := receiver.ContactByType(contactType)
-		if err != nil {
-			return fmt.Errorf("receiver with ID %s has no contact information for contact type %s: %w", receiver.ID, contactType, err)
+		contact := receiver.ContactByType(contactType)
+		if contact == "" {
+			return fmt.Errorf("receiver with ID %s has no contact information for contact type %s", receiver.ID, contactType)
 		}
 		instruction := instructionsByContactMap[contact]
 		if instruction == nil {
@@ -350,7 +349,7 @@ func findReceiverByInstruction(receiverMap map[string]*Receiver, instruction *Di
 	}
 
 	for _, receiver := range receiverMap {
-		if utils.StringPtrEq(receiver.Email, contact) || utils.StringPtrEq(receiver.PhoneNumber, contact) {
+		if contact == receiver.PhoneNumber || contact == receiver.Email {
 			return receiver
 		}
 	}

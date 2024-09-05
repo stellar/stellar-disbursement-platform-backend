@@ -20,8 +20,8 @@ type Receiver struct {
 	ExternalID  string     `json:"external_id,omitempty" db:"external_id"`
 	CreatedAt   *time.Time `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at,omitempty" db:"updated_at"`
-	Email       *string    `json:"email,omitempty" db:"email"`
-	PhoneNumber *string    `json:"phone_number,omitempty" db:"phone_number"`
+	Email       string     `json:"email,omitempty" db:"email"`
+	PhoneNumber string     `json:"phone_number,omitempty" db:"phone_number"`
 	ReceiverStats
 }
 
@@ -32,26 +32,15 @@ const (
 	ReceiverContactTypeSMS   ReceiverContactType = "PHONE_NUMBER"
 )
 
-func (r Receiver) ContactByType(contactType ReceiverContactType) (string, error) {
-	if contactType == "" {
-		return "", fmt.Errorf("contact type is empty")
-	}
-
+func (r Receiver) ContactByType(contactType ReceiverContactType) string {
 	switch contactType {
 	case ReceiverContactTypeEmail:
-		if r.Email != nil {
-			return *r.Email, nil
-		} else {
-			return "", fmt.Errorf("receiver does not have an email")
-		}
+		return r.Email
 	case ReceiverContactTypeSMS:
-		if r.PhoneNumber != nil {
-			return *r.PhoneNumber, nil
-		} else {
-			return "", fmt.Errorf("receiver does not have a phone number")
-		}
+		return r.PhoneNumber
+	default:
+		return ""
 	}
-	return "", fmt.Errorf("receiver does not have a contact of type %s", contactType)
 }
 
 type ReceiverRegistrationRequest struct {
@@ -200,8 +189,8 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 	SELECT
 		rc.id,
 		rc.external_id,
+		COALESCE(rc.phone_number, '') as phone_number,
 		COALESCE(rc.email, '') as email,
-		rc.phone_number,
 		rc.created_at,
 		rc.updated_at,
 		COALESCE(total_payments, 0) as total_payments,
@@ -308,13 +297,12 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 		LEFT JOIN receiver_wallets rw ON rw.receiver_id = r.id
 		LEFT JOIN registered_receiver_wallets_count_cte rrwc ON rrwc.receiver_id = r.id
 		`
-
 	receiverQuery := `
 		SELECT
 			r.id,
-			r.email,
+			COALESCE(r.phone_number, '') as phone_number,
+			COALESCE(r.email, '') as email,
 			r.external_id,
-			r.phone_number,
 			r.created_at,
 			r.updated_at
 		FROM
@@ -383,7 +371,8 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 		    $3
 		) RETURNING
 			id,
-			phone_number,
+			COALESCE(phone_number, '') as phone_number,
+			COALESCE(email, '') as email,
 			external_id,
 			created_at,
 			updated_at
@@ -453,7 +442,8 @@ func (r *ReceiverModel) GetByPhoneNumbers(ctx context.Context, sqlExec db.SQLExe
 	query := `
 	SELECT
 		r.id,
-		r.phone_number,
+		COALESCE(r.phone_number, '') as phone_number,
+		COALESCE(r.email, '') as email,
 		r.external_id,
 		r.created_at,
 		r.updated_at
@@ -478,8 +468,8 @@ func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecute
 	query := `
 	SELECT
 		r.id,
-		r.phone_number,
-		r.email,
+		COALESCE(r.phone_number, '') as phone_number,
+		COALESCE(r.email, '') as email,
 		r.external_id,
 		r.created_at,
 		r.updated_at

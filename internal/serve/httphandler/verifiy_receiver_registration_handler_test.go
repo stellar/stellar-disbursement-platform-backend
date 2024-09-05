@@ -199,10 +199,10 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	}
 
 	// receiver without receiver_verification row:
-	receiverMissingReceiverVerification := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: utils.StringPtr("+380443333333")})
+	receiverMissingReceiverVerification := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443333333"})
 
 	// receiver with a receiverVerification row that's exceeded the maximum number of attempts:
-	receiverWithExceededAttempts := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: utils.StringPtr("+380446666666")})
+	receiverWithExceededAttempts := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380446666666"})
 	receiverVerificationExceededAttempts := data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 		ReceiverID:        receiverWithExceededAttempts.ID,
 		VerificationField: data.VerificationFieldDateOfBirth,
@@ -218,7 +218,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	require.NoError(t, err)
 
 	// receiver with receiver_verification row:
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: utils.StringPtr("+380445555555")})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
 	_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 		ReceiverID:        receiver.ID,
 		VerificationField: data.VerificationFieldDateOfBirth,
@@ -239,7 +239,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			name:     "returns an error if the receiver does not have any receiverVerification row",
 			receiver: *receiverMissingReceiverVerification,
 			registrationRequest: data.ReceiverRegistrationRequest{
-				PhoneNumber:       *receiverMissingReceiverVerification.PhoneNumber,
+				PhoneNumber:       receiverMissingReceiverVerification.PhoneNumber,
 				VerificationType:  data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
@@ -249,7 +249,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (YEAR_MONTH)",
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
-				PhoneNumber:       *receiver.PhoneNumber,
+				PhoneNumber:       receiver.PhoneNumber,
 				VerificationType:  data.VerificationFieldYearMonth,
 				VerificationValue: "1999-12",
 			},
@@ -259,7 +259,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (NATIONAL_ID_NUMBER)",
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
-				PhoneNumber:       *receiver.PhoneNumber,
+				PhoneNumber:       receiver.PhoneNumber,
 				VerificationType:  data.VerificationFieldNationalID,
 				VerificationValue: "123456",
 			},
@@ -269,7 +269,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			name:     "returns an error if the receiver has exceeded their max attempts to confirm the verification value",
 			receiver: *receiverWithExceededAttempts,
 			registrationRequest: data.ReceiverRegistrationRequest{
-				PhoneNumber:       *receiverWithExceededAttempts.PhoneNumber,
+				PhoneNumber:       receiverWithExceededAttempts.PhoneNumber,
 				VerificationType:  data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
@@ -279,7 +279,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			name:     "returns an error if the varification value provided in the payload is different from the DB one",
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
-				PhoneNumber:       *receiver.PhoneNumber,
+				PhoneNumber:       receiver.PhoneNumber,
 				VerificationType:  data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-11-11", // <--- different from the DB one (1990-01-01)
 			},
@@ -290,7 +290,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			name:     "🎉 successfully process the verification value and updates it accordingly in the DB",
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
-				PhoneNumber:       *receiver.PhoneNumber,
+				PhoneNumber:       receiver.PhoneNumber,
 				VerificationType:  data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
@@ -429,7 +429,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			}
 
 			// receiver & receiver wallet
-			receiver := data.CreateReceiverFixture(t, ctx, dbTx, &data.Receiver{PhoneNumber: utils.StringPtr("+380445555555")})
+			receiver := data.CreateReceiverFixture(t, ctx, dbTx, &data.Receiver{PhoneNumber: "+380445555555"})
 			var receiverWallet *data.ReceiverWallet
 			if tc.currentReceiverWalletStatus.State() != "" {
 				receiverWallet = data.CreateReceiverWalletFixture(t, ctx, dbTx, receiver.ID, wallet.ID, tc.currentReceiverWalletStatus)
@@ -494,7 +494,7 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	phoneNumber := "+380445555555"
 	defer data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
 	// create valid sep24 token
@@ -861,7 +861,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// update database with the entries needed
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		_ = data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+		_ = data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 
 		// set the logger to a buffer so we can check the error message
 		buf := new(strings.Builder)
@@ -902,7 +902,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
 		// receiver with a receiverVerification row that's exceeded the maximum number of attempts:
-		receiverWithExceededAttempts := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+		receiverWithExceededAttempts := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 		receiverVerificationExceededAttempts := data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiverWithExceededAttempts.ID,
 			VerificationField: data.VerificationFieldDateOfBirth,
@@ -957,7 +957,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		// update database with the entries needed
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: data.VerificationFieldDateOfBirth,
@@ -1017,7 +1017,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: data.VerificationFieldDateOfBirth,
@@ -1097,7 +1097,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 					ReceiverID:        receiver.ID,
 					VerificationField: data.VerificationFieldDateOfBirth,
@@ -1202,7 +1202,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 					ReceiverID:        receiver.ID,
 					VerificationField: data.VerificationFieldDateOfBirth,
@@ -1320,7 +1320,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 					ReceiverID:        receiver.ID,
 					VerificationField: data.VerificationFieldDateOfBirth,

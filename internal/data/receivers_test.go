@@ -462,8 +462,8 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 	date := time.Date(2023, 1, 10, 23, 40, 20, 1431, time.UTC)
 	receiver1Email := "receiver1@mock.com"
 	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
-		Email:       &receiver1Email,
-		PhoneNumber: utils.StringPtr("+99991111"),
+		Email:       receiver1Email,
+		PhoneNumber: "+99991111",
 		ExternalID:  "external-id-1",
 		CreatedAt:   &date,
 		UpdatedAt:   &date,
@@ -472,8 +472,8 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 	date = time.Date(2023, 3, 10, 23, 40, 20, 1431, time.UTC)
 	receiver2Email := "receiver2@mock.com"
 	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
-		Email:       &receiver2Email,
-		PhoneNumber: utils.StringPtr("+99992222"),
+		Email:       receiver2Email,
+		PhoneNumber: "+99992222",
 		ExternalID:  "external-id-2",
 		CreatedAt:   &date,
 		UpdatedAt:   &date,
@@ -853,10 +853,9 @@ func Test_ReceiversModel_GetAll_makeSureReceiversWithMultipleWalletsWillReturnAS
 	wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
 
-	receiver1Email := "receiver1@mock.com"
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
-		Email:       &receiver1Email,
-		PhoneNumber: utils.StringPtr("+99991111"),
+		Email:       "receiver1@mock.com",
+		PhoneNumber: "+99991111",
 		ExternalID:  "external-id-1",
 	})
 
@@ -995,7 +994,7 @@ func Test_DeleteByPhoneNumber(t *testing.T) {
 	}) // This payment will be deleted along with the remaining receiverX-related data
 
 	// 4. Delete receiverX
-	err = models.Receiver.DeleteByPhoneNumber(ctx, dbConnectionPool, *receiverX.PhoneNumber)
+	err = models.Receiver.DeleteByPhoneNumber(ctx, dbConnectionPool, receiverX.PhoneNumber)
 	require.NoError(t, err)
 
 	type testCase struct {
@@ -1110,7 +1109,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 	receiverModel := ReceiverModel{}
 
 	email, externalID := "receiver@email.com", "externalID"
-	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{Email: &email, ExternalID: externalID})
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{Email: email, ExternalID: externalID})
 
 	resetReceiver := func(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, receiverID string) {
 		q := `
@@ -1142,7 +1141,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, email, *receiver.Email)
+		assert.Equal(t, email, receiver.Email)
 		assert.Equal(t, externalID, receiver.ExternalID)
 
 		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
@@ -1152,8 +1151,8 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.NotEqual(t, email, *receiver.Email)
-		assert.Equal(t, "updated_email@email.com", *receiver.Email)
+		assert.NotEqual(t, email, receiver.Email)
+		assert.Equal(t, "updated_email@email.com", receiver.Email)
 		assert.Equal(t, externalID, receiver.ExternalID)
 	})
 
@@ -1162,7 +1161,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, email, *receiver.Email)
+		assert.Equal(t, email, receiver.Email)
 		assert.Equal(t, externalID, receiver.ExternalID)
 
 		err := receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
@@ -1173,8 +1172,8 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.NotEqual(t, email, *receiver.Email)
-		assert.Equal(t, "updated_email@email.com", *receiver.Email)
+		assert.NotEqual(t, email, receiver.Email)
+		assert.Equal(t, "updated_email@email.com", receiver.Email)
 		assert.NotEqual(t, externalID, receiver.ExternalID)
 		assert.Equal(t, "newExternalID", receiver.ExternalID)
 	})

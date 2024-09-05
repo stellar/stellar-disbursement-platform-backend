@@ -116,8 +116,8 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 	ctx := context.Background()
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		PhoneNumber: utils.StringPtr("+380445555555"),
-		Email:       utils.StringPtr("receiver@email.com"),
+		PhoneNumber: "+380445555555",
+		Email:       "receiver@email.com",
 		ExternalID:  "externalID",
 	})
 
@@ -305,7 +305,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+		assert.Equal(t, "receiver@email.com", receiverDB.Email)
 		assert.Equal(t, "externalID", receiverDB.ExternalID)
 	})
 
@@ -349,7 +349,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+		assert.Equal(t, "receiver@email.com", receiverDB.Email)
 		assert.Equal(t, "externalID", receiverDB.ExternalID)
 	})
 
@@ -393,7 +393,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+		assert.Equal(t, "receiver@email.com", receiverDB.Email)
 		assert.Equal(t, "externalID", receiverDB.ExternalID)
 	})
 
@@ -437,7 +437,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+		assert.Equal(t, "receiver@email.com", receiverDB.Email)
 		assert.Equal(t, "externalID", receiverDB.ExternalID)
 	})
 
@@ -533,7 +533,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 			receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 			require.NoError(t, err)
-			assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+			assert.Equal(t, "receiver@email.com", receiverDB.Email)
 			assert.Equal(t, "externalID", receiverDB.ExternalID)
 		}
 	})
@@ -610,7 +610,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 			receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 			require.NoError(t, err)
-			assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+			assert.Equal(t, "receiver@email.com", receiverDB.Email)
 			assert.Equal(t, "externalID", receiverDB.ExternalID)
 		}
 	})
@@ -635,7 +635,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "update_receiver@email.com", *receiverDB.Email)
+		assert.Equal(t, "update_receiver@email.com", receiverDB.Email)
 	})
 
 	t.Run("updates receiver's external ID", func(t *testing.T) {

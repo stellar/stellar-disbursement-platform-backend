@@ -117,7 +117,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 ) error {
 	now := time.Now()
 	// TODO: SDP-1318 - Replace with correct contact depending on receiver choice.
-	truncatedPhoneNumber := utils.TruncateString(*receiver.PhoneNumber, 3)
+	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
 	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)

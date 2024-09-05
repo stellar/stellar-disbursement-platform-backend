@@ -42,7 +42,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 	ctx := context.Background()
 
 	phoneNumber := "+380443973607"
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: &phoneNumber})
+	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
 	data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
@@ -63,7 +63,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 	}.ServeHTTP)
 
 	requestSendOTP := ReceiverSendOTPRequest{
-		PhoneNumber:    *receiver1.PhoneNumber,
+		PhoneNumber:    receiver1.PhoneNumber,
 		ReCAPTCHAToken: "XyZ",
 	}
 	reqBody, err := json.Marshal(requestSendOTP)
