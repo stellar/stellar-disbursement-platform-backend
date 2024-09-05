@@ -26,25 +26,25 @@ func Test_UpdateReceiverHandler_createVerificationInsert(t *testing.T) {
 
 	verificationDOB := data.ReceiverVerificationInsert{
 		ReceiverID:        receiverID,
-		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationField: data.VerificationTypeDateOfBirth,
 		VerificationValue: "1999-01-01",
 	}
 
 	verificationYearMonth := data.ReceiverVerificationInsert{
 		ReceiverID:        receiverID,
-		VerificationField: data.VerificationFieldYearMonth,
+		VerificationField: data.VerificationTypeYearMonth,
 		VerificationValue: "1999-01",
 	}
 
 	verificationPIN := data.ReceiverVerificationInsert{
 		ReceiverID:        receiverID,
-		VerificationField: data.VerificationFieldPin,
+		VerificationField: data.VerificationTypePin,
 		VerificationValue: "123",
 	}
 
 	verificationNationalID := data.ReceiverVerificationInsert{
 		ReceiverID:        receiverID,
-		VerificationField: data.VerificationFieldNationalID,
+		VerificationField: data.VerificationTypeNationalID,
 		VerificationValue: "12345CODE",
 	}
 
@@ -268,7 +268,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 	t.Run("update date of birth value", func(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 			VerificationValue: "2000-01-01",
 		})
 
@@ -297,7 +297,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		`
 
 		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationFieldDateOfBirth)
+		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypeDateOfBirth)
 		require.NoError(t, err)
 
 		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1999-01-01"))
@@ -312,7 +312,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 	t.Run("update year/month value", func(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldYearMonth,
+			VerificationField: data.VerificationTypeYearMonth,
 			VerificationValue: "2000-01",
 		})
 
@@ -341,7 +341,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		`
 
 		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationFieldYearMonth)
+		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypeYearMonth)
 		require.NoError(t, err)
 
 		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1999-01"))
@@ -356,7 +356,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 	t.Run("update pin value", func(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldPin,
+			VerificationField: data.VerificationTypePin,
 			VerificationValue: "8901",
 		})
 
@@ -385,7 +385,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		`
 
 		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationFieldPin)
+		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypePin)
 		require.NoError(t, err)
 
 		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1234"))
@@ -400,7 +400,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 	t.Run("update national ID value", func(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldNationalID,
+			VerificationField: data.VerificationTypeNationalID,
 			VerificationValue: "OLDID890",
 		})
 
@@ -429,7 +429,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		`
 
 		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationFieldNationalID)
+		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypeNationalID)
 		require.NoError(t, err)
 
 		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "NEWID123"))
@@ -446,25 +446,25 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 			VerificationValue: "2000-01-01",
 		})
 
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldYearMonth,
+			VerificationField: data.VerificationTypeYearMonth,
 			VerificationValue: "2000-01",
 		})
 
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldPin,
+			VerificationField: data.VerificationTypePin,
 			VerificationValue: "8901",
 		})
 
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldNationalID,
+			VerificationField: data.VerificationTypeNationalID,
 			VerificationValue: "OLDID890",
 		})
 
@@ -498,27 +498,27 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		`
 
 		receiverVerifications := []struct {
-			verificationField    data.VerificationField
+			verificationField    data.VerificationType
 			newVerificationValue string
 			oldVerificationValue string
 		}{
 			{
-				verificationField:    data.VerificationFieldDateOfBirth,
+				verificationField:    data.VerificationTypeDateOfBirth,
 				newVerificationValue: "1999-01-01",
 				oldVerificationValue: "2000-01-01",
 			},
 			{
-				verificationField:    data.VerificationFieldYearMonth,
+				verificationField:    data.VerificationTypeYearMonth,
 				newVerificationValue: "1999-01",
 				oldVerificationValue: "2000-01",
 			},
 			{
-				verificationField:    data.VerificationFieldPin,
+				verificationField:    data.VerificationTypePin,
 				newVerificationValue: "1234",
 				oldVerificationValue: "8901",
 			},
 			{
-				verificationField:    data.VerificationFieldNationalID,
+				verificationField:    data.VerificationTypeNationalID,
 				newVerificationValue: "NEWID123",
 				oldVerificationValue: "OLDID890",
 			},
@@ -571,27 +571,27 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		`
 
 		receiverVerifications := []struct {
-			verificationField    data.VerificationField
+			verificationField    data.VerificationType
 			newVerificationValue string
 			oldVerificationValue string
 		}{
 			{
-				verificationField:    data.VerificationFieldDateOfBirth,
+				verificationField:    data.VerificationTypeDateOfBirth,
 				newVerificationValue: "1999-01-01",
 				oldVerificationValue: "2000-01-01",
 			},
 			{
-				verificationField:    data.VerificationFieldYearMonth,
+				verificationField:    data.VerificationTypeYearMonth,
 				newVerificationValue: "1999-01",
 				oldVerificationValue: "",
 			},
 			{
-				verificationField:    data.VerificationFieldPin,
+				verificationField:    data.VerificationTypePin,
 				newVerificationValue: "1234",
 				oldVerificationValue: "",
 			},
 			{
-				verificationField:    data.VerificationFieldNationalID,
+				verificationField:    data.VerificationTypeNationalID,
 				newVerificationValue: "NEWID123",
 				oldVerificationValue: "",
 			},

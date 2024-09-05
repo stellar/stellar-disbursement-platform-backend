@@ -119,7 +119,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
 		// Verify ReceiverVerifications
-		receiverVerifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, VerificationFieldDateOfBirth)
+		receiverVerifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, VerificationTypeDateOfBirth)
 		require.NoError(t, err)
 		assertEqualVerifications(t, smsInstructions, receiverVerifications, receivers)
 
@@ -242,7 +242,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
 		// Verify ReceiverVerifications
-		receiverVerifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, VerificationFieldDateOfBirth)
+		receiverVerifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, VerificationTypeDateOfBirth)
 		require.NoError(t, err)
 		assertEqualVerifications(t, smsInstructions, receiverVerifications, receivers)
 

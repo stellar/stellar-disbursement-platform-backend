@@ -23,7 +23,7 @@ type UpdateReceiverHandler struct {
 
 func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverRequest, receiverID string) []data.ReceiverVerificationInsert {
 	receiverVerifications := []data.ReceiverVerificationInsert{}
-	appendNewVerificationValue := func(verificationField data.VerificationField, verificationValue string) {
+	appendNewVerificationValue := func(verificationField data.VerificationType, verificationValue string) {
 		if verificationValue != "" {
 			receiverVerifications = append(receiverVerifications, data.ReceiverVerificationInsert{
 				ReceiverID:        receiverID,
@@ -33,15 +33,15 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 		}
 	}
 
-	for _, verificationField := range data.GetAllVerificationFields() {
+	for _, verificationField := range data.GetAllVerificationTypes() {
 		switch verificationField {
-		case data.VerificationFieldDateOfBirth:
+		case data.VerificationTypeDateOfBirth:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.DateOfBirth)
-		case data.VerificationFieldYearMonth:
+		case data.VerificationTypeYearMonth:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.YearMonth)
-		case data.VerificationFieldPin:
+		case data.VerificationTypePin:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.Pin)
-		case data.VerificationFieldNationalID:
+		case data.VerificationTypeNationalID:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.NationalID)
 		}
 	}

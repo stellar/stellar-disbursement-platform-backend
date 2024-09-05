@@ -149,7 +149,7 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{

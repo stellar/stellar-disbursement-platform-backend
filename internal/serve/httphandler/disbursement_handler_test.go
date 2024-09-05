@@ -175,7 +175,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           asset.ID,
 			WalletID:          "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -191,7 +191,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           asset.ID,
 			WalletID:          disabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -206,7 +206,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -221,7 +221,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       "AAA",
 			AssetID:           asset.ID,
 			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -244,7 +244,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           asset.ID,
 			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -265,7 +265,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:                    country.Code,
 			AssetID:                        asset.ID,
 			WalletID:                       enabledWallet.ID,
-			VerificationField:              data.VerificationFieldDateOfBirth,
+			VerificationField:              data.VerificationTypeDateOfBirth,
 			SMSRegistrationMessageTemplate: smsTemplate,
 		})
 		require.NoError(t, err)

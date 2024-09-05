@@ -43,7 +43,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		Asset:                          asset,
 		Country:                        country,
 		Wallet:                         wallet,
-		VerificationField:              VerificationFieldDateOfBirth,
+		VerificationField:              VerificationTypeDateOfBirth,
 		SMSRegistrationMessageTemplate: smsTemplate,
 	}
 
@@ -73,7 +73,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
-		assert.Equal(t, VerificationFieldDateOfBirth, actual.VerificationField)
+		assert.Equal(t, VerificationTypeDateOfBirth, actual.VerificationField)
 	})
 }
 
@@ -539,7 +539,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -567,7 +567,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -605,7 +605,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -624,7 +624,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{

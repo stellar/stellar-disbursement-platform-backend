@@ -40,8 +40,8 @@ type ReceiverSendOTPRequest struct {
 }
 
 type ReceiverSendOTPResponseBody struct {
-	Message           string                 `json:"message"`
-	VerificationField data.VerificationField `json:"verification_field"`
+	Message           string                `json:"message"`
+	VerificationField data.VerificationType `json:"verification_field"`
 }
 
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +97,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	verificationField := data.VerificationFieldDateOfBirth
+	verificationField := data.VerificationTypeDateOfBirth
 	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
 	if err != nil {
 		err = fmt.Errorf("cannot find latest receiver verification for phone number %s: %w", truncatedPhoneNumber, err)

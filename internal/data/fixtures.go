@@ -540,7 +540,7 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 		d.Country = GetCountryFixture(t, ctx, sqlExec, FixtureCountryUKR)
 	}
 	if d.VerificationField == "" {
-		d.VerificationField = VerificationFieldDateOfBirth
+		d.VerificationField = VerificationTypeDateOfBirth
 	}
 
 	// insert disbursement
@@ -613,7 +613,7 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 	}
 
 	if insert.VerificationField == "" {
-		insert.VerificationField = VerificationFieldDateOfBirth
+		insert.VerificationField = VerificationTypeDateOfBirth
 	}
 
 	id, err := model.Insert(ctx, &insert)

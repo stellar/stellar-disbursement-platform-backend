@@ -9,11 +9,11 @@ import (
 )
 
 type DisbursementInstructionsValidator struct {
-	verificationField data.VerificationField
+	verificationField data.VerificationType
 	*Validator
 }
 
-func NewDisbursementInstructionsValidator(verificationField data.VerificationField) *DisbursementInstructionsValidator {
+func NewDisbursementInstructionsValidator(verificationField data.VerificationType) *DisbursementInstructionsValidator {
 	return &DisbursementInstructionsValidator{
 		verificationField: verificationField,
 		Validator:         NewValidator(),
@@ -54,13 +54,13 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 
 	// validate verification field
 	switch iv.verificationField {
-	case data.VerificationFieldDateOfBirth:
+	case data.VerificationTypeDateOfBirth:
 		iv.CheckError(utils.ValidateDateOfBirthVerification(verification), fmt.Sprintf("line %d - date of birth", lineNumber), "")
-	case data.VerificationFieldYearMonth:
+	case data.VerificationTypeYearMonth:
 		iv.CheckError(utils.ValidateYearMonthVerification(verification), fmt.Sprintf("line %d - year/month", lineNumber), "")
-	case data.VerificationFieldPin:
+	case data.VerificationTypePin:
 		iv.CheckError(utils.ValidatePinVerification(verification), fmt.Sprintf("line %d - pin", lineNumber), "")
-	case data.VerificationFieldNationalID:
+	case data.VerificationTypeNationalID:
 		iv.CheckError(utils.ValidateNationalIDVerification(verification), fmt.Sprintf("line %d - national id", lineNumber), "")
 	}
 }

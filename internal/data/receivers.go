@@ -45,12 +45,12 @@ func (r Receiver) ContactByType(contactType ReceiverContactType) string {
 
 type ReceiverRegistrationRequest struct {
 	// TODO: SDP-1296 - Update `/wallet-registration/otp` to support multiple contact information types and send OTPs accordingly
-	Email             string            `json:"email"`
-	PhoneNumber       string            `json:"phone_number"`
-	OTP               string            `json:"otp"`
-	VerificationValue string            `json:"verification"`
-	VerificationType  VerificationField `json:"verification_type"`
-	ReCAPTCHAToken    string            `json:"recaptcha_token"`
+	Email             string           `json:"email"`
+	PhoneNumber       string           `json:"phone_number"`
+	OTP               string           `json:"otp"`
+	VerificationValue string           `json:"verification"`
+	VerificationField VerificationType `json:"verification_field"`
+	ReCAPTCHAToken    string           `json:"recaptcha_token"`
 }
 
 type ReceiverStats struct {

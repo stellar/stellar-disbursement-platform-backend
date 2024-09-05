@@ -120,16 +120,16 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
-	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)
+	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationField)
 	if err != nil {
-		return fmt.Errorf("error retrieving receiver verification for verification type %s: %w", receiverRegistrationRequest.VerificationType, err)
+		return fmt.Errorf("error retrieving receiver verification for verification type %s: %w", receiverRegistrationRequest.VerificationField, err)
 	}
 	if len(receiverVerifications) == 0 {
-		err = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
+		err = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationField, truncatedPhoneNumber)
 		return &ErrorInformationNotFound{cause: err}
 	}
 	if len(receiverVerifications) > 1 {
-		log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receiver.ID, receiverRegistrationRequest.VerificationType)
+		log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receiver.ID, receiverRegistrationRequest.VerificationField)
 	}
 	receiverVerification := receiverVerifications[0]
 
@@ -156,7 +156,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	}
 
 	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
-		baseErrMsg := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
+		baseErrMsg := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationField, truncatedPhoneNumber)
 		// update the receiver verification with the confirmation that the value was checked
 		rvu.Attempts = utils.IntPtr(receiverVerification.Attempts + 1)
 		rvu.FailedAt = &now

@@ -26,7 +26,7 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	phone := strings.TrimSpace(receiverInfo.PhoneNumber)
 	otp := strings.TrimSpace(receiverInfo.OTP)
 	verification := strings.TrimSpace(receiverInfo.VerificationValue)
-	verificationType := strings.TrimSpace(string(receiverInfo.VerificationType))
+	verificationField := strings.TrimSpace(string(receiverInfo.VerificationField))
 
 	// validate phone field
 	rv.CheckError(utils.ValidatePhoneNumber(phone), "phone_number", "invalid phone format. Correct format: +380445555555")
@@ -36,33 +36,33 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value")
 
 	// validate verification type field
-	rv.Check(verificationType != "", "verification_type", "verification type cannot be empty")
-	vt := rv.validateAndGetVerificationType(verificationType)
+	rv.Check(verificationField != "", "verification_field", "verification type cannot be empty")
+	vf := rv.validateAndGetVerificationType(verificationField)
 
 	// validate verification fields
-	switch vt {
-	case data.VerificationFieldDateOfBirth:
+	switch vf {
+	case data.VerificationTypeDateOfBirth:
 		rv.CheckError(utils.ValidateDateOfBirthVerification(verification), "verification", "")
-	case data.VerificationFieldYearMonth:
+	case data.VerificationTypeYearMonth:
 		rv.CheckError(utils.ValidateYearMonthVerification(verification), "verification", "")
-	case data.VerificationFieldPin:
+	case data.VerificationTypePin:
 		rv.CheckError(utils.ValidatePinVerification(verification), "verification", "")
-	case data.VerificationFieldNationalID:
+	case data.VerificationTypeNationalID:
 		rv.CheckError(utils.ValidateNationalIDVerification(verification), "verification", "")
 	}
 
 	receiverInfo.PhoneNumber = phone
 	receiverInfo.OTP = otp
 	receiverInfo.VerificationValue = verification
-	receiverInfo.VerificationType = vt
+	receiverInfo.VerificationField = vf
 }
 
 // validateAndGetVerificationType validates if the verification type field is a valid value.
-func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verificationType string) data.VerificationField {
-	vt := data.VerificationField(strings.ToUpper(verificationType))
+func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verificationType string) data.VerificationType {
+	vt := data.VerificationType(strings.ToUpper(verificationType))
 
-	if !slices.Contains(data.GetAllVerificationFields(), vt) {
-		rv.Check(false, "verification_type", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
+	if !slices.Contains(data.GetAllVerificationTypes(), vt) {
+		rv.Check(false, "verification_field", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationTypes()))
 		return ""
 	}
 	return vt
