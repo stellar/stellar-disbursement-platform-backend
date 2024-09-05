@@ -803,7 +803,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            data.StartedDisbursementStatus,
-		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationField: data.VerificationTypeDateOfBirth,
 	})
 
 	t.Run("returns Unauthorized when no token in the context", func(t *testing.T) {

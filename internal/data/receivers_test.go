@@ -929,7 +929,7 @@ func Test_DeleteByPhoneNumber(t *testing.T) {
 	receiverWalletX := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverX.ID, wallet.ID, DraftReceiversWalletStatus)
 	_ = CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 		ReceiverID:        receiverX.ID,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 		VerificationValue: "1990-01-01",
 	})
 	messageX := CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
@@ -960,7 +960,7 @@ func Test_DeleteByPhoneNumber(t *testing.T) {
 	receiverWalletY := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverY.ID, wallet.ID, DraftReceiversWalletStatus)
 	_ = CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 		ReceiverID:        receiverY.ID,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 		VerificationValue: "1990-01-01",
 	})
 	messageY := CreateMessageFixture(t, ctx, dbConnectionPool, &Message{

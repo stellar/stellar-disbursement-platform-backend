@@ -78,7 +78,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -115,7 +115,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -186,7 +186,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -240,7 +240,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -305,7 +305,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -370,7 +370,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -454,7 +454,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -518,7 +518,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -578,7 +578,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -641,7 +641,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -649,7 +649,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -725,7 +725,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -733,7 +733,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -741,7 +741,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 
 		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{

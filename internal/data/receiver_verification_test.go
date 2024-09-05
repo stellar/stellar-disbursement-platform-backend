@@ -31,17 +31,17 @@ func Test_ReceiverVerificationModel_GetByReceiverIDsAndVerificationField(t *test
 
 	verification1 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 		ReceiverID:        receiver1.ID,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 		VerificationValue: "1990-01-01",
 	})
 	verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 		ReceiverID:        receiver2.ID,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 		VerificationValue: "1990-01-02",
 	})
 	CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 		ReceiverID:        receiver3.ID,
-		VerificationField: VerificationFieldPin,
+		VerificationField: VerificationTypePin,
 		VerificationValue: "1990-01-03",
 	})
 
@@ -50,11 +50,11 @@ func Test_ReceiverVerificationModel_GetByReceiverIDsAndVerificationField(t *test
 
 	receiverVerificationModel := ReceiverVerificationModel{}
 
-	actualVerifications, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver1.ID, receiver2.ID, receiver3.ID}, VerificationFieldDateOfBirth)
+	actualVerifications, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver1.ID, receiver2.ID, receiver3.ID}, VerificationTypeDateOfBirth)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(actualVerifications))
 	for _, v := range actualVerifications {
-		assert.Equal(t, VerificationFieldDateOfBirth, v.VerificationField)
+		assert.Equal(t, VerificationTypeDateOfBirth, v.VerificationField)
 		assert.Contains(t, verifiedReceivers, v.ReceiverID)
 		assert.Contains(t, verifieldValues, v.HashedValue)
 	}
@@ -84,22 +84,22 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 	t.Run("returns all when the receiver has verifications registered", func(t *testing.T) {
 		verification1 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 			VerificationValue: "1990-01-01",
 		})
 		verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldYearMonth,
+			VerificationField: VerificationTypeYearMonth,
 			VerificationValue: "1990-01",
 		})
 		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldPin,
+			VerificationField: VerificationTypePin,
 			VerificationValue: "1234",
 		})
 		verification4 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldNationalID,
+			VerificationField: VerificationTypeNationalID,
 			VerificationValue: "5678",
 		})
 
@@ -111,28 +111,28 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 		assert.Equal(t, []ReceiverVerification{
 			{
 				ReceiverID:        receiver.ID,
-				VerificationField: VerificationFieldDateOfBirth,
+				VerificationField: VerificationTypeDateOfBirth,
 				HashedValue:       verification1.HashedValue,
 				CreatedAt:         verification1.CreatedAt,
 				UpdatedAt:         verification1.UpdatedAt,
 			},
 			{
 				ReceiverID:        receiver.ID,
-				VerificationField: VerificationFieldYearMonth,
+				VerificationField: VerificationTypeYearMonth,
 				HashedValue:       verification2.HashedValue,
 				CreatedAt:         verification2.CreatedAt,
 				UpdatedAt:         verification2.UpdatedAt,
 			},
 			{
 				ReceiverID:        receiver.ID,
-				VerificationField: VerificationFieldPin,
+				VerificationField: VerificationTypePin,
 				HashedValue:       verification3.HashedValue,
 				CreatedAt:         verification3.CreatedAt,
 				UpdatedAt:         verification3.UpdatedAt,
 			},
 			{
 				ReceiverID:        receiver.ID,
-				VerificationField: VerificationFieldNationalID,
+				VerificationField: VerificationTypeNationalID,
 				HashedValue:       verification4.HashedValue,
 				CreatedAt:         verification4.CreatedAt,
 				UpdatedAt:         verification4.UpdatedAt,
@@ -165,28 +165,28 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 		earlierTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 		verification1 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 			VerificationValue: "1990-01-01",
 		})
 		verification1.UpdatedAt = earlierTime
 
 		verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldYearMonth,
+			VerificationField: VerificationTypeYearMonth,
 			VerificationValue: "1990-01",
 		})
 		verification2.UpdatedAt = earlierTime
 
 		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldPin,
+			VerificationField: VerificationTypePin,
 			VerificationValue: "1234",
 		})
 		verification3.UpdatedAt = earlierTime
 
 		verification4 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldNationalID,
+			VerificationField: VerificationTypeNationalID,
 			VerificationValue: "5678",
 		})
 
@@ -197,7 +197,7 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 		assert.Equal(t,
 			ReceiverVerification{
 				ReceiverID:        receiver.ID,
-				VerificationField: VerificationFieldNationalID,
+				VerificationField: VerificationTypeNationalID,
 				HashedValue:       verification4.HashedValue,
 				CreatedAt:         verification4.CreatedAt,
 				UpdatedAt:         verification4.UpdatedAt,
@@ -221,14 +221,14 @@ func Test_ReceiverVerificationModel_Insert(t *testing.T) {
 
 	verification := ReceiverVerificationInsert{
 		ReceiverID:        receiver.ID,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 		VerificationValue: "1990-01-01",
 	}
 
 	_, err = receiverVerificationModel.Insert(ctx, dbConnectionPool, verification)
 	require.NoError(t, err)
 
-	actualVerification, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationFieldDateOfBirth)
+	actualVerification, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationTypeDateOfBirth)
 	require.NoError(t, err)
 	verified := CompareVerificationValue(actualVerification[0].HashedValue, verification.VerificationValue)
 	assert.True(t, verified)
@@ -253,7 +253,7 @@ func Test_ReceiverVerificationModel_UpdateVerificationValue(t *testing.T) {
 	oldExpectedValue := "1990-01-01"
 	actualBeforeUpdate, err := receiverVerificationModel.Insert(ctx, dbConnectionPool, ReceiverVerificationInsert{
 		ReceiverID:        receiver.ID,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 		VerificationValue: oldExpectedValue,
 	})
 	require.NoError(t, err)
@@ -262,10 +262,10 @@ func Test_ReceiverVerificationModel_UpdateVerificationValue(t *testing.T) {
 	assert.True(t, verified)
 
 	newExpectedValue := "1990-01-02"
-	err = receiverVerificationModel.UpdateVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldDateOfBirth, newExpectedValue)
+	err = receiverVerificationModel.UpdateVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypeDateOfBirth, newExpectedValue)
 	require.NoError(t, err)
 
-	actualAfterUpdate, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationFieldDateOfBirth)
+	actualAfterUpdate, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationTypeDateOfBirth)
 	require.NoError(t, err)
 	verified = CompareVerificationValue(actualAfterUpdate[0].HashedValue, newExpectedValue)
 	assert.True(t, verified)
@@ -282,7 +282,7 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 	ctx := context.Background()
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 	receiverVerificationModel := ReceiverVerificationModel{}
-	getReceiverVerificationHashedValue := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, receiverID string, verificationField VerificationField) string {
+	getReceiverVerificationHashedValue := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, receiverID string, verificationField VerificationType) string {
 		const q = "SELECT hashed_value FROM receiver_verifications WHERE receiver_id = $1 AND verification_field = $2"
 		var hashedValue string
 		qErr := dbConnectionPool.GetContext(ctx, &hashedValue, q, receiverID, verificationField)
@@ -293,20 +293,20 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 	t.Run("upserts the verification value successfully", func(t *testing.T) {
 		// Inserts the verification value
 		firstVerificationValue := "123456"
-		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldPin, firstVerificationValue)
+		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypePin, firstVerificationValue)
 		require.NoError(t, err)
 
-		currentHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldPin)
+		currentHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationTypePin)
 		assert.NotEmpty(t, currentHashedValue)
 		verified := CompareVerificationValue(currentHashedValue, firstVerificationValue)
 		assert.True(t, verified)
 
 		// Updates the verification value
 		newVerificationValue := "654321"
-		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldPin, newVerificationValue)
+		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypePin, newVerificationValue)
 		require.NoError(t, err)
 
-		afterUpdateHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldPin)
+		afterUpdateHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationTypePin)
 		assert.NotEmpty(t, afterUpdateHashedValue)
 
 		// Checking if the hashed value is NOT the first one.
@@ -320,10 +320,10 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 	t.Run("doesn't update the verification value when it was confirmed by the receiver", func(t *testing.T) {
 		// Inserts the verification value
 		firstVerificationValue := "0301016957187"
-		err := receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID, firstVerificationValue)
+		err := receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID, firstVerificationValue)
 		require.NoError(t, err)
 
-		currentHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID)
+		currentHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID)
 		assert.NotEmpty(t, currentHashedValue)
 		verified := CompareVerificationValue(currentHashedValue, firstVerificationValue)
 		assert.True(t, verified)
@@ -332,17 +332,17 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 		now := time.Now()
 		err = receiverVerificationModel.UpdateReceiverVerification(ctx, ReceiverVerificationUpdate{
 			ReceiverID:          receiver.ID,
-			VerificationField:   VerificationFieldNationalID,
+			VerificationField:   VerificationTypeNationalID,
 			ConfirmedAt:         &now,
 			VerificationChannel: message.MessageChannelSMS,
 		}, dbConnectionPool)
 		require.NoError(t, err)
 
 		newVerificationValue := "0301017821085"
-		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID, newVerificationValue)
+		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID, newVerificationValue)
 		require.NoError(t, err)
 
-		afterUpdateHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID)
+		afterUpdateHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID)
 		assert.NotEmpty(t, currentHashedValue)
 
 		// Checking if the hashed value is NOT the new one.
@@ -371,7 +371,7 @@ func Test_ReceiverVerificationModel_UpdateReceiverVerification(t *testing.T) {
 
 	verification := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 		ReceiverID:        receiver.ID,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 		VerificationValue: "1990-01-01",
 	})
 
@@ -382,7 +382,7 @@ func Test_ReceiverVerificationModel_UpdateReceiverVerification(t *testing.T) {
 	date := time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC)
 	verificationUpdate := ReceiverVerificationUpdate{
 		ReceiverID:          receiver.ID,
-		VerificationField:   VerificationFieldDateOfBirth,
+		VerificationField:   VerificationTypeDateOfBirth,
 		Attempts:            utils.IntPtr(5),
 		ConfirmedAt:         &date,
 		FailedAt:            &date,
@@ -424,7 +424,7 @@ func Test_ReceiverVerificationUpdate_Validate(t *testing.T) {
 			name: "valid update",
 			update: ReceiverVerificationUpdate{
 				ReceiverID:          "receiver-id",
-				VerificationField:   VerificationFieldDateOfBirth,
+				VerificationField:   VerificationTypeDateOfBirth,
 				VerificationChannel: message.MessageChannelSMS,
 			},
 			wantErr: nil,
@@ -445,7 +445,7 @@ func Test_ReceiverVerificationUpdate_Validate(t *testing.T) {
 			name: "invalid update with empty verification channel",
 			update: ReceiverVerificationUpdate{
 				ReceiverID:        "receiver-id",
-				VerificationField: VerificationFieldDateOfBirth,
+				VerificationField: VerificationTypeDateOfBirth,
 			},
 			wantErr: fmt.Errorf("verification channel is required"),
 		},
@@ -492,15 +492,15 @@ func Test_ReceiverVerificationModel_GetLatestByPhoneNumber(t *testing.T) {
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 	receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
 
-	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldDateOfBirth, "1990-01-01")
+	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypeDateOfBirth, "1990-01-01")
 	require.NoError(t, err)
-	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldPin, "123456")
+	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypePin, "123456")
 	require.NoError(t, err)
 
 	verification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
 	require.NoError(t, err)
 
-	assert.Equal(t, VerificationFieldPin, verification.VerificationField)
+	assert.Equal(t, VerificationTypePin, verification.VerificationField)
 	assert.True(t, CompareVerificationValue(verification.HashedValue, "123456"))
 }
 

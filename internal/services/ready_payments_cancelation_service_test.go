@@ -48,7 +48,7 @@ func Test_ReadyPaymentsCancellationService_CancelReadyPaymentsService(t *testing
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            data.ReadyDisbursementStatus,
-		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationField: data.VerificationTypeDateOfBirth,
 	})
 
 	t.Run("automatic payment cancellation is deactivated", func(t *testing.T) {

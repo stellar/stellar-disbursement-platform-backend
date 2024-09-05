@@ -10,11 +10,11 @@ import (
 
 func Test_DisbursementRequestValidator_ValidateAndGetVerificationType(t *testing.T) {
 	t.Run("Valid verification type", func(t *testing.T) {
-		validField := []data.VerificationField{
-			data.VerificationFieldDateOfBirth,
-			data.VerificationFieldYearMonth,
-			data.VerificationFieldPin,
-			data.VerificationFieldNationalID,
+		validField := []data.VerificationType{
+			data.VerificationTypeDateOfBirth,
+			data.VerificationTypeYearMonth,
+			data.VerificationTypePin,
+			data.VerificationTypeNationalID,
 		}
 		for _, field := range validField {
 			validator := NewDisbursementRequestValidator(field)
@@ -23,7 +23,7 @@ func Test_DisbursementRequestValidator_ValidateAndGetVerificationType(t *testing
 	})
 
 	t.Run("Invalid verification type", func(t *testing.T) {
-		field := data.VerificationField("field")
+		field := data.VerificationType("field")
 		validator := NewDisbursementRequestValidator(field)
 
 		actual := validator.ValidateAndGetVerificationType()

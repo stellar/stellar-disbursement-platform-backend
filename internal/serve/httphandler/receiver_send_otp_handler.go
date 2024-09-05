@@ -40,11 +40,10 @@ type ReceiverSendOTPRequest struct {
 }
 
 type ReceiverSendOTPResponseBody struct {
-	Message           string                 `json:"message"`
-	VerificationField data.VerificationField `json:"verification_field"`
+	Message           string                `json:"message"`
+	VerificationField data.VerificationType `json:"verification_field"`
 }
 
-// FIXME! /wallet-registration/otp returns a JSON with the field named `verification_field` but /wallet-registration/verification expects the field to be named `verification_type`. This inconsistency should be fixed.
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -98,7 +97,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	verificationField := data.VerificationFieldDateOfBirth
+	verificationField := data.VerificationTypeDateOfBirth
 	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
 	if err != nil {
 		err = fmt.Errorf("cannot find latest receiver verification for phone number %s: %w", truncatedPhoneNumber, err)

@@ -37,12 +37,12 @@ type DisbursementHandler struct {
 }
 
 type PostDisbursementRequest struct {
-	Name                           string                 `json:"name"`
-	CountryCode                    string                 `json:"country_code"`
-	WalletID                       string                 `json:"wallet_id"`
-	AssetID                        string                 `json:"asset_id"`
-	VerificationField              data.VerificationField `json:"verification_field"`
-	SMSRegistrationMessageTemplate string                 `json:"sms_registration_message_template"`
+	Name                           string                `json:"name"`
+	CountryCode                    string                `json:"country_code"`
+	WalletID                       string                `json:"wallet_id"`
+	AssetID                        string                `json:"asset_id"`
+	VerificationField              data.VerificationType `json:"verification_field"`
+	SMSRegistrationMessageTemplate string                `json:"sms_registration_message_template"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -438,7 +438,7 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	}
 }
 
-func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
+func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationField data.VerificationType) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(verificationField)
 
 	instructions := []*data.DisbursementInstruction{}
