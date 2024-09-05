@@ -1053,7 +1053,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				},
 			},
 		}
-		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got := s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.True(t, got)
 	})
 
@@ -1065,7 +1065,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				InvitationSentAt: &invitationSentAt,
 			},
 		}
-		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got := s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.False(t, got)
 	})
 
@@ -1089,7 +1089,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got := s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.False(t, got)
 
 		entries := getEntries()
@@ -1121,7 +1121,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got := s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.False(t, got)
 
 		entries := getEntries()
@@ -1153,7 +1153,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				},
 			},
 		}
-		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got := s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.True(t, got)
 
 		// 4 days after receiving the first invitation
@@ -1169,7 +1169,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				},
 			},
 		}
-		got = s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got = s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.True(t, got)
 
 		// 6 days after receiving the first invitation
@@ -1185,7 +1185,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				},
 			},
 		}
-		got = s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got = s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.True(t, got)
 
 		// 8 days after receiving the first invitation - we don't resend because it reached the maximum number of attempts
@@ -1201,7 +1201,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				},
 			},
 		}
-		got = s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		got = s.shouldSendInvitation(ctx, &org, &rwa)
 		assert.False(t, got)
 	})
 }

@@ -108,7 +108,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	receiverWalletIDs := []string{}
 	// TODO: improve this code adding go routines
 	for _, rwa := range receiverWalletsAsset {
-		if !s.shouldSendInvitationSMS(ctx, organization, &rwa) {
+		if !s.shouldSendInvitation(ctx, organization, &rwa) {
 			continue
 		}
 
@@ -244,10 +244,10 @@ func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistrati
 	return receiverWallets, err
 }
 
-// shouldSendInvitationSMS returns true if we should send the invitation SMS to the receiver. It will be used to either
-// send the invitation for the first time, or to resend it automatically according to the organization's SMS Resend
-// Interval and the maximum number of SMS resend attempts.
-func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
+// shouldSendInvitation returns true if we should send the invitation to the receiver. It will be used to either
+// send the invitation for the first time, or to resend it automatically according to the organization's Resend
+// Interval and the maximum number of resend attempts.
+func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
 	receiver := rwa.ReceiverWallet.Receiver
 
 	// TODO: SDP-1316 - add support for other contact information in this method.
