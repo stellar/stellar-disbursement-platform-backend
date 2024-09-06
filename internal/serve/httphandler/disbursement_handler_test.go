@@ -290,7 +290,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assert.Equal(t, 1, len(actualDisbursement.StatusHistory))
 		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
 		assert.Equal(t, user.ID, actualDisbursement.StatusHistory[0].UserID)
-		assert.Equal(t, smsTemplate, actualDisbursement.SMSRegistrationMessageTemplate)
+		assert.Equal(t, smsTemplate, actualDisbursement.ReceiverRegistrationMessageTemplate)
 	})
 
 	authManagerMock.AssertExpectations(t)

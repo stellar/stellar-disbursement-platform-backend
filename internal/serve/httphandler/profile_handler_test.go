@@ -76,8 +76,8 @@ func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool d
 			organizations
 		SET
 			name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
-			sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT,
-			sms_resend_interval = NULL, payment_cancellation_period_days = NULL, privacy_policy_link = NULL`
+			receiver_registration_message_template = DEFAULT, otp_message_template = DEFAULT,
+			receiver_invitation_resend_interval = NULL, payment_cancellation_period_days = NULL, privacy_policy_link = NULL`
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
 }
@@ -346,25 +346,25 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"organization_name": "My Org Name",
 					"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
 					"payment_cancellation_period_days": 2,
-					"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
-					"sms_resend_interval": 2,
+					"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+					"receiver_invitation_resend_interval": 2,
 					"timezone_utc_offset": "-03:00",
 					"privacy_policy_link": "https://example.com/privacy-policy"
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", reqBody, newPNGImgBuf())
 			},
 			resultingFieldsToCompare: map[string]interface{}{
-				"IsApprovalRequired":             true,
-				"Name":                           "My Org Name",
-				"Logo":                           newPNGImgBuf().Bytes(),
-				"OTPMessageTemplate":             "Here's your OTP Code to complete your registration. MyOrg 👋",
-				"PaymentCancellationPeriodDays":  int64(2),
-				"SMSRegistrationMessageTemplate": "My custom receiver wallet registration invite. MyOrg 👋",
-				"SMSResendInterval":              int64(2),
-				"TimezoneUTCOffset":              "-03:00",
-				"PrivacyPolicyLink":              "https://example.com/privacy-policy",
+				"IsApprovalRequired":                  true,
+				"Name":                                "My Org Name",
+				"Logo":                                newPNGImgBuf().Bytes(),
+				"OTPMessageTemplate":                  "Here's your OTP Code to complete your registration. MyOrg 👋",
+				"PaymentCancellationPeriodDays":       int64(2),
+				"ReceiverRegistrationMessageTemplate": "My custom receiver wallet registration invite. MyOrg 👋",
+				"ReceiverInvitationResendInterval":    int64(2),
+				"TimezoneUTCOffset":                   "-03:00",
+				"PrivacyPolicyLink":                   "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', SMSResendInterval='2', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendInterval='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
@@ -377,37 +377,37 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			},
 			updateOrgInitialValuesFn: func(t *testing.T, ctx context.Context, models *data.Models) {
 				otpMessageTemplate := "custom OTPMessageTemplate"
-				smsRegistrationMessageTemplate := "custom SMSRegistrationMessageTemplate"
+				smsRegistrationMessageTemplate := "custom ReceiverRegistrationMessageTemplate"
 				smsResendInterval := int64(123)
 				paymentCancellationPeriodDays := int64(456)
 				privacyPolicyLink := "https://example.com/privacy-policy"
 				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-					SMSRegistrationMessageTemplate: &smsRegistrationMessageTemplate,
-					OTPMessageTemplate:             &otpMessageTemplate,
-					SMSResendInterval:              &smsResendInterval,
-					PaymentCancellationPeriodDays:  &paymentCancellationPeriodDays,
-					PrivacyPolicyLink:              &privacyPolicyLink,
+					ReceiverRegistrationMessageTemplate: &smsRegistrationMessageTemplate,
+					OTPMessageTemplate:                  &otpMessageTemplate,
+					ReceiverInvitationResendInterval:    &smsResendInterval,
+					PaymentCancellationPeriodDays:       &paymentCancellationPeriodDays,
+					PrivacyPolicyLink:                   &privacyPolicyLink,
 				})
 				require.NoError(t, err)
 			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
-					"sms_registration_message_template": "",
+					"receiver_registration_message_template": "",
 					"otp_message_template": "",
-					"sms_resend_interval": 0,
+					"receiver_invitation_resend_interval": 0,
 					"payment_cancellation_period_days": 0,
 					"privacy_policy_link": ""
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
 			},
 			resultingFieldsToCompare: map[string]interface{}{
-				"SMSRegistrationMessageTemplate": "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.",
-				"OTPMessageTemplate":             "{{.OTP}} is your {{.OrganizationName}} phone verification code.",
-				"SMSResendInterval":              nilInt64,
-				"PaymentCancellationPeriodDays":  nilInt64,
-				"PrivacyPolicyLink":              nilString,
+				"ReceiverRegistrationMessageTemplate": "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.",
+				"OTPMessageTemplate":                  "{{.OTP}} is your {{.OrganizationName}} phone verification code.",
+				"ReceiverInvitationResendInterval":    nilInt64,
+				"PaymentCancellationPeriodDays":       nilInt64,
+				"PrivacyPolicyLink":                   nilString,
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', SMSRegistrationMessageTemplate='', SMSResendInterval='0']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', ReceiverInvitationResendInterval='0', ReceiverRegistrationMessageTemplate='']"},
 		},
 	}
 
@@ -1134,7 +1134,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required": false,
 				"privacy_policy_link": null,
-				"sms_resend_interval": 0,
+				"receiver_invitation_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
@@ -1144,12 +1144,12 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns the sms_registration_message_template and otp_message_template when they aren't the default values", func(t *testing.T) {
+	t.Run("returns the receiver_registration_message_template and otp_message_template when they aren't the default values", func(t *testing.T) {
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
 		msg := "My custom receiver wallet registration invite. MyOrg 👋"
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-			SMSRegistrationMessageTemplate: &msg,
+			ReceiverRegistrationMessageTemplate: &msg,
 		})
 		require.NoError(t, err)
 
@@ -1171,8 +1171,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
-				"sms_resend_interval": 0,
+				"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+				"receiver_invitation_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
@@ -1206,9 +1206,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+				"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
-				"sms_resend_interval": 0,
+				"receiver_invitation_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
@@ -1219,14 +1219,14 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns the custom sms_resend_interval", func(t *testing.T) {
+	t.Run("returns the custom receiver_invitation_resend_interval", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
-		var smsResendInterval int64 = 2
+		var resendInterval int64 = 2
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-			SMSResendInterval: &smsResendInterval,
+			ReceiverInvitationResendInterval: &resendInterval,
 		})
 		require.NoError(t, err)
 
@@ -1248,7 +1248,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_resend_interval": 2,
+				"receiver_invitation_resend_interval": 2,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
@@ -1288,7 +1288,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_resend_interval": 0,
+				"receiver_invitation_resend_interval": 0,
 				"payment_cancellation_period_days": 5,
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
@@ -1328,7 +1328,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_resend_interval": 0,
+				"receiver_invitation_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": "https://example.com/privacy-policy",
 				"message_channel_priority": ["SMS", "EMAIL"]

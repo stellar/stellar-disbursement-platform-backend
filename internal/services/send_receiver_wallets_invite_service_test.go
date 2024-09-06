@@ -397,7 +397,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		rec2RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
 
 		customInvitationMessage := "My custom receiver wallet registration invite. MyOrg 👋"
-		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSRegistrationMessageTemplate: &customInvitationMessage})
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverRegistrationMessageTemplate: &customInvitationMessage})
 		require.NoError(t, err)
 
 		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -545,7 +545,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rec1RW.ID)
 		require.NoError(t, err)
 
-		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: new(int64)})
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendInterval: new(int64)})
 		require.NoError(t, err)
 
 		reqs := []schemas.EventReceiverWalletSMSInvitationData{
@@ -592,7 +592,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		// Set the SMS Resend Interval
 		var smsResendInterval int64 = 2
-		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendInterval: &smsResendInterval})
 		require.NoError(t, err)
 
 		_ = data.CreateMessageFixture(t, ctx, dbConnectionPool, &data.Message{
@@ -672,7 +672,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		// Set the SMS Resend Interval
 		var smsResendInterval int64 = 2
-		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendInterval: &smsResendInterval})
 		require.NoError(t, err)
 
 		reqs := []schemas.EventReceiverWalletSMSInvitationData{
@@ -719,7 +719,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		// Set the SMS Resend Interval
 		var smsResendInterval int64 = 2
-		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval, SMSRegistrationMessageTemplate: new(string)})
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendInterval: &smsResendInterval, ReceiverRegistrationMessageTemplate: new(string)})
 		require.NoError(t, err)
 
 		walletDeepLink1 := WalletDeepLink{
@@ -787,19 +787,19 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 	t.Run("send disbursement invite successfully", func(t *testing.T) {
 		disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:                        country,
-			Wallet:                         wallet1,
-			Status:                         data.ReadyDisbursementStatus,
-			Asset:                          asset1,
-			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 3:",
+			Country:                             country,
+			Wallet:                              wallet1,
+			Status:                              data.ReadyDisbursementStatus,
+			Asset:                               asset1,
+			ReceiverRegistrationMessageTemplate: "SMS Registration Message template test disbursement 3:",
 		})
 
 		disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:                        country,
-			Wallet:                         wallet2,
-			Status:                         data.ReadyDisbursementStatus,
-			Asset:                          asset2,
-			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 4:",
+			Country:                             country,
+			Wallet:                              wallet2,
+			Status:                              data.ReadyDisbursementStatus,
+			Asset:                               asset2,
+			ReceiverRegistrationMessageTemplate: "SMS Registration Message template test disbursement 4:",
 		})
 
 		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
@@ -839,7 +839,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
-		contentDisbursement3 := fmt.Sprintf("%s %s", disbursement3.SMSRegistrationMessageTemplate, deepLink1)
+		contentDisbursement3 := fmt.Sprintf("%s %s", disbursement3.ReceiverRegistrationMessageTemplate, deepLink1)
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
@@ -850,7 +850,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
-		contentDisbursement4 := fmt.Sprintf("%s %s", disbursement4.SMSRegistrationMessageTemplate, deepLink2)
+		contentDisbursement4 := fmt.Sprintf("%s %s", disbursement4.ReceiverRegistrationMessageTemplate, deepLink2)
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
@@ -936,11 +936,11 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 	t.Run("successfully resend the disbursement invitation SMS", func(t *testing.T) {
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:                        country,
-			Wallet:                         wallet1,
-			Status:                         data.ReadyDisbursementStatus,
-			Asset:                          asset1,
-			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement:",
+			Country:                             country,
+			Wallet:                              wallet1,
+			Status:                              data.ReadyDisbursementStatus,
+			Asset:                               asset1,
+			ReceiverRegistrationMessageTemplate: "SMS Registration Message template test disbursement:",
 		})
 
 		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
@@ -969,7 +969,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		// Set the SMS Resend Interval
 		var smsResendInterval int64 = 2
-		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval, SMSRegistrationMessageTemplate: new(string)})
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendInterval: &smsResendInterval, ReceiverRegistrationMessageTemplate: new(string)})
 		require.NoError(t, err)
 
 		walletDeepLink1 := WalletDeepLink{
@@ -981,7 +981,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
-		contentDisbursement := fmt.Sprintf("%s %s", disbursement.SMSRegistrationMessageTemplate, deepLink1)
+		contentDisbursement := fmt.Sprintf("%s %s", disbursement.ReceiverRegistrationMessageTemplate, deepLink1)
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
@@ -1044,7 +1044,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 	ctx := context.Background()
 
 	t.Run("returns true when user never received the invitation SMS", func(t *testing.T) {
-		org := data.Organization{SMSResendInterval: nil}
+		org := data.Organization{ReceiverInvitationResendInterval: nil}
 		rwa := data.ReceiverWalletAsset{
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: nil,
@@ -1059,7 +1059,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 
 	t.Run("returns false when user received the invitation SMS and organization's SMS Resend Interval is not set", func(t *testing.T) {
 		invitationSentAt := time.Now()
-		org := data.Organization{SMSResendInterval: nil}
+		org := data.Organization{ReceiverInvitationResendInterval: nil}
 		rwa := data.ReceiverWalletAsset{
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: &invitationSentAt,
@@ -1072,7 +1072,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 	t.Run("returns false when receiver reached the maximum number of SMS resend attempts", func(t *testing.T) {
 		var smsResendInterval int64 = 2
 		invitationSentAt := time.Now()
-		org := data.Organization{SMSResendInterval: &smsResendInterval}
+		org := data.Organization{ReceiverInvitationResendInterval: &smsResendInterval}
 		rwa := data.ReceiverWalletAsset{
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: &invitationSentAt,
@@ -1104,7 +1104,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 	t.Run("returns false when the receiver is not in the period to resend the SMS", func(t *testing.T) {
 		var smsResendInterval int64 = 2
 		invitationSentAt := time.Now().AddDate(0, 0, -int(smsResendInterval-1))
-		org := data.Organization{SMSResendInterval: &smsResendInterval}
+		org := data.Organization{ReceiverInvitationResendInterval: &smsResendInterval}
 		rwa := data.ReceiverWalletAsset{
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: &invitationSentAt,
@@ -1141,7 +1141,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 
 		// 2 days after receiving the first invitation
 		invitationSentAt := time.Now().Add((-25 * 2) * time.Hour)
-		org := data.Organization{SMSResendInterval: &smsResendInterval}
+		org := data.Organization{ReceiverInvitationResendInterval: &smsResendInterval}
 		rwa := data.ReceiverWalletAsset{
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: &invitationSentAt,
