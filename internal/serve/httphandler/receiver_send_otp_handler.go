@@ -22,19 +22,6 @@ import (
 
 type OTPRegistrationType string
 
-const (
-	OTPRegistrationTypeSMS   OTPRegistrationType = "phone_number"
-	OTPRegistrationTypeEmail OTPRegistrationType = "email"
-)
-
-func (t OTPRegistrationType) String() string {
-	return strings.ReplaceAll(string(t), "_", " ")
-}
-
-func getAllowedOTPRegistrationTypes() []OTPRegistrationType {
-	return []OTPRegistrationType{OTPRegistrationTypeSMS, OTPRegistrationTypeEmail}
-}
-
 // OTPMessageDisclaimer contains disclaimer text that needs to be added as part of the OTP message to remind the
 // receiver how sensitive the data is.
 const OTPMessageDisclaimer = " If you did not request this code, please ignore. Do not share your code with anyone."
@@ -113,14 +100,14 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	// Determine OTP registration type and handle accordingly
-	var otpRegistrationType OTPRegistrationType
+	var otpRegistrationType data.ReceiverContactType
 	var verificationField data.VerificationType
 	var httpErr *httperror.HTTPError
 	if receiverSendOTPRequest.PhoneNumber != "" {
-		otpRegistrationType = OTPRegistrationTypeSMS
+		otpRegistrationType = data.ReceiverContactTypeSMS
 		verificationField, httpErr = h.handleOTPForSMSReceiver(ctx, receiverSendOTPRequest.PhoneNumber, sep24Claims.ClientDomainClaim)
 	} else {
-		otpRegistrationType = OTPRegistrationTypeEmail
+		otpRegistrationType = data.ReceiverContactTypeEmail
 		verificationField, httpErr = h.HandleOTPForEmailReceiver(ctx, sep24Claims, receiverSendOTPRequest)
 	}
 	if httpErr != nil {
@@ -133,16 +120,14 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 }
 
 // newReceiverSendOTPResponseBody creates a new ReceiverSendOTPResponseBody based on the OTP registration type and verification field.
-func newReceiverSendOTPResponseBody(otpRegistrationType OTPRegistrationType, verificationField data.VerificationType) ReceiverSendOTPResponseBody {
+func newReceiverSendOTPResponseBody(contactType data.ReceiverContactType, verificationField data.VerificationType) ReceiverSendOTPResponseBody {
 	resp := ReceiverSendOTPResponseBody{VerificationField: verificationField}
 
-	switch otpRegistrationType {
-	case OTPRegistrationTypeSMS:
+	switch contactType {
+	case data.ReceiverContactTypeSMS:
 		resp.Message = "if your phone number is registered, you'll receive an OTP"
-	case OTPRegistrationTypeEmail:
+	case data.ReceiverContactTypeEmail:
 		resp.Message = "if your email is registered, you'll receive an OTP"
-	default:
-		resp.Message = "if your contact information is registered, you'll receive an OTP"
 	}
 
 	return resp
@@ -189,7 +174,7 @@ func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(
 	}
 
 	// Send OTP message
-	err = h.sendSMSMessage(ctx, phoneNumber, newOTP)
+	err = h.sendOTP(ctx, data.ReceiverContactTypeSMS, phoneNumber, newOTP)
 	if err != nil {
 		err = fmt.Errorf("sending SMS message: %w", err)
 		return placeholderVerificationField, httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
@@ -198,8 +183,8 @@ func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(
 	return receiverVerification.VerificationField, nil
 }
 
-// sendSMSMessage sends an OTP through an SMS message to the provided phone number.
-func (h ReceiverSendOTPHandler) sendSMSMessage(ctx context.Context, phoneNumber, otp string) error {
+// sendOTP sends an OTP through the provided contact type to the provided contact information.
+func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.ReceiverContactType, contactInfo, otp string) error {
 	organization, err := h.Models.Organizations.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot get organization: %w", err)
@@ -226,16 +211,20 @@ func (h ReceiverSendOTPHandler) sendSMSMessage(ctx context.Context, phoneNumber,
 		return fmt.Errorf("cannot execute OTP template: %w", err)
 	}
 
-	msg := message.Message{
-		ToPhoneNumber: phoneNumber,
-		Message:       builder.String(),
+	msg := message.Message{Message: builder.String()}
+	switch contactType {
+	case data.ReceiverContactTypeSMS:
+		msg.ToPhoneNumber = contactInfo
+	case data.ReceiverContactTypeEmail:
+		msg.ToEmail = contactInfo
+		msg.Title = "Your One-Time Password: " + otp
 	}
 
-	truncatedPhoneNumber := utils.TruncateString(phoneNumber, 3)
-	log.Ctx(ctx).Infof("sending OTP message to phone number: %s", truncatedPhoneNumber)
+	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
+	log.Ctx(ctx).Infof("sending OTP message to %s: %s", utils.HumanizeString(string(contactType)), truncatedContactInfo)
 	err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
 	if err != nil {
-		return fmt.Errorf("cannot send OTP message: %w", err)
+		return fmt.Errorf("cannot send OTP message through %s: %w", utils.HumanizeString(string(contactType)), err)
 	}
 
 	return nil

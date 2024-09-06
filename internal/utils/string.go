@@ -44,3 +44,8 @@ func TruncateString(str string, borderSizeToKeep int) string {
 func TrimAndLower(str string) string {
 	return strings.TrimSpace(strings.ToLower(str))
 }
+
+// HumanizeString converts a string to a human readable format.
+func HumanizeString(str string) string {
+	return strings.ToLower(strings.ReplaceAll(str, "_", " "))
+}

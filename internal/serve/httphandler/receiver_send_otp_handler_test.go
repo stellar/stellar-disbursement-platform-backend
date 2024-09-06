@@ -398,12 +398,12 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 }
 
 func Test_newReceiverSendOTPResponseBody(t *testing.T) {
-	for _, otpType := range getAllowedOTPRegistrationTypes() {
+	for _, otpType := range data.GetAllReceiverContactTypes() {
 		for _, verificationType := range data.GetAllVerificationTypes() {
 			t.Run(fmt.Sprintf("%s/%s", otpType, verificationType), func(t *testing.T) {
 				gotBody := newReceiverSendOTPResponseBody(otpType, verificationType)
 				wantBody := ReceiverSendOTPResponseBody{
-					Message:           fmt.Sprintf("if your %s is registered, you'll receive an OTP", otpType),
+					Message:           fmt.Sprintf("if your %s is registered, you'll receive an OTP", utils.HumanizeString(string(otpType))),
 					VerificationField: verificationType,
 				}
 				require.Equal(t, wantBody, gotBody)
@@ -412,7 +412,7 @@ func Test_newReceiverSendOTPResponseBody(t *testing.T) {
 	}
 }
 
-func Test_ReceiverSendOTPHandler_sendSMSMessage(t *testing.T) {
+func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -428,6 +428,7 @@ func Test_ReceiverSendOTPHandler_sendSMSMessage(t *testing.T) {
 	defaultOTPMessageTemplate := organization.OTPMessageTemplate
 
 	phoneNumber := "+380443973607"
+	email := "foobar@test.com"
 	otp := "246810"
 
 	testCases := []struct {
@@ -458,33 +459,46 @@ func Test_ReceiverSendOTPHandler_sendSMSMessage(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockMessageDispatcher := message.NewMockMessageDispatcher(t)
-			mockCall := mockMessageDispatcher.
-				On("SendMessage",
-					mock.Anything,
-					message.Message{ToPhoneNumber: phoneNumber, Message: tc.wantMessage},
-					[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail})
-			if !tc.shouldDispatcherFail {
-				mockCall.Return(nil).Once()
-			} else {
-				mockCall.Return(errors.New("error sending message")).Once()
-			}
+	for _, contactType := range data.GetAllReceiverContactTypes() {
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("%s/%s", contactType, tc.name), func(t *testing.T) {
+				var expectedMsg message.Message
+				var contactInfo string
+				switch contactType {
+				case data.ReceiverContactTypeSMS:
+					expectedMsg = message.Message{ToPhoneNumber: phoneNumber, Message: tc.wantMessage}
+					contactInfo = phoneNumber
+				case data.ReceiverContactTypeEmail:
+					expectedMsg = message.Message{ToEmail: email, Message: tc.wantMessage, Title: "Your One-Time Password: " + otp}
+					contactInfo = email
+				}
 
-			handler := ReceiverSendOTPHandler{
-				Models:            models,
-				MessageDispatcher: mockMessageDispatcher,
-			}
+				mockMessageDispatcher := message.NewMockMessageDispatcher(t)
+				mockCall := mockMessageDispatcher.
+					On("SendMessage",
+						mock.Anything,
+						expectedMsg,
+						[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail})
+				if !tc.shouldDispatcherFail {
+					mockCall.Return(nil).Once()
+				} else {
+					mockCall.Return(errors.New("error sending message")).Once()
+				}
 
-			err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
-				OTPMessageTemplate: &tc.overrideOrgOTPTemplate,
+				handler := ReceiverSendOTPHandler{
+					Models:            models,
+					MessageDispatcher: mockMessageDispatcher,
+				}
+
+				err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					OTPMessageTemplate: &tc.overrideOrgOTPTemplate,
+				})
+				require.NoError(t, err)
+
+				err := handler.sendOTP(ctx, contactType, contactInfo, otp)
+				require.NoError(t, err)
 			})
-			require.NoError(t, err)
-
-			err := handler.sendSMSMessage(ctx, phoneNumber, otp)
-			require.NoError(t, err)
-		})
+		}
 	}
 }
 
@@ -567,7 +581,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForSMSReceiver(t *testing.T) {
 			wantHttpErr:           nil,
 		},
 		{
-			name:              "🔴 error if sendSMSMessage fails",
+			name:              "🔴 error if sendOTP fails",
 			phoneNumber:       phoneNumberWithWallet,
 			sep24ClientDomain: "correct.test",
 			prepareMocksFn: func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher) {
@@ -581,7 +595,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForSMSReceiver(t *testing.T) {
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
 			wantHttpErr: func() *httperror.HTTPError {
-				err := fmt.Errorf("sending SMS message: %w", fmt.Errorf("cannot send OTP message: %w", errors.New("error sending message")))
+				err := fmt.Errorf("sending SMS message: %w", fmt.Errorf("cannot send OTP message through phone number: %w", errors.New("error sending message")))
 				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
 			}(),
 		},
