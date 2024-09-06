@@ -157,7 +157,7 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 
 	t.Run("returns error when the receiver has no verifications registered", func(t *testing.T) {
 		receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
-		_, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
+		_, err := receiverVerificationModel.GetLatestByContactInfo(ctx, receiver.PhoneNumber)
 		require.Error(t, err, fmt.Errorf("cannot query any receiver verifications for phone number %s", receiver.PhoneNumber))
 	})
 
@@ -191,7 +191,7 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 		})
 
 		receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
-		actualVerification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
+		actualVerification, err := receiverVerificationModel.GetLatestByContactInfo(ctx, receiver.PhoneNumber)
 		require.NoError(t, err)
 
 		assert.Equal(t,
@@ -479,29 +479,79 @@ func Test_ReceiverVerificationModel_CheckTotalAttempts(t *testing.T) {
 	})
 }
 
-func Test_ReceiverVerificationModel_GetLatestByPhoneNumber(t *testing.T) {
+func Test_ReceiverVerificationModel_GetLatestByContactInfo(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
 	ctx := context.Background()
 
-	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-	receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
+	oldVerificationType := VerificationTypeDateOfBirth
+	oldVerificationValue := "1990-01-01"
+	latestVerificationType := VerificationTypePin
+	latestVerificationValue := "123456"
 
-	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypeDateOfBirth, "1990-01-01")
-	require.NoError(t, err)
-	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypePin, "123456")
-	require.NoError(t, err)
+	testCases := []struct {
+		name        string
+		contactInfo func(r Receiver, contactType ReceiverContactType) string
+		wantErrorIs error
+	}{
+		{
+			name: "fails with ErrRecordNotFound when the contact info is not found",
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return "+13334445555"
+			},
+			wantErrorIs: ErrRecordNotFound,
+		},
+		{
+			name: "🎉 successfully finds the latest receiver verification",
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			wantErrorIs: nil,
+		},
+	}
 
-	verification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
-	require.NoError(t, err)
+	phoneNumber := "+141555555555"
+	email := "foobar@test.com"
+	for _, contactType := range GetAllReceiverContactTypes() {
+		receiverInsert := &Receiver{}
+		switch contactType {
+		case ReceiverContactTypeSMS:
+			receiverInsert.PhoneNumber = phoneNumber
+		case ReceiverContactTypeEmail:
+			receiverInsert.Email = email
+		}
 
-	assert.Equal(t, VerificationTypePin, verification.VerificationField)
-	assert.True(t, CompareVerificationValue(verification.HashedValue, "123456"))
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				defer DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+				defer DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+
+				receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, receiverInsert)
+
+				err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, oldVerificationType, oldVerificationValue)
+				require.NoError(t, err)
+				err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, latestVerificationType, latestVerificationValue)
+				require.NoError(t, err)
+
+				contactInfo := tc.contactInfo(*receiver, contactType)
+				verification, err := receiverVerificationModel.GetLatestByContactInfo(ctx, contactInfo)
+				if tc.wantErrorIs != nil {
+					require.Error(t, err)
+					assert.ErrorIs(t, err, ErrRecordNotFound)
+					assert.Nil(t, verification)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, latestVerificationType, verification.VerificationField)
+					assert.True(t, CompareVerificationValue(verification.HashedValue, latestVerificationValue))
+				}
+			})
+		}
+	}
 }
 
 func Test_ReceiverVerification_HashAndCompareVerificationValue(t *testing.T) {

@@ -288,20 +288,22 @@ func (rw *ReceiverWalletModel) GetAllPendingRegistrationByDisbursementID(ctx con
 	return receiverWallets, nil
 }
 
-// UpdateOTPByReceiverPhoneNumberAndWalletDomain updates receiver wallet OTP if its not verified yet,
-// and returns the number of updated rows.
-func (rw *ReceiverWalletModel) UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx context.Context, receiverPhoneNumber, sep10ClientDomain, otp string) (numberOfUpdatedRows int, err error) {
+// UpdateOTPByReceiverContactInfoAndWalletDomain updates receiver wallet OTP if its not verified yet, and returns the
+// number of updated rows.
+func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx context.Context, receiverContactInfo, sep10ClientDomain, otp string) (numberOfUpdatedRows int, err error) {
 	query := `
 		WITH rw_cte AS (
 			SELECT
 				rw.id,
 				rw.otp_confirmed_at
-			FROM receiver_wallets rw
-			INNER JOIN receivers r ON rw.receiver_id = r.id
-			INNER JOIN wallets w ON rw.wallet_id = w.id
-			WHERE r.phone_number = $1
-			AND w.sep_10_client_domain = $2
-			AND rw.otp_confirmed_at IS NULL
+			FROM 
+				receiver_wallets rw
+				INNER JOIN receivers r ON rw.receiver_id = r.id
+				INNER JOIN wallets w ON rw.wallet_id = w.id
+			WHERE
+				(r.phone_number = $1 OR r.email = $1)
+				AND w.sep_10_client_domain = $2
+				AND rw.otp_confirmed_at IS NULL
 		)
 		UPDATE
 			receiver_wallets
@@ -313,14 +315,14 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx
 			receiver_wallets.id = rw_cte.id
 	`
 
-	rows, err := rw.dbConnectionPool.ExecContext(ctx, query, receiverPhoneNumber, sep10ClientDomain, otp)
+	rows, err := rw.dbConnectionPool.ExecContext(ctx, query, receiverContactInfo, sep10ClientDomain, otp)
 	if err != nil {
-		return 0, fmt.Errorf("error updating receiver wallets otp: %w", err)
+		return 0, fmt.Errorf("updating receiver wallets otp: %w", err)
 	}
 
 	updatedRowsAffected, err := rows.RowsAffected()
 	if err != nil {
-		return 0, fmt.Errorf("error getting updated rows of receiver wallets otp: %w", err)
+		return 0, fmt.Errorf("getting updated rows of receiver wallets otp: %w", err)
 	}
 
 	return int(updatedRowsAffected), nil

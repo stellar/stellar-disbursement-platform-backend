@@ -150,7 +150,7 @@ func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(
 	}
 
 	// get receiverVerification by that value phoneNumber
-	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, phoneNumber)
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByContactInfo(ctx, phoneNumber)
 	if err != nil {
 		err = fmt.Errorf("cannot find latest receiver verification for phone number %s: %w", truncatedPhoneNumber, err)
 		log.Ctx(ctx).Warn(err)
@@ -164,8 +164,8 @@ func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(
 	}
 
 	// Update OTP for receiver wallet
-	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, phoneNumber, sep24ClientDomain, newOTP)
-	if err != nil {
+	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, phoneNumber, sep24ClientDomain, newOTP)
+	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil)
 	}
 	if numberOfUpdatedRows < 1 {
