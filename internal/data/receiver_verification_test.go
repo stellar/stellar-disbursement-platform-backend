@@ -515,15 +515,13 @@ func Test_ReceiverVerificationModel_GetLatestByContactInfo(t *testing.T) {
 		},
 	}
 
-	phoneNumber := "+141555555555"
-	email := "foobar@test.com"
 	for _, contactType := range GetAllReceiverContactTypes() {
 		receiverInsert := &Receiver{}
 		switch contactType {
 		case ReceiverContactTypeSMS:
-			receiverInsert.PhoneNumber = phoneNumber
+			receiverInsert.PhoneNumber = "+141555555555"
 		case ReceiverContactTypeEmail:
-			receiverInsert.Email = email
+			receiverInsert.Email = "foobar@test.com"
 		}
 
 		for _, tc := range testCases {

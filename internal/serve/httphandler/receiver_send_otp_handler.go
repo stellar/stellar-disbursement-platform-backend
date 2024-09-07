@@ -43,6 +43,36 @@ type ReceiverSendOTPRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
+// ValidateContactInfo validates the contact information provided in the ReceiverSendOTPRequest. It ensures that either
+// the phone number or email is provided, but not both. It also validates the phone number and email format.
+func (r ReceiverSendOTPRequest) ValidateContactInfo() *httperror.HTTPError {
+	r.Email = utils.TrimAndLower(r.Email)
+	r.PhoneNumber = utils.TrimAndLower(r.PhoneNumber)
+
+	switch {
+	case r.PhoneNumber == "" && r.Email == "":
+		extras := map[string]interface{}{"phone_number": "phone_number or email is required", "email": "phone_number or email is required"}
+		return httperror.BadRequest("", nil, extras)
+
+	case r.PhoneNumber != "" && r.Email != "":
+		extras := map[string]interface{}{"phone_number": "phone_number and email cannot be both provided", "email": "phone_number and email cannot be both provided"}
+		return httperror.BadRequest("", nil, extras)
+
+	case r.PhoneNumber != "":
+		if err := utils.ValidatePhoneNumber(r.PhoneNumber); err != nil {
+			extras := map[string]interface{}{"phone_number": err.Error()}
+			return httperror.BadRequest("", err, extras)
+		}
+	case r.Email != "":
+		if err := utils.ValidateEmail(r.Email); err != nil {
+			extras := map[string]interface{}{"email": err.Error()}
+			return httperror.BadRequest("", err, extras)
+		}
+	}
+
+	return nil
+}
+
 type ReceiverSendOTPResponseBody struct {
 	Message           string                `json:"message"`
 	VerificationField data.VerificationType `json:"verification_field"`
@@ -90,32 +120,29 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	// Ensure XOR(PhoneNumber, Email)
-	if receiverSendOTPRequest.PhoneNumber == "" && receiverSendOTPRequest.Email == "" {
-		httperror.BadRequest("request invalid", errors.New("phone_number or email is required"), nil).Render(w)
-		return
-	}
-	if receiverSendOTPRequest.PhoneNumber != "" && receiverSendOTPRequest.Email != "" {
-		httperror.BadRequest("request invalid", errors.New("phone_number and email cannot be both provided"), nil).Render(w)
+	if httpErr := receiverSendOTPRequest.ValidateContactInfo(); httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
-	// Determine OTP registration type and handle accordingly
-	var otpRegistrationType data.ReceiverContactType
-	var verificationField data.VerificationType
-	var httpErr *httperror.HTTPError
+	// Determine the contact type and handle accordingly
+	var contactType data.ReceiverContactType
+	var contactInfo string
 	if receiverSendOTPRequest.PhoneNumber != "" {
-		otpRegistrationType = data.ReceiverContactTypeSMS
-		verificationField, httpErr = h.handleOTPForSMSReceiver(ctx, receiverSendOTPRequest.PhoneNumber, sep24Claims.ClientDomainClaim)
+		contactType, contactInfo = data.ReceiverContactTypeSMS, receiverSendOTPRequest.PhoneNumber
+	} else if receiverSendOTPRequest.Email != "" {
+		contactType, contactInfo = data.ReceiverContactTypeEmail, receiverSendOTPRequest.Email
 	} else {
-		otpRegistrationType = data.ReceiverContactTypeEmail
-		verificationField, httpErr = h.HandleOTPForEmailReceiver(ctx, sep24Claims, receiverSendOTPRequest)
+		httperror.InternalError(ctx, "unexpected contact info", nil, nil).Render(w)
+		return
 	}
+	verificationField, httpErr := h.handleOTPForReceiver(ctx, contactType, contactInfo, sep24Claims.ClientDomainClaim)
 	if httpErr != nil {
 		httpErr.Render(w)
 		return
 	}
 
-	response := newReceiverSendOTPResponseBody(otpRegistrationType, verificationField)
+	response := newReceiverSendOTPResponseBody(contactType, verificationField)
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
 
@@ -133,27 +160,22 @@ func newReceiverSendOTPResponseBody(contactType data.ReceiverContactType, verifi
 	return resp
 }
 
-// handleOTPForSMSReceiver handles the OTP generation and sending for a receiver with a phone number through SMS.
-func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(
+// handleOTPReceiver handles the OTP generation and sending for a receiver with the provided contactType and contactInfo.
+func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 	ctx context.Context,
-	phoneNumber string,
+	contactType data.ReceiverContactType,
+	contactInfo string,
 	sep24ClientDomain string,
 ) (data.VerificationType, *httperror.HTTPError) {
-	placeholderVerificationField := data.VerificationTypeDateOfBirth
 	var err error
+	placeholderVerificationField := data.VerificationTypeDateOfBirth
+	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
+	contactTypeStr := utils.HumanizeString(string(contactType))
 
-	// Validate phone number
-	truncatedPhoneNumber := utils.TruncateString(phoneNumber, 3)
-	if err = utils.ValidatePhoneNumber(phoneNumber); err != nil {
-		extras := map[string]interface{}{"phone_number": err.Error()}
-		return placeholderVerificationField, httperror.BadRequest("", err, extras)
-	}
-
-	// get receiverVerification by that value phoneNumber
-	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByContactInfo(ctx, phoneNumber)
+	// get receiverVerification by that value of contactInfo
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByContactInfo(ctx, contactInfo)
 	if err != nil {
-		err = fmt.Errorf("cannot find latest receiver verification for phone number %s: %w", truncatedPhoneNumber, err)
-		log.Ctx(ctx).Warn(err)
+		log.Ctx(ctx).Warnf("cannot find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, err)
 		return placeholderVerificationField, nil
 	}
 
@@ -164,19 +186,19 @@ func (h ReceiverSendOTPHandler) handleOTPForSMSReceiver(
 	}
 
 	// Update OTP for receiver wallet
-	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, phoneNumber, sep24ClientDomain, newOTP)
+	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, contactInfo, sep24ClientDomain, newOTP)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil)
 	}
 	if numberOfUpdatedRows < 1 {
-		log.Ctx(ctx).Warnf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client domain (%s) are valid", truncatedPhoneNumber, sep24ClientDomain)
+		log.Ctx(ctx).Warnf("could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, sep24ClientDomain)
 		return placeholderVerificationField, nil
 	}
 
 	// Send OTP message
-	err = h.sendOTP(ctx, data.ReceiverContactTypeSMS, phoneNumber, newOTP)
+	err = h.sendOTP(ctx, contactType, contactInfo, newOTP)
 	if err != nil {
-		err = fmt.Errorf("sending SMS message: %w", err)
+		err = fmt.Errorf("sending OTP message: %w", err)
 		return placeholderVerificationField, httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
 	}
 
@@ -221,16 +243,12 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	}
 
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
-	log.Ctx(ctx).Infof("sending OTP message to %s: %s", utils.HumanizeString(string(contactType)), truncatedContactInfo)
+	contactTypeStr := utils.HumanizeString(string(contactType))
+	log.Ctx(ctx).Infof("sending OTP message to %s: %s", contactTypeStr, truncatedContactInfo)
 	err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
 	if err != nil {
-		return fmt.Errorf("cannot send OTP message through %s: %w", utils.HumanizeString(string(contactType)), err)
+		return fmt.Errorf("cannot send OTP message through %s: %w", contactTypeStr, err)
 	}
 
 	return nil
-}
-
-func (h ReceiverSendOTPHandler) HandleOTPForEmailReceiver(ctx context.Context, sep24Claims *anchorplatform.SEP24JWTClaims, receiverSendOTPRequest ReceiverSendOTPRequest) (data.VerificationType, *httperror.HTTPError) {
-	verificationField := data.VerificationTypeDateOfBirth
-	return verificationField, httperror.NewHTTPError(http.StatusNotImplemented, "Not implemented", nil, nil)
 }

@@ -502,7 +502,7 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 	}
 }
 
-func Test_ReceiverSendOTPHandler_handleOTPForSMSReceiver(t *testing.T) {
+func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -514,75 +514,67 @@ func Test_ReceiverSendOTPHandler_handleOTPForSMSReceiver(t *testing.T) {
 
 	ctx := context.Background()
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
-	phoneNumberWithWallet := "+41555551111"
-	phoneNumberWithoutWallet := "+41555551010"
-	notFoundPhoneNumber := "+41555550000"
-	// incorrectDoB := "2024-09-07"
+	receiverWithoutWalletInsert := &data.Receiver{
+		PhoneNumber: "+141555550000",
+		Email:       "without_wallet@test.com",
+	}
 
 	testCases := []struct {
 		name                  string
-		phoneNumber           string
+		contactInfo           func(r data.Receiver, contactType data.ReceiverContactType) string
 		dateOfBirth           string
 		sep24ClientDomain     string
 		prepareMocksFn        func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher)
-		assertLogsFn          func(t *testing.T, entries []logrus.Entry)
+		assertLogsFn          func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry)
 		wantVerificationField data.VerificationType
-		wantHttpErr           *httperror.HTTPError
+		wantHttpErr           func(contactType data.ReceiverContactType) *httperror.HTTPError
 	}{
 		{
-			name:                  "🔴 error if phone_number is empty",
-			phoneNumber:           "",
-			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr: httperror.BadRequest("", utils.ErrEmptyPhoneNumber, map[string]interface{}{
-				"phone_number": utils.ErrEmptyPhoneNumber.Error(),
-			}),
-		},
-		{
-			name:                  "🔴 error if phone_number is invalid",
-			phoneNumber:           "invalid",
-			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr: httperror.BadRequest("", utils.ErrInvalidE164PhoneNumber, map[string]interface{}{
-				"phone_number": utils.ErrInvalidE164PhoneNumber.Error(),
-			}),
-		},
-		{
-			name:        "🟡 false positive if GetLatestByPhoneNumber returns no results",
-			phoneNumber: notFoundPhoneNumber,
-			assertLogsFn: func(t *testing.T, entries []logrus.Entry) {
-				truncatedPhoneNumber := utils.TruncateString(notFoundPhoneNumber, 3)
-				wantLog := fmt.Sprintf("cannot find latest receiver verification for phone number %s: %v", truncatedPhoneNumber, data.ErrRecordNotFound)
+			name: "🟡 false positive if GetLatestByContactInfo returns no results",
+			contactInfo: func(r data.Receiver, contactType data.ReceiverContactType) string {
+				return "not_found"
+			},
+			assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
+				contactTypeStr := utils.HumanizeString(string(contactType))
+				truncatedContactInfo := utils.TruncateString("not_found", 3)
+				wantLog := fmt.Sprintf("cannot find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, data.ErrRecordNotFound)
 				assert.Contains(t, entries[0].Message, wantLog)
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr:           nil,
 		},
 		{
-			name:              "🟡 false positive if UpdateOTPByReceiverPhoneNumberAndWalletDomain doesn't find a {phone_number,client_domain} match (client_domain)",
-			phoneNumber:       phoneNumberWithWallet,
+			name: "🟡 false positive if UpdateOTPByReceiverContactInfoAndWalletDomain doesn't find a {<contactInfo>,client_domain} match (client_domain)",
+			contactInfo: func(r data.Receiver, contactType data.ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
 			sep24ClientDomain: "incorrect.test",
-			assertLogsFn: func(t *testing.T, entries []logrus.Entry) {
-				truncatedPhoneNumber := utils.TruncateString(phoneNumberWithWallet, 3)
-				wantLog := fmt.Sprintf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client domain (%s) are valid", truncatedPhoneNumber, "incorrect.test")
+			assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
+				contactTypeStr := utils.HumanizeString(string(contactType))
+				truncatedContactInfo := utils.TruncateString(r.ContactByType(contactType), 3)
+				wantLog := fmt.Sprintf("could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, "incorrect.test")
 				assert.Contains(t, entries[0].Message, wantLog)
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr:           nil,
 		},
 		{
-			name:              "🟡 false positive if UpdateOTPByReceiverPhoneNumberAndWalletDomain doesn't find a {phone_number,client_domain} match (phone_number)",
-			phoneNumber:       phoneNumberWithoutWallet,
+			name: "🟡 false positive if UpdateOTPByReceiverContactInfoAndWalletDomain doesn't find a {<contactInfo>,client_domain} match (<contactInfo>)",
+			contactInfo: func(_ data.Receiver, contactType data.ReceiverContactType) string {
+				return receiverWithoutWalletInsert.ContactByType(contactType)
+			},
 			sep24ClientDomain: "correct.test",
-			assertLogsFn: func(t *testing.T, entries []logrus.Entry) {
-				truncatedPhoneNumber := utils.TruncateString(phoneNumberWithoutWallet, 3)
-				wantLog := fmt.Sprintf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client domain (%s) are valid", truncatedPhoneNumber, "correct.test")
+			assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, _ data.Receiver, entries []logrus.Entry) {
+				contactTypeStr := utils.HumanizeString(string(contactType))
+				truncatedContactInfo := utils.TruncateString(receiverWithoutWalletInsert.ContactByType(contactType), 3)
+				wantLog := fmt.Sprintf("could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, "correct.test")
 				assert.Contains(t, entries[0].Message, wantLog)
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr:           nil,
 		},
 		{
-			name:              "🔴 error if sendOTP fails",
-			phoneNumber:       phoneNumberWithWallet,
+			name: "🔴 error if sendOTP fails",
+			contactInfo: func(r data.Receiver, contactType data.ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
 			sep24ClientDomain: "correct.test",
 			prepareMocksFn: func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher) {
 				mockMessageDispatcher.
@@ -594,14 +586,17 @@ func Test_ReceiverSendOTPHandler_handleOTPForSMSReceiver(t *testing.T) {
 					Once()
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr: func() *httperror.HTTPError {
-				err := fmt.Errorf("sending SMS message: %w", fmt.Errorf("cannot send OTP message through phone number: %w", errors.New("error sending message")))
+			wantHttpErr: func(contactType data.ReceiverContactType) *httperror.HTTPError {
+				contactTypeStr := utils.HumanizeString(string(contactType))
+				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s: %w", contactTypeStr, errors.New("error sending message")))
 				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
-			}(),
+			},
 		},
 		{
-			name:              "🟢 successful",
-			phoneNumber:       phoneNumberWithWallet,
+			name: "🟢 successful",
+			contactInfo: func(r data.Receiver, contactType data.ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
 			sep24ClientDomain: "correct.test",
 			prepareMocksFn: func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher) {
 				mockMessageDispatcher.
@@ -617,53 +612,64 @@ func Test_ReceiverSendOTPHandler_handleOTPForSMSReceiver(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-			defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-			defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+	for _, contactType := range data.GetAllReceiverContactTypes() {
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("%s/%s", contactType, tc.name), func(t *testing.T) {
+				receiverWithWalletInsert := &data.Receiver{}
+				switch contactType {
+				case data.ReceiverContactTypeSMS:
+					receiverWithWalletInsert.PhoneNumber = "+141555551111"
+				case data.ReceiverContactTypeEmail:
+					receiverWithWalletInsert.Email = "with_wallet@test.com"
+				}
 
-			handler := ReceiverSendOTPHandler{Models: models}
-			if tc.prepareMocksFn != nil {
-				mockMessageDispatcher := message.NewMockMessageDispatcher(t)
-				tc.prepareMocksFn(t, mockMessageDispatcher)
-				handler.MessageDispatcher = mockMessageDispatcher
-			}
+				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 
-			// Setup receiver with Verification but without wallet:
-			receiverWithoutWallet := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumberWithoutWallet})
-			_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-				ReceiverID:        receiverWithoutWallet.ID,
-				VerificationField: data.VerificationTypePin,
-				VerificationValue: "123456",
+				handler := ReceiverSendOTPHandler{Models: models}
+				if tc.prepareMocksFn != nil {
+					mockMessageDispatcher := message.NewMockMessageDispatcher(t)
+					tc.prepareMocksFn(t, mockMessageDispatcher)
+					handler.MessageDispatcher = mockMessageDispatcher
+				}
+
+				// Setup receiver with Verification but without wallet:
+				receiverWithoutWallet := data.CreateReceiverFixture(t, ctx, dbConnectionPool, receiverWithoutWalletInsert)
+				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+					ReceiverID:        receiverWithoutWallet.ID,
+					VerificationField: data.VerificationTypePin,
+					VerificationValue: "123456",
+				})
+
+				// Setup receiver with Verification AND wallet:
+				receiverWithWallet := data.CreateReceiverFixture(t, ctx, dbConnectionPool, receiverWithWalletInsert)
+				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+					ReceiverID:        receiverWithWallet.ID,
+					VerificationField: data.VerificationTypePin,
+					VerificationValue: "123456",
+				})
+				_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithWallet.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+				getEntries := log.DefaultLogger.StartTest(logrus.DebugLevel)
+
+				contactInfo := tc.contactInfo(*receiverWithWallet, contactType)
+				verificationField, httpErr := handler.handleOTPForReceiver(ctx, contactType, contactInfo, tc.sep24ClientDomain)
+				if tc.wantHttpErr != nil {
+					wantHTTPErr := tc.wantHttpErr(contactType)
+					require.NotNil(t, httpErr)
+					assert.Equal(t, *wantHTTPErr, *httpErr)
+					assert.Equal(t, tc.wantVerificationField, verificationField)
+				} else {
+					require.Nil(t, httpErr)
+					assert.Equal(t, tc.wantVerificationField, verificationField)
+				}
+
+				entries := getEntries()
+				if tc.assertLogsFn != nil {
+					tc.assertLogsFn(t, contactType, *receiverWithWallet, entries)
+				}
 			})
-
-			// Setup receiver with Verification AND wallet:
-			receiverWithWallet := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumberWithWallet})
-			_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-				ReceiverID:        receiverWithWallet.ID,
-				VerificationField: data.VerificationTypePin,
-				VerificationValue: "123456",
-			})
-			_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithWallet.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-
-			getEntries := log.DefaultLogger.StartTest(logrus.DebugLevel)
-
-			phoneNumber := tc.phoneNumber
-			verificationField, httpErr := handler.handleOTPForSMSReceiver(ctx, phoneNumber, tc.sep24ClientDomain)
-			if tc.wantHttpErr != nil {
-				require.NotNil(t, httpErr)
-				assert.Equal(t, *tc.wantHttpErr, *httpErr)
-				assert.Equal(t, tc.wantVerificationField, verificationField)
-			} else {
-				require.Nil(t, httpErr)
-				assert.Equal(t, tc.wantVerificationField, verificationField)
-			}
-
-			entries := getEntries()
-			if tc.assertLogsFn != nil {
-				tc.assertLogsFn(t, entries)
-			}
-		})
+		}
 	}
 }
