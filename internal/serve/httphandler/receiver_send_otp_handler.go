@@ -43,9 +43,10 @@ type ReceiverSendOTPRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
-// ValidateContactInfo validates the contact information provided in the ReceiverSendOTPRequest. It ensures that either
+// validateContactInfo validates the contact information provided in the ReceiverSendOTPRequest. It ensures that either
 // the phone number or email is provided, but not both. It also validates the phone number and email format.
-func (r ReceiverSendOTPRequest) ValidateContactInfo() *httperror.HTTPError {
+// TODO: use a validator instead!
+func (r ReceiverSendOTPRequest) validateContactInfo() *httperror.HTTPError {
 	r.Email = utils.TrimAndLower(r.Email)
 	r.PhoneNumber = utils.TrimAndLower(r.PhoneNumber)
 
@@ -120,7 +121,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	// Ensure XOR(PhoneNumber, Email)
-	if httpErr := receiverSendOTPRequest.ValidateContactInfo(); httpErr != nil {
+	if httpErr := receiverSendOTPRequest.validateContactInfo(); httpErr != nil {
 		httpErr.Render(w)
 		return
 	}
@@ -244,7 +245,7 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 	contactTypeStr := utils.HumanizeString(string(contactType))
-	log.Ctx(ctx).Infof("sending OTP message to %s: %s", contactTypeStr, truncatedContactInfo)
+	log.Ctx(ctx).Infof("sending OTP message to %s %s", contactTypeStr, truncatedContactInfo)
 	err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
 	if err != nil {
 		return fmt.Errorf("cannot send OTP message through %s: %w", contactTypeStr, err)

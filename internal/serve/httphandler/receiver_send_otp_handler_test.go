@@ -31,370 +31,410 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
-	r := chi.NewRouter()
+func Test_ReceiverSendOTPRequest_validateContactInfo(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		receiverSendOTPRequest ReceiverSendOTPRequest
+		wantHttpErr            *httperror.HTTPError
+	}{
+		{
+			name: "🔴 (400 - BadRequest) when both phone number and email are empty",
+			receiverSendOTPRequest: ReceiverSendOTPRequest{
+				PhoneNumber: "",
+				Email:       "",
+			},
+			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+				"phone_number": "phone_number or email is required",
+				"email":        "phone_number or email is required",
+			}),
+		},
+		{
+			name: "🔴 (400 - BadRequest) when both phone number and email are provided",
+			receiverSendOTPRequest: ReceiverSendOTPRequest{
+				PhoneNumber: "+141555550000",
+				Email:       "foobar@test.com",
+			},
+			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+				"phone_number": "phone_number and email cannot be both provided",
+				"email":        "phone_number and email cannot be both provided",
+			}),
+		},
+		{
+			name: "🔴 (400 - BadRequest) when phone number is invalid",
+			receiverSendOTPRequest: ReceiverSendOTPRequest{
+				PhoneNumber: "invalid",
+			},
+			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+				"phone_number": "the provided phone number is not a valid E.164 number",
+			}),
+		},
+		{
+			name: "🔴 (400 - BadRequest) when email is invalid",
+			receiverSendOTPRequest: ReceiverSendOTPRequest{
+				Email: "invalid",
+			},
+			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+				"email": "the provided email is not valid",
+			}),
+		},
+		{
+			name: "🟢 (200 - Ok) when phone number is valid",
+			receiverSendOTPRequest: ReceiverSendOTPRequest{
+				PhoneNumber: "+14155550000",
+			},
+			wantHttpErr: nil,
+		},
+		{
+			name: "🟢 (200 - Ok) when email is valid",
+			receiverSendOTPRequest: ReceiverSendOTPRequest{
+				Email: "foobar@test.com",
+			},
+			wantHttpErr: nil,
+		},
+	}
 
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotHttpErr := tc.receiverSendOTPRequest.validateContactInfo()
+			if tc.wantHttpErr == nil {
+				assert.Nil(t, gotHttpErr)
+			} else {
+				assert.Equal(t, tc.wantHttpErr.StatusCode, gotHttpErr.StatusCode)
+				assert.Equal(t, tc.wantHttpErr.Message, gotHttpErr.Message)
+				assert.Equal(t, tc.wantHttpErr.Extras, gotHttpErr.Extras)
+			}
+		})
+	}
+}
+
+func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := context.Background()
-
-	phoneNumber := "+380443973607"
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
-	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
-	data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-		ReceiverID:        receiver1.ID,
-		VerificationField: data.VerificationTypeDateOfBirth,
-	})
-
-	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
-	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
-
-	mockMessageDispatcher := message.NewMockMessageDispatcher(t)
-	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-
-	r.Post("/wallet-registration/otp", ReceiverSendOTPHandler{
-		Models:             models,
-		MessageDispatcher:  mockMessageDispatcher,
-		ReCAPTCHAValidator: reCAPTCHAValidator,
-	}.ServeHTTP)
-
-	requestSendOTP := ReceiverSendOTPRequest{
-		PhoneNumber:    receiver1.PhoneNumber,
-		ReCAPTCHAToken: "XyZ",
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: "no-op-domain.test.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
 	}
-	reqBody, err := json.Marshal(requestSendOTP)
+	ctxWithValidSEP24Claims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+	invalidClaims := &anchorplatform.SEP24JWTClaims{}
+	ctxWithInvalidSEP24Claims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, invalidClaims)
+
+	const reCAPTCHAToken = "XyZ"
+
+	testCases := []struct {
+		name                   string
+		context                context.Context
+		receiverSendOTPRequest ReceiverSendOTPRequest
+		prepareMocksFn         func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher)
+		wantStatusCode         int
+		wantBody               string
+	}{
+		{
+			name:                   "(500 - InternalServerError) if the reCAPTCHA validation returns an error",
+			context:                ctx,
+			receiverSendOTPRequest: ReceiverSendOTPRequest{ReCAPTCHAToken: "invalid-recaptcha-token"},
+			prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, _ *message.MockMessageDispatcher) {
+				mockReCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, "invalid-recaptcha-token").
+					Return(false, errors.New("invalid recaptcha")).
+					Once()
+			},
+			wantStatusCode: http.StatusInternalServerError,
+			wantBody:       `{"error":"Cannot validate reCAPTCHA token"}`,
+		},
+		{
+			name:                   "(400 - BadRequest) if the reCAPTCHA token is invalid",
+			context:                ctx,
+			receiverSendOTPRequest: ReceiverSendOTPRequest{ReCAPTCHAToken: reCAPTCHAToken},
+			prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, _ *message.MockMessageDispatcher) {
+				mockReCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, reCAPTCHAToken).
+					Return(false, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantBody:       `{"error":"reCAPTCHA token is invalid"}`,
+		},
+		{
+			name:                   "(401 - Unauthorized) if the SEP-24 claims are not in the request context",
+			context:                ctx,
+			receiverSendOTPRequest: ReceiverSendOTPRequest{ReCAPTCHAToken: reCAPTCHAToken},
+			prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, _ *message.MockMessageDispatcher) {
+				mockReCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, reCAPTCHAToken).
+					Return(true, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusUnauthorized,
+			wantBody:       `{"error":"Not authorized."}`,
+		},
+		{
+			name:                   "(401 - Unauthorized) if the SEP-24 claims are invalid",
+			context:                ctxWithInvalidSEP24Claims,
+			receiverSendOTPRequest: ReceiverSendOTPRequest{ReCAPTCHAToken: reCAPTCHAToken},
+			prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, _ *message.MockMessageDispatcher) {
+				mockReCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, reCAPTCHAToken).
+					Return(true, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusUnauthorized,
+			wantBody:       `{"error":"Not authorized."}`,
+		},
+		{
+			name:                   "(400 - BadRequest) if the request body is invalid",
+			context:                ctxWithValidSEP24Claims,
+			receiverSendOTPRequest: ReceiverSendOTPRequest{ReCAPTCHAToken: reCAPTCHAToken},
+			prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, _ *message.MockMessageDispatcher) {
+				mockReCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, reCAPTCHAToken).
+					Return(true, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"phone_number":"phone_number or email is required",
+					"email":"phone_number or email is required"
+				}
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockReCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+			mockMessageDispatcher := message.NewMockMessageDispatcher(t)
+
+			tc.prepareMocksFn(t, mockReCAPTCHAValidator, mockMessageDispatcher)
+
+			r := chi.NewRouter()
+			r.Post("/wallet-registration/otp", ReceiverSendOTPHandler{
+				Models:             models,
+				MessageDispatcher:  mockMessageDispatcher,
+				ReCAPTCHAValidator: mockReCAPTCHAValidator,
+			}.ServeHTTP)
+
+			reqBody, err := json.Marshal(tc.receiverSendOTPRequest)
+			require.NoError(t, err)
+			req, err := http.NewRequestWithContext(tc.context, http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+
+			r.ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			assert.JSONEq(t, tc.wantBody, string(respBody))
+		})
+	}
+}
+
+func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	t.Run("returns 401 - Unauthorized if the token is not in the request context", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	const phoneNumber = "+14155550000"
+	const email = "foobar@test.com"
+	require.NoError(t, err)
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
 
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+	ctxWithValidSEP24Claims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
 
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
+	const reCAPTCHAToken = "XyZ"
 
-	t.Run("returns 401 - Unauthorized if the token is in the request context but it's not valid", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
+	type testCase struct {
+		name                   string
+		receiverSendOTPRequest ReceiverSendOTPRequest
+		verificationField      data.VerificationType
+		contactType            data.ReceiverContactType
+		prepareMocksFn         func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher)
+		shouldCreateObjects    bool
+		assertLogsFn           func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry)
+		wantStatusCode         int
+		wantBody               string
+	}
+	testCases := []testCase{}
 
-		rr := httptest.NewRecorder()
-		invalidClaims := &anchorplatform.SEP24JWTClaims{}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, invalidClaims))
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns 400 - BadRequest with a wrong request body", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Twice()
-		invalidRequest := `{"recaptcha_token": "XyZ"}`
-
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(invalidRequest))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		invalidClaims := &anchorplatform.SEP24JWTClaims{}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, invalidClaims))
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"request invalid","extras":{"phone_number":"phone_number is required"}}`, string(respBody))
-
-		req, err = http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(`{"phone_number": "+55555555555", "recaptcha_token": "XyZ"}`))
-		require.NoError(t, err)
-
-		rr = httptest.NewRecorder()
-		invalidClaims = &anchorplatform.SEP24JWTClaims{}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, invalidClaims))
-		r.ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "request invalid", "extras": {"phone_number": "invalid phone number provided"}}`, string(respBody))
-	})
-
-	t.Run("returns 200 - Ok if the token is in the request context and body is valid", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet1.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-
-		mockMessageDispatcher.
-			On("SendMessage",
-				mock.Anything,
-				mock.AnythingOfType("message.Message"),
-				[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
-			Once().
-			Run(func(args mock.Arguments) {
-				msg := args.Get(1).(message.Message)
-				assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
-				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
-			})
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
-		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_field":"DATE_OF_BIRTH"}`)
-	})
-
-	t.Run("returns 200 - parses a custom OTP message template successfully", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet1.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-
-		// Set a custom message for the OTP message
-		customOTPMessage := "Here's your code to complete your registration. MyOrg 👋"
-		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{OTPMessageTemplate: &customOTPMessage})
-		require.NoError(t, err)
-
-		mockMessageDispatcher.
-			On("SendMessage",
-				mock.Anything,
-				mock.AnythingOfType("message.Message"),
-				[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
-			Once().
-			Run(func(args mock.Arguments) {
-				msg := args.Get(1).(message.Message)
-				assert.Contains(t, msg.Message, customOTPMessage)
-				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
-			})
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
-		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_field":"DATE_OF_BIRTH"}`)
-	})
-
-	t.Run("returns 500 - InternalServerError when something goes wrong when sending the SMS", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet1.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-
-		mockMessageDispatcher.
-			On("SendMessage",
-				mock.Anything,
-				mock.AnythingOfType("message.Message"),
-				[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(errors.New("error sending message")).
-			Once()
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
-		assert.JSONEq(t, string(respBody), `{"error":"Cannot send OTP message"}`)
-	})
-
-	t.Run("returns 500 - InternalServerError when unable to validate recaptcha", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(false, errors.New("error requesting verify reCAPTCHA token")).
-			Once()
-
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet1.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		wantsBody := `
-			{
-				"error": "Cannot validate reCAPTCHA token"
+	for _, contactType := range data.GetAllReceiverContactTypes() {
+		for _, verificationField := range data.GetAllVerificationTypes() {
+			receiverSendOTPRequest := ReceiverSendOTPRequest{ReCAPTCHAToken: reCAPTCHAToken}
+			var contactInfo string
+			switch contactType {
+			case data.ReceiverContactTypeSMS:
+				receiverSendOTPRequest.PhoneNumber = phoneNumber
+				contactInfo = phoneNumber
+			case data.ReceiverContactTypeEmail:
+				receiverSendOTPRequest.Email = email
+				contactInfo = email
 			}
-		`
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-	})
 
-	t.Run("returns 200 (DoB) - InternalServerError if phone number is not associated with receiver verification", func(t *testing.T) {
-		requestSendOTP := ReceiverSendOTPRequest{
-			PhoneNumber:    "+14152223333",
-			ReCAPTCHAToken: "XyZ",
+			testCases = append(testCases, []testCase{
+				{
+					name:                   fmt.Sprintf("%s/%s/🔴 (500-InternalServerError) when the SMS dispatcher fails", contactType, verificationField),
+					receiverSendOTPRequest: receiverSendOTPRequest,
+					verificationField:      verificationField,
+					contactType:            contactType,
+					shouldCreateObjects:    true,
+					prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher) {
+						mockReCAPTCHAValidator.
+							On("IsTokenValid", mock.Anything, reCAPTCHAToken).
+							Return(true, nil).
+							Once()
+						mockMessageDispatcher.
+							On("SendMessage",
+								mock.Anything,
+								mock.AnythingOfType("message.Message"),
+								[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+							Return(errors.New("failed calling message dispatcher")).
+							Once().
+							Run(func(args mock.Arguments) {
+								msg := args.Get(1).(message.Message)
+								assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
+								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+							})
+					},
+					assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
+						contactTypeStr := utils.HumanizeString(string(contactType))
+						truncatedContactInfo := utils.TruncateString(contactInfo, 3)
+						wantLog := fmt.Sprintf("sending OTP message to %s %s", contactTypeStr, truncatedContactInfo)
+						assert.Contains(t, entries[0].Message, wantLog)
+					},
+					wantStatusCode: http.StatusInternalServerError,
+					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s: failed calling message dispatcher"}`, utils.HumanizeString(string(contactType))),
+				},
+				{
+					name:                   fmt.Sprintf("%s/%s/🟡 (200-Ok) with false positive", contactType, verificationField),
+					receiverSendOTPRequest: receiverSendOTPRequest,
+					verificationField:      verificationField,
+					contactType:            contactType,
+					shouldCreateObjects:    false,
+					prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher) {
+						mockReCAPTCHAValidator.
+							On("IsTokenValid", mock.Anything, reCAPTCHAToken).
+							Return(true, nil).
+							Once()
+					},
+					assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
+						contactTypeStr := utils.HumanizeString(string(contactType))
+						truncatedContactInfo := utils.TruncateString(contactInfo, 3)
+						wantLog := fmt.Sprintf("cannot find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, data.ErrRecordNotFound)
+						assert.Contains(t, entries[0].Message, wantLog)
+					},
+					wantStatusCode: http.StatusOK,
+					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"DATE_OF_BIRTH"}`, utils.HumanizeString(string(contactType))),
+				},
+				{
+					name:                   fmt.Sprintf("%s/%s/🟢 (200-Ok) OTP sent!", contactType, verificationField),
+					receiverSendOTPRequest: receiverSendOTPRequest,
+					verificationField:      verificationField,
+					contactType:            contactType,
+					shouldCreateObjects:    true,
+					prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher) {
+						mockReCAPTCHAValidator.
+							On("IsTokenValid", mock.Anything, reCAPTCHAToken).
+							Return(true, nil).
+							Once()
+						mockMessageDispatcher.
+							On("SendMessage",
+								mock.Anything,
+								mock.AnythingOfType("message.Message"),
+								[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+							Return(nil).
+							Once().
+							Run(func(args mock.Arguments) {
+								msg := args.Get(1).(message.Message)
+								assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
+								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+							})
+					},
+					wantStatusCode: http.StatusOK,
+					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"%s"}`, utils.HumanizeString(string(contactType)), verificationField),
+				},
+			}...)
 		}
-		reqBody, _ = json.Marshal(requestSendOTP)
+	}
 
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet1.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		wantsBody := `{
-			"message":"if your phone number is registered, you'll receive an OTP",
-			"verification_field":"DATE_OF_BIRTH"
-		}`
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-	})
-
-	t.Run("returns 400 - BadRequest when recaptcha token is invalid", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(false, nil).
-			Once()
-
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet1.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		wantsBody := `
-			{
-				"error": "reCAPTCHA token is invalid"
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+			if tc.shouldCreateObjects {
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+					PhoneNumber: tc.receiverSendOTPRequest.PhoneNumber,
+					Email:       tc.receiverSendOTPRequest.Email,
+				})
+				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+				data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+					ReceiverID:        receiver.ID,
+					VerificationField: tc.verificationField,
+				})
 			}
-		`
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-	})
 
-	mockMessageDispatcher.AssertExpectations(t)
-	reCAPTCHAValidator.AssertExpectations(t)
+			mockReCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+			mockMessageDispatcher := message.NewMockMessageDispatcher(t)
+
+			tc.prepareMocksFn(t, mockReCAPTCHAValidator, mockMessageDispatcher)
+
+			r := chi.NewRouter()
+			r.Post("/wallet-registration/otp", ReceiverSendOTPHandler{
+				Models:             models,
+				MessageDispatcher:  mockMessageDispatcher,
+				ReCAPTCHAValidator: mockReCAPTCHAValidator,
+			}.ServeHTTP)
+
+			reqBody, err := json.Marshal(tc.receiverSendOTPRequest)
+			require.NoError(t, err)
+			req, err := http.NewRequestWithContext(ctxWithValidSEP24Claims, http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+
+			getEntries := log.DefaultLogger.StartTest(logrus.DebugLevel)
+			r.ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			assert.JSONEq(t, tc.wantBody, string(respBody))
+			entries := getEntries()
+			if tc.assertLogsFn != nil {
+				tc.assertLogsFn(t, tc.contactType, data.Receiver{}, entries)
+			}
+		})
+	}
 }
 
 func Test_newReceiverSendOTPResponseBody(t *testing.T) {
