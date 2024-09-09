@@ -44,11 +44,10 @@ func (r Receiver) ContactByType(contactType ReceiverContactType) string {
 }
 
 func GetAllReceiverContactTypes() []ReceiverContactType {
-	return []ReceiverContactType{ReceiverContactTypeSMS, ReceiverContactTypeEmail}
+	return []ReceiverContactType{ReceiverContactTypeEmail, ReceiverContactTypeSMS}
 }
 
 type ReceiverRegistrationRequest struct {
-	// TODO: SDP-1296 - Update `/wallet-registration/otp` to support multiple contact information types and send OTPs accordingly
 	Email             string           `json:"email"`
 	PhoneNumber       string           `json:"phone_number"`
 	OTP               string           `json:"otp"`

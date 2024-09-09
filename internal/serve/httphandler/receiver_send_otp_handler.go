@@ -126,7 +126,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	} else if receiverSendOTPRequest.Email != "" {
 		contactType, contactInfo = data.ReceiverContactTypeEmail, receiverSendOTPRequest.Email
 	} else {
-		httperror.InternalError(ctx, "unexpected contact info", nil, nil).Render(w)
+		httperror.InternalError(ctx, "Unexpected contact info", nil, nil).Render(w)
 		return
 	}
 	verificationField, httpErr := h.handleOTPForReceiver(ctx, contactType, contactInfo, sep24Claims.ClientDomainClaim)
@@ -163,12 +163,12 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 	var err error
 	placeholderVerificationField := data.VerificationTypeDateOfBirth
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
-	contactTypeStr := utils.HumanizeString(string(contactType))
+	contactTypeStr := utils.Humanize(string(contactType))
 
 	// get receiverVerification by that value of contactInfo
 	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByContactInfo(ctx, contactInfo)
 	if err != nil {
-		log.Ctx(ctx).Warnf("cannot find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, err)
+		log.Ctx(ctx).Warnf("Could not find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, err)
 		return placeholderVerificationField, nil
 	}
 
@@ -184,7 +184,7 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil)
 	}
 	if numberOfUpdatedRows < 1 {
-		log.Ctx(ctx).Warnf("could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, sep24ClientDomain)
+		log.Ctx(ctx).Warnf("Could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, sep24ClientDomain)
 		return placeholderVerificationField, nil
 	}
 
@@ -236,8 +236,8 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	}
 
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
-	contactTypeStr := utils.HumanizeString(string(contactType))
-	log.Ctx(ctx).Infof("sending OTP message to %s %s", contactTypeStr, truncatedContactInfo)
+	contactTypeStr := utils.Humanize(string(contactType))
+	log.Ctx(ctx).Infof("sending OTP message to %s %s...", contactTypeStr, truncatedContactInfo)
 	err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
 	if err != nil {
 		return fmt.Errorf("cannot send OTP message through %s: %w", contactTypeStr, err)

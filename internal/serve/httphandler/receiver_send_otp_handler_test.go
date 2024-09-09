@@ -322,13 +322,13 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 							})
 					},
 					assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
-						contactTypeStr := utils.HumanizeString(string(contactType))
+						contactTypeStr := utils.Humanize(string(contactType))
 						truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 						wantLog := fmt.Sprintf("sending OTP message to %s %s", contactTypeStr, truncatedContactInfo)
 						assert.Contains(t, entries[0].Message, wantLog)
 					},
 					wantStatusCode: http.StatusInternalServerError,
-					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s: failed calling message dispatcher"}`, utils.HumanizeString(string(contactType))),
+					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s: failed calling message dispatcher"}`, utils.Humanize(string(contactType))),
 				},
 				{
 					name:                   fmt.Sprintf("%s/%s/🟡 (200-Ok) with false positive", contactType, verificationField),
@@ -343,13 +343,13 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 							Once()
 					},
 					assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
-						contactTypeStr := utils.HumanizeString(string(contactType))
+						contactTypeStr := utils.Humanize(string(contactType))
 						truncatedContactInfo := utils.TruncateString(contactInfo, 3)
-						wantLog := fmt.Sprintf("cannot find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, data.ErrRecordNotFound)
+						wantLog := fmt.Sprintf("Could not find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, data.ErrRecordNotFound)
 						assert.Contains(t, entries[0].Message, wantLog)
 					},
 					wantStatusCode: http.StatusOK,
-					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"DATE_OF_BIRTH"}`, utils.HumanizeString(string(contactType))),
+					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"DATE_OF_BIRTH"}`, utils.Humanize(string(contactType))),
 				},
 				{
 					name:                   fmt.Sprintf("%s/%s/🟢 (200-Ok) OTP sent!", contactType, verificationField),
@@ -376,7 +376,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 							})
 					},
 					wantStatusCode: http.StatusOK,
-					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"%s"}`, utils.HumanizeString(string(contactType)), verificationField),
+					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"%s"}`, utils.Humanize(string(contactType)), verificationField),
 				},
 			}...)
 		}
@@ -441,7 +441,7 @@ func Test_newReceiverSendOTPResponseBody(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%s", otpType, verificationType), func(t *testing.T) {
 				gotBody := newReceiverSendOTPResponseBody(otpType, verificationType)
 				wantBody := ReceiverSendOTPResponseBody{
-					Message:           fmt.Sprintf("if your %s is registered, you'll receive an OTP", utils.HumanizeString(string(otpType))),
+					Message:           fmt.Sprintf("if your %s is registered, you'll receive an OTP", utils.Humanize(string(otpType))),
 					VerificationField: verificationType,
 				}
 				require.Equal(t, wantBody, gotBody)
@@ -573,9 +573,9 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 				return "not_found"
 			},
 			assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
-				contactTypeStr := utils.HumanizeString(string(contactType))
+				contactTypeStr := utils.Humanize(string(contactType))
 				truncatedContactInfo := utils.TruncateString("not_found", 3)
-				wantLog := fmt.Sprintf("cannot find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, data.ErrRecordNotFound)
+				wantLog := fmt.Sprintf("Could not find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, data.ErrRecordNotFound)
 				assert.Contains(t, entries[0].Message, wantLog)
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
@@ -587,9 +587,9 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 			},
 			sep24ClientDomain: "incorrect.test",
 			assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
-				contactTypeStr := utils.HumanizeString(string(contactType))
+				contactTypeStr := utils.Humanize(string(contactType))
 				truncatedContactInfo := utils.TruncateString(r.ContactByType(contactType), 3)
-				wantLog := fmt.Sprintf("could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, "incorrect.test")
+				wantLog := fmt.Sprintf("Could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, "incorrect.test")
 				assert.Contains(t, entries[0].Message, wantLog)
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
@@ -601,9 +601,9 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 			},
 			sep24ClientDomain: "correct.test",
 			assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, _ data.Receiver, entries []logrus.Entry) {
-				contactTypeStr := utils.HumanizeString(string(contactType))
+				contactTypeStr := utils.Humanize(string(contactType))
 				truncatedContactInfo := utils.TruncateString(receiverWithoutWalletInsert.ContactByType(contactType), 3)
-				wantLog := fmt.Sprintf("could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, "correct.test")
+				wantLog := fmt.Sprintf("Could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, "correct.test")
 				assert.Contains(t, entries[0].Message, wantLog)
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
@@ -625,7 +625,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
 			wantHttpErr: func(contactType data.ReceiverContactType) *httperror.HTTPError {
-				contactTypeStr := utils.HumanizeString(string(contactType))
+				contactTypeStr := utils.Humanize(string(contactType))
 				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s: %w", contactTypeStr, errors.New("error sending message")))
 				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
 			},
