@@ -53,7 +53,7 @@ type PatchOrganizationProfileRequest struct {
 	OrganizationName               string  `json:"organization_name"`
 	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
 	IsApprovalRequired             *bool   `json:"is_approval_required"`
-	SMSResendInterval              *int64  `json:"receiver_invitation_resend_interval"`
+	SMSResendInterval              *int64  `json:"receiver_invitation_resend_interval_days"`
 	PaymentCancellationPeriodDays  *int64  `json:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
 	OTPMessageTemplate             *string `json:"otp_message_template"`
@@ -160,15 +160,15 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 
 	organizationUpdate := data.OrganizationUpdate{
-		Name:                                reqBody.OrganizationName,
-		Logo:                                fileContentBytes,
-		TimezoneUTCOffset:                   reqBody.TimezoneUTCOffset,
-		IsApprovalRequired:                  reqBody.IsApprovalRequired,
-		ReceiverRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
-		OTPMessageTemplate:                  reqBody.OTPMessageTemplate,
-		ReceiverInvitationResendInterval:    reqBody.SMSResendInterval,
-		PaymentCancellationPeriodDays:       reqBody.PaymentCancellationPeriodDays,
-		PrivacyPolicyLink:                   reqBody.PrivacyPolicyLink,
+		Name:                                 reqBody.OrganizationName,
+		Logo:                                 fileContentBytes,
+		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
+		IsApprovalRequired:                   reqBody.IsApprovalRequired,
+		ReceiverRegistrationMessageTemplate:  reqBody.SMSRegistrationMessageTemplate,
+		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
+		ReceiverInvitationResendIntervalDays: reqBody.SMSResendInterval,
+		PaymentCancellationPeriodDays:        reqBody.PaymentCancellationPeriodDays,
+		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
 	if err != nil {
@@ -358,16 +358,16 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	resp := map[string]interface{}{
-		"name":                                org.Name,
-		"logo_url":                            lu.String(),
-		"distribution_account":                distributionAccount,
-		"distribution_account_public_key":     distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
-		"timezone_utc_offset":                 org.TimezoneUTCOffset,
-		"is_approval_required":                org.IsApprovalRequired,
-		"receiver_invitation_resend_interval": 0,
-		"payment_cancellation_period_days":    0,
-		"privacy_policy_link":                 org.PrivacyPolicyLink,
-		"message_channel_priority":            org.MessageChannelPriority,
+		"name":                            org.Name,
+		"logo_url":                        lu.String(),
+		"distribution_account":            distributionAccount,
+		"distribution_account_public_key": distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
+		"timezone_utc_offset":             org.TimezoneUTCOffset,
+		"is_approval_required":            org.IsApprovalRequired,
+		"receiver_invitation_resend_interval_days": 0,
+		"payment_cancellation_period_days":         0,
+		"privacy_policy_link":                      org.PrivacyPolicyLink,
+		"message_channel_priority":                 org.MessageChannelPriority,
 	}
 
 	if org.ReceiverRegistrationMessageTemplate != data.DefaultReceiverRegistrationMessageTemplate {
@@ -378,8 +378,8 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		resp["otp_message_template"] = org.OTPMessageTemplate
 	}
 
-	if org.ReceiverInvitationResendInterval != nil {
-		resp["receiver_invitation_resend_interval"] = *org.ReceiverInvitationResendInterval
+	if org.ReceiverInvitationResendIntervalDays != nil {
+		resp["receiver_invitation_resend_interval_days"] = *org.ReceiverInvitationResendIntervalDays
 	}
 
 	if org.PaymentCancellationPeriodDays != nil {

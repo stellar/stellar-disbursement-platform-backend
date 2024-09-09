@@ -35,7 +35,7 @@ type Organization struct {
 	TimezoneUTCOffset string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
 	// ReceiverInvitationResendInterval is the time period that SDP will wait to resend the invitation to the receivers that aren't registered.
 	// If it's nil means resending the invitation is deactivated.
-	ReceiverInvitationResendInterval *int64 `json:"receiver_invitation_resend_interval" db:"receiver_invitation_resend_interval"`
+	ReceiverInvitationResendIntervalDays *int64 `json:"receiver_invitation_resend_interval_days" db:"receiver_invitation_resend_interval_days"`
 	// PaymentCancellationPeriodDays is the number of days for a ready payment to be automatically cancelled.
 	PaymentCancellationPeriodDays       *int64 `json:"payment_cancellation_period_days" db:"payment_cancellation_period_days"`
 	ReceiverRegistrationMessageTemplate string `json:"receiver_registration_message_template" db:"receiver_registration_message_template"`
@@ -54,12 +54,12 @@ type Organization struct {
 }
 
 type OrganizationUpdate struct {
-	Name                             string `json:",omitempty"`
-	Logo                             []byte `json:",omitempty"`
-	TimezoneUTCOffset                string `json:",omitempty"`
-	IsApprovalRequired               *bool  `json:",omitempty"`
-	ReceiverInvitationResendInterval *int64 `json:",omitempty"`
-	PaymentCancellationPeriodDays    *int64 `json:",omitempty"`
+	Name                                 string `json:",omitempty"`
+	Logo                                 []byte `json:",omitempty"`
+	TimezoneUTCOffset                    string `json:",omitempty"`
+	IsApprovalRequired                   *bool  `json:",omitempty"`
+	ReceiverInvitationResendIntervalDays *int64 `json:",omitempty"`
+	PaymentCancellationPeriodDays        *int64 `json:",omitempty"`
 
 	// Using pointers to accept empty strings
 	ReceiverRegistrationMessageTemplate *string `json:",omitempty"`
@@ -128,7 +128,7 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.IsApprovalRequired == nil &&
 		ou.ReceiverRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
-		ou.ReceiverInvitationResendInterval == nil &&
+		ou.ReceiverInvitationResendIntervalDays == nil &&
 		ou.PaymentCancellationPeriodDays == nil &&
 		ou.PrivacyPolicyLink == nil
 }
@@ -227,13 +227,13 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		}
 	}
 
-	if ou.ReceiverInvitationResendInterval != nil {
-		if *ou.ReceiverInvitationResendInterval > 0 {
-			fields = append(fields, "receiver_invitation_resend_interval = ?")
-			args = append(args, *ou.ReceiverInvitationResendInterval)
+	if ou.ReceiverInvitationResendIntervalDays != nil {
+		if *ou.ReceiverInvitationResendIntervalDays > 0 {
+			fields = append(fields, "receiver_invitation_resend_interval_days = ?")
+			args = append(args, *ou.ReceiverInvitationResendIntervalDays)
 		} else {
 			// When 0 (zero) is passed by parameter we set it as NULL.
-			fields = append(fields, "receiver_invitation_resend_interval = NULL")
+			fields = append(fields, "receiver_invitation_resend_interval_days = NULL")
 		}
 	}
 

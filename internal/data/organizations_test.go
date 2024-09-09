@@ -398,29 +398,29 @@ func Test_Organizations_Update(t *testing.T) {
 		assert.Equal(t, defaultMessage, o.OTPMessageTemplate)
 	})
 
-	t.Run("updates the organization's ReceiverInvitationResendInterval", func(t *testing.T) {
+	t.Run("updates the organization's ReceiverInvitationResendIntervalDays", func(t *testing.T) {
 		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
-		assert.Nil(t, o.ReceiverInvitationResendInterval)
+		assert.Nil(t, o.ReceiverInvitationResendIntervalDays)
 
 		var smsResendInterval int64 = 2
-		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationResendInterval: &smsResendInterval})
+		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationResendIntervalDays: &smsResendInterval})
 		require.NoError(t, err)
 
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, smsResendInterval, *o.ReceiverInvitationResendInterval)
+		assert.Equal(t, smsResendInterval, *o.ReceiverInvitationResendIntervalDays)
 
 		// Set it as null
 		smsResendInterval = 0
-		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationResendInterval: &smsResendInterval})
+		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationResendIntervalDays: &smsResendInterval})
 		require.NoError(t, err)
 
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
-		assert.Nil(t, o.ReceiverInvitationResendInterval)
+		assert.Nil(t, o.ReceiverInvitationResendIntervalDays)
 	})
 
 	t.Run("updates the organization's PaymentCancellationPeriod", func(t *testing.T) {

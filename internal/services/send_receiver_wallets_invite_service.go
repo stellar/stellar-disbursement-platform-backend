@@ -69,8 +69,8 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	}
 
 	// Debug purposes
-	if organization.ReceiverInvitationResendInterval == nil {
-		log.Ctx(ctx).Debug("automatic resend invitation SMS is deactivated. Set a valid value to the organization's receiver_invitation_resend_interval to activate it.")
+	if organization.ReceiverInvitationResendIntervalDays == nil {
+		log.Ctx(ctx).Debug("automatic resend invitation SMS is deactivated. Set a valid value to the organization's receiver_invitation_resend_interval_days to activate it.")
 	}
 
 	orgSMSRegistrationMessageTemplate := organization.ReceiverRegistrationMessageTemplate
@@ -266,7 +266,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 	}
 
 	// If organization's SMS Resend Interval is nil and we've sent the invitation message to the receiver, we won't resend it.
-	if organization.ReceiverInvitationResendInterval == nil && rwa.ReceiverWallet.InvitationSentAt != nil {
+	if organization.ReceiverInvitationResendIntervalDays == nil && rwa.ReceiverWallet.InvitationSentAt != nil {
 		log.Ctx(ctx).Debugf(
 			"the invitation message was not automatically resent to the receiver %s with phone number %s because the organization's SMS Resend Interval is nil",
 			receiver.ID, truncatedReceiverContact)
@@ -274,7 +274,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 	}
 
 	// The organizations has a interval to automatic resend the Invitation SMS.
-	if organization.ReceiverInvitationResendInterval != nil {
+	if organization.ReceiverInvitationResendIntervalDays != nil {
 		// Check if the receiver wallet reached the maximum number of SMS resend attempts.
 		if rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts >= s.maxInvitationSMSResendAttempts {
 			log.Ctx(ctx).Debugf(
@@ -290,7 +290,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 
 		// Check if it's in the period to resend it.
 		resendPeriod := time.Now().
-			AddDate(0, 0, -int(*organization.ReceiverInvitationResendInterval*(rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts+1)))
+			AddDate(0, 0, -int(*organization.ReceiverInvitationResendIntervalDays*(rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts+1)))
 		if !rwa.ReceiverWallet.InvitationSentAt.Before(resendPeriod) {
 			log.Ctx(ctx).Debugf(
 				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Phone Number: %s - Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - SMS Resend Interval %d day(s)",
@@ -298,7 +298,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 				receiver.ID,
 				rwa.WalletID,
 				rwa.ReceiverWallet.InvitationSentAt.Format(time.RFC1123),
-				*organization.ReceiverInvitationResendInterval,
+				*organization.ReceiverInvitationResendIntervalDays,
 			)
 			return false
 		}

@@ -1,7 +1,7 @@
 -- +migrate Up
 -- Rename organizations.sms_resend_interval to organizations.receiver_invitation_resend_interval
 ALTER TABLE organizations
-    RENAME COLUMN sms_resend_interval TO receiver_invitation_resend_interval;
+    RENAME COLUMN sms_resend_interval TO receiver_invitation_resend_interval_days;
 
 -- Rename organizations.sms_registration_message_template to organizations.receiver_registration_message_template
 ALTER TABLE organizations
@@ -13,7 +13,7 @@ ALTER TABLE organizations
 
 ALTER TABLE organizations
     ADD CONSTRAINT organization_invitation_resend_interval_valid_value_check
-        CHECK ((receiver_invitation_resend_interval IS NOT NULL AND receiver_invitation_resend_interval > 0) OR receiver_invitation_resend_interval IS NULL);
+        CHECK ((receiver_invitation_resend_interval_days IS NOT NULL AND receiver_invitation_resend_interval_days > 0) OR receiver_invitation_resend_interval_days IS NULL);
 
 -- Rename disbursements.sms_registration_message_template to disbursements.receiver_registration_message_template
 ALTER TABLE disbursements
@@ -22,7 +22,7 @@ ALTER TABLE disbursements
 
 -- +migrate Down
 ALTER TABLE organizations
-    RENAME COLUMN receiver_invitation_resend_interval TO sms_resend_interval;
+    RENAME COLUMN receiver_invitation_resend_interval_days TO sms_resend_interval;
 
 ALTER TABLE organizations
     RENAME COLUMN receiver_registration_message_template TO sms_registration_message_template;
