@@ -17,25 +17,25 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
-	AdminDBConnectionPool          db.DBConnectionPool
-	MtnDBConnectionPool            db.DBConnectionPool
-	AnchorPlatformBaseSepURL       string
-	MessageDispatcher              message.MessageDispatcherInterface
-	MaxInvitationSMSResendAttempts int64
-	Sep10SigningPrivateKey         string
-	CrashTrackerClient             crashtracker.CrashTrackerClient
+type SendReceiverWalletsInvitationEventHandlerOptions struct {
+	AdminDBConnectionPool       db.DBConnectionPool
+	MtnDBConnectionPool         db.DBConnectionPool
+	AnchorPlatformBaseSepURL    string
+	MessageDispatcher           message.MessageDispatcherInterface
+	MaxInvitationResendAttempts int64
+	Sep10SigningPrivateKey      string
+	CrashTrackerClient          crashtracker.CrashTrackerClient
 }
 
-type SendReceiverWalletsSMSInvitationEventHandler struct {
+type SendReceiverWalletsInvitationEventHandler struct {
 	tenantManager       tenant.ManagerInterface
 	mtnDBConnectionPool db.DBConnectionPool
 	service             services.SendReceiverWalletInviteServiceInterface
 }
 
-var _ events.EventHandler = new(SendReceiverWalletsSMSInvitationEventHandler)
+var _ events.EventHandler = new(SendReceiverWalletsInvitationEventHandler)
 
-func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWalletsSMSInvitationEventHandlerOptions) *SendReceiverWalletsSMSInvitationEventHandler {
+func NewSendReceiverWalletsInvitationEventHandler(options SendReceiverWalletsInvitationEventHandlerOptions) *SendReceiverWalletsInvitationEventHandler {
 	tm := tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool))
 
 	models, err := data.NewModels(options.MtnDBConnectionPool)
@@ -47,32 +47,32 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 		models,
 		options.MessageDispatcher,
 		options.Sep10SigningPrivateKey,
-		options.MaxInvitationSMSResendAttempts,
+		options.MaxInvitationResendAttempts,
 		options.CrashTrackerClient,
 	)
 	if err != nil {
 		log.Fatalf("error instantiating service: %s", err.Error())
 	}
 
-	return &SendReceiverWalletsSMSInvitationEventHandler{
+	return &SendReceiverWalletsInvitationEventHandler{
 		tenantManager:       tm,
 		mtnDBConnectionPool: options.MtnDBConnectionPool,
 		service:             s,
 	}
 }
 
-func (h *SendReceiverWalletsSMSInvitationEventHandler) Name() string {
+func (h *SendReceiverWalletsInvitationEventHandler) Name() string {
 	return utils.GetTypeName(h)
 }
 
-func (h *SendReceiverWalletsSMSInvitationEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
+func (h *SendReceiverWalletsInvitationEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
 	return message.Topic == events.ReceiverWalletNewInvitationTopic
 }
 
-func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Context, message *events.Message) error {
-	receiverWalletInvitationData, err := utils.ConvertType[any, []schemas.EventReceiverWalletSMSInvitationData](message.Data)
+func (h *SendReceiverWalletsInvitationEventHandler) Handle(ctx context.Context, message *events.Message) error {
+	receiverWalletInvitationData, err := utils.ConvertType[any, []schemas.EventReceiverWalletInvitationData](message.Data)
 	if err != nil {
-		return fmt.Errorf("could not convert message data to %T: %w", []schemas.EventReceiverWalletSMSInvitationData{}, err)
+		return fmt.Errorf("could not convert message data to %T: %w", []schemas.EventReceiverWalletInvitationData{}, err)
 	}
 
 	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)

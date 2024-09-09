@@ -2,7 +2,7 @@ package schemas
 
 import "time"
 
-type EventReceiverWalletSMSInvitationData struct {
+type EventReceiverWalletInvitationData struct {
 	ReceiverWalletID string `json:"receiver_wallet_id"`
 }
 

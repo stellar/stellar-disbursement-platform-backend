@@ -23,15 +23,15 @@ import (
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
-	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error
+	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletInvitationData) error
 }
 
 type SendReceiverWalletInviteService struct {
-	messageDispatcher              message.MessageDispatcherInterface
-	Models                         *data.Models
-	maxInvitationSMSResendAttempts int64
-	sep10SigningPrivateKey         string
-	crashTrackerClient             crashtracker.CrashTrackerClient
+	messageDispatcher           message.MessageDispatcherInterface
+	Models                      *data.Models
+	maxInvitationResendAttempts int64
+	sep10SigningPrivateKey      string
+	crashTrackerClient          crashtracker.CrashTrackerClient
 }
 
 var _ SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteService)
@@ -49,7 +49,7 @@ func (s SendReceiverWalletInviteService) validate() error {
 // For instance, the Wallet Foo is in two Ready Payments, one with USDC and the other with EUROC.
 // So the receiver who has a Stellar Address pending registration (status:READY) in this wallet will receive both invites for USDC and EUROC.
 // This would not impact the user receiving both token amounts. It's only for the registration process.
-func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error {
+func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletInvitationData) error {
 	if s.Models == nil {
 		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
 	}
@@ -70,18 +70,18 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 	// Debug purposes
 	if organization.ReceiverInvitationResendIntervalDays == nil {
-		log.Ctx(ctx).Debug("automatic resend invitation SMS is deactivated. Set a valid value to the organization's receiver_invitation_resend_interval_days to activate it.")
+		log.Ctx(ctx).Debug("automatic resend invitation is deactivated. Set a valid value to the organization's receiver_invitation_resend_interval_days to activate it.")
 	}
 
-	orgSMSRegistrationMessageTemplate := organization.ReceiverRegistrationMessageTemplate
-	if !strings.Contains(orgSMSRegistrationMessageTemplate, "{{.RegistrationLink}}") {
-		orgSMSRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(orgSMSRegistrationMessageTemplate))
+	orgReceiverRegistrationMessageTemplate := organization.ReceiverRegistrationMessageTemplate
+	if !strings.Contains(orgReceiverRegistrationMessageTemplate, "{{.RegistrationLink}}") {
+		orgReceiverRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(orgReceiverRegistrationMessageTemplate))
 	}
 
 	// Execute the template early so we avoid hitting the database to query the other info
-	msgTemplate, err := template.New("").Parse(orgSMSRegistrationMessageTemplate)
+	msgTemplate, err := template.New("").Parse(orgReceiverRegistrationMessageTemplate)
 	if err != nil {
-		return fmt.Errorf("error parsing organization SMS registration message template: %w", err)
+		return fmt.Errorf("error parsing organization receiver registration message template: %w", err)
 	}
 
 	wallets, err := s.Models.Wallets.GetAll(ctx)
@@ -131,15 +131,15 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			continue
 		}
 
-		disbursementSMSRegistrationMessageTemplate := rwa.DisbursementSMSTemplate
-		if disbursementSMSRegistrationMessageTemplate != nil && *disbursementSMSRegistrationMessageTemplate != "" {
-			if !strings.Contains(*disbursementSMSRegistrationMessageTemplate, "{{.RegistrationLink}}") {
-				*disbursementSMSRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(*disbursementSMSRegistrationMessageTemplate))
+		disbursementReceiverRegistrationMessageTemplate := rwa.DisbursementReceiverRegistrationMsgTemplate
+		if disbursementReceiverRegistrationMessageTemplate != nil && *disbursementReceiverRegistrationMessageTemplate != "" {
+			if !strings.Contains(*disbursementReceiverRegistrationMessageTemplate, "{{.RegistrationLink}}") {
+				*disbursementReceiverRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(*disbursementReceiverRegistrationMessageTemplate))
 			}
 
-			msgTemplate, err = template.New("").Parse(*disbursementSMSRegistrationMessageTemplate)
+			msgTemplate, err = template.New("").Parse(*disbursementReceiverRegistrationMessageTemplate)
 			if err != nil {
-				return fmt.Errorf("parsing disbursement SMS registration message template: %w", err)
+				return fmt.Errorf("parsing disbursement receiver registration message template: %w", err)
 			}
 		}
 
@@ -200,8 +200,8 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		msgsToInsert = append(msgsToInsert, msgToInsert)
 
-		// We don't want to update the `invitation_sent_at` for receiver wallets that we've sent the invitation SMS
-		// because there's no way to calculate how many times we've resent the invitation SMS since
+		// We don't want to update the `invitation_sent_at` for receiver wallets for which we've already sent the invitation message
+		// because there's no way to calculate how many times we've resent the invitation message since
 		// the first invitation if we update it.
 		if rwa.ReceiverWallet.InvitationSentAt == nil && msgToInsert.Status == data.SuccessMessageStatus {
 			receiverWalletIDs = append(receiverWalletIDs, rwa.ReceiverWallet.ID)
@@ -223,7 +223,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 // resolveReceiverWalletsPendingRegistration returns the receiver wallets pending registration based on the receiverWalletInvitationData.
 // If the receiverWalletInvitationData is empty, it will return all receiver wallets pending registration.
-func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistration(ctx context.Context, receiverWalletInvitationData []schemas.EventReceiverWalletSMSInvitationData) ([]*data.ReceiverWallet, error) {
+func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistration(ctx context.Context, receiverWalletInvitationData []schemas.EventReceiverWalletInvitationData) ([]*data.ReceiverWallet, error) {
 	var err error
 	var receiverWallets []*data.ReceiverWallet
 	if len(receiverWalletInvitationData) == 0 {
@@ -260,40 +260,40 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 
 	truncatedReceiverContact := utils.TruncateString(phoneNumber, 3)
 
-	// We've never sent a Invitation SMS
+	// We've never sent an Invitation message
 	if rwa.ReceiverWallet.InvitationSentAt == nil {
 		return true
 	}
 
-	// If organization's SMS Resend Interval is nil and we've sent the invitation message to the receiver, we won't resend it.
+	// If organization's Receiver Invitation Resend Interval is nil and we've sent the invitation message to the receiver, we won't resend it.
 	if organization.ReceiverInvitationResendIntervalDays == nil && rwa.ReceiverWallet.InvitationSentAt != nil {
 		log.Ctx(ctx).Debugf(
-			"the invitation message was not automatically resent to the receiver %s with phone number %s because the organization's SMS Resend Interval is nil",
+			"the invitation message was not automatically resent to the receiver %s with contact %s because the organization's Receiver Invitation Resend Interval is nil",
 			receiver.ID, truncatedReceiverContact)
 		return false
 	}
 
-	// The organizations has a interval to automatic resend the Invitation SMS.
+	// The organizations defined an interval to automatically resend the receiver invitation message.
 	if organization.ReceiverInvitationResendIntervalDays != nil {
-		// Check if the receiver wallet reached the maximum number of SMS resend attempts.
-		if rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts >= s.maxInvitationSMSResendAttempts {
+		// Check if the receiver wallet reached the maximum number of resend attempts.
+		if rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationResentAttempts >= s.maxInvitationResendAttempts {
 			log.Ctx(ctx).Debugf(
-				"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Phone Number: %s - Receiver ID %s - Wallet ID %s - Total Invitation SMS resent %d - Maximum attempts %d",
+				"the invitation message was not resent to the receiver because the maximum number of message resend attempts has been reached: Contact: %s - Receiver ID %s - Wallet ID %s - Total Invitation resent %d - Maximum attempts %d",
 				truncatedReceiverContact,
 				receiver.ID,
 				rwa.WalletID,
-				rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts,
-				s.maxInvitationSMSResendAttempts,
+				rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationResentAttempts,
+				s.maxInvitationResendAttempts,
 			)
 			return false
 		}
 
 		// Check if it's in the period to resend it.
 		resendPeriod := time.Now().
-			AddDate(0, 0, -int(*organization.ReceiverInvitationResendIntervalDays*(rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts+1)))
+			AddDate(0, 0, -int(*organization.ReceiverInvitationResendIntervalDays*(rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationResentAttempts+1)))
 		if !rwa.ReceiverWallet.InvitationSentAt.Before(resendPeriod) {
 			log.Ctx(ctx).Debugf(
-				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Phone Number: %s - Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - SMS Resend Interval %d day(s)",
+				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Contact: %s - Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - Receiver Invitation Resend Interval %d day(s)",
 				truncatedReceiverContact,
 				receiver.ID,
 				rwa.WalletID,
@@ -307,13 +307,13 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messageDispatcher message.MessageDispatcherInterface, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messageDispatcher message.MessageDispatcherInterface, sep10SigningPrivateKey string, maxInvitationResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
-		messageDispatcher:              messageDispatcher,
-		Models:                         models,
-		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
-		sep10SigningPrivateKey:         sep10SigningPrivateKey,
-		crashTrackerClient:             crashTrackerClient,
+		messageDispatcher:           messageDispatcher,
+		Models:                      models,
+		maxInvitationResendAttempts: maxInvitationResendAttempts,
+		sep10SigningPrivateKey:      sep10SigningPrivateKey,
+		crashTrackerClient:          crashTrackerClient,
 	}
 
 	if err := s.validate(); err != nil {

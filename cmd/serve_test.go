@@ -175,7 +175,7 @@ func Test_serve(t *testing.T) {
 		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
 		DistributionAccountService:      mDistAccService,
-		MaxInvitationSMSResendAttempts:  3,
+		MaxInvitationResendAttempts:     3,
 		DistAccEncryptionPassphrase:     distributionAccPrivKey,
 		CircleService:                   mCircleService,
 	}

@@ -50,25 +50,25 @@ type ProfileHandler struct {
 }
 
 type PatchOrganizationProfileRequest struct {
-	OrganizationName               string  `json:"organization_name"`
-	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
-	IsApprovalRequired             *bool   `json:"is_approval_required"`
-	SMSResendInterval              *int64  `json:"receiver_invitation_resend_interval_days"`
-	PaymentCancellationPeriodDays  *int64  `json:"payment_cancellation_period_days"`
-	SMSRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
-	OTPMessageTemplate             *string `json:"otp_message_template"`
-	PrivacyPolicyLink              *string `json:"privacy_policy_link"`
+	OrganizationName                    string  `json:"organization_name"`
+	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
+	IsApprovalRequired                  *bool   `json:"is_approval_required"`
+	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
+	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
+	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
+	OTPMessageTemplate                  *string `json:"otp_message_template"`
+	PrivacyPolicyLink                   *string `json:"privacy_policy_link"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
-	return (r.OrganizationName == "" &&
+	return r.OrganizationName == "" &&
 		r.TimezoneUTCOffset == "" &&
 		r.IsApprovalRequired == nil &&
-		r.SMSRegistrationMessageTemplate == nil &&
+		r.ReceiverRegistrationMessageTemplate == nil &&
 		r.OTPMessageTemplate == nil &&
-		r.SMSResendInterval == nil &&
+		r.ReceiverInvitationResendInterval == nil &&
 		r.PaymentCancellationPeriodDays == nil &&
-		r.PrivacyPolicyLink == nil)
+		r.PrivacyPolicyLink == nil
 }
 
 type PatchUserProfileRequest struct {
@@ -164,9 +164,9 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		Logo:                                 fileContentBytes,
 		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
 		IsApprovalRequired:                   reqBody.IsApprovalRequired,
-		ReceiverRegistrationMessageTemplate:  reqBody.SMSRegistrationMessageTemplate,
+		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
 		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
-		ReceiverInvitationResendIntervalDays: reqBody.SMSResendInterval,
+		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
 		PaymentCancellationPeriodDays:        reqBody.PaymentCancellationPeriodDays,
 		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
 	}

@@ -377,14 +377,14 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			},
 			updateOrgInitialValuesFn: func(t *testing.T, ctx context.Context, models *data.Models) {
 				otpMessageTemplate := "custom OTPMessageTemplate"
-				smsRegistrationMessageTemplate := "custom ReceiverRegistrationMessageTemplate"
-				smsResendInterval := int64(123)
+				receiverRegistrationMessageTemplate := "custom ReceiverRegistrationMessageTemplate"
+				receiverInvitationResendInterval := int64(123)
 				paymentCancellationPeriodDays := int64(456)
 				privacyPolicyLink := "https://example.com/privacy-policy"
 				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-					ReceiverRegistrationMessageTemplate:  &smsRegistrationMessageTemplate,
+					ReceiverRegistrationMessageTemplate:  &receiverRegistrationMessageTemplate,
 					OTPMessageTemplate:                   &otpMessageTemplate,
-					ReceiverInvitationResendIntervalDays: &smsResendInterval,
+					ReceiverInvitationResendIntervalDays: &receiverInvitationResendInterval,
 					PaymentCancellationPeriodDays:        &paymentCancellationPeriodDays,
 					PrivacyPolicyLink:                    &privacyPolicyLink,
 				})

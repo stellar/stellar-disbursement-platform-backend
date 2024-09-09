@@ -31,7 +31,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 
 	service := servicesMocks.MockSendReceiverWalletInviteService{}
 
-	handler := SendReceiverWalletsSMSInvitationEventHandler{
+	handler := SendReceiverWalletsInvitationEventHandler{
 		tenantManager:       tenantManager,
 		mtnDBConnectionPool: mtnDBConnectionPool,
 		service:             &service,
@@ -40,13 +40,13 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
 		handleErr := handler.Handle(ctx, &events.Message{Data: "invalid"})
-		assert.ErrorContains(t, handleErr, "could not convert message data to []schemas.EventReceiverWalletSMSInvitationData")
+		assert.ErrorContains(t, handleErr, "could not convert message data to []schemas.EventReceiverWalletInvitationData")
 	})
 
 	t.Run("logs and report error when fails getting tenant by ID", func(t *testing.T) {
 		handleErr := handler.Handle(ctx, &events.Message{
 			TenantID: "tenant-id",
-			Data: []schemas.EventReceiverWalletSMSInvitationData{
+			Data: []schemas.EventReceiverWalletInvitationData{
 				{ReceiverWalletID: "rw-id-1"},
 				{ReceiverWalletID: "rw-id-2"},
 			},
@@ -60,7 +60,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+		reqs := []schemas.EventReceiverWalletInvitationData{
 			{ReceiverWalletID: "rw-id-1"},
 			{ReceiverWalletID: "rw-id-2"},
 		}
@@ -85,7 +85,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+		reqs := []schemas.EventReceiverWalletInvitationData{
 			{ReceiverWalletID: "rw-id-1"},
 			{ReceiverWalletID: "rw-id-2"},
 		}
@@ -109,7 +109,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 
 func Test_SendReceiverWalletsSMSInvitationEventHandler_CanHandleMessage(t *testing.T) {
 	ctx := context.Background()
-	handler := SendReceiverWalletsSMSInvitationEventHandler{}
+	handler := SendReceiverWalletsInvitationEventHandler{}
 
 	assert.False(t, handler.CanHandleMessage(ctx, &events.Message{Topic: "some-topic"}))
 	assert.True(t, handler.CanHandleMessage(ctx, &events.Message{Topic: events.ReceiverWalletNewInvitationTopic}))

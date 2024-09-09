@@ -44,12 +44,12 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 
 	t.Run("exits with status 1 when Messenger Client is missing config", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			o := SendReceiverWalletsSMSInvitationJobOptions{
-				Models:                         models,
-				MaxInvitationSMSResendAttempts: 3,
+			o := SendReceiverWalletsInvitationJobOptions{
+				Models:                      models,
+				MaxInvitationResendAttempts: 3,
 			}
 
-			NewSendReceiverWalletsSMSInvitationJob(o)
+			NewSendReceiverWalletsInvitationJob(o)
 			return
 		}
 
@@ -69,13 +69,13 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 
 	t.Run("exits with status 1 when Base URL is empty", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			o := SendReceiverWalletsSMSInvitationJobOptions{
-				Models:                         models,
-				MessageDispatcher:              dryRunDispatcher,
-				MaxInvitationSMSResendAttempts: 3,
+			o := SendReceiverWalletsInvitationJobOptions{
+				Models:                      models,
+				MessageDispatcher:           dryRunDispatcher,
+				MaxInvitationResendAttempts: 3,
 			}
 
-			NewSendReceiverWalletsSMSInvitationJob(o)
+			NewSendReceiverWalletsInvitationJob(o)
 			return
 		}
 
@@ -94,25 +94,25 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	})
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {
-		o := SendReceiverWalletsSMSInvitationJobOptions{
-			Models:                         models,
-			MessageDispatcher:              dryRunDispatcher,
-			MaxInvitationSMSResendAttempts: 3,
-			JobIntervalSeconds:             DefaultMinimumJobIntervalSeconds,
+		o := SendReceiverWalletsInvitationJobOptions{
+			Models:                      models,
+			MessageDispatcher:           dryRunDispatcher,
+			MaxInvitationResendAttempts: 3,
+			JobIntervalSeconds:          DefaultMinimumJobIntervalSeconds,
 		}
 
-		j := NewSendReceiverWalletsSMSInvitationJob(o)
+		j := NewSendReceiverWalletsInvitationJob(o)
 
 		assert.NotNil(t, j)
 	})
 }
 
 func Test_SendReceiverWalletsSMSInvitationJob(t *testing.T) {
-	j := sendReceiverWalletsSMSInvitationJob{
+	j := sendReceiverWalletsInvitationJob{
 		jobIntervalSeconds: 5,
 	}
 
-	assert.Equal(t, sendReceiverWalletsSMSInvitationJobName, j.GetName())
+	assert.Equal(t, sendReceiverWalletsInvitationJobName, j.GetName())
 	assert.Equal(t, time.Duration(5)*time.Second, j.GetInterval())
 }
 

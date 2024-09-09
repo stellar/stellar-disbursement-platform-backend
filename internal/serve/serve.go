@@ -89,7 +89,7 @@ type ServeOptions struct {
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
 	EventProducer                   events.Producer
-	MaxInvitationSMSResendAttempts  int
+	MaxInvitationResendAttempts     int
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
 }

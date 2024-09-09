@@ -18,7 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-type RetryInvitationSMSResponse struct {
+type RetryInvitationMessageResponse struct {
 	ID               string     `json:"id"`
 	ReceiverID       string     `json:"receiver_id"`
 	WalletID         string     `json:"wallet_id"`
@@ -39,13 +39,13 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 
 	var msg *events.Message
 	receiverWallet, err := db.RunInTransactionWithResult(ctx, h.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.ReceiverWallet, error) {
-		receiverWallet, err := h.Models.ReceiverWallet.RetryInvitationSMS(ctx, dbTx, receiverWalletID)
+		receiverWallet, err := h.Models.ReceiverWallet.RetryInvitationMessage(ctx, dbTx, receiverWalletID)
 		if err != nil {
-			return nil, fmt.Errorf("retrying invitation SMS for receiver wallet ID %s: %w", receiverWalletID, err)
+			return nil, fmt.Errorf("retrying invitation message for receiver wallet ID %s: %w", receiverWalletID, err)
 		}
 
-		eventData := []schemas.EventReceiverWalletSMSInvitationData{{ReceiverWalletID: receiverWalletID}}
-		msg, err = events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, receiverWalletID, events.RetryReceiverWalletSMSInvitationType, eventData)
+		eventData := []schemas.EventReceiverWalletInvitationData{{ReceiverWalletID: receiverWalletID}}
+		msg, err = events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, receiverWalletID, events.RetryReceiverWalletInvitationType, eventData)
 		if err != nil {
 			return nil, fmt.Errorf("creating event producer message: %w", err)
 		}
@@ -77,7 +77,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 		}
 	}
 
-	response := RetryInvitationSMSResponse{
+	response := RetryInvitationMessageResponse{
 		ID:               receiverWallet.ID,
 		ReceiverID:       receiverWallet.Receiver.ID,
 		WalletID:         receiverWallet.Wallet.ID,

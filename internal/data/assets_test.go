@@ -642,13 +642,13 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverX.PhoneNumber,
 				},
 				ReceiverWalletStats: ReceiverWalletStats{
-					TotalInvitationSMSResentAttempts: 2,
+					TotalInvitationResentAttempts: 2,
 				},
 				InvitationSentAt: &invitationSentAt,
 			},
-			WalletID:                walletA.ID,
-			Asset:                   *asset1,
-			DisbursementSMSTemplate: &disbursementA1.ReceiverRegistrationMessageTemplate,
+			WalletID: walletA.ID,
+			Asset:    *asset1,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementA1.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -660,9 +660,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 				},
 				InvitationSentAt: &invitationSentAt,
 			},
-			WalletID:                walletA.ID,
-			Asset:                   *asset2,
-			DisbursementSMSTemplate: &disbursementA2.ReceiverRegistrationMessageTemplate,
+			WalletID: walletA.ID,
+			Asset:    *asset2,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementA2.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -673,9 +673,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverX.PhoneNumber,
 				},
 			},
-			WalletID:                walletB.ID,
-			Asset:                   *asset1,
-			DisbursementSMSTemplate: &disbursementB1.ReceiverRegistrationMessageTemplate,
+			WalletID: walletB.ID,
+			Asset:    *asset1,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementB1.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -686,9 +686,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverX.PhoneNumber,
 				},
 			},
-			WalletID:                walletB.ID,
-			Asset:                   *asset2,
-			DisbursementSMSTemplate: &disbursementB2.ReceiverRegistrationMessageTemplate,
+			WalletID: walletB.ID,
+			Asset:    *asset2,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementB2.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -699,9 +699,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID:                walletA.ID,
-			Asset:                   *asset1,
-			DisbursementSMSTemplate: &disbursementA1.ReceiverRegistrationMessageTemplate,
+			WalletID: walletA.ID,
+			Asset:    *asset1,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementA1.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -712,9 +712,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID:                walletA.ID,
-			Asset:                   *asset2,
-			DisbursementSMSTemplate: &disbursementA2.ReceiverRegistrationMessageTemplate,
+			WalletID: walletA.ID,
+			Asset:    *asset2,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementA2.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -725,9 +725,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID:                walletB.ID,
-			Asset:                   *asset1,
-			DisbursementSMSTemplate: &disbursementB1.ReceiverRegistrationMessageTemplate,
+			WalletID: walletB.ID,
+			Asset:    *asset1,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementB1.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -738,9 +738,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID:                walletB.ID,
-			Asset:                   *asset2,
-			DisbursementSMSTemplate: &disbursementB2.ReceiverRegistrationMessageTemplate,
+			WalletID: walletB.ID,
+			Asset:    *asset2,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementB2.ReceiverRegistrationMessageTemplate,
 		},
 	}
 

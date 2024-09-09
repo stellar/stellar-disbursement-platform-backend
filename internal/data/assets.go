@@ -224,10 +224,10 @@ func (a *AssetModel) SoftDelete(ctx context.Context, sqlExec db.SQLExecuter, id 
 }
 
 type ReceiverWalletAsset struct {
-	WalletID                string         `db:"wallet_id"`
-	ReceiverWallet          ReceiverWallet `db:"receiver_wallet"`
-	Asset                   Asset          `db:"asset"`
-	DisbursementSMSTemplate *string        `json:"-" db:"receiver_registration_message_template"`
+	WalletID                                    string         `db:"wallet_id"`
+	ReceiverWallet                              ReceiverWallet `db:"receiver_wallet"`
+	Asset                                       Asset          `db:"asset"`
+	DisbursementReceiverRegistrationMsgTemplate *string        `json:"-" db:"receiver_registration_message_template"`
 }
 
 // GetAssetsPerReceiverWallet returns the assets associated with a READY payment for each receiver

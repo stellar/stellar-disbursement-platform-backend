@@ -18,8 +18,8 @@ const (
 
 // Type Names
 const (
-	RetryReceiverWalletSMSInvitationType           = "retry-receiver-wallet-sms-invitation"
-	BatchReceiverWalletSMSInvitationType           = "batch-receiver-wallet-sms-invitation"
+	RetryReceiverWalletInvitationType              = "retry-receiver-wallet-sms-invitation"
+	BatchReceiverWalletInvitationType              = "batch-receiver-wallet-sms-invitation"
 	PaymentCompletedSuccessType                    = "payment-completed-success"
 	PaymentCompletedErrorType                      = "payment-completed-error"
 	PaymentReadyToPayDisbursementStarted           = "payment-ready-to-pay-disbursement-started"
