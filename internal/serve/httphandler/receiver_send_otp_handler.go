@@ -45,33 +45,25 @@ type ReceiverSendOTPRequest struct {
 
 // validateContactInfo validates the contact information provided in the ReceiverSendOTPRequest. It ensures that either
 // the phone number or email is provided, but not both. It also validates the phone number and email format.
-// TODO: use a validator instead!
-func (r ReceiverSendOTPRequest) validateContactInfo() *httperror.HTTPError {
+func (r ReceiverSendOTPRequest) validateContactInfo() validators.Validator {
+	v := *validators.NewValidator()
 	r.Email = utils.TrimAndLower(r.Email)
 	r.PhoneNumber = utils.TrimAndLower(r.PhoneNumber)
 
 	switch {
 	case r.PhoneNumber == "" && r.Email == "":
-		extras := map[string]interface{}{"phone_number": "phone_number or email is required", "email": "phone_number or email is required"}
-		return httperror.BadRequest("", nil, extras)
-
+		v.Check(false, "phone_number", "phone_number or email is required")
+		v.Check(false, "email", "phone_number or email is required")
 	case r.PhoneNumber != "" && r.Email != "":
-		extras := map[string]interface{}{"phone_number": "phone_number and email cannot be both provided", "email": "phone_number and email cannot be both provided"}
-		return httperror.BadRequest("", nil, extras)
-
+		v.Check(false, "phone_number", "phone_number and email cannot be both provided")
+		v.Check(false, "email", "phone_number and email cannot be both provided")
 	case r.PhoneNumber != "":
-		if err := utils.ValidatePhoneNumber(r.PhoneNumber); err != nil {
-			extras := map[string]interface{}{"phone_number": err.Error()}
-			return httperror.BadRequest("", err, extras)
-		}
+		v.CheckError(utils.ValidatePhoneNumber(r.PhoneNumber), "phone_number", "")
 	case r.Email != "":
-		if err := utils.ValidateEmail(r.Email); err != nil {
-			extras := map[string]interface{}{"email": err.Error()}
-			return httperror.BadRequest("", err, extras)
-		}
+		v.CheckError(utils.ValidateEmail(r.Email), "email", "")
 	}
 
-	return nil
+	return v
 }
 
 type ReceiverSendOTPResponseBody struct {
@@ -121,8 +113,8 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	// Ensure XOR(PhoneNumber, Email)
-	if httpErr := receiverSendOTPRequest.validateContactInfo(); httpErr != nil {
-		httpErr.Render(w)
+	if v := receiverSendOTPRequest.validateContactInfo(); v.HasErrors() {
+		httperror.BadRequest("", nil, v.Errors).Render(w)
 		return
 	}
 

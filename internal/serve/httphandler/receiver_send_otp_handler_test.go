@@ -35,73 +35,71 @@ func Test_ReceiverSendOTPRequest_validateContactInfo(t *testing.T) {
 	testCases := []struct {
 		name                   string
 		receiverSendOTPRequest ReceiverSendOTPRequest
-		wantHttpErr            *httperror.HTTPError
+		wantValidationErrors   map[string]interface{}
 	}{
 		{
-			name: "🔴 (400 - BadRequest) when both phone number and email are empty",
+			name: "🔴 phone number and email both empty",
 			receiverSendOTPRequest: ReceiverSendOTPRequest{
 				PhoneNumber: "",
 				Email:       "",
 			},
-			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+			wantValidationErrors: map[string]interface{}{
 				"phone_number": "phone_number or email is required",
 				"email":        "phone_number or email is required",
-			}),
+			},
 		},
 		{
-			name: "🔴 (400 - BadRequest) when both phone number and email are provided",
+			name: "🔴 phone number and email both provided",
 			receiverSendOTPRequest: ReceiverSendOTPRequest{
 				PhoneNumber: "+141555550000",
 				Email:       "foobar@test.com",
 			},
-			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+			wantValidationErrors: map[string]interface{}{
 				"phone_number": "phone_number and email cannot be both provided",
 				"email":        "phone_number and email cannot be both provided",
-			}),
+			},
 		},
 		{
-			name: "🔴 (400 - BadRequest) when phone number is invalid",
+			name: "🔴 phone number is invalid",
 			receiverSendOTPRequest: ReceiverSendOTPRequest{
 				PhoneNumber: "invalid",
 			},
-			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+			wantValidationErrors: map[string]interface{}{
 				"phone_number": "the provided phone number is not a valid E.164 number",
-			}),
+			},
 		},
 		{
-			name: "🔴 (400 - BadRequest) when email is invalid",
+			name: "🔴 email is invalid",
 			receiverSendOTPRequest: ReceiverSendOTPRequest{
 				Email: "invalid",
 			},
-			wantHttpErr: httperror.BadRequest("", nil, map[string]interface{}{
+			wantValidationErrors: map[string]interface{}{
 				"email": "the provided email is not valid",
-			}),
+			},
 		},
 		{
-			name: "🟢 (200 - Ok) when phone number is valid",
+			name: "🟢 phone number is valid",
 			receiverSendOTPRequest: ReceiverSendOTPRequest{
 				PhoneNumber: "+14155550000",
 			},
-			wantHttpErr: nil,
+			wantValidationErrors: nil,
 		},
 		{
-			name: "🟢 (200 - Ok) when email is valid",
+			name: "🟢 email is valid",
 			receiverSendOTPRequest: ReceiverSendOTPRequest{
 				Email: "foobar@test.com",
 			},
-			wantHttpErr: nil,
+			wantValidationErrors: nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotHttpErr := tc.receiverSendOTPRequest.validateContactInfo()
-			if tc.wantHttpErr == nil {
-				assert.Nil(t, gotHttpErr)
+			v := tc.receiverSendOTPRequest.validateContactInfo()
+			if len(tc.wantValidationErrors) == 0 {
+				assert.Len(t, v.Errors, 0)
 			} else {
-				assert.Equal(t, tc.wantHttpErr.StatusCode, gotHttpErr.StatusCode)
-				assert.Equal(t, tc.wantHttpErr.Message, gotHttpErr.Message)
-				assert.Equal(t, tc.wantHttpErr.Extras, gotHttpErr.Extras)
+				assert.Equal(t, tc.wantValidationErrors, v.Errors)
 			}
 		})
 	}
