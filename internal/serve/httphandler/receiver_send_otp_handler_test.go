@@ -295,6 +295,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 				receiverSendOTPRequest.Email = email
 				contactInfo = email
 			}
+			truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 
 			testCases = append(testCases, []testCase{
 				{
@@ -323,12 +324,11 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 					},
 					assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
 						contactTypeStr := utils.Humanize(string(contactType))
-						truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 						wantLog := fmt.Sprintf("sending OTP message to %s %s", contactTypeStr, truncatedContactInfo)
 						assert.Contains(t, entries[0].Message, wantLog)
 					},
 					wantStatusCode: http.StatusInternalServerError,
-					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s: failed calling message dispatcher"}`, utils.Humanize(string(contactType))),
+					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s to %s: failed calling message dispatcher"}`, utils.Humanize(string(contactType)), truncatedContactInfo),
 				},
 				{
 					name:                   fmt.Sprintf("%s/%s/🟡 (200-Ok) with false positive", contactType, verificationField),
@@ -344,7 +344,6 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 					},
 					assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
 						contactTypeStr := utils.Humanize(string(contactType))
-						truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 						wantLog := fmt.Sprintf("Could not find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, data.ErrRecordNotFound)
 						assert.Contains(t, entries[0].Message, wantLog)
 					},
@@ -565,7 +564,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 		prepareMocksFn        func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher)
 		assertLogsFn          func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry)
 		wantVerificationField data.VerificationType
-		wantHttpErr           func(contactType data.ReceiverContactType) *httperror.HTTPError
+		wantHttpErr           func(contactType data.ReceiverContactType, r data.Receiver) *httperror.HTTPError
 	}{
 		{
 			name: "🟡 false positive if GetLatestByContactInfo returns no results",
@@ -624,9 +623,10 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 					Once()
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr: func(contactType data.ReceiverContactType) *httperror.HTTPError {
+			wantHttpErr: func(contactType data.ReceiverContactType, r data.Receiver) *httperror.HTTPError {
 				contactTypeStr := utils.Humanize(string(contactType))
-				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s: %w", contactTypeStr, errors.New("error sending message")))
+				truncatedContactInfo := utils.TruncateString(r.ContactByType(contactType), 3)
+				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s to %s: %w", contactTypeStr, truncatedContactInfo, errors.New("error sending message")))
 				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
 			},
 		},
@@ -694,7 +694,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 				contactInfo := tc.contactInfo(*receiverWithWallet, contactType)
 				verificationField, httpErr := handler.handleOTPForReceiver(ctx, contactType, contactInfo, tc.sep24ClientDomain)
 				if tc.wantHttpErr != nil {
-					wantHTTPErr := tc.wantHttpErr(contactType)
+					wantHTTPErr := tc.wantHttpErr(contactType, *receiverWithWallet)
 					require.NotNil(t, httpErr)
 					assert.Equal(t, *wantHTTPErr, *httpErr)
 					assert.Equal(t, tc.wantVerificationField, verificationField)

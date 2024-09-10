@@ -240,7 +240,7 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	log.Ctx(ctx).Infof("sending OTP message to %s %s...", contactTypeStr, truncatedContactInfo)
 	err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
 	if err != nil {
-		return fmt.Errorf("cannot send OTP message through %s: %w", contactTypeStr, err)
+		return fmt.Errorf("cannot send OTP message through %s to %s: %w", contactTypeStr, truncatedContactInfo, err)
 	}
 
 	return nil
