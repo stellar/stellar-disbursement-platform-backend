@@ -261,12 +261,12 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 		expectedName := "disbursement 2"
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                           expectedName,
-			CountryCode:                    country.Code,
-			AssetID:                        asset.ID,
-			WalletID:                       enabledWallet.ID,
-			VerificationField:              data.VerificationTypeDateOfBirth,
-			SMSRegistrationMessageTemplate: smsTemplate,
+			Name:                                expectedName,
+			CountryCode:                         country.Code,
+			AssetID:                             asset.ID,
+			WalletID:                            enabledWallet.ID,
+			VerificationField:                   data.VerificationTypeDateOfBirth,
+			ReceiverRegistrationMessageTemplate: smsTemplate,
 		})
 		require.NoError(t, err)
 
@@ -290,7 +290,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assert.Equal(t, 1, len(actualDisbursement.StatusHistory))
 		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
 		assert.Equal(t, user.ID, actualDisbursement.StatusHistory[0].UserID)
-		assert.Equal(t, smsTemplate, actualDisbursement.SMSRegistrationMessageTemplate)
+		assert.Equal(t, smsTemplate, actualDisbursement.ReceiverRegistrationMessageTemplate)
 	})
 
 	authManagerMock.AssertExpectations(t)

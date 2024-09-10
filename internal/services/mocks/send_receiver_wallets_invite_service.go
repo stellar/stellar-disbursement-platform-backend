@@ -12,7 +12,7 @@ type MockSendReceiverWalletInviteService struct {
 	mock.Mock
 }
 
-func (s *MockSendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletsReq ...schemas.EventReceiverWalletSMSInvitationData) error {
+func (s *MockSendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletsReq ...schemas.EventReceiverWalletInvitationData) error {
 	args := s.Called(ctx, receiverWalletsReq)
 	return args.Error(0)
 }

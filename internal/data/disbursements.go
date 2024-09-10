@@ -17,19 +17,19 @@ import (
 )
 
 type Disbursement struct {
-	ID                             string                    `json:"id" db:"id"`
-	Name                           string                    `json:"name" db:"name"`
-	Country                        *Country                  `json:"country,omitempty" db:"country"`
-	Wallet                         *Wallet                   `json:"wallet,omitempty" db:"wallet"`
-	Asset                          *Asset                    `json:"asset,omitempty" db:"asset"`
-	Status                         DisbursementStatus        `json:"status" db:"status"`
-	VerificationField              VerificationType          `json:"verification_field,omitempty" db:"verification_field"`
-	StatusHistory                  DisbursementStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	SMSRegistrationMessageTemplate string                    `json:"sms_registration_message_template" db:"sms_registration_message_template"`
-	FileName                       string                    `json:"file_name,omitempty" db:"file_name"`
-	FileContent                    []byte                    `json:"-" db:"file_content"`
-	CreatedAt                      time.Time                 `json:"created_at" db:"created_at"`
-	UpdatedAt                      time.Time                 `json:"updated_at" db:"updated_at"`
+	ID                                  string                    `json:"id" db:"id"`
+	Name                                string                    `json:"name" db:"name"`
+	Country                             *Country                  `json:"country,omitempty" db:"country"`
+	Wallet                              *Wallet                   `json:"wallet,omitempty" db:"wallet"`
+	Asset                               *Asset                    `json:"asset,omitempty" db:"asset"`
+	Status                              DisbursementStatus        `json:"status" db:"status"`
+	VerificationField                   VerificationType          `json:"verification_field,omitempty" db:"verification_field"`
+	StatusHistory                       DisbursementStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	ReceiverRegistrationMessageTemplate string                    `json:"receiver_registration_message_template" db:"receiver_registration_message_template"`
+	FileName                            string                    `json:"file_name,omitempty" db:"file_name"`
+	FileContent                         []byte                    `json:"-" db:"file_content"`
+	CreatedAt                           time.Time                 `json:"created_at" db:"created_at"`
+	UpdatedAt                           time.Time                 `json:"updated_at" db:"updated_at"`
 	*DisbursementStats
 }
 
@@ -71,7 +71,7 @@ var (
 func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field, sms_registration_message_template)
+		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field, receiver_registration_message_template)
 		VALUES 
 		    ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
@@ -85,7 +85,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		disbursement.Asset.ID,
 		disbursement.Country.Code,
 		disbursement.VerificationField,
-		disbursement.SMSRegistrationMessageTemplate,
+		disbursement.ReceiverRegistrationMessageTemplate,
 	)
 	if err != nil {
 		// check if the error is a duplicate key error
@@ -127,7 +127,7 @@ func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id 
 			d.created_at,
 			d.updated_at,
 			d.verification_field,
-			COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
+			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
@@ -179,7 +179,7 @@ func (d *DisbursementModel) GetByName(ctx context.Context, sqlExec db.SQLExecute
 			d.created_at,
 			d.updated_at,
 			d.verification_field,
-			COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
+			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
@@ -320,7 +320,7 @@ func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, 
 			d.created_at,
 			d.updated_at,
 			d.verification_field,
-			COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
+			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			COALESCE(d.file_name, '') as file_name,
 			w.id as "wallet.id",
 			w.name as "wallet.name",

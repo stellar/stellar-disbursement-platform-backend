@@ -298,7 +298,7 @@ func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Contex
 			}
 			receiverIDToReceiverWalletIDMap[receiverID] = rwID
 		} else {
-			_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletID)
+			_, retryErr := di.receiverWalletModel.RetryInvitationMessage(ctx, dbTx, receiverWalletID)
 			if retryErr != nil {
 				if !errors.Is(retryErr, ErrRecordNotFound) {
 					return nil, fmt.Errorf("retrying invitation: %w", retryErr)
