@@ -40,11 +40,11 @@ func Test_DisbursementModelInsert(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:                          asset,
-		Country:                        country,
-		Wallet:                         wallet,
-		VerificationField:              VerificationTypeDateOfBirth,
-		SMSRegistrationMessageTemplate: smsTemplate,
+		Asset:                               asset,
+		Country:                             country,
+		Wallet:                              wallet,
+		VerificationField:                   VerificationTypeDateOfBirth,
+		ReceiverRegistrationMessageTemplate: smsTemplate,
 	}
 
 	t.Run("returns error when disbursement already exists", func(t *testing.T) {
@@ -69,7 +69,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, asset, actual.Asset)
 		assert.Equal(t, country, actual.Country)
 		assert.Equal(t, wallet, actual.Wallet)
-		assert.Equal(t, smsTemplate, actual.SMSRegistrationMessageTemplate)
+		assert.Equal(t, smsTemplate, actual.ReceiverRegistrationMessageTemplate)
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)

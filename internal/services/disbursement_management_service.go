@@ -266,12 +266,12 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			if len(receiverWallets) != 0 {
-				eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverWallets))
+				eventData := make([]schemas.EventReceiverWalletInvitationData, 0, len(receiverWallets))
 				for _, receiverWallet := range receiverWallets {
-					eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
+					eventData = append(eventData, schemas.EventReceiverWalletInvitationData{ReceiverWalletID: receiverWallet.ID})
 				}
 
-				sendInviteMsg, msgErr := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
+				sendInviteMsg, msgErr := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletInvitationType, eventData)
 				if msgErr != nil {
 					return nil, fmt.Errorf("creating new message: %w", msgErr)
 				}

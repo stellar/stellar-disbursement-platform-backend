@@ -94,8 +94,8 @@ func Test_RetryInvitation(t *testing.T) {
 					Topic:    events.ReceiverWalletNewInvitationTopic,
 					Key:      rw.ID,
 					TenantID: tnt.ID,
-					Type:     events.RetryReceiverWalletSMSInvitationType,
-					Data: []schemas.EventReceiverWalletSMSInvitationData{
+					Type:     events.RetryReceiverWalletInvitationType,
+					Data: []schemas.EventReceiverWalletInvitationData{
 						{
 							ReceiverWalletID: rw.ID,
 						},
@@ -147,8 +147,8 @@ func Test_RetryInvitation(t *testing.T) {
 					Topic:    events.ReceiverWalletNewInvitationTopic,
 					Key:      rw.ID,
 					TenantID: tnt.ID,
-					Type:     events.RetryReceiverWalletSMSInvitationType,
-					Data: []schemas.EventReceiverWalletSMSInvitationData{
+					Type:     events.RetryReceiverWalletInvitationType,
+					Data: []schemas.EventReceiverWalletInvitationData{
 						{
 							ReceiverWalletID: rw.ID,
 						},
@@ -220,8 +220,8 @@ func Test_RetryInvitation(t *testing.T) {
 			Topic:    events.ReceiverWalletNewInvitationTopic,
 			Key:      rw.ID,
 			TenantID: tnt.ID,
-			Type:     events.RetryReceiverWalletSMSInvitationType,
-			Data: []schemas.EventReceiverWalletSMSInvitationData{
+			Type:     events.RetryReceiverWalletInvitationType,
+			Data: []schemas.EventReceiverWalletInvitationData{
 				{ReceiverWalletID: rw.ID},
 			},
 		}

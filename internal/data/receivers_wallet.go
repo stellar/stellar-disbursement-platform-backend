@@ -92,9 +92,9 @@ type ReceiverWalletStats struct {
 	CanceledPayments  string          `json:"canceled_payments,omitempty" db:"canceled_payments"`
 	RemainingPayments string          `json:"remaining_payments,omitempty" db:"remaining_payments"`
 	ReceivedAmounts   ReceivedAmounts `json:"received_amounts,omitempty" db:"received_amounts"`
-	// TotalInvitationSMSResentAttempts holds how many times were resent the Invitation SMS to the receiver
+	// TotalInvitationResentAttempts holds how many times were resent the Invitation SMS to the receiver
 	// since the last invitation has been sent.
-	TotalInvitationSMSResentAttempts int64 `json:"-" db:"total_invitation_sms_resent_attempts"`
+	TotalInvitationResentAttempts int64 `json:"-" db:"total_invitation_sms_resent_attempts"`
 }
 
 type ReceiverWalletModel struct {
@@ -554,8 +554,8 @@ func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx conte
 	return receiverWallets, nil
 }
 
-// RetryInvitationSMS sets null the invitation_sent_at of a receiver wallet.
-func (rw *ReceiverWalletModel) RetryInvitationSMS(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletId string) (*ReceiverWallet, error) {
+// RetryInvitationMessage sets null the invitation_sent_at of a receiver wallet.
+func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletId string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
 	query := `
 		UPDATE 

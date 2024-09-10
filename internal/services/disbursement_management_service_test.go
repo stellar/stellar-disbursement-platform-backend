@@ -408,13 +408,13 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 					sendInviteMsg := msgs[0]
 					assert.Equal(t, events.ReceiverWalletNewInvitationTopic, sendInviteMsg.Topic)
 					assert.Equal(t, readyDisbursement.ID, sendInviteMsg.Key)
-					assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, sendInviteMsg.Type)
+					assert.Equal(t, events.BatchReceiverWalletInvitationType, sendInviteMsg.Type)
 					assert.Equal(t, tnt.ID, sendInviteMsg.TenantID)
 
-					eventData, ok := sendInviteMsg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
+					eventData, ok := sendInviteMsg.Data.([]schemas.EventReceiverWalletInvitationData)
 					require.True(t, ok)
 					require.Len(t, eventData, 2)
-					wantElements := []schemas.EventReceiverWalletSMSInvitationData{
+					wantElements := []schemas.EventReceiverWalletInvitationData{
 						{ReceiverWalletID: rwDraft.ID}, // <--- invitation for the receiver that is being included in the system for the first time
 						{ReceiverWalletID: rwReady.ID}, // <--- invitation for the receiver that is already in the system but doesn't have a Stellar wallet yet
 					}
@@ -750,8 +750,8 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 				Topic:    events.ReceiverWalletNewInvitationTopic,
 				Key:      disbursement.ID,
 				TenantID: tnt.ID,
-				Type:     events.BatchReceiverWalletSMSInvitationType,
-				Data: []schemas.EventReceiverWalletSMSInvitationData{
+				Type:     events.BatchReceiverWalletInvitationType,
+				Data: []schemas.EventReceiverWalletInvitationData{
 					{ReceiverWalletID: rwReady.ID}, // Receiver that can receive SMS
 				},
 			},
@@ -853,8 +853,8 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 					Topic:    events.ReceiverWalletNewInvitationTopic,
 					Key:      disbursement.ID,
 					TenantID: tnt.ID,
-					Type:     events.BatchReceiverWalletSMSInvitationType,
-					Data: []schemas.EventReceiverWalletSMSInvitationData{
+					Type:     events.BatchReceiverWalletInvitationType,
+					Data: []schemas.EventReceiverWalletInvitationData{
 						{ReceiverWalletID: rwReady.ID}, // Receiver that can receive SMS
 					},
 				},
@@ -1014,8 +1014,8 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 				Topic:    events.ReceiverWalletNewInvitationTopic,
 				Key:      disbursement.ID,
 				TenantID: tnt.ID,
-				Type:     events.BatchReceiverWalletSMSInvitationType,
-				Data: []schemas.EventReceiverWalletSMSInvitationData{
+				Type:     events.BatchReceiverWalletInvitationType,
+				Data: []schemas.EventReceiverWalletInvitationData{
 					{
 						ReceiverWalletID: rwReady.ID,
 					},

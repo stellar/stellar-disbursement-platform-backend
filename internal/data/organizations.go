@@ -25,20 +25,20 @@ import (
 )
 
 const (
-	DefaultSMSRegistrationMessageTemplate = "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
-	DefaultOTPMessageTemplate             = "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+	DefaultReceiverRegistrationMessageTemplate = "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+	DefaultOTPMessageTemplate                  = "{{.OTP}} is your {{.OrganizationName}} phone verification code."
 )
 
 type Organization struct {
 	ID                string `json:"id" db:"id"`
 	Name              string `json:"name" db:"name"`
 	TimezoneUTCOffset string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
-	// SMSResendInterval is the time period that SDP will wait to resend the invitation SMS to the receivers that aren't registered.
-	// If it's nil means resending the invitation SMS is deactivated.
-	SMSResendInterval *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
+	// ReceiverInvitationResendInterval is the time period that SDP will wait to resend the invitation to the receivers that aren't registered.
+	// If it's nil means resending the invitation is deactivated.
+	ReceiverInvitationResendIntervalDays *int64 `json:"receiver_invitation_resend_interval_days" db:"receiver_invitation_resend_interval_days"`
 	// PaymentCancellationPeriodDays is the number of days for a ready payment to be automatically cancelled.
-	PaymentCancellationPeriodDays  *int64 `json:"payment_cancellation_period_days" db:"payment_cancellation_period_days"`
-	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
+	PaymentCancellationPeriodDays       *int64 `json:"payment_cancellation_period_days" db:"payment_cancellation_period_days"`
+	ReceiverRegistrationMessageTemplate string `json:"receiver_registration_message_template" db:"receiver_registration_message_template"`
 	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
 	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
 	// When the {{.OTP}} is not found in the message, it's added at the beginning of the message.
@@ -54,17 +54,17 @@ type Organization struct {
 }
 
 type OrganizationUpdate struct {
-	Name                          string `json:",omitempty"`
-	Logo                          []byte `json:",omitempty"`
-	TimezoneUTCOffset             string `json:",omitempty"`
-	IsApprovalRequired            *bool  `json:",omitempty"`
-	SMSResendInterval             *int64 `json:",omitempty"`
-	PaymentCancellationPeriodDays *int64 `json:",omitempty"`
+	Name                                 string `json:",omitempty"`
+	Logo                                 []byte `json:",omitempty"`
+	TimezoneUTCOffset                    string `json:",omitempty"`
+	IsApprovalRequired                   *bool  `json:",omitempty"`
+	ReceiverInvitationResendIntervalDays *int64 `json:",omitempty"`
+	PaymentCancellationPeriodDays        *int64 `json:",omitempty"`
 
 	// Using pointers to accept empty strings
-	SMSRegistrationMessageTemplate *string `json:",omitempty"`
-	OTPMessageTemplate             *string `json:",omitempty"`
-	PrivacyPolicyLink              *string `json:",omitempty"`
+	ReceiverRegistrationMessageTemplate *string `json:",omitempty"`
+	OTPMessageTemplate                  *string `json:",omitempty"`
+	PrivacyPolicyLink                   *string `json:",omitempty"`
 }
 
 type LogoType string
@@ -93,7 +93,7 @@ func (lt LogoType) ToHTTPContentType() string {
 
 func (ou *OrganizationUpdate) validate() error {
 	if ou.areAllFieldsEmpty() {
-		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
+		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, Receiver invitation resend interval, Receiver registration invite template, OTP message template, privacy policy link or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
@@ -122,15 +122,15 @@ func (ou *OrganizationUpdate) validate() error {
 }
 
 func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
-	return (ou.Name == "" &&
+	return ou.Name == "" &&
 		len(ou.Logo) == 0 &&
 		ou.TimezoneUTCOffset == "" &&
 		ou.IsApprovalRequired == nil &&
-		ou.SMSRegistrationMessageTemplate == nil &&
+		ou.ReceiverRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
-		ou.SMSResendInterval == nil &&
+		ou.ReceiverInvitationResendIntervalDays == nil &&
 		ou.PaymentCancellationPeriodDays == nil &&
-		ou.PrivacyPolicyLink == nil)
+		ou.PrivacyPolicyLink == nil
 }
 
 type OrganizationModel struct {
@@ -197,13 +197,13 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		args = append(args, *ou.IsApprovalRequired)
 	}
 
-	if ou.SMSRegistrationMessageTemplate != nil {
-		if *ou.SMSRegistrationMessageTemplate != "" {
-			fields = append(fields, "sms_registration_message_template = ?")
-			args = append(args, *ou.SMSRegistrationMessageTemplate)
+	if ou.ReceiverRegistrationMessageTemplate != nil {
+		if *ou.ReceiverRegistrationMessageTemplate != "" {
+			fields = append(fields, "receiver_registration_message_template = ?")
+			args = append(args, *ou.ReceiverRegistrationMessageTemplate)
 		} else {
 			// When empty value is passed by parameter we set the DEFAULT value for the column.
-			fields = append(fields, "sms_registration_message_template = DEFAULT")
+			fields = append(fields, "receiver_registration_message_template = DEFAULT")
 		}
 	}
 
@@ -227,13 +227,13 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		}
 	}
 
-	if ou.SMSResendInterval != nil {
-		if *ou.SMSResendInterval > 0 {
-			fields = append(fields, "sms_resend_interval = ?")
-			args = append(args, *ou.SMSResendInterval)
+	if ou.ReceiverInvitationResendIntervalDays != nil {
+		if *ou.ReceiverInvitationResendIntervalDays > 0 {
+			fields = append(fields, "receiver_invitation_resend_interval_days = ?")
+			args = append(args, *ou.ReceiverInvitationResendIntervalDays)
 		} else {
 			// When 0 (zero) is passed by parameter we set it as NULL.
-			fields = append(fields, "sms_resend_interval = NULL")
+			fields = append(fields, "receiver_invitation_resend_interval_days = NULL")
 		}
 	}
 
