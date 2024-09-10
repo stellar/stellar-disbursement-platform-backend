@@ -1024,7 +1024,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			VerificationValue: "1990-01-01",
 		})
 		_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-		_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
 		require.NoError(t, err)
 
 		// set the logger to a buffer so we can check the error message
@@ -1104,7 +1104,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					VerificationValue: "1990-01-01",
 				})
 				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-				_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+				_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
 				require.NoError(t, err)
 
 				// setup router and execute request
@@ -1209,7 +1209,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					VerificationValue: "1990-01-01",
 				})
 				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-				_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+				_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
 				require.NoError(t, err)
 
 				// setup router and execute request
@@ -1258,7 +1258,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 				// registering Second Wallet
 				receiverWallet2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
-				_, err = models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet2.SEP10ClientDomain, "123456")
+				_, err = models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet2.SEP10ClientDomain, "123456")
 				require.NoError(t, err)
 
 				sep24Claims.ClientDomainClaim = wallet2.SEP10ClientDomain
@@ -1327,7 +1327,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					VerificationValue: "1990-01-01",
 				})
 				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-				_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+				_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
 				require.NoError(t, err)
 
 				// Creating a payment ready to pay

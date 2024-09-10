@@ -14,6 +14,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type ReceiverVerification struct {
@@ -97,29 +98,31 @@ func (m *ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlE
 	return receiverVerifications, nil
 }
 
-// GetLatestByPhoneNumber returns the latest updated receiver verification for some receiver that is associated with a phone number.
-func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, phoneNumber string) (*ReceiverVerification, error) {
-	receiverVerification := ReceiverVerification{}
+// GetLatestByContactInfo returns the latest updated receiver verification for a receiver associated with a phone number or email.
+func (m *ReceiverVerificationModel) GetLatestByContactInfo(ctx context.Context, contactInfo string) (*ReceiverVerification, error) {
 	query := `
 		SELECT 
 			rv.*
 		FROM 
 			receiver_verifications rv
-		JOIN receivers r ON rv.receiver_id = r.id
+			JOIN receivers r ON rv.receiver_id = r.id
 		WHERE 
 			r.phone_number = $1
+			OR r.email = $1
 		ORDER BY
 			rv.updated_at DESC,
 			rv.verification_field ASC
 		LIMIT 1
 	`
 
-	err := m.dbConnectionPool.GetContext(ctx, &receiverVerification, query, phoneNumber)
+	receiverVerification := ReceiverVerification{}
+	err := m.dbConnectionPool.GetContext(ctx, &receiverVerification, query, contactInfo)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
-		return nil, fmt.Errorf("fetching receiver verifications for phone number %s: %w", phoneNumber, err)
+		truncatedContactInfo := utils.TruncateString(contactInfo, 3)
+		return nil, fmt.Errorf("fetching receiver verifications for contact info %s: %w", truncatedContactInfo, err)
 	}
 
 	return &receiverVerification, nil
