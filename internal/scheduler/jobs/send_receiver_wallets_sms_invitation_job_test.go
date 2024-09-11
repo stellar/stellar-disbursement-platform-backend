@@ -140,8 +140,6 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 
 	t.Run("executes the service successfully", func(t *testing.T) {
 		messageDispatcherMock := message.NewMockMessageDispatcher(t)
-		messengerClientMock := message.NewMessengerClientMock(t)
-
 		crashTrackerClientMock := &crashtracker.MockCrashTrackerClient{}
 
 		s, err := services.NewSendReceiverWalletInviteService(
@@ -217,6 +215,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
+		titleWallet1 := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		walletDeepLink2 := services.WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
@@ -228,30 +227,27 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
+		titleWallet2 := "You have a payment waiting for you from " + walletDeepLink2.OrganizationName
 
 		mockErr := errors.New("unexpected error")
 		messageDispatcherMock.
-			On("GetClient", message.MessageChannelSMS).
-			Return(messengerClientMock, nil).
-			Twice().
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Message:       contentWallet1,
+				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(mockErr).
+			Return(message.MessengerTypeTwilioSMS, mockErr).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
 				Message:       contentWallet2,
+				Title:         titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
-		messengerClientMock.
-			On("MessengerType").
-			Return(message.MessengerTypeTwilioSMS).
-			Twice()
+
 		mockMsg := fmt.Sprintf(
 			"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
 			receiver1.ID, rec1RW.ID, message.MessengerTypeTwilioSMS,
@@ -279,7 +275,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.FailureMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet1, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet1, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -295,7 +291,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		assert.Equal(t, wallet2.ID, msg.WalletID)
 		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet2, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet2, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)

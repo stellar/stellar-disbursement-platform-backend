@@ -17,7 +17,7 @@ const (
 //go:generate mockery --name MessageDispatcherInterface --case=underscore --structname=MockMessageDispatcher --inpackage
 type MessageDispatcherInterface interface {
 	RegisterClient(ctx context.Context, channel MessageChannel, client MessengerClient)
-	SendMessage(ctx context.Context, message Message, channelPriority []MessageChannel) error
+	SendMessage(ctx context.Context, message Message, channelPriority []MessageChannel) (MessengerType, error)
 	GetClient(channel MessageChannel) (MessengerClient, error)
 }
 
@@ -36,14 +36,17 @@ func (d *MessageDispatcher) RegisterClient(ctx context.Context, channel MessageC
 	d.clients[channel] = client
 }
 
-func (d *MessageDispatcher) SendMessage(ctx context.Context, message Message, channelPriority []MessageChannel) error {
+func (d *MessageDispatcher) SendMessage(ctx context.Context, message Message, channelPriority []MessageChannel) (MessengerType, error) {
+	// default to the highest priority channel messenger type.
+	messengerType := d.clients[channelPriority[0]].MessengerType()
+
 	supportedChannels := make(map[MessageChannel]bool)
 	for _, ch := range message.SupportedChannels() {
 		supportedChannels[ch] = true
 	}
 
 	if len(supportedChannels) == 0 {
-		return fmt.Errorf("no valid channel found for message %s", message)
+		return messengerType, fmt.Errorf("no valid channel found for message %s", message)
 	}
 
 	for _, channel := range channelPriority {
@@ -57,16 +60,17 @@ func (d *MessageDispatcher) SendMessage(ctx context.Context, message Message, ch
 			log.Ctx(ctx).Warnf("No client registered for channel %q", channel)
 			continue
 		}
+		messengerType = client.MessengerType()
 
 		err := client.SendMessage(message)
 		if err == nil {
-			return nil
+			return messengerType, nil
 		}
 
-		log.Ctx(ctx).Errorf("Error sending message %s using channel %q: %v", message, channel, err)
+		log.Ctx(ctx).Errorf("Error sending %s through messenger type %s: %v", channel, messengerType, err)
 	}
 
-	return fmt.Errorf("unable to send message %s using any of the supported channels [%v]", message, supportedChannels)
+	return messengerType, fmt.Errorf("unable to send message %s using any of the supported channels [%v]", message, supportedChannels)
 }
 
 func (d *MessageDispatcher) GetClient(channel MessageChannel) (MessengerClient, error) {

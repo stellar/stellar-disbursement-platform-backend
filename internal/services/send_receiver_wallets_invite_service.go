@@ -56,7 +56,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 	currentTenant, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {
-		return fmt.Errorf("error getting tenant from context: %w", err)
+		return fmt.Errorf("getting tenant from context: %w", err)
 	}
 	if currentTenant.BaseURL == nil {
 		return fmt.Errorf("tenant base URL cannot be nil for tenant %s", currentTenant.ID)
@@ -65,7 +65,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	// Get the organization entry to get the Org name and ReceiverRegistrationMessageTemplate
 	organization, err := s.Models.Organizations.Get(ctx)
 	if err != nil {
-		return fmt.Errorf("error getting organization: %w", err)
+		return fmt.Errorf("getting organization: %w", err)
 	}
 
 	// Debug purposes
@@ -81,12 +81,12 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	// Execute the template early so we avoid hitting the database to query the other info
 	msgTemplate, err := template.New("").Parse(orgReceiverRegistrationMessageTemplate)
 	if err != nil {
-		return fmt.Errorf("error parsing organization receiver registration message template: %w", err)
+		return fmt.Errorf("parsing organization receiver registration message template: %w", err)
 	}
 
 	wallets, err := s.Models.Wallets.GetAll(ctx)
 	if err != nil {
-		return fmt.Errorf("error getting all wallets: %w", err)
+		return fmt.Errorf("getting all wallets: %w", err)
 	}
 
 	walletsMap := make(map[string]data.Wallet, len(wallets))
@@ -96,12 +96,12 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 	receiverWallets, err := s.resolveReceiverWalletsPendingRegistration(ctx, receiverWalletInvitationData)
 	if err != nil {
-		return fmt.Errorf("error resolving receiver wallets pending registration: %w", err)
+		return fmt.Errorf("resolving receiver wallets pending registration: %w", err)
 	}
 
 	receiverWalletsAsset, err := s.Models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
 	if err != nil {
-		return fmt.Errorf("error getting all assets: %w", err)
+		return fmt.Errorf("getting all assets: %w", err)
 	}
 
 	msgsToInsert := []*data.MessageInsert{}
@@ -155,47 +155,36 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			return fmt.Errorf("executing registration message template: %w", err)
 		}
 
-		// TODO: SDP-1316 - add a Title. Consider if we should make the title configurable.
-		msg := message.Message{
-			Message: content.String(),
-		}
+		msg := message.Message{Message: content.String()}
 		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
 			msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
 		}
 		if rwa.ReceiverWallet.Receiver.Email != "" {
 			msg.ToEmail = rwa.ReceiverWallet.Receiver.Email
+			msg.Title = "You have a payment waiting for you from " + organization.Name
 		}
 
-		assetID := rwa.Asset.ID
-		receiverWalletID := rwa.ReceiverWallet.ID
-
-		// TODO: SDP-1316 - Update send and auto-retry invitation scheduler job to work with both SMS and email
-		messageChannel := message.MessageChannelSMS
-		messageClient, err := s.messageDispatcher.GetClient(messageChannel)
-		if err != nil {
-			return fmt.Errorf("getting message client: %w", err)
-		}
-
-		messageType := messageClient.MessengerType()
 		msgToInsert := &data.MessageInsert{
-			Type:             messageType,
-			AssetID:          &assetID,
+			AssetID:          &rwa.Asset.ID,
 			ReceiverID:       rwa.ReceiverWallet.Receiver.ID,
 			WalletID:         wallet.ID,
-			ReceiverWalletID: &receiverWalletID,
-			TextEncrypted:    content.String(),
+			ReceiverWalletID: &rwa.ReceiverWallet.ID,
+			TextEncrypted:    msg.Message,
+			TitleEncrypted:   msg.Title,
 		}
 
-		// We assume that the message will be sent at first
-		msgToInsert.Status = data.SuccessMessageStatus
-		if err := s.messageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority); err != nil {
+		if messengerType, sendErr := s.messageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority); sendErr != nil {
 			errMsg := fmt.Sprintf(
 				"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
-				rwa.ReceiverWallet.Receiver.ID, rwa.ReceiverWallet.ID, messageType,
+				rwa.ReceiverWallet.Receiver.ID, rwa.ReceiverWallet.ID, messengerType,
 			)
 			// call crash tracker client to log and report error
-			s.crashTrackerClient.LogAndReportErrors(ctx, err, errMsg)
+			s.crashTrackerClient.LogAndReportErrors(ctx, sendErr, errMsg)
 			msgToInsert.Status = data.FailureMessageStatus
+			msgToInsert.Type = messengerType
+		} else {
+			msgToInsert.Status = data.SuccessMessageStatus
+			msgToInsert.Type = messengerType
 		}
 
 		msgsToInsert = append(msgsToInsert, msgToInsert)
@@ -214,7 +203,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		}
 
 		if err := s.Models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
-			return fmt.Errorf("error inserting messages in the database: %w", err)
+			return fmt.Errorf("inserting messages in the database: %w", err)
 		}
 
 		return nil
@@ -250,16 +239,6 @@ func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistrati
 func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
 	receiver := rwa.ReceiverWallet.Receiver
 
-	// TODO: SDP-1316 - add support for other contact information in this method.
-	var phoneNumber string
-	if receiver.PhoneNumber == "" {
-		return false
-	} else {
-		phoneNumber = receiver.PhoneNumber
-	}
-
-	truncatedReceiverContact := utils.TruncateString(phoneNumber, 3)
-
 	// We've never sent an Invitation message
 	if rwa.ReceiverWallet.InvitationSentAt == nil {
 		return true
@@ -268,8 +247,8 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 	// If organization's Receiver Invitation Resend Interval is nil and we've sent the invitation message to the receiver, we won't resend it.
 	if organization.ReceiverInvitationResendIntervalDays == nil && rwa.ReceiverWallet.InvitationSentAt != nil {
 		log.Ctx(ctx).Debugf(
-			"the invitation message was not automatically resent to the receiver %s with contact %s because the organization's Receiver Invitation Resend Interval is nil",
-			receiver.ID, truncatedReceiverContact)
+			"the invitation message was not automatically resent to the receiver %s because the organization's Receiver Invitation Resend Interval is nil",
+			receiver.ID)
 		return false
 	}
 
@@ -278,8 +257,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 		// Check if the receiver wallet reached the maximum number of resend attempts.
 		if rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationResentAttempts >= s.maxInvitationResendAttempts {
 			log.Ctx(ctx).Debugf(
-				"the invitation message was not resent to the receiver because the maximum number of message resend attempts has been reached: Contact: %s - Receiver ID %s - Wallet ID %s - Total Invitation resent %d - Maximum attempts %d",
-				truncatedReceiverContact,
+				"the invitation message was not resent to the receiver because the maximum number of message resend attempts has been reached: Receiver ID %s - Wallet ID %s - Total Invitation resent %d - Maximum attempts %d",
 				receiver.ID,
 				rwa.WalletID,
 				rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationResentAttempts,
@@ -293,8 +271,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 			AddDate(0, 0, -int(*organization.ReceiverInvitationResendIntervalDays*(rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationResentAttempts+1)))
 		if !rwa.ReceiverWallet.InvitationSentAt.Before(resendPeriod) {
 			log.Ctx(ctx).Debugf(
-				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Contact: %s - Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - Receiver Invitation Resend Interval %d day(s)",
-				truncatedReceiverContact,
+				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - Receiver Invitation Resend Interval %d day(s)",
 				receiver.ID,
 				rwa.WalletID,
 				rwa.ReceiverWallet.InvitationSentAt.Format(time.RFC1123),

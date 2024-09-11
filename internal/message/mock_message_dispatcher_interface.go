@@ -49,21 +49,31 @@ func (_m *MockMessageDispatcher) RegisterClient(ctx context.Context, channel Mes
 }
 
 // SendMessage provides a mock function with given fields: ctx, message, channelPriority
-func (_m *MockMessageDispatcher) SendMessage(ctx context.Context, message Message, channelPriority []MessageChannel) error {
+func (_m *MockMessageDispatcher) SendMessage(ctx context.Context, message Message, channelPriority []MessageChannel) (MessengerType, error) {
 	ret := _m.Called(ctx, message, channelPriority)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SendMessage")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, Message, []MessageChannel) error); ok {
+	var r0 MessengerType
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, Message, []MessageChannel) (MessengerType, error)); ok {
+		return rf(ctx, message, channelPriority)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, Message, []MessageChannel) MessengerType); ok {
 		r0 = rf(ctx, message, channelPriority)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(MessengerType)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, Message, []MessageChannel) error); ok {
+		r1 = rf(ctx, message, channelPriority)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // NewMockMessageDispatcher creates a new instance of MockMessageDispatcher. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

@@ -287,13 +287,16 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 		for _, verificationField := range data.GetAllVerificationTypes() {
 			receiverSendOTPRequest := ReceiverSendOTPRequest{ReCAPTCHAToken: reCAPTCHAToken}
 			var contactInfo string
+			var messengerType message.MessengerType
 			switch contactType {
 			case data.ReceiverContactTypeSMS:
 				receiverSendOTPRequest.PhoneNumber = phoneNumber
 				contactInfo = phoneNumber
+				messengerType = message.MessengerTypeTwilioSMS
 			case data.ReceiverContactTypeEmail:
 				receiverSendOTPRequest.Email = email
 				contactInfo = email
+				messengerType = message.MessengerTypeAWSEmail
 			}
 			truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 
@@ -314,7 +317,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 								mock.Anything,
 								mock.AnythingOfType("message.Message"),
 								[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-							Return(errors.New("failed calling message dispatcher")).
+							Return(messengerType, errors.New("failed calling message dispatcher")).
 							Once().
 							Run(func(args mock.Arguments) {
 								msg := args.Get(1).(message.Message)
@@ -366,7 +369,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 								mock.Anything,
 								mock.AnythingOfType("message.Message"),
 								[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-							Return(nil).
+							Return(messengerType, nil).
 							Once().
 							Run(func(args mock.Arguments) {
 								msg := args.Get(1).(message.Message)
@@ -501,13 +504,16 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%s", contactType, tc.name), func(t *testing.T) {
 				var expectedMsg message.Message
 				var contactInfo string
+				var messengerType message.MessengerType
 				switch contactType {
 				case data.ReceiverContactTypeSMS:
 					expectedMsg = message.Message{ToPhoneNumber: phoneNumber, Message: tc.wantMessage}
 					contactInfo = phoneNumber
+					messengerType = message.MessengerTypeTwilioSMS
 				case data.ReceiverContactTypeEmail:
 					expectedMsg = message.Message{ToEmail: email, Message: tc.wantMessage, Title: "Your One-Time Password: " + otp}
 					contactInfo = email
+					messengerType = message.MessengerTypeAWSEmail
 				}
 
 				mockMessageDispatcher := message.NewMockMessageDispatcher(t)
@@ -517,9 +523,9 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 						expectedMsg,
 						[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail})
 				if !tc.shouldDispatcherFail {
-					mockCall.Return(nil).Once()
+					mockCall.Return(messengerType, nil).Once()
 				} else {
-					mockCall.Return(errors.New("error sending message")).Once()
+					mockCall.Return(messengerType, errors.New("error sending message")).Once()
 				}
 
 				handler := ReceiverSendOTPHandler{
@@ -619,7 +625,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 						mock.Anything,
 						mock.AnythingOfType("message.Message"),
 						[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-					Return(errors.New("error sending message")).
+					Return(message.MessengerTypeTwilioSMS, errors.New("error sending message")).
 					Once()
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
@@ -642,7 +648,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 						mock.Anything,
 						mock.AnythingOfType("message.Message"),
 						[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-					Return(nil).
+					Return(message.MessengerTypeTwilioSMS, nil).
 					Once()
 			},
 			wantVerificationField: data.VerificationTypePin,
