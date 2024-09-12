@@ -16,7 +16,7 @@ func Test_Ping(t *testing.T) {
 
 	// Create a new Bearer token authenticator
 	auth := &BearerTokenAuthenticator{Token: "TODO: Insert your token here"}
-	sorobanRPCURL := "https://svc.blockdaemon.com/stellar/testnet/native/soroban-rpc"
+	sorobanRPCURL := "https://soroban-testnet.stellar.org"
 	client := NewClient(sorobanRPCURL, auth)
 
 	resp, err := client.Call(ctx, 1, "getVersionInfo", nil)
