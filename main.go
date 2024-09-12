@@ -9,8 +9,10 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services/sorobanrpc"
@@ -31,14 +33,8 @@ const (
 	NetworkPassphrase = network.TestNetworkPassphrase
 	HorizonURL        = "https://horizon-testnet.stellar.org"
 	SorobanURL        = "https://soroban-testnet.stellar.org"
+	FactoryContractID = "CCXAAMITX4NT5MU7NVCCCY2SFK7VY5EPAUXCOPNHZQTDFHS3HJ7RU57G"
 )
-
-type SorobanService struct {
-	rpcClient         *sorobanrpc.Client
-	sourceAccKP       *keypair.Full
-	networkPassphrase string
-	horizonClient     horizonclient.ClientInterface
-}
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -55,8 +51,24 @@ func main() {
 	fmt.Println("\n====================================")
 	s.printGetTransaction(ctx, TestTxHash)
 	fmt.Println("\n====================================")
-	s.printSendTransaction(ctx)
+	s.printSendNativePaymentTransaction(ctx)
 	fmt.Println("\n====================================")
+}
+
+// preConfigureLogger will set the log level to Trace, so logs works from the
+// start. This will eventually be overwritten in cmd/root.go
+func preConfigureLogger() {
+	log.DefaultLogger = log.New()
+	log.DefaultLogger.SetLevel(logrus.TraceLevel)
+}
+
+//////// SorobanService
+
+type SorobanService struct {
+	rpcClient         *sorobanrpc.Client
+	sourceAccKP       *keypair.Full
+	networkPassphrase string
+	horizonClient     horizonclient.ClientInterface
 }
 
 func NewSorobanService() SorobanService {
@@ -103,7 +115,7 @@ func (s *SorobanService) printGetTransaction(ctx context.Context, hash string) {
 	log.Ctx(ctx).Infof("RPC GetTransaction: %+v", resp2.Result)
 }
 
-func (s *SorobanService) printSendTransaction(ctx context.Context) {
+func (s *SorobanService) printSendNativePaymentTransaction(ctx context.Context) {
 	tx1, err := s.buildAndSignNativePaymentTx(ctx)
 	if err != nil {
 		log.Ctx(ctx).Panicf("Error building&signing transaction: %v", err)
@@ -124,6 +136,16 @@ func (s *SorobanService) printSendTransaction(ctx context.Context) {
 	}
 	log.Ctx(ctx).Infof("RPC SendTransaction (hash=%s): %+v", tx2.Hash, resp2.Result)
 }
+
+func (s *SorobanService) printSendDeploySmartWalletTransaction(ctx context.Context) {
+	passKey := tssUtils.NewPasskey()
+
+	tx1, err := s.buildAndSignContractDeploymentTx(ctx)
+	if err != nil {
+		log.Ctx(ctx).Panicf("Error building&signing transaction: %v", err)
+	}
+	
+
 
 type TxWithMetadata struct {
 	XDR  string
@@ -163,6 +185,10 @@ func (s *SorobanService) buildAndSignNativePaymentTx(_ context.Context) (*TxWith
 		return nil, fmt.Errorf("signing transaction: %w", err)
 	}
 
+	return txWithMetadata(tx, s)
+}
+
+func txWithMetadata(tx *txnbuild.Transaction, s *SorobanService) (*TxWithMetadata, error) {
 	txHash, err := tx.HashHex(s.networkPassphrase)
 	if err != nil {
 		return nil, fmt.Errorf("hashing transaction: %w", err)
@@ -180,9 +206,61 @@ func (s *SorobanService) buildAndSignNativePaymentTx(_ context.Context) (*TxWith
 	}, nil
 }
 
-// preConfigureLogger will set the log level to Trace, so logs works from the
-// start. This will eventually be overwritten in cmd/root.go
-func preConfigureLogger() {
-	log.DefaultLogger = log.New()
-	log.DefaultLogger.SetLevel(logrus.TraceLevel)
+func (s *SorobanService) buildAndSignContractDeploymentTx(_ context.Context) (*TxWithMetadata, error) {
+	hAcc, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: s.sourceAccKP.Address()})
+	if err != nil {
+		return nil, tssUtils.NewHorizonErrorWrapper(err)
+	}
+
+	contractStrKey, err := strkey.Decode(strkey.VersionByteContract, FactoryContractID)
+	if err != nil {
+		return nil, fmt.Errorf("decoding contract ID: %w", err)
+	}
+	fmt.Println("contractStrkey len:", len(contractStrKey))
+	if len(contractStrKey) != 32 {
+		return nil, fmt.Errorf("contract ID is not 32 bytes long")
+	}
+
+	contractIDHash := xdr.Hash(contractStrKey)
+	fooStr, err := xdr.NewScVal(xdr.ScValTypeScvString, "foo")
+	if err != nil {
+		return nil, fmt.Errorf("creating xdr.ScVal: %w", err)
+	}
+
+	contractInvokeOp := &txnbuild.InvokeHostFunction{
+		SourceAccount: s.sourceAccKP.Address(),
+		HostFunction: xdr.HostFunction{
+			Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
+			InvokeContract: &xdr.InvokeContractArgs{
+				ContractAddress: xdr.ScAddress{
+					Type:       xdr.ScAddressTypeScAddressTypeContract,
+					ContractId: &contractIDHash,
+				},
+				FunctionName: "deploy",
+				Args:         xdr.ScVec{fooStr},
+			},
+		},
+	}
+
+	tx, err := txnbuild.NewTransaction(
+		txnbuild.TransactionParams{
+			SourceAccount:        &hAcc,
+			IncrementSequenceNum: true,
+			BaseFee:              txnbuild.MinBaseFee * 100,
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds: txnbuild.NewTimeout(60),
+			},
+			Operations: []txnbuild.Operation{contractInvokeOp},
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating transaction: %w", err)
+	}
+
+	tx, err = tx.Sign(s.networkPassphrase, s.sourceAccKP)
+	if err != nil {
+		return nil, fmt.Errorf("signing transaction: %w", err)
+	}
+
+	return txWithMetadata(tx, s)
 }

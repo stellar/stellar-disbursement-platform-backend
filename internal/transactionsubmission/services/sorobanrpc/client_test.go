@@ -19,7 +19,7 @@ func Test_Ping(t *testing.T) {
 	sorobanRPCURL := "https://svc.blockdaemon.com/stellar/testnet/native/soroban-rpc"
 	client := NewClient(sorobanRPCURL, auth)
 
-	resp, err := client.Call(ctx, "getVersionInfo", 1)
+	resp, err := client.Call(ctx, 1, "getVersionInfo", nil)
 	require.NoError(t, err)
 
 	t.Logf("Soroban RPC version: %s", resp.Result)
