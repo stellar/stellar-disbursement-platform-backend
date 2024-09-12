@@ -243,7 +243,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationField: data.VerificationTypeDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
-			wantErrContains: "DATE_OF_BIRTH not found for receiver with phone number +38...333",
+			wantErrContains: "DATE_OF_BIRTH not found for receiver id " + receiverMissingReceiverVerification.ID,
 		},
 		{
 			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (YEAR_MONTH)",
@@ -253,7 +253,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationField: data.VerificationTypeYearMonth,
 				VerificationValue: "1999-12",
 			},
-			wantErrContains: "YEAR_MONTH not found for receiver with phone number +38...555",
+			wantErrContains: "YEAR_MONTH not found for receiver id " + receiver.ID,
 		},
 		{
 			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (NATIONAL_ID_NUMBER)",
@@ -263,7 +263,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationField: data.VerificationTypeNationalID,
 				VerificationValue: "123456",
 			},
-			wantErrContains: "NATIONAL_ID_NUMBER not found for receiver with phone number +38...555",
+			wantErrContains: "NATIONAL_ID_NUMBER not found for receiver id " + receiver.ID,
 		},
 		{
 			name:     "returns an error if the receiver has exceeded their max attempts to confirm the verification value",
@@ -273,7 +273,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationField: data.VerificationTypeDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
-			wantErrContains: "the number of attempts to confirm the verification value exceededs the max attempts",
+			wantErrContains: "the number of attempts to confirm the verification value exceeded the max attempts",
 		},
 		{
 			name:     "returns an error if the varification value provided in the payload is different from the DB one",
@@ -284,7 +284,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationValue: "1990-11-11", // <--- different from the DB one (1990-01-01)
 			},
 			shouldAssertAttemptsCount: true,
-			wantErrContains:           "DATE_OF_BIRTH value does not match for user with phone number +38...555",
+			wantErrContains:           "DATE_OF_BIRTH value does not match for receiver with id " + receiver.ID,
 		},
 		{
 			name:     "🎉 successfully process the verification value and updates it accordingly in the DB",
@@ -775,15 +775,27 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 	}
 
 	phoneNumber := "+380445555555"
-	receiverRegistrationRequest := data.ReceiverRegistrationRequest{
+	receiverRegistrationRequestWithPhone := data.ReceiverRegistrationRequest{
 		PhoneNumber:       phoneNumber,
 		OTP:               "123456",
 		VerificationValue: "1990-01-01",
 		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "token",
 	}
-	reqBody, err := json.Marshal(receiverRegistrationRequest)
+	reqBody, err := json.Marshal(receiverRegistrationRequestWithPhone)
 	require.NoError(t, err)
+
+	email := "test@stellar.org"
+	receiverRegistrationRequestWithEmail := data.ReceiverRegistrationRequest{
+		Email:             email,
+		OTP:               "123456",
+		VerificationValue: "1990-01-01",
+		VerificationField: "date_of_birth",
+		ReCAPTCHAToken:    "token",
+	}
+	reqBodyEmail, err := json.Marshal(receiverRegistrationRequestWithEmail)
+	require.NoError(t, err)
+
 	r := chi.NewRouter()
 
 	t.Run("returns an error when validate() fails - testing case where a SEP24 claims are missing from the context", func(t *testing.T) {
@@ -844,7 +856,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "receiver with phone number +38...555 not found in our server")
+		require.Contains(t, buf.String(), "receiver with contact info +38...555 not found in our server")
 	})
 
 	t.Run("returns an error when processReceiverVerificationPII() fails - testing case where no receiverVerification is found", func(t *testing.T) {
@@ -861,7 +873,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// update database with the entries needed
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		_ = data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 
 		// set the logger to a buffer so we can check the error message
 		buf := new(strings.Builder)
@@ -884,7 +896,8 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "processing receiver verification entry for receiver with phone number +38...555: DATE_OF_BIRTH not found for receiver with phone number +38...555")
+		expectedErr := `processing receiver verification entry for receiver with contact info +38...555: verification of type %s not found for receiver id %s`
+		require.Contains(t, buf.String(), fmt.Sprintf(expectedErr, data.VerificationTypeDateOfBirth, receiver.ID))
 	})
 
 	t.Run("returns an error when processReceiverVerificationPII() fails - testing case where maximum number of verification attempts exceeded", func(t *testing.T) {
@@ -934,7 +947,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		expectedError := "the number of attempts to confirm the verification value exceededs the max attempts"
+		expectedError := "the number of attempts to confirm the verification value exceeded the max attempts"
 		wantBody := fmt.Sprintf(`{"error": "%s"}`, expectedError)
 		assert.JSONEq(t, wantBody, string(respBody))
 
@@ -985,7 +998,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
-		wantErrContains := fmt.Sprintf("processing OTP for receiver with phone number +38...555: receiver wallet not found for receiverID=%s and clientDomain=home.page", receiver.ID)
+		wantErrContains := fmt.Sprintf("processing OTP for receiver with contact info +38...555: receiver wallet not found for receiverID=%s and clientDomain=home.page", receiver.ID)
 		require.Contains(t, buf.String(), wantErrContains)
 	})
 
@@ -1202,19 +1215,19 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+				receiver := data.InsertReceiverFixture(t, ctx, dbConnectionPool, &data.ReceiverInsert{Email: &email})
 				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 					ReceiverID:        receiver.ID,
 					VerificationField: data.VerificationTypeDateOfBirth,
 					VerificationValue: "1990-01-01",
 				})
 				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-				_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+				_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, email, wallet.SEP10ClientDomain, "123456")
 				require.NoError(t, err)
 
 				// setup router and execute request
 				r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-				req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+				req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBodyEmail)))
 				require.NoError(t, err)
 				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
 				rr := httptest.NewRecorder()
@@ -1258,12 +1271,12 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 				// registering Second Wallet
 				receiverWallet2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
-				_, err = models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet2.SEP10ClientDomain, "123456")
+				_, err = models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, email, wallet2.SEP10ClientDomain, "123456")
 				require.NoError(t, err)
 
 				sep24Claims.ClientDomainClaim = wallet2.SEP10ClientDomain
 
-				req, err = http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+				req, err = http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBodyEmail)))
 				require.NoError(t, err)
 				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
 				rr = httptest.NewRecorder()
