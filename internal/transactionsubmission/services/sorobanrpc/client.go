@@ -275,3 +275,39 @@ func (c *Client) SendTransaction(ctx context.Context, id int, txXDR string) (*Se
 
 	return sendTransactionResp, nil
 }
+
+//////// Simulate Transaction
+
+type SimulateTransactionResult struct {
+	TransactionData string   `json:"transactionData"`
+	MinResourceFee  string   `json:"minResourceFee"`
+	Events          []string `json:"events"`
+	Results         []struct {
+		Auth []interface{} `json:"auth"`
+		XDR  string        `json:"xdr"`
+	} `json:"results"`
+	Cost struct {
+		CPUInsns string `json:"cpuInsns"`
+		MemBytes string `json:"memBytes"`
+	} `json:"cost"`
+	LatestLedger int `json:"latestLedger"`
+}
+
+type SimulateTransactionResponse struct {
+	RPCResponse
+	Result SimulateTransactionResult `json:"result,omitempty"`
+}
+
+func (c *Client) SimulateTransaction(ctx context.Context, id int, txXDR string) (*SimulateTransactionResponse, error) {
+	rpcResp, err := c.Call(ctx, id, "simulateTransaction", map[string]string{"transaction": txXDR})
+	if err != nil {
+		return nil, fmt.Errorf("calling RPC server with simulateTransaction: %w", err)
+	}
+
+	simulateTransactionResp, err := utils.ConvertType[*RPCResponse, *SimulateTransactionResponse](rpcResp)
+	if err != nil {
+		return nil, fmt.Errorf("converting RPC response to SimulateTransactionResponse: %w", err)
+	}
+
+	return simulateTransactionResp, nil
+}
