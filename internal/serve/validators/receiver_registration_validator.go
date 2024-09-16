@@ -23,14 +23,24 @@ func NewReceiverRegistrationValidator() *ReceiverRegistrationValidator {
 
 // ValidateReceiver validates if the infos present in the ReceiverRegistrationRequest are valids.
 func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.ReceiverRegistrationRequest) {
-	phone := strings.TrimSpace(receiverInfo.PhoneNumber)
+	phone := utils.TrimAndLower(receiverInfo.PhoneNumber)
+	email := utils.TrimAndLower(receiverInfo.Email)
 	otp := strings.TrimSpace(receiverInfo.OTP)
 	verification := strings.TrimSpace(receiverInfo.VerificationValue)
 	verificationField := strings.TrimSpace(string(receiverInfo.VerificationField))
 
-	// validate phone field
-	rv.CheckError(utils.ValidatePhoneNumber(phone), "phone_number", "invalid phone format. Correct format: +380445555555")
-	rv.Check(phone != "", "phone_number", "phone cannot be empty")
+	switch {
+	case phone == "" && email == "":
+		rv.Check(false, "phone_number", "phone_number or email is required")
+		rv.Check(false, "email", "phone_number or email is required")
+	case phone != "" && email != "":
+		rv.Check(false, "phone_number", "phone_number and email cannot be both provided")
+		rv.Check(false, "email", "phone_number and email cannot be both provided")
+	case phone != "":
+		rv.CheckError(utils.ValidatePhoneNumber(phone), "phone_number", "")
+	case email != "":
+		rv.CheckError(utils.ValidateEmail(email), "email", "")
+	}
 
 	// validate otp field
 	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value")
@@ -52,6 +62,7 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	}
 
 	receiverInfo.PhoneNumber = phone
+	receiverInfo.Email = email
 	receiverInfo.OTP = otp
 	receiverInfo.VerificationValue = verification
 	receiverInfo.VerificationField = vf
