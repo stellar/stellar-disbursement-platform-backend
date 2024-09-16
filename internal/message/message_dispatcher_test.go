@@ -90,12 +90,13 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 	emptyMessage := Message{}
 
 	tests := []struct {
-		name              string
-		message           Message
-		channelPriority   []MessageChannel
-		supportedChannels []MessageChannel
-		setupMock         func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock)
-		expectedErr       error
+		name                  string
+		message               Message
+		channelPriority       []MessageChannel
+		supportedChannels     []MessageChannel
+		setupMock             func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock)
+		expectedMessengerType MessengerType
+		expectedErr           error
 	}{
 		{
 			name:              "fail when no supported channels",
@@ -129,7 +130,8 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 
 				smsClientMock.AssertNotCalled(t, "SendMessage", emailMessage)
 			},
-			expectedErr: nil,
+			expectedMessengerType: MessengerTypeAWSEmail,
+			expectedErr:           nil,
 		},
 		{
 			name:              "successful when single supported channel (sms)",
@@ -144,7 +146,8 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 
 				emailClientMock.AssertNotCalled(t, "SendMessage", smsMessage)
 			},
-			expectedErr: nil,
+			expectedMessengerType: MessengerTypeTwilioSMS,
+			expectedErr:           nil,
 		},
 		{
 			name:              "successful when multiple supported channels",
@@ -159,7 +162,8 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 
 				emailClientMock.AssertNotCalled(t, "SendMessage", multiChannelMessage)
 			},
-			expectedErr: nil,
+			expectedMessengerType: MessengerTypeTwilioSMS,
+			expectedErr:           nil,
 		},
 		{
 			name:              "successful when first channel fails (sms) but second succeeds (e-mail)",
@@ -177,7 +181,8 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 					Return(nil).
 					Once()
 			},
-			expectedErr: nil,
+			expectedMessengerType: MessengerTypeAWSEmail,
+			expectedErr:           nil,
 		},
 		{
 			name:              "fail when all channels fail",
@@ -205,19 +210,20 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 			dispatcher := NewMessageDispatcher()
 
 			emailClient := NewMessengerClientMock(t)
-			emailClient.On("MessengerType").Return(MessengerTypeDryRun).Once()
+			emailClient.On("MessengerType").Return(MessengerTypeAWSEmail).Maybe()
 			dispatcher.RegisterClient(ctx, MessageChannelEmail, emailClient)
 
 			smsClient := NewMessengerClientMock(t)
-			smsClient.On("MessengerType").Return(MessengerTypeDryRun).Once()
+			smsClient.On("MessengerType").Return(MessengerTypeTwilioSMS).Maybe()
 			dispatcher.RegisterClient(ctx, MessageChannelSMS, smsClient)
 
 			tt.setupMock(emailClient, smsClient)
 
-			err := dispatcher.SendMessage(ctx, tt.message, tt.channelPriority)
+			messengerType, err := dispatcher.SendMessage(ctx, tt.message, tt.channelPriority)
 			if tt.expectedErr != nil {
 				assert.EqualError(t, err, tt.expectedErr.Error())
 			} else {
+				assert.Equal(t, tt.expectedMessengerType, messengerType)
 				assert.NoError(t, err)
 			}
 		})

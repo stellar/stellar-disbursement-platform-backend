@@ -238,7 +238,7 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 	contactTypeStr := utils.Humanize(string(contactType))
 	log.Ctx(ctx).Infof("sending OTP message to %s %s...", contactTypeStr, truncatedContactInfo)
-	err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
+	_, err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
 	if err != nil {
 		return fmt.Errorf("cannot send OTP message through %s to %s: %w", contactTypeStr, truncatedContactInfo, err)
 	}

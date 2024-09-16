@@ -51,7 +51,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 	require.Equal(t, wantRegistrationLink, registrationLink)
 }
 
-func Test_SendReceiverWalletInviteService(t *testing.T) {
+func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -64,14 +64,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
 
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
-	messageClientMock := message.NewMessengerClientMock(t)
-	messageClientMock.
-		On("MessengerType").
-		Return(message.MessengerTypeTwilioSMS)
 	messageDispatcherMock := message.NewMockMessageDispatcher(t)
-	messageDispatcherMock.
-		On("GetClient", message.MessageChannelSMS).
-		Return(messageClientMock, nil)
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 
@@ -88,6 +81,12 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverEmailOnly := data.InsertReceiverFixture(t, ctx, dbConnectionPool, &data.ReceiverInsert{
+		Email: utils.StringPtr("emailJWP5O@randomemail.com"),
+	})
+	receiverPhoneOnly := data.InsertReceiverFixture(t, ctx, dbConnectionPool, &data.ReceiverInsert{
+		PhoneNumber: utils.StringPtr("1234567890"),
+	})
 
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Country: country,
@@ -147,6 +146,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
+		titleWallet1 := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
@@ -158,6 +158,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
+		titleWallet2 := "You have a payment waiting for you from " + walletDeepLink2.OrganizationName
 
 		mockErr := errors.New("unexpected error")
 		messageDispatcherMock.
@@ -165,15 +166,17 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Message:       contentWallet1,
+				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(errors.New("unexpected error")).
+			Return(message.MessengerTypeTwilioSMS, errors.New("unexpected error")).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
 				Message:       contentWallet2,
+				Title:         titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
 		mockMsg := fmt.Sprintf(
@@ -224,7 +227,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.FailureMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet1, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet1, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -240,7 +243,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet2.ID, msg.WalletID)
 		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet2, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet2, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -258,10 +261,10 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
 		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 
-		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
-		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverPhoneOnly.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverPhoneOnly.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
 
-		rec2RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
+		rec2RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverEmailOnly.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
 
 		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Status:         data.ReadyPaymentStatus,
@@ -289,6 +292,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
+		// titleWallet1 := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
@@ -300,21 +304,21 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
+		titleWallet2 := "You have a payment waiting for you from " + walletDeepLink2.OrganizationName
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
-				ToEmail:       receiver1.Email,
+				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
 				Message:       contentWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver2.PhoneNumber,
-				ToEmail:       receiver2.Email,
-				Message:       contentWallet2,
+				ToEmail: receiverEmailOnly.Email,
+				Message: contentWallet2,
+				Title:   titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeAWSEmail, nil).
 			Once()
 
 		reqs := []schemas.EventReceiverWalletInvitationData{
@@ -329,13 +333,13 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
-		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, wallet1.ID)
 		require.NoError(t, err)
 		require.Len(t, receivers, 1)
 		assert.Equal(t, rec1RW.ID, receivers[0].ID)
 		assert.NotNil(t, receivers[0].InvitationSentAt)
 
-		receivers, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver2.ID}, wallet2.ID)
+		receivers, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverEmailOnly.ID}, wallet2.ID)
 		require.NoError(t, err)
 		require.Len(t, receivers, 1)
 		assert.Equal(t, rec2RW.ID, receivers[0].ID)
@@ -351,11 +355,11 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 				receiver_id = $1 AND wallet_id = $2 AND receiver_wallet_id = $3
 		`
 		var msg data.Message
-		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver1.ID, wallet1.ID, rec1RW.ID)
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiverPhoneOnly.ID, wallet1.ID, rec1RW.ID)
 		require.NoError(t, err)
 
 		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
-		assert.Equal(t, receiver1.ID, msg.ReceiverID)
+		assert.Equal(t, receiverPhoneOnly.ID, msg.ReceiverID)
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
@@ -367,15 +371,15 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Nil(t, msg.AssetID)
 
 		msg = data.Message{}
-		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver2.ID, wallet2.ID, rec2RW.ID)
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiverEmailOnly.ID, wallet2.ID, rec2RW.ID)
 		require.NoError(t, err)
 
-		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
-		assert.Equal(t, receiver2.ID, msg.ReceiverID)
+		assert.Equal(t, message.MessengerTypeAWSEmail, msg.Type)
+		assert.Equal(t, receiverEmailOnly.ID, msg.ReceiverID)
 		assert.Equal(t, wallet2.ID, msg.WalletID)
 		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet2, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet2, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -426,6 +430,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("%s %s", customInvitationMessage, deepLink1)
+		titleWallet1 := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
@@ -437,21 +442,24 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet2 := fmt.Sprintf("%s %s", customInvitationMessage, deepLink2)
+		titleWallet2 := "You have a payment waiting for you from " + walletDeepLink2.OrganizationName
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Message:       contentWallet1,
+				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
 				Message:       contentWallet2,
+				Title:         titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
 		reqs := []schemas.EventReceiverWalletInvitationData{
@@ -496,7 +504,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet1, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet1, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -512,7 +520,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet2.ID, msg.WalletID)
 		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet1, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet2, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -732,14 +740,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
+		titleWallet1 := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Message:       contentWallet1,
+				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
 		reqs := []schemas.EventReceiverWalletInvitationData{
@@ -777,7 +787,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet1, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet1, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -840,6 +850,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentDisbursement3 := fmt.Sprintf("%s %s", disbursement3.ReceiverRegistrationMessageTemplate, deepLink1)
+		titleDisbursement3 := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
@@ -851,21 +862,24 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentDisbursement4 := fmt.Sprintf("%s %s", disbursement4.ReceiverRegistrationMessageTemplate, deepLink2)
+		titleDisbursement4 := "You have a payment waiting for you from " + walletDeepLink2.OrganizationName
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Message:       contentDisbursement3,
+				Title:         titleDisbursement3,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
 				Message:       contentDisbursement4,
+				Title:         titleDisbursement4,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
 		reqs := []schemas.EventReceiverWalletInvitationData{
@@ -910,7 +924,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleDisbursement3, msg.TitleEncrypted)
 		assert.Equal(t, contentDisbursement3, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -926,7 +940,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet2.ID, msg.WalletID)
 		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleDisbursement4, msg.TitleEncrypted)
 		assert.Equal(t, contentDisbursement4, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -982,14 +996,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentDisbursement := fmt.Sprintf("%s %s", disbursement.ReceiverRegistrationMessageTemplate, deepLink1)
+		titleDisbursement := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Message:       contentDisbursement,
+				Title:         titleDisbursement,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
-			Return(nil).
+			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
 		reqs := []schemas.EventReceiverWalletInvitationData{
@@ -1027,7 +1043,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleDisbursement, msg.TitleEncrypted)
 		assert.Equal(t, contentDisbursement, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -1096,7 +1112,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitation(t *testing.T) {
 		require.Len(t, entries, 1)
 		assert.Equal(
 			t,
-			"the invitation message was not resent to the receiver because the maximum number of message resend attempts has been reached: Contact: +12...789 - Receiver ID receiver-ID - Wallet ID wallet-ID - Total Invitation resent 3 - Maximum attempts 3",
+			"the invitation message was not resent to the receiver because the maximum number of message resend attempts has been reached: Receiver ID receiver-ID - Wallet ID wallet-ID - Total Invitation resent 3 - Maximum attempts 3",
 			entries[0].Message,
 		)
 	})
@@ -1129,7 +1145,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitation(t *testing.T) {
 		assert.Equal(
 			t,
 			fmt.Sprintf(
-				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Contact: +12...789 - Receiver ID receiver-ID - Wallet ID wallet-ID - Last Invitation Sent At %s - Receiver Invitation Resend Interval 2 day(s)",
+				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Receiver ID receiver-ID - Wallet ID wallet-ID - Last Invitation Sent At %s - Receiver Invitation Resend Interval 2 day(s)",
 				invitationSentAt.Format(time.RFC1123),
 			),
 			entries[0].Message,
