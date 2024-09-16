@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	htmlTpl "github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type ReceiverRegistrationHandler struct {
@@ -20,13 +21,14 @@ type ReceiverRegistrationHandler struct {
 }
 
 type ReceiverRegistrationData struct {
-	StellarAccount    string
-	JWTToken          string
-	Title             string
-	Message           string
-	ReCAPTCHASiteKey  string
-	PrivacyPolicyLink string
-	OrganizationName  string
+	StellarAccount       string
+	JWTToken             string
+	Title                string
+	Message              string
+	ReCAPTCHASiteKey     string
+	PrivacyPolicyLink    string
+	OrganizationName     string
+	TruncatedContactInfo string
 }
 
 // ServeHTTP will serve the SEP-24 deposit page needed to register users.
@@ -86,6 +88,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		htmlTemplateName = "receiver_registered_successfully.tmpl"
 		tmplData.Title = "Registration Complete 🎉"
 		tmplData.Message = "Your Stellar wallet has been registered successfully!"
+		tmplData.TruncatedContactInfo = utils.TruncateString(rw.OTPConfirmedBy, 3)
 	}
 
 	registerPage, err := htmlTpl.ExecuteHTMLTemplate(htmlTemplateName, tmplData)

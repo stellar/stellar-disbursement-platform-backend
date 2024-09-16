@@ -76,6 +76,7 @@ type ReceiverWallet struct {
 	OTP             string                       `json:"-" db:"otp"`
 	OTPCreatedAt    *time.Time                   `json:"-" db:"otp_created_at"`
 	OTPConfirmedAt  *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
+	OTPConfirmedBy  string                       `json:"otp_confirmed_by,omitempty" db:"otp_confirmed_by"`
 	// AnchorPlatformAccountID is the ID of the SEP24 transaction initiated by the Anchor Platform where the receiver wallet was registered.
 	AnchorPlatformTransactionID       string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
 	AnchorPlatformTransactionSyncedAt *time.Time `json:"anchor_platform_transaction_synced_at,omitempty" db:"anchor_platform_transaction_synced_at"`
@@ -359,6 +360,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 			COALESCE(rw.otp, '') as otp,
 			rw.otp_created_at,
 			rw.otp_confirmed_at,
+			COALESCE(rw.otp_confirmed_by, '') as otp_confirmed_by,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.sep_10_client_domain as "wallet.sep_10_client_domain"
@@ -392,8 +394,9 @@ func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receive
 			stellar_address = $3,
 			stellar_memo = $4,
 			stellar_memo_type = $5,
-			otp_confirmed_at = $6
-		WHERE rw.id = $7
+			otp_confirmed_at = $6,
+			otp_confirmed_by = $7
+		WHERE rw.id = $8
 	`
 
 	result, err := sqlExec.ExecContext(ctx, query,
@@ -403,6 +406,7 @@ func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receive
 		sql.NullString{String: receiverWallet.StellarMemo, Valid: receiverWallet.StellarMemo != ""},
 		sql.NullString{String: receiverWallet.StellarMemoType, Valid: receiverWallet.StellarMemoType != ""},
 		receiverWallet.OTPConfirmedAt,
+		receiverWallet.OTPConfirmedBy,
 		receiverWallet.ID)
 	if err != nil {
 		return fmt.Errorf("updating receiver wallet: %w", err)
@@ -494,6 +498,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
 			COALESCE(rw.otp, '') as otp,
 			rw.otp_created_at,
+			COALESCE(rw.otp_confirmed_by, '') as otp_confirmed_by,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage"
