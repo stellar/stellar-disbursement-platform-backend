@@ -1537,7 +1537,8 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 			ReceiverWallet: receiverWallet,
 		})
 
-		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})
+		params := data.QueryParams{SortBy: data.DefaultPaymentSortField, SortOrder: data.DefaultPaymentSortOrder}
+		response, err := handler.getPaymentsWithCount(ctx, &params)
 		require.NoError(t, err)
 
 		assert.Equal(t, response.Total, 2)
