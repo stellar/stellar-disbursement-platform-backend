@@ -189,6 +189,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	dbTx db.DBTransaction,
 	sep24Claims anchorplatform.SEP24JWTClaims,
 	receiver data.Receiver, otp string,
+	contactInfo string,
 ) (receiverWallet data.ReceiverWallet, wasAlreadyRegistered bool, err error) {
 	// STEP 1: find the receiver wallet for the given [receiverID, clientDomain]
 	rw, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
@@ -220,6 +221,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	// STEP 5: update receiver wallet status to "REGISTERED"
 	now := time.Now()
 	rw.OTPConfirmedAt = &now
+	rw.OTPConfirmedWith = contactInfo
 	rw.Status = data.RegisteredReceiversWalletStatus
 	rw.StellarAddress = sep24Claims.SEP10StellarAccount()
 	rw.StellarMemo = sep24Claims.SEP10StellarMemo()
@@ -310,7 +312,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			}
 
 			// STEP 4: process OTP
-			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
+			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
 			if err != nil {
 				return nil, fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, err)
 			}

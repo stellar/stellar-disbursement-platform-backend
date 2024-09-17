@@ -553,6 +553,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		receiverWallet.Status = RegisteredReceiversWalletStatus
 		now := time.Now()
 		receiverWallet.OTPConfirmedAt = &now
+		receiverWallet.OTPConfirmedWith = "test@stellar.org"
 
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
 		require.NoError(t, err)
@@ -565,7 +566,8 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 				rw.stellar_address,
 				rw.stellar_memo,
 				rw.stellar_memo_type,
-				otp_confirmed_at
+				otp_confirmed_at,
+				COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with
 			FROM
 				receiver_wallets rw
 			WHERE
@@ -581,6 +583,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		assert.Equal(t, "123456", receiverWalletUpdated.StellarMemo)
 		assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
 		assert.WithinDuration(t, now, *receiverWalletUpdated.OTPConfirmedAt, 100*time.Millisecond)
+		assert.Equal(t, receiverWallet.OTPConfirmedWith, receiverWalletUpdated.OTPConfirmedWith)
 	})
 }
 
