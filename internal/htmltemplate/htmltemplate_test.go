@@ -3,6 +3,7 @@ package htmltemplate
 import (
 	"crypto/rand"
 	"fmt"
+	"html/template"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,7 +44,7 @@ func Test_ExecuteHTMLTemplateForEmailEmptyBody(t *testing.T) {
 	randomStr := fmt.Sprintf("%x", b)[:10]
 
 	// check if the random string is imprinted in the template
-	inputData := EmptyBodyEmailTemplate{Body: randomStr}
+	inputData := EmptyBodyEmailTemplate{Body: template.HTML(randomStr)}
 	templateStr, err := ExecuteHTMLTemplateForEmailEmptyBody(inputData)
 	require.NoError(t, err)
 	require.Contains(t, templateStr, randomStr)

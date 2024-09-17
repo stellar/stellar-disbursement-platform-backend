@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"html/template"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -51,7 +52,7 @@ func (a *awsSESClient) SendMessage(message Message) error {
 
 // generateAWSEmail generates the email object to send an email through AWS SES.
 func generateAWSEmail(message Message, sender string) (*ses.SendEmailInput, error) {
-	html, err := htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: message.Message})
+	html, err := htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: template.HTML(message.Message)})
 	if err != nil {
 		return nil, fmt.Errorf("generating html template: %w", err)
 	}
