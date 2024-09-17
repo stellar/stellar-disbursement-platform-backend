@@ -221,7 +221,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	// STEP 5: update receiver wallet status to "REGISTERED"
 	now := time.Now()
 	rw.OTPConfirmedAt = &now
-	rw.OTPConfirmedBy = contactInfo
+	rw.OTPConfirmedWith = contactInfo
 	rw.Status = data.RegisteredReceiversWalletStatus
 	rw.StellarAddress = sep24Claims.SEP10StellarAccount()
 	rw.StellarMemo = sep24Claims.SEP10StellarMemo()

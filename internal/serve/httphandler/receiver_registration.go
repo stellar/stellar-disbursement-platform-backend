@@ -88,7 +88,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		htmlTemplateName = "receiver_registered_successfully.tmpl"
 		tmplData.Title = "Registration Complete 🎉"
 		tmplData.Message = "Your Stellar wallet has been registered successfully!"
-		tmplData.TruncatedContactInfo = utils.TruncateString(rw.OTPConfirmedBy, 3)
+		tmplData.TruncatedContactInfo = utils.TruncateString(rw.OTPConfirmedWith, 3)
 	}
 
 	registerPage, err := htmlTpl.ExecuteHTMLTemplate(htmlTemplateName, tmplData)

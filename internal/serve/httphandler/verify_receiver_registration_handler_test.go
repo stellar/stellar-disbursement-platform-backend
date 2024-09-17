@@ -436,20 +436,20 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 				receiverWallet = data.CreateReceiverWalletFixture(t, ctx, dbTx, receiver.ID, wallet.ID, tc.currentReceiverWalletStatus)
 				var stellarAddress string
 				var otpConfirmedAt *time.Time
-				var otpConfirmedBy string
+				var otpConfirmedWith string
 				if tc.wantWasAlreadyRegistered {
 					stellarAddress = "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
 					now := time.Now()
 					otpConfirmedAt = &now
-					otpConfirmedBy = receiverEmail
+					otpConfirmedWith = receiverEmail
 				}
 
 				const q = `
 					UPDATE receiver_wallets
-					SET otp = $1, otp_created_at = NOW(), stellar_address = $2, otp_confirmed_at = $3, otp_confirmed_by = $4
+					SET otp = $1, otp_created_at = NOW(), stellar_address = $2, otp_confirmed_at = $3, otp_confirmed_with = $4
 					WHERE id = $5
 				`
-				_, err = dbTx.ExecContext(ctx, q, correctOTP, sql.NullString{String: stellarAddress, Valid: stellarAddress != ""}, otpConfirmedAt, otpConfirmedBy, receiverWallet.ID)
+				_, err = dbTx.ExecContext(ctx, q, correctOTP, sql.NullString{String: stellarAddress, Valid: stellarAddress != ""}, otpConfirmedAt, otpConfirmedWith, receiverWallet.ID)
 				require.NoError(t, err)
 			}
 
@@ -469,7 +469,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 				assert.Equal(t, rwUpdated.StellarAddress, rw.StellarAddress)
 				assert.NotNil(t, rw.OTPConfirmedAt)
 				assert.NotNil(t, rwUpdated.OTPConfirmedAt)
-				assert.Equal(t, rwUpdated.OTPConfirmedBy, receiverEmail)
+				assert.Equal(t, rwUpdated.OTPConfirmedWith, receiverEmail)
 				assert.WithinDuration(t, *rwUpdated.OTPConfirmedAt, *rw.OTPConfirmedAt, time.Millisecond)
 
 			} else {

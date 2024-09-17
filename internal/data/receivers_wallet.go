@@ -63,20 +63,20 @@ func (rwsh *ReceiversWalletStatusHistory) Scan(src interface{}) error {
 var _ sql.Scanner = (*ReceiversWalletStatusHistory)(nil)
 
 type ReceiverWallet struct {
-	ID              string                       `json:"id" db:"id"`
-	Receiver        Receiver                     `json:"receiver" db:"receiver"`
-	Wallet          Wallet                       `json:"wallet" db:"wallet"`
-	StellarAddress  string                       `json:"stellar_address,omitempty" db:"stellar_address"`
-	StellarMemo     string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
-	StellarMemoType string                       `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
-	Status          ReceiversWalletStatus        `json:"status" db:"status"`
-	StatusHistory   ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	CreatedAt       time.Time                    `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time                    `json:"updated_at" db:"updated_at"`
-	OTP             string                       `json:"-" db:"otp"`
-	OTPCreatedAt    *time.Time                   `json:"-" db:"otp_created_at"`
-	OTPConfirmedAt  *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
-	OTPConfirmedBy  string                       `json:"otp_confirmed_by,omitempty" db:"otp_confirmed_by"`
+	ID               string                       `json:"id" db:"id"`
+	Receiver         Receiver                     `json:"receiver" db:"receiver"`
+	Wallet           Wallet                       `json:"wallet" db:"wallet"`
+	StellarAddress   string                       `json:"stellar_address,omitempty" db:"stellar_address"`
+	StellarMemo      string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
+	StellarMemoType  string                       `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
+	Status           ReceiversWalletStatus        `json:"status" db:"status"`
+	StatusHistory    ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	CreatedAt        time.Time                    `json:"created_at" db:"created_at"`
+	UpdatedAt        time.Time                    `json:"updated_at" db:"updated_at"`
+	OTP              string                       `json:"-" db:"otp"`
+	OTPCreatedAt     *time.Time                   `json:"-" db:"otp_created_at"`
+	OTPConfirmedAt   *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
+	OTPConfirmedWith string                       `json:"otp_confirmed_with,omitempty" db:"otp_confirmed_with"`
 	// AnchorPlatformAccountID is the ID of the SEP24 transaction initiated by the Anchor Platform where the receiver wallet was registered.
 	AnchorPlatformTransactionID       string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
 	AnchorPlatformTransactionSyncedAt *time.Time `json:"anchor_platform_transaction_synced_at,omitempty" db:"anchor_platform_transaction_synced_at"`
@@ -360,7 +360,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 			COALESCE(rw.otp, '') as otp,
 			rw.otp_created_at,
 			rw.otp_confirmed_at,
-			COALESCE(rw.otp_confirmed_by, '') as otp_confirmed_by,
+			COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.sep_10_client_domain as "wallet.sep_10_client_domain"
@@ -395,7 +395,7 @@ func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receive
 			stellar_memo = $4,
 			stellar_memo_type = $5,
 			otp_confirmed_at = $6,
-			otp_confirmed_by = $7
+			otp_confirmed_with = $7
 		WHERE rw.id = $8
 	`
 
@@ -406,7 +406,7 @@ func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receive
 		sql.NullString{String: receiverWallet.StellarMemo, Valid: receiverWallet.StellarMemo != ""},
 		sql.NullString{String: receiverWallet.StellarMemoType, Valid: receiverWallet.StellarMemoType != ""},
 		receiverWallet.OTPConfirmedAt,
-		receiverWallet.OTPConfirmedBy,
+		receiverWallet.OTPConfirmedWith,
 		receiverWallet.ID)
 	if err != nil {
 		return fmt.Errorf("updating receiver wallet: %w", err)
@@ -498,7 +498,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
 			COALESCE(rw.otp, '') as otp,
 			rw.otp_created_at,
-			COALESCE(rw.otp_confirmed_by, '') as otp_confirmed_by,
+			COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage"
