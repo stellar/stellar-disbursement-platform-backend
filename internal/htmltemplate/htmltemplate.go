@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"text/template"
+	"html/template"
 )
 
 //go:embed tmpl/*.tmpl
