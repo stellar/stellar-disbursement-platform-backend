@@ -31,9 +31,15 @@ Follow these instructions to get started with the Stellar Disbursement Platform 
 
 ## Quick Setup and Deployment
 
-### Docker
+### Pre-requisites
 
-Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
+* **Docker:** Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
+* **Git:** You will need Git to clone the repository. You can download it from [here](https://git-scm.com/downloads).
+* **Go:** If you want to use the `make_env.sh` script to create Stellar accounts and a `.env` file, you will need to have Go installed on your system. You can download it from [here](https://golang.org/dl/).
+* **jq:** If you want to use the `main.sh` script to bring up the local environment, you will need to have `jq` installed. You can install it using Homebrew:
+```sh  
+brew install jq
+```
 
 ### Clone the repository:
 
