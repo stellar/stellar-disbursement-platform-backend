@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 None
 
+## [2.1.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.1.0...2.1.1))
+
+### Changed
+- Removed calls related to the deprecated Circle Accounts API and replaced them with calls to `GET /v1/businessAccount/balances` and `GET /configuration`.  [#433](https://github.com/stellar/stellar-disbursement-platform-backend/pull/433).
+
 ## [2.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.0.0...2.1.0))
 
 Release of the Stellar Disbursement Platform v2.1.0. This release introduces

@@ -65,7 +65,7 @@ var (
 //	|    |    |--- Check if the receiver wallet exists.
 //	|    |    |    |--- If the receiver wallet does not exist, create one.
 //	|    |    |    |--- If the receiver wallet exists and it's not REGISTERED, retry the invitation SMS.
-//	|    |    |--- Delete all payments tied to this disbursement.
+//	|    |    |--- Delete all previously existing payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
 func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int) error {
 	if len(instructions) > maxNumberOfInstructions {
@@ -85,6 +85,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			return fmt.Errorf("error fetching receivers by phone number: %w", err)
 		}
 
+		// Create a map of existing receivers for easy lookup
 		receiverMap := make(map[string]*Receiver)
 		for _, receiver := range existingReceivers {
 			receiverMap[receiver.PhoneNumber] = receiver
@@ -98,6 +99,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			}
 		}
 
+		// Create missing receivers
 		for _, instruction := range instructions {
 			_, exists := receiverMap[instruction.Phone]
 			if !exists {

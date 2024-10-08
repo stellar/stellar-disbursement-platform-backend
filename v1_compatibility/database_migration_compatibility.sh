@@ -17,8 +17,8 @@ echo "====> ✅Step 1: finish cloning SDP v1 (stellar/stellar-relief-backoffice-
 # Run docker compose
 echo $DIVIDER
 echo "====> 👀Step 2: start calling docker compose up"
-docker compose down && docker-compose up --abort-on-container-exit
-echo "====> ✅Step 2: finish calling docker-compose up"
+docker compose down && docker compose up --abort-on-container-exit
+echo "====> ✅Step 2: finish calling docker compose up"
 
 echo $DIVIDER
 echo "🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉"

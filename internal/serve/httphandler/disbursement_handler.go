@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -126,7 +127,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
 	if err != nil {
-		if errors.Is(data.ErrRecordAlreadyExists, err) {
+		if errors.Is(err, data.ErrRecordAlreadyExists) {
 			httperror.Conflict("disbursement already exists", err, nil).Render(w)
 		} else {
 			httperror.BadRequest("could not create disbursement", err, nil).Render(w)
@@ -203,7 +204,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 
 	// check if disbursement is in draft, ready status
-	if disbursement.Status != data.DraftDisbursementStatus && disbursement.Status != data.ReadyDisbursementStatus {
+	if !slices.Contains([]data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus}, disbursement.Status) {
 		httperror.BadRequest("disbursement is not in draft or ready status", nil, nil).Render(w)
 		return
 	}
