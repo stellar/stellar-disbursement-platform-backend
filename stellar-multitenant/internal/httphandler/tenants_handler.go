@@ -63,7 +63,7 @@ func (t TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
 
 	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg)
 	if err != nil {
-		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
+		if errors.Is(err, tenant.ErrTenantDoesNotExist) {
 			errorMsg := fmt.Sprintf("tenant %s does not exist", arg)
 			httperror.NotFound(errorMsg, err, nil).Render(w)
 			return
@@ -210,12 +210,12 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		Status:       reqBody.Status,
 	})
 	if err != nil {
-		if errors.Is(tenant.ErrEmptyUpdateTenant, err) {
+		if errors.Is(err, tenant.ErrEmptyUpdateTenant) {
 			errorMsg := fmt.Sprintf("updating tenant %s: %s", tenantID, err)
 			httperror.BadRequest(errorMsg, err, nil).Render(w)
 			return
 		}
-		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
+		if errors.Is(err, tenant.ErrTenantDoesNotExist) {
 			errorMsg := fmt.Sprintf("updating tenant: tenant %s does not exist", tenantID)
 			httperror.NotFound(errorMsg, err, nil).Render(w)
 			return
@@ -236,7 +236,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tenantID},
 	})
 	if err != nil {
-		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
+		if errors.Is(err, tenant.ErrTenantDoesNotExist) {
 			errorMsg := fmt.Sprintf("tenant %s does not exist", tenantID)
 			httperror.NotFound(errorMsg, err, nil).Render(w)
 			return

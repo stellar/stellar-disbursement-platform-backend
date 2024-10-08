@@ -263,7 +263,7 @@ func Test_CircleDistributionAccountService_GetBalances(t *testing.T) {
 			account:     circleDistAcc,
 			prepareMocksFn: func(mCircleService *circle.MockService) {
 				mCircleService.
-					On("GetWalletByID", ctx, circleDistAcc.CircleWalletID).
+					On("GetBusinessBalances", ctx).
 					Return(nil, errors.New("foobar")).
 					Once()
 			},
@@ -275,14 +275,14 @@ func Test_CircleDistributionAccountService_GetBalances(t *testing.T) {
 			account:     circleDistAcc,
 			prepareMocksFn: func(mCircleService *circle.MockService) {
 				mCircleService.
-					On("GetWalletByID", ctx, circleDistAcc.CircleWalletID).
-					Return(&circle.Wallet{
-						WalletID: circleDistAcc.CircleWalletID,
-						Balances: []circle.Balance{
+					On("GetBusinessBalances", ctx).
+					Return(&circle.Balances{
+						Available: []circle.Balance{
 							{Currency: "USD", Amount: "100.0"},
 							{Currency: "EUR", Amount: "200.0"},
 							{Currency: "UNSUPPORTED_ASSET", Amount: "300.0"},
 						},
+						Unsettled: []circle.Balance{},
 					}, nil).
 					Once()
 			},
@@ -297,10 +297,9 @@ func Test_CircleDistributionAccountService_GetBalances(t *testing.T) {
 			account:     circleDistAcc,
 			prepareMocksFn: func(mCircleService *circle.MockService) {
 				mCircleService.
-					On("GetWalletByID", ctx, circleDistAcc.CircleWalletID).
-					Return(&circle.Wallet{
-						WalletID: circleDistAcc.CircleWalletID,
-						Balances: []circle.Balance{
+					On("GetBusinessBalances", ctx).
+					Return(&circle.Balances{
+						Available: []circle.Balance{
 							{Currency: "USD", Amount: "100.0"},
 							{Currency: "EUR", Amount: "200.0"},
 							{Currency: "UNSUPPORTED_ASSET", Amount: "300.0"},
@@ -346,12 +345,11 @@ func Test_CircleDistributionAccountService_GetBalance(t *testing.T) {
 		Status:         schema.AccountStatusActive,
 	}
 	unsupportedAsset := data.Asset{Code: "FOO", Issuer: "GCANIBF4EHC5ZKKMSPX2WFGJ4ZO7BI4JFHZHBUQC5FH3JOOLKG7F5DL3"}
-	mockGetWalletByIDFn := func(mCircleService *circle.MockService) {
+	mockGetGetBusinessBalancesFn := func(mCircleService *circle.MockService) {
 		mCircleService.
-			On("GetWalletByID", ctx, circleDistAcc.CircleWalletID).
-			Return(&circle.Wallet{
-				WalletID: circleDistAcc.CircleWalletID,
-				Balances: []circle.Balance{
+			On("GetBusinessBalances", ctx).
+			Return(&circle.Balances{
+				Available: []circle.Balance{
 					{Currency: "USD", Amount: "100.0"},
 					{Currency: "EUR", Amount: "200.0"},
 				},
@@ -380,7 +378,7 @@ func Test_CircleDistributionAccountService_GetBalance(t *testing.T) {
 			networkType:    utils.TestnetNetworkType,
 			account:        circleDistAcc,
 			asset:          unsupportedAsset,
-			prepareMocksFn: mockGetWalletByIDFn,
+			prepareMocksFn: mockGetGetBusinessBalancesFn,
 			expectedError:  fmt.Errorf("balance for asset %v not found for distribution account", unsupportedAsset),
 		},
 		{
@@ -388,7 +386,7 @@ func Test_CircleDistributionAccountService_GetBalance(t *testing.T) {
 			networkType:     utils.TestnetNetworkType,
 			account:         circleDistAcc,
 			asset:           assets.USDCAssetTestnet,
-			prepareMocksFn:  mockGetWalletByIDFn,
+			prepareMocksFn:  mockGetGetBusinessBalancesFn,
 			expectedBalance: 100.0,
 		},
 		{
@@ -396,7 +394,7 @@ func Test_CircleDistributionAccountService_GetBalance(t *testing.T) {
 			networkType:     utils.PubnetNetworkType,
 			account:         circleDistAcc,
 			asset:           assets.EURCAssetPubnet,
-			prepareMocksFn:  mockGetWalletByIDFn,
+			prepareMocksFn:  mockGetGetBusinessBalancesFn,
 			expectedBalance: 200.0,
 		},
 	}

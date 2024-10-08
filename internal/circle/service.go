@@ -138,10 +138,18 @@ func (s *Service) GetTransferByID(ctx context.Context, transferID string) (*Tran
 	return client.GetTransferByID(ctx, transferID)
 }
 
-func (s *Service) GetWalletByID(ctx context.Context, walletID string) (*Wallet, error) {
+func (s *Service) GetBusinessBalances(ctx context.Context) (*Balances, error) {
 	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get Circle client: %w", err)
 	}
-	return client.GetWalletByID(ctx, walletID)
+	return client.GetBusinessBalances(ctx)
+}
+
+func (s *Service) GetAccountConfiguration(ctx context.Context) (*AccountConfiguration, error) {
+	client, err := s.getClientForTenantInContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.GetAccountConfiguration(ctx)
 }

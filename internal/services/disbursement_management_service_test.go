@@ -247,10 +247,9 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 	}
 	prepareCircleServiceMockFn := func(mCircleService *circle.MockService) {
 		mCircleService.
-			On("GetWalletByID", ctx, circleDistAccountDBVault.CircleWalletID).
-			Return(&circle.Wallet{
-				WalletID: circleDistAccountDBVault.CircleWalletID,
-				Balances: []circle.Balance{
+			On("GetBusinessBalances", mock.Anything).
+			Return(&circle.Balances{
+				Available: []circle.Balance{
 					{Currency: "EUR", Amount: "10000000.0"},
 				},
 			}, nil).

@@ -2,6 +2,7 @@ package anchorplatform
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -40,14 +41,14 @@ func checkSEP24ClientAndHomeDomains(ctx context.Context, sep24Claims *SEP24JWTCl
 		missingDomain := "missing client domain in the token claims"
 		if networkPassphrase == network.PublicNetworkPassphrase {
 			log.Ctx(ctx).Error(missingDomain)
-			return fmt.Errorf(missingDomain)
+			return errors.New(missingDomain)
 		}
 		log.Ctx(ctx).Warn(missingDomain)
 	}
 	if sep24Claims.HomeDomain() == "" {
 		missingDomain := "missing home domain in the token claims"
 		log.Ctx(ctx).Error(missingDomain)
-		return fmt.Errorf(missingDomain)
+		return errors.New(missingDomain)
 	}
 	return nil
 }

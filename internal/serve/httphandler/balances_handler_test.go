@@ -79,7 +79,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					Once()
 
 				mCircleService.
-					On("GetWalletByID", mock.Anything, "circle-wallet-id").
+					On("GetBusinessBalances", mock.Anything).
 					Return(nil, fmt.Errorf("wrapped error: %w", circleAPIError)).
 					Once()
 			},
@@ -125,7 +125,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					}, nil).
 					Once()
 				mCircleService.
-					On("GetWalletByID", mock.Anything, "circle-wallet-id").
+					On("GetBusinessBalances", mock.Anything).
 					Return(nil, errors.New("unexpected error")).
 					Once()
 			},
@@ -145,15 +145,12 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					}, nil).
 					Once()
 				mCircleService.
-					On("GetWalletByID", mock.Anything, "circle-wallet-id").
-					Return(&circle.Wallet{
-						WalletID:    "test-id",
-						EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
-						Type:        "end_user_wallet",
-						Description: "Treasury Wallet",
-						Balances: []circle.Balance{
+					On("GetBusinessBalances", mock.Anything).
+					Return(&circle.Balances{
+						Available: []circle.Balance{
 							{Amount: "123.00", Currency: "USD"},
 						},
+						Unsettled: []circle.Balance{},
 					}, nil).
 					Once()
 			},
@@ -183,16 +180,14 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						Status:         schema.AccountStatusActive,
 					}, nil).
 					Once()
+
 				mCircleService.
-					On("GetWalletByID", mock.Anything, "circle-wallet-id").
-					Return(&circle.Wallet{
-						WalletID:    "test-id",
-						EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
-						Type:        "end_user_wallet",
-						Description: "Treasury Wallet",
-						Balances: []circle.Balance{
+					On("GetBusinessBalances", mock.Anything).
+					Return(&circle.Balances{
+						Available: []circle.Balance{
 							{Amount: "123.00", Currency: "USD"},
 						},
+						Unsettled: []circle.Balance{},
 					}, nil).
 					Once()
 			},
@@ -245,14 +240,14 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 	testCases := []struct {
 		name             string
 		networkType      utils.NetworkType
-		circleWallet     *circle.Wallet
+		circleBalances   *circle.Balances
 		expectedBalances []Balance
 	}{
 		{
 			name:        "[Pubnet] only supported assets are included",
 			networkType: utils.PubnetNetworkType,
-			circleWallet: &circle.Wallet{
-				Balances: []circle.Balance{
+			circleBalances: &circle.Balances{
+				Available: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
@@ -275,8 +270,8 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 		{
 			name:        "[Testnet] only supported assets are included",
 			networkType: utils.TestnetNetworkType,
-			circleWallet: &circle.Wallet{
-				Balances: []circle.Balance{
+			circleBalances: &circle.Balances{
+				Available: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
@@ -299,8 +294,8 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 		{
 			name:        "[Pubnet] none of the provided assets is supported",
 			networkType: utils.PubnetNetworkType,
-			circleWallet: &circle.Wallet{
-				Balances: []circle.Balance{
+			circleBalances: &circle.Balances{
+				Available: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 				},
 			},
@@ -309,8 +304,8 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 		{
 			name:        "[Testnet] none of the provided assets is supported",
 			networkType: utils.TestnetNetworkType,
-			circleWallet: &circle.Wallet{
-				Balances: []circle.Balance{
+			circleBalances: &circle.Balances{
+				Available: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 				},
 			},
@@ -322,7 +317,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := BalancesHandler{NetworkType: tc.networkType}
 
-			actualBalances := h.filterBalances(ctx, tc.circleWallet)
+			actualBalances := h.filterBalances(ctx, tc.circleBalances.Available)
 
 			assert.Equal(t, tc.expectedBalances, actualBalances)
 		})

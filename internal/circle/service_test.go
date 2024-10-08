@@ -259,16 +259,16 @@ func Test_Service_allMethods(t *testing.T) {
 		assert.Equal(t, &Transfer{ID: "transfer-id"}, res)
 	})
 
-	t.Run("GetWalletByID", func(t *testing.T) {
-		mCircleClient := NewMockClient(t)
-		mCircleClient.
-			On("GetWalletByID", ctx, "wallet-id").
-			Return(&Wallet{WalletID: "wallet-id"}, nil).
-			Once()
-		svc := createService(t, mCircleClient)
-
-		res, err := svc.GetWalletByID(ctx, "wallet-id")
-		assert.NoError(t, err)
-		assert.Equal(t, &Wallet{WalletID: "wallet-id"}, res)
-	})
+	//t.Run("GetWalletByID", func(t *testing.T) {
+	//	mCircleClient := NewMockClient(t)
+	//	mCircleClient.
+	//		On("GetWalletByID", ctx, "wallet-id").
+	//		Return(&Wallet{WalletID: "wallet-id"}, nil).
+	//		Once()
+	//	svc := createService(t, mCircleClient)
+	//
+	//	res, err := svc.GetWalletByID(ctx, "wallet-id")
+	//	assert.NoError(t, err)
+	//	assert.Equal(t, &Wallet{WalletID: "wallet-id"}, res)
+	//})
 }

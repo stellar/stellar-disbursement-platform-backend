@@ -215,9 +215,9 @@ func Test_Client_GetTransferByID(t *testing.T) {
 	})
 }
 
-func Test_Client_GetWalletByID(t *testing.T) {
+func Test_Client_GetBusinessBalances(t *testing.T) {
 	ctx := context.Background()
-	t.Run("get wallet by id error", func(t *testing.T) {
+	t.Run("get business balances error", func(t *testing.T) {
 		cc, httpClientMock, _ := newClientWithMocks(t)
 		testError := errors.New("test error")
 		httpClientMock.
@@ -226,19 +226,19 @@ func Test_Client_GetWalletByID(t *testing.T) {
 				req, ok := args.Get(0).(*http.Request)
 				assert.True(t, ok)
 
-				assert.Equal(t, "http://localhost:8080/v1/wallets/test-id", req.URL.String())
+				assert.Equal(t, "http://localhost:8080/v1/businessAccount/balances", req.URL.String())
 				assert.Equal(t, http.MethodGet, req.Method)
 				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
 			}).
 			Return(nil, testError).
 			Once()
 
-		wallet, err := cc.GetWalletByID(ctx, "test-id")
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/wallets/test-id: %w", testError).Error())
+		wallet, err := cc.GetBusinessBalances(ctx)
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/businessAccount/balances: %w", testError).Error())
 		assert.Nil(t, wallet)
 	})
 
-	t.Run("get wallet by id fails auth", func(t *testing.T) {
+	t.Run("get business balances fails auth", func(t *testing.T) {
 		const unauthorizedResponse = `{
 			"code": 401,
 			"message": "Malformed key. Does it contain three parts?"
@@ -258,24 +258,22 @@ func Test_Client_GetWalletByID(t *testing.T) {
 			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
 			Return(nil).Once()
 
-		transfer, err := cc.GetWalletByID(ctx, "test-id")
+		transfer, err := cc.GetBusinessBalances(ctx)
 		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
 		assert.Nil(t, transfer)
 	})
 
-	t.Run("get wallet by id successful", func(t *testing.T) {
+	t.Run("get business balances successful", func(t *testing.T) {
 		const getWalletResponseJSON = `{
 			"data": {
-				"walletId": "test-id",
-				"entityId": "2f47c999-9022-4939-acea-dc3afa9ccbaf",
-				"type": "end_user_wallet",
-				"description": "Treasury Wallet",
-				"balances": [
-					{
-						"amount": "4790.00",
-						"currency": "USD"
-					}
-				]
+					"available": [
+						{
+							"amount": "22306.90",
+							"currency": "USD"
+						}
+					],
+					"unsettled": []
+				}
 			}
 		}`
 		cc, httpClientMock, _ := newClientWithMocks(t)
@@ -289,24 +287,21 @@ func Test_Client_GetWalletByID(t *testing.T) {
 				req, ok := args.Get(0).(*http.Request)
 				assert.True(t, ok)
 
-				assert.Equal(t, "http://localhost:8080/v1/wallets/test-id", req.URL.String())
+				assert.Equal(t, "http://localhost:8080/v1/businessAccount/balances", req.URL.String())
 				assert.Equal(t, http.MethodGet, req.Method)
 				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
 			}).
 			Once()
 
-		wallet, err := cc.GetWalletByID(ctx, "test-id")
+		businessBalances, err := cc.GetBusinessBalances(ctx)
 		assert.NoError(t, err)
-		wantWallet := &Wallet{
-			WalletID:    "test-id",
-			EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
-			Type:        "end_user_wallet",
-			Description: "Treasury Wallet",
-			Balances: []Balance{
-				{Amount: "4790.00", Currency: "USD"},
+		wantBusinessBalances := &Balances{
+			Available: []Balance{
+				{Amount: "22306.90", Currency: "USD"},
 			},
+			Unsettled: []Balance{},
 		}
-		assert.Equal(t, wantWallet, wallet)
+		assert.Equal(t, wantBusinessBalances, businessBalances)
 	})
 }
 
