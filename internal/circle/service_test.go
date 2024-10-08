@@ -258,4 +258,48 @@ func Test_Service_allMethods(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, &Transfer{ID: "transfer-id"}, res)
 	})
+
+	t.Run("GetAccountConfiguration", func(t *testing.T) {
+		mClient := NewMockClient(t)
+		mClient.
+			On("GetAccountConfiguration", ctx).
+			Return(&AccountConfiguration{
+				Payments: WalletConfig{
+					MasterWalletID: "master-wallet-id",
+				},
+			}, nil).
+			Once()
+		svc := createService(t, mClient)
+
+		res, err := svc.GetAccountConfiguration(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, &AccountConfiguration{
+			Payments: WalletConfig{
+				MasterWalletID: "master-wallet-id",
+			},
+		}, res)
+	})
+
+	t.Run("GetBusinessBalances", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		mCircleClient.
+			On("GetBusinessBalances", ctx).
+			Return(&Balances{
+				Available: []Balance{
+					{Currency: "USD", Amount: "1234"},
+				},
+				Unsettled: []Balance{},
+			}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.GetBusinessBalances(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, &Balances{
+			Available: []Balance{
+				{Currency: "USD", Amount: "1234"},
+			},
+			Unsettled: []Balance{},
+		}, res)
+	})
 }

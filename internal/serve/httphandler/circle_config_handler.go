@@ -180,10 +180,7 @@ func (h CircleConfigHandler) validateConfigWithCircle(ctx context.Context, patch
 		if err != nil {
 			return wrapCircleError(ctx, err)
 		}
-		if accountConfig.Payments == nil || accountConfig.Payments.MasterWalletID == nil {
-			return httperror.BadRequest("Failed to retrieve the master wallet ID from Circle", nil, nil)
-		}
-		if *accountConfig.Payments.MasterWalletID != walletID {
+		if accountConfig.Payments.MasterWalletID != walletID {
 			return httperror.BadRequest("The provided wallet ID does not match the master wallet ID from Circle", nil, nil)
 		}
 	}

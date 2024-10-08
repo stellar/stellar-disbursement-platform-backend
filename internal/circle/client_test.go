@@ -305,6 +305,90 @@ func Test_Client_GetBusinessBalances(t *testing.T) {
 	})
 }
 
+func Test_Client_GetAccountConfiguration(t *testing.T) {
+	ctx := context.Background()
+	t.Run("get configuration error", func(t *testing.T) {
+		cc, httpClientMock, _ := newClientWithMocks(t)
+		testError := errors.New("test error")
+		httpClientMock.
+			On("Do", mock.Anything).
+			Run(func(args mock.Arguments) {
+				req, ok := args.Get(0).(*http.Request)
+				assert.True(t, ok)
+
+				assert.Equal(t, "http://localhost:8080/v1/configuration", req.URL.String())
+				assert.Equal(t, http.MethodGet, req.Method)
+				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+			}).
+			Return(nil, testError).
+			Once()
+
+		wallet, err := cc.GetAccountConfiguration(ctx)
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/configuration: %w", testError).Error())
+		assert.Nil(t, wallet)
+	})
+
+	t.Run("get configuration fails auth", func(t *testing.T) {
+		const unauthorizedResponse = `{
+			"code": 401,
+			"message": "Malformed key. Does it contain three parts?"
+		}`
+		cc, httpClientMock, tntManagerMock := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+		httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
+			}, nil).
+			Once()
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+
+		transfer, err := cc.GetAccountConfiguration(ctx)
+		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.Nil(t, transfer)
+	})
+
+	t.Run("get configuration successful", func(t *testing.T) {
+		const getConfigurationResponseJSON = `{
+			"data": {
+				"payments": {
+					"masterWalletId": "1016352538"
+				}
+			}
+		}`
+		cc, httpClientMock, _ := newClientWithMocks(t)
+		httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(getConfigurationResponseJSON)),
+			}, nil).
+			Run(func(args mock.Arguments) {
+				req, ok := args.Get(0).(*http.Request)
+				assert.True(t, ok)
+
+				assert.Equal(t, "http://localhost:8080/v1/configuration", req.URL.String())
+				assert.Equal(t, http.MethodGet, req.Method)
+				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+			}).
+			Once()
+
+		config, err := cc.GetAccountConfiguration(ctx)
+		assert.NoError(t, err)
+		wantConfig := &AccountConfiguration{
+			Payments: WalletConfig{
+				MasterWalletID: "1016352538",
+			},
+		}
+		assert.Equal(t, wantConfig, config)
+	})
+}
+
 func Test_Client_handleError(t *testing.T) {
 	ctx := context.Background()
 	tnt := &tenant.Tenant{ID: "test-id"}

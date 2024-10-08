@@ -149,7 +149,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 					Once()
 				mCircleClient.
 					On("GetAccountConfiguration", mock.Anything).
-					Return(&circle.AccountConfiguration{Payments: &circle.WalletConfig{MasterWalletID: utils.StringPtr("new_wallet_id")}}, nil).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: "new_wallet_id"}}, nil).
 					Once()
 
 				mTenantManager.
@@ -311,7 +311,7 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 					Return(true, nil).
 					Once()
 				mCircleClient.On("GetAccountConfiguration", ctx).
-					Return(&circle.AccountConfiguration{Payments: &circle.WalletConfig{MasterWalletID: utils.StringPtr("another_wallet_id")}}, nil).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: "another_wallet_id"}}, nil).
 					Once()
 			},
 			expectedError: httperror.BadRequest("The provided wallet ID does not match the master wallet ID from Circle", nil, nil),
@@ -326,7 +326,7 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 					Once()
 				mCircleClient.
 					On("GetAccountConfiguration", ctx).
-					Return(&circle.AccountConfiguration{Payments: &circle.WalletConfig{MasterWalletID: &newWalletID}}, nil).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: newWalletID}}, nil).
 					Once()
 			},
 			expectedError: nil,
@@ -360,7 +360,7 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 					Once()
 				mCircleClient.
 					On("GetAccountConfiguration", ctx).
-					Return(&circle.AccountConfiguration{Payments: &circle.WalletConfig{MasterWalletID: &newWalletID}}, nil).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: newWalletID}}, nil).
 					Once()
 			},
 			expectedError: nil,

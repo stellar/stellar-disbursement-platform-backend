@@ -8,17 +8,17 @@ import (
 
 // ConfigurationResponse represents the response containing account configuration.
 type ConfigurationResponse struct {
-	Data *AccountConfiguration `json:"data,omitempty"`
+	Data AccountConfiguration `json:"data,omitempty"`
 }
 
 // AccountConfiguration represents the configuration settings of an account.
 type AccountConfiguration struct {
-	Payments *WalletConfig `json:"payments,omitempty"`
+	Payments WalletConfig `json:"payments,omitempty"`
 }
 
 // WalletConfig represents the wallet configuration with details such as the master wallet ID.
 type WalletConfig struct {
-	MasterWalletID *string `json:"masterWalletId,omitempty"`
+	MasterWalletID string `json:"masterWalletId,omitempty"`
 }
 
 // parseAccountConfigurationResponse parses the response containing account configuration.
@@ -28,5 +28,5 @@ func parseAccountConfigurationResponse(resp *http.Response) (*AccountConfigurati
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 
-	return configurationResponse.Data, nil
+	return &configurationResponse.Data, nil
 }

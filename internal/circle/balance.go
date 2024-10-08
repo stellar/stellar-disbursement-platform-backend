@@ -18,7 +18,7 @@ var (
 
 // ListBusinessBalancesResponse represents the response containing business balances.
 type ListBusinessBalancesResponse struct {
-	Data *Balances `json:"data,omitempty"`
+	Data Balances `json:"data,omitempty"`
 }
 
 // Balances represents the available and unsettled balances for different currencies.
@@ -74,5 +74,5 @@ func parseBusinessBalancesResponse(resp *http.Response) (*Balances, error) {
 		return nil, fmt.Errorf("unmarshalling Circle HTTP response: %w", err)
 	}
 
-	return balancesResponse.Data, nil
+	return &balancesResponse.Data, nil
 }
