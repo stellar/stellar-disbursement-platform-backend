@@ -125,6 +125,9 @@ const WalletRegistration = {
     return 0;
   }
 };
+
+// Hardcode to Phone Number
+WalletRegistration.setSection(CurrentSection.PHONE_NUMBER);
 // ------------------------------ END: GLOBAL VARIABLES AND METHODS ------------------------------
 
 
@@ -246,7 +249,7 @@ async function handleContactInfoSubmitted() {
       [VerificationField.DATE_OF_BIRTH]: { name: "date_of_birth", type: "date", label: "Date of birth" },
       [VerificationField.YEAR_MONTH]: { name: "year_month", type: "month", label: "Date of birth (Year/Month)" },
       [VerificationField.NATIONAL_ID_NUMBER]: { name: "national_id_number", type: "text", label: "National ID number" },
-      [VerificationField.PIN]: { name: "pin", type: "text", label: "Pin" },
+      [VerificationField.PIN]: { name: "pin", type: "text", label: "Password" },
     };
 
     const inputFieldConfig = inputFeldConfigMap[verificationField];
@@ -272,11 +275,6 @@ async function handleContactInfoSubmitted() {
 
 // ------------------------------ START: SECTION 3 ------------------------------
 async function handleVerificationInfoSubmitted() {
-  const reCAPTCHAToken = WalletRegistration.getRecaptchaToken();
-  if (!reCAPTCHAToken) {
-    WalletRegistration.toggleErrorNotification("Error", "reCAPTCHA is required", true);
-    return;
-  }
 
   const contactMethod = WalletRegistration.contactMethod;
   const contactValue = WalletRegistration.getContactValue();
@@ -303,7 +301,6 @@ async function handleVerificationInfoSubmitted() {
       body: JSON.stringify({
         [contactMethod]: contactValue,
         otp: otp,
-        recaptcha_token: reCAPTCHAToken,
         verification_field: WalletRegistration.verificationField,
         verification: verificationFieldValue,
       }),
@@ -324,16 +321,10 @@ async function handleVerificationInfoSubmitted() {
   } catch (error) {
     WalletRegistration.toggleButtonsEnabled(true);
     WalletRegistration.toggleErrorNotification("Error", error, true);
-    grecaptcha.reset(1);
   }
 }
 
 async function handleResendOtpClicked() {
-  const reCAPTCHAToken = WalletRegistration.getRecaptchaToken();
-  if (!reCAPTCHAToken) {
-    WalletRegistration.toggleErrorNotification("Error", "reCAPTCHA is required", true);
-    return;
-  }
 
   const contactValue = WalletRegistration.getContactValue();
   if (!contactValue) {
@@ -356,7 +347,6 @@ async function handleResendOtpClicked() {
   }
 
   sendOtp(showSuccessMessage, showErrorMessage);
-  grecaptcha.reset(1);
 }
 // ------------------------------ END: SECTION 3 ------------------------------
 

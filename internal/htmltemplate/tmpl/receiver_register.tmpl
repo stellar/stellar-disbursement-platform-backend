@@ -95,7 +95,7 @@
 
           <p>
             Enter your phone number below. If you are pre-approved, you will
-            receive a one-time passcode.
+            receive a one-time passcode (OTP).
           </p>
 
           <form id="submitPhoneNumberForm">
@@ -133,10 +133,10 @@
       <!-- Enter passcode and verification field page -->
       <section data-section="passcode" style="display: none">
         <div class="WalletRegistration__MainContent">
-          <h2>Enter passcode</h2>
+          <h2>Enter OTP</h2>
 
           <p>
-            If you are pre-approved, you will receive a one-time passcode, enter
+            If you are pre-approved, you will receive a one-time passcode (OTP), enter
             it below to continue.
           </p>
 
@@ -149,7 +149,7 @@
 
           <form id="submitVerificationForm">
             <div class="Form__item">
-              <label for="otp">Passcode</label>
+              <label for="otp">OTP</label>
               <input
                 type="text"
                 autocomplete="one-time-code"
@@ -167,8 +167,6 @@
                 id="verification"
                 required
               />
-
-            <div class="g-recaptcha" data-sitekey="{{.ReCAPTCHASiteKey}}"></div>
 
             <div class="Form__buttons">
               <button data-button type="submit" class="Button--primary">

@@ -6,12 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## [3.0.0-rc.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.0.0-rc.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.1.0...3.0.0-rc.1))
+
+Release of the Stellar Disbursement Platform v3.0.0-rc.1. This release introduces
+the option to register receivers using email addresses, in addition to phone numbers.
+
 ### Breaking Changes
 - Renamed properties and environment variables related to Email Registration Support [#412](https://github.com/stellar/stellar-disbursement-platform-backend/pull/412) 
   - Renamed `MAX_INVITATION_SMS_RESEND_ATTEMPT` environment variable to `MAX_INVITATION_RESEND_ATTEMPTS`
   - Renamed `organization.sms_resend_interval` to `organization.receiver_invitation_resend_interval_days` 
   - Renamed `organization.sms_registration_message_template` to `organization.receiver_registration_message_template`
   - Renamed `disbursement.sms_registration_message_template` to `disbursement.receiver_registration_message_template`
+
+### Added
+
+- Ability to register receivers using email addresses 
+  - Update the receiver_registered_successfully.tmpl HTML template to display the contact info [#418](https://github.com/stellar/stellar-disbursement-platform-backend/pull/418)
+  - Update `/wallet-registration/verification` to accommodate different verification methods [#416](https://github.com/stellar/stellar-disbursement-platform-backend/pull/416)
+  - Update send and auto-retry invitation scheduler job to work with email [#415](https://github.com/stellar/stellar-disbursement-platform-backend/pull/415)
+  - Update `POST /wallet-registration/otp` to send OTPs through email [#413](https://github.com/stellar/stellar-disbursement-platform-backend/pull/413)
+  - Rename SMS related fields in `organization` and `disbursement` to be more generic [#412](https://github.com/stellar/stellar-disbursement-platform-backend/pull/412)
+  - Update process disbursement instructions to accept email addresses [#404](https://github.com/stellar/stellar-disbursement-platform-backend/pull/404)
+  - Add initial screen so receivers can choose between phone number and email registration during registration [#406](https://github.com/stellar/stellar-disbursement-platform-backend/pull/406)
+  - Add message channel priority or `organizations` table [#400](https://github.com/stellar/stellar-disbursement-platform-backend/pull/400)
+  - Add MessageDispatcher to SDP to send messages to different channels [#391](https://github.com/stellar/stellar-disbursement-platform-backend/pull/391)
+
+### Security and Dependencies
+
+- Fix HTML Injection Vulnerability [#419](https://github.com/stellar/stellar-disbursement-platform-backend/pull/419), Fix HTML escaping [#420](https://github.com/stellar/stellar-disbursement-platform-backend/pull/420)
+- Bump `golangci/golangci-lint-action` [#380](https://github.com/stellar/stellar-disbursement-platform-backend/pull/380)
+- Bump `golang` in the all-docker group [#387](https://github.com/stellar/stellar-disbursement-platform-backend/pull/387), [#394](https://github.com/stellar/stellar-disbursement-platform-backend/pull/394), [#414](https://github.com/stellar/stellar-disbursement-platform-backend/pull/414)
+- Bump minor and patch dependencies across directories [#381](https://github.com/stellar/stellar-disbursement-platform-backend/pull/381), [#395](https://github.com/stellar/stellar-disbursement-platform-backend/pull/395), [#403](https://github.com/stellar/stellar-disbursement-platform-backend/pull/403), [#411](https://github.com/stellar/stellar-disbursement-platform-backend/pull/411)
 
 ## [2.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.0.0...2.1.0))
 
