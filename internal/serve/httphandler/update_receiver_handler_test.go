@@ -125,7 +125,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 	r := chi.NewRouter()
 	r.Patch("/receivers/{id}", handler.UpdateReceiver)
 
-	t.Run("error invalid request body", func(t *testing.T) {
+	t.Run("[400-BadRequest] invalid request body", func(t *testing.T) {
 		testCases := []struct {
 			name    string
 			request validators.UpdateReceiverRequest
@@ -216,6 +216,18 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 				`,
 			},
 			{
+				name:    "invalid phone number",
+				request: validators.UpdateReceiverRequest{PhoneNumber: "invalid"},
+				want: `
+				{
+					"error": "request invalid",
+					"extras": {
+					  "phone_number": "invalid phone number format"
+					}
+				  }
+				`,
+			},
+			{
 				name:    "invalid external ID",
 				request: validators.UpdateReceiverRequest{ExternalID: "       "},
 				want: `
@@ -249,7 +261,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("receiver not found", func(t *testing.T) {
+	t.Run("[404]receiver not found", func(t *testing.T) {
 		request := validators.UpdateReceiverRequest{DateOfBirth: "1999-01-01"}
 
 		route := fmt.Sprintf("/receivers/%s", "invalid_receiver_id")
@@ -636,6 +648,29 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "update_receiver@email.com", receiverDB.Email)
+	})
+
+	t.Run("updates receiver's phone number", func(t *testing.T) {
+		request := validators.UpdateReceiverRequest{
+			PhoneNumber: "+14155556666",
+		}
+
+		route := fmt.Sprintf("/receivers/%s", receiver.ID)
+		reqBody, err := json.Marshal(request)
+		require.NoError(t, err)
+
+		req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "+14155556666", receiverDB.PhoneNumber)
 	})
 
 	t.Run("updates receiver's external ID", func(t *testing.T) {

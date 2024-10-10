@@ -85,7 +85,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	receiver, err := db.RunInTransactionWithResult(ctx, h.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *data.Receiver, innerErr error) {
 		for _, rv := range receiverVerifications {
 			innerErr = h.Models.ReceiverVerification.UpsertVerificationValue(
-				req.Context(),
+				ctx,
 				dbTx,
 				rv.ReceiverID,
 				rv.VerificationField,
@@ -93,13 +93,16 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			)
 
 			if innerErr != nil {
-				return nil, fmt.Errorf("error updating receiver verification %s: %w", rv.VerificationField, innerErr)
+				return nil, fmt.Errorf("updating receiver verification %s: %w", rv.VerificationField, innerErr)
 			}
 		}
 
 		var receiverUpdate data.ReceiverUpdate
 		if reqBody.Email != "" {
 			receiverUpdate.Email = &reqBody.Email
+		}
+		if reqBody.PhoneNumber != "" {
+			receiverUpdate.PhoneNumber = &reqBody.PhoneNumber
 		}
 		if reqBody.ExternalID != "" {
 			receiverUpdate.ExternalId = &reqBody.ExternalID
@@ -113,7 +116,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 
 		receiver, innerErr := h.Models.Receiver.Get(ctx, dbTx, receiverID)
 		if innerErr != nil {
-			return nil, fmt.Errorf("error querying receiver with ID %s: %w", receiverID, innerErr)
+			return nil, fmt.Errorf("querying receiver with ID %s: %w", receiverID, innerErr)
 		}
 
 		return receiver, nil
