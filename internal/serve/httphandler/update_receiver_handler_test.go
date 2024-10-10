@@ -98,10 +98,9 @@ func Test_UpdateReceiverHandler_createVerificationInsert(t *testing.T) {
 	}
 }
 
-func Test_UpdateReceiverHandler(t *testing.T) {
+func Test_UpdateReceiverHandler_400(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -115,26 +114,21 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		PhoneNumber: "+380445555555",
-		Email:       "receiver@email.com",
-		ExternalID:  "externalID",
-	})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
 
 	// setup
 	r := chi.NewRouter()
 	r.Patch("/receivers/{id}", handler.UpdateReceiver)
 
-	t.Run("[400-BadRequest] invalid request body", func(t *testing.T) {
-		testCases := []struct {
-			name    string
-			request validators.UpdateReceiverRequest
-			want    string
-		}{
-			{
-				name:    "empty request body",
-				request: validators.UpdateReceiverRequest{},
-				want: `
+	testCases := []struct {
+		name         string
+		request      validators.UpdateReceiverRequest
+		expectedBody string
+	}{
+		{
+			name:    "empty request body",
+			request: validators.UpdateReceiverRequest{},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -142,11 +136,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid date of birth",
-				request: validators.UpdateReceiverRequest{DateOfBirth: "invalid"},
-				want: `
+		},
+		{
+			name:    "invalid date of birth",
+			request: validators.UpdateReceiverRequest{DateOfBirth: "invalid"},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -154,11 +148,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid year/month",
-				request: validators.UpdateReceiverRequest{YearMonth: "invalid"},
-				want: `
+		},
+		{
+			name:    "invalid year/month",
+			request: validators.UpdateReceiverRequest{YearMonth: "invalid"},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -166,11 +160,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid pin",
-				request: validators.UpdateReceiverRequest{Pin: "    "},
-				want: `
+		},
+		{
+			name:    "invalid pin",
+			request: validators.UpdateReceiverRequest{Pin: "    "},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -178,11 +172,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid national ID - empty",
-				request: validators.UpdateReceiverRequest{NationalID: "   "},
-				want: `
+		},
+		{
+			name:    "invalid national ID - empty",
+			request: validators.UpdateReceiverRequest{NationalID: "   "},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -190,11 +184,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid national ID - too long",
-				request: validators.UpdateReceiverRequest{NationalID: fmt.Sprintf("%0*d", utils.VerificationFieldMaxIdLength+1, 0)},
-				want: `
+		},
+		{
+			name:    "invalid national ID - too long",
+			request: validators.UpdateReceiverRequest{NationalID: fmt.Sprintf("%0*d", utils.VerificationFieldMaxIdLength+1, 0)},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -202,11 +196,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid email",
-				request: validators.UpdateReceiverRequest{Email: "invalid"},
-				want: `
+		},
+		{
+			name:    "invalid email",
+			request: validators.UpdateReceiverRequest{Email: "invalid"},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -214,11 +208,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid phone number",
-				request: validators.UpdateReceiverRequest{PhoneNumber: "invalid"},
-				want: `
+		},
+		{
+			name:    "invalid phone number",
+			request: validators.UpdateReceiverRequest{PhoneNumber: "invalid"},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -226,11 +220,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
-			},
-			{
-				name:    "invalid external ID",
-				request: validators.UpdateReceiverRequest{ExternalID: "       "},
-				want: `
+		},
+		{
+			name:    "invalid external ID",
+			request: validators.UpdateReceiverRequest{ExternalID: "       "},
+			expectedBody: `
 				{
 					"error": "request invalid",
 					"extras": {
@@ -238,462 +232,319 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 					}
 				  }
 				`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			route := fmt.Sprintf("/receivers/%s", receiver.ID)
+			reqBody, err := json.Marshal(tc.request)
+			require.NoError(t, err)
+			req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
+			require.NoError(t, err)
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedBody, string(respBody))
+		})
+	}
+}
+
+func Test_UpdateReceiverHandler_404(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &UpdateReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	// setup
+	r := chi.NewRouter()
+	r.Patch("/receivers/{id}", handler.UpdateReceiver)
+
+	request := validators.UpdateReceiverRequest{DateOfBirth: "1999-01-01"}
+
+	route := fmt.Sprintf("/receivers/%s", "invalid_receiver_id")
+	reqBody, err := json.Marshal(request)
+	require.NoError(t, err)
+	req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	resp := rr.Result()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &UpdateReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	ctx := context.Background()
+
+	// setup
+	r := chi.NewRouter()
+	r.Patch("/receivers/{id}", handler.UpdateReceiver)
+
+	testCases := []struct {
+		fieldName string
+		request   validators.UpdateReceiverRequest
+		assertFn  func(t *testing.T, receiver *data.Receiver)
+	}{
+		{
+			fieldName: "email",
+			request: validators.UpdateReceiverRequest{
+				Email: "update_receiver@email.com",
 			},
+			assertFn: func(t *testing.T, receiver *data.Receiver) {
+				assert.Equal(t, "update_receiver@email.com", receiver.Email)
+			},
+		},
+		{
+			fieldName: "phone_number",
+			request: validators.UpdateReceiverRequest{
+				PhoneNumber: "+14155556666",
+			},
+			assertFn: func(t *testing.T, receiver *data.Receiver) {
+				assert.Equal(t, "+14155556666", receiver.PhoneNumber)
+			},
+		},
+		{
+			fieldName: "external_id",
+			request: validators.UpdateReceiverRequest{
+				ExternalID: "newExternalID",
+			},
+			assertFn: func(t *testing.T, receiver *data.Receiver) {
+				assert.Equal(t, "newExternalID", receiver.ExternalID)
+			},
+		},
+		{
+			fieldName: "ALL FIELDS",
+			request: validators.UpdateReceiverRequest{
+				Email:       "update_receiver@email.com",
+				PhoneNumber: "+14155556666",
+				ExternalID:  "newExternalID",
+			},
+			assertFn: func(t *testing.T, receiver *data.Receiver) {
+				assert.Equal(t, "update_receiver@email.com", receiver.Email)
+				assert.Equal(t, "+14155556666", receiver.PhoneNumber)
+				assert.Equal(t, "newExternalID", receiver.ExternalID)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.fieldName, func(t *testing.T) {
+			defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+
+			receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+			data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+				ReceiverID:        receiver.ID,
+				VerificationField: data.VerificationTypeDateOfBirth,
+				VerificationValue: "2000-01-01",
+			})
+
+			route := fmt.Sprintf("/receivers/%s", receiver.ID)
+			reqBody, err := json.Marshal(tc.request)
+			require.NoError(t, err)
+			req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
+			require.NoError(t, err)
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
+			require.NoError(t, err)
+
+			tc.assertFn(t, receiverDB)
+		})
+	}
+}
+
+// upsertAction is a helper type to define the action to be taken by the handler when upserting the receiver verification.
+type upsertAction string
+
+const (
+	actionUpdate upsertAction = "UPDATE"
+	actionInsert upsertAction = "INSERT"
+)
+
+// shouldPreInsert is a helper function to determine if the receiver verification should be inserted before the request is
+// made, so we test if the handler is updating the verification value. Otherwise, the receiver verification will be inserted
+// as a consequence of the request.
+func (ua upsertAction) shouldPreInsert() bool {
+	return ua == actionUpdate
+}
+
+func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &UpdateReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	ctx := context.Background()
+
+	// setup
+	r := chi.NewRouter()
+	r.Patch("/receivers/{id}", handler.UpdateReceiver)
+
+	assertVerificationFieldsContains := func(t *testing.T, rvList []data.ReceiverVerification, vt data.VerificationType, verifValue string) {
+		var rv data.ReceiverVerification
+		for _, _rv := range rvList {
+			if _rv.VerificationField == vt {
+				rv = _rv
+				break
+			}
 		}
+		require.NotEmptyf(t, rv, "receiver verification of type %s not found", vt)
+
+		assert.Equal(t, vt, rv.VerificationField)
+		assert.True(t, data.CompareVerificationValue(rv.HashedValue, verifValue), "hashed value does not match")
+	}
+
+	testCases := []struct {
+		fieldName string
+		request   validators.UpdateReceiverRequest
+		assertFn  func(t *testing.T, rvList []data.ReceiverVerification)
+	}{
+		{
+			fieldName: "date_of_birth",
+			request: validators.UpdateReceiverRequest{
+				DateOfBirth: "2000-01-01",
+			},
+			assertFn: func(t *testing.T, rvList []data.ReceiverVerification) {
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypeDateOfBirth, "2000-01-01")
+			},
+		},
+		{
+			fieldName: "year_month",
+			request: validators.UpdateReceiverRequest{
+				YearMonth: "2000-01",
+			},
+			assertFn: func(t *testing.T, rvList []data.ReceiverVerification) {
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypeYearMonth, "2000-01")
+			},
+		},
+		{
+			fieldName: "pin",
+			request: validators.UpdateReceiverRequest{
+				Pin: "123456",
+			},
+			assertFn: func(t *testing.T, rvList []data.ReceiverVerification) {
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypePin, "123456")
+			},
+		},
+		{
+			fieldName: "national_id",
+			request: validators.UpdateReceiverRequest{
+				NationalID: "abcd1234",
+			},
+			assertFn: func(t *testing.T, rvList []data.ReceiverVerification) {
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypeNationalID, "abcd1234")
+			},
+		},
+		{
+			fieldName: "ALL FIELDS",
+			request: validators.UpdateReceiverRequest{
+				DateOfBirth: "2000-01-01",
+				YearMonth:   "2000-01",
+				Pin:         "123456",
+				NationalID:  "abcd1234",
+			},
+			assertFn: func(t *testing.T, rvList []data.ReceiverVerification) {
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypeDateOfBirth, "2000-01-01")
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypeYearMonth, "2000-01")
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypePin, "123456")
+				assertVerificationFieldsContains(t, rvList, data.VerificationTypeNationalID, "abcd1234")
+			},
+		},
+	}
+
+	for _, action := range []upsertAction{actionUpdate, actionInsert} {
 		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/%s", action, tc.fieldName), func(t *testing.T) {
+				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+
+				if action.shouldPreInsert() {
+					data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+						ReceiverID:        receiver.ID,
+						VerificationField: data.VerificationTypeDateOfBirth,
+						VerificationValue: "1999-01-01",
+					})
+					data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+						ReceiverID:        receiver.ID,
+						VerificationField: data.VerificationTypeYearMonth,
+						VerificationValue: "1999-01",
+					})
+					data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+						ReceiverID:        receiver.ID,
+						VerificationField: data.VerificationTypePin,
+						VerificationValue: "000000",
+					})
+					data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+						ReceiverID:        receiver.ID,
+						VerificationField: data.VerificationTypeNationalID,
+						VerificationValue: "aaaa0000",
+					})
+				}
+
 				route := fmt.Sprintf("/receivers/%s", receiver.ID)
 				reqBody, err := json.Marshal(tc.request)
 				require.NoError(t, err)
-				req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
+				req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
 				require.NoError(t, err)
 
 				rr := httptest.NewRecorder()
 				r.ServeHTTP(rr, req)
 
 				resp := rr.Result()
-				respBody, err := io.ReadAll(resp.Body)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+				rvSlice, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
 				require.NoError(t, err)
 
-				assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-				assert.JSONEq(t, tc.want, string(respBody))
+				tc.assertFn(t, rvSlice)
 			})
 		}
-	})
-
-	t.Run("[404]receiver not found", func(t *testing.T) {
-		request := validators.UpdateReceiverRequest{DateOfBirth: "1999-01-01"}
-
-		route := fmt.Sprintf("/receivers/%s", "invalid_receiver_id")
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	})
-
-	t.Run("update date of birth value", func(t *testing.T) {
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeDateOfBirth,
-			VerificationValue: "2000-01-01",
-		})
-
-		request := validators.UpdateReceiverRequest{DateOfBirth: "1999-01-01"}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		query := `
-			SELECT 
-				hashed_value
-			FROM 
-				receiver_verifications
-			WHERE 
-				receiver_id = $1 AND 
-				verification_field = $2
-		`
-
-		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypeDateOfBirth)
-		require.NoError(t, err)
-
-		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1999-01-01"))
-		assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "2000-01-01"))
-
-		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", receiverDB.Email)
-		assert.Equal(t, "externalID", receiverDB.ExternalID)
-	})
-
-	t.Run("update year/month value", func(t *testing.T) {
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeYearMonth,
-			VerificationValue: "2000-01",
-		})
-
-		request := validators.UpdateReceiverRequest{YearMonth: "1999-01"}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		query := `
-			SELECT
-				hashed_value
-			FROM
-				receiver_verifications
-			WHERE
-				receiver_id = $1 AND
-				verification_field = $2
-		`
-
-		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypeYearMonth)
-		require.NoError(t, err)
-
-		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1999-01"))
-		assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "2000-01"))
-
-		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", receiverDB.Email)
-		assert.Equal(t, "externalID", receiverDB.ExternalID)
-	})
-
-	t.Run("update pin value", func(t *testing.T) {
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypePin,
-			VerificationValue: "8901",
-		})
-
-		request := validators.UpdateReceiverRequest{Pin: "1234"}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		query := `
-			SELECT
-				hashed_value
-			FROM
-				receiver_verifications
-			WHERE
-				receiver_id = $1 AND
-				verification_field = $2
-		`
-
-		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypePin)
-		require.NoError(t, err)
-
-		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1234"))
-		assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "8901"))
-
-		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", receiverDB.Email)
-		assert.Equal(t, "externalID", receiverDB.ExternalID)
-	})
-
-	t.Run("update national ID value", func(t *testing.T) {
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeNationalID,
-			VerificationValue: "OLDID890",
-		})
-
-		request := validators.UpdateReceiverRequest{NationalID: "NEWID123"}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		query := `
-			SELECT
-				hashed_value
-			FROM
-				receiver_verifications
-			WHERE
-				receiver_id = $1 AND
-				verification_field = $2
-		`
-
-		newReceiverVerification := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationTypeNationalID)
-		require.NoError(t, err)
-
-		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "NEWID123"))
-		assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "OLDID890"))
-
-		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "receiver@email.com", receiverDB.Email)
-		assert.Equal(t, "externalID", receiverDB.ExternalID)
-	})
-
-	t.Run("update multiples receiver verifications values", func(t *testing.T) {
-		data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeDateOfBirth,
-			VerificationValue: "2000-01-01",
-		})
-
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeYearMonth,
-			VerificationValue: "2000-01",
-		})
-
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypePin,
-			VerificationValue: "8901",
-		})
-
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeNationalID,
-			VerificationValue: "OLDID890",
-		})
-
-		request := validators.UpdateReceiverRequest{
-			DateOfBirth: "1999-01-01",
-			YearMonth:   "1999-01",
-			Pin:         "1234",
-			NationalID:  "NEWID123",
-		}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		query := `
-			SELECT
-				hashed_value
-			FROM
-				receiver_verifications
-			WHERE
-				receiver_id = $1 AND
-				verification_field = $2
-		`
-
-		receiverVerifications := []struct {
-			verificationField    data.VerificationType
-			newVerificationValue string
-			oldVerificationValue string
-		}{
-			{
-				verificationField:    data.VerificationTypeDateOfBirth,
-				newVerificationValue: "1999-01-01",
-				oldVerificationValue: "2000-01-01",
-			},
-			{
-				verificationField:    data.VerificationTypeYearMonth,
-				newVerificationValue: "1999-01",
-				oldVerificationValue: "2000-01",
-			},
-			{
-				verificationField:    data.VerificationTypePin,
-				newVerificationValue: "1234",
-				oldVerificationValue: "8901",
-			},
-			{
-				verificationField:    data.VerificationTypeNationalID,
-				newVerificationValue: "NEWID123",
-				oldVerificationValue: "OLDID890",
-			},
-		}
-		for _, v := range receiverVerifications {
-			newReceiverVerification := data.ReceiverVerification{}
-			err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, v.verificationField)
-			require.NoError(t, err)
-
-			assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, v.newVerificationValue))
-			assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, v.oldVerificationValue))
-
-			receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-			require.NoError(t, err)
-			assert.Equal(t, "receiver@email.com", receiverDB.Email)
-			assert.Equal(t, "externalID", receiverDB.ExternalID)
-		}
-	})
-
-	t.Run("updates and inserts receiver verifications values", func(t *testing.T) {
-		data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-
-		request := validators.UpdateReceiverRequest{
-			DateOfBirth: "1999-01-01",
-			YearMonth:   "1999-01",
-			Pin:         "1234",
-			NationalID:  "NEWID123",
-		}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		query := `
-			SELECT
-				hashed_value
-			FROM
-				receiver_verifications
-			WHERE
-				receiver_id = $1 AND
-				verification_field = $2
-		`
-
-		receiverVerifications := []struct {
-			verificationField    data.VerificationType
-			newVerificationValue string
-			oldVerificationValue string
-		}{
-			{
-				verificationField:    data.VerificationTypeDateOfBirth,
-				newVerificationValue: "1999-01-01",
-				oldVerificationValue: "2000-01-01",
-			},
-			{
-				verificationField:    data.VerificationTypeYearMonth,
-				newVerificationValue: "1999-01",
-				oldVerificationValue: "",
-			},
-			{
-				verificationField:    data.VerificationTypePin,
-				newVerificationValue: "1234",
-				oldVerificationValue: "",
-			},
-			{
-				verificationField:    data.VerificationTypeNationalID,
-				newVerificationValue: "NEWID123",
-				oldVerificationValue: "",
-			},
-		}
-		for _, v := range receiverVerifications {
-			newReceiverVerification := data.ReceiverVerification{}
-			err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, v.verificationField)
-			require.NoError(t, err)
-			t.Logf("newReceiverVerification: %+v", newReceiverVerification)
-
-			assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, v.newVerificationValue))
-
-			if v.oldVerificationValue != "" {
-				assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, v.oldVerificationValue))
-			}
-
-			receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-			require.NoError(t, err)
-			assert.Equal(t, "receiver@email.com", receiverDB.Email)
-			assert.Equal(t, "externalID", receiverDB.ExternalID)
-		}
-	})
-
-	t.Run("updates receiver's email", func(t *testing.T) {
-		request := validators.UpdateReceiverRequest{
-			Email: "update_receiver@email.com",
-		}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "update_receiver@email.com", receiverDB.Email)
-	})
-
-	t.Run("updates receiver's phone number", func(t *testing.T) {
-		request := validators.UpdateReceiverRequest{
-			PhoneNumber: "+14155556666",
-		}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "+14155556666", receiverDB.PhoneNumber)
-	})
-
-	t.Run("updates receiver's external ID", func(t *testing.T) {
-		request := validators.UpdateReceiverRequest{
-			ExternalID: "newExternalID",
-		}
-
-		route := fmt.Sprintf("/receivers/%s", receiver.ID)
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
-		require.NoError(t, err)
-
-		assert.Equal(t, "newExternalID", receiverDB.ExternalID)
-	})
+	}
 }

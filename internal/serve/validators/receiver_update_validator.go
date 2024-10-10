@@ -7,10 +7,12 @@ import (
 )
 
 type UpdateReceiverRequest struct {
+	// Verification fields:
 	DateOfBirth string `json:"date_of_birth"`
 	YearMonth   string `json:"year_month"`
 	Pin         string `json:"pin"`
 	NationalID  string `json:"national_id"`
+	// Receiver fields:
 	Email       string `json:"email"`
 	PhoneNumber string `json:"phone_number"`
 	ExternalID  string `json:"external_id"`
