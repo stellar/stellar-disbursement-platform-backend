@@ -222,7 +222,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 				{
 					"error": "request invalid",
 					"extras": {
-					  "external_id": "invalid external_id format"
+					  "external_id": "external_id cannot be set to empty"
 					}
 				  }
 				`,
