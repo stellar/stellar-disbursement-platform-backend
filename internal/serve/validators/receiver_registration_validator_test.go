@@ -10,12 +10,10 @@ import (
 
 func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 	type testCase struct {
-		name             string
-		receiverInfo     data.ReceiverRegistrationRequest
-		expectedErrorLen int
-		expectedErrorMsg string
-		expectedErrorKey string
-		expectedReceiver data.ReceiverRegistrationRequest
+		name                     string
+		receiverInfo             data.ReceiverRegistrationRequest
+		expectedReceiver         data.ReceiverRegistrationRequest
+		expectedValidationErrors map[string]interface{}
 	}
 
 	testCases := []testCase{
@@ -25,23 +23,50 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "invalid",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "invalid phone format. Correct format: +380445555555",
-			expectedErrorKey: "phone_number",
+			expectedValidationErrors: map[string]interface{}{
+				"phone_number": "the provided phone number is not a valid E.164 number",
+			},
 		},
 		{
-			name: "error if phone number is empty",
+			name: "error if email is invalid",
+			receiverInfo: data.ReceiverRegistrationRequest{
+				Email:             "invalid",
+				OTP:               "123456",
+				VerificationValue: "1990-01-01",
+				VerificationField: data.VerificationTypeDateOfBirth,
+			},
+			expectedValidationErrors: map[string]interface{}{
+				"email": "the provided email is not valid",
+			},
+		},
+		{
+			name: "error if phone number and email are empty",
 			receiverInfo: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "phone cannot be empty",
-			expectedErrorKey: "phone_number",
+			expectedValidationErrors: map[string]interface{}{
+				"phone_number": "phone_number or email is required",
+				"email":        "phone_number or email is required",
+			},
+		},
+		{
+			name: "error if phone number and email are provided",
+			receiverInfo: data.ReceiverRegistrationRequest{
+				Email:             "test@stellar.com",
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "1990-01-01",
+				VerificationField: data.VerificationTypeDateOfBirth,
+			},
+			expectedValidationErrors: map[string]interface{}{
+				"phone_number": "phone_number and email cannot be both provided",
+				"email":        "phone_number and email cannot be both provided",
+			},
 		},
 		{
 			name: "error if OTP is invalid",
@@ -49,11 +74,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "12mock",
 				VerificationValue: "1990-01-01",
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "invalid otp format. Needs to be a 6 digit value",
-			expectedErrorKey: "otp",
+			expectedValidationErrors: map[string]interface{}{
+				"otp": "invalid otp format. Needs to be a 6 digit value",
+			},
 		},
 		{
 			name: "error if verification type is invalid",
@@ -61,11 +86,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationType:  "mock_type",
+				VerificationField: "mock_type",
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]",
-			expectedErrorKey: "verification_type",
+			expectedValidationErrors: map[string]interface{}{
+				"verification_field": "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]",
+			},
 		},
 		{
 			name: "error if verification[DATE_OF_BIRTH] is invalid",
@@ -73,11 +98,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "90/01/01",
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "invalid date of birth format. Correct format: 1990-01-30",
-			expectedErrorKey: "verification",
+			expectedValidationErrors: map[string]interface{}{
+				"verification": "invalid date of birth format. Correct format: 1990-01-30",
+			},
 		},
 		{
 			name: "error if verification[YEAR_MONTH] is invalid",
@@ -85,11 +110,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "90/12",
-				VerificationType:  data.VerificationFieldYearMonth,
+				VerificationField: data.VerificationTypeYearMonth,
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "invalid year/month format. Correct format: 1990-12",
-			expectedErrorKey: "verification",
+			expectedValidationErrors: map[string]interface{}{
+				"verification": "invalid year/month format. Correct format: 1990-12",
+			},
 		},
 		{
 			name: "error if verification[PIN] is invalid",
@@ -97,11 +122,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "ABCDE1234",
-				VerificationType:  data.VerificationFieldPin,
+				VerificationField: data.VerificationTypePin,
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "invalid pin length. Cannot have less than 4 or more than 8 characters in pin",
-			expectedErrorKey: "verification",
+			expectedValidationErrors: map[string]interface{}{
+				"verification": "invalid pin length. Cannot have less than 4 or more than 8 characters in pin",
+			},
 		},
 		{
 			name: "error if verification[NATIONAL_ID_NUMBER] is invalid",
@@ -109,11 +134,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "6UZMB56FWTKV4U0PJ21TBR6VOQVYSGIMZG2HW2S0L7EK5K83W78XXXXX",
-				VerificationType:  data.VerificationFieldNationalID,
+				VerificationField: data.VerificationTypeNationalID,
 			},
-			expectedErrorLen: 1,
-			expectedErrorMsg: "invalid national id. Cannot have more than 50 characters in national id",
-			expectedErrorKey: "verification",
+			expectedValidationErrors: map[string]interface{}{
+				"verification": "invalid national id. Cannot have more than 50 characters in national id",
+			},
 		},
 		{
 			name: "🎉 successfully validates receiver values [DATE_OF_BIRTH]",
@@ -121,14 +146,14 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
 				VerificationValue: "1990-01-01  ",
-				VerificationType:  "date_of_birth",
+				VerificationField: "date_of_birth",
 			},
-			expectedErrorLen: 0,
+			expectedValidationErrors: map[string]interface{}{},
 			expectedReceiver: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
 		},
 		{
@@ -137,14 +162,14 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
 				VerificationValue: "1990-12  ",
-				VerificationType:  "year_month",
+				VerificationField: "year_month",
 			},
-			expectedErrorLen: 0,
+			expectedValidationErrors: map[string]interface{}{},
 			expectedReceiver: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1990-12",
-				VerificationType:  data.VerificationFieldYearMonth,
+				VerificationField: data.VerificationTypeYearMonth,
 			},
 		},
 		{
@@ -153,14 +178,14 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
 				VerificationValue: "1234  ",
-				VerificationType:  "pin",
+				VerificationField: "pin",
 			},
-			expectedErrorLen: 0,
+			expectedValidationErrors: map[string]interface{}{},
 			expectedReceiver: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1234",
-				VerificationType:  data.VerificationFieldPin,
+				VerificationField: data.VerificationTypePin,
 			},
 		},
 		{
@@ -169,14 +194,14 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
 				VerificationValue: "  NATIONALIDNUMBER123",
-				VerificationType:  "national_id_number",
+				VerificationField: "national_id_number",
 			},
-			expectedErrorLen: 0,
+			expectedValidationErrors: map[string]interface{}{},
 			expectedReceiver: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "NATIONALIDNUMBER123",
-				VerificationType:  data.VerificationFieldNationalID,
+				VerificationField: data.VerificationTypeNationalID,
 			},
 		},
 	}
@@ -186,15 +211,14 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 			validator := NewReceiverRegistrationValidator()
 			validator.ValidateReceiver(&tc.receiverInfo)
 
-			assert.Equal(t, tc.expectedErrorLen, len(validator.Errors))
-
-			if tc.expectedErrorLen > 0 {
-				assert.Equal(t, tc.expectedErrorMsg, validator.Errors[tc.expectedErrorKey])
+			if len(tc.expectedValidationErrors) > 0 {
+				assert.Equal(t, tc.expectedValidationErrors, validator.Errors)
 			} else {
+				assert.Equal(t, tc.expectedReceiver.Email, tc.receiverInfo.Email)
 				assert.Equal(t, tc.expectedReceiver.PhoneNumber, tc.receiverInfo.PhoneNumber)
 				assert.Equal(t, tc.expectedReceiver.OTP, tc.receiverInfo.OTP)
 				assert.Equal(t, tc.expectedReceiver.VerificationValue, tc.receiverInfo.VerificationValue)
-				assert.Equal(t, tc.expectedReceiver.VerificationType, tc.receiverInfo.VerificationType)
+				assert.Equal(t, tc.expectedReceiver.VerificationField, tc.receiverInfo.VerificationField)
 			}
 		})
 	}
@@ -203,11 +227,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 func Test_ReceiverRegistrationValidator_ValidateAndGetVerificationType(t *testing.T) {
 	t.Run("Valid verification type", func(t *testing.T) {
 		validator := NewReceiverRegistrationValidator()
-		validField := []data.VerificationField{
-			data.VerificationFieldDateOfBirth,
-			data.VerificationFieldYearMonth,
-			data.VerificationFieldPin,
-			data.VerificationFieldNationalID,
+		validField := []data.VerificationType{
+			data.VerificationTypeDateOfBirth,
+			data.VerificationTypeYearMonth,
+			data.VerificationTypePin,
+			data.VerificationTypeNationalID,
 		}
 		for _, field := range validField {
 			assert.Equal(t, field, validator.validateAndGetVerificationType(string(field)))
@@ -221,6 +245,6 @@ func Test_ReceiverRegistrationValidator_ValidateAndGetVerificationType(t *testin
 		actual := validator.validateAndGetVerificationType(invalidStatus)
 		assert.Empty(t, actual)
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]", validator.Errors["verification_type"])
+		assert.Equal(t, "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]", validator.Errors["verification_field"])
 	})
 }

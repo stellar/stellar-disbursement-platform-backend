@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -33,17 +34,22 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	ctx := context.Background()
+
 	messageDryRunClient, err := message.NewDryRunClient()
 	require.NoError(t, err)
+	dryRunDispatcher := message.NewMessageDispatcher()
+	dryRunDispatcher.RegisterClient(ctx, message.MessageChannelSMS, messageDryRunClient)
+	dryRunDispatcher.RegisterClient(ctx, message.MessageChannelEmail, messageDryRunClient)
 
 	t.Run("exits with status 1 when Messenger Client is missing config", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			o := SendReceiverWalletsSMSInvitationJobOptions{
-				Models:                         models,
-				MaxInvitationSMSResendAttempts: 3,
+			o := SendReceiverWalletsInvitationJobOptions{
+				Models:                      models,
+				MaxInvitationResendAttempts: 3,
 			}
 
-			NewSendReceiverWalletsSMSInvitationJob(o)
+			NewSendReceiverWalletsInvitationJob(o)
 			return
 		}
 
@@ -63,13 +69,13 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 
 	t.Run("exits with status 1 when Base URL is empty", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			o := SendReceiverWalletsSMSInvitationJobOptions{
-				Models:                         models,
-				MessengerClient:                messageDryRunClient,
-				MaxInvitationSMSResendAttempts: 3,
+			o := SendReceiverWalletsInvitationJobOptions{
+				Models:                      models,
+				MessageDispatcher:           dryRunDispatcher,
+				MaxInvitationResendAttempts: 3,
 			}
 
-			NewSendReceiverWalletsSMSInvitationJob(o)
+			NewSendReceiverWalletsInvitationJob(o)
 			return
 		}
 
@@ -88,25 +94,25 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	})
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {
-		o := SendReceiverWalletsSMSInvitationJobOptions{
-			Models:                         models,
-			MessengerClient:                messageDryRunClient,
-			MaxInvitationSMSResendAttempts: 3,
-			JobIntervalSeconds:             DefaultMinimumJobIntervalSeconds,
+		o := SendReceiverWalletsInvitationJobOptions{
+			Models:                      models,
+			MessageDispatcher:           dryRunDispatcher,
+			MaxInvitationResendAttempts: 3,
+			JobIntervalSeconds:          DefaultMinimumJobIntervalSeconds,
 		}
 
-		j := NewSendReceiverWalletsSMSInvitationJob(o)
+		j := NewSendReceiverWalletsInvitationJob(o)
 
 		assert.NotNil(t, j)
 	})
 }
 
 func Test_SendReceiverWalletsSMSInvitationJob(t *testing.T) {
-	j := sendReceiverWalletsSMSInvitationJob{
+	j := sendReceiverWalletsInvitationJob{
 		jobIntervalSeconds: 5,
 	}
 
-	assert.Equal(t, sendReceiverWalletsSMSInvitationJobName, j.GetName())
+	assert.Equal(t, sendReceiverWalletsInvitationJobName, j.GetName())
 	assert.Equal(t, time.Duration(5)*time.Second, j.GetInterval())
 }
 
@@ -133,12 +139,12 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	var maxInvitationSMSResendAttempts int64 = 3
 
 	t.Run("executes the service successfully", func(t *testing.T) {
-		messengerClientMock := &message.MessengerClientMock{}
+		messageDispatcherMock := message.NewMockMessageDispatcher(t)
 		crashTrackerClientMock := &crashtracker.MockCrashTrackerClient{}
 
 		s, err := services.NewSendReceiverWalletInviteService(
 			models,
-			messengerClientMock,
+			messageDispatcherMock,
 			stellarSecretKey,
 			maxInvitationSMSResendAttempts,
 			crashTrackerClientMock,
@@ -209,6 +215,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
+		titleWallet1 := "You have a payment waiting for you from " + walletDeepLink1.OrganizationName
 
 		walletDeepLink2 := services.WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
@@ -220,23 +227,26 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
+		titleWallet2 := "You have a payment waiting for you from " + walletDeepLink2.OrganizationName
 
 		mockErr := errors.New("unexpected error")
-		messengerClientMock.
-			On("SendMessage", message.Message{
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
+				ToEmail:       receiver1.Email,
 				Message:       contentWallet1,
-			}).
-			Return(mockErr).
+				Title:         titleWallet1,
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioSMS, mockErr).
 			Once().
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
+				ToEmail:       receiver2.Email,
 				Message:       contentWallet2,
-			}).
-			Return(nil).
-			Once().
-			On("MessengerType").
-			Return(message.MessengerTypeTwilioSMS)
+				Title:         titleWallet2,
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioSMS, nil).
+			Once()
 
 		mockMsg := fmt.Sprintf(
 			"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
@@ -265,7 +275,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.FailureMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet1, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet1, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
@@ -281,7 +291,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		assert.Equal(t, wallet2.ID, msg.WalletID)
 		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
-		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, titleWallet2, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet2, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)

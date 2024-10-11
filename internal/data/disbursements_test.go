@@ -40,11 +40,11 @@ func Test_DisbursementModelInsert(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:                          asset,
-		Country:                        country,
-		Wallet:                         wallet,
-		VerificationField:              VerificationFieldDateOfBirth,
-		SMSRegistrationMessageTemplate: smsTemplate,
+		Asset:                               asset,
+		Country:                             country,
+		Wallet:                              wallet,
+		VerificationField:                   VerificationTypeDateOfBirth,
+		ReceiverRegistrationMessageTemplate: smsTemplate,
 	}
 
 	t.Run("returns error when disbursement already exists", func(t *testing.T) {
@@ -69,11 +69,11 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, asset, actual.Asset)
 		assert.Equal(t, country, actual.Country)
 		assert.Equal(t, wallet, actual.Wallet)
-		assert.Equal(t, smsTemplate, actual.SMSRegistrationMessageTemplate)
+		assert.Equal(t, smsTemplate, actual.ReceiverRegistrationMessageTemplate)
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
-		assert.Equal(t, VerificationFieldDateOfBirth, actual.VerificationField)
+		assert.Equal(t, VerificationTypeDateOfBirth, actual.VerificationField)
 	})
 }
 
@@ -442,9 +442,9 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	disbursementFileContent := CreateInstructionsFixture(t, []*DisbursementInstruction{
-		{"1234567890", "1", "123.12", "1995-02-20", nil},
-		{"0987654321", "2", "321", "1974-07-19", nil},
-		{"0987654321", "3", "321", "1974-07-19", nil},
+		{"1234567890", "", "1", "123.12", "1995-02-20", ""},
+		{"0987654321", "", "2", "321", "1974-07-19", ""},
+		{"0987654321", "", "3", "321", "1974-07-19", ""},
 	})
 
 	t.Run("update instructions", func(t *testing.T) {
@@ -539,7 +539,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -567,7 +567,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -605,7 +605,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -624,7 +624,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Asset:             asset,
 			Wallet:            wallet,
 			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{

@@ -3,12 +3,14 @@ package httphandler
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -37,12 +39,12 @@ type DisbursementHandler struct {
 }
 
 type PostDisbursementRequest struct {
-	Name                           string                 `json:"name"`
-	CountryCode                    string                 `json:"country_code"`
-	WalletID                       string                 `json:"wallet_id"`
-	AssetID                        string                 `json:"asset_id"`
-	VerificationField              data.VerificationField `json:"verification_field"`
-	SMSRegistrationMessageTemplate string                 `json:"sms_registration_message_template"`
+	Name                                string                `json:"name"`
+	CountryCode                         string                `json:"country_code"`
+	WalletID                            string                `json:"wallet_id"`
+	AssetID                             string                `json:"asset_id"`
+	VerificationField                   data.VerificationType `json:"verification_field"`
+	ReceiverRegistrationMessageTemplate string                `json:"receiver_registration_message_template"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -118,11 +120,11 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			Status:    data.DraftDisbursementStatus,
 			UserID:    user.ID,
 		}},
-		Wallet:                         wallet,
-		Asset:                          asset,
-		Country:                        country,
-		VerificationField:              verificationField,
-		SMSRegistrationMessageTemplate: disbursementRequest.SMSRegistrationMessageTemplate,
+		Wallet:                              wallet,
+		Asset:                               asset,
+		Country:                             country,
+		VerificationField:                   verificationField,
+		ReceiverRegistrationMessageTemplate: disbursementRequest.ReceiverRegistrationMessageTemplate,
 	}
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
@@ -217,12 +219,20 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 	defer file.Close()
 
-	// TeeReader is used to read multiple times from the same reader (file)
-	// We read once to process the instructions, and then again to persist the file to the database
 	var buf bytes.Buffer
-	reader := io.TeeReader(file, &buf)
+	if _, err = io.Copy(&buf, file); err != nil {
+		httperror.BadRequest("could not read file", err, nil).Render(w)
+		return
+	}
 
-	instructions, v := parseInstructionsFromCSV(ctx, reader, disbursement.VerificationField)
+	contactType, err := resolveReceiverContactType(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		errMsg := fmt.Sprintf("could not determine contact information type: %s", err)
+		httperror.BadRequest(errMsg, err, nil).Render(w)
+		return
+	}
+
+	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.VerificationField)
 	if v != nil && v.HasErrors() {
 		httperror.BadRequest("could not parse csv file", err, v.Errors).Render(w)
 		return
@@ -247,7 +257,14 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, user.ID, instructions, disbursement, disbursementUpdate, data.MaxInstructionsPerDisbursement); err != nil {
+	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, data.DisbursementInstructionsOpts{
+		UserID:                  user.ID,
+		Instructions:            instructions,
+		ReceiverContactType:     contactType,
+		Disbursement:            disbursement,
+		DisbursementUpdate:      disbursementUpdate,
+		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
+	}); err != nil {
 		switch {
 		case errors.Is(err, data.ErrMaxInstructionsExceeded):
 			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of : %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
@@ -438,11 +455,12 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	}
 }
 
-func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
+// parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
+func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, verificationField data.VerificationType) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(verificationField)
 
 	instructions := []*data.DisbursementInstruction{}
-	if err := gocsv.Unmarshal(file, &instructions); err != nil {
+	if err := gocsv.Unmarshal(reader, &instructions); err != nil {
 		log.Ctx(ctx).Errorf("error parsing csv file: %s", err.Error())
 		validator.Errors["file"] = "could not parse file"
 		return nil, validator
@@ -463,4 +481,35 @@ func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationF
 	}
 
 	return sanitizedInstructions, nil
+}
+
+// resolveReceiverContactType determines the type of contact information in the CSV file
+func resolveReceiverContactType(file io.Reader) (data.ReceiverContactType, error) {
+	headers, err := csv.NewReader(file).Read()
+	if err != nil {
+		return "", fmt.Errorf("reading csv headers: %w", err)
+	}
+
+	var hasPhone, hasEmail bool
+	for _, header := range headers {
+		switch strings.ToLower(strings.TrimSpace(header)) {
+		case "phone":
+			hasPhone = true
+		case "email":
+			hasEmail = true
+		}
+	}
+
+	switch {
+	case !hasPhone && !hasEmail:
+		return "", fmt.Errorf("csv file must contain at least one of the following columns [phone, email]")
+	case hasPhone && hasEmail:
+		return "", fmt.Errorf("csv file must contain either a phone or email column, not both")
+	case hasPhone:
+		return data.ReceiverContactTypeSMS, nil
+	case hasEmail:
+		return data.ReceiverContactTypeEmail, nil
+	default:
+		return "", fmt.Errorf("csv file must contain either a phone or email column")
+	}
 }

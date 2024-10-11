@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"text/template"
+	"html/template"
 )
 
 //go:embed tmpl/*.tmpl
@@ -26,7 +26,7 @@ func ExecuteHTMLTemplate(templateName string, data interface{}) (string, error) 
 }
 
 type EmptyBodyEmailTemplate struct {
-	Body string
+	Body template.HTML
 }
 
 func ExecuteHTMLTemplateForEmailEmptyBody(data EmptyBodyEmailTemplate) (string, error) {

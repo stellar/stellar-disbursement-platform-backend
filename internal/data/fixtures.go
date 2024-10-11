@@ -287,12 +287,13 @@ func ClearAndCreateCountryFixtures(t *testing.T, ctx context.Context, sqlExec db
 }
 
 func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *Receiver) *Receiver {
+	t.Helper()
+
 	randomSuffix, err := utils.RandomString(5)
 	require.NoError(t, err)
 
-	if r.Email == nil {
-		email := fmt.Sprintf("email%s@randomemail.com", randomSuffix)
-		r.Email = &email
+	if r.Email == "" {
+		r.Email = fmt.Sprintf("email%s@randomemail.com", randomSuffix)
 	}
 
 	if r.PhoneNumber == "" {
@@ -332,6 +333,31 @@ func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		&receiver.CreatedAt,
 		&receiver.UpdatedAt,
 	)
+	require.NoError(t, err)
+
+	return &receiver
+}
+
+func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *ReceiverInsert) *Receiver {
+	t.Helper()
+
+	if r.ExternalId == nil {
+		randString, err := utils.RandomString(56)
+		require.NoError(t, err)
+		r.ExternalId = &randString
+	}
+
+	const query = `
+		INSERT INTO receivers
+			(email, phone_number, external_id)
+		VALUES
+			($1, $2, $3)
+		RETURNING
+			id, COALESCE(phone_number, '') as phone_number, COALESCE(email, '') as email, external_id, created_at, updated_at
+	`
+
+	var receiver Receiver
+	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalId)
 	require.NoError(t, err)
 
 	return &receiver
@@ -420,7 +446,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		SELECT
 			rw.id, rw.stellar_address, rw.stellar_memo, rw.stellar_memo_type, rw.status, rw.status_history, rw.created_at, rw.updated_at,
 			rw.anchor_platform_transaction_id, rw.anchor_platform_transaction_synced_at,
-			r.id, r.email, r.phone_number, r.external_id, r.created_at, r.updated_at,
+			r.id, COALESCE(r.phone_number, '') as phone_number, COALESCE(r.email, '') as email, r.external_id, r.created_at, r.updated_at,
 			w.id, w.name, w.homepage, w.deep_link_schema, w.created_at, w.updated_at
 		FROM
 			inserted_receiver_wallet AS rw
@@ -541,7 +567,7 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 		d.Country = GetCountryFixture(t, ctx, sqlExec, FixtureCountryUKR)
 	}
 	if d.VerificationField == "" {
-		d.VerificationField = VerificationFieldDateOfBirth
+		d.VerificationField = VerificationTypeDateOfBirth
 	}
 
 	// insert disbursement
@@ -614,7 +640,7 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 	}
 
 	if insert.VerificationField == "" {
-		insert.VerificationField = VerificationFieldDateOfBirth
+		insert.VerificationField = VerificationTypeDateOfBirth
 	}
 
 	id, err := model.Insert(ctx, &insert)

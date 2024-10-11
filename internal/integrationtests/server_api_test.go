@@ -307,7 +307,7 @@ func Test_ReceiverRegistration(t *testing.T) {
 		PhoneNumber:       "+18554212274",
 		OTP:               "123456",
 		VerificationValue: "1999-01-30",
-		VerificationType:  "date_of_birth",
+		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "captchtoken",
 	}
 

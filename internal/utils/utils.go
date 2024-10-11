@@ -95,6 +95,11 @@ func StringPtr(s string) *string {
 	return &s
 }
 
+// IntPtr returns a pointer to an int
+func IntPtr(i int) *int {
+	return &i
+}
+
 func TimePtr(t time.Time) *time.Time {
 	return &t
 }

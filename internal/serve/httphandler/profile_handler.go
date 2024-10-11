@@ -50,25 +50,25 @@ type ProfileHandler struct {
 }
 
 type PatchOrganizationProfileRequest struct {
-	OrganizationName               string  `json:"organization_name"`
-	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
-	IsApprovalRequired             *bool   `json:"is_approval_required"`
-	SMSResendInterval              *int64  `json:"sms_resend_interval"`
-	PaymentCancellationPeriodDays  *int64  `json:"payment_cancellation_period_days"`
-	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
-	OTPMessageTemplate             *string `json:"otp_message_template"`
-	PrivacyPolicyLink              *string `json:"privacy_policy_link"`
+	OrganizationName                    string  `json:"organization_name"`
+	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
+	IsApprovalRequired                  *bool   `json:"is_approval_required"`
+	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
+	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
+	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
+	OTPMessageTemplate                  *string `json:"otp_message_template"`
+	PrivacyPolicyLink                   *string `json:"privacy_policy_link"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
-	return (r.OrganizationName == "" &&
+	return r.OrganizationName == "" &&
 		r.TimezoneUTCOffset == "" &&
 		r.IsApprovalRequired == nil &&
-		r.SMSRegistrationMessageTemplate == nil &&
+		r.ReceiverRegistrationMessageTemplate == nil &&
 		r.OTPMessageTemplate == nil &&
-		r.SMSResendInterval == nil &&
+		r.ReceiverInvitationResendInterval == nil &&
 		r.PaymentCancellationPeriodDays == nil &&
-		r.PrivacyPolicyLink == nil)
+		r.PrivacyPolicyLink == nil
 }
 
 type PatchUserProfileRequest struct {
@@ -160,15 +160,15 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 
 	organizationUpdate := data.OrganizationUpdate{
-		Name:                           reqBody.OrganizationName,
-		Logo:                           fileContentBytes,
-		TimezoneUTCOffset:              reqBody.TimezoneUTCOffset,
-		IsApprovalRequired:             reqBody.IsApprovalRequired,
-		SMSRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
-		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
-		SMSResendInterval:              reqBody.SMSResendInterval,
-		PaymentCancellationPeriodDays:  reqBody.PaymentCancellationPeriodDays,
-		PrivacyPolicyLink:              reqBody.PrivacyPolicyLink,
+		Name:                                 reqBody.OrganizationName,
+		Logo:                                 fileContentBytes,
+		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
+		IsApprovalRequired:                   reqBody.IsApprovalRequired,
+		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
+		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
+		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
+		PaymentCancellationPeriodDays:        reqBody.PaymentCancellationPeriodDays,
+		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
 	if err != nil {
@@ -358,27 +358,28 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	resp := map[string]interface{}{
-		"name":                             org.Name,
-		"logo_url":                         lu.String(),
-		"distribution_account":             distributionAccount,
-		"distribution_account_public_key":  distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
-		"timezone_utc_offset":              org.TimezoneUTCOffset,
-		"is_approval_required":             org.IsApprovalRequired,
-		"sms_resend_interval":              0,
-		"payment_cancellation_period_days": 0,
-		"privacy_policy_link":              org.PrivacyPolicyLink,
+		"name":                            org.Name,
+		"logo_url":                        lu.String(),
+		"distribution_account":            distributionAccount,
+		"distribution_account_public_key": distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
+		"timezone_utc_offset":             org.TimezoneUTCOffset,
+		"is_approval_required":            org.IsApprovalRequired,
+		"receiver_invitation_resend_interval_days": 0,
+		"payment_cancellation_period_days":         0,
+		"privacy_policy_link":                      org.PrivacyPolicyLink,
+		"message_channel_priority":                 org.MessageChannelPriority,
 	}
 
-	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
-		resp["sms_registration_message_template"] = org.SMSRegistrationMessageTemplate
+	if org.ReceiverRegistrationMessageTemplate != data.DefaultReceiverRegistrationMessageTemplate {
+		resp["receiver_registration_message_template"] = org.ReceiverRegistrationMessageTemplate
 	}
 
 	if org.OTPMessageTemplate != data.DefaultOTPMessageTemplate {
 		resp["otp_message_template"] = org.OTPMessageTemplate
 	}
 
-	if org.SMSResendInterval != nil {
-		resp["sms_resend_interval"] = *org.SMSResendInterval
+	if org.ReceiverInvitationResendIntervalDays != nil {
+		resp["receiver_invitation_resend_interval_days"] = *org.ReceiverInvitationResendIntervalDays
 	}
 
 	if org.PaymentCancellationPeriodDays != nil {

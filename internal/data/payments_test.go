@@ -283,6 +283,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 		Disbursement:   disbursement1,
 		Asset:          *asset,
 		ReceiverWallet: receiverWallet,
+		UpdatedAt:      time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
 
 	stellarTransactionID, err = utils.RandomString(64)
@@ -305,27 +306,41 @@ func Test_PaymentModelGetAll(t *testing.T) {
 		Disbursement:   disbursement2,
 		Asset:          *asset,
 		ReceiverWallet: receiverWallet,
+		UpdatedAt:      time.Date(2023, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
 
 	t.Run("returns payments successfully", func(t *testing.T) {
-		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{}, dbConnectionPool)
+		params := QueryParams{SortBy: DefaultPaymentSortField, SortOrder: DefaultPaymentSortOrder}
+		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2, *expectedPayment1}, actualPayments)
 	})
 
 	t.Run("returns payments successfully with limit", func(t *testing.T) {
-		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{Page: 1, PageLimit: 1}, dbConnectionPool)
-		require.NoError(t, err)
-		assert.Equal(t, 1, len(actualPayments))
-		assert.Equal(t, []Payment{*expectedPayment1}, actualPayments)
-	})
-
-	t.Run("returns payments successfully with offset", func(t *testing.T) {
-		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{Page: 2, PageLimit: 1}, dbConnectionPool)
+		params := QueryParams{
+			SortBy:    DefaultPaymentSortField,
+			SortOrder: DefaultPaymentSortOrder,
+			Page:      1,
+			PageLimit: 1,
+		}
+		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2}, actualPayments)
+	})
+
+	t.Run("returns payments successfully with offset", func(t *testing.T) {
+		params := QueryParams{
+			Page:      2,
+			PageLimit: 1,
+			SortBy:    DefaultPaymentSortField,
+			SortOrder: DefaultPaymentSortOrder,
+		}
+		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(actualPayments))
+		assert.Equal(t, []Payment{*expectedPayment1}, actualPayments)
 	})
 
 	t.Run("returns payments successfully with created at order", func(t *testing.T) {
@@ -361,10 +376,15 @@ func Test_PaymentModelGetAll(t *testing.T) {
 				PendingPaymentStatus,
 			},
 		}
-		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{Filters: filters}, dbConnectionPool)
+		queryParams := QueryParams{
+			Filters:   filters,
+			SortBy:    DefaultPaymentSortField,
+			SortOrder: DefaultPaymentSortOrder,
+		}
+		actualPayments, err := paymentModel.GetAll(ctx, &queryParams, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualPayments))
-		assert.Equal(t, []Payment{*expectedPayment1, *expectedPayment2}, actualPayments)
+		assert.Equal(t, []Payment{*expectedPayment2, *expectedPayment1}, actualPayments)
 	})
 
 	t.Run("should not return duplicated entries when receiver are in more than one disbursements with different wallets", func(t *testing.T) {
@@ -410,6 +430,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 			Disbursement:   disbursement1,
 			Asset:          *usdc,
 			ReceiverWallet: receiverDemoWallet,
+			UpdatedAt:      time.Date(2023, 3, 21, 23, 40, 20, 1431, time.UTC),
 		})
 
 		vibrantWalletPayment := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -418,12 +439,15 @@ func Test_PaymentModelGetAll(t *testing.T) {
 			Disbursement:   disbursement2,
 			Asset:          *usdc,
 			ReceiverWallet: receiverVibrantWallet,
+			UpdatedAt:      time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 		})
 
 		payments, err := models.Payment.GetAll(ctx, &QueryParams{
 			Filters: map[FilterKey]interface{}{
 				FilterKeyReceiverID: receiver.ID,
 			},
+			SortBy:    DefaultPaymentSortField,
+			SortOrder: DefaultPaymentSortOrder,
 		}, dbConnectionPool)
 		require.NoError(t, err)
 
@@ -721,7 +745,7 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            ReadyDisbursementStatus,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 	})
 
 	t.Run("does not update payments when no payments IDs is given", func(t *testing.T) {
@@ -992,7 +1016,7 @@ func Test_PaymentModelCancelPayment(t *testing.T) {
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            ReadyDisbursementStatus,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 	})
 
 	t.Run("no ready payment for more than 5 days won't cancel any", func(t *testing.T) {
@@ -1251,7 +1275,7 @@ func Test_PaymentModel_GetReadyByDisbursementID(t *testing.T) {
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            StartedDisbursementStatus,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 	})
 
 	t.Run("returns empty array when there's no payment ready", func(t *testing.T) {
@@ -1317,7 +1341,7 @@ func Test_PaymentModel_GetReadyByPaymentsID(t *testing.T) {
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            StartedDisbursementStatus,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 	})
 
 	t.Run("returns empty array when there's no payment ready", func(t *testing.T) {
@@ -1391,7 +1415,7 @@ func Test_PaymentModel_GetReadyByReceiverWalletID(t *testing.T) {
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            StartedDisbursementStatus,
-		VerificationField: VerificationFieldDateOfBirth,
+		VerificationField: VerificationTypeDateOfBirth,
 	})
 
 	t.Run("returns empty array when there's no payment ready", func(t *testing.T) {
@@ -1475,7 +1499,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		// It's not possible to have a payment in a end state when the receiver wallet is not registered yet
@@ -1510,7 +1534,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -1545,7 +1569,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		paymentReceiver1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -1596,7 +1620,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
@@ -1604,7 +1628,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -1657,7 +1681,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet1,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
@@ -1665,7 +1689,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet2,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -1730,7 +1754,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            StartedDisbursementStatus,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		payment := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{

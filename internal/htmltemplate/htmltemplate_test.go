@@ -3,6 +3,7 @@ package htmltemplate
 import (
 	"crypto/rand"
 	"fmt"
+	"html/template"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ func Test_ExecuteHTMLTemplate(t *testing.T) {
 	var inputData interface{}
 	templateStr, err := ExecuteHTMLTemplate("non-existing-file.html", inputData)
 	require.Empty(t, templateStr)
-	require.EqualError(t, err, `executing html template: template: no template "non-existing-file.html" associated with template "empty_body.tmpl"`)
+	require.EqualError(t, err, `executing html template: html/template: "non-existing-file.html" is undefined`)
 
 	// handle invalid struct body
 	inputData = struct {
@@ -43,7 +44,7 @@ func Test_ExecuteHTMLTemplateForEmailEmptyBody(t *testing.T) {
 	randomStr := fmt.Sprintf("%x", b)[:10]
 
 	// check if the random string is imprinted in the template
-	inputData := EmptyBodyEmailTemplate{Body: randomStr}
+	inputData := EmptyBodyEmailTemplate{Body: template.HTML(randomStr)}
 	templateStr, err := ExecuteHTMLTemplateForEmailEmptyBody(inputData)
 	require.NoError(t, err)
 	require.Contains(t, templateStr, randomStr)
@@ -65,6 +66,24 @@ func Test_ExecuteHTMLTemplateForInvitationMessage(t *testing.T) {
 	assert.Contains(t, content, "as a developer.")
 	assert.Contains(t, content, forgotPasswordLink)
 	assert.Contains(t, content, "Organization Name")
+}
+
+func Test_ExecuteHTMLTemplateForInvitationMessage_HTMLInjectionAttack(t *testing.T) {
+	forgotPasswordLink := "https://sdp.com/forgot-password"
+
+	data := InvitationMessageTemplate{
+		FirstName:          "First",
+		Role:               "developer",
+		ForgotPasswordLink: forgotPasswordLink,
+		OrganizationName:   "<a href='evil.com'>Redeem funds</a>",
+	}
+	content, err := ExecuteHTMLTemplateForInvitationMessage(data)
+	require.NoError(t, err)
+
+	assert.Contains(t, content, "Hello, First!")
+	assert.Contains(t, content, "as a developer.")
+	assert.Contains(t, content, forgotPasswordLink)
+	assert.Contains(t, content, "&lt;a href=&#39;evil.com&#39;&gt;Redeem funds&lt;/a&gt;")
 }
 
 func Test_ExecuteHTMLTemplateForForgotPasswordMessage(t *testing.T) {

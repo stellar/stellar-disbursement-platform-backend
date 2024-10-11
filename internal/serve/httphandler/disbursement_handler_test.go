@@ -175,7 +175,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           asset.ID,
 			WalletID:          "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -191,7 +191,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           asset.ID,
 			WalletID:          disabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -206,7 +206,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -221,7 +221,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       "AAA",
 			AssetID:           asset.ID,
 			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -244,7 +244,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode:       country.Code,
 			AssetID:           asset.ID,
 			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationField: data.VerificationTypeDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -261,12 +261,12 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 		expectedName := "disbursement 2"
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                           expectedName,
-			CountryCode:                    country.Code,
-			AssetID:                        asset.ID,
-			WalletID:                       enabledWallet.ID,
-			VerificationField:              data.VerificationFieldDateOfBirth,
-			SMSRegistrationMessageTemplate: smsTemplate,
+			Name:                                expectedName,
+			CountryCode:                         country.Code,
+			AssetID:                             asset.ID,
+			WalletID:                            enabledWallet.ID,
+			VerificationField:                   data.VerificationTypeDateOfBirth,
+			ReceiverRegistrationMessageTemplate: smsTemplate,
 		})
 		require.NoError(t, err)
 
@@ -290,7 +290,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assert.Equal(t, 1, len(actualDisbursement.StatusHistory))
 		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
 		assert.Equal(t, user.ID, actualDisbursement.StatusHistory[0].UserID)
-		assert.Equal(t, smsTemplate, actualDisbursement.SMSRegistrationMessageTemplate)
+		assert.Equal(t, smsTemplate, actualDisbursement.ReceiverRegistrationMessageTemplate)
 	})
 
 	authManagerMock.AssertExpectations(t)
@@ -909,7 +909,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				{},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "could not parse file",
+			expectedMessage: "could not determine contact information type",
 		},
 		{
 			name:           "no instructions found in file",
@@ -919,6 +919,24 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "no valid instructions found",
+		},
+		{
+			name:           "instructions invalid - attempting to upload phone and email",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "email", "id", "amount", "date-of-birth"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "csv file must contain either a phone or email column, not both",
+		},
+		{
+			name:           "instructions invalid - no phone or email",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"id", "amount", "date-of-birth"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "csv file must contain at least one of the following columns [phone, email]",
 		},
 		{
 			name:            "max instructions exceeded",
@@ -1159,7 +1177,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		{
 			ID:             receiver3.ID,
 			PhoneNumber:    receiver3.PhoneNumber,
-			Email:          *receiver3.Email,
+			Email:          receiver3.Email,
 			ExternalID:     receiver3.ExternalID,
 			ReceiverWallet: receiverWallet3,
 			Payment:        payment3,
@@ -1169,7 +1187,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		{
 			ID:             receiver2.ID,
 			PhoneNumber:    receiver2.PhoneNumber,
-			Email:          *receiver2.Email,
+			Email:          receiver2.Email,
 			ExternalID:     receiver2.ExternalID,
 			ReceiverWallet: receiverWallet2,
 			Payment:        payment2,
@@ -1179,7 +1197,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		{
 			ID:             receiver1.ID,
 			PhoneNumber:    receiver1.PhoneNumber,
-			Email:          *receiver1.Email,
+			Email:          receiver1.Email,
 			ExternalID:     receiver1.ExternalID,
 			ReceiverWallet: receiverWallet1,
 			Payment:        payment1,

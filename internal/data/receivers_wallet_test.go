@@ -553,6 +553,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		receiverWallet.Status = RegisteredReceiversWalletStatus
 		now := time.Now()
 		receiverWallet.OTPConfirmedAt = &now
+		receiverWallet.OTPConfirmedWith = "test@stellar.org"
 
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
 		require.NoError(t, err)
@@ -565,7 +566,8 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 				rw.stellar_address,
 				rw.stellar_memo,
 				rw.stellar_memo_type,
-				otp_confirmed_at
+				otp_confirmed_at,
+				COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with
 			FROM
 				receiver_wallets rw
 			WHERE
@@ -581,85 +583,139 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		assert.Equal(t, "123456", receiverWalletUpdated.StellarMemo)
 		assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
 		assert.WithinDuration(t, now, *receiverWalletUpdated.OTPConfirmedAt, 100*time.Millisecond)
+		assert.Equal(t, receiverWallet.OTPConfirmedWith, receiverWalletUpdated.OTPConfirmedWith)
 	})
 }
 
-func Test_ReceiverWallet_UpdateOTPByReceiverPhoneNumberAndWalletHomePage(t *testing.T) {
+func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "http://home.test", "home.test", "wallet123://")
 
-	t.Run("returns 1 updated row when the receiver wallet has not confirmed yet", func(t *testing.T) {
-		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "http://home.page", "home.page", "wallet1://")
-		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, RegisteredReceiversWalletStatus)
+	// Define test cases
+	testCases := []struct {
+		name                string
+		setupReceiverWallet func(t *testing.T, receiver Receiver)
+		contactInfo         func(r Receiver, contactType ReceiverContactType) string
+		clientDomain        string
+		expectedRows        int
+	}{
+		{
+			name: "does not update OTP for a receiver wallet with a different contact info",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return "invalid_contact_info"
+			},
+			clientDomain: wallet.SEP10ClientDomain,
+			expectedRows: 0,
+		},
+		{
+			name: "does not update OTP for a receiver wallet with a different client domain",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			clientDomain: "foo-bar",
+			expectedRows: 0,
+		},
+		{
+			name: "does not update OTP for a confirmed receiver wallet",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+				// Confirm OTP
+				q := `UPDATE receiver_wallets SET otp_confirmed_at = NOW() WHERE id = $1`
+				_, err := dbConnectionPool.ExecContext(ctx, q, rw.ID)
+				require.NoError(t, err)
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			clientDomain: wallet.SEP10ClientDomain,
+			expectedRows: 0,
+		},
+		{
+			name: "🎉 successfully updates OTP for an unconfirmed receiver wallet",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			clientDomain: wallet.SEP10ClientDomain,
+			expectedRows: 1,
+		},
+		{
+			name: "🎉 successfully renews OTP for an unconfirmed receiver wallet",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				// Create a receiver with a different contact info toi make sure they will not be picked by the query
+				receiverNoOp := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{PhoneNumber: "+141555550000", Email: "zoopbar@test.com"})
+				rwNoOp := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverNoOp.ID, wallet.ID, RegisteredReceiversWalletStatus)
 
-		testingOTP := "123456"
+				// Confirm OTP for the first receiver
+				q := `UPDATE receiver_wallets SET otp_confirmed_at = NOW() WHERE id = $1`
+				_, err := dbConnectionPool.ExecContext(ctx, q, rwNoOp.ID)
+				require.NoError(t, err)
 
-		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver1.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
-		require.NoError(t, err)
-		assert.Equal(t, 1, rowsUpdated)
-	})
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			clientDomain: wallet.SEP10ClientDomain,
+			expectedRows: 1,
+		},
+	}
 
-	t.Run("returns 1 updated row when trying to renew an OTP with an unconfirmed receiver wallet", func(t *testing.T) {
-		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "testWalletC", "http://home3.page", "home3.page", "wallet3://")
+	// Prepare test data
+	phoneNumber := "+141555555555"
+	email := "test@example.com"
 
-		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, RegisteredReceiversWalletStatus)
-		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, RegisteredReceiversWalletStatus)
+	// Run test cases
+	for _, contactType := range GetAllReceiverContactTypes() {
+		receiverInsert := &Receiver{}
+		switch contactType {
+		case ReceiverContactTypeSMS:
+			receiverInsert.PhoneNumber = phoneNumber
+		case ReceiverContactTypeEmail:
+			receiverInsert.Email = email
+		}
 
-		testingOTP := "222333"
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("%s/%s", contactType, tc.name), func(t *testing.T) {
+				defer DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+				defer DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 
-		q := `
-			UPDATE
-				receiver_wallets
-			SET
-				otp_confirmed_at = NOW()
-			WHERE
-				id = $1
-		`
-		_, err := dbConnectionPool.ExecContext(ctx, q, rw1.ID)
-		require.NoError(t, err)
+				receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, receiverInsert)
+				tc.setupReceiverWallet(t, *receiver)
 
-		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver2.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
-		require.NoError(t, err)
-		assert.Equal(t, 1, rowsUpdated)
+				otp, err := utils.RandomString(6, utils.NumberBytes)
+				require.NoError(t, err)
 
-		q = `SELECT otp FROM receiver_wallets WHERE id = $1`
-		var dbOTP string
-		err = dbConnectionPool.QueryRowxContext(ctx, q, rw2.ID).Scan(&dbOTP)
-		require.NoError(t, err)
-		assert.Equal(t, testingOTP, dbOTP)
-	})
+				contactInfo := tc.contactInfo(*receiver, contactType)
+				rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, contactInfo, tc.clientDomain, otp)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedRows, rowsUpdated)
 
-	t.Run("returns 0 updated rows when the receiver wallet is confirmed", func(t *testing.T) {
-		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "testWalletD", "http://home4.page", "home4.page", "wallet4://")
-		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, RegisteredReceiversWalletStatus)
-
-		testingOTP := "123456"
-
-		q := `
-			UPDATE
-				receiver_wallets
-			SET
-				otp_confirmed_at = NOW()
-		`
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.NoError(t, err)
-
-		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver1.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
-		require.NoError(t, err)
-		assert.Equal(t, 0, rowsUpdated)
-	})
+				if tc.expectedRows > 0 {
+					q := `SELECT otp FROM receiver_wallets WHERE receiver_id = $1 AND wallet_id = $2`
+					var dbOTP string
+					err := dbConnectionPool.GetContext(ctx, &dbOTP, q, receiver.ID, wallet.ID)
+					require.NoError(t, err)
+					assert.Equal(t, otp, dbOTP)
+				}
+			})
+		}
+	}
 }
 
 func Test_VerifyReceiverWalletOTP(t *testing.T) {
@@ -1246,7 +1302,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	})
 
 	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
-	results, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver.PhoneNumber, wallet.SEP10ClientDomain, "123456")
+	results, err := receiverWalletModel.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, receiver.PhoneNumber, wallet.SEP10ClientDomain, "123456")
 	require.NoError(t, err)
 	require.Equal(t, 1, results)
 
@@ -1400,7 +1456,7 @@ func Test_RetryInvitationSMS(t *testing.T) {
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
-		receiverWallet, err := receiverWalletModel.RetryInvitationSMS(ctx, dbConnectionPool, "invalid_id")
+		receiverWallet, err := receiverWalletModel.RetryInvitationMessage(ctx, dbConnectionPool, "invalid_id")
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Empty(t, receiverWallet)
@@ -1411,7 +1467,7 @@ func Test_RetryInvitationSMS(t *testing.T) {
 		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 
-		receiverWallet, err := receiverWalletModel.RetryInvitationSMS(ctx, dbConnectionPool, rw.ID)
+		receiverWallet, err := receiverWalletModel.RetryInvitationMessage(ctx, dbConnectionPool, rw.ID)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Empty(t, receiverWallet)
@@ -1422,7 +1478,7 @@ func Test_RetryInvitationSMS(t *testing.T) {
 		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
 
-		receiverWallet, err := receiverWalletModel.RetryInvitationSMS(ctx, dbConnectionPool, rw.ID)
+		receiverWallet, err := receiverWalletModel.RetryInvitationMessage(ctx, dbConnectionPool, rw.ID)
 		require.NoError(t, err)
 		assert.Nil(t, receiverWallet.InvitationSentAt)
 	})

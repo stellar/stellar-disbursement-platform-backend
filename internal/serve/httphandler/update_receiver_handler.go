@@ -23,7 +23,7 @@ type UpdateReceiverHandler struct {
 
 func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverRequest, receiverID string) []data.ReceiverVerificationInsert {
 	receiverVerifications := []data.ReceiverVerificationInsert{}
-	appendNewVerificationValue := func(verificationField data.VerificationField, verificationValue string) {
+	appendNewVerificationValue := func(verificationField data.VerificationType, verificationValue string) {
 		if verificationValue != "" {
 			receiverVerifications = append(receiverVerifications, data.ReceiverVerificationInsert{
 				ReceiverID:        receiverID,
@@ -33,15 +33,15 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 		}
 	}
 
-	for _, verificationField := range data.GetAllVerificationFields() {
+	for _, verificationField := range data.GetAllVerificationTypes() {
 		switch verificationField {
-		case data.VerificationFieldDateOfBirth:
+		case data.VerificationTypeDateOfBirth:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.DateOfBirth)
-		case data.VerificationFieldYearMonth:
+		case data.VerificationTypeYearMonth:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.YearMonth)
-		case data.VerificationFieldPin:
+		case data.VerificationTypePin:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.Pin)
-		case data.VerificationFieldNationalID:
+		case data.VerificationTypeNationalID:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.NationalID)
 		}
 	}
@@ -97,13 +97,17 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			}
 		}
 
-		receiverUpdate := data.ReceiverUpdate{
-			Email:      reqBody.Email,
-			ExternalId: reqBody.ExternalID,
+		var receiverUpdate data.ReceiverUpdate
+		if reqBody.Email != "" {
+			receiverUpdate.Email = &reqBody.Email
 		}
-		if receiverUpdate.Email != "" || receiverUpdate.ExternalId != "" {
+		if reqBody.ExternalID != "" {
+			receiverUpdate.ExternalId = &reqBody.ExternalID
+		}
+
+		if !receiverUpdate.IsEmpty() {
 			if innerErr = h.Models.Receiver.Update(ctx, dbTx, receiverID, receiverUpdate); innerErr != nil {
-				return nil, fmt.Errorf("error updating receiver with ID %s: %w", receiverID, innerErr)
+				return nil, fmt.Errorf("updating receiver with ID %s: %w", receiverID, innerErr)
 			}
 		}
 

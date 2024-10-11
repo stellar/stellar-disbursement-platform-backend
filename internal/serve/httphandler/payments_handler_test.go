@@ -132,7 +132,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"status": "DRAFT",
 				"created_at": %q,
 				"updated_at": %q,
-				"sms_registration_message_template":""
+				"receiver_registration_message_template":""
 			},
 			"asset": {
 				"id": %q,
@@ -803,7 +803,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            data.StartedDisbursementStatus,
-		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationField: data.VerificationTypeDateOfBirth,
 	})
 
 	t.Run("returns Unauthorized when no token in the context", func(t *testing.T) {
@@ -1537,7 +1537,8 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 			ReceiverWallet: receiverWallet,
 		})
 
-		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})
+		params := data.QueryParams{SortBy: data.DefaultPaymentSortField, SortOrder: data.DefaultPaymentSortOrder}
+		response, err := handler.getPaymentsWithCount(ctx, &params)
 		require.NoError(t, err)
 
 		assert.Equal(t, response.Total, 2)

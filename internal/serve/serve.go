@@ -64,7 +64,7 @@ type ServeOptions struct {
 	CorsAllowedOrigins              []string
 	authManager                     auth.AuthManager
 	EmailMessengerClient            message.MessengerClient
-	SMSMessengerClient              message.MessengerClient
+	MessageDispatcher               message.MessageDispatcherInterface
 	SEP24JWTSecret                  string
 	sep24JWTManager                 *anchorplatform.JWTManager
 	BaseURL                         string
@@ -89,7 +89,7 @@ type ServeOptions struct {
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
 	EventProducer                   events.Producer
-	MaxInvitationSMSResendAttempts  int
+	MaxInvitationResendAttempts     int
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
 }
@@ -396,6 +396,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
 					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
 					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+					MonitorService:              o.MonitorService,
 				}.Patch)
 		})
 
@@ -471,7 +472,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{
 				Models:             o.Models,
-				SMSMessengerClient: o.SMSMessengerClient,
+				MessageDispatcher:  o.MessageDispatcher,
 				ReCAPTCHAValidator: reCAPTCHAValidator,
 			}.ServeHTTP)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
