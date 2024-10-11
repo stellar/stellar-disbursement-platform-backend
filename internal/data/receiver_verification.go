@@ -182,15 +182,9 @@ func (m *ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
 	return nil
 }
 
-// UpsertVerificationValue creates or updates the receiver's verification. In case the verification exists and it's
-// already confirmed by the receiver it's not updated.
-func (m *ReceiverVerificationModel) UpsertVerificationValue(
-	ctx context.Context,
-	sqlExec db.SQLExecuter,
-	receiverID string,
-	verificationField VerificationType,
-	verificationValue string,
-) error {
+// UpsertVerificationValue creates or updates the receiver's verification. In case the verification exists and it's already confirmed by the receiver
+// it's not updated.
+func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context, sqlExec db.SQLExecuter, receiverID string, verificationField VerificationType, verificationValue string) error {
 	log.Ctx(ctx).Infof("Calling UpsertVerificationValue for receiver %s and verification field %s", receiverID, verificationField)
 	hashedValue, err := HashVerificationValue(verificationValue)
 	if err != nil {
