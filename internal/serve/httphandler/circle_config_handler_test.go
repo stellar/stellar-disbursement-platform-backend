@@ -148,8 +148,8 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 					Return(true, nil).
 					Once()
 				mCircleClient.
-					On("GetWalletByID", mock.Anything, "new_wallet_id").
-					Return(&circle.Wallet{WalletID: "new_wallet_id"}, nil).
+					On("GetAccountConfiguration", mock.Anything).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: "new_wallet_id"}}, nil).
 					Once()
 
 				mTenantManager.
@@ -289,19 +289,32 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 			expectedError: httperror.BadRequest("Failed to ping, please make sure that the provided API Key is correct.", nil, nil),
 		},
 		{
-			name:         "returns an error if circleClient.GetWalletByID returns an error",
+			name:         "returns an error if circleClient.GetAccountConfiguration returns an error",
 			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: &newWalletID},
 			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
 				mCircleClient.
 					On("Ping", ctx).
 					Return(true, nil).
 					Once()
-				mCircleClient.
-					On("GetWalletByID", ctx, newWalletID).
+				mCircleClient.On("GetAccountConfiguration", ctx).
 					Return(nil, fmt.Errorf("get wallet error")).
 					Once()
 			},
 			expectedError: wrapCircleError(ctx, fmt.Errorf("get wallet error")),
+		},
+		{
+			name:         "returns an error if wallet ID does not match the master wallet ID from Circle",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: &newWalletID},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClient.
+					On("Ping", ctx).
+					Return(true, nil).
+					Once()
+				mCircleClient.On("GetAccountConfiguration", ctx).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: "another_wallet_id"}}, nil).
+					Once()
+			},
+			expectedError: httperror.BadRequest("The provided wallet ID does not match the master wallet ID from Circle", nil, nil),
 		},
 		{
 			name:         "🎉 successfully validate for a new pair of apiKey and walletID",
@@ -312,8 +325,8 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 					Return(true, nil).
 					Once()
 				mCircleClient.
-					On("GetWalletByID", ctx, newWalletID).
-					Return(&circle.Wallet{WalletID: newWalletID}, nil).
+					On("GetAccountConfiguration", ctx).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: newWalletID}}, nil).
 					Once()
 			},
 			expectedError: nil,
@@ -346,8 +359,8 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 					Return("api-key", nil).
 					Once()
 				mCircleClient.
-					On("GetWalletByID", ctx, newWalletID).
-					Return(&circle.Wallet{WalletID: newWalletID}, nil).
+					On("GetAccountConfiguration", ctx).
+					Return(&circle.AccountConfiguration{Payments: circle.WalletConfig{MasterWalletID: newWalletID}}, nil).
 					Once()
 			},
 			expectedError: nil,

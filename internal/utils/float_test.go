@@ -19,7 +19,7 @@ func Test_FloatToString(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf(tc.wantStringOutput), func(t *testing.T) {
+		t.Run(fmt.Sprint(tc.wantStringOutput), func(t *testing.T) {
 			gotStringOutput := FloatToString(tc.floatInput)
 			assert.Equal(t, tc.wantStringOutput, gotStringOutput)
 		})

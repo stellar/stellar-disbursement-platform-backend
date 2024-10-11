@@ -153,13 +153,13 @@ func (s *CircleDistributionAccountService) GetBalances(ctx context.Context, acco
 		return nil, fmt.Errorf("This organization's distribution account is in %s state, please complete the %s activation process to access this endpoint.", account.Status, account.Type.Platform())
 	}
 
-	wallet, err := s.CircleService.GetWalletByID(ctx, account.CircleWalletID)
+	businessBalances, err := s.CircleService.GetBusinessBalances(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting wallet by ID: %w", err)
 	}
 
 	balances := make(map[data.Asset]float64)
-	for _, b := range wallet.Balances {
+	for _, b := range businessBalances.Available {
 		asset, err := circle.ParseStellarAsset(b.Currency, s.NetworkType)
 		if err != nil {
 			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP: %v", b.Currency, err)

@@ -35,7 +35,7 @@ func (s StatisticsHandler) GetStatisticsByDisbursement(w http.ResponseWriter, r 
 
 	stats, err := statistics.CalculateStatisticsByDisbursement(ctx, s.DBConnectionPool, disbursementID)
 	if err != nil {
-		if errors.Is(statistics.ErrResourcesNotFound, err) {
+		if errors.Is(err, statistics.ErrResourcesNotFound) {
 			errorMsg := fmt.Sprintf("a disbursement with the id %s does not exist", disbursementID)
 			httperror.NotFound(errorMsg, err, nil).Render(w)
 			return
