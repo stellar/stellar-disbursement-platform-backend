@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -122,9 +125,32 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 		return receiver, nil
 	})
 	if err != nil {
+		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
+
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
 
 	httpjson.Render(rw, receiver, httpjson.JSON)
+}
+
+func parseHttpConflictErrorIfNeeded(err error) *httperror.HTTPError {
+	var pqErr *pq.Error
+	if err == nil || !errors.As(err, &pqErr) || pqErr.Code != "23505" {
+		return nil
+	}
+
+	allowedConstraints := []string{"receiver_unique_email", "receiver_unique_phone_number"}
+	if !slices.Contains(allowedConstraints, pqErr.Constraint) {
+		return nil
+	}
+	fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
+	msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
+
+	return httperror.Conflict(msg, err, map[string]interface{}{
+		fieldName: fieldName + " must be unique",
+	})
 }

@@ -289,6 +289,84 @@ func Test_UpdateReceiverHandler_404(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
+func Test_UpdateReceiverHandler_409(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &UpdateReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	ctx := context.Background()
+
+	// setup
+	r := chi.NewRouter()
+	r.Patch("/receivers/{id}", handler.UpdateReceiver)
+
+	receiverStatic := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		PhoneNumber: "+14155556666",
+	})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+
+	testCases := []struct {
+		fieldName    string
+		request      validators.UpdateReceiverRequest
+		expectedBody string
+	}{
+		{
+			fieldName: "email conflict",
+			request: validators.UpdateReceiverRequest{
+				Email: receiverStatic.Email,
+			},
+			expectedBody: `{
+				"error": "The provided email is already associated with another user.",
+				"extras": {
+					"email": "email must be unique"
+				}
+			}`,
+		},
+		{
+			fieldName: "phone_number",
+			request: validators.UpdateReceiverRequest{
+				PhoneNumber: receiverStatic.PhoneNumber,
+			},
+			expectedBody: `{
+				"error": "The provided phone_number is already associated with another user.",
+				"extras": {
+					"phone_number": "phone_number must be unique"
+				}
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.fieldName, func(t *testing.T) {
+			route := fmt.Sprintf("/receivers/%s", receiver.ID)
+			reqBody, err := json.Marshal(tc.request)
+			require.NoError(t, err)
+			req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
+			require.NoError(t, err)
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, http.StatusConflict, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedBody, string(respBody))
+		})
+	}
+}
+
 func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
