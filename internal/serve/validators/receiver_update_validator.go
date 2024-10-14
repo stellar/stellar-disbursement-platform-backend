@@ -7,11 +7,14 @@ import (
 )
 
 type UpdateReceiverRequest struct {
+	// receiver_verifications fields:
 	DateOfBirth string `json:"date_of_birth"`
 	YearMonth   string `json:"year_month"`
 	Pin         string `json:"pin"`
 	NationalID  string `json:"national_id"`
+	// receivers fields:
 	Email       string `json:"email"`
+	PhoneNumber string `json:"phone_number"`
 	ExternalID  string `json:"external_id"`
 }
 type UpdateReceiverValidator struct {
@@ -60,8 +63,12 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 		ur.Check(utils.ValidateEmail(email) == nil, "email", "invalid email format")
 	}
 
+	if updateReceiverRequest.PhoneNumber != "" {
+		ur.Check(utils.ValidatePhoneNumber(updateReceiverRequest.PhoneNumber) == nil, "phone_number", "invalid phone number format")
+	}
+
 	if updateReceiverRequest.ExternalID != "" {
-		ur.Check(externalID != "", "external_id", "invalid external_id format")
+		ur.Check(externalID != "", "external_id", "external_id cannot be set to empty")
 	}
 
 	updateReceiverRequest.DateOfBirth = dateOfBirth

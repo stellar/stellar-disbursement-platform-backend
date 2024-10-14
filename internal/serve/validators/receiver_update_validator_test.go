@@ -6,100 +6,107 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_UpdateReceiverValidator_ValidateReceiver(t *testing.T) {
-	t.Run("Empty request", func(t *testing.T) {
-		validator := NewUpdateReceiverValidator()
+func Test_UpdateReceiverValidator_ValidateReceiver2(t *testing.T) {
+	testCases := []struct {
+		name           string
+		request        UpdateReceiverRequest
+		expectedErrors map[string]interface{}
+	}{
+		{
+			name:    "Empty request",
+			request: UpdateReceiverRequest{},
+			expectedErrors: map[string]interface{}{
+				"body": "request body is empty",
+			},
+		},
+		{
+			name: "[DATE_OF_BIRTH] ValidationField is invalid",
+			request: UpdateReceiverRequest{
+				DateOfBirth: "invalid",
+			},
+			expectedErrors: map[string]interface{}{
+				"date_of_birth": "invalid date of birth format. Correct format: 1990-01-30",
+			},
+		},
+		{
+			name: "[YEAR_MONTH] ValidationField is invalid",
+			request: UpdateReceiverRequest{
+				YearMonth: "invalid",
+			},
+			expectedErrors: map[string]interface{}{
+				"year_month": "invalid year/month format. Correct format: 1990-12",
+			},
+		},
+		{
+			name: "[PIN] ValidationField is invalid",
+			request: UpdateReceiverRequest{
+				Pin: "   ",
+			},
+			expectedErrors: map[string]interface{}{
+				"pin": "invalid pin length. Cannot have less than 4 or more than 8 characters in pin",
+			},
+		},
+		{
+			name: "[NATIONAL_ID_NUMBER] ValidationField is invalid",
+			request: UpdateReceiverRequest{
+				NationalID: "   ",
+			},
+			expectedErrors: map[string]interface{}{
+				"national_id": "national id cannot be empty",
+			},
+		},
+		{
+			name: "e-mail is invalid",
+			request: UpdateReceiverRequest{
+				Email: "invalid",
+			},
+			expectedErrors: map[string]interface{}{
+				"email": "invalid email format",
+			},
+		},
+		{
+			name: "phone number is invalid",
+			request: UpdateReceiverRequest{
+				PhoneNumber: "invalid",
+			},
+			expectedErrors: map[string]interface{}{
+				"phone_number": "invalid phone number format",
+			},
+		},
+		{
+			name: "external ID is invalid",
+			request: UpdateReceiverRequest{
+				ExternalID: "    ",
+			},
+			expectedErrors: map[string]interface{}{
+				"external_id": "external_id cannot be set to empty",
+			},
+		},
+		{
+			name: "🎉 Valid receiver values",
+			request: UpdateReceiverRequest{
+				DateOfBirth: "1999-01-01",
+				YearMonth:   "1999-01",
+				Pin:         "1234   ",
+				NationalID:  "   12345CODE",
+				Email:       "receiver@email.com",
+				PhoneNumber: "+14155556666",
+				ExternalID:  "externalID",
+			},
+			expectedErrors: map[string]interface{}{},
+		},
+	}
 
-		receiverInfo := UpdateReceiverRequest{}
-		validator.ValidateReceiver(&receiverInfo)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := NewUpdateReceiverValidator()
+			validator.ValidateReceiver(&tc.request)
 
-		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "request body is empty", validator.Errors["body"])
-	})
-
-	t.Run("Invalid date of birth", func(t *testing.T) {
-		validator := NewUpdateReceiverValidator()
-
-		receiverInfo := UpdateReceiverRequest{
-			DateOfBirth: "invalid",
-		}
-		validator.ValidateReceiver(&receiverInfo)
-
-		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid date of birth format. Correct format: 1990-01-30", validator.Errors["date_of_birth"])
-	})
-
-	t.Run("Invalid pin", func(t *testing.T) {
-		validator := NewUpdateReceiverValidator()
-
-		receiverInfo := UpdateReceiverRequest{
-			Pin: "   ",
-		}
-		validator.ValidateReceiver(&receiverInfo)
-
-		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid pin length. Cannot have less than 4 or more than 8 characters in pin", validator.Errors["pin"])
-	})
-
-	t.Run("Invalid national ID", func(t *testing.T) {
-		validator := NewUpdateReceiverValidator()
-
-		receiverInfo := UpdateReceiverRequest{
-			NationalID: "   ",
-		}
-		validator.ValidateReceiver(&receiverInfo)
-
-		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "national id cannot be empty", validator.Errors["national_id"])
-	})
-
-	t.Run("invalid email", func(t *testing.T) {
-		validator := NewUpdateReceiverValidator()
-
-		receiverInfo := UpdateReceiverRequest{
-			Email: "invalid",
-		}
-		validator.ValidateReceiver(&receiverInfo)
-
-		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid email format", validator.Errors["email"])
-
-		receiverInfo = UpdateReceiverRequest{
-			Email: "     ",
-		}
-		validator.ValidateReceiver(&receiverInfo)
-
-		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid email format", validator.Errors["email"])
-	})
-
-	t.Run("invalid external ID", func(t *testing.T) {
-		validator := NewUpdateReceiverValidator()
-
-		receiverInfo := UpdateReceiverRequest{
-			ExternalID: "    ",
-		}
-		validator.ValidateReceiver(&receiverInfo)
-
-		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid external_id format", validator.Errors["external_id"])
-	})
-
-	t.Run("Valid receiver values", func(t *testing.T) {
-		validator := NewUpdateReceiverValidator()
-
-		receiverInfo := UpdateReceiverRequest{
-			DateOfBirth: "1999-01-01",
-			Pin:         "1234   ",
-			NationalID:  "   12345CODE",
-			Email:       "receiver@email.com",
-			ExternalID:  "externalID",
-		}
-		validator.ValidateReceiver(&receiverInfo)
-
-		assert.Equal(t, 0, len(validator.Errors))
-		assert.Equal(t, "1999-01-01", receiverInfo.DateOfBirth)
-		assert.Equal(t, "1234", receiverInfo.Pin)
-		assert.Equal(t, "12345CODE", receiverInfo.NationalID)
-	})
+			assert.Equal(t, len(tc.expectedErrors), len(validator.Errors))
+			assert.Equal(t, tc.expectedErrors, validator.Errors)
+			for key, value := range tc.expectedErrors {
+				assert.Equal(t, value, validator.Errors[key])
+			}
+		})
+	}
 }

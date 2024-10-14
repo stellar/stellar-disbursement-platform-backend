@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -85,7 +88,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	receiver, err := db.RunInTransactionWithResult(ctx, h.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *data.Receiver, innerErr error) {
 		for _, rv := range receiverVerifications {
 			innerErr = h.Models.ReceiverVerification.UpsertVerificationValue(
-				req.Context(),
+				ctx,
 				dbTx,
 				rv.ReceiverID,
 				rv.VerificationField,
@@ -93,13 +96,16 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			)
 
 			if innerErr != nil {
-				return nil, fmt.Errorf("error updating receiver verification %s: %w", rv.VerificationField, innerErr)
+				return nil, fmt.Errorf("updating receiver verification %s: %w", rv.VerificationField, innerErr)
 			}
 		}
 
 		var receiverUpdate data.ReceiverUpdate
 		if reqBody.Email != "" {
 			receiverUpdate.Email = &reqBody.Email
+		}
+		if reqBody.PhoneNumber != "" {
+			receiverUpdate.PhoneNumber = &reqBody.PhoneNumber
 		}
 		if reqBody.ExternalID != "" {
 			receiverUpdate.ExternalId = &reqBody.ExternalID
@@ -113,15 +119,38 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 
 		receiver, innerErr := h.Models.Receiver.Get(ctx, dbTx, receiverID)
 		if innerErr != nil {
-			return nil, fmt.Errorf("error querying receiver with ID %s: %w", receiverID, innerErr)
+			return nil, fmt.Errorf("querying receiver with ID %s: %w", receiverID, innerErr)
 		}
 
 		return receiver, nil
 	})
 	if err != nil {
+		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
+
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
 
 	httpjson.Render(rw, receiver, httpjson.JSON)
+}
+
+func parseHttpConflictErrorIfNeeded(err error) *httperror.HTTPError {
+	var pqErr *pq.Error
+	if err == nil || !errors.As(err, &pqErr) || pqErr.Code != "23505" {
+		return nil
+	}
+
+	allowedConstraints := []string{"receiver_unique_email", "receiver_unique_phone_number"}
+	if !slices.Contains(allowedConstraints, pqErr.Constraint) {
+		return nil
+	}
+	fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
+	msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
+
+	return httperror.Conflict(msg, err, map[string]interface{}{
+		fieldName: fieldName + " must be unique",
+	})
 }
