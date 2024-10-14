@@ -55,13 +55,13 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	circleWallet, err := h.CircleService.GetWalletByID(ctx, distAccount.CircleWalletID)
+	businessBalances, err := h.CircleService.GetBusinessBalances(ctx)
 	if err != nil {
 		wrapCircleError(ctx, err).Render(w)
 		return
 	}
 
-	balances := h.filterBalances(ctx, circleWallet)
+	balances := h.filterBalances(ctx, businessBalances.Available)
 
 	response := GetBalanceResponse{
 		Account:  distAccount,
@@ -70,9 +70,9 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, response, httpjson.JSON)
 }
 
-func (h BalancesHandler) filterBalances(ctx context.Context, circleWallet *circle.Wallet) []Balance {
+func (h BalancesHandler) filterBalances(ctx context.Context, availableBalances []circle.Balance) []Balance {
 	balances := []Balance{}
-	for _, balance := range circleWallet.Balances {
+	for _, balance := range availableBalances {
 		asset, err := circle.ParseStellarAsset(balance.Currency, h.NetworkType)
 		if err != nil {
 			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP: %v", balance.Currency, err)

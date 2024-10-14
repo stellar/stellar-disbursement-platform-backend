@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	pingPath     = "/ping"
-	transferPath = "/v1/transfers"
-	walletPath   = "/v1/wallets"
+	pingPath             = "/ping"
+	transferPath         = "/v1/transfers"
+	businessBalancesPath = "/v1/businessAccount/balances"
+	configurationPath    = "/v1/configuration"
 )
 
 var authErrorStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
@@ -36,7 +37,8 @@ type ClientInterface interface {
 	Ping(ctx context.Context) (bool, error)
 	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error)
 	GetTransferByID(ctx context.Context, id string) (*Transfer, error)
-	GetWalletByID(ctx context.Context, id string) (*Wallet, error)
+	GetBusinessBalances(ctx context.Context) (*Balances, error)
+	GetAccountConfiguration(ctx context.Context) (*AccountConfiguration, error)
 }
 
 // Client provides methods to interact with the Circle API.
@@ -167,16 +169,14 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	return parseTransferResponse(resp)
 }
 
-// GetWalletByID retrieves a wallet by its ID.
-//
-// Circle API documentation: https://developers.circle.com/circle-mint/reference/getwallet.
-func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, error) {
-	url, err := url.JoinPath(client.BasePath, walletPath, id)
+// GetBusinessBalances retrieves the available and unsettled balances for different currencies.
+func (client *Client) GetBusinessBalances(ctx context.Context) (*Balances, error) {
+	url, err := url.JoinPath(client.BasePath, businessBalancesPath)
 	if err != nil {
 		return nil, fmt.Errorf("building path: %w", err)
 	}
 
-	resp, err := client.request(ctx, walletPath, url, http.MethodGet, true, nil)
+	resp, err := client.request(ctx, businessBalancesPath, url, http.MethodGet, true, nil)
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
@@ -189,7 +189,30 @@ func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, er
 		}
 	}
 
-	return parseWalletResponse(resp)
+	return parseBusinessBalancesResponse(resp)
+}
+
+// GetAccountConfiguration retrieves the configuration of the Circle Account.
+func (client *Client) GetAccountConfiguration(ctx context.Context) (*AccountConfiguration, error) {
+	url, err := url.JoinPath(client.BasePath, configurationPath)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	resp, err := client.request(ctx, configurationPath, url, http.MethodGet, true, nil)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parseAccountConfigurationResponse(resp)
 }
 
 type RetryableError struct {

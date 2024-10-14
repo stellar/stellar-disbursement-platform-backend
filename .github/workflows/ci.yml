@@ -22,7 +22,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # version v6.1.0
+        uses: golangci/golangci-lint-action@971e284b6050e8a5849b72094c50ab08da042db8 # version v6.1.1
         with:
           version: v1.56.2 # this is the golangci-lint version
           args: --timeout 5m0s

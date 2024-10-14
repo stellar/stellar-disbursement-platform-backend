@@ -25,10 +25,18 @@ if [ ! -f ./.env ]; then
     exit 1
 fi
 
-# Check if curl is installed
-if ! command -v curl &> /dev/null
-then
-    echo "Error: curl is not installed. Please install curl to continue."
+declare -a required_tools=( docker curl jq )
+declare failed=0
+
+for tool in ${required_tools[@]}; do
+    if ! command -v $tool &> /dev/null
+    then
+        echo "Error: $tool is not installed. Please install $tool to continue."
+        failed=1
+    fi
+done
+
+if [[ $failed != 0 ]]; then
     exit 1
 fi
 
@@ -153,4 +161,9 @@ for tenant in "${tenants[@]}"; do
     url="http://$tenant.stellar.local:3000"
     echo -e "🔗Tenant $tenant: \033]8;;$url\033\\$url\033]8;;\033\\"
     echo "username: owner@$tenant.local  password: Password123!"
+
+    if ! grep -q $tenant /etc/hosts; then
+        echo >&2 "WARN $tenant.stellar.local missing from /etc/hosts"
+    fi
 done
+

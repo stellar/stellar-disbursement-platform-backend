@@ -129,7 +129,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
 	if err != nil {
-		if errors.Is(data.ErrRecordAlreadyExists, err) {
+		if errors.Is(err, data.ErrRecordAlreadyExists) {
 			httperror.Conflict("disbursement already exists", err, nil).Render(w)
 		} else {
 			httperror.BadRequest("could not create disbursement", err, nil).Render(w)

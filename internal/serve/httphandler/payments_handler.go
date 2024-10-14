@@ -88,7 +88,7 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 
 	payment, err := p.Models.Payment.Get(r.Context(), paymentID, p.DBConnectionPool)
 	if err != nil {
-		if errors.Is(data.ErrRecordNotFound, err) {
+		if errors.Is(err, data.ErrRecordNotFound) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", paymentID)
 			httperror.NotFound(errorResponse, err, nil).Render(w)
 			return

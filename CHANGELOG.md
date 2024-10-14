@@ -38,6 +38,11 @@ the option to register receivers using email addresses, in addition to phone num
 - Bump `golang` in the all-docker group [#387](https://github.com/stellar/stellar-disbursement-platform-backend/pull/387), [#394](https://github.com/stellar/stellar-disbursement-platform-backend/pull/394), [#414](https://github.com/stellar/stellar-disbursement-platform-backend/pull/414)
 - Bump minor and patch dependencies across directories [#381](https://github.com/stellar/stellar-disbursement-platform-backend/pull/381), [#395](https://github.com/stellar/stellar-disbursement-platform-backend/pull/395), [#403](https://github.com/stellar/stellar-disbursement-platform-backend/pull/403), [#411](https://github.com/stellar/stellar-disbursement-platform-backend/pull/411)
 
+## [2.1.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.1.0...2.1.1))
+
+### Changed
+- Removed calls related to the deprecated Circle Accounts API and replaced them with calls to `GET /v1/businessAccount/balances` and `GET /configuration`.  [#433](https://github.com/stellar/stellar-disbursement-platform-backend/pull/433).
+
 ## [2.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.0.0...2.1.0))
 
 Release of the Stellar Disbursement Platform v2.1.0. This release introduces

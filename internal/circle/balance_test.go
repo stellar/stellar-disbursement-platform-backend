@@ -87,7 +87,7 @@ func Test_ParseStellarAsset(t *testing.T) {
 		})
 
 		t.Run("FromAllowlist/"+tc.name, func(t *testing.T) {
-			asset, err := ParseStellarAssetFromAllowlist(tc.circleCurrency, tc.networkType, tc.allowedAssetsMap)
+			asset, err := parseStellarAssetFromAllowlist(tc.circleCurrency, tc.networkType, tc.allowedAssetsMap)
 
 			if tc.expectedError == nil {
 				assert.NoError(t, err)
