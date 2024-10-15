@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
-	jwtgo "github.com/golang-jwt/jwt/v4"
 )
 
 // tokenRefreshWindow is the time window in minutes that we allow to refresh a token. If the token is going to expire in
@@ -19,6 +18,8 @@ const tokenRefreshWindow = 3
 
 type JWTManager interface {
 	GenerateToken(ctx context.Context, user *User, expiresAt time.Time) (string, error)
+	// RefreshToken generates a new token if the current token is going to expire in less than `tokenRefreshWindow` minutes.
+	// Otherwise, it returns the same token.
 	RefreshToken(ctx context.Context, token string, expiresAt time.Time) (string, error)
 	ValidateToken(ctx context.Context, token string) (bool, error)
 	GetUserFromToken(ctx context.Context, token string) (*User, error)
@@ -94,6 +95,8 @@ func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expir
 	return tokenString, nil
 }
 
+// RefreshToken generates a new token if the current token is going to expire in less than `tokenRefreshWindow` minutes.
+// Otherwise, it returns the same token.
 func (m *defaultJWTManager) RefreshToken(ctx context.Context, tokenString string, expiresAt time.Time) (string, error) {
 	_, c, err := m.parseToken(tokenString)
 	if err != nil {
