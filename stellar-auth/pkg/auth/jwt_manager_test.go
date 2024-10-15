@@ -117,7 +117,7 @@ func Test_DefaultJWTManager_RefreshToken(t *testing.T) {
 	ctx := tenant.SaveTenantInContext(context.Background(), &currentTenant)
 
 	t.Run("returns the same token when is above the refresh period", func(t *testing.T) {
-		expiresAt := time.Now().Add(time.Minute * (defaultRefreshTimeoutInMinutes + 1))
+		expiresAt := time.Now().Add(time.Minute * (tokenRefreshWindow + 1))
 		token, err := jwtManager.GenerateToken(ctx, &User{}, expiresAt)
 		require.NoError(t, err)
 
@@ -129,7 +129,7 @@ func Test_DefaultJWTManager_RefreshToken(t *testing.T) {
 	})
 
 	t.Run("returns a refreshed token", func(t *testing.T) {
-		expiresAt := time.Now().Add(time.Minute * defaultRefreshTimeoutInMinutes)
+		expiresAt := time.Now().Add(time.Minute * tokenRefreshWindow)
 		token, err := jwtManager.GenerateToken(ctx, &User{}, expiresAt)
 		require.NoError(t, err)
 
