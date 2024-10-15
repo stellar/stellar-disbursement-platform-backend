@@ -13,7 +13,9 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 )
 
-const defaultRefreshTimeoutInMinutes = 2
+// tokenRefreshWindow is the time window in minutes that we allow to refresh a token. If the token is going to expire in
+// less than this time, we generate a new token, otherwise we return the same token.
+const tokenRefreshWindow = 3
 
 type JWTManager interface {
 	GenerateToken(ctx context.Context, user *User, expiresAt time.Time) (string, error)
@@ -100,7 +102,7 @@ func (m *defaultJWTManager) RefreshToken(ctx context.Context, tokenString string
 
 	// We only generate new tokens when enough time
 	// is elapsed.
-	if time.Until(c.ExpiresAt.Time) > defaultRefreshTimeoutInMinutes*time.Minute {
+	if time.Until(c.ExpiresAt.Time) > tokenRefreshWindow*time.Minute {
 		return tokenString, nil
 	}
 
