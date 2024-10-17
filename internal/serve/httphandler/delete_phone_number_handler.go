@@ -34,7 +34,7 @@ func (d DeletePhoneNumberHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	}
 
 	log.Ctx(ctx).Warnf("Deleting user with phone number %s", utils.TruncateString(phoneNumber, 3))
-	err := d.Models.Receiver.DeleteByPhoneNumber(ctx, d.Models.DBConnectionPool, phoneNumber)
+	err := d.Models.Receiver.DeleteByContactInfo(ctx, d.Models.DBConnectionPool, phoneNumber)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("", err, nil).Render(w)
