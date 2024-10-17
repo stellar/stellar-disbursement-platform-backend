@@ -487,7 +487,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		// This will be used for test purposes and will only be available when IsPubnet is false:
-		r.With(middleware.EnsureTenantMiddleware).Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{
+		r.With(middleware.EnsureTenantMiddleware).Delete("/contact-info/{contact_info}", httphandler.DeleteContactInfoHandler{
 			Models:            o.Models,
 			NetworkPassphrase: o.NetworkPassphrase,
 		}.ServeHTTP)
