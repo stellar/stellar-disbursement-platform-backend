@@ -460,19 +460,20 @@ func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecute
 	return receivers, nil
 }
 
-// DeleteByPhoneNumber deletes a receiver by phone number. It also deletes the associated entries in other tables:
-// messages, payments, receiver_verifications, receiver_wallets, receivers, disbursements, submitter_transactions
-func (r *ReceiverModel) DeleteByPhoneNumber(ctx context.Context, dbConnectionPool db.DBConnectionPool, phoneNumber string) error {
+// DeleteByContactInfo deletes a receiver by phone number or email. It also deletes the associated entries in other
+// tables: messages, payments, receiver_verifications, receiver_wallets, receivers, disbursements,
+// submitter_transactions.
+func (r *ReceiverModel) DeleteByContactInfo(ctx context.Context, dbConnectionPool db.DBConnectionPool, contactInfo string) error {
 	return db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		query := "SELECT id FROM receivers WHERE phone_number = $1"
+		query := "SELECT id FROM receivers WHERE phone_number = $1 OR email = $1"
 		var receiverID string
 
-		err := dbTx.GetContext(ctx, &receiverID, query, phoneNumber)
+		err := dbTx.GetContext(ctx, &receiverID, query, contactInfo)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrRecordNotFound
 			}
-			return fmt.Errorf("error fetching receiver by phone number %s: %w", phoneNumber, err)
+			return fmt.Errorf("error fetching receiver by phone number %s: %w", contactInfo, err)
 		}
 
 		type QueryWithParams struct {
