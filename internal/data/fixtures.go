@@ -289,7 +289,7 @@ func ClearAndCreateCountryFixtures(t *testing.T, ctx context.Context, sqlExec db
 func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *Receiver) *Receiver {
 	t.Helper()
 
-	randomSuffix, err := utils.RandomString(5)
+	randomSuffix, err := utils.RandomString(5, utils.NumberBytes)
 	require.NoError(t, err)
 
 	if r == nil {
