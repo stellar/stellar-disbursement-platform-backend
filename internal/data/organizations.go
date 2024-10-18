@@ -26,7 +26,7 @@ import (
 
 const (
 	DefaultReceiverRegistrationMessageTemplate = "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
-	DefaultOTPMessageTemplate                  = "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+	DefaultOTPMessageTemplate                  = "{{.OTP}} is your {{.OrganizationName}} verification code."
 )
 
 type Organization struct {
