@@ -11,7 +11,15 @@ import (
 var Tmpl embed.FS
 
 func ExecuteHTMLTemplate(templateName string, data interface{}) (string, error) {
-	t, err := template.ParseFS(Tmpl, "tmpl/*.tmpl", "tmpl/**/*.tmpl")
+	// Define the function map that will be available inside the templates
+	funcMap := template.FuncMap{
+		"EmailStyle": func() template.HTML {
+			return emailStyle
+		},
+	}
+
+	// Parse the templates with the function map
+	t, err := template.New("").Funcs(funcMap).ParseFS(Tmpl, "tmpl/*.tmpl", "tmpl/**/*.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("error parsing embedded template files: %w", err)
 	}
@@ -62,3 +70,36 @@ type StaffMFAEmailMessageTemplate struct {
 func ExecuteHTMLTemplateForStaffMFAEmailMessage(data StaffMFAEmailMessageTemplate) (string, error) {
 	return ExecuteHTMLTemplate("staff_mfa_message.tmpl", data)
 }
+
+// emailStyle is the CSS style that will be included in the email templates.
+const emailStyle = template.HTML(`
+    <style>
+        body {
+			font-family: Arial, sans-serif;
+			line-height: 1.6;
+			color: #000000;
+			background-color: #ffffff;
+			margin: 0;
+			padding: 20px;
+		}
+		p {
+			margin-bottom: 16px;
+		}
+		.button {
+			display: inline-block;
+			padding: 10px 20px;
+			background-color: #000000;
+			color: #ffffff;
+			text-decoration: none;
+			border-radius: 5px;
+			font-weight: bold;
+		}
+		.button:hover {
+			background-color: #333333;
+		}
+		strong:hover {
+			font-weight: bold;
+			color: #cccccc;
+		}
+    </style>
+`)
