@@ -130,14 +130,14 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("error getting organization data: %s", err.Error())
 				}
 
-				invitationData := htmltemplate.InvitationMessageTemplate{
+				invitationData := htmltemplate.StaffInvitationEmailMessageTemplate{
 					FirstName:          firstName,
 					Role:               role,
 					ForgotPasswordLink: forgotPasswordLink,
 					OrganizationName:   organization.Name,
 				}
 
-				msgBody, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(invitationData)
+				msgBody, err := htmltemplate.ExecuteHTMLTemplateForStaffInvitationEmailMessage(invitationData)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error executing invitation message template: %s", err.Error())
 				}

@@ -605,7 +605,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 			Return("123123", nil).
 			Once()
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForMFAMessage(htmltemplate.MFAMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffMFAEmailMessage(htmltemplate.StaffMFAEmailMessageTemplate{
 			OrganizationName: "MyCustomAid",
 			MFACode:          "123123",
 		})

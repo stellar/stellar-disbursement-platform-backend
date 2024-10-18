@@ -7,11 +7,11 @@ import (
 	"html/template"
 )
 
-//go:embed tmpl/*.tmpl
+//go:embed tmpl/**/*.tmpl "tmpl/*.tmpl"
 var Tmpl embed.FS
 
 func ExecuteHTMLTemplate(templateName string, data interface{}) (string, error) {
-	t, err := template.ParseFS(Tmpl, "tmpl/*.tmpl")
+	t, err := template.ParseFS(Tmpl, "tmpl/*.tmpl", "tmpl/**/*.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("error parsing embedded template files: %w", err)
 	}
@@ -33,32 +33,32 @@ func ExecuteHTMLTemplateForEmailEmptyBody(data EmptyBodyEmailTemplate) (string, 
 	return ExecuteHTMLTemplate("empty_body.tmpl", data)
 }
 
-type InvitationMessageTemplate struct {
+type StaffInvitationEmailMessageTemplate struct {
 	FirstName          string
 	Role               string
 	ForgotPasswordLink string
 	OrganizationName   string
 }
 
-func ExecuteHTMLTemplateForInvitationMessage(data InvitationMessageTemplate) (string, error) {
-	return ExecuteHTMLTemplate("invitation_message.tmpl", data)
+func ExecuteHTMLTemplateForStaffInvitationEmailMessage(data StaffInvitationEmailMessageTemplate) (string, error) {
+	return ExecuteHTMLTemplate("staff_invitation_message.tmpl", data)
 }
 
-type ForgotPasswordMessageTemplate struct {
+type ForgotPasswordEmailMessageTemplate struct {
 	ResetToken        string
 	ResetPasswordLink string
 	OrganizationName  string
 }
 
-func ExecuteHTMLTemplateForForgotPasswordMessage(data ForgotPasswordMessageTemplate) (string, error) {
-	return ExecuteHTMLTemplate("forgot_password_message.tmpl", data)
+func ExecuteHTMLTemplateForForgotPasswordEmailMessage(data ForgotPasswordEmailMessageTemplate) (string, error) {
+	return ExecuteHTMLTemplate("staff_forgot_password_message.tmpl", data)
 }
 
-type MFAMessageTemplate struct {
+type StaffMFAEmailMessageTemplate struct {
 	MFACode          string
 	OrganizationName string
 }
 
-func ExecuteHTMLTemplateForMFAMessage(data MFAMessageTemplate) (string, error) {
-	return ExecuteHTMLTemplate("mfa_message.tmpl", data)
+func ExecuteHTMLTemplateForStaffMFAEmailMessage(data StaffMFAEmailMessageTemplate) (string, error) {
+	return ExecuteHTMLTemplate("staff_mfa_message.tmpl", data)
 }

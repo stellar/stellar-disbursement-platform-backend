@@ -686,7 +686,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		forgotPasswordLink, err := urllib.JoinPath(uiBaseURL, "forgot-password")
 		require.NoError(t, err)
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(htmltemplate.InvitationMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffInvitationEmailMessage(htmltemplate.StaffInvitationEmailMessageTemplate{
 			FirstName:          u.FirstName,
 			Role:               u.Roles[0],
 			ForgotPasswordLink: forgotPasswordLink,
@@ -853,7 +853,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		forgotPasswordLink, err := urllib.JoinPath(uiBaseURL, "forgot-password")
 		require.NoError(t, err)
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(htmltemplate.InvitationMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffInvitationEmailMessage(htmltemplate.StaffInvitationEmailMessageTemplate{
 			FirstName:          u.FirstName,
 			Role:               u.Roles[0],
 			ForgotPasswordLink: forgotPasswordLink,

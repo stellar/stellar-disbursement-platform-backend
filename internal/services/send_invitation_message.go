@@ -57,13 +57,13 @@ func SendInvitationMessage(ctx context.Context, messengerClient message.Messenge
 		return fmt.Errorf("getting forgot password link: %w", err)
 	}
 
-	invitationMsgData := htmltemplate.InvitationMessageTemplate{
+	invitationMsgData := htmltemplate.StaffInvitationEmailMessageTemplate{
 		FirstName:          opts.FirstName,
 		Role:               opts.Role,
 		ForgotPasswordLink: forgotPasswordLink,
 		OrganizationName:   organization.Name,
 	}
-	messageContent, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(invitationMsgData)
+	messageContent, err := htmltemplate.ExecuteHTMLTemplateForStaffInvitationEmailMessage(invitationMsgData)
 	if err != nil {
 		return fmt.Errorf("executing invitation message HTML template: %w", err)
 	}
