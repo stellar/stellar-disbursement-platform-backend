@@ -2,36 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Stellar Disbursement Platform</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
+            color: #000000;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 20px;
         }
-        a {
-            color: #3498db;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
+        p {
+            margin-bottom: 16px;
         }
         .button {
             display: inline-block;
             padding: 10px 20px;
-            background-color: #3498db;
+            background-color: #000000;
             color: #ffffff;
             text-decoration: none;
             border-radius: 5px;
             font-weight: bold;
         }
         .button:hover {
-            background-color: #3cb0fd;
+            background-color: #333333;
         }
     </style>
 </head>
 <body>
     <p>Hello, {{.FirstName}}!</p>
-    <p>You have been added to your organization's Stellar Disbursement Platform as a {{.Role}}. Please click the link below to set up your password and let your organization administrator know if you have any questions.</p>
+    <p>You have been added to your organization's Stellar Disbursement Platform as a {{.Role}}. Please click the button below to set up your password. If you have any questions, feel free to contact your organization administrator.</p>
     <p>
         <a href="{{.ForgotPasswordLink}}" class="button">Set up my password</a>
     </p>

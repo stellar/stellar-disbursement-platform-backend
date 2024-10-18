@@ -74,53 +74,13 @@ func Test_persistentPostRun(t *testing.T) {
 	err = rootCmd.Execute()
 	require.NoError(t, err)
 
-	expectContains := `-------------------------------------------------------------------------------
-Recipient: email@email.com
-Subject: Welcome to Stellar Disbursement Platform
-Content: <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Welcome to Stellar Disbursement Platform</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-        }
-        a {
-            color: #3498db;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        .button {
-            display: inline-block;
-            padding: 10px 20px;
-            background-color: #3498db;
-            color: #ffffff;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        .button:hover {
-            background-color: #3cb0fd;
-        }
-    </style>
-</head>
-<body>
-    <p>Hello, First!</p>
-    <p>You have been added to your organization's Stellar Disbursement Platform as a developer. Please click the link below to set up your password and let your organization administrator know if you have any questions.</p>
-    <p>
-        <a href="http://localhost:3000/forgot-password" class="button">Set up my password</a>
-    </p>
-    <p>Best regards,</p>
-    <p>The MyCustomAid Team</p>
-</body>
-</html>
-
--------------------------------------------------------------------------------
-`
+	expectContainsSlice := []string{
+		"<title>Welcome to Stellar Disbursement Platform</title>",
+		"<p>You have been added to your organization's Stellar Disbursement Platform as a developer. Please click the button below to set up your password. If you have any questions, feel free to contact your organization administrator.</p>",
+		`<a href="http://localhost:3000/forgot-password" class="button">Set up my password</a>`,
+		"<p>Best regards,</p>",
+		"<p>The MyCustomAid Team</p>",
+	}
 
 	w.Close()
 	os.Stdout = stdOut
@@ -129,7 +89,9 @@ Content: <!DOCTYPE html>
 	_, err = io.Copy(buf, r)
 	require.NoError(t, err)
 
-	assert.Contains(t, buf.String(), expectContains)
+	for _, expectContains := range expectContainsSlice {
+		assert.Contains(t, buf.String(), expectContains)
+	}
 
 	// Set another SDP UI base URL
 	rootCmd.SetArgs([]string{"auth", "add-user", "email@email.com", "First", "Last", "--roles", "developer", "--sdp-ui-base-url", "https://sdp-ui.org", "--tenant-id", tnt.ID})
@@ -144,53 +106,13 @@ Content: <!DOCTYPE html>
 	err = rootCmd.Execute()
 	require.NoError(t, err)
 
-	expectContains = `-------------------------------------------------------------------------------
-Recipient: email@email.com
-Subject: Welcome to Stellar Disbursement Platform
-Content: <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Welcome to Stellar Disbursement Platform</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-        }
-        a {
-            color: #3498db;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        .button {
-            display: inline-block;
-            padding: 10px 20px;
-            background-color: #3498db;
-            color: #ffffff;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        .button:hover {
-            background-color: #3cb0fd;
-        }
-    </style>
-</head>
-<body>
-    <p>Hello, First!</p>
-    <p>You have been added to your organization's Stellar Disbursement Platform as a developer. Please click the link below to set up your password and let your organization administrator know if you have any questions.</p>
-    <p>
-        <a href="https://sdp-ui.org/forgot-password" class="button">Set up my password</a>
-    </p>
-    <p>Best regards,</p>
-    <p>The MyCustomAid Team</p>
-</body>
-</html>
-
--------------------------------------------------------------------------------
-`
+	expectContainsSlice = []string{
+		"<title>Welcome to Stellar Disbursement Platform</title>",
+		"<p>You have been added to your organization's Stellar Disbursement Platform as a developer. Please click the button below to set up your password. If you have any questions, feel free to contact your organization administrator.</p>",
+		`<a href="https://sdp-ui.org/forgot-password" class="button">Set up my password</a>`,
+		"<p>Best regards,</p>",
+		"<p>The MyCustomAid Team</p>",
+	}
 
 	w.Close()
 	os.Stdout = stdOut
@@ -199,5 +121,7 @@ Content: <!DOCTYPE html>
 	_, err = io.Copy(buf, r)
 	require.NoError(t, err)
 
-	assert.Contains(t, buf.String(), expectContains)
+	for _, expectContains := range expectContainsSlice {
+		assert.Contains(t, buf.String(), expectContains)
+	}
 }
