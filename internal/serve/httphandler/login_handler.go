@@ -147,11 +147,11 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	msgTemplate := htmltemplate.MFAMessageTemplate{
+	msgTemplate := htmltemplate.StaffMFAEmailMessageTemplate{
 		MFACode:          code,
 		OrganizationName: organization.Name,
 	}
-	msgContent, err := htmltemplate.ExecuteHTMLTemplateForMFAMessage(msgTemplate)
+	msgContent, err := htmltemplate.ExecuteHTMLTemplateForStaffMFAEmailMessage(msgTemplate)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot execute mfa message template", err, nil).Render(rw)
 		return
