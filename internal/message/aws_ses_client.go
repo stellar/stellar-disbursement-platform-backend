@@ -52,9 +52,14 @@ func (a *awsSESClient) SendMessage(message Message) error {
 
 // generateAWSEmail generates the email object to send an email through AWS SES.
 func generateAWSEmail(message Message, sender string) (*ses.SendEmailInput, error) {
-	html, err := htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: template.HTML(message.Message)})
-	if err != nil {
-		return nil, fmt.Errorf("generating html template: %w", err)
+	emailBody := message.Message
+	var err error
+	// If the email body does not contain an HTML tag, then it is considered as a plain text email:
+	if !strings.Contains(emailBody, "<html") {
+		emailBody, err = htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: template.HTML(emailBody)})
+		if err != nil {
+			return nil, fmt.Errorf("generating html template: %w", err)
+		}
 	}
 
 	return &ses.SendEmailInput{
@@ -68,7 +73,7 @@ func generateAWSEmail(message Message, sender string) (*ses.SendEmailInput, erro
 			Body: &ses.Body{
 				Html: &ses.Content{
 					Charset: aws.String("utf-8"),
-					Data:    aws.String(html),
+					Data:    aws.String(emailBody),
 				},
 			},
 			Subject: &ses.Content{
