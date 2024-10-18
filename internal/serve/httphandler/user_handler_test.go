@@ -697,7 +697,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		msg := message.Message{
 			ToEmail: u.Email,
 			Title:   "Welcome to Stellar Disbursement Platform",
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).
@@ -864,7 +864,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		msg := message.Message{
 			ToEmail: u.Email,
 			Title:   "Welcome to Stellar Disbursement Platform",
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).

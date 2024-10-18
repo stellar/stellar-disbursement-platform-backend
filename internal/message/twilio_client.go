@@ -36,7 +36,7 @@ func (t *twilioClient) SendMessage(message Message) error {
 
 	resp, err := t.CreateMessage(&twilioApi.CreateMessageParams{
 		To:                  &message.ToPhoneNumber,
-		Body:                &message.Message,
+		Body:                &message.Body,
 		MessagingServiceSid: &t.senderID,
 	})
 	if err != nil {

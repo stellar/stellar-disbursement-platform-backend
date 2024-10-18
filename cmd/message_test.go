@@ -93,7 +93,7 @@ func Test_message_send_SendMessage_wasCalled(t *testing.T) {
 	}
 	wantMessage := message.Message{
 		ToPhoneNumber: "+41555511111",
-		Message:       "hello world",
+		Body:          "hello world",
 	}
 	mMessageService.On("SendMessage", wantMessageOptions, wantMessage).Return(nil).Once()
 

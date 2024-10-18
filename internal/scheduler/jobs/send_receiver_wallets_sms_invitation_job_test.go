@@ -234,7 +234,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
-				Message:       contentWallet1,
+				Body:          contentWallet1,
 				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, mockErr).
@@ -242,7 +242,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
-				Message:       contentWallet2,
+				Body:          contentWallet2,
 				Title:         titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).

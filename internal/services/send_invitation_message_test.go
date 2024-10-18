@@ -122,7 +122,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 					On("SendMessage", message.Message{
 						ToEmail: email,
 						Title:   invitationMessageTitle,
-						Message: content,
+						Body:    content,
 					}).
 					Return(errors.New("foobar")).
 					Once()
@@ -142,7 +142,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 					On("SendMessage", message.Message{
 						ToEmail: email,
 						Title:   invitationMessageTitle,
-						Message: content,
+						Body:    content,
 					}).
 					Return(nil).
 					Once()

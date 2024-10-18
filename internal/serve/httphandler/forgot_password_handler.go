@@ -129,7 +129,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		msg := message.Message{
 			ToEmail: forgotPasswordRequest.Email,
 			Title:   forgotPasswordMessageTitle,
-			Message: messageContent,
+			Body:    messageContent,
 		}
 		err = h.MessengerClient.SendMessage(msg)
 		if err != nil {

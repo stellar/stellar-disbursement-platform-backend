@@ -160,7 +160,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	msg := message.Message{
 		ToEmail: user.Email,
 		Title:   mfaMessageTitle,
-		Message: msgContent,
+		Body:    msgContent,
 	}
 	err = h.MessengerClient.SendMessage(msg)
 	if err != nil {

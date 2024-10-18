@@ -91,7 +91,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		msg := message.Message{
 			ToEmail: "valid@email.com",
 			Title:   forgotPasswordMessageTitle,
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).
@@ -261,7 +261,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		msg := message.Message{
 			ToEmail: "valid@email.com",
 			Title:   forgotPasswordMessageTitle,
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).
