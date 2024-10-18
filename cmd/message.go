@@ -115,7 +115,7 @@ func (s *MessageCommand) sendMessageCommand(messengerService MessengerServiceInt
 			Name:      "message",
 			Usage:     "The text of the message to be sent",
 			OptType:   types.String,
-			ConfigKey: &msg.Message,
+			ConfigKey: &msg.Body,
 			Required:  true,
 		},
 	}

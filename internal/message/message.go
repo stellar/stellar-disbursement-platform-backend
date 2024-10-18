@@ -10,7 +10,7 @@ import (
 type Message struct {
 	ToPhoneNumber string
 	ToEmail       string
-	Message       string
+	Body          string
 	Title         string
 }
 
@@ -28,7 +28,7 @@ func (s Message) ValidateFor(messengerType MessengerType) error {
 		}
 	}
 
-	if strings.Trim(s.Message, " ") == "" {
+	if strings.Trim(s.Body, " ") == "" {
 		return fmt.Errorf("message is empty")
 	}
 
@@ -64,6 +64,6 @@ func (s Message) String() string {
 	return fmt.Sprintf("Message{ToPhoneNumber: %s, ToEmail: %s, Message: %s, Title: %s}",
 		utils.TruncateString(s.ToPhoneNumber, 3),
 		utils.TruncateString(s.ToEmail, 3),
-		utils.TruncateString(s.Message, 3),
+		utils.TruncateString(s.Body, 3),
 		utils.TruncateString(s.Title, 3))
 }

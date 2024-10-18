@@ -44,7 +44,7 @@ func (a *awsSNSClient) SendMessage(message Message) error {
 
 	params := &sns.PublishInput{
 		PhoneNumber:       aws.String(message.ToPhoneNumber),
-		Message:           aws.String(message.Message),
+		Message:           aws.String(message.Body),
 		MessageAttributes: messageAttributes,
 	}
 

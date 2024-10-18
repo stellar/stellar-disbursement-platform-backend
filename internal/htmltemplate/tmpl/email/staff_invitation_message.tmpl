@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Stellar Disbursement Platform</title>
+    {{EmailStyle}}
+</head>
+<body>
+    <p>Hello, {{.FirstName}}!</p>
+    <p>You have been added to your organization's Stellar Disbursement Platform as a {{.Role}}. Please click the button below to set up your password. If you have any questions, feel free to contact your organization administrator.</p>
+    <p>
+        <a href="{{.ForgotPasswordLink}}" class="button">Set up my password</a>
+    </p>
+    <p>Best regards,</p>
+    <p>The {{.OrganizationName}} Team</p>
+</body>
+</html>

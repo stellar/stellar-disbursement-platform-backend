@@ -130,14 +130,14 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("error getting organization data: %s", err.Error())
 				}
 
-				invitationData := htmltemplate.InvitationMessageTemplate{
+				invitationData := htmltemplate.StaffInvitationEmailMessageTemplate{
 					FirstName:          firstName,
 					Role:               role,
 					ForgotPasswordLink: forgotPasswordLink,
 					OrganizationName:   organization.Name,
 				}
 
-				msgBody, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(invitationData)
+				msgBody, err := htmltemplate.ExecuteHTMLTemplateForStaffInvitationEmailMessage(invitationData)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error executing invitation message template: %s", err.Error())
 				}
@@ -145,7 +145,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 				err = emailMessengerClient.SendMessage(message.Message{
 					ToEmail: email,
 					Title:   "Welcome to Stellar Disbursement Platform",
-					Message: msgBody,
+					Body:    msgBody,
 				})
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error sending invitation message: %s", err.Error())

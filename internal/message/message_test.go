@@ -30,19 +30,19 @@ func Test_message_Validate(t *testing.T) {
 		{
 			name:          "[sms] message cannot be empty",
 			messengerType: MessengerTypeTwilioSMS,
-			message:       Message{ToPhoneNumber: "+14152111111", Message: "   "},
+			message:       Message{ToPhoneNumber: "+14152111111", Body: "   "},
 			wantErr:       fmt.Errorf("message is empty"),
 		},
 		{
 			name:          "[sms] all fields are present for Twilio 🎉",
 			messengerType: MessengerTypeTwilioSMS,
-			message:       Message{ToPhoneNumber: "+14152111111", Message: "foo bar"},
+			message:       Message{ToPhoneNumber: "+14152111111", Body: "foo bar"},
 			wantErr:       nil,
 		},
 		{
 			name:          "[sms] all fields are present for AWS SNS 🎉",
 			messengerType: MessengerTypeAWSSMS,
-			message:       Message{ToPhoneNumber: "+14152111111", Message: "foo bar"},
+			message:       Message{ToPhoneNumber: "+14152111111", Body: "foo bar"},
 			wantErr:       nil,
 		},
 		// Email types
@@ -73,7 +73,7 @@ func Test_message_Validate(t *testing.T) {
 		{
 			name:          "[email] all fields are present for AWS email 🎉",
 			messengerType: MessengerTypeAWSEmail,
-			message:       Message{ToEmail: "foo@test.com", Title: "My title", Message: "foo bar"},
+			message:       Message{ToEmail: "foo@test.com", Title: "My title", Body: "foo bar"},
 			wantErr:       nil,
 		},
 	}
@@ -98,32 +98,32 @@ func TestMessage_SupportedChannels(t *testing.T) {
 	}{
 		{
 			name:         "sms only",
-			message:      Message{ToPhoneNumber: "+14152111111", Message: "Hello"},
+			message:      Message{ToPhoneNumber: "+14152111111", Body: "Hello"},
 			wantChannels: []MessageChannel{MessageChannelSMS},
 		},
 		{
 			name:         "e-mail only",
-			message:      Message{ToEmail: "test@example.com", Title: "Test", Message: "Hello"},
+			message:      Message{ToEmail: "test@example.com", Title: "Test", Body: "Hello"},
 			wantChannels: []MessageChannel{MessageChannelEmail},
 		},
 		{
 			name:         "both sms and e-mail",
-			message:      Message{ToPhoneNumber: "+14152111111", ToEmail: "test@example.com", Title: "Test", Message: "Hello"},
+			message:      Message{ToPhoneNumber: "+14152111111", ToEmail: "test@example.com", Title: "Test", Body: "Hello"},
 			wantChannels: []MessageChannel{MessageChannelSMS, MessageChannelEmail},
 		},
 		{
 			name:         "neither sms nor e-mail",
-			message:      Message{Message: "Hello"},
+			message:      Message{Body: "Hello"},
 			wantChannels: []MessageChannel{},
 		},
 		{
 			name:         "invalid phone number",
-			message:      Message{ToPhoneNumber: "invalid", ToEmail: "test@example.com", Title: "Test", Message: "Hello"},
+			message:      Message{ToPhoneNumber: "invalid", ToEmail: "test@example.com", Title: "Test", Body: "Hello"},
 			wantChannels: []MessageChannel{MessageChannelEmail},
 		},
 		{
 			name:         "invalid email",
-			message:      Message{ToPhoneNumber: "+14152111111", ToEmail: "invalid", Title: "Test", Message: "Hello"},
+			message:      Message{ToPhoneNumber: "+14152111111", ToEmail: "invalid", Title: "Test", Body: "Hello"},
 			wantChannels: []MessageChannel{MessageChannelSMS},
 		},
 	}
@@ -144,17 +144,17 @@ func TestMessage_String(t *testing.T) {
 	}{
 		{
 			name:               "all fields present",
-			message:            Message{ToPhoneNumber: "+14152111111", ToEmail: "test@example.com", Title: "Test Title", Message: "Hello, World!"},
+			message:            Message{ToPhoneNumber: "+14152111111", ToEmail: "test@example.com", Title: "Test Title", Body: "Hello, World!"},
 			wantRepresentation: "Message{ToPhoneNumber: +14...111, ToEmail: tes...com, Message: Hel...ld!, Title: Tes...tle}",
 		},
 		{
 			name:               "only phone number",
-			message:            Message{ToPhoneNumber: "+14152111111", Message: "Hello"},
+			message:            Message{ToPhoneNumber: "+14152111111", Body: "Hello"},
 			wantRepresentation: "Message{ToPhoneNumber: +14...111, ToEmail: , Message: Hello, Title: }",
 		},
 		{
 			name:               "only email",
-			message:            Message{ToEmail: "test@example.com", Title: "Test", Message: "Hello"},
+			message:            Message{ToEmail: "test@example.com", Title: "Test", Body: "Hello"},
 			wantRepresentation: "Message{ToPhoneNumber: , ToEmail: tes...com, Message: Hello, Title: Test}",
 		},
 		{
@@ -164,7 +164,7 @@ func TestMessage_String(t *testing.T) {
 		},
 		{
 			name:               "long fields",
-			message:            Message{ToPhoneNumber: "+14152111111", ToEmail: "very.long.email@example.com", Title: "This is a very long title", Message: "This is a very long message that should be truncated"},
+			message:            Message{ToPhoneNumber: "+14152111111", ToEmail: "very.long.email@example.com", Title: "This is a very long title", Body: "This is a very long message that should be truncated"},
 			wantRepresentation: "Message{ToPhoneNumber: +14...111, ToEmail: ver...com, Message: Thi...ted, Title: Thi...tle}",
 		},
 	}
