@@ -145,7 +145,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 				err = emailMessengerClient.SendMessage(message.Message{
 					ToEmail: email,
 					Title:   "Welcome to Stellar Disbursement Platform",
-					Message: msgBody,
+					Body:    msgBody,
 				})
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error sending invitation message: %s", err.Error())

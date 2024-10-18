@@ -321,8 +321,8 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 							Once().
 							Run(func(args mock.Arguments) {
 								msg := args.Get(1).(message.Message)
-								assert.Contains(t, msg.Message, "is your MyCustomAid verification code.")
-								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+								assert.Contains(t, msg.Body, "is your MyCustomAid verification code.")
+								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Body)
 							})
 					},
 					assertLogsFn: func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry) {
@@ -373,8 +373,8 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 							Once().
 							Run(func(args mock.Arguments) {
 								msg := args.Get(1).(message.Message)
-								assert.Contains(t, msg.Message, "is your MyCustomAid verification code.")
-								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+								assert.Contains(t, msg.Body, "is your MyCustomAid verification code.")
+								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Body)
 							})
 					},
 					wantStatusCode: http.StatusOK,
@@ -507,11 +507,11 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 				var messengerType message.MessengerType
 				switch contactType {
 				case data.ReceiverContactTypeSMS:
-					expectedMsg = message.Message{ToPhoneNumber: phoneNumber, Message: tc.wantMessage}
+					expectedMsg = message.Message{ToPhoneNumber: phoneNumber, Body: tc.wantMessage}
 					contactInfo = phoneNumber
 					messengerType = message.MessengerTypeTwilioSMS
 				case data.ReceiverContactTypeEmail:
-					expectedMsg = message.Message{ToEmail: email, Message: tc.wantMessage, Title: "Your One-Time Password: " + otp}
+					expectedMsg = message.Message{ToEmail: email, Body: tc.wantMessage, Title: "Your One-Time Password: " + otp}
 					contactInfo = email
 					messengerType = message.MessengerTypeAWSEmail
 				}

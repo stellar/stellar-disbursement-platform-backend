@@ -62,7 +62,7 @@ func Test_AWSSES_SendMessage_messageIsInvalid(t *testing.T) {
 
 func Test_AWSSES_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 	testSenderID := "sender@test.com"
-	message := Message{ToEmail: "foo@test.com", Title: "test title", Message: "foo bar"}
+	message := Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"}
 	emailStr, err := generateAWSEmail(message, testSenderID)
 	require.NoError(t, err)
 
@@ -73,7 +73,7 @@ func Test_AWSSES_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Once()
 
 	mAWS := awsSESClient{emailService: &mAWSSES, senderID: "sender@test.com"}
-	err = mAWS.SendMessage(Message{ToEmail: "foo@test.com", Title: "test title", Message: "foo bar"})
+	err = mAWS.SendMessage(Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"})
 	require.EqualError(t, err, "sending AWS SES email: test AWS SES error")
 
 	mAWSSES.AssertExpectations(t)
@@ -81,7 +81,7 @@ func Test_AWSSES_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 
 func Test_AWSSES_SendMessage_success(t *testing.T) {
 	testSenderID := "sender@test.com"
-	message := Message{ToEmail: "foo@test.com", Title: "test title", Message: "foo bar"}
+	message := Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"}
 	emailStr, err := generateAWSEmail(message, testSenderID)
 	require.NoError(t, err)
 
@@ -92,7 +92,7 @@ func Test_AWSSES_SendMessage_success(t *testing.T) {
 		Once()
 
 	mAWS := awsSESClient{emailService: &mAWSSES, senderID: "sender@test.com"}
-	err = mAWS.SendMessage(Message{ToEmail: "foo@test.com", Title: "test title", Message: "foo bar"})
+	err = mAWS.SendMessage(Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"})
 	require.NoError(t, err)
 
 	mAWSSES.AssertExpectations(t)
@@ -101,7 +101,7 @@ func Test_AWSSES_SendMessage_success(t *testing.T) {
 func Test_generateAWSEmail_success(t *testing.T) {
 	message := Message{
 		ToEmail: "receiver@test.com",
-		Message: "Helo world!",
+		Body:    "Helo world!",
 		Title:   "title",
 	}
 	gotEmail, err := generateAWSEmail(message, "sender@test.com")

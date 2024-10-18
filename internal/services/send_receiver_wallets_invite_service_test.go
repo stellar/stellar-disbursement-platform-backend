@@ -165,7 +165,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
-				Message:       contentWallet1,
+				Body:          contentWallet1,
 				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, errors.New("unexpected error")).
@@ -173,7 +173,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
-				Message:       contentWallet2,
+				Body:          contentWallet2,
 				Title:         titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -309,13 +309,13 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
-				Message:       contentWallet1,
+				Body:          contentWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
 				ToEmail: receiverEmailOnly.Email,
-				Message: contentWallet2,
+				Body:    contentWallet2,
 				Title:   titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeAWSEmail, nil).
@@ -448,7 +448,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
-				Message:       contentWallet1,
+				Body:          contentWallet1,
 				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -456,7 +456,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
-				Message:       contentWallet2,
+				Body:          contentWallet2,
 				Title:         titleWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -746,7 +746,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
-				Message:       contentWallet1,
+				Body:          contentWallet1,
 				Title:         titleWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -868,7 +868,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
-				Message:       contentDisbursement3,
+				Body:          contentDisbursement3,
 				Title:         titleDisbursement3,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -876,7 +876,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
-				Message:       contentDisbursement4,
+				Body:          contentDisbursement4,
 				Title:         titleDisbursement4,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -1002,7 +1002,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
-				Message:       contentDisbursement,
+				Body:          contentDisbursement,
 				Title:         titleDisbursement,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).

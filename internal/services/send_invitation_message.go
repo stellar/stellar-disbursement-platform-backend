@@ -70,7 +70,7 @@ func SendInvitationMessage(ctx context.Context, messengerClient message.Messenge
 
 	msg := message.Message{
 		ToEmail: opts.Email,
-		Message: messageContent,
+		Body:    messageContent,
 		Title:   invitationMessageTitle,
 	}
 

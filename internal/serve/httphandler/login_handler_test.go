@@ -614,7 +614,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 		msg := message.Message{
 			ToEmail: "testuser@mail.com",
 			Title:   mfaMessageTitle,
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).

@@ -16,7 +16,7 @@ func (c *dryRunClient) SendMessage(message Message) error {
 	fmt.Println(strings.Repeat("-", 79))
 	fmt.Println("Recipient:", recipient)
 	fmt.Println("Subject:", message.Title)
-	fmt.Println("Content:", message.Message)
+	fmt.Println("Content:", message.Body)
 	fmt.Println(strings.Repeat("-", 79))
 
 	return nil
