@@ -364,7 +364,7 @@ func Test_Organizations_Update(t *testing.T) {
 	t.Run("updates the organization's OTPMessageTemplate", func(t *testing.T) {
 		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
-		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} verification code."
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, defaultMessage, o.OTPMessageTemplate)

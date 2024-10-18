@@ -402,7 +402,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			},
 			resultingFieldsToCompare: map[string]interface{}{
 				"ReceiverRegistrationMessageTemplate":  "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.",
-				"OTPMessageTemplate":                   "{{.OTP}} is your {{.OrganizationName}} phone verification code.",
+				"OTPMessageTemplate":                   "{{.OTP}} is your {{.OrganizationName}} verification code.",
 				"ReceiverInvitationResendIntervalDays": nilInt64,
 				"PaymentCancellationPeriodDays":        nilInt64,
 				"PrivacyPolicyLink":                    nilString,
