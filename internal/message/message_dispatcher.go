@@ -51,7 +51,7 @@ func (d *MessageDispatcher) SendMessage(ctx context.Context, message Message, ch
 
 	for _, channel := range channelPriority {
 		if !supportedChannels[channel] {
-			log.Ctx(ctx).Debugf("Channel %q is not supported for the message %s", channel, message)
+			log.Ctx(ctx).Debugf("Skipping channel %q since it's not supported for the message %s", channel, message)
 			continue
 		}
 
