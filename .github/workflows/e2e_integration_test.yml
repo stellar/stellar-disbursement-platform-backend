@@ -25,9 +25,9 @@ jobs:
       max-parallel: 1
       matrix:
         platform:
-          - "Stellar-phone" # Receivers registered with their phone number
-          - "Stellar-email" # Receivers registered with their email
-          - "Circle-phone"
+          - "Stellar-phone" # Stellar distribution account where receivers are registered with their phone number
+          - "Stellar-email" # Stellar distribution account where receivers are registered with their email
+          - "Circle-phone" # Circle distribution account where receivers are registered with their email
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar-phone)"
