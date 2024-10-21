@@ -25,15 +25,22 @@ jobs:
       max-parallel: 1
       matrix:
         platform:
-          - "Stellar"
-          - "Circle"
+          - "Stellar-phone" # Receivers registered with their phone number
+          - "Stellar-email" # Receivers registered with their email
+          - "Circle-phone"
         include:
-          - platform: "Stellar"
-            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+          - platform: "Stellar-phone"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar-phone)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+          - platform: "Stellar-email"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar-email)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
           - platform: "Circle"
-            environment: "Receiver Registration - E2E Integration Tests (Circle)"
+            environment: "Receiver Registration - E2E Integration Tests (Circle-phone)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
