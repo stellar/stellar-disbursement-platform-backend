@@ -253,6 +253,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
 		OTP:               data.TestnetAlwaysValidOTP,
 		PhoneNumber:       disbursementData[0].Phone,
+		Email:             disbursementData[0].Email,
 		VerificationValue: disbursementData[0].VerificationValue,
 		VerificationField: disbursement.VerificationField,
 		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
