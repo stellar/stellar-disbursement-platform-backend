@@ -52,7 +52,7 @@ func Test_readDisbursementCSV(t *testing.T) {
 	})
 
 	t.Run("reading csv file", func(t *testing.T) {
-		data, err := readDisbursementCSV("resources", "disbursement_integration_tests.csv")
+		data, err := readDisbursementCSV("resources", "disbursement_instructions_phone.csv")
 		require.NoError(t, err)
 		assert.Equal(t, "0.1", data[0].Amount)
 		assert.NotNil(t, data[0].Phone)
