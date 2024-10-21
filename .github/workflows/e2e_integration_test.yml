@@ -30,15 +30,15 @@ jobs:
           - "Circle-phone" # Circle distribution account where receivers are registered with their email
         include:
           - platform: "Stellar-phone"
-            environment: "Receiver Registration - E2E Integration Tests (Stellar-phone)"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
           - platform: "Stellar-email"
-            environment: "Receiver Registration - E2E Integration Tests (Stellar-email)"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
-          - platform: "Circle"
-            environment: "Receiver Registration - E2E Integration Tests (Circle-phone)"
+          - platform: "Circle-phone"
+            environment: "Receiver Registration - E2E Integration Tests (Circle)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
     environment: ${{ matrix.environment }}
