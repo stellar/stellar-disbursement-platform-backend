@@ -179,7 +179,7 @@ func Test_ProcessDisbursement(t *testing.T) {
 		HttpClient:              &httpClientMock,
 		ServerApiBaseURL:        "http://mock_server.com/",
 		DisbursementCSVFilePath: "resources",
-		DisbursementCSVFileName: "disbursement_integration_tests.csv",
+		DisbursementCSVFileName: "disbursement_instructions_phone.csv",
 	}
 
 	ctx := context.Background()
