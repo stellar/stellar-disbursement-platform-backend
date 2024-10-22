@@ -321,7 +321,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 							Once().
 							Run(func(args mock.Arguments) {
 								msg := args.Get(1).(message.Message)
-								assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
+								assert.Contains(t, msg.Message, "is your MyCustomAid verification code.")
 								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
 							})
 					},
@@ -373,7 +373,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 							Once().
 							Run(func(args mock.Arguments) {
 								msg := args.Get(1).(message.Message)
-								assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
+								assert.Contains(t, msg.Message, "is your MyCustomAid verification code.")
 								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
 							})
 					},
@@ -480,12 +480,12 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 		{
 			name:                   "dispacher fails",
 			overrideOrgOTPTemplate: defaultOTPMessageTemplate,
-			wantMessage:            fmt.Sprintf("246810 is your %s phone verification code. If you did not request this code, please ignore. Do not share your code with anyone.", organization.Name),
+			wantMessage:            fmt.Sprintf("246810 is your %s verification code. If you did not request this code, please ignore. Do not share your code with anyone.", organization.Name),
 		},
 		{
 			name:                   "🎉 successful with default message",
 			overrideOrgOTPTemplate: defaultOTPMessageTemplate,
-			wantMessage:            fmt.Sprintf("246810 is your %s phone verification code. If you did not request this code, please ignore. Do not share your code with anyone.", organization.Name),
+			wantMessage:            fmt.Sprintf("246810 is your %s verification code. If you did not request this code, please ignore. Do not share your code with anyone.", organization.Name),
 		},
 		{
 			name:                   "🎉 successful with custom message and pre-existing OTP tag",
