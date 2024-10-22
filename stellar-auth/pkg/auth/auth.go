@@ -11,6 +11,8 @@ var ErrInvalidToken = errors.New("invalid token")
 
 type AuthManager interface {
 	Authenticate(ctx context.Context, email, pass string) (string, error)
+	// RefreshToken generates a new token if the current token is going to expire in less than `tokenRefreshWindow` minutes.
+	// Otherwise, it returns the same token.
 	RefreshToken(ctx context.Context, tokenString string) (string, error)
 	ValidateToken(ctx context.Context, tokenString string) (bool, error)
 	AllRolesInTokenUser(ctx context.Context, tokenString string, roleNames []string) (bool, error)
