@@ -473,7 +473,7 @@ func (r *ReceiverModel) DeleteByContactInfo(ctx context.Context, dbConnectionPoo
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrRecordNotFound
 			}
-			return fmt.Errorf("error fetching receiver by phone number %s: %w", contactInfo, err)
+			return fmt.Errorf("fetching receiver by contact info %s: %w", contactInfo, err)
 		}
 
 		type QueryWithParams struct {
