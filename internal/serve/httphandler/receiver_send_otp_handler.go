@@ -226,7 +226,7 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 		return fmt.Errorf("cannot execute OTP template: %w", err)
 	}
 
-	msg := message.Message{Message: builder.String()}
+	msg := message.Message{Body: builder.String()}
 	switch contactType {
 	case data.ReceiverContactTypeSMS:
 		msg.ToPhoneNumber = contactInfo

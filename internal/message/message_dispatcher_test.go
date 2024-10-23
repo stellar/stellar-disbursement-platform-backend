@@ -72,19 +72,19 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 	emailMessage := Message{
 		Title:   "Test Title",
 		ToEmail: "mymail@stellar.org",
-		Message: "Test Message",
+		Body:    "Test Message",
 	}
 
 	smsMessage := Message{
 		ToPhoneNumber: "+14152111111",
-		Message:       "Test Message",
+		Body:          "Test Message",
 	}
 
 	multiChannelMessage := Message{
 		Title:         "Test Title",
 		ToEmail:       "mymail@stellar.org",
 		ToPhoneNumber: "+14152111111",
-		Message:       "Test Message",
+		Body:          "Test Message",
 	}
 
 	emptyMessage := Message{}

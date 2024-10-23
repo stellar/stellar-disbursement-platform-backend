@@ -50,16 +50,16 @@ func Test_ExecuteHTMLTemplateForEmailEmptyBody(t *testing.T) {
 	require.Contains(t, templateStr, randomStr)
 }
 
-func Test_ExecuteHTMLTemplateForInvitationMessage(t *testing.T) {
+func Test_ExecuteHTMLTemplateForStaffInvitationEmailMessage(t *testing.T) {
 	forgotPasswordLink := "https://sdp.com/forgot-password"
 
-	data := InvitationMessageTemplate{
+	data := StaffInvitationEmailMessageTemplate{
 		FirstName:          "First",
 		Role:               "developer",
 		ForgotPasswordLink: forgotPasswordLink,
 		OrganizationName:   "Organization Name",
 	}
-	content, err := ExecuteHTMLTemplateForInvitationMessage(data)
+	content, err := ExecuteHTMLTemplateForStaffInvitationEmailMessage(data)
 	require.NoError(t, err)
 
 	assert.Contains(t, content, "Hello, First!")
@@ -68,16 +68,16 @@ func Test_ExecuteHTMLTemplateForInvitationMessage(t *testing.T) {
 	assert.Contains(t, content, "Organization Name")
 }
 
-func Test_ExecuteHTMLTemplateForInvitationMessage_HTMLInjectionAttack(t *testing.T) {
+func Test_ExecuteHTMLTemplateForStaffInvitationEmailMessage_HTMLInjectionAttack(t *testing.T) {
 	forgotPasswordLink := "https://sdp.com/forgot-password"
 
-	data := InvitationMessageTemplate{
+	data := StaffInvitationEmailMessageTemplate{
 		FirstName:          "First",
 		Role:               "developer",
 		ForgotPasswordLink: forgotPasswordLink,
 		OrganizationName:   "<a href='evil.com'>Redeem funds</a>",
 	}
-	content, err := ExecuteHTMLTemplateForInvitationMessage(data)
+	content, err := ExecuteHTMLTemplateForStaffInvitationEmailMessage(data)
 	require.NoError(t, err)
 
 	assert.Contains(t, content, "Hello, First!")
@@ -86,13 +86,13 @@ func Test_ExecuteHTMLTemplateForInvitationMessage_HTMLInjectionAttack(t *testing
 	assert.Contains(t, content, "&lt;a href=&#39;evil.com&#39;&gt;Redeem funds&lt;/a&gt;")
 }
 
-func Test_ExecuteHTMLTemplateForForgotPasswordMessage(t *testing.T) {
-	data := ForgotPasswordMessageTemplate{
+func Test_ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(t *testing.T) {
+	data := StaffForgotPasswordEmailMessageTemplate{
 		ResetToken:        "resetToken",
 		ResetPasswordLink: "https://sdp.com/reset-password",
 		OrganizationName:  "Organization Name",
 	}
-	content, err := ExecuteHTMLTemplateForForgotPasswordMessage(data)
+	content, err := ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(data)
 	require.NoError(t, err)
 
 	assert.Contains(t, content, "<strong>resetToken</strong>")

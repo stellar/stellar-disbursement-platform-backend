@@ -605,7 +605,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 			Return("123123", nil).
 			Once()
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForMFAMessage(htmltemplate.MFAMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffMFAEmailMessage(htmltemplate.StaffMFAEmailMessageTemplate{
 			OrganizationName: "MyCustomAid",
 			MFACode:          "123123",
 		})
@@ -614,7 +614,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 		msg := message.Message{
 			ToEmail: "testuser@mail.com",
 			Title:   mfaMessageTitle,
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).

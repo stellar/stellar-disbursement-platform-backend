@@ -81,7 +81,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		resetPasswordLink, err := urllib.JoinPath(uiBaseURL, "reset-password")
 		require.NoError(t, err)
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForForgotPasswordMessage(htmltemplate.ForgotPasswordMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(htmltemplate.StaffForgotPasswordEmailMessageTemplate{
 			ResetToken:        "resetToken",
 			ResetPasswordLink: resetPasswordLink,
 			OrganizationName:  "MyCustomAid",
@@ -91,7 +91,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		msg := message.Message{
 			ToEmail: "valid@email.com",
 			Title:   forgotPasswordMessageTitle,
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).
@@ -251,7 +251,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		resetPasswordLink, err := urllib.JoinPath(uiBaseURL, "reset-password")
 		require.NoError(t, err)
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForForgotPasswordMessage(htmltemplate.ForgotPasswordMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(htmltemplate.StaffForgotPasswordEmailMessageTemplate{
 			ResetToken:        "resetToken",
 			ResetPasswordLink: resetPasswordLink,
 			OrganizationName:  "MyCustomAid",
@@ -261,7 +261,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		msg := message.Message{
 			ToEmail: "valid@email.com",
 			Title:   forgotPasswordMessageTitle,
-			Message: content,
+			Body:    content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).

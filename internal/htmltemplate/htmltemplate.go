@@ -7,11 +7,19 @@ import (
 	"html/template"
 )
 
-//go:embed tmpl/*.tmpl
+//go:embed tmpl/**/*.tmpl "tmpl/*.tmpl"
 var Tmpl embed.FS
 
 func ExecuteHTMLTemplate(templateName string, data interface{}) (string, error) {
-	t, err := template.ParseFS(Tmpl, "tmpl/*.tmpl")
+	// Define the function map that will be available inside the templates
+	funcMap := template.FuncMap{
+		"EmailStyle": func() template.HTML {
+			return emailStyle
+		},
+	}
+
+	// Parse the templates with the function map
+	t, err := template.New("").Funcs(funcMap).ParseFS(Tmpl, "tmpl/*.tmpl", "tmpl/**/*.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("error parsing embedded template files: %w", err)
 	}
@@ -33,32 +41,65 @@ func ExecuteHTMLTemplateForEmailEmptyBody(data EmptyBodyEmailTemplate) (string, 
 	return ExecuteHTMLTemplate("empty_body.tmpl", data)
 }
 
-type InvitationMessageTemplate struct {
+type StaffInvitationEmailMessageTemplate struct {
 	FirstName          string
 	Role               string
 	ForgotPasswordLink string
 	OrganizationName   string
 }
 
-func ExecuteHTMLTemplateForInvitationMessage(data InvitationMessageTemplate) (string, error) {
-	return ExecuteHTMLTemplate("invitation_message.tmpl", data)
+func ExecuteHTMLTemplateForStaffInvitationEmailMessage(data StaffInvitationEmailMessageTemplate) (string, error) {
+	return ExecuteHTMLTemplate("staff_invitation_message.tmpl", data)
 }
 
-type ForgotPasswordMessageTemplate struct {
+type StaffForgotPasswordEmailMessageTemplate struct {
 	ResetToken        string
 	ResetPasswordLink string
 	OrganizationName  string
 }
 
-func ExecuteHTMLTemplateForForgotPasswordMessage(data ForgotPasswordMessageTemplate) (string, error) {
-	return ExecuteHTMLTemplate("forgot_password_message.tmpl", data)
+func ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(data StaffForgotPasswordEmailMessageTemplate) (string, error) {
+	return ExecuteHTMLTemplate("staff_forgot_password_message.tmpl", data)
 }
 
-type MFAMessageTemplate struct {
+type StaffMFAEmailMessageTemplate struct {
 	MFACode          string
 	OrganizationName string
 }
 
-func ExecuteHTMLTemplateForMFAMessage(data MFAMessageTemplate) (string, error) {
-	return ExecuteHTMLTemplate("mfa_message.tmpl", data)
+func ExecuteHTMLTemplateForStaffMFAEmailMessage(data StaffMFAEmailMessageTemplate) (string, error) {
+	return ExecuteHTMLTemplate("staff_mfa_message.tmpl", data)
 }
+
+// emailStyle is the CSS style that will be included in the email templates.
+const emailStyle = template.HTML(`
+    <style>
+        body {
+			font-family: Arial, sans-serif;
+			line-height: 1.6;
+			color: #000000;
+			background-color: #ffffff;
+			margin: 0;
+			padding: 20px;
+		}
+		p {
+			margin-bottom: 16px;
+		}
+		.button {
+			display: inline-block;
+			padding: 10px 20px;
+			background-color: #000000;
+			color: #ffffff;
+			text-decoration: none;
+			border-radius: 5px;
+			font-weight: bold;
+		}
+		.button:hover {
+			background-color: #333333;
+		}
+		strong:hover {
+			font-weight: bold;
+			color: #cccccc;
+		}
+    </style>
+`)

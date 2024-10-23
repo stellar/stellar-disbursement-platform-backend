@@ -114,12 +114,12 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		forgotPasswordData := htmltemplate.ForgotPasswordMessageTemplate{
+		forgotPasswordData := htmltemplate.StaffForgotPasswordEmailMessageTemplate{
 			ResetToken:        resetToken,
 			ResetPasswordLink: resetPasswordLink,
 			OrganizationName:  organization.Name,
 		}
-		messageContent, err := htmltemplate.ExecuteHTMLTemplateForForgotPasswordMessage(forgotPasswordData)
+		messageContent, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(forgotPasswordData)
 		if err != nil {
 			err = fmt.Errorf("error executing forgot password message template: %w", err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
@@ -129,7 +129,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		msg := message.Message{
 			ToEmail: forgotPasswordRequest.Email,
 			Title:   forgotPasswordMessageTitle,
-			Message: messageContent,
+			Body:    messageContent,
 		}
 		err = h.MessengerClient.SendMessage(msg)
 		if err != nil {
