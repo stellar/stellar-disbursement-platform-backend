@@ -81,7 +81,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		resetPasswordLink, err := urllib.JoinPath(uiBaseURL, "reset-password")
 		require.NoError(t, err)
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForForgotPasswordEmailMessage(htmltemplate.ForgotPasswordEmailMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(htmltemplate.StaffForgotPasswordEmailMessageTemplate{
 			ResetToken:        "resetToken",
 			ResetPasswordLink: resetPasswordLink,
 			OrganizationName:  "MyCustomAid",
@@ -251,7 +251,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		resetPasswordLink, err := urllib.JoinPath(uiBaseURL, "reset-password")
 		require.NoError(t, err)
 
-		content, err := htmltemplate.ExecuteHTMLTemplateForForgotPasswordEmailMessage(htmltemplate.ForgotPasswordEmailMessageTemplate{
+		content, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(htmltemplate.StaffForgotPasswordEmailMessageTemplate{
 			ResetToken:        "resetToken",
 			ResetPasswordLink: resetPasswordLink,
 			OrganizationName:  "MyCustomAid",

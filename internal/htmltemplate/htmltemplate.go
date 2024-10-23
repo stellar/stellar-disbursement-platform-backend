@@ -52,13 +52,13 @@ func ExecuteHTMLTemplateForStaffInvitationEmailMessage(data StaffInvitationEmail
 	return ExecuteHTMLTemplate("staff_invitation_message.tmpl", data)
 }
 
-type ForgotPasswordEmailMessageTemplate struct {
+type StaffForgotPasswordEmailMessageTemplate struct {
 	ResetToken        string
 	ResetPasswordLink string
 	OrganizationName  string
 }
 
-func ExecuteHTMLTemplateForForgotPasswordEmailMessage(data ForgotPasswordEmailMessageTemplate) (string, error) {
+func ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(data StaffForgotPasswordEmailMessageTemplate) (string, error) {
 	return ExecuteHTMLTemplate("staff_forgot_password_message.tmpl", data)
 }
 
