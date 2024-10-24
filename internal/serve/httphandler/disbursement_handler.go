@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-chi/chi/v5"
 	"github.com/gocarina/gocsv"
 	"github.com/stellar/go/support/log"
@@ -29,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -288,19 +288,17 @@ func parseCsvFromMultipartRequest(r *http.Request) (*bytes.Buffer, *multipart.Fi
 	}
 	defer file.Close()
 
-	var buf bytes.Buffer
-	if _, err = io.Copy(&buf, file); err != nil {
-		return nil, nil, httperror.BadRequest("could not read file", err, nil)
+	if err = utils.ValidatePathIsNotTraversal(header.Filename); err != nil {
+		return nil, nil, httperror.BadRequest("file name contains invalid traversal pattern", nil, nil)
 	}
 
 	if filepath.Ext(header.Filename) != ".csv" {
 		return nil, nil, httperror.BadRequest("the file extension should be .csv", nil, nil)
 	}
 
-	// Detect MIME type using mimetype package
-	mimeType := mimetype.Detect(buf.Bytes())
-	if !mimeType.Is("text/csv") {
-		return nil, nil, httperror.BadRequest("this is not a valid CSV file. Ensure it has a headers row at the top and multiple content rows.", nil, nil)
+	var buf bytes.Buffer
+	if _, err = io.Copy(&buf, file); err != nil {
+		return nil, nil, httperror.BadRequest("could not read file", err, nil)
 	}
 
 	return &buf, header, nil
