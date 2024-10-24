@@ -892,6 +892,17 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "the file extension should be .csv",
 		},
 		{
+			name:           ".csv file with transversal path ..\\.. fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "..\\..\\file.csv",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "file name contains invalid traversal pattern",
+		},
+		{
 			name:           "invalid date of birth",
 			disbursementID: draftDisbursement.ID,
 			csvRecords: [][]string{
@@ -953,7 +964,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				{"phone", "id", "amount", "date-of-birth"},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "this is not a valid CSV file. Ensure it has a headers row at the top and multiple content rows",
+			expectedMessage: "could not parse csv file",
 		},
 		{
 			name:           "instructions invalid - attempting to upload phone and email",

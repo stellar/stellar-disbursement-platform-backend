@@ -37,6 +37,37 @@ func Test_ValidatePhoneNumber(t *testing.T) {
 	}
 }
 
+func Test_ValidatePathIsNotTraversal(t *testing.T) {
+	testCases := []struct {
+		path        string
+		isTraversal bool
+	}{
+		{"", false},
+		{"http://example.com", false},
+		{"documents", false},
+		{"./documents/files", false},
+		{"./projects/subproject/report", false},
+		{"http://example.com/../config.yaml", true},
+		{"../config.yaml", true},
+		{"documents/../config.yaml", true},
+		{"docs/files/..", true},
+		{"..\\config.yaml", true},
+		{"documents\\..\\config.yaml", true},
+		{"documents\\files\\..", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run("-"+tc.path, func(t *testing.T) {
+			err := ValidatePathIsNotTraversal(tc.path)
+			if tc.isTraversal {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func Test_ValidateAmount(t *testing.T) {
 	testCases := []struct {
 		amount  string

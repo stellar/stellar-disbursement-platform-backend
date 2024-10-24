@@ -61,7 +61,6 @@ github.com/flosch/pongo2/v4 v4.0.2
 github.com/frankban/quicktest v1.14.6
 github.com/fsnotify/fsnotify v1.7.0
 github.com/fsouza/fake-gcs-server v1.49.0
-github.com/gabriel-vasile/mimetype v1.4.6
 github.com/gavv/monotime v0.0.0-20161010190848-47d58efa6955
 github.com/getsentry/raven-go v0.2.0
 github.com/getsentry/sentry-go v0.29.1

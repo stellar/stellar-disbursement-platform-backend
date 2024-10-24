@@ -6,7 +6,6 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/aws/aws-sdk-go v1.55.5
-	github.com/gabriel-vasile/mimetype v1.4.6
 	github.com/getsentry/sentry-go v0.29.1
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.1.0
