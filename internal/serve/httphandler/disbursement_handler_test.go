@@ -840,12 +840,13 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name            string
-		disbursementID  string
-		fieldName       string
-		csvRecords      [][]string
-		expectedStatus  int
-		expectedMessage string
+		name               string
+		disbursementID     string
+		multipartFieldName string
+		actualFileName     string
+		csvRecords         [][]string
+		expectedStatus     int
+		expectedMessage    string
 	}{
 		{
 			name:           "valid input",
@@ -856,6 +857,39 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			},
 			expectedStatus:  http.StatusOK,
 			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           ".bat file fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.bat",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".sh file fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.sh",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".bash file fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.bash",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
 		},
 		{
 			name:           "invalid date of birth",
@@ -884,11 +918,11 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "disbursement ID is invalid",
 		},
 		{
-			name:            "valid input",
-			disbursementID:  draftDisbursement.ID,
-			fieldName:       "instructions",
-			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "could not parse file",
+			name:               "invalid input",
+			disbursementID:     draftDisbursement.ID,
+			multipartFieldName: "instructions",
+			expectedStatus:     http.StatusBadRequest,
+			expectedMessage:    "could not parse file",
 		},
 		{
 			name:            "disbursement not in draft/ready status",
@@ -903,10 +937,11 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "disbursement is not in draft or ready status",
 		},
 		{
-			name:           "error parsing header",
+			name:           "error parsing contact type from header",
 			disbursementID: draftDisbursement.ID,
 			csvRecords: [][]string{
-				{},
+				{"id", "amount", "verification"},
+				{"123456789", "100.5", "1990-01-01"},
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "could not determine contact information type",
@@ -918,32 +953,24 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				{"phone", "id", "amount", "date-of-birth"},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "no valid instructions found",
+			expectedMessage: "this is not a valid CSV file. Ensure it has a headers row at the top and multiple content rows",
 		},
 		{
 			name:           "instructions invalid - attempting to upload phone and email",
 			disbursementID: draftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "email", "id", "amount", "date-of-birth"},
+				{"+380445555555", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "csv file must contain either a phone or email column, not both",
-		},
-		{
-			name:           "instructions invalid - no phone or email",
-			disbursementID: draftDisbursement.ID,
-			csvRecords: [][]string{
-				{"id", "amount", "date-of-birth"},
-			},
-			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "csv file must contain at least one of the following columns [phone, email]",
 		},
 		{
 			name:            "max instructions exceeded",
 			disbursementID:  draftDisbursement.ID,
 			csvRecords:      maxCSVRecords,
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "number of instructions exceeds maximum of : 10000",
+			expectedMessage: "number of instructions exceeds maximum of 10000",
 		},
 	}
 
@@ -952,7 +979,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			fileContent, err := createCSVFile(t, tc.csvRecords)
 			require.NoError(t, err)
 
-			req, err := createInstructionsMultipartRequest(t, ctx, tc.fieldName, tc.disbursementID, fileContent)
+			req, err := createInstructionsMultipartRequest(t, ctx, tc.multipartFieldName, tc.actualFileName, tc.disbursementID, fileContent)
 			require.NoError(t, err)
 
 			// Record the response
@@ -1705,15 +1732,19 @@ func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
 	return &buf, nil
 }
 
-func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, fieldName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
+func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multipartFieldName, fileName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	if fieldName == "" {
-		fieldName = "file"
+	if multipartFieldName == "" {
+		multipartFieldName = "file"
 	}
 
-	part, err := writer.CreateFormFile(fieldName, "instructions.csv")
+	if fileName == "" {
+		fileName = "instructions.csv"
+	}
+
+	part, err := writer.CreateFormFile(multipartFieldName, fileName)
 	require.NoError(t, err)
 
 	_, err = io.Copy(part, fileContent)
