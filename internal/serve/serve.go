@@ -367,6 +367,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			PasswordValidator:           o.PasswordValidator,
 			PublicFilesFS:               publicfiles.PublicFiles,
+			NetworkType:                 o.NetworkType,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
