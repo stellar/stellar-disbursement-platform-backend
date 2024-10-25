@@ -1662,74 +1662,100 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
-	ctx := context.Background()
-
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
+	ctx := context.Background()
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	handler := &DisbursementHandler{
-		Models: models,
-	}
-
+	handler := &DisbursementHandler{Models: models}
 	r := chi.NewRouter()
 	r.Get("/disbursements/{id}/instructions", handler.GetDisbursementInstructions)
 
-	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
-	require.NotNil(t, disbursement)
-
-	t.Run("disbursement doesn't exist", func(t *testing.T) {
-		id := "9e0ff65f-f6e9-46e9-bf03-dc46723e3bfb"
-
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", id), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotFound.Error())
+	disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
+		{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
+		{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
+		{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
 	})
+	d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
+	require.NotNil(t, d)
 
-	t.Run("disbursement has no instructions", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", disbursement.ID), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
+	testCases := []struct {
+		name                 string
+		updateDisbursementFn func(d *data.Disbursement) error
+		getDisbursementIDFn  func(d *data.Disbursement) string
+		expectedStatus       int
+		expectedErrMessage   string
+		wantFilename         string
+	}{
+		{
+			name: "404-disbursement doesn't exist",
+			getDisbursementIDFn: func(d *data.Disbursement) string {
+				return "non-existent-disbursement-id"
+			},
+			expectedStatus:     http.StatusNotFound,
+			expectedErrMessage: services.ErrDisbursementNotFound.Error(),
+		},
+		{
+			name:                "404-disbursement has no instructions",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusNotFound,
+			expectedErrMessage:  "disbursement " + d.ID + " has no instructions file",
+		},
+		{
+			name: "200-disbursement has instructions",
+			updateDisbursementFn: func(d *data.Disbursement) error {
+				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+					ID:          d.ID,
+					FileContent: disbursementFileContent,
+					FileName:    "instructions.csv",
+				})
+			},
+			wantFilename:        "instructions.csv",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusOK,
+		},
+		{
+			name: "200-disbursement has instructions but filename is missing .csv",
+			updateDisbursementFn: func(d *data.Disbursement) error {
+				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+					ID:          d.ID,
+					FileContent: disbursementFileContent,
+					FileName:    "instructions.bat",
+				})
+			},
+			wantFilename:        "instructions.bat.csv",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusOK,
+		},
+	}
 
-		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.Contains(t, rr.Body.String(), fmt.Sprintf("disbursement %s has no instructions file", disbursement.ID))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.updateDisbursementFn != nil {
+				require.NoError(t, tc.updateDisbursementFn(d))
+			}
 
-	t.Run("disbursement has instructions", func(t *testing.T) {
-		disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
-			{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
-			{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
-			{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", tc.getDisbursementIDFn(d)), nil)
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			require.Equal(t, tc.expectedStatus, rr.Code)
+			if tc.expectedStatus != http.StatusOK {
+				require.Contains(t, rr.Body.String(), tc.expectedErrMessage)
+			} else {
+				t.Log(rr.Header())
+				require.Equal(t, "text/csv", rr.Header().Get("Content-Type"))
+				require.Equal(t, "attachment; filename=\""+tc.wantFilename+"\"", rr.Header().Get("Content-Disposition"))
+				require.Equal(t, string(disbursementFileContent), rr.Body.String())
+			}
 		})
-
-		err := models.Disbursements.Update(ctx, &data.DisbursementUpdate{
-			ID:          disbursement.ID,
-			FileContent: disbursementFileContent,
-			FileName:    "instructions.csv",
-		})
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", disbursement.ID), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusOK, rr.Code)
-		require.Equal(t, "text/csv", rr.Header().Get("Content-Type"))
-		require.Equal(t, "attachment; filename=\"instructions.csv\"", rr.Header().Get("Content-Disposition"))
-		require.Equal(t, string(disbursementFileContent), rr.Body.String())
-	})
+	}
 }
 
 func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
