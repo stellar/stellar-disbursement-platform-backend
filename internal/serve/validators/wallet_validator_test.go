@@ -81,7 +81,7 @@ func TestWalletValidator_ValidateCreateWalletRequest_new(t *testing.T) {
 				AssetsIDs:         []string{"asset-id"},
 			},
 			expectedErrs: map[string]interface{}{
-				"homepage": "URL must use https",
+				"homepage": "invalid URL scheme is not part of [https]",
 			},
 			enforceHTTPS: true,
 		},

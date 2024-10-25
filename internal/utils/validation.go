@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -176,8 +177,8 @@ func ValidatePathIsNotTraversal(p string) error {
 
 var pathTraversalPattern = regexp.MustCompile(`(^|[\\/])\.\.([\\/]|$)`)
 
-// ValidateHTTPSURL checks if a URL is valid and uses HTTPS.
-func ValidateHTTPSURL(link string) error {
+// ValidateURLScheme checks if a URL is valid and if it has a valid scheme.
+func ValidateURLScheme(link string, scheme ...string) error {
 	// Use govalidator to check if it's a valid URL
 	if !govalidator.IsURL(link) {
 		return errors.New("invalid URL format")
@@ -185,8 +186,15 @@ func ValidateHTTPSURL(link string) error {
 
 	// Parse the URL to enforce HTTPS
 	parsedURL, err := url.ParseRequestURI(link)
-	if err != nil || parsedURL.Scheme != "https" {
-		return errors.New("URL must use https")
+	if err != nil {
+		return errors.New("invalid URL format")
+	}
+
+	// Check if the scheme is valid
+	if len(scheme) > 0 {
+		if !slices.Contains(scheme, parsedURL.Scheme) {
+			return fmt.Errorf("invalid URL scheme is not part of %v", scheme)
+		}
 	}
 
 	return nil

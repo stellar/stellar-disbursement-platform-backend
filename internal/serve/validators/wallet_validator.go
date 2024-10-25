@@ -45,7 +45,11 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 	wv.Check(name != "", "name", "name is required")
 	wv.Check(homepage != "", "homepage", "homepage is required")
 	if homepage != "" && enforceHTTPS {
-		wv.CheckError(utils.ValidateHTTPSURL(homepage), "homepage", "")
+		schemes := []string{"https"}
+		if !enforceHTTPS {
+			schemes = append(schemes, "http")
+		}
+		wv.CheckError(utils.ValidateURLScheme(homepage, schemes...), "homepage", "")
 	}
 	wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema is required")
 	wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain is required")

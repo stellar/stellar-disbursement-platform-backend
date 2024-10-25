@@ -254,31 +254,34 @@ func Test_ValidateNationalIDVerification(t *testing.T) {
 	}
 }
 
-func Test_ValidateHTTPSURL(t *testing.T) {
+func Test_ValidateURLScheme(t *testing.T) {
 	tests := []struct {
 		url             string
 		wantErrContains string
+		schemas         []string
 	}{
-		{"https://example.com", ""},
-		{"https://example.com/page.html", ""},
-		{"https://example.com/section", ""},
-		{"https://www.example.com", ""},
-		{"https://subdomain.example.com", ""},
-		{"https://www.subdomain.example.com", ""},
-		{"", "invalid URL format"},
-		{" ", "invalid URL format"},
-		{"foobar", "invalid URL format"},
-		{"foobar", "invalid URL format"},
-		{"https://", "invalid URL format"},
-		{"example.com", "URL must use https"},
-		{"ftp://example.com", "URL must use https"},
-		{"http://example.com", "URL must use https"},
+		{"https://example.com", "", nil},
+		{"https://example.com/page.html", "", nil},
+		{"https://example.com/section", "", nil},
+		{"https://www.example.com", "", nil},
+		{"https://subdomain.example.com", "", nil},
+		{"https://www.subdomain.example.com", "", nil},
+		{"", "invalid URL format", nil},
+		{" ", "invalid URL format", nil},
+		{"foobar", "invalid URL format", nil},
+		{"foobar", "invalid URL format", nil},
+		{"https://", "invalid URL format", nil},
+		{"example.com", "invalid URL format", []string{"https"}},
+		{"ftp://example.com", "invalid URL scheme is not part of [https]", []string{"https"}},
+		{"http://example.com", "invalid URL scheme is not part of [https]", []string{"https"}},
+		{"ftp://example.com", "", []string{"ftp"}},
+		{"http://example.com", "", []string{"http"}},
 	}
 
 	for _, tc := range tests {
 		title := fmt.Sprintf("%s-%s", VisualBool(tc.wantErrContains == ""), tc.url)
 		t.Run(title, func(t *testing.T) {
-			err := ValidateHTTPSURL(tc.url)
+			err := ValidateURLScheme(tc.url, tc.schemas...)
 			if tc.wantErrContains == "" {
 				assert.NoError(t, err)
 			} else {
