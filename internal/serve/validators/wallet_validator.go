@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/stellar/go/support/log"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type WalletRequest struct {
@@ -28,7 +30,7 @@ func NewWalletValidator() *WalletValidator {
 	return &WalletValidator{Validator: NewValidator()}
 }
 
-func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqBody *WalletRequest) *WalletRequest {
+func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqBody *WalletRequest, enforceHTTPS bool) *WalletRequest {
 	wv.Check(reqBody != nil, "body", "request body is empty")
 
 	if wv.HasErrors() {
@@ -42,6 +44,9 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 
 	wv.Check(name != "", "name", "name is required")
 	wv.Check(homepage != "", "homepage", "homepage is required")
+	if homepage != "" && enforceHTTPS {
+		wv.CheckError(utils.ValidateHTTPSURL(homepage), "homepage", "")
+	}
 	wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema is required")
 	wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain is required")
 	wv.Check(len(reqBody.AssetsIDs) != 0, "assets_ids", "provide at least one asset ID")
@@ -68,13 +73,17 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 		wv.Check(false, "sep_10_client_domain", "invalid SEP-10 client domain URL provided")
 	}
 
-	if wv.HasErrors() {
-		return nil
-	}
-
 	sep10Host := sep10URL.Host
 	if sep10Host == "" {
 		sep10Host = sep10URL.String()
+	}
+	if err := utils.ValidateDNS(sep10Host); err != nil {
+		log.Ctx(ctx).Errorf("validating SEP-10 client domain: %v", err)
+		wv.Check(false, "sep_10_client_domain", "invalid SEP-10 client domain provided")
+	}
+
+	if wv.HasErrors() {
+		return nil
 	}
 
 	modifiedReq := &WalletRequest{

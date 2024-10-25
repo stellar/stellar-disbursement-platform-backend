@@ -161,10 +161,10 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 		if err != nil {
 			if pqError, ok := err.(*pq.Error); ok {
 				constraintErrMap := map[string]error{
+					"wallets_assets_asset_id_fkey": ErrInvalidAssetID,
 					"wallets_name_key":             ErrWalletNameAlreadyExists,
 					"wallets_homepage_key":         ErrWalletHomepageAlreadyExists,
 					"wallets_deep_link_schema_key": ErrWalletDeepLinkSchemaAlreadyExists,
-					"wallets_assets_asset_id_fkey": ErrInvalidAssetID,
 				}
 
 				errConstraint, ok := constraintErrMap[pqError.Constraint]
