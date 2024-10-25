@@ -467,8 +467,13 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 		return
 	}
 
+	filename := disbursement.FileName
+	if filepath.Ext(filename) != ".csv" { // add .csv extension if missing
+		filename = filename + ".csv"
+	}
+
 	// `attachment` returns a file-download prompt. change that to `inline` to open in browser
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, disbursement.FileName))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Type", "text/csv")
 	_, err = w.Write(disbursement.FileContent)
 	if err != nil {
