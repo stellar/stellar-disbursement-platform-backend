@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"time"
@@ -174,3 +175,19 @@ func ValidatePathIsNotTraversal(p string) error {
 }
 
 var pathTraversalPattern = regexp.MustCompile(`(^|[\\/])\.\.([\\/]|$)`)
+
+// ValidateHTTPSURL checks if a URL is valid and uses HTTPS.
+func ValidateHTTPSURL(link string) error {
+	// Use govalidator to check if it's a valid URL
+	if !govalidator.IsURL(link) {
+		return errors.New("invalid URL format")
+	}
+
+	// Parse the URL to enforce HTTPS
+	parsedURL, err := url.ParseRequestURI(link)
+	if err != nil || parsedURL.Scheme != "https" {
+		return errors.New("URL must use https")
+	}
+
+	return nil
+}

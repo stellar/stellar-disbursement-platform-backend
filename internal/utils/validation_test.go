@@ -144,7 +144,7 @@ func Test_ValidateDNS(t *testing.T) {
 			gotError := ValidateDNS(tc.url)
 
 			if tc.wantErr != nil {
-				assert.EqualErrorf(t, gotError, tc.wantErr.Error(), "ValidateURL(%q) should be '%v', but got '%v'", tc.url, tc.wantErr, gotError)
+				assert.EqualErrorf(t, gotError, tc.wantErr.Error(), "ValidateDNS(%q) should be '%v', but got '%v'", tc.url, tc.wantErr, gotError)
 			} else {
 				assert.NoError(t, gotError)
 			}
@@ -250,6 +250,40 @@ func Test_ValidateNationalIDVerification(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateNationalIDVerification(tt.nationalID)
 			assert.Equal(t, tt.expectedError, err)
+		})
+	}
+}
+
+func Test_ValidateHTTPSURL(t *testing.T) {
+	tests := []struct {
+		url             string
+		wantErrContains string
+	}{
+		{"https://example.com", ""},
+		{"https://example.com/page.html", ""},
+		{"https://example.com/section", ""},
+		{"https://www.example.com", ""},
+		{"https://subdomain.example.com", ""},
+		{"https://www.subdomain.example.com", ""},
+		{"", "invalid URL format"},
+		{" ", "invalid URL format"},
+		{"foobar", "invalid URL format"},
+		{"foobar", "invalid URL format"},
+		{"https://", "invalid URL format"},
+		{"example.com", "URL must use https"},
+		{"ftp://example.com", "URL must use https"},
+		{"http://example.com", "URL must use https"},
+	}
+
+	for _, tc := range tests {
+		title := fmt.Sprintf("%s-%s", VisualBool(tc.wantErrContains == ""), tc.url)
+		t.Run(title, func(t *testing.T) {
+			err := ValidateHTTPSURL(tc.url)
+			if tc.wantErrContains == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			}
 		})
 	}
 }
