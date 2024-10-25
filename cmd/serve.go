@@ -150,6 +150,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MessageDispatcher:           o.ServeOpts.MessageDispatcher,
 			MaxInvitationResendAttempts: int64(o.ServeOpts.MaxInvitationResendAttempts),
 			Sep10SigningPrivateKey:      o.ServeOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:          o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {

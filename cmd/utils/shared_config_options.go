@@ -43,6 +43,21 @@ func TwilioConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption 
 			ConfigKey: &opts.TwilioServiceSID,
 			Required:  false,
 		},
+		// Twilio Email (SendGrid)
+		{
+			Name:      "twilio-sendgrid-api-key",
+			Usage:     "The API key of the Twilio SendGrid account",
+			OptType:   types.String,
+			ConfigKey: &opts.TwilioSendGridAPIKey,
+			Required:  false,
+		},
+		{
+			Name:      "twilio-sendgrid-sender-address",
+			Usage:     "The email address that Twilio SendGrid will use to send emails",
+			OptType:   types.String,
+			ConfigKey: &opts.TwilioSendGridSenderAddress,
+			Required:  false,
+		},
 	}
 }
 
