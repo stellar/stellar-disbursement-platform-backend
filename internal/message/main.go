@@ -12,6 +12,8 @@ type MessengerType string
 const (
 	// MessengerTypeTwilioSMS is used to send SMS messages using Twilio.
 	MessengerTypeTwilioSMS MessengerType = "TWILIO_SMS"
+	// MessengerTypeTwilioEmail is used to send emails using Twilio SendGrid.
+	MessengerTypeTwilioEmail MessengerType = "TWILIO_EMAIL"
 	// MessengerTypeAWSSMS is used to send SMS messages using AWS SNS.
 	MessengerTypeAWSSMS MessengerType = "AWS_SMS"
 	// MessengerTypeAWSEmail is used to send emails using AWS SES.
@@ -21,7 +23,7 @@ const (
 )
 
 func (mt MessengerType) All() []MessengerType {
-	return []MessengerType{MessengerTypeTwilioSMS, MessengerTypeAWSSMS, MessengerTypeAWSEmail, MessengerTypeDryRun}
+	return []MessengerType{MessengerTypeTwilioSMS, MessengerTypeTwilioEmail, MessengerTypeAWSSMS, MessengerTypeAWSEmail, MessengerTypeDryRun}
 }
 
 func ParseMessengerType(messengerTypeStr string) (MessengerType, error) {
@@ -40,7 +42,7 @@ func (mt MessengerType) ValidSMSTypes() []MessengerType {
 }
 
 func (mt MessengerType) ValidEmailTypes() []MessengerType {
-	return []MessengerType{MessengerTypeDryRun, MessengerTypeAWSEmail}
+	return []MessengerType{MessengerTypeDryRun, MessengerTypeTwilioEmail, MessengerTypeAWSEmail}
 }
 
 func (mt MessengerType) IsSMS() bool {
@@ -59,6 +61,9 @@ type MessengerOptions struct {
 	TwilioAccountSID string
 	TwilioAuthToken  string
 	TwilioServiceSID string
+	// Twilio Email (SendGrid)
+	TwilioSendGridAPIKey        string
+	TwilioSendGridSenderAddress string
 
 	// AWS
 	AWSAccessKeyID     string
@@ -74,10 +79,11 @@ func GetClient(opts MessengerOptions) (MessengerClient, error) {
 	switch opts.MessengerType {
 	case MessengerTypeTwilioSMS:
 		return NewTwilioClient(opts.TwilioAccountSID, opts.TwilioAuthToken, opts.TwilioServiceSID)
+	case MessengerTypeTwilioEmail:
+		return NewTwilioSendGridClient(opts.TwilioSendGridAPIKey, opts.TwilioSendGridSenderAddress)
 
 	case MessengerTypeAWSSMS:
 		return NewAWSSNSClient(opts.AWSAccessKeyID, opts.AWSSecretAccessKey, opts.AWSRegion, opts.AWSSNSSenderID)
-
 	case MessengerTypeAWSEmail:
 		return NewAWSSESClient(opts.AWSAccessKeyID, opts.AWSSecretAccessKey, opts.AWSRegion, opts.AWSSESSenderID)
 

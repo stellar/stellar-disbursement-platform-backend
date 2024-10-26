@@ -215,6 +215,8 @@ github.com/sanity-io/litter v1.5.5
 github.com/schollz/closestmatch v2.1.0+incompatible
 github.com/segmentio/go-loggly v0.5.1-0.20171222203950-eb91657e62b2
 github.com/segmentio/kafka-go v0.4.47
+github.com/sendgrid/rest v2.6.9+incompatible
+github.com/sendgrid/sendgrid-go v3.16.0+incompatible
 github.com/sergi/go-diff v1.2.0
 github.com/shopspring/decimal v1.3.1
 github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c
