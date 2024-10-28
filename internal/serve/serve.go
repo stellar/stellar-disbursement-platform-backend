@@ -209,9 +209,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		rateLimitWindow,
 		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
 	))
-	mux.Use(middleware.RemoveXForwardedHostMiddleware)
 	mux.Use(chimiddleware.RequestID)
-	mux.Use(chimiddleware.RealIP)
 	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager, o.SingleTenantMode))
 	mux.Use(middleware.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)

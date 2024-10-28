@@ -375,14 +375,6 @@ func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) ht
 	}
 }
 
-// RemoveXForwardedHostMiddleware is a middleware that removes the X-Forwarded-Host header from the request.
-func RemoveXForwardedHostMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Header.Del("X-Forwarded-Host")
-		next.ServeHTTP(w, r)
-	})
-}
-
 // extractTenantNameFromRequest attempts to extract the tenant name from the request HEADER[tenantHeaderKey] or the hostname prefix.
 func extractTenantNameFromRequest(r *http.Request) (string, error) {
 	// 1. Try extracting from the TenantHeaderKey header first
