@@ -13,7 +13,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
-
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -1180,4 +1179,55 @@ func Test_ExtractTenantNameFromRequest(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expectedTenant, tenantName)
 	})
+}
+
+func Test_RemoveXForwardedHostMiddleware(t *testing.T) {
+	testCases := []struct {
+		name           string
+		middleware     func(http.Handler) http.Handler
+		expectedHeader string
+	}{
+		{
+			name:       "header IS removed when the middleware is used",
+			middleware: RemoveXForwardedHostMiddleware,
+		},
+		{
+			name: "header IS NOT removed when the middleware is not used",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := chi.NewRouter()
+			if tc.middleware != nil {
+				r.Use(tc.middleware)
+			}
+			r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("X-Forwarded-Host") == "" {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte("X-Forwarded-Host header is absent"))
+				} else {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte("X-Forwarded-Host should not be present"))
+				}
+			})
+
+			req, err := http.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("X-Forwarded-Host", "example.com")
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			resp := rr.Result()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			if tc.middleware != nil {
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				assert.Equal(t, "X-Forwarded-Host header is absent", string(respBody))
+			} else {
+				assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+				assert.Equal(t, "X-Forwarded-Host should not be present", string(respBody))
+			}
+		})
+	}
 }
