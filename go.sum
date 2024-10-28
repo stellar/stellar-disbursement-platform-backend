@@ -199,8 +199,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-github.com/twilio/twilio-go v1.23.4 h1:1JePQ9xWVaW7iZieEIcfm1E89nOPcgZ+I5ZRcukBkRY=
-github.com/twilio/twilio-go v1.23.4/go.mod h1:zRkMjudW7v7MqQ3cWNZmSoZJ7EBjPZ4OpNh2zm7Q6ko=
+github.com/twilio/twilio-go v1.23.5 h1:5ksHynnYhjKf1vG7KK7+jujEj/DhQ1knwQAhNuDExW4=
+github.com/twilio/twilio-go v1.23.5/go.mod h1:zRkMjudW7v7MqQ3cWNZmSoZJ7EBjPZ4OpNh2zm7Q6ko=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.52.0 h1:wqBQpxH71XW0e2g+Og4dzQM8pk34aFYlA1Ga8db7gU0=

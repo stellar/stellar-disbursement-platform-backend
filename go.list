@@ -235,7 +235,7 @@ github.com/stretchr/testify v1.9.0
 github.com/subosito/gotenv v1.6.0
 github.com/tdewolff/minify/v2 v2.12.4
 github.com/tdewolff/parse/v2 v2.6.4
-github.com/twilio/twilio-go v1.23.4
+github.com/twilio/twilio-go v1.23.5
 github.com/tyler-smith/go-bip39 v0.0.0-20180618194314-52158e4697b8
 github.com/ugorji/go/codec v1.2.7
 github.com/urfave/negroni/v3 v3.1.1
