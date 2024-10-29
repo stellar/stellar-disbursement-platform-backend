@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -26,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -211,17 +214,9 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	// Parse uploaded CSV file
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		httperror.BadRequest("could not parse file", err, nil).Render(w)
-		return
-	}
-	defer file.Close()
-
-	var buf bytes.Buffer
-	if _, err = io.Copy(&buf, file); err != nil {
-		httperror.BadRequest("could not read file", err, nil).Render(w)
+	buf, header, httpErr := parseCsvFromMultipartRequest(r)
+	if httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
@@ -267,11 +262,11 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}); err != nil {
 		switch {
 		case errors.Is(err, data.ErrMaxInstructionsExceeded):
-			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of : %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
+			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
 		case errors.Is(err, data.ErrReceiverVerificationMismatch):
 			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
 		default:
-			httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID: %s", disbursementID), err, nil).Render(w)
+			httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursementID), err, nil).Render(w)
 		}
 		return
 	}
@@ -281,6 +276,32 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 
 	httpjson.Render(w, response, httpjson.JSON)
+}
+
+// parseCsvFromMultipartRequest parses the CSV file from a multipart request and returns the file content and header,
+// or an error if the file is not a valid CSV or the MIME type is not text/csv.
+func parseCsvFromMultipartRequest(r *http.Request) (*bytes.Buffer, *multipart.FileHeader, *httperror.HTTPError) {
+	// Parse uploaded CSV file
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return nil, nil, httperror.BadRequest("could not parse file", err, nil)
+	}
+	defer file.Close()
+
+	if err = utils.ValidatePathIsNotTraversal(header.Filename); err != nil {
+		return nil, nil, httperror.BadRequest("file name contains invalid traversal pattern", nil, nil)
+	}
+
+	if filepath.Ext(header.Filename) != ".csv" {
+		return nil, nil, httperror.BadRequest("the file extension should be .csv", nil, nil)
+	}
+
+	var buf bytes.Buffer
+	if _, err = io.Copy(&buf, file); err != nil {
+		return nil, nil, httperror.BadRequest("could not read file", err, nil)
+	}
+
+	return &buf, header, nil
 }
 
 func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Request) {
@@ -446,8 +467,13 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 		return
 	}
 
+	filename := disbursement.FileName
+	if filepath.Ext(filename) != ".csv" { // add .csv extension if missing
+		filename = filename + ".csv"
+	}
+
 	// `attachment` returns a file-download prompt. change that to `inline` to open in browser
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, disbursement.FileName))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.Header().Set("Content-Type", "text/csv")
 	_, err = w.Write(disbursement.FileContent)
 	if err != nil {

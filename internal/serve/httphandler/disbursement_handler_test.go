@@ -840,12 +840,13 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name            string
-		disbursementID  string
-		fieldName       string
-		csvRecords      [][]string
-		expectedStatus  int
-		expectedMessage string
+		name               string
+		disbursementID     string
+		multipartFieldName string
+		actualFileName     string
+		csvRecords         [][]string
+		expectedStatus     int
+		expectedMessage    string
 	}{
 		{
 			name:           "valid input",
@@ -856,6 +857,50 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			},
 			expectedStatus:  http.StatusOK,
 			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           ".bat file fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.bat",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".sh file fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.sh",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".bash file fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.bash",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".csv file with transversal path ..\\.. fails",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "..\\..\\file.csv",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "file name contains invalid traversal pattern",
 		},
 		{
 			name:           "invalid date of birth",
@@ -884,11 +929,11 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "disbursement ID is invalid",
 		},
 		{
-			name:            "valid input",
-			disbursementID:  draftDisbursement.ID,
-			fieldName:       "instructions",
-			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "could not parse file",
+			name:               "invalid input",
+			disbursementID:     draftDisbursement.ID,
+			multipartFieldName: "instructions",
+			expectedStatus:     http.StatusBadRequest,
+			expectedMessage:    "could not parse file",
 		},
 		{
 			name:            "disbursement not in draft/ready status",
@@ -903,10 +948,11 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "disbursement is not in draft or ready status",
 		},
 		{
-			name:           "error parsing header",
+			name:           "error parsing contact type from header",
 			disbursementID: draftDisbursement.ID,
 			csvRecords: [][]string{
-				{},
+				{"id", "amount", "verification"},
+				{"123456789", "100.5", "1990-01-01"},
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "could not determine contact information type",
@@ -918,32 +964,24 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				{"phone", "id", "amount", "date-of-birth"},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "no valid instructions found",
+			expectedMessage: "could not parse csv file",
 		},
 		{
 			name:           "instructions invalid - attempting to upload phone and email",
 			disbursementID: draftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "email", "id", "amount", "date-of-birth"},
+				{"+380445555555", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "csv file must contain either a phone or email column, not both",
-		},
-		{
-			name:           "instructions invalid - no phone or email",
-			disbursementID: draftDisbursement.ID,
-			csvRecords: [][]string{
-				{"id", "amount", "date-of-birth"},
-			},
-			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "csv file must contain at least one of the following columns [phone, email]",
 		},
 		{
 			name:            "max instructions exceeded",
 			disbursementID:  draftDisbursement.ID,
 			csvRecords:      maxCSVRecords,
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "number of instructions exceeds maximum of : 10000",
+			expectedMessage: "number of instructions exceeds maximum of 10000",
 		},
 	}
 
@@ -952,7 +990,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			fileContent, err := createCSVFile(t, tc.csvRecords)
 			require.NoError(t, err)
 
-			req, err := createInstructionsMultipartRequest(t, ctx, tc.fieldName, tc.disbursementID, fileContent)
+			req, err := createInstructionsMultipartRequest(t, ctx, tc.multipartFieldName, tc.actualFileName, tc.disbursementID, fileContent)
 			require.NoError(t, err)
 
 			// Record the response
@@ -1624,74 +1662,100 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
-	ctx := context.Background()
-
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
+	ctx := context.Background()
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	handler := &DisbursementHandler{
-		Models: models,
-	}
-
+	handler := &DisbursementHandler{Models: models}
 	r := chi.NewRouter()
 	r.Get("/disbursements/{id}/instructions", handler.GetDisbursementInstructions)
 
-	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
-	require.NotNil(t, disbursement)
-
-	t.Run("disbursement doesn't exist", func(t *testing.T) {
-		id := "9e0ff65f-f6e9-46e9-bf03-dc46723e3bfb"
-
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", id), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotFound.Error())
+	disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
+		{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
+		{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
+		{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
 	})
+	d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
+	require.NotNil(t, d)
 
-	t.Run("disbursement has no instructions", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", disbursement.ID), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
+	testCases := []struct {
+		name                 string
+		updateDisbursementFn func(d *data.Disbursement) error
+		getDisbursementIDFn  func(d *data.Disbursement) string
+		expectedStatus       int
+		expectedErrMessage   string
+		wantFilename         string
+	}{
+		{
+			name: "404-disbursement doesn't exist",
+			getDisbursementIDFn: func(d *data.Disbursement) string {
+				return "non-existent-disbursement-id"
+			},
+			expectedStatus:     http.StatusNotFound,
+			expectedErrMessage: services.ErrDisbursementNotFound.Error(),
+		},
+		{
+			name:                "404-disbursement has no instructions",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusNotFound,
+			expectedErrMessage:  "disbursement " + d.ID + " has no instructions file",
+		},
+		{
+			name: "200-disbursement has instructions",
+			updateDisbursementFn: func(d *data.Disbursement) error {
+				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+					ID:          d.ID,
+					FileContent: disbursementFileContent,
+					FileName:    "instructions.csv",
+				})
+			},
+			wantFilename:        "instructions.csv",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusOK,
+		},
+		{
+			name: "200-disbursement has instructions but filename is missing .csv",
+			updateDisbursementFn: func(d *data.Disbursement) error {
+				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+					ID:          d.ID,
+					FileContent: disbursementFileContent,
+					FileName:    "instructions.bat",
+				})
+			},
+			wantFilename:        "instructions.bat.csv",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusOK,
+		},
+	}
 
-		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.Contains(t, rr.Body.String(), fmt.Sprintf("disbursement %s has no instructions file", disbursement.ID))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.updateDisbursementFn != nil {
+				require.NoError(t, tc.updateDisbursementFn(d))
+			}
 
-	t.Run("disbursement has instructions", func(t *testing.T) {
-		disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
-			{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
-			{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
-			{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", tc.getDisbursementIDFn(d)), nil)
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			require.Equal(t, tc.expectedStatus, rr.Code)
+			if tc.expectedStatus != http.StatusOK {
+				require.Contains(t, rr.Body.String(), tc.expectedErrMessage)
+			} else {
+				t.Log(rr.Header())
+				require.Equal(t, "text/csv", rr.Header().Get("Content-Type"))
+				require.Equal(t, "attachment; filename=\""+tc.wantFilename+"\"", rr.Header().Get("Content-Disposition"))
+				require.Equal(t, string(disbursementFileContent), rr.Body.String())
+			}
 		})
-
-		err := models.Disbursements.Update(ctx, &data.DisbursementUpdate{
-			ID:          disbursement.ID,
-			FileContent: disbursementFileContent,
-			FileName:    "instructions.csv",
-		})
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", disbursement.ID), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusOK, rr.Code)
-		require.Equal(t, "text/csv", rr.Header().Get("Content-Type"))
-		require.Equal(t, "attachment; filename=\"instructions.csv\"", rr.Header().Get("Content-Disposition"))
-		require.Equal(t, string(disbursementFileContent), rr.Body.String())
-	})
+	}
 }
 
 func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
@@ -1705,15 +1769,19 @@ func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
 	return &buf, nil
 }
 
-func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, fieldName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
+func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multipartFieldName, fileName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	if fieldName == "" {
-		fieldName = "file"
+	if multipartFieldName == "" {
+		multipartFieldName = "file"
 	}
 
-	part, err := writer.CreateFormFile(fieldName, "instructions.csv")
+	if fileName == "" {
+		fileName = "instructions.csv"
+	}
+
+	part, err := writer.CreateFormFile(multipartFieldName, fileName)
 	require.NoError(t, err)
 
 	_, err = io.Copy(part, fileContent)

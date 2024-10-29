@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -162,3 +163,14 @@ func ValidateNationalIDVerification(nationalID string) error {
 
 	return nil
 }
+
+// ValidatePathIsNotTraversal will validate the given path to ensure it does not contain path traversal.
+func ValidatePathIsNotTraversal(p string) error {
+	if pathTraversalPattern.MatchString(p) {
+		return errors.New("path cannot contain path traversal")
+	}
+
+	return nil
+}
+
+var pathTraversalPattern = regexp.MustCompile(`(^|[\\/])\.\.([\\/]|$)`)
