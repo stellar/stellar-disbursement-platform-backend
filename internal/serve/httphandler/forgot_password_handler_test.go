@@ -43,7 +43,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
 
-	messengerClientMock := &message.MessengerClientMock{}
+	messengerClientMock := message.NewMessengerClientMock(t)
 	handler := &ForgotPasswordHandler{
 		AuthManager:        authManager,
 		MessengerClient:    messengerClientMock,
@@ -204,12 +204,6 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
-
-		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, "validToken").
-			Return(true, nil).
-			Once()
-
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -285,7 +279,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 	t.Run("Should return http status 500 when authenticator fails", func(t *testing.T) {
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com",
 			"recaptcha_token": "validToken"
 		}`
@@ -320,7 +314,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 	t.Run("Should return http status 500 when reCAPTCHA validator returns an error", func(t *testing.T) {
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com" ,
 			"recaptcha_token": "validToken"
 		}`
@@ -351,7 +345,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 	t.Run("Should return http status 400 when reCAPTCHA token is invalid", func(t *testing.T) {
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com" ,
 			"recaptcha_token": "invalidToken"
 		}`
@@ -384,7 +378,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		ctxWithoutTenant := context.Background()
 
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com" ,
 			"recaptcha_token": "invalidToken"
 		}`
@@ -404,6 +398,5 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 	})
 
 	authenticatorMock.AssertExpectations(t)
-	messengerClientMock.AssertExpectations(t)
 	reCAPTCHAValidatorMock.AssertExpectations(t)
 }
