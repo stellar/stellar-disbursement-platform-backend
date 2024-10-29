@@ -184,7 +184,6 @@ func ValidateURLScheme(link string, scheme ...string) error {
 		return errors.New("invalid URL format")
 	}
 
-	// Parse the URL to enforce HTTPS
 	parsedURL, err := url.ParseRequestURI(link)
 	if err != nil {
 		return errors.New("invalid URL format")

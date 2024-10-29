@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWalletValidator_ValidateCreateWalletRequest_new(t *testing.T) {
+func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {

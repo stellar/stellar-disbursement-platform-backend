@@ -31,12 +31,13 @@ func NewWalletValidator() *WalletValidator {
 }
 
 func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqBody *WalletRequest, enforceHTTPS bool) *WalletRequest {
+	// empty body validation
 	wv.Check(reqBody != nil, "body", "request body is empty")
-
 	if wv.HasErrors() {
 		return nil
 	}
 
+	// empty fields validation
 	name := strings.TrimSpace(reqBody.Name)
 	homepage := strings.TrimSpace(reqBody.Homepage)
 	deepLinkSchema := strings.TrimSpace(reqBody.DeepLinkSchema)
@@ -44,25 +45,24 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 
 	wv.Check(name != "", "name", "name is required")
 	wv.Check(homepage != "", "homepage", "homepage is required")
-	if homepage != "" && enforceHTTPS {
+	wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema is required")
+	wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain is required")
+	wv.Check(len(reqBody.AssetsIDs) != 0, "assets_ids", "provide at least one asset ID")
+	if wv.HasErrors() {
+		return nil
+	}
+
+	// fields format validation
+	homepageURL, err := url.ParseRequestURI(homepage)
+	if err != nil {
+		log.Ctx(ctx).Errorf("parsing homepage URL: %v", err)
+		wv.Check(false, "homepage", "invalid homepage URL provided")
+	} else {
 		schemes := []string{"https"}
 		if !enforceHTTPS {
 			schemes = append(schemes, "http")
 		}
 		wv.CheckError(utils.ValidateURLScheme(homepage, schemes...), "homepage", "")
-	}
-	wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema is required")
-	wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain is required")
-	wv.Check(len(reqBody.AssetsIDs) != 0, "assets_ids", "provide at least one asset ID")
-
-	if wv.HasErrors() {
-		return nil
-	}
-
-	homepageURL, err := url.ParseRequestURI(homepage)
-	if err != nil {
-		log.Ctx(ctx).Errorf("parsing homepage URL: %v", err)
-		wv.Check(false, "homepage", "invalid homepage URL provided")
 	}
 
 	deepLinkSchemaURL, err := url.ParseRequestURI(deepLinkSchema)
