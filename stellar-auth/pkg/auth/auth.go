@@ -183,7 +183,7 @@ func (am *defaultAuthManager) ForgotPassword(ctx context.Context, sqlExec db.SQL
 		if errors.Is(err, ErrUserNotFound) {
 			return "", fmt.Errorf("user not found in auth forgot password: %w", err)
 		}
-		return "", fmt.Errorf("error on forgot password: %w", err)
+		return "", fmt.Errorf("calling authenticator's ForgotPassword: %w", err)
 	}
 
 	return resetToken, nil

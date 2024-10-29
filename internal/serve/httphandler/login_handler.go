@@ -142,7 +142,10 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "MFA code sent to email. Check your inbox and spam folders."}, httpjson.JSON)
+	responseBody := map[string]string{
+		"message": "MFA code sent to email. Check your inbox and spam folders.",
+	}
+	httpjson.RenderStatus(rw, http.StatusOK, responseBody, httpjson.JSON)
 }
 
 func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code string) *httperror.HTTPError {

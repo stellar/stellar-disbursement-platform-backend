@@ -100,7 +100,7 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 	}
 }
 
-func Test_LoginHandler(t *testing.T) {
+func Test_LoginHandler_ServeHTTP(t *testing.T) {
 	r := chi.NewRouter()
 
 	authenticatorMock := &auth.AuthenticatorMock{}

@@ -19,12 +19,75 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_ForgotPasswordHandler(t *testing.T) {
+func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
+	type Req struct {
+		body ForgotPasswordRequest
+	}
+	testCases := []struct {
+		name     string
+		handler  ForgotPasswordHandler
+		req      Req
+		expected *httperror.HTTPError
+	}{
+		{
+			name: "🔴 invalid body fields with reCAPTCHA enabled",
+			expected: httperror.BadRequest("", nil, map[string]interface{}{
+				"email":           "email is required",
+				"recaptcha_token": "reCAPTCHA token is required",
+			}),
+		},
+		{
+			name: "🔴 invalid body fields with reCAPTCHA disabled",
+			handler: ForgotPasswordHandler{
+				ReCAPTCHADisabled: true,
+			},
+			expected: httperror.BadRequest("", nil, map[string]interface{}{
+				"email": "email is required",
+			}),
+		},
+		{
+			name: "🟢 valid request with reCAPTCHA enabled",
+			req: Req{
+				body: ForgotPasswordRequest{
+					Email:          "foobar@test.com",
+					ReCAPTCHAToken: "XyZ",
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "🟢 valid request with mfa & reCAPTCHA disabled",
+			req: Req{
+				body: ForgotPasswordRequest{
+					Email: "foobar@test.com",
+				},
+			},
+			handler: ForgotPasswordHandler{
+				ReCAPTCHADisabled: true,
+			},
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.handler.validateRequest(tc.req.body)
+			if tc.expected == nil {
+				require.Nil(t, err)
+			} else {
+				require.Equal(t, tc.expected, err)
+			}
+		})
+	}
+}
+
+func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -43,7 +106,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
 
-	messengerClientMock := &message.MessengerClientMock{}
+	messengerClientMock := message.NewMessengerClientMock(t)
 	handler := &ForgotPasswordHandler{
 		AuthManager:        authManager,
 		MessengerClient:    messengerClientMock,
@@ -241,12 +304,6 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
-
-		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, "validToken").
-			Return(true, nil).
-			Once()
-
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -255,7 +312,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		expectedBody := `
 			{
-				"error":"request invalid",
+				"error":"The request was invalid in some way.",
 				"extras": {
 					"email":"email is required"
 				}
@@ -313,7 +370,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		expectedBody := `
 			{
-				"error": "An internal error occurred while processing this request."
+				"error": "running atomic function in RunInTransactionWithResult: sending forgot password message: sending forgot password email for val...com: unexpected error"
 			}
 		`
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
@@ -322,7 +379,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 	t.Run("Should return http status 500 when authenticator fails", func(t *testing.T) {
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com",
 			"recaptcha_token": "validToken"
 		}`
@@ -348,7 +405,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		expectedBody := `
 			{
-				"error": "An internal error occurred while processing this request."
+				"error": "running atomic function in RunInTransactionWithResult: resetting password: calling authenticator's ForgotPassword: unexpected error"
 			}
 		`
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
@@ -357,7 +414,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 	t.Run("Should return http status 500 when reCAPTCHA validator returns an error", func(t *testing.T) {
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com" ,
 			"recaptcha_token": "validToken"
 		}`
@@ -388,7 +445,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 	t.Run("Should return http status 400 when reCAPTCHA token is invalid", func(t *testing.T) {
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com" ,
 			"recaptcha_token": "invalidToken"
 		}`
@@ -421,7 +478,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		ctxWithoutTenant := context.Background()
 
 		requestBody := `
-		{ 
+		{
 			"email": "valid@email.com" ,
 			"recaptcha_token": "invalidToken"
 		}`
@@ -441,6 +498,5 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 	})
 
 	authenticatorMock.AssertExpectations(t)
-	messengerClientMock.AssertExpectations(t)
 	reCAPTCHAValidatorMock.AssertExpectations(t)
 }
