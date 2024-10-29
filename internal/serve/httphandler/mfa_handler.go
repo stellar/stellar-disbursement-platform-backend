@@ -76,7 +76,7 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			httperror.Unauthorized("", err, nil).Render(rw)
 			return
 		}
-		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
+		log.Ctx(ctx).Errorf("authenticating user: %s", err.Error())
 		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
 	}

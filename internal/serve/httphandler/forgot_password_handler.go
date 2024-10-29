@@ -101,9 +101,9 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		// if we don't find the user by email, we just return an ok response
 		// to prevent malicious client from searching accounts in the system
 		if errors.Is(err, auth.ErrUserNotFound) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
+			log.Ctx(ctx).Errorf("in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, user has a valid token")
+			log.Ctx(ctx).Errorf("in forgot password handler, user has a valid token")
 		} else {
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
