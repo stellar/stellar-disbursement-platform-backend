@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -14,6 +15,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const OTPExpirationTimeMinutes = 30
@@ -382,48 +384,6 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	return &receiverWallet, nil
 }
 
-// UpdateReceiverWallet updates the status, address, OTP confirmation time, and anchor platform transaction ID of a
-// receiver wallet.
-func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receiverWallet ReceiverWallet, sqlExec db.SQLExecuter) error {
-	query := `
-		UPDATE 
-			receiver_wallets rw
-		SET 
-			status = $1,
-			anchor_platform_transaction_id = $2,
-			stellar_address = $3,
-			stellar_memo = $4,
-			stellar_memo_type = $5,
-			otp_confirmed_at = $6,
-			otp_confirmed_with = $7
-		WHERE rw.id = $8
-	`
-
-	result, err := sqlExec.ExecContext(ctx, query,
-		receiverWallet.Status,
-		sql.NullString{String: receiverWallet.AnchorPlatformTransactionID, Valid: receiverWallet.AnchorPlatformTransactionID != ""},
-		receiverWallet.StellarAddress,
-		sql.NullString{String: receiverWallet.StellarMemo, Valid: receiverWallet.StellarMemo != ""},
-		sql.NullString{String: receiverWallet.StellarMemoType, Valid: receiverWallet.StellarMemoType != ""},
-		receiverWallet.OTPConfirmedAt,
-		receiverWallet.OTPConfirmedWith,
-		receiverWallet.ID)
-	if err != nil {
-		return fmt.Errorf("updating receiver wallet: %w", err)
-	}
-
-	numRowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("getting number of rows affected: %w", err)
-	}
-
-	if numRowsAffected == 0 {
-		return fmt.Errorf("no receiver wallet could be found in UpdateReceiverWallet: %w", ErrRecordNotFound)
-	}
-
-	return nil
-}
-
 // VerifyReceiverWalletOTP validates the receiver wallet OTP.
 func (rw *ReceiverWalletModel) VerifyReceiverWalletOTP(ctx context.Context, networkPassphrase string, receiverWallet ReceiverWallet, otp string) error {
 	if networkPassphrase == network.TestNetworkPassphrase {
@@ -615,4 +575,116 @@ func (rw *ReceiverWalletModel) UpdateInvitationSentAt(ctx context.Context, sqlEx
 	}
 
 	return receiverWallets, nil
+}
+
+type ReceiverWalletUpdate struct {
+	Status                      *ReceiversWalletStatus `db:"status"`
+	AnchorPlatformTransactionID *string                `db:"anchor_platform_transaction_id"`
+	StellarAddress              *string                `db:"stellar_address"`
+	StellarMemo                 *string                `db:"stellar_memo"`
+	StellarMemoType             *string                `db:"stellar_memo_type"`
+	OTPConfirmedAt              *time.Time             `db:"otp_confirmed_at"`
+	OTPConfirmedWith            *string                `db:"otp_confirmed_with"`
+}
+
+func (rwu ReceiverWalletUpdate) IsEmpty() bool {
+	return rwu.Status == nil &&
+		rwu.AnchorPlatformTransactionID == nil &&
+		rwu.StellarAddress == nil &&
+		rwu.StellarMemo == nil &&
+		rwu.StellarMemoType == nil &&
+		rwu.OTPConfirmedAt == nil &&
+		rwu.OTPConfirmedWith == nil
+}
+
+func (rwu ReceiverWalletUpdate) Validate() error {
+	if rwu.IsEmpty() {
+		return fmt.Errorf("no values provided to update receiver wallet")
+	}
+
+	if rwu.Status != nil {
+		if err := rwu.Status.Validate(); err != nil {
+			return fmt.Errorf("validating status: %w", err)
+		}
+	}
+
+	if rwu.StellarAddress != nil {
+		if err := utils.ValidateStellarPublicKey(*rwu.StellarAddress); err != nil {
+			return fmt.Errorf("validating stellar address: %w", err)
+		}
+	}
+
+	if rwu.OTPConfirmedAt != nil && rwu.OTPConfirmedWith == nil {
+		return fmt.Errorf("OTPConfirmedWith is required when OTPConfirmedAt is provided")
+	}
+
+	if rwu.OTPConfirmedWith != nil && rwu.OTPConfirmedAt == nil {
+		return fmt.Errorf("OTPConfirmedAt is required when OTPConfirmedWith is provided")
+	}
+
+	return nil
+}
+
+func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update ReceiverWalletUpdate, sqlExec db.SQLExecuter) error {
+	if err := update.Validate(); err != nil {
+		return fmt.Errorf("validating receiver wallet update: %w", err)
+	}
+
+	fields := []string{}
+	args := []interface{}{}
+
+	if update.Status != nil {
+		fields = append(fields, "status = ?")
+		args = append(args, *update.Status)
+		fields = append(fields, "status_history = array_prepend(create_receiver_wallet_status_history(NOW(), ?), status_history)")
+		args = append(args, *update.Status)
+	}
+	if update.AnchorPlatformTransactionID != nil {
+		fields = append(fields, "anchor_platform_transaction_id = ?")
+		args = append(args, *update.AnchorPlatformTransactionID)
+	}
+	if update.StellarAddress != nil {
+		fields = append(fields, "stellar_address = ?")
+		args = append(args, *update.StellarAddress)
+	}
+	if update.StellarMemo != nil {
+		fields = append(fields, "stellar_memo = ?")
+		args = append(args, *update.StellarMemo)
+	}
+	if update.StellarMemoType != nil {
+		fields = append(fields, "stellar_memo_type = ?")
+		args = append(args, *update.StellarMemoType)
+	}
+	if update.OTPConfirmedAt != nil {
+		fields = append(fields, "otp_confirmed_at = ?")
+		args = append(args, *update.OTPConfirmedAt)
+	}
+	if update.OTPConfirmedWith != nil {
+		fields = append(fields, "otp_confirmed_with = ?")
+		args = append(args, *update.OTPConfirmedWith)
+	}
+
+	args = append(args, id)
+	query := fmt.Sprintf(`
+        UPDATE receiver_wallets
+        SET %s
+        WHERE id = ?
+    `, strings.Join(fields, ", "))
+
+	query = sqlExec.Rebind(query)
+	result, err := sqlExec.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("updating receiver wallet: %w", err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+
+	if numRowsAffected == 0 {
+		return fmt.Errorf("no receiver wallet could be found in UpdateReceiverWallet: %w", ErrRecordNotFound)
+	}
+
+	return nil
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/nyaruka/phonenumbers"
+	"github.com/stellar/go/keypair"
 )
 
 var (
@@ -43,6 +44,19 @@ func ValidatePhoneNumber(phoneNumberStr string) error {
 	if err != nil || !phonenumbers.IsValidNumber(parsedNumber) {
 		// Parsing error, not a valid phone number
 		return ErrInvalidE164PhoneNumber
+	}
+
+	return nil
+}
+
+func ValidateStellarPublicKey(publicKey string) error {
+	if publicKey == "" {
+		return fmt.Errorf("public key cannot be empty")
+	}
+
+	_, err := keypair.ParseAddress(publicKey)
+	if err != nil {
+		return fmt.Errorf("the provided public key is not a valid Stellar public key")
 	}
 
 	return nil

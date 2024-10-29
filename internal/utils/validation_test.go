@@ -290,3 +290,22 @@ func Test_ValidateURLScheme(t *testing.T) {
 		})
 	}
 }
+
+func Test_ValidateStellarPublicKey(t *testing.T) {
+	tests := []struct {
+		name          string
+		publicKey     string
+		expectedError error
+	}{
+		{"valid Stellar public key", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S", nil},
+		{"invalid Stellar public key - empty", "", fmt.Errorf("public key cannot be empty")},
+		{"invalid Stellar public key - invalid", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDON", fmt.Errorf("the provided public key is not a valid Stellar public key")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStellarPublicKey(tt.publicKey)
+			assert.Equal(t, tt.expectedError, err)
+		})
+	}
+}

@@ -1,5 +1,10 @@
 package data
 
+import (
+	"fmt"
+	"strings"
+)
+
 type ReceiversWalletStatus string
 
 const (
@@ -30,4 +35,14 @@ func ReceiversWalletStateMachineWithInitialState(initialState ReceiversWalletSta
 
 func (status ReceiversWalletStatus) State() State {
 	return State(status)
+}
+
+// Validate validates the receiver wallet status
+func (status ReceiversWalletStatus) Validate() error {
+	switch ReceiversWalletStatus(strings.ToUpper(string(status))) {
+	case DraftReceiversWalletStatus, ReadyReceiversWalletStatus, RegisteredReceiversWalletStatus, FlaggedReceiversWalletStatus:
+		return nil
+	default:
+		return fmt.Errorf("invalid receiver wallet status %q", status)
+	}
 }
