@@ -89,14 +89,14 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Ctx(ctx).Errorf("error authenticating user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err)
+		log.Ctx(ctx).Errorf("authenticating user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err)
 		httperror.InternalError(ctx, "Cannot authenticate user credentials", err, nil).Render(rw)
 		return
 	}
 
 	user, err := h.AuthManager.GetUser(ctx, token)
 	if err != nil {
-		log.Ctx(ctx).Errorf("error getting user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err)
+		log.Ctx(ctx).Errorf("getting user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
@@ -116,7 +116,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	isRemembered, err := h.AuthManager.MFADeviceRemembered(ctx, deviceID, user.ID)
 	if err != nil {
-		log.Ctx(ctx).Errorf("error checking if device is remembered for user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err.Error())
+		log.Ctx(ctx).Errorf("checking if device is remembered for user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err.Error())
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
@@ -130,7 +130,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// Get the MFA code for the user
 	code, err := h.AuthManager.GetMFACode(ctx, deviceID, user.ID)
 	if err != nil {
-		log.Ctx(ctx).Errorf("error getting MFA code for user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err.Error())
+		log.Ctx(ctx).Errorf("getting MFA code for user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err.Error())
 		httperror.InternalError(ctx, "Cannot get MFA code", err, nil).Render(rw)
 		return
 	}
@@ -164,7 +164,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	err = h.MessengerClient.SendMessage(msg)
 	if err != nil {
-		err = fmt.Errorf("error sending mfa code for email %s: %w", user.Email, err)
+		err = fmt.Errorf("sending mfa code for email %s: %w", user.Email, err)
 		log.Ctx(ctx).Error(err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return

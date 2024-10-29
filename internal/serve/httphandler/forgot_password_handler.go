@@ -89,9 +89,9 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	// to prevent malicious client from searching accounts in the system
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
+			log.Ctx(ctx).Errorf("in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, user has a valid token")
+			log.Ctx(ctx).Errorf("in forgot password handler, user has a valid token")
 		} else {
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
@@ -101,14 +101,14 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err == nil {
 		organization, err := h.Models.Organizations.Get(ctx)
 		if err != nil {
-			err = fmt.Errorf("error getting organization data: %w", err)
+			err = fmt.Errorf("getting organization data: %w", err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
 		}
 
 		resetPasswordLink, err := url.JoinPath(*tnt.SDPUIBaseURL, "reset-password")
 		if err != nil {
-			err = fmt.Errorf("error getting reset password link: %w", err)
+			err = fmt.Errorf("getting reset password link: %w", err)
 			log.Ctx(ctx).Error(err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
@@ -121,7 +121,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 		messageContent, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(forgotPasswordData)
 		if err != nil {
-			err = fmt.Errorf("error executing forgot password message template: %w", err)
+			err = fmt.Errorf("executing forgot password message template: %w", err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
 		}
@@ -133,7 +133,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 		err = h.MessengerClient.SendMessage(msg)
 		if err != nil {
-			err = fmt.Errorf("error sending forgot password email for email %s: %w", forgotPasswordRequest.Email, err)
+			err = fmt.Errorf("sending forgot password email for email %s: %w", forgotPasswordRequest.Email, err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
 		}
