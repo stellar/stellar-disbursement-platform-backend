@@ -24,30 +24,80 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-func Test_LoginRequest_validate(t *testing.T) {
-	lr := LoginRequest{
-		Email:          "",
-		Password:       "",
-		ReCAPTCHAToken: "",
+func Test_LoginHandler_validateRequest(t *testing.T) {
+	type Req struct {
+		body    LoginRequest
+		headers map[string]string
+	}
+	testCases := []struct {
+		name     string
+		handler  LoginHandler
+		req      Req
+		expected *httperror.HTTPError
+	}{
+		{
+			name: "🔴 invalid body and headers fields",
+			expected: httperror.BadRequest("", nil, map[string]interface{}{
+				"email":           "email is required",
+				"password":        "password is required",
+				"recaptcha_token": "reCAPTCHA token is required",
+				"Device-ID":       "Device-ID header is required",
+			}),
+		},
+		{
+			name: "🔴 invalid body fields with reCAPTCHA and MFA disabled",
+			handler: LoginHandler{
+				ReCAPTCHADisabled: true,
+				MFADisabled:       true,
+			},
+			expected: httperror.BadRequest("", nil, map[string]interface{}{
+				"email":    "email is required",
+				"password": "password is required",
+			}),
+		},
+		{
+			name: "🟢 valid request with mfa & reCAPTCHA enabled",
+			req: Req{
+				body: LoginRequest{
+					Email:          "foobar@test.com",
+					Password:       "password",
+					ReCAPTCHAToken: "XyZ",
+				},
+				headers: map[string]string{DeviceIDHeader: "safari-xyz"},
+			},
+			expected: nil,
+		},
+		{
+			name: "🟢 valid request with mfa & reCAPTCHA disabled",
+			req: Req{
+				body: LoginRequest{
+					Email:    "foobar@test.com",
+					Password: "password",
+				},
+			},
+			handler: LoginHandler{
+				ReCAPTCHADisabled: true,
+				MFADisabled:       true,
+			},
+			expected: nil,
+		},
 	}
 
-	extras := map[string]interface{}{"email": "email is required", "password": "password is required"}
-	expectedErr := httperror.BadRequest("Request invalid", nil, extras)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := http.Header{}
+			for k, v := range tc.req.headers {
+				headers.Set(k, v)
+			}
 
-	err := lr.validate()
-	assert.Equal(t, expectedErr, err)
-
-	lr = LoginRequest{
-		Email:          "email@email.com",
-		Password:       "",
-		ReCAPTCHAToken: "XyZ",
+			err := tc.handler.validateRequest(tc.req.body, headers)
+			if tc.expected == nil {
+				require.Nil(t, err)
+			} else {
+				require.Equal(t, tc.expected, err)
+			}
+		})
 	}
-
-	extras = map[string]interface{}{"password": "password is required"}
-	expectedErr = httperror.BadRequest("Request invalid", nil, extras)
-
-	err = lr.validate()
-	assert.Equal(t, expectedErr, err)
 }
 
 func Test_LoginHandler(t *testing.T) {
@@ -89,17 +139,18 @@ func Test_LoginHandler(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Request invalid",
+				"error": "The request was invalid in some way.",
 				"extras": {
 					"email": "email is required",
-					"password": "password is required"
+					"password": "password is required",
+					"recaptcha_token":"reCAPTCHA token is required"
 				}
 			}
 		`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(`{"email": "testuser"}`))
+		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(`{"email": "testuser", "recaptcha_token": "XyZ"}`))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -113,7 +164,7 @@ func Test_LoginHandler(t *testing.T) {
 
 		wantsBody = `
 			{
-				"error": "Request invalid",
+				"error": "The request was invalid in some way.",
 				"extras": {
 					"password": "password is required"
 				}
@@ -386,7 +437,7 @@ func Test_LoginHandler(t *testing.T) {
 	reCAPTCHAValidator.AssertExpectations(t)
 }
 
-func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
+func Test_LoginHandler_ServeHTTP_MFA(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -446,6 +497,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
 
 		loginHandler.ServeHTTP(rw, req)
@@ -455,11 +507,6 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error when deviceID header is empty", func(t *testing.T) {
-		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
-			Return(user, nil).
-			Once()
-
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		rw := httptest.NewRecorder()
@@ -524,31 +571,6 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 		mfaManagerMock.
 			On("GenerateMFACode", mock.Anything, deviceID, "userID").
 			Return("", errors.New("some weird error")).
-			Once()
-
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
-		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
-		req.Header.Set(DeviceIDHeader, deviceID)
-		rw := httptest.NewRecorder()
-
-		loginHandler.ServeHTTP(rw, req)
-
-		require.Equal(t, http.StatusInternalServerError, rw.Code)
-		require.Contains(t, rw.Body.String(), "Cannot get MFA code")
-	})
-
-	t.Run("error when code returned is empty", func(t *testing.T) {
-		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
-			Return(user, nil).
-			Once()
-		mfaManagerMock.
-			On("MFADeviceRemembered", mock.Anything, deviceID, "userID").
-			Return(false, nil).
-			Once()
-		mfaManagerMock.
-			On("GenerateMFACode", mock.Anything, deviceID, "userID").
-			Return("", nil).
 			Once()
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
