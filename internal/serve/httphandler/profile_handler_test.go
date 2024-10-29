@@ -32,9 +32,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -106,10 +107,17 @@ func Test_PatchOrganizationProfileRequest_AreAllFieldsEmpty(t *testing.T) {
 }
 
 func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
+	// Setup DB
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
 	// PNG file
 	pngImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
 	pngImgBuf := new(bytes.Buffer)
-	err := png.Encode(pngImgBuf, pngImg)
+	err = png.Encode(pngImgBuf, pngImg)
 	require.NoError(t, err)
 
 	// CSV file
@@ -137,6 +145,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
 		wantStatusCode    int
 		wantRespBody      string
+		networkType       utils.NetworkType
 	}{
 		{
 			name: "returns Unauthorized when no token is found",
@@ -221,17 +230,80 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 				}
 			}`,
 		},
+		{
+			name:  "returns BadRequest when the privacy_policy_link is invalid",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"privacy_policy_link": "example.com/privacy-policy"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"privacy_policy_link": "invalid URL format"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when the privacy_policy_link scheme is invalid",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"privacy_policy_link": "ftp://example.com/privacy-policy"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"privacy_policy_link": "invalid URL scheme is not part of [https http]"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when the privacy_policy_link scheme is invalid (pubnet)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"privacy_policy_link": "http://example.com/privacy-policy"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"privacy_policy_link": "invalid URL scheme is not part of [https]"
+				}
+			}`,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Setup DB
-			dbt := dbtest.Open(t)
-			defer dbt.Close()
-			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-			require.NoError(t, err)
-			defer dbConnectionPool.Close()
-
 			// Inject authenticated token into context:
 			ctx := context.Background()
 			if tc.token != "" {
@@ -239,11 +311,15 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies
-			handler := &ProfileHandler{MaxMemoryAllocation: 1024 * 1024, PasswordValidator: pwValidator}
+			handler := &ProfileHandler{
+				MaxMemoryAllocation: 1024 * 1024,
+				PasswordValidator:   pwValidator,
+				NetworkType:         tc.networkType,
+			}
 			if tc.mockAuthManagerFn != nil {
 				authManagerMock := &auth.AuthManagerMock{}
 				tc.mockAuthManagerFn(authManagerMock)
@@ -268,12 +344,21 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 }
 
 func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
+	// Setup DB
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
 	// PNG file
 	newPNGImgBuf := func() *bytes.Buffer {
 		pngImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
 		pngImgBuf := new(bytes.Buffer)
-		err := png.Encode(pngImgBuf, pngImg)
-		require.NoError(t, err)
+		innerErr := png.Encode(pngImgBuf, pngImg)
+		require.NoError(t, innerErr)
 		return pngImgBuf
 	}
 
@@ -283,7 +368,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 	// JPEG file
 	jpegImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
 	jpegImgBuf := new(bytes.Buffer)
-	err := jpeg.Encode(jpegImgBuf, jpegImg, &jpeg.Options{Quality: jpeg.DefaultQuality})
+	err = jpeg.Encode(jpegImgBuf, jpegImg, &jpeg.Options{Quality: jpeg.DefaultQuality})
 	require.NoError(t, err)
 
 	url := "/profile/organization"
@@ -417,15 +502,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			log.DefaultLogger.SetOutput(buf)
 			log.SetLevel(log.InfoLevel)
 
-			// Setup DB
-			dbt := dbtest.Open(t)
-			defer dbt.Close()
-			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-			require.NoError(t, err)
-			defer dbConnectionPool.Close()
-			models, err := data.NewModels(dbConnectionPool)
-			require.NoError(t, err)
-
 			// Inject authenticated token into context:
 			ctx := context.Background()
 			if tc.token != "" {
@@ -447,7 +523,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies
@@ -621,7 +697,7 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies
@@ -802,7 +878,7 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies

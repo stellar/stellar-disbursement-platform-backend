@@ -144,7 +144,7 @@ func Test_ValidateDNS(t *testing.T) {
 			gotError := ValidateDNS(tc.url)
 
 			if tc.wantErr != nil {
-				assert.EqualErrorf(t, gotError, tc.wantErr.Error(), "ValidateURL(%q) should be '%v', but got '%v'", tc.url, tc.wantErr, gotError)
+				assert.EqualErrorf(t, gotError, tc.wantErr.Error(), "ValidateDNS(%q) should be '%v', but got '%v'", tc.url, tc.wantErr, gotError)
 			} else {
 				assert.NoError(t, gotError)
 			}
@@ -250,6 +250,43 @@ func Test_ValidateNationalIDVerification(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateNationalIDVerification(tt.nationalID)
 			assert.Equal(t, tt.expectedError, err)
+		})
+	}
+}
+
+func Test_ValidateURLScheme(t *testing.T) {
+	tests := []struct {
+		url             string
+		wantErrContains string
+		schemas         []string
+	}{
+		{"https://example.com", "", nil},
+		{"https://example.com/page.html", "", nil},
+		{"https://example.com/section", "", nil},
+		{"https://www.example.com", "", nil},
+		{"https://subdomain.example.com", "", nil},
+		{"https://www.subdomain.example.com", "", nil},
+		{"", "invalid URL format", nil},
+		{" ", "invalid URL format", nil},
+		{"foobar", "invalid URL format", nil},
+		{"foobar", "invalid URL format", nil},
+		{"https://", "invalid URL format", nil},
+		{"example.com", "invalid URL format", []string{"https"}},
+		{"ftp://example.com", "invalid URL scheme is not part of [https]", []string{"https"}},
+		{"http://example.com", "invalid URL scheme is not part of [https]", []string{"https"}},
+		{"ftp://example.com", "", []string{"ftp"}},
+		{"http://example.com", "", []string{"http"}},
+	}
+
+	for _, tc := range tests {
+		title := fmt.Sprintf("%s-%s", VisualBool(tc.wantErrContains == ""), tc.url)
+		t.Run(title, func(t *testing.T) {
+			err := ValidateURLScheme(tc.url, tc.schemas...)
+			if tc.wantErrContains == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			}
 		})
 	}
 }

@@ -28,6 +28,14 @@ func (n NetworkType) Validate() error {
 	return nil
 }
 
+func (n NetworkType) IsPubnet() bool {
+	return n == PubnetNetworkType
+}
+
+func (n NetworkType) IsTestnet() bool {
+	return n == TestnetNetworkType
+}
+
 func GetNetworkTypeFromNetworkPassphrase(networkPassphrase string) (NetworkType, error) {
 	switch networkPassphrase {
 	case network.PublicNetworkPassphrase:

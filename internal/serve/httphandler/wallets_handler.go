@@ -13,10 +13,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type WalletsHandler struct {
-	Models *data.Models
+	Models      *data.Models
+	NetworkType utils.NetworkType
 }
 
 // GetWallets returns a list of wallets
@@ -52,7 +54,7 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	validator := validators.NewWalletValidator()
-	reqBody = validator.ValidateCreateWalletRequest(ctx, reqBody)
+	reqBody = validator.ValidateCreateWalletRequest(ctx, reqBody, h.NetworkType.IsPubnet())
 	if validator.HasErrors() {
 		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(rw)
 		return
@@ -67,6 +69,9 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	})
 	if err != nil {
 		switch {
+		case errors.Is(err, data.ErrInvalidAssetID):
+			httperror.BadRequest(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
+			return
 		case errors.Is(err, data.ErrWalletNameAlreadyExists):
 			httperror.Conflict(data.ErrWalletNameAlreadyExists.Error(), err, nil).Render(rw)
 			return
@@ -75,9 +80,6 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 			return
 		case errors.Is(err, data.ErrWalletDeepLinkSchemaAlreadyExists):
 			httperror.Conflict(data.ErrWalletDeepLinkSchemaAlreadyExists.Error(), err, nil).Render(rw)
-			return
-		case errors.Is(err, data.ErrInvalidAssetID):
-			httperror.Conflict(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
 			return
 		}
 

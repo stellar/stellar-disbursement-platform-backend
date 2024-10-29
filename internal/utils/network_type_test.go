@@ -44,6 +44,58 @@ func Test_NetworkType_Validate(t *testing.T) {
 	}
 }
 
+func Test_NetworkType_IsTestnet(t *testing.T) {
+	testCases := []struct {
+		networkType    NetworkType
+		expectedResult bool
+	}{
+		{
+			networkType:    TestnetNetworkType,
+			expectedResult: true,
+		},
+		{
+			networkType:    PubnetNetworkType,
+			expectedResult: false,
+		},
+		{
+			networkType:    "UNSUPPORTED",
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(string(tc.networkType), func(t *testing.T) {
+			assert.Equal(t, tc.expectedResult, tc.networkType.IsTestnet())
+		})
+	}
+}
+
+func Test_NetworkType_IsPubnet(t *testing.T) {
+	testCases := []struct {
+		networkType    NetworkType
+		expectedResult bool
+	}{
+		{
+			networkType:    TestnetNetworkType,
+			expectedResult: false,
+		},
+		{
+			networkType:    PubnetNetworkType,
+			expectedResult: true,
+		},
+		{
+			networkType:    "UNSUPPORTED",
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(string(tc.networkType), func(t *testing.T) {
+			assert.Equal(t, tc.expectedResult, tc.networkType.IsPubnet())
+		})
+	}
+}
+
 func Test_GetNetworkTypeFromNetworkPassphrase(t *testing.T) {
 	testCases := []struct {
 		networkPassphrase   string

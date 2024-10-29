@@ -47,6 +47,7 @@ type ProfileHandler struct {
 	PublicFilesFS               fs.FS
 	DistributionAccountResolver signing.DistributionAccountResolver
 	PasswordValidator           *authUtils.PasswordValidator
+	utils.NetworkType
 }
 
 type PatchOrganizationProfileRequest struct {
@@ -157,6 +158,19 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 			"details": "data or logo is required",
 		}).Render(rw)
 		return
+	}
+
+	if reqBody.PrivacyPolicyLink != nil && *reqBody.PrivacyPolicyLink != "" {
+		schemes := []string{"https"}
+		if !h.IsPubnet() {
+			schemes = append(schemes, "http")
+		}
+		validator := validators.NewValidator()
+		validator.CheckError(utils.ValidateURLScheme(*reqBody.PrivacyPolicyLink, schemes...), "privacy_policy_link", "")
+		if validator.HasErrors() {
+			httperror.BadRequest("", nil, validator.Errors).Render(rw)
+			return
+		}
 	}
 
 	organizationUpdate := data.OrganizationUpdate{

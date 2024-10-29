@@ -103,3 +103,10 @@ func IntPtr(i int) *int {
 func TimePtr(t time.Time) *time.Time {
 	return &t
 }
+
+func VisualBool(b bool) string {
+	if b {
+		return "🟢"
+	}
+	return "🔴"
+}

@@ -3,7 +3,9 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -174,3 +176,25 @@ func ValidatePathIsNotTraversal(p string) error {
 }
 
 var pathTraversalPattern = regexp.MustCompile(`(^|[\\/])\.\.([\\/]|$)`)
+
+// ValidateURLScheme checks if a URL is valid and if it has a valid scheme.
+func ValidateURLScheme(link string, scheme ...string) error {
+	// Use govalidator to check if it's a valid URL
+	if !govalidator.IsURL(link) {
+		return errors.New("invalid URL format")
+	}
+
+	parsedURL, err := url.ParseRequestURI(link)
+	if err != nil {
+		return errors.New("invalid URL format")
+	}
+
+	// Check if the scheme is valid
+	if len(scheme) > 0 {
+		if !slices.Contains(scheme, parsedURL.Scheme) {
+			return fmt.Errorf("invalid URL scheme is not part of %v", scheme)
+		}
+	}
+
+	return nil
+}
