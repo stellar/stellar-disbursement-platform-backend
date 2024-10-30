@@ -45,6 +45,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		Wallet:                              wallet,
 		VerificationField:                   VerificationTypeDateOfBirth,
 		ReceiverRegistrationMessageTemplate: smsTemplate,
+		RegistrationContactType:             RegistrationContactTypePhone,
 	}
 
 	t.Run("returns error when disbursement already exists", func(t *testing.T) {

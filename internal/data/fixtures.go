@@ -576,6 +576,9 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	if d.VerificationField == "" {
 		d.VerificationField = VerificationTypeDateOfBirth
 	}
+	if d.RegistrationContactType == "" {
+		d.RegistrationContactType = RegistrationContactTypePhone
+	}
 
 	// insert disbursement
 	if d.StatusHistory == nil {
@@ -648,6 +651,10 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 
 	if insert.VerificationField == "" {
 		insert.VerificationField = VerificationTypeDateOfBirth
+	}
+
+	if insert.RegistrationContactType == "" {
+		insert.RegistrationContactType = RegistrationContactTypePhone
 	}
 
 	id, err := model.Insert(ctx, &insert)

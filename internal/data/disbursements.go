@@ -30,7 +30,30 @@ type Disbursement struct {
 	FileContent                         []byte                    `json:"-" db:"file_content"`
 	CreatedAt                           time.Time                 `json:"created_at" db:"created_at"`
 	UpdatedAt                           time.Time                 `json:"updated_at" db:"updated_at"`
+	RegistrationContactType             RegistrationContactType   `json:"registration_contact_type,omitempty" db:"registration_contact_type"`
 	*DisbursementStats
+}
+
+type RegistrationContactType string
+
+const (
+	// RegistrationContactTypeEmail is "EMAIL"
+	RegistrationContactTypeEmail RegistrationContactType = RegistrationContactType(ReceiverContactTypeEmail)
+	// RegistrationContactTypePhone is "PHONE_NUMBER"
+	RegistrationContactTypePhone RegistrationContactType = RegistrationContactType(ReceiverContactTypeSMS)
+	// RegistrationContactTypeEmailAndWalletAddress is "EMAIL_AND_WALLET_ADDRESS"
+	RegistrationContactTypeEmailAndWalletAddress RegistrationContactType = RegistrationContactType(string(ReceiverContactTypeEmail) + "_AND_WALLET_ADDRESS")
+	// RegistrationContactTypePhoneAndWalletAddress is "PHONE_NUMBER_AND_WALLET_ADDRESS"
+	RegistrationContactTypePhoneAndWalletAddress RegistrationContactType = RegistrationContactType(string(ReceiverContactTypeSMS) + "_AND_WALLET_ADDRESS")
+)
+
+func AllRegistrationContactTypes() []RegistrationContactType {
+	return []RegistrationContactType{
+		RegistrationContactTypeEmail,
+		RegistrationContactTypeEmailAndWalletAddress,
+		RegistrationContactTypePhone,
+		RegistrationContactTypePhoneAndWalletAddress,
+	}
 }
 
 type DisbursementStatusHistory []DisbursementStatusHistoryEntry
@@ -71,9 +94,9 @@ var (
 func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field, receiver_registration_message_template)
+		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field, receiver_registration_message_template, registration_contact_type)
 		VALUES 
-		    ($1, $2, $3, $4, $5, $6, $7, $8)
+		    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 		    `
 	var newId string
@@ -86,6 +109,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		disbursement.Country.Code,
 		disbursement.VerificationField,
 		disbursement.ReceiverRegistrationMessageTemplate,
+		disbursement.RegistrationContactType,
 	)
 	if err != nil {
 		// check if the error is a duplicate key error
@@ -127,6 +151,7 @@ func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id 
 			d.created_at,
 			d.updated_at,
 			d.verification_field,
+			d.registration_contact_type,
 			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
@@ -179,6 +204,7 @@ func (d *DisbursementModel) GetByName(ctx context.Context, sqlExec db.SQLExecute
 			d.created_at,
 			d.updated_at,
 			d.verification_field,
+			d.registration_contact_type,
 			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
@@ -320,6 +346,7 @@ func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, 
 			d.created_at,
 			d.updated_at,
 			d.verification_field,
+			d.registration_contact_type,
 			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			COALESCE(d.file_name, '') as file_name,
 			w.id as "wallet.id",
