@@ -8,9 +8,15 @@ CREATE TYPE registration_contact_types AS ENUM (
     'PHONE_NUMBER_AND_WALLET_ADDRESS'
 );
 
--- TODO: create without the NOT NULL constraint, update the existing data, then add the NOT NULL constraint
 ALTER TABLE disbursements
-    ADD COLUMN registration_contact_type registration_contact_types NOT NULL DEFAULT 'PHONE_NUMBER';
+    ADD COLUMN registration_contact_type registration_contact_types;
+
+UPDATE disbursements
+    SET registration_contact_type = 'PHONE_NUMBER'
+    WHERE registration_contact_type IS NULL;
+
+ALTER TABLE disbursements
+    ALTER COLUMN registration_contact_type SET NOT NULL;
 
 -- +migrate Down
 ALTER TABLE disbursements
