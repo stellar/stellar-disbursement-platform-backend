@@ -576,7 +576,7 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	if d.VerificationField == "" {
 		d.VerificationField = VerificationTypeDateOfBirth
 	}
-	if d.RegistrationContactType == "" {
+	if utils.IsEmpty(d.RegistrationContactType) {
 		d.RegistrationContactType = RegistrationContactTypePhone
 	}
 
@@ -653,7 +653,7 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 		insert.VerificationField = VerificationTypeDateOfBirth
 	}
 
-	if insert.RegistrationContactType == "" {
+	if utils.IsEmpty(insert.RegistrationContactType) {
 		insert.RegistrationContactType = RegistrationContactTypePhone
 	}
 

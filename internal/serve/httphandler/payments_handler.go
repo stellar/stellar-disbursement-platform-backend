@@ -85,24 +85,24 @@ func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, 
 
 func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	paymentID := chi.URLParam(r, "id")
+	ctx := r.Context()
 
-	payment, err := p.Models.Payment.Get(r.Context(), paymentID, p.DBConnectionPool)
+	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", paymentID)
 			httperror.NotFound(errorResponse, err, nil).Render(w)
 			return
 		} else {
-			ctx := r.Context()
 			msg := fmt.Sprintf("Cannot retrieve payment with id %s", paymentID)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)
 			return
 		}
 	}
 
-	payments, err := p.decorateWithCircleTransactionInfo(r.Context(), *payment)
+	payments, err := p.decorateWithCircleTransactionInfo(ctx, *payment)
 	if err != nil {
-		httperror.InternalError(r.Context(), "Cannot retrieve payment with circle info", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot retrieve payment with circle info", err, nil).Render(w)
 		return
 	}
 

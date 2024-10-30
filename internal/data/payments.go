@@ -156,6 +156,7 @@ SELECT
 	d.status as "disbursement.status",
 	d.created_at as "disbursement.created_at",
 	d.updated_at as "disbursement.updated_at",
+	d.registration_contact_type as "disbursement.registration_contact_type",
 	a.id as "asset.id",
 	a.code as "asset.code",
 	a.issuer as "asset.issuer",
