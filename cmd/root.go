@@ -81,8 +81,6 @@ func rootCmd() *cobra.Command {
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
 			}
-			log.Ctx(ctx).Info("Version: ", globalOptions.Version)
-			log.Ctx(ctx).Info("GitCommit: ", globalOptions.GitCommit)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
