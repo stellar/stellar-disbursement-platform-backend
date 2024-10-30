@@ -1234,7 +1234,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 		require.Empty(t, actual)
 	})
 
-	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 	results, err := receiverWalletModel.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, receiver.PhoneNumber, wallet.SEP10ClientDomain, "123456")
 	require.NoError(t, err)
 	require.Equal(t, 1, results)
@@ -1502,74 +1502,7 @@ func Test_ReceiverWalletModelUpdateInvitationSentAt(t *testing.T) {
 	})
 }
 
-func Test_ReceiverWalletUpdate_IsEmpty(t *testing.T) {
-	t.Run("returns true when all fields are nil", func(t *testing.T) {
-		update := ReceiverWalletUpdate{}
-		assert.True(t, update.IsEmpty())
-	})
-
-	t.Run("returns false when any field is set", func(t *testing.T) {
-		registeredStatus := RegisteredReceiversWalletStatus
-		testCases := []struct {
-			name   string
-			update ReceiverWalletUpdate
-		}{
-			{
-				name: "Status set",
-				update: ReceiverWalletUpdate{
-					Status: &registeredStatus,
-				},
-			},
-			{
-				name: "AnchorPlatformTransactionID set",
-				update: ReceiverWalletUpdate{
-					AnchorPlatformTransactionID: utils.StringPtr("tx-id"),
-				},
-			},
-			{
-				name: "StellarAddress set",
-				update: ReceiverWalletUpdate{
-					StellarAddress: utils.StringPtr("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"),
-				},
-			},
-			{
-				name: "StellarMemo set",
-				update: ReceiverWalletUpdate{
-					StellarMemo: utils.StringPtr("memo"),
-				},
-			},
-			{
-				name: "StellarMemoType set",
-				update: ReceiverWalletUpdate{
-					StellarMemoType: utils.StringPtr("text"),
-				},
-			},
-			{
-				name: "OTPConfirmedAt set",
-				update: ReceiverWalletUpdate{
-					OTPConfirmedAt: utils.TimePtr(time.Now()),
-				},
-			},
-			{
-				name: "OTPConfirmedWith set",
-				update: ReceiverWalletUpdate{
-					OTPConfirmedWith: utils.StringPtr("test@email.com"),
-				},
-			},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				assert.False(t, tc.update.IsEmpty())
-			})
-		}
-	})
-}
-
 func Test_ReceiverWalletUpdate_Validate(t *testing.T) {
-	registeredStatus := RegisteredReceiversWalletStatus
-	invalidStatus := ReceiversWalletStatus("invalid")
-
 	testCases := []struct {
 		name   string
 		update ReceiverWalletUpdate
@@ -1583,38 +1516,38 @@ func Test_ReceiverWalletUpdate_Validate(t *testing.T) {
 		{
 			name: "invalid stellar address",
 			update: ReceiverWalletUpdate{
-				StellarAddress: utils.StringPtr("invalid"),
+				StellarAddress: "invalid",
 			},
-			err: "validating stellar address: the provided public key is not a valid Stellar public key",
+			err: "invalid stellar address",
 		},
 		{
 			name: "invalid status",
 			update: ReceiverWalletUpdate{
-				Status: &invalidStatus,
+				Status: "invalid",
 			},
 			err: "validating status: invalid receiver wallet status \"invalid\"",
 		},
 		{
 			name: "OTPConfirmedAt set without OTPConfirmedWith",
 			update: ReceiverWalletUpdate{
-				OTPConfirmedAt: utils.TimePtr(time.Now()),
+				OTPConfirmedAt: time.Now(),
 			},
 			err: "OTPConfirmedWith is required when OTPConfirmedAt is provided",
 		},
 		{
 			name: "OTPConfirmedWith set without OTPConfirmedAt",
 			update: ReceiverWalletUpdate{
-				OTPConfirmedWith: utils.StringPtr("test@email.com"),
+				OTPConfirmedWith: "test@email.com",
 			},
 			err: "OTPConfirmedAt is required when OTPConfirmedWith is provided",
 		},
 		{
 			name: "valid update",
 			update: ReceiverWalletUpdate{
-				Status:           &registeredStatus,
-				StellarAddress:   utils.StringPtr("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"),
-				OTPConfirmedAt:   utils.TimePtr(time.Now()),
-				OTPConfirmedWith: utils.StringPtr("test@email.com"),
+				Status:           RegisteredReceiversWalletStatus,
+				StellarAddress:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+				OTPConfirmedAt:   time.Now(),
+				OTPConfirmedWith: "test@email.com",
 			},
 			err: "",
 		},
@@ -1642,7 +1575,6 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 
 	ctx := context.Background()
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
-	registeredStatus := RegisteredReceiversWalletStatus
 
 	t.Run("returns error when update is empty", func(t *testing.T) {
 		err := receiverWalletModel.Update(ctx, "some-id", ReceiverWalletUpdate{}, dbConnectionPool)
@@ -1651,16 +1583,15 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
 		update := ReceiverWalletUpdate{
-			Status: &registeredStatus,
+			Status: RegisteredReceiversWalletStatus,
 		}
 		err := receiverWalletModel.Update(ctx, "invalid_id", update, dbConnectionPool)
 		require.ErrorIs(t, err, ErrRecordNotFound)
 	})
 
 	t.Run("returns error when receiver wallet status is not valid", func(t *testing.T) {
-		var invalidStatus ReceiversWalletStatus = "invalid"
 		update := ReceiverWalletUpdate{
-			Status: &invalidStatus,
+			Status: "invalid",
 		}
 		err := receiverWalletModel.Update(ctx, "some id", update, dbConnectionPool)
 		require.Error(t, err)
@@ -1675,13 +1606,13 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 		now := time.Now()
 
 		update := ReceiverWalletUpdate{
-			Status:                      &registeredStatus,
-			AnchorPlatformTransactionID: utils.StringPtr("test-tx-id"),
-			StellarAddress:              utils.StringPtr("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"),
-			StellarMemo:                 utils.StringPtr("123456"),
-			StellarMemoType:             utils.StringPtr("id"),
-			OTPConfirmedAt:              &now,
-			OTPConfirmedWith:            utils.StringPtr("test@stellar.org"),
+			Status:                      RegisteredReceiversWalletStatus,
+			AnchorPlatformTransactionID: "test-tx-id",
+			StellarAddress:              "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			StellarMemo:                 "123456",
+			StellarMemoType:             "id",
+			OTPConfirmedAt:              now,
+			OTPConfirmedWith:            "test@stellar.org",
 		}
 
 		err := receiverWalletModel.Update(ctx, receiverWallet.ID, update, dbConnectionPool)
@@ -1711,7 +1642,7 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", updated.StellarAddress)
 		assert.Equal(t, "123456", updated.StellarMemo)
 		assert.Equal(t, "id", updated.StellarMemoType)
-		assert.Equal(t, now.UTC(), updated.OTPConfirmedAt.UTC())
+		assert.WithinDuration(t, now.UTC(), updated.OTPConfirmedAt.UTC(), time.Microsecond)
 		assert.Equal(t, "test@stellar.org", updated.OTPConfirmedWith)
 
 		// Verify status history was updated

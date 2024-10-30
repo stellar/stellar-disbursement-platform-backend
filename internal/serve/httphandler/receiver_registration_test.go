@@ -112,11 +112,9 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		"mywallet://")
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
-	receiverWallet.StellarAddress = "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
-	receiverWallet.StellarMemo = ""
 	err = receiverWalletModel.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
-		StellarAddress: &receiverWallet.StellarAddress,
-		StellarMemo:    &receiverWallet.StellarMemo,
+		StellarAddress: "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+		StellarMemo:    "",
 	}, dbConnectionPool)
 	require.NoError(t, err)
 

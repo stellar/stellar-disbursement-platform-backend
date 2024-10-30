@@ -12,6 +12,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -578,47 +579,37 @@ func (rw *ReceiverWalletModel) UpdateInvitationSentAt(ctx context.Context, sqlEx
 }
 
 type ReceiverWalletUpdate struct {
-	Status                      *ReceiversWalletStatus `db:"status"`
-	AnchorPlatformTransactionID *string                `db:"anchor_platform_transaction_id"`
-	StellarAddress              *string                `db:"stellar_address"`
-	StellarMemo                 *string                `db:"stellar_memo"`
-	StellarMemoType             *string                `db:"stellar_memo_type"`
-	OTPConfirmedAt              *time.Time             `db:"otp_confirmed_at"`
-	OTPConfirmedWith            *string                `db:"otp_confirmed_with"`
-}
-
-func (rwu ReceiverWalletUpdate) IsEmpty() bool {
-	return rwu.Status == nil &&
-		rwu.AnchorPlatformTransactionID == nil &&
-		rwu.StellarAddress == nil &&
-		rwu.StellarMemo == nil &&
-		rwu.StellarMemoType == nil &&
-		rwu.OTPConfirmedAt == nil &&
-		rwu.OTPConfirmedWith == nil
+	Status                      ReceiversWalletStatus `db:"status"`
+	AnchorPlatformTransactionID string                `db:"anchor_platform_transaction_id"`
+	StellarAddress              string                `db:"stellar_address"`
+	StellarMemo                 string                `db:"stellar_memo"`
+	StellarMemoType             string                `db:"stellar_memo_type"`
+	OTPConfirmedAt              time.Time             `db:"otp_confirmed_at"`
+	OTPConfirmedWith            string                `db:"otp_confirmed_with"`
 }
 
 func (rwu ReceiverWalletUpdate) Validate() error {
-	if rwu.IsEmpty() {
+	if utils.IsEmpty(rwu) {
 		return fmt.Errorf("no values provided to update receiver wallet")
 	}
 
-	if rwu.Status != nil {
+	if rwu.Status != "" {
 		if err := rwu.Status.Validate(); err != nil {
 			return fmt.Errorf("validating status: %w", err)
 		}
 	}
 
-	if rwu.StellarAddress != nil {
-		if err := utils.ValidateStellarPublicKey(*rwu.StellarAddress); err != nil {
-			return fmt.Errorf("validating stellar address: %w", err)
+	if rwu.StellarAddress != "" {
+		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) {
+			return fmt.Errorf("invalid stellar address")
 		}
 	}
 
-	if rwu.OTPConfirmedAt != nil && rwu.OTPConfirmedWith == nil {
+	if !time.Time.IsZero(rwu.OTPConfirmedAt) && rwu.OTPConfirmedWith == "" {
 		return fmt.Errorf("OTPConfirmedWith is required when OTPConfirmedAt is provided")
 	}
 
-	if rwu.OTPConfirmedWith != nil && rwu.OTPConfirmedAt == nil {
+	if rwu.OTPConfirmedWith != "" && time.Time.IsZero(rwu.OTPConfirmedAt) {
 		return fmt.Errorf("OTPConfirmedAt is required when OTPConfirmedWith is provided")
 	}
 
@@ -633,35 +624,35 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	fields := []string{}
 	args := []interface{}{}
 
-	if update.Status != nil {
+	if update.Status != "" {
 		fields = append(fields, "status = ?")
-		args = append(args, *update.Status)
+		args = append(args, update.Status)
 		fields = append(fields, "status_history = array_prepend(create_receiver_wallet_status_history(NOW(), ?), status_history)")
-		args = append(args, *update.Status)
+		args = append(args, update.Status)
 	}
-	if update.AnchorPlatformTransactionID != nil {
+	if update.AnchorPlatformTransactionID != "" {
 		fields = append(fields, "anchor_platform_transaction_id = ?")
-		args = append(args, *update.AnchorPlatformTransactionID)
+		args = append(args, update.AnchorPlatformTransactionID)
 	}
-	if update.StellarAddress != nil {
+	if update.StellarAddress != "" {
 		fields = append(fields, "stellar_address = ?")
-		args = append(args, *update.StellarAddress)
+		args = append(args, update.StellarAddress)
 	}
-	if update.StellarMemo != nil {
+	if update.StellarMemo != "" {
 		fields = append(fields, "stellar_memo = ?")
-		args = append(args, *update.StellarMemo)
+		args = append(args, update.StellarMemo)
 	}
-	if update.StellarMemoType != nil {
+	if update.StellarMemoType != "" {
 		fields = append(fields, "stellar_memo_type = ?")
-		args = append(args, *update.StellarMemoType)
+		args = append(args, update.StellarMemoType)
 	}
-	if update.OTPConfirmedAt != nil {
+	if !time.Time.IsZero(update.OTPConfirmedAt) {
 		fields = append(fields, "otp_confirmed_at = ?")
-		args = append(args, *update.OTPConfirmedAt)
+		args = append(args, update.OTPConfirmedAt)
 	}
-	if update.OTPConfirmedWith != nil {
+	if update.OTPConfirmedWith != "" {
 		fields = append(fields, "otp_confirmed_with = ?")
-		args = append(args, *update.OTPConfirmedWith)
+		args = append(args, update.OTPConfirmedWith)
 	}
 
 	args = append(args, id)
