@@ -424,25 +424,29 @@ func DeleteAllReceiverVerificationFixtures(t *testing.T, ctx context.Context, sq
 }
 
 func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, receiverID, walletID string, status ReceiversWalletStatus) *ReceiverWallet {
-	kp, err := keypair.Random()
-	require.NoError(t, err)
-	stellarAddress := kp.Address()
+	var stellarAddress, stellarMemo, stellarMemoType, anchorPlatformTransactionID string
 
-	randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
-	require.NoError(t, err)
+	if status != DraftReceiversWalletStatus && status != ReadyReceiversWalletStatus {
+		kp, err := keypair.Random()
+		require.NoError(t, err)
+		stellarAddress = kp.Address()
 
-	stellarMemo := fmt.Sprint(randNumber.Int64() + 10000)
-	stellarMemoType := "id"
+		randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
+		require.NoError(t, err)
 
-	anchorPlatformTransactionID, err := utils.RandomString(10)
-	require.NoError(t, err)
+		stellarMemo = fmt.Sprint(randNumber.Int64() + 10000)
+		stellarMemoType = "id"
+
+		anchorPlatformTransactionID, err = utils.RandomString(10)
+		require.NoError(t, err)
+	}
 
 	const query = `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
-				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, anchor_platform_transaction_id)
+				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, anchor_platform_transaction_id)
 			VALUES
-				($1, $2, $3, $4, $5, $6, $7)
+				($1, $2, $3, $4, $5, $6, ARRAY[create_receiver_wallet_status_history(now(), $6)], $7)
 			RETURNING
 				*
 		)
@@ -458,7 +462,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err = sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
+	err := sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
 		&receiverWallet.ID,
 		&receiverWallet.StellarAddress,
 		&receiverWallet.StellarMemo,

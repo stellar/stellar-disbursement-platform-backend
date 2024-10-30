@@ -229,7 +229,14 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	if sep24Claims.SEP10StellarMemo() != "" {
 		rw.StellarMemoType = "id"
 	}
-	err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *rw, dbTx)
+	err = v.Models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{
+		Status:           rw.Status,
+		StellarAddress:   rw.StellarAddress,
+		StellarMemo:      rw.StellarMemo,
+		StellarMemoType:  rw.StellarMemoType,
+		OTPConfirmedAt:   now,
+		OTPConfirmedWith: rw.OTPConfirmedWith,
+	}, dbTx)
 	if err != nil {
 		err = fmt.Errorf("completing receiver wallet registration: %w", err)
 		return receiverWallet, false, err
@@ -242,8 +249,9 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 // the receiver wallet with the anchor platform transaction ID.
 func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
 	// STEP 1: update receiver wallet with the anchor platform transaction ID.
-	receiverWallet.AnchorPlatformTransactionID = sep24Claims.TransactionID()
-	err := v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, receiverWallet, dbTx)
+	err := v.Models.ReceiverWallet.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
+		AnchorPlatformTransactionID: sep24Claims.TransactionID(),
+	}, dbTx)
 	if err != nil {
 		return fmt.Errorf("updating receiver wallet with anchor platform transaction ID: %w", err)
 	}

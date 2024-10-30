@@ -112,9 +112,10 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		"mywallet://")
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
-	receiverWallet.StellarAddress = "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
-	receiverWallet.StellarMemo = ""
-	err = receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
+	err = receiverWalletModel.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
+		StellarAddress: "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+		StellarMemo:    "",
+	}, dbConnectionPool)
 	require.NoError(t, err)
 
 	t.Run("returns 200 - Ok (And show the Registration Success page) if the token is in the request context and it's valid and the user was already registered 🎉", func(t *testing.T) {

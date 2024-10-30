@@ -520,73 +520,6 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 	})
 }
 
-func Test_UpdateReceiverWallet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
-
-	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
-		err := receiverWalletModel.UpdateReceiverWallet(ctx, ReceiverWallet{ID: "invalid_id", Status: DraftReceiversWalletStatus}, dbConnectionPool)
-		require.ErrorIs(t, err, ErrRecordNotFound)
-	})
-
-	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
-	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
-
-	t.Run("returns error when status is not valid", func(t *testing.T) {
-		receiverWallet.Status = "invalid_status"
-		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
-		require.Error(t, err, "querying receiver wallet: sql: no rows in result set")
-	})
-
-	t.Run("successfuly update receiver wallet", func(t *testing.T) {
-		receiverWallet.AnchorPlatformTransactionID = "test-anchor-tx-platform-id"
-		receiverWallet.StellarAddress = "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
-		receiverWallet.StellarMemo = "123456"
-		receiverWallet.StellarMemoType = "id"
-		receiverWallet.Status = RegisteredReceiversWalletStatus
-		now := time.Now()
-		receiverWallet.OTPConfirmedAt = &now
-		receiverWallet.OTPConfirmedWith = "test@stellar.org"
-
-		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
-		require.NoError(t, err)
-
-		// validate if the receiver wallet has been updated
-		query := `
-			SELECT
-				rw.status,
-				rw.anchor_platform_transaction_id,
-				rw.stellar_address,
-				rw.stellar_memo,
-				rw.stellar_memo_type,
-				otp_confirmed_at,
-				COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with
-			FROM
-				receiver_wallets rw
-			WHERE
-				rw.id = $1
-		`
-		receiverWalletUpdated := ReceiverWallet{}
-		err = dbConnectionPool.GetContext(ctx, &receiverWalletUpdated, query, receiverWallet.ID)
-		require.NoError(t, err)
-
-		assert.Equal(t, RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
-		assert.Equal(t, "test-anchor-tx-platform-id", receiverWalletUpdated.AnchorPlatformTransactionID)
-		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
-		assert.Equal(t, "123456", receiverWalletUpdated.StellarMemo)
-		assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
-		assert.WithinDuration(t, now, *receiverWalletUpdated.OTPConfirmedAt, 100*time.Millisecond)
-		assert.Equal(t, receiverWallet.OTPConfirmedWith, receiverWalletUpdated.OTPConfirmedWith)
-	})
-}
-
 func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -1301,7 +1234,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 		require.Empty(t, actual)
 	})
 
-	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 	results, err := receiverWalletModel.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, receiver.PhoneNumber, wallet.SEP10ClientDomain, "123456")
 	require.NoError(t, err)
 	require.Equal(t, 1, results)
@@ -1566,5 +1499,156 @@ func Test_ReceiverWalletModelUpdateInvitationSentAt(t *testing.T) {
 		assert.Equal(t, receiverWallet.ID, receiverWallets[0].ID)
 		require.NotNil(t, receiverWallets[0].InvitationSentAt)
 		assert.True(t, invitationSentAt.Before(*receiverWallets[0].InvitationSentAt))
+	})
+}
+
+func Test_ReceiverWalletUpdate_Validate(t *testing.T) {
+	testCases := []struct {
+		name   string
+		update ReceiverWalletUpdate
+		err    string
+	}{
+		{
+			name:   "empty update",
+			update: ReceiverWalletUpdate{},
+			err:    "no values provided to update receiver wallet",
+		},
+		{
+			name: "invalid stellar address",
+			update: ReceiverWalletUpdate{
+				StellarAddress: "invalid",
+			},
+			err: "invalid stellar address",
+		},
+		{
+			name: "invalid status",
+			update: ReceiverWalletUpdate{
+				Status: "invalid",
+			},
+			err: "validating status: invalid receiver wallet status \"invalid\"",
+		},
+		{
+			name: "OTPConfirmedAt set without OTPConfirmedWith",
+			update: ReceiverWalletUpdate{
+				OTPConfirmedAt: time.Now(),
+			},
+			err: "OTPConfirmedWith is required when OTPConfirmedAt is provided",
+		},
+		{
+			name: "OTPConfirmedWith set without OTPConfirmedAt",
+			update: ReceiverWalletUpdate{
+				OTPConfirmedWith: "test@email.com",
+			},
+			err: "OTPConfirmedAt is required when OTPConfirmedWith is provided",
+		},
+		{
+			name: "valid update",
+			update: ReceiverWalletUpdate{
+				Status:           RegisteredReceiversWalletStatus,
+				StellarAddress:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+				OTPConfirmedAt:   time.Now(),
+				OTPConfirmedWith: "test@email.com",
+			},
+			err: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.update.Validate()
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+			}
+		})
+	}
+}
+
+func Test_ReceiverWalletModel_Update(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("returns error when update is empty", func(t *testing.T) {
+		err := receiverWalletModel.Update(ctx, "some-id", ReceiverWalletUpdate{}, dbConnectionPool)
+		assert.EqualError(t, err, "validating receiver wallet update: no values provided to update receiver wallet")
+	})
+
+	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
+		update := ReceiverWalletUpdate{
+			Status: RegisteredReceiversWalletStatus,
+		}
+		err := receiverWalletModel.Update(ctx, "invalid_id", update, dbConnectionPool)
+		require.ErrorIs(t, err, ErrRecordNotFound)
+	})
+
+	t.Run("returns error when receiver wallet status is not valid", func(t *testing.T) {
+		update := ReceiverWalletUpdate{
+			Status: "invalid",
+		}
+		err := receiverWalletModel.Update(ctx, "some id", update, dbConnectionPool)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "validating receiver wallet update: validating status: invalid receiver wallet status \"invalid\"")
+	})
+
+	t.Run("successfully updates receiver wallet", func(t *testing.T) {
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+
+		now := time.Now()
+
+		update := ReceiverWalletUpdate{
+			Status:                      RegisteredReceiversWalletStatus,
+			AnchorPlatformTransactionID: "test-tx-id",
+			StellarAddress:              "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			StellarMemo:                 "123456",
+			StellarMemoType:             "id",
+			OTPConfirmedAt:              now,
+			OTPConfirmedWith:            "test@stellar.org",
+		}
+
+		err := receiverWalletModel.Update(ctx, receiverWallet.ID, update, dbConnectionPool)
+		require.NoError(t, err)
+
+		// Verify the update
+		query := `
+			SELECT
+				rw.status,
+				rw.anchor_platform_transaction_id,
+				rw.stellar_address,
+				rw.stellar_memo,
+				rw.stellar_memo_type,
+				rw.otp_confirmed_at,
+				rw.otp_confirmed_with
+			FROM
+				receiver_wallets rw
+			WHERE
+				rw.id = $1
+		`
+		var updated ReceiverWallet
+		err = dbConnectionPool.GetContext(ctx, &updated, query, receiverWallet.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, RegisteredReceiversWalletStatus, updated.Status)
+		assert.Equal(t, "test-tx-id", updated.AnchorPlatformTransactionID)
+		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", updated.StellarAddress)
+		assert.Equal(t, "123456", updated.StellarMemo)
+		assert.Equal(t, "id", updated.StellarMemoType)
+		assert.WithinDuration(t, now.UTC(), updated.OTPConfirmedAt.UTC(), time.Microsecond)
+		assert.Equal(t, "test@stellar.org", updated.OTPConfirmedWith)
+
+		// Verify status history was updated
+		var statusHistory ReceiversWalletStatusHistory
+		err = dbConnectionPool.GetContext(ctx, &statusHistory, "SELECT status_history FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, RegisteredReceiversWalletStatus, statusHistory[0].Status)
 	})
 }

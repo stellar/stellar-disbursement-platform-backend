@@ -43,17 +43,17 @@ func Test_CreateReceiverWalletFixture(t *testing.T) {
 	// Create a random receiver wallet
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://mywallet.test.com/", "mywallet.test.com", "mtwallet://")
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-	rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+	rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 
 	// Check receiver wallet
 	require.Len(t, rw.ID, 36)
 	require.NotEmpty(t, rw.StellarAddress)
 	require.NotEmpty(t, rw.StellarMemo)
 	require.NotEmpty(t, rw.StellarMemoType)
-	require.Equal(t, DraftReceiversWalletStatus, rw.Status)
+	require.Equal(t, RegisteredReceiversWalletStatus, rw.Status)
 	require.Len(t, rw.StatusHistory, 1)
 	require.NotEmpty(t, rw.StatusHistory[0].Timestamp)
-	require.Equal(t, DraftReceiversWalletStatus, rw.StatusHistory[0].Status)
+	require.Equal(t, RegisteredReceiversWalletStatus, rw.StatusHistory[0].Status)
 	require.NotEmpty(t, rw.CreatedAt)
 	require.NotEmpty(t, rw.UpdatedAt)
 
