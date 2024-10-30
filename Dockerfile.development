@@ -15,13 +15,11 @@ FROM golang:1.23.2-bullseye AS development
 WORKDIR /app/github.com/stellar/stellar-disbursement-platform
 RUN apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
 # Copy the built executable and all source files for debugging
-COPY --from=build /src/stellar-disbursement-platform /app/github.com/stellar/stellar-disbursement-platform
-# Build a debug version of the binary
-RUN go build -gcflags="all=-N -l" -o stellar-disbursement-platform .
+COPY --from=build /bin/stellar-disbursement-platform /app/github.com/stellar/stellar-disbursement-platform/
+COPY . ./
 # Install Delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 # Ensure the binary has executable permissions
 RUN chmod +x /app/github.com/stellar/stellar-disbursement-platform/stellar-disbursement-platform
 EXPOSE 8001 2345
 ENTRYPOINT ["/go/bin/dlv", "exec", "--continue", "--accept-multiclient", "--headless", "--listen=:2345", "--api-version=2", "--log", "./stellar-disbursement-platform"]
-
