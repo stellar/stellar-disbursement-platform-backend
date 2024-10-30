@@ -10,9 +10,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
-type ReceiverContactTypesHandler struct{}
+type RegistrationContactTypesHandler struct{}
 
-func (c ReceiverContactTypesHandler) Get(w http.ResponseWriter, r *http.Request) {
+func (c RegistrationContactTypesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	allTypes := data.GetAllReceiverContactTypes()
 	allTypesWithWalletAddress := make(map[string]bool, 2*len(allTypes))
 	for _, t := range allTypes {

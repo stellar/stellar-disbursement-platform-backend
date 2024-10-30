@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_ReceiverContactTypesHandler_Get(t *testing.T) {
-	h := ReceiverContactTypesHandler{}
+func Test_RegistrationContactTypesHandler_Get(t *testing.T) {
+	h := RegistrationContactTypesHandler{}
 
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest("GET", "/receiver-contact-types", nil)

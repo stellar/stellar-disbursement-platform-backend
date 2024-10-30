@@ -330,7 +330,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.
 			With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-			Get("/receiver-contact-types", httphandler.ReceiverContactTypesHandler{}.Get)
+			Get("/registration-contact-types", httphandler.RegistrationContactTypesHandler{}.Get)
 
 		r.Route("/assets", func(r chi.Router) {
 			assetsHandler := httphandler.AssetsHandler{
