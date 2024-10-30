@@ -1,12 +1,20 @@
 # Stage 1: Build the Go application
 FROM golang:1.23.2-bullseye AS build
+
+# Declare the build argument
 ARG GIT_COMMIT
 
 WORKDIR /src/stellar-disbursement-platform
 ADD go.mod go.sum ./
 RUN go mod download
 COPY . ./
-RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
+
+# Single RUN command to set GIT_COMMIT and use it in build
+RUN if [ -z "$GIT_COMMIT" ]; then \
+    GIT_COMMIT=$(git rev-parse --short HEAD)$( [ -n "$(git status -s)" ] && echo "-dirty-$(id -u -n)" ); \
+    fi && \
+    echo "Building with commit: $GIT_COMMIT" && \
+    go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=${GIT_COMMIT}" .
 
 # Stage 2: Setup the development environment with Delve for debugging
 FROM golang:1.23.2-bullseye AS development
