@@ -160,7 +160,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"updated_at": %q,
 			"external_payment_id": %q
 		}`, payment.ID, payment.StellarTransactionID, payment.StellarOperationID, payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano),
-			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano), disbursement.RegistrationContactType,
+			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano), disbursement.RegistrationContactType.String(),
 			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.CreatedAt.Format(time.RFC3339Nano), receiverWallet.UpdatedAt.Format(time.RFC3339Nano),
 			payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano),
 			payment.ExternalPaymentID)

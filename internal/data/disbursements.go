@@ -34,28 +34,6 @@ type Disbursement struct {
 	*DisbursementStats
 }
 
-type RegistrationContactType string
-
-const (
-	// RegistrationContactTypeEmail is "EMAIL"
-	RegistrationContactTypeEmail RegistrationContactType = RegistrationContactType(ReceiverContactTypeEmail)
-	// RegistrationContactTypePhone is "PHONE_NUMBER"
-	RegistrationContactTypePhone RegistrationContactType = RegistrationContactType(ReceiverContactTypeSMS)
-	// RegistrationContactTypeEmailAndWalletAddress is "EMAIL_AND_WALLET_ADDRESS"
-	RegistrationContactTypeEmailAndWalletAddress RegistrationContactType = RegistrationContactType(string(ReceiverContactTypeEmail) + "_AND_WALLET_ADDRESS")
-	// RegistrationContactTypePhoneAndWalletAddress is "PHONE_NUMBER_AND_WALLET_ADDRESS"
-	RegistrationContactTypePhoneAndWalletAddress RegistrationContactType = RegistrationContactType(string(ReceiverContactTypeSMS) + "_AND_WALLET_ADDRESS")
-)
-
-func AllRegistrationContactTypes() []RegistrationContactType {
-	return []RegistrationContactType{
-		RegistrationContactTypeEmail,
-		RegistrationContactTypeEmailAndWalletAddress,
-		RegistrationContactTypePhone,
-		RegistrationContactTypePhoneAndWalletAddress,
-	}
-}
-
 type DisbursementStatusHistory []DisbursementStatusHistoryEntry
 
 type DisbursementStats struct {
