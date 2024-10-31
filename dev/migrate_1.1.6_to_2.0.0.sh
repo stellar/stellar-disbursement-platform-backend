@@ -114,7 +114,6 @@ ALTER TABLE public.receiver_verifications
 		USING verification_field::text::sdp_${tenant}.verification_type;
 INSERT INTO sdp_${tenant}.receiver_verifications SELECT * FROM public.receiver_verifications;
 
--- TODO: create without the NOT NULL constraint, update the existing data, then add the NOT NULL constraint
 ALTER TABLE public.disbursements
 	ALTER COLUMN status DROP DEFAULT,
 	ALTER COLUMN status TYPE sdp_${tenant}.disbursement_status

@@ -44,14 +44,14 @@ BEGIN
                 USING verification_field::text::%I.verification_type;
         INSERT INTO %I.receiver_verifications SELECT * FROM public.receiver_verifications;
 
-        -- TODO: create without the NOT NULL constraint, update the existing data, then add the NOT NULL constraint
         ALTER TABLE public.disbursements
             ALTER COLUMN status DROP DEFAULT,
             ALTER COLUMN status TYPE %I.disbursement_status
                 USING status::text::%I.disbursement_status,
             ALTER COLUMN verification_field DROP DEFAULT,
             ALTER COLUMN verification_field TYPE %I.verification_type
-                USING verification_field::text::%I.verification_type;
+                USING verification_field::text::%I.verification_type,
+            ADD COLUMN IF NOT EXISTS registration_contact_type %I.registration_contact_types NOT NULL DEFAULT ''PHONE_NUMBER'';
         INSERT INTO %I.disbursements SELECT * FROM public.disbursements;
 
         ALTER TABLE public.payments
@@ -71,7 +71,7 @@ BEGIN
                    schema_name, schema_name, schema_name, schema_name, schema_name, schema_name,
                    schema_name, schema_name, schema_name, schema_name, schema_name, schema_name,
                    schema_name, schema_name, schema_name, schema_name, schema_name, schema_name,
-                   schema_name);
+                   schema_name, schema_name);
 
 
     -- Step 3: Import TSS data
