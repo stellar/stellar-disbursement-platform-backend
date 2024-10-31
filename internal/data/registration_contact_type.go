@@ -63,9 +63,6 @@ func (rct *RegistrationContactType) UnmarshalJSON(data []byte) error {
 	return rct.parseFromString(typeStr)
 }
 
-var _ json.Marshaler = (*RegistrationContactType)(nil)
-var _ json.Unmarshaler = (*RegistrationContactType)(nil)
-
 func (rct RegistrationContactType) Value() (driver.Value, error) {
 	return rct.String(), nil
 }
@@ -83,5 +80,9 @@ func (rct *RegistrationContactType) Scan(value interface{}) error {
 	return rct.parseFromString(string(byteValue))
 }
 
-var _ driver.Valuer = (*RegistrationContactType)(nil)
-var _ sql.Scanner = (*RegistrationContactType)(nil)
+var (
+	_ json.Marshaler   = (*RegistrationContactType)(nil)
+	_ json.Unmarshaler = (*RegistrationContactType)(nil)
+	_ driver.Valuer    = (*RegistrationContactType)(nil)
+	_ sql.Scanner      = (*RegistrationContactType)(nil)
+)
