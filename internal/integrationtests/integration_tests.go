@@ -19,9 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-const (
-	paymentProcessTimeSeconds = 30
-)
+const paymentProcessTimeSeconds = 30
 
 type IntegrationTestsInterface interface {
 	StartIntegrationTests(ctx context.Context, opts IntegrationTestsOpts) error
@@ -33,6 +31,7 @@ type IntegrationTestsOpts struct {
 	TenantName                 string
 	UserEmail                  string
 	UserPassword               string
+	RegistrationContactType    data.RegistrationContactType
 	DistributionAccountType    string
 	DisbursedAssetCode         string
 	DisbursetAssetIssuer       string
@@ -176,11 +175,12 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 
 	log.Ctx(ctx).Info("Creating disbursement using server API")
 	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &httphandler.PostDisbursementRequest{
-		Name:              opts.DisbursementName,
-		CountryCode:       "USA",
-		WalletID:          wallet.ID,
-		AssetID:           asset.ID,
-		VerificationField: data.VerificationTypeDateOfBirth,
+		Name:                    opts.DisbursementName,
+		CountryCode:             "USA",
+		WalletID:                wallet.ID,
+		AssetID:                 asset.ID,
+		VerificationField:       data.VerificationTypeDateOfBirth,
+		RegistrationContactType: opts.RegistrationContactType,
 	})
 	if err != nil {
 		return fmt.Errorf("creating disbursement: %w", err)

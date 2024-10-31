@@ -118,7 +118,7 @@ func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, aut
 
 	if resp.StatusCode/100 != 2 {
 		logErrorResponses(ctx, resp.Body)
-		return nil, fmt.Errorf("error trying to create a new disbursement on the server API")
+		return nil, fmt.Errorf("trying to create a new disbursement on the server API")
 	}
 
 	disbursement := &data.Disbursement{}

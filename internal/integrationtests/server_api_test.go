@@ -127,7 +127,7 @@ func Test_CreateDisbursement(t *testing.T) {
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
 		d, err := sa.CreateDisbursement(ctx, authToken, reqBody)
-		require.EqualError(t, err, "error trying to create a new disbursement on the server API")
+		require.EqualError(t, err, "trying to create a new disbursement on the server API")
 		assert.Empty(t, d)
 
 		httpClientMock.AssertExpectations(t)

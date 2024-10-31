@@ -56,12 +56,15 @@ func (rct RegistrationContactType) MarshalJSON() ([]byte, error) {
 }
 
 func (rct *RegistrationContactType) UnmarshalJSON(data []byte) error {
-	var typeStr string
-	if err := json.Unmarshal(data, &typeStr); err != nil {
+	var strValue string
+	if err := json.Unmarshal(data, &strValue); err != nil {
 		return err
 	}
 
-	return rct.ParseFromString(typeStr)
+	if strValue == "" {
+		return nil
+	}
+	return rct.ParseFromString(strValue)
 }
 
 func (rct RegistrationContactType) Value() (driver.Value, error) {
@@ -78,7 +81,12 @@ func (rct *RegistrationContactType) Scan(value interface{}) error {
 		return fmt.Errorf("unexpected type for RegistrationContactType %T", value)
 	}
 
-	return rct.ParseFromString(string(byteValue))
+	strValue := string(byteValue)
+	if strValue == "" {
+		return nil
+	}
+
+	return rct.ParseFromString(strValue)
 }
 
 var (

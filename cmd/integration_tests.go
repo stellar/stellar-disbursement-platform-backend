@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"go/types"
 
 	"github.com/spf13/cobra"
@@ -8,6 +9,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/integrationtests"
 )
 
@@ -104,6 +106,15 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			OptType:   types.String,
 			ConfigKey: &integrationTestsOpts.ServerApiBaseURL,
 			Required:  true,
+		},
+		{
+			Name:           "registration-contact-type",
+			Usage:          fmt.Sprintf("The registration contact type used when creating a new disbursement. Options: %v", data.AllRegistrationContactTypes()),
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetRegistrationContactType,
+			ConfigKey:      &integrationTestsOpts.RegistrationContactType,
+			Required:       true,
+			FlagDefault:    data.RegistrationContactTypePhone.String(),
 		},
 	}
 	integrationTestsCmd := &cobra.Command{

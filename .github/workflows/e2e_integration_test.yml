@@ -31,17 +31,19 @@ jobs:
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            # TODO: ADD VALIDATION TYPE in this test and the envs used by the integration tests, defaulting to phone number when not provided
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
           - platform: "Stellar-email"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
+            REGISTRATION_CONTACT_TYPE: "EMAIL"
           - platform: "Circle-phone"
             environment: "Receiver Registration - E2E Integration Tests (Circle)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
