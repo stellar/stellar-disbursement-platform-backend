@@ -114,6 +114,7 @@ func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*
 	return disbursement, nil
 }
 
+// TODO: unify the selectors in a single constant
 func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Disbursement, error) {
 	var disbursement Disbursement
 
@@ -128,7 +129,6 @@ func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id 
 			d.file_content,
 			d.created_at,
 			d.updated_at,
-			d.verification_field,
 			d.registration_contact_type,
 			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			w.id as "wallet.id",
@@ -181,7 +181,6 @@ func (d *DisbursementModel) GetByName(ctx context.Context, sqlExec db.SQLExecute
 			d.file_content,
 			d.created_at,
 			d.updated_at,
-			d.verification_field,
 			d.registration_contact_type,
 			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			w.id as "wallet.id",
@@ -321,12 +320,12 @@ func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, 
 			d.status,
 			d.status_history,
 			d.verification_field,
+			COALESCE(d.file_name, '') as file_name,
+			d.file_content,
 			d.created_at,
 			d.updated_at,
-			d.verification_field,
 			d.registration_contact_type,
 			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
-			COALESCE(d.file_name, '') as file_name,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
