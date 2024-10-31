@@ -29,13 +29,14 @@ func (rct RegistrationContactType) String() string {
 	return string(rct.ReceiverContactType)
 }
 
-// parseFromString parses the string, setting ReceiverContactType and IncludesWalletAddress based on suffix.
-func (rct *RegistrationContactType) parseFromString(input string) error {
+// ParseFromString parses the string, setting ReceiverContactType and IncludesWalletAddress based on suffix.
+func (rct *RegistrationContactType) ParseFromString(input string) error {
+	input = strings.ToUpper(strings.TrimSpace(input))
 	rct.IncludesWalletAddress = strings.HasSuffix(input, "_AND_WALLET_ADDRESS")
 	rct.ReceiverContactType = ReceiverContactType(strings.TrimSuffix(input, "_AND_WALLET_ADDRESS"))
 
 	if !slices.Contains(GetAllReceiverContactTypes(), rct.ReceiverContactType) {
-		return fmt.Errorf("unknown ReceiverContactType = %s", rct.ReceiverContactType)
+		return fmt.Errorf("unknown ReceiverContactType %q", rct.ReceiverContactType)
 	}
 
 	return nil
@@ -60,7 +61,7 @@ func (rct *RegistrationContactType) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	return rct.parseFromString(typeStr)
+	return rct.ParseFromString(typeStr)
 }
 
 func (rct RegistrationContactType) Value() (driver.Value, error) {
@@ -77,7 +78,7 @@ func (rct *RegistrationContactType) Scan(value interface{}) error {
 		return fmt.Errorf("unexpected type for RegistrationContactType %T", value)
 	}
 
-	return rct.parseFromString(string(byteValue))
+	return rct.ParseFromString(string(byteValue))
 }
 
 var (
