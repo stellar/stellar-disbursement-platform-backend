@@ -25,6 +25,8 @@ func main() {
 	}
 
 	preConfigureLogger()
+	log.Info("Version: ", Version)
+	log.Info("GitCommit: ", GitCommit)
 
 	rootCmd := cmd.SetupCLI(Version, GitCommit)
 	if err := rootCmd.Execute(); err != nil {
