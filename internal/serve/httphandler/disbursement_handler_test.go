@@ -38,11 +38,13 @@ import (
 )
 
 func Test_DisbursementHandler_validateRequest(t *testing.T) {
-	testCases := []struct {
+	type TestCase struct {
 		name           string
 		request        PostDisbursementRequest
 		expectedErrors map[string]interface{}
-	}{
+	}
+
+	testCases := []TestCase{
 		{
 			name:    "🔴 all fields are empty",
 			request: PostDisbursementRequest{},
@@ -80,6 +82,32 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 				VerificationField:       data.VerificationTypeDateOfBirth,
 			},
 		},
+	}
+
+	for _, rct := range data.AllRegistrationContactTypes() {
+		var name string
+		var expectedErrors map[string]interface{}
+		if !rct.IncludesWalletAddress {
+			name = fmt.Sprintf("🔴[%s]registration_contact_type without wallet address REQUIRES verification_field", rct)
+			expectedErrors = map[string]interface{}{
+				"verification_field": fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+			}
+		} else {
+			name = fmt.Sprintf("🟢[%s]registration_contact_type with wallet address DOES NOT REQUIRE registration_contact_type", rct)
+		}
+		newTestCase := TestCase{
+			name: name,
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: rct,
+				VerificationField:       "",
+			},
+			expectedErrors: expectedErrors,
+		}
+
+		testCases = append(testCases, newTestCase)
 	}
 
 	for _, tc := range testCases {
