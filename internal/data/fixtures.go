@@ -226,64 +226,11 @@ func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
-func GetCountryFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code string) *Country {
-	const query = `
-		SELECT
-			*
-		FROM
-			countries
-		WHERE
-			code = $1
-	`
-
-	country := &Country{}
-	err := sqlExec.GetContext(ctx, country, query, code)
-	require.NoError(t, err)
-
-	return country
-}
-
-func CreateCountryFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code, name string) *Country {
-	const query = `
-		WITH create_country AS (
-			INSERT INTO countries
-				(code, name)
-			VALUES
-				($1, $2)
-			ON CONFLICT DO NOTHING
-			RETURNING *
-		)
-		SELECT created_at, updated_at FROM create_country
-		UNION ALL
-		SELECT created_at, updated_at FROM countries WHERE code = $1 AND name = $2
-	`
-
-	country := &Country{
-		Code: code,
-		Name: name,
-	}
-
-	err := sqlExec.QueryRowxContext(ctx, query, code, name).Scan(&country.CreatedAt, &country.UpdatedAt)
-	require.NoError(t, err)
-
-	return country
-}
-
 // DeleteAllCountryFixtures deletes all countries in the database
 func DeleteAllCountryFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	const query = "DELETE FROM countries"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
-}
-
-// ClearAndCreateCountryFixtures deletes all countries in the database then creates new countries for testing
-func ClearAndCreateCountryFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Country {
-	DeleteAllCountryFixtures(t, ctx, sqlExec)
-	expected := []Country{
-		*CreateCountryFixture(t, ctx, sqlExec, "BRA", "Brazil"),
-		*CreateCountryFixture(t, ctx, sqlExec, "UKR", "Ukraine"),
-	}
-	return expected
 }
 
 func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *Receiver) *Receiver {
@@ -569,9 +516,6 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	}
 	if d.Asset == nil {
 		d.Asset = GetAssetFixture(t, ctx, sqlExec, FixtureAssetUSDC)
-	}
-	if d.Country == nil {
-		d.Country = GetCountryFixture(t, ctx, sqlExec, FixtureCountryUKR)
 	}
 	if d.VerificationField == "" {
 		d.VerificationField = VerificationTypeDateOfBirth

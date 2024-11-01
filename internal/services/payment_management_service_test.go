@@ -31,15 +31,13 @@ func Test_PaymentManagementService_CancelPayment(t *testing.T) {
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUSA)
 
 	// create disbursements
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "ready disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// create disbursement receivers

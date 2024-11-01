@@ -11,16 +11,14 @@ type DBQueryLabels struct {
 }
 
 type DisbursementLabels struct {
-	Asset   string
-	Country string
-	Wallet  string
+	Asset  string
+	Wallet string
 }
 
 func (d DisbursementLabels) ToMap() map[string]string {
 	return map[string]string{
-		"asset":   d.Asset,
-		"country": d.Country,
-		"wallet":  d.Wallet,
+		"asset":  d.Asset,
+		"wallet": d.Wallet,
 	}
 }
 

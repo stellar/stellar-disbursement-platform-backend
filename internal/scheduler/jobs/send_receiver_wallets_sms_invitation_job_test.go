@@ -159,8 +159,6 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 		data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "ATL", "Atlantis")
-
 		wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet1.com", "wallet1://sdp")
 		wallet2 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "www.wallet2.com", "wallet2://sdp")
 
@@ -171,17 +169,15 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 
 		disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country: country,
-			Wallet:  wallet1,
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   asset1,
+			Wallet: wallet1,
+			Status: data.ReadyDisbursementStatus,
+			Asset:  asset1,
 		})
 
 		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country: country,
-			Wallet:  wallet2,
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   asset2,
+			Wallet: wallet2,
+			Status: data.ReadyDisbursementStatus,
+			Asset:  asset2,
 		})
 
 		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)

@@ -16,7 +16,6 @@ var (
 type Models struct {
 	Disbursements            *DisbursementModel
 	Wallets                  *WalletModel
-	Countries                *CountryModel
 	Assets                   *AssetModel
 	Organizations            *OrganizationModel
 	Payment                  *PaymentModel
@@ -37,7 +36,6 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 	return &Models{
 		Disbursements:            &DisbursementModel{dbConnectionPool: dbConnectionPool},
 		Wallets:                  &WalletModel{dbConnectionPool: dbConnectionPool},
-		Countries:                &CountryModel{dbConnectionPool: dbConnectionPool},
 		Assets:                   &AssetModel{dbConnectionPool: dbConnectionPool},
 		Organizations:            &OrganizationModel{dbConnectionPool: dbConnectionPool},
 		Payment:                  &PaymentModel{dbConnectionPool: dbConnectionPool},

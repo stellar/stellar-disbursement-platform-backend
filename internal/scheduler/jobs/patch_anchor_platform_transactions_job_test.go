@@ -137,7 +137,6 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -145,7 +144,6 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,

@@ -763,14 +763,12 @@ func Test_TenantHandler_Patch_error(t *testing.T) {
 			name:          "400 response if attempting to deactivate a tenant with active payments",
 			initialStatus: tenant.ActivatedTenantStatus,
 			prepareMocksFn: func() {
-				country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 				asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 				disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-					Country: country,
-					Wallet:  wallet,
-					Status:  data.ReadyDisbursementStatus,
-					Asset:   asset,
+					Wallet: wallet,
+					Status: data.ReadyDisbursementStatus,
+					Asset:  asset,
 				})
 				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 				rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)

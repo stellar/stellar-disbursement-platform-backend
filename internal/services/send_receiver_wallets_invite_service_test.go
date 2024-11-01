@@ -71,8 +71,6 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "ATL", "Atlantis")
-
 	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet1.com", "wallet1://sdp")
 	wallet2 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "www.wallet2.com", "wallet2://sdp")
 
@@ -89,17 +87,15 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	})
 
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country: country,
-		Wallet:  wallet1,
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset1,
+		Wallet: wallet1,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset1,
 	})
 
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country: country,
-		Wallet:  wallet2,
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset2,
+		Wallet: wallet2,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset2,
 	})
 
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
@@ -797,7 +793,6 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 	t.Run("send disbursement invite successfully", func(t *testing.T) {
 		disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:                             country,
 			Wallet:                              wallet1,
 			Status:                              data.ReadyDisbursementStatus,
 			Asset:                               asset1,
@@ -805,7 +800,6 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		})
 
 		disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:                             country,
 			Wallet:                              wallet2,
 			Status:                              data.ReadyDisbursementStatus,
 			Asset:                               asset2,
@@ -950,7 +944,6 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 	t.Run("successfully resend the disbursement invitation SMS", func(t *testing.T) {
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:                             country,
 			Wallet:                              wallet1,
 			Status:                              data.ReadyDisbursementStatus,
 			Asset:                               asset1,

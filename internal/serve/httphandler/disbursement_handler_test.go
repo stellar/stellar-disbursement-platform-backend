@@ -48,7 +48,6 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{},
 			expectedErrors: map[string]interface{}{
 				"name":                      "name is required",
-				"country_code":              "country_code is required",
 				"wallet_id":                 "wallet_id is required",
 				"asset_id":                  "asset_id is required",
 				"registration_contact_type": fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
@@ -58,10 +57,9 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 		{
 			name: "🔴 registration_contact_type and verification_field are invalid",
 			request: PostDisbursementRequest{
-				Name:        "disbursement 1",
-				CountryCode: "UKR",
-				AssetID:     "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:    "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				Name:     "disbursement 1",
+				AssetID:  "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID: "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 				RegistrationContactType: data.RegistrationContactType{
 					ReceiverContactType: "invalid1",
 				},
@@ -76,7 +74,6 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			name: "🟢 all fields are valid",
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
-				CountryCode:             "UKR",
 				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
 				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 				RegistrationContactType: data.RegistrationContactTypePhone,
@@ -124,13 +121,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	enabledWallet.Assets = nil
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	existingDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "existing disbursement",
-		Asset:   asset,
-		Wallet:  &enabledWallet,
-		Country: country,
+		Name:   "existing disbursement",
+		Asset:  asset,
+		Wallet: &enabledWallet,
 	})
 
 	type TestCase struct {
@@ -149,7 +144,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 					"error": "The request was invalid in some way.",
 					"extras": {
 						"name": "name is required",
-						"country_code": "country_code is required",
 						"wallet_id": "wallet_id is required",
 						"asset_id": "asset_id is required",
 						"registration_contact_type": "registration_contact_type must be one of [EMAIL EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER PHONE_NUMBER_AND_WALLET_ADDRESS]",
@@ -162,7 +156,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			name: "🔴 wallet_id could not be found",
 			reqBody: map[string]interface{}{
 				"name":                      "disbursement 1",
-				"country_code":              country.Code,
 				"asset_id":                  asset.ID,
 				"wallet_id":                 "not-found-wallet-id",
 				"registration_contact_type": data.RegistrationContactTypePhone,
@@ -177,7 +170,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			name: "🔴 wallet is not enabled",
 			reqBody: map[string]interface{}{
 				"name":                      "disbursement 1",
-				"country_code":              country.Code,
 				"asset_id":                  asset.ID,
 				"wallet_id":                 disabledWallet.ID,
 				"registration_contact_type": data.RegistrationContactTypePhone,
@@ -192,7 +184,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			name: "🔴 asset_id could not be found",
 			reqBody: map[string]interface{}{
 				"name":                      "disbursement 1",
-				"country_code":              country.Code,
 				"asset_id":                  "not-found-asset-id",
 				"wallet_id":                 enabledWallet.ID,
 				"registration_contact_type": data.RegistrationContactTypePhone,
@@ -204,25 +195,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			},
 		},
 		{
-			name: "🔴 country_code could not be found",
-			reqBody: map[string]interface{}{
-				"name":                      "disbursement 1",
-				"country_code":              "not-found-country-code",
-				"asset_id":                  asset.ID,
-				"wallet_id":                 enabledWallet.ID,
-				"registration_contact_type": data.RegistrationContactTypePhone,
-				"verification_field":        data.VerificationTypeDateOfBirth,
-			},
-			wantStatusCode: http.StatusBadRequest,
-			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"country code could not be retrieved"}`
-			},
-		},
-		{
 			name: "🔴 non-unique disbursement name",
 			reqBody: map[string]interface{}{
 				"name":                      existingDisbursement.Name,
-				"country_code":              country.Code,
 				"asset_id":                  asset.ID,
 				"wallet_id":                 enabledWallet.ID,
 				"registration_contact_type": data.RegistrationContactTypePhone,
@@ -248,15 +223,13 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			name: fmt.Sprintf("🟢[%s]registration_contact_type%s", registrationContactType, testNameSuffix),
 			prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
 				labels := monitor.DisbursementLabels{
-					Asset:   asset.Code,
-					Country: country.Code,
-					Wallet:  enabledWallet.Name,
+					Asset:  asset.Code,
+					Wallet: enabledWallet.Name,
 				}
 				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 			},
 			reqBody: map[string]interface{}{
 				"name":                                   fmt.Sprintf("successful disbursement %d", i),
-				"country_code":                           country.Code,
 				"asset_id":                               asset.ID,
 				"wallet_id":                              enabledWallet.ID,
 				"registration_contact_type":              registrationContactType.String(),
@@ -288,12 +261,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						"created_at": asset.CreatedAt.Format(time.RFC3339Nano),
 						"updated_at": asset.UpdatedAt.Format(time.RFC3339Nano),
 						"deleted_at": nil,
-					},
-					"country": map[string]interface{}{
-						"code":       country.Code,
-						"name":       country.Name,
-						"created_at": country.CreatedAt.Format(time.RFC3339Nano),
-						"updated_at": country.UpdatedAt.Format(time.RFC3339Nano),
 					},
 					"wallet": map[string]interface{}{
 						"id":                   enabledWallet.ID,
@@ -488,7 +455,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	createdByUser := auth.User{
 		ID:        "User1",
@@ -551,7 +517,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -560,7 +525,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -569,7 +533,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: startedStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -578,7 +541,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC),
 	})
 
@@ -871,14 +833,12 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	// create disbursement
 	draftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
-		Name:    "disbursement1",
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Name:   "disbursement1",
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
@@ -1212,24 +1172,19 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	asset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool,
 		"USDC",
 		"GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, context.Background(), dbConnectionPool,
-		"FRA",
-		"France")
 
 	// create disbursements
 	disbursementWithReceivers := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
-		Name:    "disbursement with receivers",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement with receivers",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 	disbursementWithoutReceivers := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
-		Name:    "disbursement without receivers",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement without receivers",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// create disbursement receivers

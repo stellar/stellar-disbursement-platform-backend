@@ -24,14 +24,12 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	ctx := context.Background()
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, &DisbursementModel{dbConnectionPool: dbConnectionPool}, Disbursement{
-		Name:    "disbursement1",
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Name:   "disbursement1",
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	di := NewDisbursementInstructionModel(dbConnectionPool)
@@ -259,11 +257,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 		// New instructions
 		readyDisbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, &DisbursementModel{dbConnectionPool: dbConnectionPool}, &Disbursement{
-			Name:    "readyDisbursement",
-			Country: country,
-			Wallet:  wallet,
-			Asset:   asset,
-			Status:  ReadyDisbursementStatus,
+			Name:   "readyDisbursement",
+			Wallet: wallet,
+			Asset:  asset,
+			Status: ReadyDisbursementStatus,
 		})
 
 		newInstruction1 := DisbursementInstruction{

@@ -25,14 +25,12 @@ func Test_DisbursementReceiverModel_Count(t *testing.T) {
 	paymentModel := &PaymentModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, disbursementModel, &Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 
 	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -87,14 +85,12 @@ func Test_DisbursementReceiverModel_GetAll(t *testing.T) {
 	paymentModel := &PaymentModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, disbursementModel, &Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 
 	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})

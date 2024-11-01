@@ -585,7 +585,6 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "UKR", "Ukraine")
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
@@ -598,10 +597,9 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 		}
 
 		pausedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet:  wallet,
-			Asset:   asset,
-			Country: country,
-			Status:  data.PausedDisbursementStatus,
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.PausedDisbursementStatus,
 		})
 
 		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -638,10 +636,9 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 		}
 
 		disbursement := data.CreateDisbursementFixture(t, ctxWithoutTenant, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet:  wallet,
-			Asset:   asset,
-			Country: country,
-			Status:  data.StartedDisbursementStatus,
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.StartedDisbursementStatus,
 		})
 
 		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -672,10 +669,9 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 		}
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet:  wallet,
-			Asset:   asset,
-			Country: country,
-			Status:  data.StartedDisbursementStatus,
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.StartedDisbursementStatus,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -721,10 +717,9 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 		}
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet:  wallet,
-			Asset:   asset,
-			Country: country,
-			Status:  data.StartedDisbursementStatus,
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.StartedDisbursementStatus,
 		})
 
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -1349,12 +1344,10 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 				// Creating a payment ready to pay
 				asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-				country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "UKR", "Ukraine")
 				disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-					Wallet:  wallet,
-					Asset:   asset,
-					Country: country,
-					Status:  data.StartedDisbursementStatus,
+					Wallet: wallet,
+					Asset:  asset,
+					Status: data.StartedDisbursementStatus,
 				})
 				payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 					Amount:         "100",
