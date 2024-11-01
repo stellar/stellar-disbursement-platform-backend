@@ -133,15 +133,14 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		Country: country,
 	})
 
-	// smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
-
-	testCases := []struct {
+	type TestCase struct {
 		name               string
 		prepareMocksFn     func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService)
 		reqBody            map[string]interface{}
 		wantStatusCode     int
 		wantResponseBodyFn func(d *data.Disbursement) string
-	}{
+	}
+	testCases := []TestCase{
 		{
 			name:           "🔴 body parameters are missing",
 			wantStatusCode: http.StatusBadRequest,
@@ -234,10 +233,19 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 				return `{"error":"disbursement already exists"}`
 			},
 		},
+	}
 
-		// TODO: Add a loop that increments successful testCases
-		{
-			name: "🟢 successfully create a new disbursement",
+	// Add successful testCases
+	for i, registrationContactType := range data.AllRegistrationContactTypes() {
+		var customInviteTemplate string
+		var testNameSuffix string
+		if i%2 == 0 {
+			customInviteTemplate = "You have a new payment waiting for you from org x. Click on the link to register."
+			testNameSuffix = "(w/ custom invite template)"
+		}
+
+		successfulTestCase := TestCase{
+			name: fmt.Sprintf("🟢[%s]registration_contact_type%s", registrationContactType, testNameSuffix),
 			prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
 				labels := monitor.DisbursementLabels{
 					Asset:   asset.Code,
@@ -247,16 +255,32 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 			},
 			reqBody: map[string]interface{}{
-				"name":                      "disbursement 1",
-				"country_code":              country.Code,
-				"asset_id":                  asset.ID,
-				"wallet_id":                 enabledWallet.ID,
-				"registration_contact_type": data.RegistrationContactTypePhone,
-				"verification_field":        data.VerificationTypeDateOfBirth,
+				"name":                                   fmt.Sprintf("successful disbursement %d", i),
+				"country_code":                           country.Code,
+				"asset_id":                               asset.ID,
+				"wallet_id":                              enabledWallet.ID,
+				"registration_contact_type":              registrationContactType.String(),
+				"receiver_registration_message_template": customInviteTemplate,
+				"verification_field":                     data.VerificationTypeDateOfBirth,
 			},
 			wantStatusCode: http.StatusCreated,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
 				respMap := map[string]interface{}{
+					"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+					"id":                                     d.ID,
+					"name":                                   fmt.Sprintf("successful disbursement %d", i),
+					"receiver_registration_message_template": customInviteTemplate,
+					"registration_contact_type":              registrationContactType.String(),
+					"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
+					"verification_field":                     data.VerificationTypeDateOfBirth,
+					"status":                                 data.DraftDisbursementStatus,
+					"status_history": []map[string]interface{}{
+						{
+							"status":    data.DraftDisbursementStatus,
+							"timestamp": d.StatusHistory[0].Timestamp,
+							"user_id":   user.ID,
+						},
+					},
 					"asset": map[string]interface{}{
 						"code":       asset.Code,
 						"id":         asset.ID,
@@ -271,21 +295,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						"created_at": country.CreatedAt.Format(time.RFC3339Nano),
 						"updated_at": country.UpdatedAt.Format(time.RFC3339Nano),
 					},
-					"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
-					"id":                                     d.ID,
-					"name":                                   "disbursement 1",
-					"receiver_registration_message_template": "",
-					"registration_contact_type":              data.RegistrationContactTypePhone.String(),
-					"status":                                 data.DraftDisbursementStatus,
-					"status_history": []map[string]interface{}{
-						{
-							"status":    data.DraftDisbursementStatus,
-							"timestamp": d.StatusHistory[0].Timestamp,
-							"user_id":   user.ID,
-						},
-					},
-					"updated_at":         d.UpdatedAt.Format(time.RFC3339Nano),
-					"verification_field": data.VerificationTypeDateOfBirth,
 					"wallet": map[string]interface{}{
 						"id":                   enabledWallet.ID,
 						"name":                 enabledWallet.Name,
@@ -302,7 +311,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 				require.NoError(t, err)
 				return string(resp)
 			},
-		},
+		}
+		testCases = append(testCases, successfulTestCase)
 	}
 
 	for _, tc := range testCases {
