@@ -15,7 +15,6 @@ import (
 func Test_DisbursementModelInsert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -31,7 +30,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
 
 	disbursement := Disbursement{
-		Name:   "disbursement1",
+		Name:   "disbursement",
 		Status: DraftDisbursementStatus,
 		StatusHistory: []DisbursementStatusHistoryEntry{
 			{
@@ -46,7 +45,9 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		RegistrationContactType:             RegistrationContactTypePhone,
 	}
 
-	t.Run("returns error when disbursement already exists", func(t *testing.T) {
+	t.Run("🔴 fails to insert disbursements with non-unique name", func(t *testing.T) {
+		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
 		_, err := disbursementModel.Insert(ctx, &disbursement)
 		require.NoError(t, err)
 		_, err = disbursementModel.Insert(ctx, &disbursement)
@@ -54,8 +55,9 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		require.Equal(t, ErrRecordAlreadyExists, err)
 	})
 
-	t.Run("insert disbursement successfully", func(t *testing.T) {
-		disbursement.Name = "disbursement2"
+	t.Run("🟢 successfully insert disbursement", func(t *testing.T) {
+		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
 		id, err := disbursementModel.Insert(ctx, &disbursement)
 		require.NoError(t, err)
 		require.NotNil(t, id)
@@ -63,7 +65,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		actual, err := disbursementModel.Get(ctx, dbConnectionPool, id)
 		require.NoError(t, err)
 
-		assert.Equal(t, "disbursement2", actual.Name)
+		assert.Equal(t, "disbursement", actual.Name)
 		assert.Equal(t, DraftDisbursementStatus, actual.Status)
 		assert.Equal(t, asset, actual.Asset)
 		assert.Equal(t, wallet, actual.Wallet)
@@ -72,6 +74,31 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
 		assert.Equal(t, VerificationTypeDateOfBirth, actual.VerificationField)
+	})
+
+	t.Run("🟢 successfully insert disbursement (empty:[VerificationField,ReceiverRegistrationMessageTemplate])", func(t *testing.T) {
+		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
+		d := disbursement
+		d.ReceiverRegistrationMessageTemplate = ""
+		d.VerificationField = ""
+
+		id, err := disbursementModel.Insert(ctx, &d)
+		require.NoError(t, err)
+		require.NotNil(t, id)
+
+		actual, err := disbursementModel.Get(ctx, dbConnectionPool, id)
+		require.NoError(t, err)
+
+		assert.Equal(t, "disbursement", actual.Name)
+		assert.Equal(t, DraftDisbursementStatus, actual.Status)
+		assert.Equal(t, asset, actual.Asset)
+		assert.Equal(t, wallet, actual.Wallet)
+		assert.Empty(t, actual.ReceiverRegistrationMessageTemplate)
+		assert.Equal(t, 1, len(actual.StatusHistory))
+		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
+		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
+		assert.Empty(t, actual.VerificationField)
 	})
 }
 
