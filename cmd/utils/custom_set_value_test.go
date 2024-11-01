@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -712,6 +713,57 @@ func Test_SetConfigOptionEventBrokerType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.eventBrokerType = ""
 			customSetterTester[events.EventBrokerType](t, tc, co)
+		})
+	}
+}
+
+func Test_SetRegistrationContactType(t *testing.T) {
+	opts := struct{ RegistrationContactType data.RegistrationContactType }{}
+
+	co := config.ConfigOption{
+		Name:           "registration-contact-type",
+		OptType:        types.String,
+		CustomSetValue: SetRegistrationContactType,
+		ConfigKey:      &opts.RegistrationContactType,
+	}
+
+	testCases := []customSetterTestCase[data.RegistrationContactType]{
+		{
+			name:            "returns an error if the value is empty",
+			args:            []string{},
+			wantErrContains: `couldn't parse registration contact type in registration-contact-type: unknown ReceiverContactType ""`,
+		},
+		{
+			name:            "returns an error if the value is not supported",
+			args:            []string{"--registration-contact-type", "test"},
+			wantErrContains: `couldn't parse registration contact type in registration-contact-type: unknown ReceiverContactType "TEST"`,
+		},
+		{
+			name:       "🎉 handles registration contact type (through CLI args): EMAIL",
+			args:       []string{"--registration-contact-type", "EmAiL"},
+			wantResult: data.RegistrationContactTypeEmail,
+		},
+		{
+			name:       "🎉 handles registration contact type (through CLI args): EMAIL_AND_WALLET_ADDRESS",
+			args:       []string{"--registration-contact-type", "EMAIL_AND_WALLET_ADDRESS"},
+			wantResult: data.RegistrationContactTypeEmailAndWalletAddress,
+		},
+		{
+			name:       "🎉 handles registration contact type (through CLI args): PHONE_NUMBER",
+			args:       []string{"--registration-contact-type", "PHONE_NUMBER"},
+			wantResult: data.RegistrationContactTypePhone,
+		},
+		{
+			name:       "🎉 handles registration contact type (through CLI args): PHONE_NUMBER_AND_WALLET_ADDRESS",
+			args:       []string{"--registration-contact-type", "PHONE_NUMBER_AND_WALLET_ADDRESS"},
+			wantResult: data.RegistrationContactTypePhoneAndWalletAddress,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.RegistrationContactType = data.RegistrationContactType{}
+			customSetterTester[data.RegistrationContactType](t, tc, co)
 		})
 	}
 }

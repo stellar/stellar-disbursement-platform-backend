@@ -42,12 +42,13 @@ type DisbursementHandler struct {
 }
 
 type PostDisbursementRequest struct {
-	Name                                string                `json:"name"`
-	CountryCode                         string                `json:"country_code"`
-	WalletID                            string                `json:"wallet_id"`
-	AssetID                             string                `json:"asset_id"`
-	VerificationField                   data.VerificationType `json:"verification_field"`
-	ReceiverRegistrationMessageTemplate string                `json:"receiver_registration_message_template"`
+	Name                                string                       `json:"name"`
+	CountryCode                         string                       `json:"country_code"`
+	WalletID                            string                       `json:"wallet_id"`
+	AssetID                             string                       `json:"asset_id"`
+	VerificationField                   data.VerificationType        `json:"verification_field"`
+	RegistrationContactType             data.RegistrationContactType `json:"registration_contact_type"`
+	ReceiverRegistrationMessageTemplate string                       `json:"receiver_registration_message_template"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -68,14 +69,17 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	v.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
 	v.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
 	v.Check(disbursementRequest.AssetID != "", "asset_id", "asset_id is required")
-
+	v.Check(
+		slices.Contains(data.AllRegistrationContactTypes(), disbursementRequest.RegistrationContactType),
+		"registration_contact_type",
+		fmt.Sprintf("invalid parameter. valid values are: %v", data.AllRegistrationContactTypes()),
+	)
 	if v.HasErrors() {
 		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
 		return
 	}
 
 	verificationField := v.ValidateAndGetVerificationType()
-
 	if v.HasErrors() {
 		httperror.BadRequest("Verification field invalid", err, v.Errors).Render(w)
 		return
@@ -127,6 +131,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		Asset:                               asset,
 		Country:                             country,
 		VerificationField:                   verificationField,
+		RegistrationContactType:             disbursementRequest.RegistrationContactType,
 		ReceiverRegistrationMessageTemplate: disbursementRequest.ReceiverRegistrationMessageTemplate,
 	}
 

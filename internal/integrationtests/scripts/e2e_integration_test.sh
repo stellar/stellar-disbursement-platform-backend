@@ -22,6 +22,9 @@ wait_for_server() {
 }
 
 accountTypes=("DISTRIBUTION_ACCOUNT.STELLAR.ENV" "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
+if [ -z "${REGISTRATION_CONTACT_TYPE+x}" ]; then
+  export REGISTRATION_CONTACT_TYPE="PHONE_NUMBER"
+fi
 for accountType in "${accountTypes[@]}"; do
   export DISTRIBUTION_ACCOUNT_TYPE=$accountType
   if [ $accountType="DISTRIBUTION_ACCOUNT.STELLAR.ENV" ]
