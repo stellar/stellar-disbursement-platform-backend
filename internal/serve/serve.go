@@ -328,6 +328,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/", httphandler.CountriesHandler{Models: o.Models}.GetCountries)
 		})
 
+		r.
+			With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			Get("/registration-contact-types", httphandler.RegistrationContactTypesHandler{}.Get)
+
 		r.Route("/assets", func(r chi.Router) {
 			assetsHandler := httphandler.AssetsHandler{
 				Models:          o.Models,

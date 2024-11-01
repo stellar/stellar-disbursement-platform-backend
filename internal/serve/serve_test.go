@@ -456,6 +456,8 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/receivers/verification-types"},
 		// Countries
 		{http.MethodGet, "/countries"},
+		// Receiver Contact Types
+		{http.MethodGet, "/registration-contact-types"},
 		// Assets
 		{http.MethodGet, "/assets"},
 		{http.MethodPost, "/assets"},
