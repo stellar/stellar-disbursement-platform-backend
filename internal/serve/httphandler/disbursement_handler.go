@@ -51,90 +51,100 @@ type PostDisbursementRequest struct {
 	ReceiverRegistrationMessageTemplate string                       `json:"receiver_registration_message_template"`
 }
 
+func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *validators.Validator {
+	v := validators.NewValidator()
+
+	v.Check(req.Name != "", "name", "name is required")
+	v.Check(req.CountryCode != "", "country_code", "country_code is required")
+	v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
+	v.Check(req.AssetID != "", "asset_id", "asset_id is required")
+	v.Check(
+		slices.Contains(data.AllRegistrationContactTypes(), req.RegistrationContactType),
+		"registration_contact_type",
+		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
+	)
+	v.Check(
+		slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
+		"verification_field",
+		fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+	)
+
+	return v
+}
+
 type PatchDisbursementStatusRequest struct {
 	Status string `json:"status"`
 }
 
 func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Request) {
-	var disbursementRequest PostDisbursementRequest
-
-	err := json.NewDecoder(r.Body).Decode(&disbursementRequest)
-	if err != nil {
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
-		return
-	}
-
-	v := validators.NewDisbursementRequestValidator(disbursementRequest.VerificationField)
-	v.Check(disbursementRequest.Name != "", "name", "name is required")
-	v.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
-	v.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
-	v.Check(disbursementRequest.AssetID != "", "asset_id", "asset_id is required")
-	v.Check(
-		slices.Contains(data.AllRegistrationContactTypes(), disbursementRequest.RegistrationContactType),
-		"registration_contact_type",
-		fmt.Sprintf("invalid parameter. valid values are: %v", data.AllRegistrationContactTypes()),
-	)
-	if v.HasErrors() {
-		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
-		return
-	}
-
-	verificationField := v.ValidateAndGetVerificationType()
-	if v.HasErrors() {
-		httperror.BadRequest("Verification field invalid", err, v.Errors).Render(w)
-		return
-	}
-
 	ctx := r.Context()
-	wallet, err := d.Models.Wallets.Get(ctx, disbursementRequest.WalletID)
+
+	// Grab token and user
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		httperror.Unauthorized("", nil, nil).Render(w)
+		return
+	}
+	user, err := d.AuthManager.GetUser(ctx, token)
 	if err != nil {
-		httperror.BadRequest("wallet ID is invalid", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
+		return
+	}
+
+	// Decode and validate body
+	var req PostDisbursementRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		httperror.BadRequest(err.Error(), err, nil).Render(w)
+		return
+	}
+	v := d.validateRequest(req)
+	if v.HasErrors() {
+		httperror.BadRequest("", err, v.Errors).Render(w)
+		return
+	}
+
+	// Get Wallet
+	wallet, err := d.Models.Wallets.Get(ctx, req.WalletID)
+	if err != nil {
+		httperror.BadRequest("wallet ID could not be retrieved", err, nil).Render(w)
 		return
 	}
 	if !wallet.Enabled {
 		httperror.BadRequest("wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
 		return
 	}
-	asset, err := d.Models.Assets.Get(ctx, disbursementRequest.AssetID)
+
+	// Get Asset
+	asset, err := d.Models.Assets.Get(ctx, req.AssetID)
 	if err != nil {
-		httperror.BadRequest("asset ID is invalid", err, nil).Render(w)
-		return
-	}
-	country, err := d.Models.Countries.Get(ctx, disbursementRequest.CountryCode)
-	if err != nil {
-		httperror.BadRequest("country code is invalid", err, nil).Render(w)
+		httperror.BadRequest("asset ID could not be retrieved", err, nil).Render(w)
 		return
 	}
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		msg := fmt.Sprintf("Cannot get token from context when inserting disbursement %s", disbursementRequest.Name)
-		httperror.InternalError(ctx, msg, nil, nil).Render(w)
-		return
-	}
-	user, err := d.AuthManager.GetUser(ctx, token)
+	// Get Country
+	country, err := d.Models.Countries.Get(ctx, req.CountryCode)
 	if err != nil {
-		msg := fmt.Sprintf("Cannot insert disbursement %s", disbursementRequest.Name)
-		httperror.InternalError(ctx, msg, err, nil).Render(w)
+		httperror.BadRequest("country code could not be retrieved", err, nil).Render(w)
 		return
 	}
 
+	// Insert disbursement
 	disbursement := data.Disbursement{
-		Name:   disbursementRequest.Name,
-		Status: data.DraftDisbursementStatus,
+		Asset:                               asset,
+		Country:                             country,
+		Name:                                req.Name,
+		ReceiverRegistrationMessageTemplate: req.ReceiverRegistrationMessageTemplate,
+		RegistrationContactType:             req.RegistrationContactType,
+		VerificationField:                   req.VerificationField,
+		Wallet:                              wallet,
+		Status:                              data.DraftDisbursementStatus,
 		StatusHistory: []data.DisbursementStatusHistoryEntry{{
 			Timestamp: time.Now(),
 			Status:    data.DraftDisbursementStatus,
 			UserID:    user.ID,
 		}},
-		Wallet:                              wallet,
-		Asset:                               asset,
-		Country:                             country,
-		VerificationField:                   verificationField,
-		RegistrationContactType:             disbursementRequest.RegistrationContactType,
-		ReceiverRegistrationMessageTemplate: disbursementRequest.ReceiverRegistrationMessageTemplate,
 	}
-
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordAlreadyExists) {
@@ -144,7 +154,6 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-
 	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, newId)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newId)
@@ -152,12 +161,12 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Monitor disbursement creation
 	labels := monitor.DisbursementLabels{
 		Asset:   newDisbursement.Asset.Code,
 		Country: newDisbursement.Country.Code,
 		Wallet:  newDisbursement.Wallet.Name,
 	}
-
 	err = d.MonitorService.MonitorCounters(monitor.DisbursementsCounterTag, labels.ToMap())
 	if err != nil {
 		log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
