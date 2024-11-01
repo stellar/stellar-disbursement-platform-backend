@@ -17,7 +17,6 @@ import (
 func Test_ReadyPaymentsCancellationService_CancelReadyPaymentsService(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -27,14 +26,6 @@ func Test_ReadyPaymentsCancellationService_CancelReadyPaymentsService(t *testing
 
 	service := NewReadyPaymentsCancellationService(models)
 	ctx := context.Background()
-
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")

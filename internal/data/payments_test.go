@@ -384,7 +384,6 @@ func Test_PaymentModelGetAll(t *testing.T) {
 
 		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
@@ -703,7 +702,6 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -712,14 +710,6 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 
 	models, err := NewModels(dbConnectionPool)
 	require.NoError(t, err)
-
-	DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
@@ -984,7 +974,6 @@ func Test_PaymentModelCancelPayment(t *testing.T) {
 
 	DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 	DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
 	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 	DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 	DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)

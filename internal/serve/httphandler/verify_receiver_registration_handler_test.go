@@ -1325,7 +1325,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 				// update database with the entries needed
 				defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-				defer data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)

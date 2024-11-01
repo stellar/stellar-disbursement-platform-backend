@@ -444,7 +444,6 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -469,15 +468,6 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 		DistAccountResolver: mDistAccountResolver,
 		PaymentDispatcher:   paymentDispatcher,
 	})
-
-	// clean test db
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")

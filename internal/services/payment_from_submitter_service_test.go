@@ -570,7 +570,6 @@ func updateTSSTransactionsToError(t *testing.T, testCtx *testContext, txDataSlic
 func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
@@ -579,15 +578,6 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	ctx := testCtx.ctx
 
 	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
-
-	// clean test db
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
@@ -694,7 +684,6 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
@@ -703,15 +692,6 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	ctx := testCtx.ctx
 
 	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
-
-	// clean test db
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")

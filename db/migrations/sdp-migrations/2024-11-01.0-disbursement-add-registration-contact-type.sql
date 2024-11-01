@@ -4,7 +4,7 @@
 ALTER TABLE disbursements
     DROP COLUMN country_code;
 
-DROP TABLE countries;
+DROP TABLE countries CASCADE;
 
 
 -- +migrate Down

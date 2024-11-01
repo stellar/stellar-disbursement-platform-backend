@@ -226,13 +226,6 @@ func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
-// DeleteAllCountryFixtures deletes all countries in the database
-func DeleteAllCountryFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM countries"
-	_, err := sqlExec.ExecContext(ctx, query)
-	require.NoError(t, err)
-}
-
 func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *Receiver) *Receiver {
 	t.Helper()
 
@@ -769,5 +762,4 @@ func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter
 	DeleteAllDisbursementFixtures(t, ctx, sqlExec)
 	DeleteAllWalletFixtures(t, ctx, sqlExec)
 	DeleteAllAssetFixtures(t, ctx, sqlExec)
-	DeleteAllCountryFixtures(t, ctx, sqlExec)
 }

@@ -348,7 +348,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"auth_users",
 			"circle_client_config",
 			"circle_transfer_requests",
-			"countries",
 			"disbursements",
 			"messages",
 			"organizations",
