@@ -37,13 +37,71 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
-	const url = "/disbursements"
-	const method = "POST"
+func Test_DisbursementHandler_validateRequest(t *testing.T) {
+	testCases := []struct {
+		name           string
+		request        PostDisbursementRequest
+		expectedErrors map[string]interface{}
+	}{
+		{
+			name:    "🔴 all fields are empty",
+			request: PostDisbursementRequest{},
+			expectedErrors: map[string]interface{}{
+				"name":                      "name is required",
+				"country_code":              "country_code is required",
+				"wallet_id":                 "wallet_id is required",
+				"asset_id":                  "asset_id is required",
+				"registration_contact_type": fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
+				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+			},
+		},
+		{
+			name: "🔴 registration_contact_type and verification_field are invalid",
+			request: PostDisbursementRequest{
+				Name:        "disbursement 1",
+				CountryCode: "UKR",
+				AssetID:     "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:    "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: data.RegistrationContactType{
+					ReceiverContactType: "invalid1",
+				},
+				VerificationField: "invalid2",
+			},
+			expectedErrors: map[string]interface{}{
+				"registration_contact_type": fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
+				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+			},
+		},
+		{
+			name: "🟢 all fields are valid",
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				CountryCode:             "UKR",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: data.RegistrationContactTypePhone,
+				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+		},
+	}
 
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &DisbursementHandler{}
+			v := handler.validateRequest(tc.request)
+			if len(tc.expectedErrors) == 0 {
+				assert.False(t, v.HasErrors())
+			} else {
+				assert.True(t, v.HasErrors())
+				assert.Equal(t, tc.expectedErrors, v.Errors)
+			}
+		})
+	}
+}
+
+func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -57,18 +115,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		ID:    "user-id",
 		Email: "email@email.com",
 	}
-	authManagerMock := &auth.AuthManagerMock{}
-	authManagerMock.
-		On("GetUser", mock.Anything, token).
-		Return(user, nil)
-
-	mMonitorService := monitorMocks.NewMockMonitorService(t)
-
-	handler := &DisbursementHandler{
-		Models:         models,
-		MonitorService: mMonitorService,
-		AuthManager:    authManagerMock,
-	}
 
 	// setup fixtures
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
@@ -80,231 +126,231 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
-	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
-
-	t.Run("returns error when body is invalid", func(t *testing.T) {
-		requestBody := `
-       {
-			"name": "My New Disbursement name 5",
-       }`
-
-		want := `{"error":"invalid request body"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
+	existingDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name:    "existing disbursement",
+		Asset:   asset,
+		Wallet:  &enabledWallet,
+		Country: country,
 	})
 
-	t.Run("returns error when name is not provided", func(t *testing.T) {
-		requestBody := `
+	type TestCase struct {
+		name               string
+		prepareMocksFn     func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService)
+		reqBody            map[string]interface{}
+		wantStatusCode     int
+		wantResponseBodyFn func(d *data.Disbursement) string
+	}
+	testCases := []TestCase{
 		{
-		  "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		  "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		  "country_code": "UKR",
-		  "registration_contact_type": "PHONE_NUMBER",
-		  "verification_field": "date_of_birth"
-		}`
-
-		want := `
+			name:           "🔴 body parameters are missing",
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{
+					"error": "The request was invalid in some way.",
+					"extras": {
+						"name": "name is required",
+						"country_code": "country_code is required",
+						"wallet_id": "wallet_id is required",
+						"asset_id": "asset_id is required",
+						"registration_contact_type": "registration_contact_type must be one of [EMAIL EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER PHONE_NUMBER_AND_WALLET_ADDRESS]",
+						"verification_field": "verification_field must be one of [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"
+					}
+				}`
+			},
+		},
 		{
-			"error":"Request invalid", 
-			"extras": {
-				"name": "name is required"
-			}
-		}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when wallet_id is not provided", func(t *testing.T) {
-		requestBody := `
+			name: "🔴 wallet_id could not be found",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement 1",
+				"country_code":              country.Code,
+				"asset_id":                  asset.ID,
+				"wallet_id":                 "not-found-wallet-id",
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"wallet ID could not be retrieved"}`
+			},
+		},
 		{
-		   "name": "My New Disbursement name 5",
-		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		   "country_code": "UKR",
-		   "registration_contact_type": "PHONE_NUMBER",
-		   "verification_field": "date_of_birth"
-		}`
-
-		want := `{"error":"Request invalid", "extras": {"wallet_id": "wallet_id is required"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when asset_id is not provided", func(t *testing.T) {
-		requestBody := `
+			name: "🔴 wallet is not enabled",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement 1",
+				"country_code":              country.Code,
+				"asset_id":                  asset.ID,
+				"wallet_id":                 disabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"wallet is not enabled"}`
+			},
+		},
 		{
-		   "name": "My New Disbursement name 5",
-		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		   "country_code": "UKR",
-		   "registration_contact_type": "PHONE_NUMBER",
-		   "verification_field": "date_of_birth"
-		}`
-
-		want := `{"error":"Request invalid", "extras": {"asset_id": "asset_id is required"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when country_code is not provided", func(t *testing.T) {
-		requestBody := `
+			name: "🔴 asset_id could not be found",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement 1",
+				"country_code":              country.Code,
+				"asset_id":                  "not-found-asset-id",
+				"wallet_id":                 enabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"asset ID could not be retrieved"}`
+			},
+		},
 		{
-		   "name": "My New Disbursement name 5",
-		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		   "registration_contact_type": "PHONE_NUMBER",
-		   "verification_field": "date_of_birth"
-		}`
-
-		want := `{"error":"Request invalid", "extras": {"country_code": "country_code is required"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when no verification field is provided", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                    "disbursement 1",
-			CountryCode:             country.Code,
-			AssetID:                 asset.ID,
-			WalletID:                enabledWallet.ID,
-			RegistrationContactType: data.RegistrationContactTypePhone,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"Verification field invalid", "extras": {"verification_field": "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when wallet_id is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                    "disbursement 1",
-			CountryCode:             country.Code,
-			AssetID:                 asset.ID,
-			WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			RegistrationContactType: data.RegistrationContactTypePhone,
-			VerificationField:       data.VerificationTypeDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"wallet ID is invalid"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when wallet is not enabled", func(t *testing.T) {
-		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                    "disbursement 1",
-			CountryCode:             country.Code,
-			AssetID:                 asset.ID,
-			WalletID:                disabledWallet.ID,
-			RegistrationContactType: data.RegistrationContactTypePhone,
-			VerificationField:       data.VerificationTypeDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"wallet is not enabled"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when asset_id is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                    "disbursement 1",
-			CountryCode:             country.Code,
-			AssetID:                 "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			WalletID:                enabledWallet.ID,
-			RegistrationContactType: data.RegistrationContactTypePhone,
-			VerificationField:       data.VerificationTypeDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"asset ID is invalid"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when country_code is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                    "disbursement 1",
-			CountryCode:             "AAA",
-			AssetID:                 asset.ID,
-			WalletID:                enabledWallet.ID,
-			RegistrationContactType: data.RegistrationContactTypePhone,
-			VerificationField:       data.VerificationTypeDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"country code is invalid"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	labels := monitor.DisbursementLabels{
-		Asset:   asset.Code,
-		Country: country.Code,
-		Wallet:  enabledWallet.Name,
+			name: "🔴 country_code could not be found",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement 1",
+				"country_code":              "not-found-country-code",
+				"asset_id":                  asset.ID,
+				"wallet_id":                 enabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"country code could not be retrieved"}`
+			},
+		},
+		{
+			name: "🔴 non-unique disbursement name",
+			reqBody: map[string]interface{}{
+				"name":                      existingDisbursement.Name,
+				"country_code":              country.Code,
+				"asset_id":                  asset.ID,
+				"wallet_id":                 enabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusConflict,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"disbursement already exists"}`
+			},
+		},
 	}
 
-	t.Run("returns error when disbursement name is not unique", func(t *testing.T) {
-		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+	// Add successful testCases
+	for i, registrationContactType := range data.AllRegistrationContactTypes() {
+		var customInviteTemplate string
+		var testNameSuffix string
+		if i%2 == 0 {
+			customInviteTemplate = "You have a new payment waiting for you from org x. Click on the link to register."
+			testNameSuffix = "(w/ custom invite template)"
+		}
 
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                    "disbursement 1",
-			CountryCode:             country.Code,
-			AssetID:                 asset.ID,
-			WalletID:                enabledWallet.ID,
-			RegistrationContactType: data.RegistrationContactTypePhone,
-			VerificationField:       data.VerificationTypeDateOfBirth,
+		successfulTestCase := TestCase{
+			name: fmt.Sprintf("🟢[%s]registration_contact_type%s", registrationContactType, testNameSuffix),
+			prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
+				labels := monitor.DisbursementLabels{
+					Asset:   asset.Code,
+					Country: country.Code,
+					Wallet:  enabledWallet.Name,
+				}
+				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+			},
+			reqBody: map[string]interface{}{
+				"name":                                   fmt.Sprintf("successful disbursement %d", i),
+				"country_code":                           country.Code,
+				"asset_id":                               asset.ID,
+				"wallet_id":                              enabledWallet.ID,
+				"registration_contact_type":              registrationContactType.String(),
+				"receiver_registration_message_template": customInviteTemplate,
+				"verification_field":                     data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusCreated,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				respMap := map[string]interface{}{
+					"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+					"id":                                     d.ID,
+					"name":                                   fmt.Sprintf("successful disbursement %d", i),
+					"receiver_registration_message_template": customInviteTemplate,
+					"registration_contact_type":              registrationContactType.String(),
+					"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
+					"verification_field":                     data.VerificationTypeDateOfBirth,
+					"status":                                 data.DraftDisbursementStatus,
+					"status_history": []map[string]interface{}{
+						{
+							"status":    data.DraftDisbursementStatus,
+							"timestamp": d.StatusHistory[0].Timestamp,
+							"user_id":   user.ID,
+						},
+					},
+					"asset": map[string]interface{}{
+						"code":       asset.Code,
+						"id":         asset.ID,
+						"issuer":     asset.Issuer,
+						"created_at": asset.CreatedAt.Format(time.RFC3339Nano),
+						"updated_at": asset.UpdatedAt.Format(time.RFC3339Nano),
+						"deleted_at": nil,
+					},
+					"country": map[string]interface{}{
+						"code":       country.Code,
+						"name":       country.Name,
+						"created_at": country.CreatedAt.Format(time.RFC3339Nano),
+						"updated_at": country.UpdatedAt.Format(time.RFC3339Nano),
+					},
+					"wallet": map[string]interface{}{
+						"id":                   enabledWallet.ID,
+						"name":                 enabledWallet.Name,
+						"deep_link_schema":     enabledWallet.DeepLinkSchema,
+						"homepage":             enabledWallet.Homepage,
+						"sep_10_client_domain": enabledWallet.SEP10ClientDomain,
+						"created_at":           enabledWallet.CreatedAt.Format(time.RFC3339Nano),
+						"updated_at":           enabledWallet.UpdatedAt.Format(time.RFC3339Nano),
+						"enabled":              true,
+					},
+				}
+
+				resp, err := json.Marshal(respMap)
+				require.NoError(t, err)
+				return string(resp)
+			},
+		}
+		testCases = append(testCases, successfulTestCase)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mAuthManager := &auth.AuthManagerMock{}
+			mAuthManager.
+				On("GetUser", mock.Anything, token).
+				Return(user, nil)
+			mMonitorService := monitorMocks.NewMockMonitorService(t)
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(t, mMonitorService)
+			}
+
+			handler := &DisbursementHandler{
+				Models:         models,
+				AuthManager:    mAuthManager,
+				MonitorService: mMonitorService,
+			}
+
+			requestBody, err := json.Marshal(tc.reqBody)
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			req, _ := http.NewRequestWithContext(ctx, "POST", "/disbursements", bytes.NewReader(requestBody))
+			http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
+			resp := rr.Result()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			require.Equalf(t, tc.wantStatusCode, resp.StatusCode, "status code doesn't match and here's the response body: %s", respBody)
+			var actualDisbursement *data.Disbursement
+			if tc.wantResponseBodyFn != nil {
+				require.NoError(t, json.Unmarshal(respBody, &actualDisbursement))
+			}
+
+			wantBody := tc.wantResponseBodyFn(actualDisbursement)
+			assert.JSONEq(t, wantBody, string(respBody))
 		})
-		require.NoError(t, err)
-
-		// create disbursement
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), "", http.StatusCreated)
-		// try creating again
-		want := `{"error":"disbursement already exists"}`
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusConflict)
-	})
-
-	t.Run("successfully create a disbursement", func(t *testing.T) {
-		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
-
-		expectedName := "disbursement 2"
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                                expectedName,
-			CountryCode:                         country.Code,
-			AssetID:                             asset.ID,
-			WalletID:                            enabledWallet.ID,
-			VerificationField:                   data.VerificationTypeDateOfBirth,
-			RegistrationContactType:             data.RegistrationContactTypePhone,
-			ReceiverRegistrationMessageTemplate: smsTemplate,
-		})
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequestWithContext(ctx, method, url, strings.NewReader(string(requestBody)))
-		http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		var actualDisbursement data.Disbursement
-		err = json.NewDecoder(resp.Body).Decode(&actualDisbursement)
-
-		require.NoError(t, err)
-		assert.Equal(t, expectedName, actualDisbursement.Name)
-		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.Status)
-		assert.Equal(t, asset, actualDisbursement.Asset)
-		assert.Equal(t, &enabledWallet, actualDisbursement.Wallet)
-		assert.Equal(t, country, actualDisbursement.Country)
-		assert.Equal(t, 1, len(actualDisbursement.StatusHistory))
-		assert.Equal(t, data.RegistrationContactTypePhone, actualDisbursement.RegistrationContactType)
-		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
-		assert.Equal(t, user.ID, actualDisbursement.StatusHistory[0].UserID)
-		assert.Equal(t, smsTemplate, actualDisbursement.ReceiverRegistrationMessageTemplate)
-	})
-
-	authManagerMock.AssertExpectations(t)
+	}
 }
 
 func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
@@ -1806,23 +1852,6 @@ func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multi
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req, nil
-}
-
-func assertPOSTResponse(t *testing.T, ctx context.Context, handler *DisbursementHandler, method, url, requestBody, want string, expectedStatus int) {
-	rr := httptest.NewRecorder()
-	req, _ := http.NewRequestWithContext(ctx, method, url, strings.NewReader(requestBody))
-	http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
-
-	resp := rr.Result()
-
-	respBody, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	assert.Equal(t, expectedStatus, resp.StatusCode)
-
-	if want != "" {
-		assert.JSONEq(t, want, string(respBody))
-	}
 }
 
 func buildURLWithQueryParams(baseURL, endpoint string, queryParams map[string]string) string {

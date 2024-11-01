@@ -380,30 +380,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	t.Run("failure - Confirmed Verification Value not matching", func(t *testing.T) {
 		defer cleanup()
 
-		instruction4 := DisbursementInstruction{
-			Phone:             "+380-12-345-674",
-			Amount:            "100.04",
-			ID:                "123456784",
-			VerificationValue: "1990-01-04",
-			ExternalPaymentId: "abc123",
-		}
-
-		instruction5 := DisbursementInstruction{
-			Phone:             "+380-12-345-675",
-			Amount:            "100.05",
-			ID:                "123456785",
-			VerificationValue: "1990-01-05",
-			ExternalPaymentId: "abc123",
-		}
-
-		instruction6 := DisbursementInstruction{
-			Phone:             "+380-12-345-676",
-			Amount:            "100.06",
-			ID:                "123456786",
-			VerificationValue: "1990-01-06",
-			ExternalPaymentId: "abc123",
-		}
-
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
@@ -415,7 +391,8 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone, instruction4.Phone, instruction5.Phone, instruction6.Phone)
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone)
+		require.Len(t, receivers, 3)
 		require.NoError(t, err)
 		receiversMap := make(map[string]*Receiver)
 		for _, receiver := range receivers {
