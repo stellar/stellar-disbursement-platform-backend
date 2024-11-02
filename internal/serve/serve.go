@@ -324,10 +324,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/countries", func(r chi.Router) {
-			r.Get("/", httphandler.CountriesHandler{Models: o.Models}.GetCountries)
-		})
-
 		r.
 			With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 			Get("/registration-contact-types", httphandler.RegistrationContactTypesHandler{}.Get)

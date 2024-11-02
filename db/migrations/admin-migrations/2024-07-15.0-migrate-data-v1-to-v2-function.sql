@@ -51,7 +51,8 @@ BEGIN
             ALTER COLUMN verification_field DROP DEFAULT,
             ALTER COLUMN verification_field TYPE %I.verification_type
                 USING verification_field::text::%I.verification_type,
-            ADD COLUMN IF NOT EXISTS registration_contact_type %I.registration_contact_types NOT NULL DEFAULT ''PHONE_NUMBER'';
+            ADD COLUMN IF NOT EXISTS registration_contact_type %I.registration_contact_types NOT NULL DEFAULT ''PHONE_NUMBER'',
+            DROP COLUMN IF EXISTS country_code CASCADE;
         INSERT INTO %I.disbursements SELECT * FROM public.disbursements;
 
         ALTER TABLE public.payments

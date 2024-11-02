@@ -451,8 +451,6 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 	require.NoError(t, err)
 
 	// 1. Create assets, wallets and disbursements:
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "ATL", "Atlantis")
-
 	asset1 := CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 	asset2 := CreateAssetFixture(t, ctx, dbConnectionPool, "FOO2", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -460,28 +458,24 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 	walletB := CreateWalletFixture(t, ctx, dbConnectionPool, "walletB", "https://www.b.com", "www.b.com", "b://")
 
 	disbursementA1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country:                             country,
 		Wallet:                              walletA,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A1",
 	})
 	disbursementA2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country:                             country,
 		Wallet:                              walletA,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A2",
 	})
 	disbursementB1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country:                             country,
 		Wallet:                              walletB,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B1",
 	})
 	disbursementB2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country:                             country,
 		Wallet:                              walletB,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,

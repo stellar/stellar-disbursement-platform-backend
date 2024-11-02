@@ -103,10 +103,9 @@ func Test_CreateDisbursement(t *testing.T) {
 	}
 
 	reqBody := &httphandler.PostDisbursementRequest{
-		Name:        "mockDisbursement",
-		CountryCode: "USA",
-		WalletID:    "123",
-		AssetID:     "890",
+		Name:     "mockDisbursement",
+		WalletID: "123",
+		AssetID:  "890",
 	}
 
 	t.Run("error calling httpClient.Do", func(t *testing.T) {

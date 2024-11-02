@@ -97,7 +97,6 @@ func TestCalculateStatistics(t *testing.T) {
 	require.NoError(t, err)
 
 	asset1 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
@@ -107,11 +106,10 @@ func TestCalculateStatistics(t *testing.T) {
 	receiverWallet2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.DraftReceiversWalletStatus)
 
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.CompletedDisbursementStatus,
-		Asset:   asset1,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 1",
+		Status: data.CompletedDisbursementStatus,
+		Asset:  asset1,
+		Wallet: wallet,
 	})
 
 	stellarTransactionID, err := utils.RandomString(64)
@@ -220,11 +218,10 @@ func TestCalculateStatistics(t *testing.T) {
 	asset2 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 2",
-		Status:  data.CompletedDisbursementStatus,
-		Asset:   asset2,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 2",
+		Status: data.CompletedDisbursementStatus,
+		Asset:  asset2,
+		Wallet: wallet,
 	})
 
 	stellarTransactionID, err = utils.RandomString(64)
@@ -401,7 +398,6 @@ func Test_checkIfDisbursementExists(t *testing.T) {
 
 	t.Run("disbursement exists", func(t *testing.T) {
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, model.Disbursements, &data.Disbursement{
@@ -412,9 +408,8 @@ func Test_checkIfDisbursementExists(t *testing.T) {
 					UserID: "user1",
 				},
 			},
-			Asset:   asset,
-			Country: country,
-			Wallet:  wallet,
+			Asset:  asset,
+			Wallet: wallet,
 		})
 		exists, err := checkIfDisbursementExists(context.Background(), dbConnectionPool, disbursement.ID)
 		require.NoError(t, err)

@@ -63,17 +63,13 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool,
 		"USDC",
 		"GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool,
-		"FRA",
-		"France")
 
 	// create disbursements
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "ready disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// create disbursement receivers
@@ -270,17 +266,13 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool,
 		"USDC",
 		"GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool,
-		"FRA",
-		"France")
 
 	// create disbursements
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "ready disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// create disbursement receivers
@@ -578,7 +570,6 @@ func updateTSSTransactionsToError(t *testing.T, testCtx *testContext, txDataSlic
 func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
@@ -588,17 +579,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 
 	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
 
-	// clean test db
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-
 	// create fixtures
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE")
 
@@ -606,11 +587,10 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Disbursements, &data.Disbursement{
-		Name:    "started disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "started disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Payment, &data.Payment{
@@ -704,7 +684,6 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
@@ -714,17 +693,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 
 	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
 
-	// clean test db
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-
 	// create fixtures
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE")
 
@@ -732,11 +701,10 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Disbursements, &data.Disbursement{
-		Name:    "started disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "started disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Payment, &data.Payment{

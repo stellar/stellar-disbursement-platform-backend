@@ -88,15 +88,13 @@ func TestStatisticsHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	asset1 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.CompletedDisbursementStatus,
-		Asset:   asset1,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 1",
+		Status: data.CompletedDisbursementStatus,
+		Asset:  asset1,
+		Wallet: wallet,
 	})
 
 	t.Run("get statistics for existing disbursement with no data", func(t *testing.T) {

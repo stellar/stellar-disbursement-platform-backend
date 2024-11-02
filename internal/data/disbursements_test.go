@@ -25,7 +25,6 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	wallet.Assets = nil
 
@@ -41,7 +40,6 @@ func Test_DisbursementModelInsert(t *testing.T) {
 			},
 		},
 		Asset:                               asset,
-		Country:                             country,
 		Wallet:                              wallet,
 		VerificationField:                   VerificationTypeDateOfBirth,
 		ReceiverRegistrationMessageTemplate: smsTemplate,
@@ -68,7 +66,6 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, "disbursement2", actual.Name)
 		assert.Equal(t, DraftDisbursementStatus, actual.Status)
 		assert.Equal(t, asset, actual.Asset)
-		assert.Equal(t, country, actual.Country)
 		assert.Equal(t, wallet, actual.Wallet)
 		assert.Equal(t, smsTemplate, actual.ReceiverRegistrationMessageTemplate)
 		assert.Equal(t, 1, len(actual.StatusHistory))
@@ -91,7 +88,6 @@ func Test_DisbursementModelCount(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -102,9 +98,8 @@ func Test_DisbursementModelCount(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns 0 when no disbursements exist", func(t *testing.T) {
@@ -156,7 +151,6 @@ func Test_DisbursementModelGet(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -168,9 +162,8 @@ func Test_DisbursementModelGet(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns error when disbursement does not exist", func(t *testing.T) {
@@ -201,7 +194,6 @@ func Test_DisbursementModelGetByName(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -213,9 +205,8 @@ func Test_DisbursementModelGetByName(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns error when disbursement does not exist", func(t *testing.T) {
@@ -236,7 +227,6 @@ func Test_DisbursementModelGetByName(t *testing.T) {
 func Test_DisbursementModelGetAll(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -247,7 +237,6 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -258,9 +247,8 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns empty list when no disbursements exist", func(t *testing.T) {
@@ -281,8 +269,8 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 
 		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
 		require.NoError(t, err)
-		assert.Equal(t, 2, len(actualDisbursements))
-		assert.Equal(t, []*Disbursement{expected1, expected2}, actualDisbursements)
+		assert.Len(t, actualDisbursements, 2)
+		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
 	})
 
 	t.Run("returns disbursements successfully with limit", func(t *testing.T) {
@@ -350,7 +338,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		assert.Equal(t, []*Disbursement{expected1}, actualDisbursements)
 	})
 
-	t.Run("returns disbursements successfully with statuses parameter ", func(t *testing.T) {
+	t.Run("returns disbursements successfully with statuses parameter", func(t *testing.T) {
 		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
 		disbursement.Name = "disbursement1"
@@ -372,6 +360,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		assert.Equal(t, 2, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
 	})
+
 	t.Run("returns disbursements successfully with stats", func(t *testing.T) {
 		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
@@ -508,7 +497,6 @@ func Test_DisbursementModel_Update(t *testing.T) {
 func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
@@ -518,15 +506,6 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 	models, err := NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -539,7 +518,6 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            ReadyDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
 			VerificationField: VerificationTypeDateOfBirth,
 		})
 
@@ -567,7 +545,6 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            StartedDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
 			VerificationField: VerificationTypeDateOfBirth,
 		})
 
@@ -605,7 +582,6 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            StartedDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
 			VerificationField: VerificationTypeDateOfBirth,
 		})
 
@@ -624,7 +600,6 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            StartedDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
 			VerificationField: VerificationTypeDateOfBirth,
 		})
 

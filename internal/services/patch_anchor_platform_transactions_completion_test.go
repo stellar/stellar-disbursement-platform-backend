@@ -66,7 +66,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 	t.Run("doesn't patch the transaction when payment isn't on Success or Failed status", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -74,7 +73,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -103,7 +101,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 	t.Run("doesn't mark as synced when fails patching anchor platform transaction when payment is success", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -111,7 +108,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -174,7 +170,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 	t.Run("mark as synced when patch anchor platform transaction successfully and payment is failed", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -182,7 +177,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -228,7 +222,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 	t.Run("marks as synced when patch anchor platform transaction successfully and payment is success", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -236,7 +229,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -293,7 +285,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 	t.Run("marks as synced when patch anchor platform transaction successfully and payment is success (XLM)", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 
@@ -301,7 +292,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -358,7 +348,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 	t.Run("doesn't patch the transaction when it's already patch as completed", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -366,7 +355,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -442,7 +430,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 	t.Run("doesn't mark as synced when fails patching anchor platform transaction when payment is success", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -450,7 +437,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -506,7 +492,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 	t.Run("mark as synced when patch anchor platform transaction successfully and payment is failed", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -514,7 +499,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -566,7 +550,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 	t.Run("marks as synced when patch anchor platform transaction successfully and payment is success", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -574,7 +557,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -629,7 +611,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 	t.Run("doesn't patch the transaction when it's already patch as completed", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -637,7 +618,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -645,7 +625,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		})
 
 		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -713,7 +692,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 	t.Run("patches the transactions successfully if the other payments were failed", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -721,7 +699,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -729,7 +706,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		})
 
 		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,
@@ -737,7 +713,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		})
 
 		disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country:           country,
 			Wallet:            wallet,
 			Asset:             asset,
 			Status:            data.StartedDisbursementStatus,

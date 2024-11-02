@@ -346,13 +346,11 @@ func Test_CircleTransferRequestModel_GetOrInsert(t *testing.T) {
 	models, err := NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 	receiverReady := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 	rwReady := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, ReadyReceiversWalletStatus)
@@ -547,13 +545,11 @@ func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing
 	models, outerErr := NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 	receiverReady := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 	rwReady := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, ReadyReceiversWalletStatus)

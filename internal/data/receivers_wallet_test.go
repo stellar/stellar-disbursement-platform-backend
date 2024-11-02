@@ -65,7 +65,6 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 	})
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	receiverWallet1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
@@ -92,9 +91,8 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 	disbursement := Disbursement{
-		Status:  DraftDisbursementStatus,
-		Asset:   asset,
-		Country: country,
+		Status: DraftDisbursementStatus,
+		Asset:  asset,
 	}
 
 	stellarTransactionID, err := utils.RandomString(64)

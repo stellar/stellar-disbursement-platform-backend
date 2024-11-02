@@ -72,7 +72,7 @@ var CounterVecMetrics = map[MetricTag]*prometheus.CounterVec{
 		Namespace: "sdp", Subsystem: "business", Name: string(DisbursementsCounterTag),
 		Help: "Disbursements Counter",
 	},
-		[]string{"asset", "country", "wallet"},
+		[]string{"asset", "wallet"},
 	),
 	CircleAPIRequestsTotalTag: prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "sdp", Subsystem: "circle", Name: string(CircleAPIRequestsTotalTag),

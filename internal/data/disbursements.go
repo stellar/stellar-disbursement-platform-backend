@@ -19,7 +19,6 @@ import (
 type Disbursement struct {
 	ID                                  string                    `json:"id" db:"id"`
 	Name                                string                    `json:"name" db:"name"`
-	Country                             *Country                  `json:"country,omitempty" db:"country"`
 	Wallet                              *Wallet                   `json:"wallet,omitempty" db:"wallet"`
 	Asset                               *Asset                    `json:"asset,omitempty" db:"asset"`
 	Status                              DisbursementStatus        `json:"status" db:"status"`
@@ -72,9 +71,9 @@ var (
 func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field, receiver_registration_message_template, registration_contact_type)
+		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type)
 		VALUES 
-		    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		    ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 		    `
 	var newId string
@@ -84,7 +83,6 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		disbursement.StatusHistory,
 		disbursement.Wallet.ID,
 		disbursement.Asset.ID,
-		disbursement.Country.Code,
 		disbursement.VerificationField,
 		disbursement.ReceiverRegistrationMessageTemplate,
 		disbursement.RegistrationContactType,
@@ -139,16 +137,11 @@ const selectDisbursementQuery = `
 			a.code as "asset.code",
 			a.issuer as "asset.issuer",
 			a.created_at as "asset.created_at",
-			a.updated_at as "asset.updated_at",
-			c.code as "country.code",
-			c.name as "country.name",
-			c.created_at as "country.created_at",
-			c.updated_at as "country.updated_at"
+			a.updated_at as "asset.updated_at"
 		FROM
 			disbursements d
 		JOIN wallets w on d.wallet_id = w.id
 		JOIN assets a on d.asset_id = a.id
-		JOIN countries c on d.country_code = c.code
 	`
 
 func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Disbursement, error) {
@@ -259,7 +252,6 @@ func (d *DisbursementModel) Count(ctx context.Context, sqlExec db.SQLExecuter, q
 			disbursements d
 		JOIN wallets w on d.wallet_id = w.id
 		JOIN assets a on d.asset_id = a.id
-		JOIN countries c on d.country_code = c.code
 		`
 
 	query, params := d.newDisbursementQuery(baseQuery, queryParams, false)

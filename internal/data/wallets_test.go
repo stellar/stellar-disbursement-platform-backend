@@ -251,7 +251,7 @@ func Test_WalletModelInsert(t *testing.T) {
 	})
 
 	// Ensure that only insert one of each entry
-	t.Run("duplicated countries codes and assets IDs", func(t *testing.T) {
+	t.Run("duplicated assets IDs", func(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 
 		name := "test_wallet"

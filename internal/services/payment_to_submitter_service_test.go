@@ -39,7 +39,6 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
 	nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	models, err := data.NewModels(dbConnectionPool)
@@ -129,11 +128,10 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
 			startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-				Name:    "ready disbursement",
-				Status:  data.StartedDisbursementStatus,
-				Asset:   tc.asset,
-				Wallet:  wallet,
-				Country: country,
+				Name:   "ready disbursement",
+				Status: data.StartedDisbursementStatus,
+				Asset:  tc.asset,
+				Wallet: wallet,
 			})
 
 			receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
@@ -446,7 +444,6 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -472,17 +469,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 		PaymentDispatcher:   paymentDispatcher,
 	})
 
-	// clean test db
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-
 	// create fixtures
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG")
 
@@ -490,11 +477,10 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "started disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "started disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -592,13 +578,11 @@ func Test_PaymentToSubmitterService_markPaymentsAsFailed(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)

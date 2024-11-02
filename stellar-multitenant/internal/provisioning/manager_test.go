@@ -455,7 +455,6 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"auth_users",
 		"circle_client_config",
 		"circle_transfer_requests",
-		"countries",
 		"disbursements",
 		"messages",
 		"organizations",
@@ -549,7 +548,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				// Needed for UpdateTenantConfig:
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
-				updatedTnt.DistributionAccountAddress = &distAccAddress
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,

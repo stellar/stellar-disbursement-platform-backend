@@ -43,7 +43,6 @@ type DisbursementHandler struct {
 
 type PostDisbursementRequest struct {
 	Name                                string                       `json:"name"`
-	CountryCode                         string                       `json:"country_code"`
 	WalletID                            string                       `json:"wallet_id"`
 	AssetID                             string                       `json:"asset_id"`
 	VerificationField                   data.VerificationType        `json:"verification_field"`
@@ -55,7 +54,6 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 	v := validators.NewValidator()
 
 	v.Check(req.Name != "", "name", "name is required")
-	v.Check(req.CountryCode != "", "country_code", "country_code is required")
 	v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
 	v.Check(req.AssetID != "", "asset_id", "asset_id is required")
 	v.Check(
@@ -122,17 +120,9 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get Country
-	country, err := d.Models.Countries.Get(ctx, req.CountryCode)
-	if err != nil {
-		httperror.BadRequest("country code could not be retrieved", err, nil).Render(w)
-		return
-	}
-
 	// Insert disbursement
 	disbursement := data.Disbursement{
 		Asset:                               asset,
-		Country:                             country,
 		Name:                                req.Name,
 		ReceiverRegistrationMessageTemplate: req.ReceiverRegistrationMessageTemplate,
 		RegistrationContactType:             req.RegistrationContactType,
@@ -163,9 +153,8 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	// Monitor disbursement creation
 	labels := monitor.DisbursementLabels{
-		Asset:   newDisbursement.Asset.Code,
-		Country: newDisbursement.Country.Code,
-		Wallet:  newDisbursement.Wallet.Name,
+		Asset:  newDisbursement.Asset.Code,
+		Wallet: newDisbursement.Wallet.Name,
 	}
 	err = d.MonitorService.MonitorCounters(monitor.DisbursementsCounterTag, labels.ToMap())
 	if err != nil {

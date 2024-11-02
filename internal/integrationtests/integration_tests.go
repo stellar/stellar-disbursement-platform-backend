@@ -115,7 +115,7 @@ func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsSer
 	return it, nil
 }
 
-func (it *IntegrationTestsService) initServices(ctx context.Context, opts IntegrationTestsOpts) {
+func (it *IntegrationTestsService) initServices(_ context.Context, opts IntegrationTestsOpts) {
 	// initialize default testnet horizon client
 	it.horizonClient = horizonclient.DefaultTestNetClient
 
@@ -176,7 +176,6 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Creating disbursement using server API")
 	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &httphandler.PostDisbursementRequest{
 		Name:                    opts.DisbursementName,
-		CountryCode:             "USA",
 		WalletID:                wallet.ID,
 		AssetID:                 asset.ID,
 		VerificationField:       data.VerificationTypeDateOfBirth,

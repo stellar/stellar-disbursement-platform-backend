@@ -28,7 +28,6 @@ func Test_ReceiversModel_Get(t *testing.T) {
 	ctx := context.Background()
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -36,10 +35,9 @@ func Test_ReceiversModel_Get(t *testing.T) {
 
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 	disbursement := Disbursement{
-		Status:  DraftDisbursementStatus,
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Status: DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	stellarTransactionID, err := utils.RandomString(64)
@@ -929,7 +927,6 @@ func Test_DeleteByContactInfo(t *testing.T) {
 			})
 
 			// 1. Create country, asset, and wallet (won't be deleted)
-			country := CreateCountryFixture(t, ctx, dbConnectionPool, "ATL", "Atlantis")
 			asset := CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 			wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
 
@@ -951,10 +948,9 @@ func Test_DeleteByContactInfo(t *testing.T) {
 				CreatedAt:        time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC),
 			})
 			disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-				Country: country,
-				Wallet:  wallet,
-				Status:  ReadyDisbursementStatus,
-				Asset:   asset,
+				Wallet: wallet,
+				Status: ReadyDisbursementStatus,
+				Asset:  asset,
 			})
 			paymentX1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
 				ReceiverWallet: receiverWalletX,
@@ -982,10 +978,9 @@ func Test_DeleteByContactInfo(t *testing.T) {
 				CreatedAt:        time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC),
 			})
 			disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-				Country: country,
-				Wallet:  wallet,
-				Status:  ReadyDisbursementStatus,
-				Asset:   asset,
+				Wallet: wallet,
+				Status: ReadyDisbursementStatus,
+				Asset:  asset,
 			})
 			paymentY2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
 				ReceiverWallet: receiverWalletY,
