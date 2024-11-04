@@ -863,10 +863,24 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
 	// create disbursement
-	draftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
+	phoneDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
 		Name:   "disbursement1",
 		Asset:  asset,
 		Wallet: wallet,
+	})
+
+	emailDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
+		Name:                    "disbursement with emails",
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: data.RegistrationContactTypeEmail,
+	})
+
+	emailWalletDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
+		Name:                    "disbursement with emails and wallets",
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: data.RegistrationContactTypeEmailAndWalletAddress,
 	})
 
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
@@ -895,7 +909,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	}{
 		{
 			name:           "valid input",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990-01-01"},
@@ -905,7 +919,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:           ".bat file fails",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990-01-01"},
@@ -916,7 +930,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:           ".sh file fails",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990-01-01"},
@@ -927,7 +941,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:           ".bash file fails",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990-01-01"},
@@ -938,7 +952,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:           ".csv file with transversal path ..\\.. fails",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990-01-01"},
@@ -949,7 +963,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:           "invalid date of birth",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990/01/01"},
@@ -959,7 +973,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:           "invalid phone number",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"380-12-345-678", "123456789", "100.5", "1990-01-01"},
@@ -975,7 +989,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:               "invalid input",
-			disbursementID:     draftDisbursement.ID,
+			disbursementID:     phoneDraftDisbursement.ID,
 			multipartFieldName: "instructions",
 			expectedStatus:     http.StatusBadRequest,
 			expectedMessage:    "could not parse file",
@@ -993,37 +1007,87 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "disbursement is not in draft or ready status",
 		},
 		{
-			name:           "error parsing contact type from header",
-			disbursementID: draftDisbursement.ID,
-			csvRecords: [][]string{
-				{"id", "amount", "verification"},
-				{"123456789", "100.5", "1990-01-01"},
-			},
-			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "could not determine contact information type",
-		},
-		{
 			name:           "no instructions found in file",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
-				{"phone", "id", "amount", "date-of-birth"},
+				{"phone", "id", "amount", "verification"},
 			},
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "could not parse csv file",
 		},
 		{
-			name:           "instructions invalid - attempting to upload phone and email",
-			disbursementID: draftDisbursement.ID,
+			name:           "headers invalid - email column missing for email contact type",
+			disbursementID: emailDraftDisbursement.ID,
 			csvRecords: [][]string{
-				{"phone", "email", "id", "amount", "date-of-birth"},
+				{"id", "amount", "verification"},
+				{"123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: email column is required",
+				data.RegistrationContactTypeEmail),
+		},
+		{
+			name:           "columns invalid - email column not allowed for phone contact type",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "email", "id", "amount", "verification"},
 				{"+380445555555", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
 			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: email column is not allowed for this registration contact type",
+				data.RegistrationContactTypePhone),
+		},
+		{
+			name:           "columns invalid - phone column not allowed for email contact type",
+			disbursementID: emailDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "email", "id", "amount", "verification"},
+				{"+380445555555", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: phone column is not allowed for this registration contact type",
+				data.RegistrationContactTypeEmail),
+		},
+		{
+			name:           "columns invalid - wallet column missing for email-wallet contact type",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"email", "id", "amount"},
+				{"foobar@test.com", "123456789", "100.5"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: walletAddress column is required",
+				data.RegistrationContactTypeEmailAndWalletAddress),
+		},
+		{
+			name:           "columns invalid - verification column not allowed for wallet contact type",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"walletAddress", "email", "id", "amount", "verification"},
+				{"GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: verification column is not allowed for this registration contact type",
+				data.RegistrationContactTypeEmailAndWalletAddress),
+		},
+		{
+			name:           "instructions invalid - walletAddress is invalid",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"walletAddress", "email", "id", "amount"},
+				{"GB3SAK22KSTIFQAV5GKALBY5KJ3JRF2DLSED3E7PVH", "foobar@test.com", "123456789", "100.5"},
+			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "csv file must contain either a phone or email column, not both",
+			expectedMessage: "invalid wallet address",
 		},
 		{
 			name:            "max instructions exceeded",
-			disbursementID:  draftDisbursement.ID,
+			disbursementID:  phoneDraftDisbursement.ID,
 			csvRecords:      maxCSVRecords,
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "number of instructions exceeds maximum of 10000",

@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -225,14 +224,15 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	contactType, err := resolveReceiverContactType(bytes.NewReader(buf.Bytes()))
-	if err != nil {
-		errMsg := fmt.Sprintf("could not determine contact information type: %s", err)
+	if err = validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
+		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
+			disbursement.RegistrationContactType,
+			err)
 		httperror.BadRequest(errMsg, err, nil).Render(w)
 		return
 	}
 
-	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.VerificationField)
+	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, disbursement.VerificationField)
 	if v != nil && v.HasErrors() {
 		httperror.BadRequest("could not parse csv file", err, v.Errors).Render(w)
 		return
@@ -260,7 +260,6 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, data.DisbursementInstructionsOpts{
 		UserID:                  user.ID,
 		Instructions:            instructions,
-		ReceiverContactType:     contactType,
 		Disbursement:            disbursement,
 		DisbursementUpdate:      disbursementUpdate,
 		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
@@ -487,8 +486,8 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 }
 
 // parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
-func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, verificationField data.VerificationType) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
-	validator := validators.NewDisbursementInstructionsValidator(verificationField)
+func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType data.RegistrationContactType, verificationField data.VerificationType) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
+	validator := validators.NewDisbursementInstructionsValidator(contactType, verificationField)
 
 	instructions := []*data.DisbursementInstruction{}
 	if err := gocsv.Unmarshal(reader, &instructions); err != nil {
@@ -514,33 +513,63 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, verificatio
 	return sanitizedInstructions, nil
 }
 
-// resolveReceiverContactType determines the type of contact information in the CSV file
-func resolveReceiverContactType(file io.Reader) (data.ReceiverContactType, error) {
+// validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
+func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType) error {
 	headers, err := csv.NewReader(file).Read()
 	if err != nil {
-		return "", fmt.Errorf("reading csv headers: %w", err)
+		return fmt.Errorf("reading csv headers: %w", err)
 	}
 
-	var hasPhone, hasEmail bool
+	hasHeaders := map[string]bool{
+		"phone":         false,
+		"email":         false,
+		"walletAddress": false,
+		"verification":  false,
+	}
+
+	// Populate header presence map
 	for _, header := range headers {
-		switch strings.ToLower(strings.TrimSpace(header)) {
-		case "phone":
-			hasPhone = true
-		case "email":
-			hasEmail = true
+		if _, exists := hasHeaders[header]; exists {
+			hasHeaders[header] = true
 		}
 	}
 
-	switch {
-	case !hasPhone && !hasEmail:
-		return "", fmt.Errorf("csv file must contain at least one of the following columns [phone, email]")
-	case hasPhone && hasEmail:
-		return "", fmt.Errorf("csv file must contain either a phone or email column, not both")
-	case hasPhone:
-		return data.ReceiverContactTypeSMS, nil
-	case hasEmail:
-		return data.ReceiverContactTypeEmail, nil
-	default:
-		return "", fmt.Errorf("csv file must contain either a phone or email column")
+	// establish the header rules. Each registration contact type has its own rules.
+	type headerRules struct {
+		required   []string
+		disallowed []string
 	}
+
+	rules := map[data.RegistrationContactType]headerRules{
+		data.RegistrationContactTypePhone: {
+			required:   []string{"phone", "verification"},
+			disallowed: []string{"email", "walletAddress"},
+		},
+		data.RegistrationContactTypeEmail: {
+			required:   []string{"email", "verification"},
+			disallowed: []string{"phone", "walletAddress"},
+		},
+		data.RegistrationContactTypeEmailAndWalletAddress: {
+			required:   []string{"email", "walletAddress"},
+			disallowed: []string{"phone", "verification"},
+		},
+		data.RegistrationContactTypePhoneAndWalletAddress: {
+			required:   []string{"phone", "walletAddress"},
+			disallowed: []string{"email", "verification"},
+		},
+	}
+
+	// Validate headers according to the rules
+	for _, req := range rules[registrationContactType].required {
+		if !hasHeaders[req] {
+			return fmt.Errorf("%s column is required", req)
+		}
+	}
+	for _, dis := range rules[registrationContactType].disallowed {
+		if hasHeaders[dis] {
+			return fmt.Errorf("%s column is not allowed for this registration contact type", dis)
+		}
+	}
+
+	return nil
 }

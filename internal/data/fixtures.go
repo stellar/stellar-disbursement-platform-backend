@@ -594,6 +594,10 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 		insert.RegistrationContactType = RegistrationContactTypePhone
 	}
 
+	if utils.IsEmpty(insert.RegistrationContactType) {
+		insert.RegistrationContactType = RegistrationContactTypePhone
+	}
+
 	id, err := model.Insert(ctx, &insert)
 	require.NoError(t, err)
 
