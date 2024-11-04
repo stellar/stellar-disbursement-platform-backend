@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type Disbursement struct {
@@ -75,15 +76,15 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		VALUES 
 		    ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
-		    `
-	var newId string
-	err := d.dbConnectionPool.GetContext(ctx, &newId, q,
+	`
+	var newID string
+	err := d.dbConnectionPool.GetContext(ctx, &newID, q,
 		disbursement.Name,
 		disbursement.Status,
 		disbursement.StatusHistory,
 		disbursement.Wallet.ID,
 		disbursement.Asset.ID,
-		disbursement.VerificationField,
+		utils.SQLNullString(string(disbursement.VerificationField)),
 		disbursement.ReceiverRegistrationMessageTemplate,
 		disbursement.RegistrationContactType,
 	)
@@ -95,7 +96,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		return "", fmt.Errorf("unable to create disbursement %s: %w", disbursement.Name, err)
 	}
 
-	return newId, nil
+	return newID, nil
 }
 
 func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*Disbursement, error) {
@@ -118,7 +119,7 @@ const selectDisbursementQuery = `
 			d.name,
 			d.status,
 			d.status_history,
-			d.verification_field,
+			COALESCE(d.verification_field::text, '') as verification_field,
 			COALESCE(d.file_name, '') as file_name,
 			d.file_content,
 			d.created_at,

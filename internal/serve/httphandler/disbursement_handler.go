@@ -61,11 +61,13 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 		"registration_contact_type",
 		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
 	)
-	v.Check(
-		slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
-		"verification_field",
-		fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
-	)
+	if !req.RegistrationContactType.IncludesWalletAddress {
+		v.Check(
+			slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
+			"verification_field",
+			fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+		)
+	}
 
 	return v
 }
