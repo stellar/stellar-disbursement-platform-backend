@@ -4,64 +4,64 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/stellar/go/strkey"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type DisbursementInstructionsValidator struct {
+	contactType       data.RegistrationContactType
 	verificationField data.VerificationType
 	*Validator
 }
 
-func NewDisbursementInstructionsValidator(verificationField data.VerificationType) *DisbursementInstructionsValidator {
+func NewDisbursementInstructionsValidator(contactType data.RegistrationContactType, verificationField data.VerificationType) *DisbursementInstructionsValidator {
 	return &DisbursementInstructionsValidator{
+		contactType:       contactType,
 		verificationField: verificationField,
 		Validator:         NewValidator(),
 	}
 }
 
 func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *data.DisbursementInstruction, lineNumber int) {
-	var phone, email string
-	if instruction.Phone != "" {
-		phone = strings.TrimSpace(instruction.Phone)
-	}
-	if instruction.Email != "" {
-		email = strings.TrimSpace(instruction.Email)
-	}
+	// 1. Validate required fields
+	iv.Check(instruction.ID != "", fmt.Sprintf("line %d - id", lineNumber), "id cannot be empty")
+	iv.CheckError(utils.ValidateAmount(instruction.Amount), fmt.Sprintf("line %d - amount", lineNumber), "invalid amount. Amount must be a positive number")
 
-	id := strings.TrimSpace(instruction.ID)
-	amount := strings.TrimSpace(instruction.Amount)
-	verification := strings.TrimSpace(instruction.VerificationValue)
-
-	// validate contact field provided
-	iv.Check(phone != "" || email != "", fmt.Sprintf("line %d - contact", lineNumber), "phone or email must be provided")
-
-	// validate phone field
-	if phone != "" {
-		iv.CheckError(utils.ValidatePhoneNumber(phone), fmt.Sprintf("line %d - phone", lineNumber), "invalid phone format. Correct format: +380445555555")
+	// 2. Validate Contact fields
+	switch iv.contactType.ReceiverContactType {
+	case data.ReceiverContactTypeEmail:
+		iv.Check(instruction.Email != "", fmt.Sprintf("line %d - email", lineNumber), "email cannot be empty")
+		if instruction.Email != "" {
+			iv.CheckError(utils.ValidateEmail(instruction.Email), fmt.Sprintf("line %d - email", lineNumber), "invalid email format")
+		}
+	case data.ReceiverContactTypeSMS:
+		iv.Check(instruction.Phone != "", fmt.Sprintf("line %d - phone", lineNumber), "phone cannot be empty")
+		if instruction.Phone != "" {
+			iv.CheckError(utils.ValidatePhoneNumber(instruction.Phone), fmt.Sprintf("line %d - phone", lineNumber), "invalid phone format. Correct format: +380445555555")
+		}
 	}
 
-	// validate email field
-	if email != "" {
-		iv.CheckError(utils.ValidateEmail(email), fmt.Sprintf("line %d - email", lineNumber), "invalid email format")
-	}
-
-	// validate id field
-	iv.Check(id != "", fmt.Sprintf("line %d - id", lineNumber), "id cannot be empty")
-
-	// validate amount field
-	iv.CheckError(utils.ValidateAmount(amount), fmt.Sprintf("line %d - amount", lineNumber), "invalid amount. Amount must be a positive number")
-
-	// validate verification field
-	switch iv.verificationField {
-	case data.VerificationTypeDateOfBirth:
-		iv.CheckError(utils.ValidateDateOfBirthVerification(verification), fmt.Sprintf("line %d - date of birth", lineNumber), "")
-	case data.VerificationTypeYearMonth:
-		iv.CheckError(utils.ValidateYearMonthVerification(verification), fmt.Sprintf("line %d - year/month", lineNumber), "")
-	case data.VerificationTypePin:
-		iv.CheckError(utils.ValidatePinVerification(verification), fmt.Sprintf("line %d - pin", lineNumber), "")
-	case data.VerificationTypeNationalID:
-		iv.CheckError(utils.ValidateNationalIDVerification(verification), fmt.Sprintf("line %d - national id", lineNumber), "")
+	// 3. Validate WalletAddress field
+	if iv.contactType.IncludesWalletAddress {
+		iv.Check(instruction.WalletAddress != "", fmt.Sprintf("line %d - wallet address", lineNumber), "wallet address cannot be empty")
+		if instruction.WalletAddress != "" {
+			iv.Check(strkey.IsValidEd25519PublicKey(instruction.WalletAddress), fmt.Sprintf("line %d - wallet address", lineNumber), "invalid wallet address. Must be a valid Stellar public key")
+		}
+	} else {
+		// 4. Validate verification field
+		verification := instruction.VerificationValue
+		switch iv.verificationField {
+		case data.VerificationTypeDateOfBirth:
+			iv.CheckError(utils.ValidateDateOfBirthVerification(verification), fmt.Sprintf("line %d - date of birth", lineNumber), "")
+		case data.VerificationTypeYearMonth:
+			iv.CheckError(utils.ValidateYearMonthVerification(verification), fmt.Sprintf("line %d - year/month", lineNumber), "")
+		case data.VerificationTypePin:
+			iv.CheckError(utils.ValidatePinVerification(verification), fmt.Sprintf("line %d - pin", lineNumber), "")
+		case data.VerificationTypeNationalID:
+			iv.CheckError(utils.ValidateNationalIDVerification(verification), fmt.Sprintf("line %d - national id", lineNumber), "")
+		}
 	}
 }
 
@@ -73,6 +73,10 @@ func (iv *DisbursementInstructionsValidator) SanitizeInstruction(instruction *da
 
 	if instruction.Email != "" {
 		sanitizedInstruction.Email = strings.ToLower(strings.TrimSpace(instruction.Email))
+	}
+
+	if instruction.WalletAddress != "" {
+		sanitizedInstruction.WalletAddress = strings.ToUpper(strings.TrimSpace(instruction.WalletAddress))
 	}
 
 	if instruction.ExternalPaymentId != "" {

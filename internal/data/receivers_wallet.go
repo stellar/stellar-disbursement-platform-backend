@@ -206,6 +206,45 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 	return receiverWallets, nil
 }
 
+const selectReceiverWalletQuery = `
+		SELECT
+			rw.id,
+			rw.receiver_id as "receiver.id",
+			rw.status,
+			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
+			COALESCE(rw.stellar_address, '') as stellar_address,
+			COALESCE(rw.stellar_memo, '') as stellar_memo,
+			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
+			COALESCE(rw.otp, '') as otp,
+			rw.otp_created_at,
+			rw.otp_confirmed_at,
+			COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with,
+			w.id as "wallet.id",
+			w.name as "wallet.name",
+			w.sep_10_client_domain as "wallet.sep_10_client_domain",
+			w.homepage as "wallet.homepage"
+		FROM 
+			receiver_wallets rw
+		JOIN 
+			wallets w ON rw.wallet_id = w.id
+	`
+
+// GetByIDs returns a receiver wallet by IDs
+func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, ids ...string) ([]ReceiverWallet, error) {
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no receiver wallet IDs provided")
+	}
+
+	query := fmt.Sprintf("%s WHERE rw.id = ANY($1)", selectReceiverWalletQuery)
+
+	receiverWallets := make([]ReceiverWallet, len(ids))
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(ids))
+	if err != nil {
+		return nil, fmt.Errorf("querying receiver wallet: %w", err)
+	}
+	return receiverWallets, nil
+}
+
 // GetByReceiverIDsAndWalletID returns a list of receiver wallets by receiver IDs and wallet ID.
 func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, walletId string) ([]*ReceiverWallet, error) {
 	receiverWallets := []*ReceiverWallet{}
@@ -350,33 +389,9 @@ func (rw *ReceiverWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 
 // GetByReceiverIDAndWalletDomain returns a receiver wallet that match the receiver ID and wallet domain.
 func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Context, receiverId string, walletDomain string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
-	var receiverWallet ReceiverWallet
-	query := `
-		SELECT
-			rw.id,
-			rw.receiver_id as "receiver.id",
-			rw.status,
-			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
-			COALESCE(rw.stellar_address, '') as stellar_address,
-			COALESCE(rw.stellar_memo, '') as stellar_memo,
-			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
-			COALESCE(rw.otp, '') as otp,
-			rw.otp_created_at,
-			rw.otp_confirmed_at,
-			COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.sep_10_client_domain as "wallet.sep_10_client_domain"
-		FROM 
-			receiver_wallets rw
-		JOIN 
-			wallets w ON rw.wallet_id = w.id
-		WHERE
-			rw.receiver_id = $1 
-		AND	
-			w.sep_10_client_domain = $2
-	`
+	query := fmt.Sprintf("%s %s", selectReceiverWalletQuery, "WHERE rw.receiver_id = $1 AND w.sep_10_client_domain = $2")
 
+	var receiverWallet ReceiverWallet
 	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverId, walletDomain)
 	if err != nil {
 		return nil, fmt.Errorf("error querying receiver wallet: %w", err)
@@ -448,25 +463,7 @@ func (rw *ReceiverWalletModel) UpdateStatusByDisbursementID(ctx context.Context,
 func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo, clientDomain string) (*ReceiverWallet, error) {
 	// build query
 	var receiverWallets ReceiverWallet
-	query := `
-		SELECT
-			rw.id,
-			rw.receiver_id as "receiver.id",
-			rw.status,
-			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
-			COALESCE(rw.stellar_address, '') as stellar_address,
-			COALESCE(rw.stellar_memo, '') as stellar_memo,
-			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
-			COALESCE(rw.otp, '') as otp,
-			rw.otp_created_at,
-			COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.homepage as "wallet.homepage"
-		FROM receiver_wallets rw
-		JOIN wallets w ON rw.wallet_id = w.id
-		WHERE rw.stellar_address = ?
-	`
+	query := fmt.Sprintf("%s %s", selectReceiverWalletQuery, "WHERE rw.stellar_address = ?")
 
 	// append memo to query if it is not empty
 	args := []interface{}{stellarAccount}

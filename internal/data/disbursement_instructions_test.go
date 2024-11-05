@@ -32,6 +32,13 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		Wallet: wallet,
 	})
 
+	emailDisbursement := CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, &DisbursementModel{dbConnectionPool: dbConnectionPool}, Disbursement{
+		Name:                    "disbursement2",
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: RegistrationContactTypeEmail,
+	})
+
 	di := NewDisbursementInstructionModel(dbConnectionPool)
 
 	smsInstruction1 := DisbursementInstruction{
@@ -91,12 +98,117 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		FileContent: CreateInstructionsFixture(t, smsInstructions),
 	}
 
+	knownWalletDisbursement := CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, &DisbursementModel{dbConnectionPool: dbConnectionPool}, Disbursement{
+		Name:                    "disbursement with provided receiver wallets",
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: RegistrationContactTypePhoneAndWalletAddress,
+	})
+
+	knownWalletDisbursementUpdate := func(instructions []*DisbursementInstruction) *DisbursementUpdate {
+		return &DisbursementUpdate{
+			ID:          knownWalletDisbursement.ID,
+			FileName:    "instructions.csv",
+			FileContent: CreateInstructionsFixture(t, instructions),
+		}
+	}
+
 	cleanup := func() {
 		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 	}
+
+	t.Run("failure - invalid wallet address for known wallet address instructions", func(t *testing.T) {
+		defer cleanup()
+
+		instructions := []*DisbursementInstruction{
+			{
+				WalletAddress: "GCVL44LFV3BFI627ABY3YRITFBRJVXUQVPLXQ3LISMI5UVKS5LHWTPT6",
+				Amount:        "100.01",
+				ID:            "1",
+				Phone:         "+380-12-345-679",
+			},
+		}
+
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            knownWalletDisbursement,
+			DisbursementUpdate:      knownWalletDisbursementUpdate(instructions),
+			MaxNumberOfInstructions: 10,
+		})
+		assert.ErrorContains(t, err, "validating receiver wallet update: invalid stellar address")
+	})
+
+	t.Run("success - known wallet address instructions", func(t *testing.T) {
+		defer cleanup()
+
+		instructions := []*DisbursementInstruction{
+			{
+				WalletAddress: "GCVL44LFV3BFI627ABY3YRITFBRJVXUQVPLXQ3LISMI5UVKS5LHWTPT7",
+				Amount:        "100.01",
+				ID:            "1",
+				Phone:         "+380-12-345-671",
+			},
+			{
+				WalletAddress: "GC524YE6Z6ISMNLHWFYXQZRR5DTF2A75DYE5TE6G7UMZJ6KZRNVHPOQS",
+				Amount:        "100.02",
+				ID:            "2",
+				Phone:         "+380-12-345-672",
+			},
+		}
+
+		update := knownWalletDisbursementUpdate(instructions)
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            knownWalletDisbursement,
+			DisbursementUpdate:      update,
+			MaxNumberOfInstructions: 10,
+		})
+		require.NoError(t, err)
+
+		// Verify Receivers
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbConnectionPool, instructions[0].Phone, instructions[1].Phone)
+		require.NoError(t, err)
+		assertEqualReceivers(t, []string{instructions[0].Phone, instructions[1].Phone}, []string{"1", "2"}, receivers)
+
+		// Verify Receiver Verifications
+		receiver1Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[0].ID)
+		require.NoError(t, err)
+		assert.Len(t, receiver1Verifications, 0)
+		receiver2Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[1].ID)
+		require.NoError(t, err)
+		assert.Len(t, receiver2Verifications, 0)
+
+		// Verify Receiver Wallets
+		receiverWallets, err := di.receiverWalletModel.GetWithReceiverIds(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID})
+		require.NoError(t, err)
+		assert.Len(t, receiverWallets, 2)
+		for _, receiverWallet := range receiverWallets {
+			assert.Equal(t, wallet.ID, receiverWallet.Wallet.ID)
+			assert.Contains(t, []string{instructions[0].WalletAddress, instructions[1].WalletAddress}, receiverWallet.StellarAddress)
+			assert.Equal(t, RegisteredReceiversWalletStatus, receiverWallet.Status)
+		}
+
+		// Verify Payments
+		actualPayments := GetPaymentsByDisbursementID(t, ctx, dbConnectionPool, knownWalletDisbursement.ID)
+		assert.Len(t, actualPayments, 2)
+		assert.Contains(t, actualPayments, instructions[0].Amount)
+		assert.Contains(t, actualPayments, instructions[1].Amount)
+
+		actualExternalPaymentIDs := GetExternalPaymentIDsByDisbursementID(t, ctx, dbConnectionPool, knownWalletDisbursement.ID)
+		assert.Len(t, actualExternalPaymentIDs, 0)
+
+		// Verify Disbursement
+		actualDisbursement, err := di.disbursementModel.Get(ctx, dbConnectionPool, knownWalletDisbursement.ID)
+		require.NoError(t, err)
+		assert.Equal(t, ReadyDisbursementStatus, actualDisbursement.Status)
+		assert.Equal(t, update.FileContent, actualDisbursement.FileContent)
+		assert.Equal(t, update.FileName, actualDisbursement.FileName)
+	})
 
 	t.Run("success - sms instructions", func(t *testing.T) {
 		defer cleanup()
@@ -106,7 +218,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeSMS,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.NoError(t, err)
@@ -152,9 +263,8 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
 			Instructions:            emailInstructions,
-			Disbursement:            disbursement,
+			Disbursement:            emailDisbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeEmail,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.NoError(t, err)
@@ -176,9 +286,8 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
 			UserID:                  "user-id",
 			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
+			Disbursement:            emailDisbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeEmail,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.ErrorContains(t, err, "has no contact information for contact type EMAIL")
@@ -202,7 +311,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            emailAndSMSInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeEmail,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		errorMsg := "processing receivers: resolving contact information for instruction with ID %s: phone and email are both provided"
@@ -218,7 +326,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeSMS,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.NoError(t, err)
@@ -229,7 +336,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeSMS,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.NoError(t, err)
@@ -298,7 +404,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            newInstructions,
 			Disbursement:            readyDisbursement,
 			DisbursementUpdate:      readyDisbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeSMS,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.NoError(t, err)
@@ -342,7 +447,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            newInstructions,
 			Disbursement:            readyDisbursement,
 			DisbursementUpdate:      readyDisbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeSMS,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.NoError(t, err)
@@ -383,7 +487,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeSMS,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.NoError(t, err)
@@ -406,7 +509,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Instructions:            smsInstructions,
 			Disbursement:            disbursement,
 			DisbursementUpdate:      disbursementUpdate,
-			ReceiverContactType:     ReceiverContactTypeSMS,
 			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
 		})
 		require.Error(t, err)
