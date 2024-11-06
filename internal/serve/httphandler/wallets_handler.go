@@ -41,24 +41,20 @@ func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 
 func (h WalletsHandler) parseFilters(r *http.Request) ([]data.Filter, error) {
 	filters := []data.Filter{}
-	const invalidFilterError = "invalid '%s' parameter value"
-
-	enabledFilter, err := utils.ParseBoolQueryParam(r, "enabled")
-	if err != nil {
-		return nil, fmt.Errorf(invalidFilterError, "enabled")
-	}
-	if enabledFilter != nil {
-		filters = append(filters, data.NewFilter(data.FilterEnabledWallets, *enabledFilter))
+	filterParams := map[string]data.FilterKey{
+		"enabled":      data.FilterEnabledWallets,
+		"user_managed": data.FilterUserManaged,
 	}
 
-	userManagedFilter, err := utils.ParseBoolQueryParam(r, "user_managed")
-	if err != nil {
-		return nil, fmt.Errorf(invalidFilterError, "user_managed")
+	for param, filterType := range filterParams {
+		paramValue, err := utils.ParseBoolQueryParam(r, param)
+		if err != nil {
+			return nil, fmt.Errorf("invalid '%s' parameter value", param)
+		}
+		if paramValue != nil {
+			filters = append(filters, data.NewFilter(filterType, *paramValue))
+		}
 	}
-	if userManagedFilter != nil {
-		filters = append(filters, data.NewFilter(data.FilterUserManaged, *userManagedFilter))
-	}
-
 	return filters, nil
 }
 

@@ -106,7 +106,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	var wallet *data.Wallet
 	if req.RegistrationContactType.IncludesWalletAddress {
-		wallets, findWalletErr := d.Models.Wallets.FindWallets(ctx, data.NewFilter(data.FilterUserManaged, true))
+		wallets, findWalletErr := d.Models.Wallets.FindWallets(ctx,
+			data.NewFilter(data.FilterUserManaged, true),
+			data.NewFilter(data.FilterEnabledWallets, true))
+
 		if findWalletErr != nil {
 			httperror.InternalError(ctx, "Cannot get wallets", findWalletErr, nil).Render(w)
 			return
