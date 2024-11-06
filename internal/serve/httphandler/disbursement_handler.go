@@ -53,7 +53,6 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 	v := validators.NewValidator()
 
 	v.Check(req.Name != "", "name", "name is required")
-	v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
 	v.Check(req.AssetID != "", "asset_id", "asset_id is required")
 	v.Check(
 		slices.Contains(data.AllRegistrationContactTypes(), req.RegistrationContactType),
@@ -67,6 +66,10 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 			"verification_field",
 			fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
 		)
+		v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
+	} else {
+		v.Check(req.VerificationField == "", "verification_field", "verification_field is not allowed for this registration contact type")
+		v.Check(req.WalletID == "", "wallet_id", "wallet_id is not allowed for this registration contact type")
 	}
 
 	return v

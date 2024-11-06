@@ -57,6 +57,20 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴 wallet_id and verification_field not allowed for user managed wallet",
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: data.RegistrationContactTypePhoneAndWalletAddress,
+				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+			expectedErrors: map[string]interface{}{
+				"wallet_id":          "wallet_id is not allowed for this registration contact type",
+				"verification_field": "verification_field is not allowed for this registration contact type",
+			},
+		},
+		{
 			name: "🔴 registration_contact_type and verification_field are invalid",
 			request: PostDisbursementRequest{
 				Name:     "disbursement 1",
@@ -139,11 +153,12 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
 				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 				RegistrationContactType: rct,
-				VerificationField:       "",
 			},
 			expectedErrors: expectedErrors,
+		}
+		if !rct.IncludesWalletAddress {
+			newTestCase.request.WalletID = "aab4a4a9-2493-4f37-9741-01d5bd31d68b"
 		}
 
 		testCases = append(testCases, newTestCase)
@@ -308,10 +323,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			reqBody: map[string]interface{}{
 				"name":                                   fmt.Sprintf("successful disbursement %d", i),
 				"asset_id":                               asset.ID,
-				"wallet_id":                              wallet.ID,
 				"registration_contact_type":              registrationContactType.String(),
 				"receiver_registration_message_template": customInviteTemplate,
-				"verification_field":                     data.VerificationTypeDateOfBirth,
 			},
 			wantStatusCode: http.StatusCreated,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
@@ -322,7 +335,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 					"receiver_registration_message_template": customInviteTemplate,
 					"registration_contact_type":              registrationContactType.String(),
 					"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
-					"verification_field":                     data.VerificationTypeDateOfBirth,
 					"status":                                 data.DraftDisbursementStatus,
 					"status_history": []map[string]interface{}{
 						{
@@ -351,10 +363,19 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 					},
 				}
 
+				if !registrationContactType.IncludesWalletAddress {
+					respMap["verification_field"] = data.VerificationTypeDateOfBirth
+				}
+
 				resp, err := json.Marshal(respMap)
 				require.NoError(t, err)
 				return string(resp)
 			},
+		}
+
+		if !registrationContactType.IncludesWalletAddress {
+			successfulTestCase.reqBody["wallet_id"] = wallet.ID
+			successfulTestCase.reqBody["verification_field"] = data.VerificationTypeDateOfBirth
 		}
 		testCases = append(testCases, successfulTestCase)
 	}
