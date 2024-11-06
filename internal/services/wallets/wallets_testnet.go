@@ -25,4 +25,9 @@ var TestnetWallets = []data.Wallet{
 			assets.USDCAssetTestnet,
 		},
 	},
+	{
+		Name:        "User Managed Wallet",
+		Assets:      assets.AllAssetsTestnet,
+		UserManaged: true,
+	},
 }

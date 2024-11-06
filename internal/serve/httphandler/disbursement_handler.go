@@ -104,14 +104,28 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get Wallet
-	wallet, err := d.Models.Wallets.Get(ctx, req.WalletID)
-	if err != nil {
-		httperror.BadRequest("wallet ID could not be retrieved", err, nil).Render(w)
-		return
+	var wallet *data.Wallet
+	if req.RegistrationContactType.IncludesWalletAddress {
+		wallets, findWalletErr := d.Models.Wallets.FindWallets(ctx, data.NewFilter(data.FilterUserManaged, true))
+		if findWalletErr != nil {
+			httperror.InternalError(ctx, "Cannot get wallets", findWalletErr, nil).Render(w)
+			return
+		}
+		if len(wallets) == 0 {
+			httperror.BadRequest("No User Managed Wallets found", nil, nil).Render(w)
+			return
+		}
+		wallet = &wallets[0]
+	} else {
+		// Get Wallet
+		wallet, err = d.Models.Wallets.Get(ctx, req.WalletID)
+		if err != nil {
+			httperror.BadRequest("Wallet ID could not be retrieved", err, nil).Render(w)
+			return
+		}
 	}
 	if !wallet.Enabled {
-		httperror.BadRequest("wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
+		httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
 		return
 	}
 

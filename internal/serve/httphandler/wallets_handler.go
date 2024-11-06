@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -23,25 +22,44 @@ type WalletsHandler struct {
 
 // GetWallets returns a list of wallets
 func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
-	context := r.Context()
+	ctx := r.Context()
 
-	enabledParam := r.URL.Query().Get("enabled")
-	var enabledFilter *bool
-	if enabledParam != "" {
-		enabledValue, err := strconv.ParseBool(enabledParam)
-		if err != nil {
-			httperror.BadRequest("Invalid enabled parameter value", nil, nil).Render(w)
-			return
-		}
-		enabledFilter = &enabledValue
+	filters, err := h.parseFilters(r)
+	if err != nil {
+		extras := map[string]interface{}{"validation_error": err.Error()}
+		httperror.BadRequest("Error parsing request filters", nil, extras).Render(w)
+		return
 	}
 
-	wallets, err := h.Models.Wallets.FindWallets(context, enabledFilter)
+	wallets, err := h.Models.Wallets.FindWallets(ctx, filters...)
 	if err != nil {
-		httperror.InternalError(context, "Cannot retrieve list of wallets", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot retrieve list of wallets", err, nil).Render(w)
 		return
 	}
 	httpjson.Render(w, wallets, httpjson.JSON)
+}
+
+func (h WalletsHandler) parseFilters(r *http.Request) ([]data.Filter, error) {
+	filters := []data.Filter{}
+	const invalidFilterError = "invalid '%s' parameter value"
+
+	enabledFilter, err := utils.ParseBoolQueryParam(r, "enabled")
+	if err != nil {
+		return nil, fmt.Errorf(invalidFilterError, "enabled")
+	}
+	if enabledFilter != nil {
+		filters = append(filters, data.NewFilter(data.FilterEnabledWallets, *enabledFilter))
+	}
+
+	userManagedFilter, err := utils.ParseBoolQueryParam(r, "user_managed")
+	if err != nil {
+		return nil, fmt.Errorf(invalidFilterError, "user_managed")
+	}
+	if userManagedFilter != nil {
+		filters = append(filters, data.NewFilter(data.FilterUserManaged, *userManagedFilter))
+	}
+
+	return filters, nil
 }
 
 func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {

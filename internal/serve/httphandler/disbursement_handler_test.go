@@ -186,6 +186,10 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	disabledWallet := wallets[1]
 	data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
 
+	userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
+	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
+	userManagedWallet = data.GetWalletFixture(t, ctx, dbConnectionPool, userManagedWallet.Name)
+
 	enabledWallet.Assets = nil
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
@@ -230,7 +234,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"wallet ID could not be retrieved"}`
+				return `{"error":"Wallet ID could not be retrieved"}`
 			},
 		},
 		{
@@ -244,7 +248,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"wallet is not enabled"}`
+				return `{"error":"Wallet is not enabled"}`
 			},
 		},
 		{
@@ -281,9 +285,15 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	for i, registrationContactType := range data.AllRegistrationContactTypes() {
 		var customInviteTemplate string
 		var testNameSuffix string
+		var wallet data.Wallet
 		if i%2 == 0 {
 			customInviteTemplate = "You have a new payment waiting for you from org x. Click on the link to register."
 			testNameSuffix = "(w/ custom invite template)"
+		}
+		if registrationContactType.IncludesWalletAddress {
+			wallet = *userManagedWallet
+		} else {
+			wallet = enabledWallet
 		}
 
 		successfulTestCase := TestCase{
@@ -291,14 +301,14 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
 				labels := monitor.DisbursementLabels{
 					Asset:  asset.Code,
-					Wallet: enabledWallet.Name,
+					Wallet: wallet.Name,
 				}
 				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 			},
 			reqBody: map[string]interface{}{
 				"name":                                   fmt.Sprintf("successful disbursement %d", i),
 				"asset_id":                               asset.ID,
-				"wallet_id":                              enabledWallet.ID,
+				"wallet_id":                              wallet.ID,
 				"registration_contact_type":              registrationContactType.String(),
 				"receiver_registration_message_template": customInviteTemplate,
 				"verification_field":                     data.VerificationTypeDateOfBirth,
@@ -330,13 +340,13 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						"deleted_at": nil,
 					},
 					"wallet": map[string]interface{}{
-						"id":                   enabledWallet.ID,
-						"name":                 enabledWallet.Name,
-						"deep_link_schema":     enabledWallet.DeepLinkSchema,
-						"homepage":             enabledWallet.Homepage,
-						"sep_10_client_domain": enabledWallet.SEP10ClientDomain,
-						"created_at":           enabledWallet.CreatedAt.Format(time.RFC3339Nano),
-						"updated_at":           enabledWallet.UpdatedAt.Format(time.RFC3339Nano),
+						"id":                   wallet.ID,
+						"name":                 wallet.Name,
+						"deep_link_schema":     wallet.DeepLinkSchema,
+						"homepage":             wallet.Homepage,
+						"sep_10_client_domain": wallet.SEP10ClientDomain,
+						"created_at":           wallet.CreatedAt.Format(time.RFC3339Nano),
+						"updated_at":           wallet.UpdatedAt.Format(time.RFC3339Nano),
 						"enabled":              true,
 					},
 				}

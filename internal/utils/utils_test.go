@@ -275,3 +275,57 @@ func TestStringPtr(t *testing.T) {
 		assert.Equal(t, "initial string", *result)
 	})
 }
+
+// Write a test for ParseBoolQueryParam function.
+func Test_ParseBoolQueryParam(t *testing.T) {
+	trueValue := true
+	falseValue := false
+
+	testCases := []struct {
+		name           string
+		queryParam     string
+		expectedResult *bool
+		expectedError  string
+	}{
+		{
+			name:           "valid true value",
+			queryParam:     "true",
+			expectedResult: &trueValue,
+			expectedError:  "",
+		},
+		{
+			name:           "valid false value",
+			queryParam:     "false",
+			expectedResult: &falseValue,
+			expectedError:  "",
+		},
+		{
+			name:           "valid empty value",
+			queryParam:     "",
+			expectedResult: nil,
+			expectedError:  "",
+		},
+		{
+			name:           "invalid value",
+			queryParam:     "invalid",
+			expectedResult: nil,
+			expectedError:  "invalid 'enabled' parameter value",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest("GET", fmt.Sprintf("/?enabled=%s", tc.queryParam), nil)
+			require.NoError(t, err)
+
+			result, err := ParseBoolQueryParam(req, "enabled")
+			if tc.expectedError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+		})
+	}
+}

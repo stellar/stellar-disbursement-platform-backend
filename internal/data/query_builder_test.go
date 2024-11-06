@@ -87,6 +87,16 @@ func Test_QueryBuilder(t *testing.T) {
 		assert.Equal(t, expectedQuery, actual)
 		assert.Equal(t, []interface{}{"Disbursement 1", 20, 20}, params)
 	})
+
+	t.Run("Test AddGroupBy", func(t *testing.T) {
+		qb := NewQueryBuilder("SELECT * FROM disbursements d")
+
+		qb.AddGroupBy("d.id")
+		actual, _ := qb.Build()
+
+		expectedQuery := "SELECT * FROM disbursements d GROUP BY d.id"
+		assert.Equal(t, expectedQuery, actual)
+	})
 }
 
 func Test_BuildSetClause(t *testing.T) {

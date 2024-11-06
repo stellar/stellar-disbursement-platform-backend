@@ -2,6 +2,11 @@ package assets
 
 import "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 
+var AllAssetsTestnet = []data.Asset{
+	XLMAsset,
+	USDCAssetTestnet,
+}
+
 // USDC
 
 const USDCAssetIssuerTestnet = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
