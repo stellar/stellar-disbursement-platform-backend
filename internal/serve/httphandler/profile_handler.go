@@ -1,19 +1,19 @@
 package httphandler
 
 import (
-	// Don't remove the `image/jpeg` and `image/png` packages import unless
-	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
-	// See https://pkg.go.dev/image#pkg-overview
-	_ "image/jpeg"
-	_ "image/png"
-
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
+
+	// Don't remove the `image/jpeg` and `image/png` packages import unless
+	// the `image` package is no longer necessary.
+	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
+	// See https://pkg.go.dev/image#pkg-overview
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"io/fs"
 	"net/http"
