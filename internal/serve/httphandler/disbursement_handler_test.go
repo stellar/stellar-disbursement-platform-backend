@@ -73,6 +73,34 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴 receiver_registration_message_template contains HTML",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "<a href='evil.com'>Redeem money</a>",
+			},
+			expectedErrors: map[string]interface{}{
+				"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS",
+			},
+		},
+		{
+			name: "🔴 receiver_registration_message_template contains JS",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "javascript:alert(localStorage.getItem('sdp_session'))",
+			},
+			expectedErrors: map[string]interface{}{
+				"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS",
+			},
+		},
+		{
 			name: "🟢 all fields are valid",
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
@@ -80,6 +108,17 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 				RegistrationContactType: data.RegistrationContactTypePhone,
 				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+		},
+		{
+			name: "🟢 all fields are valid w/ receiver_registration_message_template",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "My custom invitation message",
 			},
 		},
 	}
