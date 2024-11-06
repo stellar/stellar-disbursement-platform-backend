@@ -202,7 +202,7 @@ func ValidateURLScheme(link string, scheme ...string) error {
 // ValidateNoHTMLNorJSNorCSS detects HTML, <script> tags, inline JavaScript, and CSS styles in a string
 func ValidateNoHTMLNorJSNorCSS(input string) error {
 	// Regular expressions to catch HTML tags, <script> tags, javascript: URIs, <style> tags, and inline style attributes
-	htmlPattern := regexp.MustCompile(`</?[a-z][\s\S]*>`)
+	htmlPattern := regexp.MustCompile(`</(?i)[a-z][\s\S]*>`)
 	scriptTagPattern := regexp.MustCompile(`(?i)<script[\s\S]*?>[\s\S]*?</script>`)
 	inlineJSURIPattern := regexp.MustCompile(`(?i)javascript:[\s\S]*`)
 	styleTagPattern := regexp.MustCompile(`(?i)<style[\s\S]*?>[\s\S]*?</style>`)

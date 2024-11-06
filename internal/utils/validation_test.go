@@ -295,11 +295,17 @@ func Test_ValidateURLScheme(t *testing.T) {
 func Test_ValidateNoHTMLNorJSNorCSS(t *testing.T) {
 	testCases := []string{
 		"<a href='evil.com'>Click here</a>",
+		"<A HREF='evil.com'>Click here</A>",
 		"<style>body { background: red; }</style>",
+		"<STYLE>body { background: red; }</STYLE>",
 		"<div style='color: red;'>Test</div>",
+		"<DIV STYLE='color: red;'>Test</DIV>",
 		"expression(alert('XSS'))",
+		"EXPRESSION(ALERT('XSS'))",
 		"javascript:alert(localStorage.getItem('sdp_session'))",
+		"JAVASCRIPT:ALERT(localStorage.getItem('sdp_session'))",
 		"javascript:alert('XSS')",
+		"JAVASCRIPT:ALERT('XSS')",
 	}
 
 	for _, tc := range testCases {
