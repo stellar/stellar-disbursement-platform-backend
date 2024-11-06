@@ -300,6 +300,54 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 				}
 			}`,
 		},
+		{
+			name:  "returns BadRequest when receiver_registration_message_template contains HTML",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_message_template": "<a href='evil.com'>Redeem money</a>"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when receiver_registration_message_template contains JS",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_message_template": "javascript:alert(localStorage.getItem('sdp_session'))"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS"
+				}
+			}`,
+		},
 	}
 
 	for _, tc := range testCases {

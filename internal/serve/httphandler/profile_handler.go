@@ -1,24 +1,24 @@
 package httphandler
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"image"
-	"sort"
-
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
 	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
 	// See https://pkg.go.dev/image#pkg-overview
 	_ "image/jpeg"
 	_ "image/png"
+
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"image"
 	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/stellar/go/support/http/httpdecode"
@@ -62,14 +62,7 @@ type PatchOrganizationProfileRequest struct {
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
-	return r.OrganizationName == "" &&
-		r.TimezoneUTCOffset == "" &&
-		r.IsApprovalRequired == nil &&
-		r.ReceiverRegistrationMessageTemplate == nil &&
-		r.OTPMessageTemplate == nil &&
-		r.ReceiverInvitationResendInterval == nil &&
-		r.PaymentCancellationPeriodDays == nil &&
-		r.PrivacyPolicyLink == nil
+	return r == nil || utils.IsEmpty(*r)
 }
 
 type PatchUserProfileRequest struct {
@@ -106,7 +99,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 
 	// limiting the amount of memory allocated in the server to handle the request
 	if err := req.ParseMultipartForm(h.MaxMemoryAllocation); err != nil {
-		err = fmt.Errorf("error parsing multipart form: %w", err)
+		err = fmt.Errorf("parsing multipart form: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse multipart form data", err, map[string]interface{}{
 			"details": "request too large. Max size 2MB.",
@@ -116,7 +109,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 
 	multipartFile, _, err := req.FormFile("logo")
 	if err != nil && !errors.Is(err, http.ErrMissingFile) {
-		err = fmt.Errorf("error parsing logo file: %w", err)
+		err = fmt.Errorf("parsing logo file: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse request logo", err, nil).Render(rw)
 		return
@@ -146,7 +139,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	var reqBody PatchOrganizationProfileRequest
 	d := req.FormValue("data")
 	if err = json.Unmarshal([]byte(d), &reqBody); err != nil {
-		err = fmt.Errorf("error decoding data: %w", err)
+		err = fmt.Errorf("decoding data: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
@@ -160,17 +153,20 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		return
 	}
 
+	validator := validators.NewValidator()
 	if reqBody.PrivacyPolicyLink != nil && *reqBody.PrivacyPolicyLink != "" {
 		schemes := []string{"https"}
 		if !h.IsPubnet() {
 			schemes = append(schemes, "http")
 		}
-		validator := validators.NewValidator()
 		validator.CheckError(utils.ValidateURLScheme(*reqBody.PrivacyPolicyLink, schemes...), "privacy_policy_link", "")
-		if validator.HasErrors() {
-			httperror.BadRequest("", nil, validator.Errors).Render(rw)
-			return
-		}
+	}
+	if reqBody.ReceiverRegistrationMessageTemplate != nil {
+		validator.CheckError(utils.ValidateNoHTMLNorJSNorCSS(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+	}
+	if validator.HasErrors() {
+		httperror.BadRequest("", nil, validator.Errors).Render(rw)
+		return
 	}
 
 	organizationUpdate := data.OrganizationUpdate{
