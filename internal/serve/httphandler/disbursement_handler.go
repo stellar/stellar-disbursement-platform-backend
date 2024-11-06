@@ -60,6 +60,7 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 		"registration_contact_type",
 		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
 	)
+	v.CheckError(utils.ValidateNoHTMLNorJSNorCSS(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 	if !req.RegistrationContactType.IncludesWalletAddress {
 		v.Check(
 			slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
