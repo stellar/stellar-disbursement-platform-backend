@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_ValidatePhoneNumber(t *testing.T) {
@@ -287,6 +288,24 @@ func Test_ValidateURLScheme(t *testing.T) {
 			} else {
 				assert.ErrorContains(t, err, tc.wantErrContains)
 			}
+		})
+	}
+}
+
+func Test_ValidateNoHTMLNorJSNorCSS(t *testing.T) {
+	testCases := []string{
+		"<a href='evil.com'>Click here</a>",
+		"<style>body { background: red; }</style>",
+		"<div style='color: red;'>Test</div>",
+		"expression(alert('XSS'))",
+		"javascript:alert(localStorage.getItem('sdp_session'))",
+		"javascript:alert('XSS')",
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc, func(t *testing.T) {
+			err := ValidateNoHTMLNorJSNorCSS(tc)
+			require.Error(t, err, "ValidateNoHTMLNorJSNorCSS(%q) didn't catch the error", tc)
 		})
 	}
 }
