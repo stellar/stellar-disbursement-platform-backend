@@ -203,15 +203,12 @@ func ValidateURLScheme(link string, scheme ...string) error {
 func ValidateNoHTMLNorJSNorCSS(input string) error {
 	// Regular expressions to catch HTML tags, <script> tags, javascript: URIs, <style> tags, and inline style attributes
 	htmlPattern := regexp.MustCompile(`</(?i)[a-z][\s\S]*>`)
-	scriptTagPattern := regexp.MustCompile(`(?i)<script[\s\S]*?>[\s\S]*?</script>`)
 	inlineJSURIPattern := regexp.MustCompile(`(?i)javascript:[\s\S]*`)
-	styleTagPattern := regexp.MustCompile(`(?i)<style[\s\S]*?>[\s\S]*?</style>`)
 	inlineStyleAttrPattern := regexp.MustCompile(`(?i)style=['"][\s\S]*?['"]`)
 	cssExpressionPattern := regexp.MustCompile(`(?i)expression\(`)
 
 	// Check if any pattern matches the input
-	if htmlPattern.MatchString(input) || scriptTagPattern.MatchString(input) ||
-		inlineJSURIPattern.MatchString(input) || styleTagPattern.MatchString(input) ||
+	if htmlPattern.MatchString(input) || inlineJSURIPattern.MatchString(input) ||
 		inlineStyleAttrPattern.MatchString(input) || cssExpressionPattern.MatchString(input) {
 		return errors.New("input contains HTML, JavaScript, or CSS content")
 	}
