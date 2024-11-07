@@ -58,3 +58,15 @@ func IsNull(filterKey FilterKey) FilterKey {
 func LowerThan(filterKey FilterKey) FilterKey {
 	return FilterKey(fmt.Sprintf("%s < ?", filterKey))
 }
+
+type Filter struct {
+	Key   FilterKey
+	Value interface{}
+}
+
+func NewFilter(key FilterKey, value interface{}) Filter {
+	return Filter{
+		Key:   key,
+		Value: value,
+	}
+}

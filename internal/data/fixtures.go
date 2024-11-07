@@ -226,6 +226,20 @@ func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
+func MakeWalletUserManaged(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			user_managed = true
+		WHERE
+			id = $1
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, walletID)
+	require.NoError(t, err)
+}
+
 func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *Receiver) *Receiver {
 	t.Helper()
 

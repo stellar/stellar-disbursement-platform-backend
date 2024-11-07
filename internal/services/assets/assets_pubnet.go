@@ -2,6 +2,12 @@ package assets
 
 import "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 
+var AllAssetsPubnet = []data.Asset{
+	EURCAssetPubnet,
+	USDCAssetPubnet,
+	XLMAsset,
+}
+
 // USDC
 
 const USDCAssetCode = "USDC"

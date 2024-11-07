@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -109,4 +110,17 @@ func VisualBool(b bool) string {
 		return "🟢"
 	}
 	return "🔴"
+}
+
+// ParseBoolQueryParam parses a boolean query parameter from an HTTP request.
+func ParseBoolQueryParam(r *http.Request, param string) (*bool, error) {
+	paramValue := r.URL.Query().Get(param)
+	if paramValue == "" {
+		return nil, nil
+	}
+	parsedValue, err := strconv.ParseBool(paramValue)
+	if err != nil {
+		return nil, fmt.Errorf("invalid '%s' parameter value: %w", param, err)
+	}
+	return &parsedValue, nil
 }

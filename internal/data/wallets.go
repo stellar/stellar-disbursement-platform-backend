@@ -27,6 +27,7 @@ type Wallet struct {
 	SEP10ClientDomain string       `json:"sep_10_client_domain,omitempty" db:"sep_10_client_domain"`
 	DeepLinkSchema    string       `json:"deep_link_schema,omitempty" db:"deep_link_schema"`
 	Enabled           bool         `json:"enabled" db:"enabled"`
+	UserManaged       bool         `json:"user_managed,omitempty" db:"user_managed"`
 	Assets            WalletAssets `json:"assets,omitempty" db:"assets"`
 	CreatedAt         *time.Time   `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt         *time.Time   `json:"updated_at,omitempty" db:"updated_at"`
@@ -103,29 +104,32 @@ func (wm *WalletModel) GetByWalletName(ctx context.Context, name string) (*Walle
 	return &wallet, nil
 }
 
+const (
+	FilterEnabledWallets FilterKey = "enabled"
+	FilterUserManaged    FilterKey = "user_managed"
+)
+
 // FindWallets returns wallets filtering by enabled status.
-func (wm *WalletModel) FindWallets(ctx context.Context, enabledFilter *bool) ([]Wallet, error) {
-	wallets := []Wallet{}
-	var whereClause string
-	var args []interface{}
-
-	if enabledFilter != nil {
-		whereClause = "WHERE w.enabled = $1 "
-		args = append(args, *enabledFilter)
+func (wm *WalletModel) FindWallets(ctx context.Context, filters ...Filter) ([]Wallet, error) {
+	qb := NewQueryBuilder(getQuery)
+	for _, filter := range filters {
+		qb.AddCondition(filter.Key.Equals(), filter.Value)
 	}
+	qb.AddGroupBy("w.id")
+	qb.AddSorting(SortFieldName, SortOrderASC, "w")
+	query, args := qb.BuildAndRebind(wm.dbConnectionPool)
 
-	query := fmt.Sprintf("%s %s %s", getQuery, whereClause, " GROUP BY w.id ORDER BY w.name")
-
+	wallets := []Wallet{}
 	err := wm.dbConnectionPool.SelectContext(ctx, &wallets, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("error querying wallets: %w", err)
+		return nil, fmt.Errorf("querying wallets: %w", err)
 	}
 	return wallets, nil
 }
 
 // GetAll returns all wallets in the database
 func (wm *WalletModel) GetAll(ctx context.Context) ([]Wallet, error) {
-	return wm.FindWallets(ctx, nil)
+	return wm.FindWallets(ctx)
 }
 
 func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wallet, error) {

@@ -57,6 +57,20 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴 wallet_id and verification_field not allowed for user managed wallet",
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: data.RegistrationContactTypePhoneAndWalletAddress,
+				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+			expectedErrors: map[string]interface{}{
+				"wallet_id":          "wallet_id is not allowed for this registration contact type",
+				"verification_field": "verification_field is not allowed for this registration contact type",
+			},
+		},
+		{
 			name: "🔴 registration_contact_type and verification_field are invalid",
 			request: PostDisbursementRequest{
 				Name:     "disbursement 1",
@@ -139,11 +153,12 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
 				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 				RegistrationContactType: rct,
-				VerificationField:       "",
 			},
 			expectedErrors: expectedErrors,
+		}
+		if !rct.IncludesWalletAddress {
+			newTestCase.request.WalletID = "aab4a4a9-2493-4f37-9741-01d5bd31d68b"
 		}
 
 		testCases = append(testCases, newTestCase)
@@ -185,6 +200,10 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	enabledWallet := wallets[0]
 	disabledWallet := wallets[1]
 	data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
+
+	userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
+	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
+	userManagedWallet = data.GetWalletFixture(t, ctx, dbConnectionPool, userManagedWallet.Name)
 
 	enabledWallet.Assets = nil
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
@@ -230,7 +249,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"wallet ID could not be retrieved"}`
+				return `{"error":"Wallet ID could not be retrieved"}`
 			},
 		},
 		{
@@ -244,7 +263,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"wallet is not enabled"}`
+				return `{"error":"Wallet is not enabled"}`
 			},
 		},
 		{
@@ -281,9 +300,15 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	for i, registrationContactType := range data.AllRegistrationContactTypes() {
 		var customInviteTemplate string
 		var testNameSuffix string
+		var wallet data.Wallet
 		if i%2 == 0 {
 			customInviteTemplate = "You have a new payment waiting for you from org x. Click on the link to register."
 			testNameSuffix = "(w/ custom invite template)"
+		}
+		if registrationContactType.IncludesWalletAddress {
+			wallet = *userManagedWallet
+		} else {
+			wallet = enabledWallet
 		}
 
 		successfulTestCase := TestCase{
@@ -291,17 +316,15 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
 				labels := monitor.DisbursementLabels{
 					Asset:  asset.Code,
-					Wallet: enabledWallet.Name,
+					Wallet: wallet.Name,
 				}
 				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 			},
 			reqBody: map[string]interface{}{
 				"name":                                   fmt.Sprintf("successful disbursement %d", i),
 				"asset_id":                               asset.ID,
-				"wallet_id":                              enabledWallet.ID,
 				"registration_contact_type":              registrationContactType.String(),
 				"receiver_registration_message_template": customInviteTemplate,
-				"verification_field":                     data.VerificationTypeDateOfBirth,
 			},
 			wantStatusCode: http.StatusCreated,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
@@ -312,7 +335,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 					"receiver_registration_message_template": customInviteTemplate,
 					"registration_contact_type":              registrationContactType.String(),
 					"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
-					"verification_field":                     data.VerificationTypeDateOfBirth,
 					"status":                                 data.DraftDisbursementStatus,
 					"status_history": []map[string]interface{}{
 						{
@@ -330,21 +352,30 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						"deleted_at": nil,
 					},
 					"wallet": map[string]interface{}{
-						"id":                   enabledWallet.ID,
-						"name":                 enabledWallet.Name,
-						"deep_link_schema":     enabledWallet.DeepLinkSchema,
-						"homepage":             enabledWallet.Homepage,
-						"sep_10_client_domain": enabledWallet.SEP10ClientDomain,
-						"created_at":           enabledWallet.CreatedAt.Format(time.RFC3339Nano),
-						"updated_at":           enabledWallet.UpdatedAt.Format(time.RFC3339Nano),
+						"id":                   wallet.ID,
+						"name":                 wallet.Name,
+						"deep_link_schema":     wallet.DeepLinkSchema,
+						"homepage":             wallet.Homepage,
+						"sep_10_client_domain": wallet.SEP10ClientDomain,
+						"created_at":           wallet.CreatedAt.Format(time.RFC3339Nano),
+						"updated_at":           wallet.UpdatedAt.Format(time.RFC3339Nano),
 						"enabled":              true,
 					},
+				}
+
+				if !registrationContactType.IncludesWalletAddress {
+					respMap["verification_field"] = data.VerificationTypeDateOfBirth
 				}
 
 				resp, err := json.Marshal(respMap)
 				require.NoError(t, err)
 				return string(resp)
 			},
+		}
+
+		if !registrationContactType.IncludesWalletAddress {
+			successfulTestCase.reqBody["wallet_id"] = wallet.ID
+			successfulTestCase.reqBody["verification_field"] = data.VerificationTypeDateOfBirth
 		}
 		testCases = append(testCases, successfulTestCase)
 	}

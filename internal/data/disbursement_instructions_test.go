@@ -142,6 +142,46 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.ErrorContains(t, err, "validating receiver wallet update: invalid stellar address")
 	})
 
+	t.Run("failure - receiver wallet address mismatch for known wallet address instructions", func(t *testing.T) {
+		defer cleanup()
+
+		firstInstruction := []*DisbursementInstruction{
+			{
+				WalletAddress: "GCVL44LFV3BFI627ABY3YRITFBRJVXUQVPLXQ3LISMI5UVKS5LHWTPT7",
+				Amount:        "100.01",
+				ID:            "1",
+				Phone:         "+380-12-345-671",
+			},
+		}
+		update := knownWalletDisbursementUpdate(firstInstruction)
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            firstInstruction,
+			Disbursement:            knownWalletDisbursement,
+			DisbursementUpdate:      update,
+			MaxNumberOfInstructions: 10,
+		})
+		require.NoError(t, err)
+
+		mismatchAddressInstruction := []*DisbursementInstruction{
+			{
+				WalletAddress: "GC524YE6Z6ISMNLHWFYXQZRR5DTF2A75DYE5TE6G7UMZJ6KZRNVHPOQS",
+				Amount:        "100.02",
+				ID:            "1",
+				Phone:         "+380-12-345-671",
+			},
+		}
+		mismatchUpdate := knownWalletDisbursementUpdate(mismatchAddressInstruction)
+		err = di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            mismatchAddressInstruction,
+			Disbursement:            knownWalletDisbursement,
+			DisbursementUpdate:      mismatchUpdate,
+			MaxNumberOfInstructions: 10,
+		})
+		assert.ErrorIs(t, err, ErrReceiverWalletAddressMismatch)
+	})
+
 	t.Run("success - known wallet address instructions", func(t *testing.T) {
 		defer cleanup()
 

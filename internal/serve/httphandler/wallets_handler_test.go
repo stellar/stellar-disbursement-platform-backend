@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
 func Test_WalletsHandlerGetWallets(t *testing.T) {
@@ -111,6 +112,47 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		require.JSONEq(t, string(expectedJSON), string(respBody))
 	})
 
+	t.Run("successfully returns a list of user managed wallets", func(t *testing.T) {
+		wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+
+		// make first wallet user managed
+		data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/wallets?user_managed=true", nil)
+		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		respWallets := []data.Wallet{}
+		err = json.Unmarshal(respBody, &respWallets)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(respWallets))
+		assert.Equal(t, wallets[0].ID, respWallets[0].ID)
+		assert.Equal(t, wallets[0].Name, respWallets[0].Name)
+	})
+
+	t.Run("bad request when user_managed parameter isn't a bool", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/wallets?user_managed=xxx", nil)
+		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		var httpErr httperror.HTTPError
+		err = json.Unmarshal(respBody, &httpErr)
+		require.NoError(t, err)
+		assert.Equal(t, "invalid 'user_managed' parameter value", httpErr.Extras["validation_error"])
+	})
+
 	t.Run("bad request when enabled parameter isn't a bool", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/wallets?enabled=xxx", nil)
@@ -122,7 +164,10 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		require.JSONEq(t, `{"error": "Invalid enabled parameter value"}`, string(respBody))
+		var httpErr httperror.HTTPError
+		err = json.Unmarshal(respBody, &httpErr)
+		require.NoError(t, err)
+		assert.Equal(t, "invalid 'enabled' parameter value", httpErr.Extras["validation_error"])
 	})
 }
 

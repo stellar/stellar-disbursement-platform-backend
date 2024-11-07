@@ -59,8 +59,9 @@ func NewDisbursementInstructionModel(dbConnectionPool db.DBConnectionPool) *Disb
 }
 
 var (
-	ErrMaxInstructionsExceeded      = errors.New("maximum number of instructions exceeded")
-	ErrReceiverVerificationMismatch = errors.New("receiver verification mismatch")
+	ErrMaxInstructionsExceeded       = errors.New("maximum number of instructions exceeded")
+	ErrReceiverVerificationMismatch  = errors.New("receiver verification mismatch")
+	ErrReceiverWalletAddressMismatch = errors.New("receiver wallet address mismatch")
 )
 
 type DisbursementInstructionsOpts struct {
@@ -164,6 +165,10 @@ func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Conte
 			return fmt.Errorf("receiver wallet not found for receiver with ID %s", receiver.ID)
 		}
 		receiverWallet := receiverWalletsByIDMap[receiverWalletID]
+
+		if receiverWallet.StellarAddress != "" && receiverWallet.StellarAddress != instruction.WalletAddress {
+			return fmt.Errorf("%w: receiver wallet address mismatch for receiver with ID %s", ErrReceiverWalletAddressMismatch, receiver.ID)
+		}
 
 		if slices.Contains([]ReceiversWalletStatus{RegisteredReceiversWalletStatus, FlaggedReceiversWalletStatus}, receiverWallet.Status) {
 			log.Ctx(ctx).Infof("receiver wallet with ID %s is %s, skipping registration", receiverWallet.ID, receiverWallet.Status)

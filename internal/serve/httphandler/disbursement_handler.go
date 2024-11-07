@@ -53,7 +53,6 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 	v := validators.NewValidator()
 
 	v.Check(req.Name != "", "name", "name is required")
-	v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
 	v.Check(req.AssetID != "", "asset_id", "asset_id is required")
 	v.Check(
 		slices.Contains(data.AllRegistrationContactTypes(), req.RegistrationContactType),
@@ -67,6 +66,10 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 			"verification_field",
 			fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
 		)
+		v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
+	} else {
+		v.Check(req.VerificationField == "", "verification_field", "verification_field is not allowed for this registration contact type")
+		v.Check(req.WalletID == "", "wallet_id", "wallet_id is not allowed for this registration contact type")
 	}
 
 	return v
@@ -104,14 +107,31 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get Wallet
-	wallet, err := d.Models.Wallets.Get(ctx, req.WalletID)
-	if err != nil {
-		httperror.BadRequest("wallet ID could not be retrieved", err, nil).Render(w)
-		return
+	var wallet *data.Wallet
+	if req.RegistrationContactType.IncludesWalletAddress {
+		wallets, findWalletErr := d.Models.Wallets.FindWallets(ctx,
+			data.NewFilter(data.FilterUserManaged, true),
+			data.NewFilter(data.FilterEnabledWallets, true))
+
+		if findWalletErr != nil {
+			httperror.InternalError(ctx, "Cannot get wallets", findWalletErr, nil).Render(w)
+			return
+		}
+		if len(wallets) == 0 {
+			httperror.BadRequest("No User Managed Wallets found", nil, nil).Render(w)
+			return
+		}
+		wallet = &wallets[0]
+	} else {
+		// Get Wallet
+		wallet, err = d.Models.Wallets.Get(ctx, req.WalletID)
+		if err != nil {
+			httperror.BadRequest("Wallet ID could not be retrieved", err, nil).Render(w)
+			return
+		}
 	}
 	if !wallet.Enabled {
-		httperror.BadRequest("wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
+		httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
 		return
 	}
 
@@ -269,6 +289,8 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		case errors.Is(err, data.ErrMaxInstructionsExceeded):
 			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
 		case errors.Is(err, data.ErrReceiverVerificationMismatch):
+			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
+		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
 			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
 		default:
 			httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursementID), err, nil).Render(w)
