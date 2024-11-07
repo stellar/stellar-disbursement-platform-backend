@@ -290,6 +290,8 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
 		case errors.Is(err, data.ErrReceiverVerificationMismatch):
 			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
+		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
+			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
 		default:
 			httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursementID), err, nil).Render(w)
 		}
