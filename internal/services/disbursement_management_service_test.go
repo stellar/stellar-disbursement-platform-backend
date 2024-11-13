@@ -207,7 +207,7 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 	// Create models and basic DB entries
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	// Create fixtures: asset, wallet, country
+	// Create fixtures: asset, wallet
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetIssuerTestnet)
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 
@@ -505,7 +505,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 	token := "token"
 	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
-	// Create fixtures: asset, wallet, country
+	// Create fixtures: asset, wallet
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 	distributionAcc := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
