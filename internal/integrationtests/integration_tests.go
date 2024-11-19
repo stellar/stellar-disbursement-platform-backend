@@ -168,17 +168,25 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	}
 
 	log.Ctx(ctx).Info("Getting test wallet in database")
-	wallet, err := it.models.Wallets.GetByWalletName(ctx, opts.WalletName)
-	if err != nil {
-		return fmt.Errorf("getting test wallet: %w", err)
+	var (
+		verificationField data.VerificationType
+		walletID          string
+	)
+	if !opts.RegistrationContactType.IncludesWalletAddress {
+		verificationField = data.VerificationTypeDateOfBirth
+		wallet, err := it.models.Wallets.GetByWalletName(ctx, opts.WalletName)
+		if err != nil {
+			return fmt.Errorf("getting test wallet: %w", err)
+		}
+		walletID = wallet.ID
 	}
 
 	log.Ctx(ctx).Info("Creating disbursement using server API")
 	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &httphandler.PostDisbursementRequest{
 		Name:                    opts.DisbursementName,
-		WalletID:                wallet.ID,
+		WalletID:                walletID,
 		AssetID:                 asset.ID,
-		VerificationField:       data.VerificationTypeDateOfBirth,
+		VerificationField:       verificationField,
 		RegistrationContactType: opts.RegistrationContactType,
 	})
 	if err != nil {
@@ -248,26 +256,30 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		return fmt.Errorf("reading disbursement CSV: %w", err)
 	}
 
-	log.Ctx(ctx).Info("Completing receiver registration using server API")
-	err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
-		OTP:               data.TestnetAlwaysValidOTP,
-		PhoneNumber:       disbursementData[0].Phone,
-		Email:             disbursementData[0].Email,
-		VerificationValue: disbursementData[0].VerificationValue,
-		VerificationField: disbursement.VerificationField,
-		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
-	})
-	if err != nil {
-		return fmt.Errorf("registring receiver: %w", err)
-	}
-	log.Ctx(ctx).Info("Receiver OTP obtained")
+	if !disbursement.RegistrationContactType.IncludesWalletAddress {
+		log.Ctx(ctx).Info("Completing receiver registration using server API")
+		err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
+			OTP:               data.TestnetAlwaysValidOTP,
+			PhoneNumber:       disbursementData[0].Phone,
+			Email:             disbursementData[0].Email,
+			VerificationValue: disbursementData[0].VerificationValue,
+			VerificationField: disbursement.VerificationField,
+			ReCAPTCHAToken:    opts.RecaptchaSiteKey,
+		})
+		if err != nil {
+			return fmt.Errorf("registring receiver: %w", err)
+		}
+		log.Ctx(ctx).Info("Receiver OTP obtained")
 
-	log.Ctx(ctx).Info("Validating receiver data after completing registration")
-	err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain)
-	if err != nil {
-		return fmt.Errorf("validating receiver after registration: %w", err)
+		log.Ctx(ctx).Info("Validating receiver data after completing registration")
+		err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain)
+		if err != nil {
+			return fmt.Errorf("validating receiver after registration: %w", err)
+		}
+		log.Ctx(ctx).Info("Receiver data validated")
+	} else {
+		log.Ctx(ctx).Infof("Receiver wallet is already registered given the disbursement registration contact type %s", disbursement.RegistrationContactType)
 	}
-	log.Ctx(ctx).Info("Receiver data validated")
 
 	log.Ctx(ctx).Info("Waiting for payment to be processed by TSS")
 	time.Sleep(paymentProcessTimeSeconds * time.Second)

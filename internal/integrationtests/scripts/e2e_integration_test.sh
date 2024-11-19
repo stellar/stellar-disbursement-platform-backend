@@ -21,20 +21,30 @@ wait_for_server() {
   echo "Server at $endpoint is up."
 }
 
-accountTypes=("DISTRIBUTION_ACCOUNT.STELLAR.ENV" "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
-if [ -z "${REGISTRATION_CONTACT_TYPE+x}" ]; then
-  export REGISTRATION_CONTACT_TYPE="PHONE_NUMBER"
-fi
-for accountType in "${accountTypes[@]}"; do
-  export DISTRIBUTION_ACCOUNT_TYPE=$accountType
-  if [ $accountType="DISTRIBUTION_ACCOUNT.STELLAR.ENV" ]
-  then
-    platform="Stellar"
-  else
-    platform="Circle"
-  fi
+options=(
+  # "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
+  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv;REGISTRATION_CONTACT_TYPE=EMAIL"
+  "platform=Circle;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+)
 
-  echo "====> 👀Starting e2e setup and integration test ($platform)"
+for option in "${options[@]}"; do
+  # Parse the properties in the option
+  IFS=';' read -r -a properties <<< "$option"
+
+  for property in "${properties[@]}"; do
+    # Split each property into key and value
+    IFS='=' read -r key value <<< "$property"
+    export "$key"="$value"
+  done
+
+  # Example of using the exported variables
+  echo -e "\n====> 👀Starting e2e setup and integration test ($platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE)"
+  echo -e "\t- Platform: $platform"
+  echo -e "\t- DISTRIBUTION_ACCOUNT_TYPE: $DISTRIBUTION_ACCOUNT_TYPE"
+  echo -e "\t- DISBURSEMENT_CSV_FILE_NAME: $DISBURSEMENT_CSV_FILE_NAME"
+  echo -e "\t- REGISTRATION_CONTACT_TYPE: $REGISTRATION_CONTACT_TYPE"
+
   echo $DIVIDER
   echo "====> 👀Step 1: start preparation"
   docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
@@ -43,7 +53,7 @@ for accountType in "${accountTypes[@]}"; do
 
   # Run docker compose
   echo $DIVIDER
-  echo "====> 👀Step 2: build sdp-api, anchor-platform and tss"
+  echo "====> 👀Step 2: build sdp-api, anchor-platform and tss ($platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE)"
   docker compose -f ../docker/docker-compose-e2e-tests.yml up --build -d
   wait_for_server "http://localhost:8000/health" 20
   echo "====> ✅Step 2: finishing build"

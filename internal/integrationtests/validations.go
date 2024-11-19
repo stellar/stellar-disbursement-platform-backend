@@ -28,11 +28,18 @@ func validateExpectationsAfterProcessDisbursement(ctx context.Context, disbursem
 	}
 
 	for _, receiver := range receivers {
-		// TODO upgrade this function to validate multiples receiver wallets and payments.
-		if receiver.ReceiverWallet.Status != data.DraftReceiversWalletStatus {
-			return fmt.Errorf("invalid status for receiver_wallet after process disbursement")
+		// Validate receiver_wallet status
+		expectedStatusByRegistrationContactType := map[data.RegistrationContactType]data.ReceiversWalletStatus{
+			data.RegistrationContactTypePhone:                 data.DraftReceiversWalletStatus,
+			data.RegistrationContactTypeEmail:                 data.DraftReceiversWalletStatus,
+			data.RegistrationContactTypePhoneAndWalletAddress: data.RegisteredReceiversWalletStatus,
+			data.RegistrationContactTypeEmailAndWalletAddress: data.RegisteredReceiversWalletStatus,
+		}
+		if expectedStatus := expectedStatusByRegistrationContactType[disbursement.RegistrationContactType]; expectedStatus != receiver.ReceiverWallet.Status {
+			return fmt.Errorf("receiver_wallet should be in %s status for registrationContactType %s", expectedStatus, disbursement.RegistrationContactType)
 		}
 
+		// Validate payment status
 		if receiver.Payment.Status != data.DraftPaymentStatus {
 			return fmt.Errorf("invalid status for payment after process disbursement")
 		}
@@ -59,15 +66,23 @@ func validateExpectationsAfterStartDisbursement(ctx context.Context, disbursemen
 		return fmt.Errorf("error getting receivers from disbursement: receivers not found")
 	}
 
-	receiver := receivers[0]
+	for _, receiver := range receivers {
 
-	// TODO upgrade this function to validate multiples receiver wallets and payments.
-	if receiver.ReceiverWallet.Status != data.ReadyReceiversWalletStatus {
-		return fmt.Errorf("invalid status for receiver_wallet after start disbursement")
-	}
+		// Validate receiver_wallet status
+		expectedStatusByRegistrationContactType := map[data.RegistrationContactType]data.ReceiversWalletStatus{
+			data.RegistrationContactTypePhone:                 data.ReadyReceiversWalletStatus,
+			data.RegistrationContactTypeEmail:                 data.ReadyReceiversWalletStatus,
+			data.RegistrationContactTypePhoneAndWalletAddress: data.RegisteredReceiversWalletStatus,
+			data.RegistrationContactTypeEmailAndWalletAddress: data.RegisteredReceiversWalletStatus,
+		}
+		if expectedStatus := expectedStatusByRegistrationContactType[disbursement.RegistrationContactType]; expectedStatus != receiver.ReceiverWallet.Status {
+			return fmt.Errorf("receiver_wallet should be in %s status for registrationContactType %s", expectedStatus, disbursement.RegistrationContactType)
+		}
 
-	if receiver.Payment.Status != data.ReadyPaymentStatus {
-		return fmt.Errorf("invalid status for payment after start disbursement")
+		// Validate payment status
+		if receiver.Payment.Status != data.ReadyPaymentStatus {
+			return fmt.Errorf("invalid status for payment after start disbursement")
+		}
 	}
 
 	return nil
