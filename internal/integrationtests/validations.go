@@ -26,15 +26,16 @@ func validateExpectationsAfterProcessDisbursement(ctx context.Context, disbursem
 	if len(receivers) <= 0 {
 		return fmt.Errorf("error getting receivers from disbursement: receivers not found")
 	}
-	receiver := receivers[0]
 
-	// TODO upgrade this function to validate multiples receiver wallets and payments.
-	if receiver.ReceiverWallet.Status != data.DraftReceiversWalletStatus {
-		return fmt.Errorf("invalid status for receiver_wallet after process disbursement")
-	}
+	for _, receiver := range receivers {
+		// TODO upgrade this function to validate multiples receiver wallets and payments.
+		if receiver.ReceiverWallet.Status != data.DraftReceiversWalletStatus {
+			return fmt.Errorf("invalid status for receiver_wallet after process disbursement")
+		}
 
-	if receiver.Payment.Status != data.DraftPaymentStatus {
-		return fmt.Errorf("invalid status for payment after process disbursement")
+		if receiver.Payment.Status != data.DraftPaymentStatus {
+			return fmt.Errorf("invalid status for payment after process disbursement")
+		}
 	}
 
 	return nil
