@@ -210,7 +210,7 @@ services:
               "sep24_enabled": true,
               "schema": "stellar",
               "code": "USDC",
-              "issuer": "GDKLFXO3FL25I7ST632KMMBP5D72QGTDV55TOWUB2XG2O67NNQDKYMLG",
+              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
               "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
               "significant_decimals": 7,
               "deposit": {

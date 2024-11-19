@@ -23,9 +23,9 @@ wait_for_server() {
 
 options=(
   "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
-  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
-  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv;REGISTRATION_CONTACT_TYPE=EMAIL"
   "platform=Circle;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv;REGISTRATION_CONTACT_TYPE=EMAIL"
+  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
 )
 
 for option in "${options[@]}"; do
@@ -39,7 +39,8 @@ for option in "${options[@]}"; do
   done
 
   # Example of using the exported variables
-  echo -e "\n====> 👀Starting e2e setup and integration test ($platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE)"
+  export DESCRIPTION="$platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
+  echo -e "\n====> 👀Starting e2e setup and integration test ($DESCRIPTION)"
   echo -e "\t- Platform: $platform"
   echo -e "\t- DISTRIBUTION_ACCOUNT_TYPE: $DISTRIBUTION_ACCOUNT_TYPE"
   echo -e "\t- DISBURSEMENT_CSV_FILE_NAME: $DISBURSEMENT_CSV_FILE_NAME"
@@ -53,7 +54,7 @@ for option in "${options[@]}"; do
 
   # Run docker compose
   echo $DIVIDER
-  echo "====> 👀Step 2: build sdp-api, anchor-platform and tss ($platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE)"
+  echo "====> 👀Step 2: build sdp-api, anchor-platform and tss ($DESCRIPTION)"
   docker compose -f ../docker/docker-compose-e2e-tests.yml up --build -d
   wait_for_server "http://localhost:8000/health" 20
   echo "====> ✅Step 2: finishing build"
@@ -62,11 +63,11 @@ for option in "${options[@]}"; do
   echo $DIVIDER
   echo "====> 👀Step 3: provision new tenant and populate new asset and test wallet on database"
   docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
-  echo "====> ✅Step 3: finish creating integration test data ($platform)"
+  echo "====> ✅Step 3: finish creating integration test data ($DESCRIPTION)"
 
   # Restart anchor platform container
   echo $DIVIDER
-  echo "====> 👀Step 4: restart anchor platform container to get the new created asset"
+  echo "====> 👀Step 4: restart anchor platform container so the new created asset shows up in the toml file"
   docker restart e2e-anchor-platform
   echo "waiting for anchor platform to initialize"
   wait_for_server "http://localhost:8080/health" 120
@@ -77,7 +78,7 @@ for option in "${options[@]}"; do
   echo $DIVIDER
   echo "====> 👀Step 5: run integration tests command"
   docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests start"
-  echo "====> ✅Step 5: finish running integration test data ($platform)"
+  echo "====> ✅Step 5: finish running integration test data ($DESCRIPTION)"
 
   # Cleanup container and volumes
   echo $DIVIDER

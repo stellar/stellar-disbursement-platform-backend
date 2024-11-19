@@ -176,13 +176,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		return fmt.Errorf("registering receiver wallet if needed: %w", err)
 	}
 
-	log.Ctx(ctx).Info("Querying database to get disbursement receiver with payment data")
-	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursement.ID)
-	if err != nil {
-		return fmt.Errorf("getting receivers: %w", err)
-	}
-
-	err = it.ensureTransactionCompletion(ctx, opts, receivers, err, disbursement)
+	err = it.ensureTransactionCompletion(ctx, opts, err, disbursement)
 	if err != nil {
 		return err
 	}
@@ -194,8 +188,14 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 
 // ensureTransactionCompletion is a function that ensures the transaction completion by waiting for the payment to be
 // processed by TSS or Circle, and then verifying the transaction on the Horizon network.
-func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Context, opts IntegrationTestsOpts, receivers []*data.DisbursementReceiver, err error, disbursement *data.Disbursement) error {
+func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Context, opts IntegrationTestsOpts, err error, disbursement *data.Disbursement) error {
+	log.Ctx(ctx).Info("Querying database to get disbursement receiver with payment data")
+
 	time.Sleep(paymentProcessTimeSeconds * time.Second) // wait for payment to be processed by TSS or Circle
+	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursement.ID)
+	if err != nil {
+		return fmt.Errorf("getting receivers: %w", err)
+	}
 
 	payment := receivers[0].Payment
 
