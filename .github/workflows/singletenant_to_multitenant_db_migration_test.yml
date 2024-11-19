@@ -8,7 +8,7 @@ on:
       - "release/**"
       - "releases/**"
       - "hotfix/**"
-  pull_request:
+  # pull_request:
 
 env:
   USER_EMAIL: "sdp_user@stellar.org"
