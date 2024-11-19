@@ -18,7 +18,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/manifoldco/promptui v0.9.0
-	github.com/nyaruka/phonenumbers v1.4.1
+	github.com/nyaruka/phonenumbers v1.4.2
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.11.1
 	github.com/rubenv/sql-migrate v1.7.0
@@ -30,7 +30,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
 	github.com/stretchr/testify v1.9.0
-	github.com/twilio/twilio-go v1.23.5
+	github.com/twilio/twilio-go v1.23.6
 	golang.org/x/crypto v0.29.0
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
 )
