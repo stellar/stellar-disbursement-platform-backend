@@ -53,6 +53,8 @@ jobs:
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
+      DISBURSEMENT_CSV_FILE_NAME: ${{ matrix.DISBURSEMENT_CSV_FILE_NAME }}
+      REGISTRATION_CONTACT_TYPE: ${{ matrix.REGISTRATION_CONTACT_TYPE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
