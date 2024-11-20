@@ -926,7 +926,7 @@ func Test_DeleteByContactInfo(t *testing.T) {
 				require.ErrorIs(t, err, ErrRecordNotFound)
 			})
 
-			// 1. Create country, asset, and wallet (won't be deleted)
+			// 1. Create asset, and wallet (won't be deleted)
 			asset := CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 			wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
 

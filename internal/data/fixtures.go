@@ -22,9 +22,7 @@ import (
 )
 
 const (
-	FixtureCountryUSA = "USA"
-	FixtureCountryUKR = "UKR"
-	FixtureAssetUSDC  = "USDC"
+	FixtureAssetUSDC = "USDC"
 )
 
 func CreateAssetFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code, issuer string) *Asset {
