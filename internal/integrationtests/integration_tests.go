@@ -176,7 +176,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		return fmt.Errorf("registering receiver wallet if needed: %w", err)
 	}
 
-	err = it.ensureTransactionCompletion(ctx, opts, err, disbursement)
+	err = it.ensureTransactionCompletion(ctx, opts, disbursement)
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 
 // ensureTransactionCompletion is a function that ensures the transaction completion by waiting for the payment to be
 // processed by TSS or Circle, and then verifying the transaction on the Horizon network.
-func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Context, opts IntegrationTestsOpts, err error, disbursement *data.Disbursement) error {
+func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
 	log.Ctx(ctx).Info("Querying database to get disbursement receiver with payment data")
 
 	time.Sleep(paymentProcessTimeSeconds * time.Second) // wait for payment to be processed by TSS or Circle
@@ -212,7 +212,8 @@ func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Conte
 
 	intendedPaymentDestination := opts.ReceiverAccountPublicKey
 	if disbursement.RegistrationContactType.IncludesWalletAddress {
-		disbursementInstructions, err := readDisbursementCSV(opts.DisbursementCSVFilePath, opts.DisbursementCSVFileName)
+		var disbursementInstructions []*data.DisbursementInstruction
+		disbursementInstructions, err = readDisbursementCSV(opts.DisbursementCSVFilePath, opts.DisbursementCSVFileName)
 		if err != nil {
 			return fmt.Errorf("reading disbursement CSV in ensureTransactionCompletion: %w", err)
 		}
