@@ -36,7 +36,7 @@ type Authenticator interface {
 	UpdateUser(ctx context.Context, ID, firstName, lastName, email, password string) error
 	ActivateUser(ctx context.Context, userID string) error
 	DeactivateUser(ctx context.Context, userID string) error
-	ForgotPassword(ctx context.Context, email string) (string, error)
+	ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error)
 	ResetPassword(ctx context.Context, resetToken, password string) error
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
 	GetAllUsers(ctx context.Context) ([]User, error)
@@ -251,7 +251,7 @@ func (a *defaultAuthenticator) DeactivateUser(ctx context.Context, userID string
 	return nil
 }
 
-func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, email string) (string, error) {
+func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
 	if email == "" {
 		return "", fmt.Errorf("error generating user reset password token: email cannot be empty")
 	}
@@ -272,7 +272,7 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, email string)
 		)
 	`
 	var hasValidToken bool
-	err = a.dbConnectionPool.GetContext(ctx, &hasValidToken, checkValidTokenQuery, email)
+	err = sqlExec.GetContext(ctx, &hasValidToken, checkValidTokenQuery, email)
 	if err != nil {
 		return "", fmt.Errorf("error checking if user has valid token: %w", err)
 	}
@@ -289,7 +289,7 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, email string)
 			auth_user_password_reset (auth_user_id, token)
 			SELECT id, reset_token FROM auth_user_reset_token_info
 	`
-	result, err := a.dbConnectionPool.ExecContext(ctx, q, email, resetToken)
+	result, err := sqlExec.ExecContext(ctx, q, email, resetToken)
 	if err != nil {
 		return "", fmt.Errorf("error inserting user reset password token in the database: %w", err)
 	}

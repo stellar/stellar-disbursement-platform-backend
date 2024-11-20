@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrInvalidToken = errors.New("invalid token")
@@ -19,7 +21,7 @@ type AuthManager interface {
 	AnyRolesInTokenUser(ctx context.Context, tokenString string, roleNames []string) (bool, error)
 	CreateUser(ctx context.Context, user *User, password string) (*User, error)
 	UpdateUser(ctx context.Context, tokenString, firstName, lastName, email, password string) error
-	ForgotPassword(ctx context.Context, email string) (string, error)
+	ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error)
 	ResetPassword(ctx context.Context, tokenString, password string) error
 	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
@@ -175,8 +177,8 @@ func (am *defaultAuthManager) UpdateUser(ctx context.Context, tokenString, first
 }
 
 // ForgotPassword handles the generation of a new password reset token for the user to set a new password.
-func (am *defaultAuthManager) ForgotPassword(ctx context.Context, email string) (string, error) {
-	resetToken, err := am.authenticator.ForgotPassword(ctx, email)
+func (am *defaultAuthManager) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
+	resetToken, err := am.authenticator.ForgotPassword(ctx, sqlExec, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return "", fmt.Errorf("user not found in auth forgot password: %w", err)

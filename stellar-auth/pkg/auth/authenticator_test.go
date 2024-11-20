@@ -503,13 +503,13 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Should return an error if the email is empty", func(t *testing.T) {
-		resetToken, err := authenticator.ForgotPassword(ctx, "")
+		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, "")
 		assert.EqualError(t, err, "error generating user reset password token: email cannot be empty")
 		assert.Empty(t, resetToken)
 	})
 
 	t.Run("Should return an error if the user is not found", func(t *testing.T) {
-		resetToken, err := authenticator.ForgotPassword(ctx, "notfounduser@email.com")
+		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, "notfounduser@email.com")
 		assert.EqualError(t, err, ErrUserNotFound.Error())
 		assert.Empty(t, resetToken)
 	})
@@ -524,11 +524,11 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
-		resetToken, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, resetToken)
 
-		resetTokenFail1, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		resetTokenFail1, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
 		require.EqualError(t, err, "user has a valid token")
 		assert.Empty(t, resetTokenFail1)
 
@@ -540,7 +540,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 		_, err = dbConnectionPool.ExecContext(ctx, updateTokenQuery, resetToken)
 		require.NoError(t, err)
 
-		resetTokenFail2, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		resetTokenFail2, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
 		require.EqualError(t, err, "user has a valid token")
 		assert.Empty(t, resetTokenFail2)
 	})
@@ -555,7 +555,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
-		oldResetToken, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		oldResetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, oldResetToken)
 
@@ -568,7 +568,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 		_, err = dbConnectionPool.ExecContext(ctx, updateTokenQuery, oldResetToken)
 		require.NoError(t, err)
 
-		newResetToken, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		newResetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, newResetToken)
 		assert.NotEqual(t, oldResetToken, newResetToken)
@@ -584,7 +584,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
-		resetToken, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
 		require.NoError(t, err)
 
 		assert.NotEmpty(t, resetToken)
