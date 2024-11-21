@@ -114,7 +114,6 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			CustomSetValue: cmdUtils.SetRegistrationContactType,
 			ConfigKey:      &integrationTestsOpts.RegistrationContactType,
 			Required:       true,
-			FlagDefault:    data.RegistrationContactTypePhone.String(),
 		},
 	}
 	integrationTestsCmd := &cobra.Command{
