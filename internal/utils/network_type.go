@@ -47,6 +47,6 @@ func GetNetworkTypeFromNetworkPassphrase(networkPassphrase string) (NetworkType,
 	case network.FutureNetworkPassphrase:
 		return FuturenetNetworkType, nil
 	default:
-		return "", fmt.Errorf("invalid network passphrase provided")
+		return "", fmt.Errorf("invalid network passphrase provided %q", networkPassphrase)
 	}
 }

@@ -16,4 +16,9 @@ var FuturenetWallets = []data.Wallet{
 			assets.XLMAsset,
 		},
 	},
+	{
+		Name:        "User Managed Wallet",
+		Assets:      assets.AllAssetsTestnet,
+		UserManaged: true,
+	},
 }
