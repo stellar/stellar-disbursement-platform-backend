@@ -31,7 +31,8 @@ services:
       METRICS_TYPE: PROMETHEUS
       EMAIL_SENDER_TYPE: DRY_RUN
       SMS_SENDER_TYPE: DRY_RUN
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
       ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
@@ -122,8 +123,8 @@ services:
     environment:
       QUEUE_POLLING_INTERVAL: "6"
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-      HORIZON_URL: "https://horizon-testnet.stellar.org"
+      NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       NUM_CHANNEL_ACCOUNTS: "1"
       MAX_BASE_FEE: "1000000"
       TSS_METRICS_PORT: "9002"
@@ -199,6 +200,9 @@ services:
       SEP24_INTERACTIVE_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
       SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
       SEP24_MORE_INFO_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
+      STELLAR_NETWORK_NETWORK: ${NETWORK_NETWORK:-TESTNET}
+      STELLAR_NETWORK_NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      STELLAR_NETWORK_HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       SEP1_ENABLED: "true"
       SEP1_TOML_TYPE: url
       SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
