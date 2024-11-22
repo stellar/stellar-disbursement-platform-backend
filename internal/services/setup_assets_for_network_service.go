@@ -18,13 +18,15 @@ import (
 type AssetsNetworkMapType map[utils.NetworkType][]data.Asset
 
 var StellarAssetsNetworkMap = AssetsNetworkMapType{
-	utils.PubnetNetworkType:  []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet, assets.XLMAsset},
-	utils.TestnetNetworkType: []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet, assets.XLMAsset},
+	utils.PubnetNetworkType:    []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet, assets.XLMAsset},
+	utils.TestnetNetworkType:   []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet, assets.XLMAsset},
+	utils.FuturenetNetworkType: []data.Asset{assets.XLMAsset},
 }
 
 var CircleAssetsNetworkMap = AssetsNetworkMapType{
-	utils.PubnetNetworkType:  []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet},
-	utils.TestnetNetworkType: []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet},
+	utils.PubnetNetworkType:    []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet},
+	utils.TestnetNetworkType:   []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet},
+	utils.FuturenetNetworkType: []data.Asset{assets.USDCAssetTestnet},
 }
 
 type AssetsNetworkByPlatformMapType map[schema.Platform]AssetsNetworkMapType

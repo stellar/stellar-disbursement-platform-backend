@@ -10,6 +10,7 @@ import (
 
 func Test_AllNetworkTypes(t *testing.T) {
 	expectedNetworkTypes := []NetworkType{
+		FuturenetNetworkType,
 		TestnetNetworkType,
 		PubnetNetworkType,
 	}

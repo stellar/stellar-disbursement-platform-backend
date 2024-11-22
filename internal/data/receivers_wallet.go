@@ -402,7 +402,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 
 // VerifyReceiverWalletOTP validates the receiver wallet OTP.
 func (rw *ReceiverWalletModel) VerifyReceiverWalletOTP(ctx context.Context, networkPassphrase string, receiverWallet ReceiverWallet, otp string) error {
-	if networkPassphrase == network.TestNetworkPassphrase {
+	if networkPassphrase == network.TestNetworkPassphrase || networkPassphrase == network.FutureNetworkPassphrase {
 		if otp == TestnetAlwaysValidOTP {
 			log.Ctx(ctx).Warnf("OTP is being approved because TestnetAlwaysValidOTP (%s) was used", TestnetAlwaysValidOTP)
 			return nil
