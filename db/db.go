@@ -19,6 +19,8 @@ const (
 )
 
 // DBConnectionPool is an interface that wraps the sqlx.DB structs methods and includes the RunInTransaction helper.
+//
+//go:generate mockery --name=DBConnectionPool --case=underscore --structname=MockDBConnectionPool
 type DBConnectionPool interface {
 	SQLExecuter
 	BeginTxx(ctx context.Context, opts *sql.TxOptions) (DBTransaction, error)

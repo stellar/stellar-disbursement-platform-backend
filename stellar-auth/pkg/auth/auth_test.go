@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db/mocks"
 )
 
 func Test_AuthManager_Authenticate(t *testing.T) {
@@ -915,35 +917,37 @@ func Test_AuthManager_ForgotPassword(t *testing.T) {
 
 	ctx := context.Background()
 
+	mockDBConnectionPool := mocks.NewMockDBConnectionPool(t)
+
 	t.Run("returns error when user is not found", func(t *testing.T) {
 		authenticatorMock.
-			On("ForgotPassword", ctx, "wrongemail@email.com").
+			On("ForgotPassword", ctx, mockDBConnectionPool, "wrongemail@email.com").
 			Return("", ErrUserNotFound).
 			Once()
 
-		resetToken, err := authManager.ForgotPassword(ctx, "wrongemail@email.com")
+		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "wrongemail@email.com")
 		assert.EqualError(t, err, "user not found in auth forgot password: user not found")
 		assert.Empty(t, resetToken)
 	})
 
 	t.Run("returns error when authenticator fails", func(t *testing.T) {
 		authenticatorMock.
-			On("ForgotPassword", ctx, "wrongemail@email.com").
+			On("ForgotPassword", ctx, mockDBConnectionPool, "wrongemail@email.com").
 			Return("", errUnexpectedError).
 			Once()
 
-		resetToken, err := authManager.ForgotPassword(ctx, "wrongemail@email.com")
+		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "wrongemail@email.com")
 		assert.EqualError(t, err, "error on forgot password: unexpected error")
 		assert.Empty(t, resetToken)
 	})
 
 	t.Run("creates a reset token successfully", func(t *testing.T) {
 		authenticatorMock.
-			On("ForgotPassword", ctx, "valid@email.com").
+			On("ForgotPassword", ctx, mockDBConnectionPool, "valid@email.com").
 			Return("resettoken", nil).
 			Once()
 
-		resetToken, err := authManager.ForgotPassword(ctx, "valid@email.com")
+		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "valid@email.com")
 		require.NoError(t, err)
 		assert.Equal(t, "resettoken", resetToken)
 	})
