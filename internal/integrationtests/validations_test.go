@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go/protocols/horizon/operations"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -266,58 +268,67 @@ func Test_validateStellarTransaction(t *testing.T) {
 	mockAmount := "0.1"
 
 	t.Run("error transaction not successful", func(t *testing.T) {
-		err := validateStellarTransaction(&PaymentHorizon{
-			TransactionSuccessful: false,
+		err := validateStellarTransaction(&operations.Payment{
+			Base: operations.Base{TransactionSuccessful: false},
 		}, mockReceiverAccount, mockassetCode, mockassetIssuer, mockAmount)
 		require.EqualError(t, err, "transaction was not successful on horizon network")
 	})
 
 	t.Run("error wrong receiver account", func(t *testing.T) {
-		err := validateStellarTransaction(&PaymentHorizon{
-			TransactionSuccessful: true,
-			ReceiverAccount:       "invalidReceiver",
+		err := validateStellarTransaction(&operations.Payment{
+			Base: operations.Base{TransactionSuccessful: true},
+			To:   "invalidReceiver",
 		}, mockReceiverAccount, mockassetCode, mockassetIssuer, mockAmount)
 		require.EqualError(t, err, "transaction sent to wrong receiver account")
 	})
 
 	t.Run("error wrong amount", func(t *testing.T) {
-		err := validateStellarTransaction(&PaymentHorizon{
-			TransactionSuccessful: true,
-			ReceiverAccount:       "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
-			Amount:                "20",
+		err := validateStellarTransaction(&operations.Payment{
+			Base:   operations.Base{TransactionSuccessful: true},
+			To:     "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
+			Amount: "20",
 		}, mockReceiverAccount, mockassetCode, mockassetIssuer, mockAmount)
 		require.EqualError(t, err, "transaction with wrong amount")
 	})
 
 	t.Run("error wrong asset code", func(t *testing.T) {
-		err := validateStellarTransaction(&PaymentHorizon{
-			TransactionSuccessful: true,
-			ReceiverAccount:       "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
-			Amount:                "0.1",
-			AssetCode:             "invalidCode",
-			AssetIssuer:           "GBZF7AS3TBASAL5RQ7ECJODFWFLBDCKJK5SMPUCO5R36CJUIZRWQJTGB",
+		err := validateStellarTransaction(&operations.Payment{
+			Base:   operations.Base{TransactionSuccessful: true},
+			To:     "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
+			Amount: "0.1",
+			Asset: base.Asset{
+				Type:   "credit_alphanum12",
+				Code:   "invalidCode",
+				Issuer: "GBZF7AS3TBASAL5RQ7ECJODFWFLBDCKJK5SMPUCO5R36CJUIZRWQJTGB",
+			},
 		}, mockReceiverAccount, mockassetCode, mockassetIssuer, mockAmount)
 		require.EqualError(t, err, "transaction with wrong disbursed asset")
 	})
 
 	t.Run("error wrong asset issuer", func(t *testing.T) {
-		err := validateStellarTransaction(&PaymentHorizon{
-			TransactionSuccessful: true,
-			ReceiverAccount:       "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
-			Amount:                "0.1",
-			AssetCode:             "USDC",
-			AssetIssuer:           "invalidIssuer",
+		err := validateStellarTransaction(&operations.Payment{
+			Base:   operations.Base{TransactionSuccessful: true},
+			To:     "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
+			Amount: "0.1",
+			Asset: base.Asset{
+				Type:   "credit_alphanum4",
+				Code:   "USDC",
+				Issuer: "invalidIssuer",
+			},
 		}, mockReceiverAccount, mockassetCode, mockassetIssuer, mockAmount)
 		require.EqualError(t, err, "transaction with wrong disbursed asset")
 	})
 
 	t.Run("successful validation", func(t *testing.T) {
-		err := validateStellarTransaction(&PaymentHorizon{
-			TransactionSuccessful: true,
-			ReceiverAccount:       "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
-			Amount:                "0.1",
-			AssetCode:             "USDC",
-			AssetIssuer:           "GBZF7AS3TBASAL5RQ7ECJODFWFLBDCKJK5SMPUCO5R36CJUIZRWQJTGB",
+		err := validateStellarTransaction(&operations.Payment{
+			Base:   operations.Base{TransactionSuccessful: true},
+			To:     "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7",
+			Amount: "0.1",
+			Asset: base.Asset{
+				Type:   "credit_alphanum4",
+				Code:   "USDC",
+				Issuer: "GBZF7AS3TBASAL5RQ7ECJODFWFLBDCKJK5SMPUCO5R36CJUIZRWQJTGB",
+			},
 		}, mockReceiverAccount, mockassetCode, mockassetIssuer, mockAmount)
 		require.NoError(t, err)
 	})

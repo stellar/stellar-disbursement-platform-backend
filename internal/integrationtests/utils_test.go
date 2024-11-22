@@ -83,7 +83,7 @@ func Test_getTransactionInHorizon(t *testing.T) {
 			Once()
 
 		ph, err := getTransactionOnHorizon(mockHorizonClient, mockTransactionID)
-		require.EqualError(t, err, "error checking payment in horizon: horizon error: \"Resource Missing\" - check horizon.Error.Problem for more information")
+		require.EqualError(t, err, "checking payment in horizon: horizon error: \"Resource Missing\" - check horizon.Error.Problem for more information")
 		assert.Empty(t, ph)
 
 		mockHorizonClient.AssertExpectations(t)
@@ -142,9 +142,10 @@ func Test_getTransactionInHorizon(t *testing.T) {
 
 		ph, err := getTransactionOnHorizon(mockHorizonClient, mockTransactionID)
 		require.NoError(t, err)
-		assert.Equal(t, "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7", ph.ReceiverAccount)
-		assert.Equal(t, "USDC", ph.AssetCode)
-		assert.Equal(t, "GBZF7AS3TBASAL5RQ7ECJODFWFLBDCKJK5SMPUCO5R36CJUIZRWQJTGB", ph.AssetIssuer)
+		assert.Equal(t, "GD44L3Q6NYRFPVOX4CJUUV63QEOOU3R5JNQJBLR6WWXFWYHEGK2YVBQ7", ph.To)
+		assert.Equal(t, "USDC", ph.Asset.Code)
+		assert.Equal(t, "GBZF7AS3TBASAL5RQ7ECJODFWFLBDCKJK5SMPUCO5R36CJUIZRWQJTGB", ph.Asset.Issuer)
+		assert.Equal(t, "credit_alphanum4", ph.Asset.Type)
 		assert.Equal(t, "100.0000000", ph.Amount)
 		assert.Equal(t, true, ph.TransactionSuccessful)
 
