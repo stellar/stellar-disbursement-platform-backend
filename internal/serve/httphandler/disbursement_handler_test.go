@@ -232,7 +232,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						"name": "name is required",
 						"wallet_id": "wallet_id is required",
 						"asset_id": "asset_id is required",
-						"registration_contact_type": "registration_contact_type must be one of [EMAIL EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER PHONE_NUMBER_AND_WALLET_ADDRESS]",
+						"registration_contact_type": "registration_contact_type must be one of [EMAIL PHONE_NUMBER EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER_AND_WALLET_ADDRESS]",
 						"verification_field": "verification_field must be one of [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"
 					}
 				}`
