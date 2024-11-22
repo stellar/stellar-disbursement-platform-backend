@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/integrationtests"
@@ -115,6 +116,8 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			ConfigKey:      &integrationTestsOpts.RegistrationContactType,
 			Required:       true,
 		},
+		utils.HorizonURL(&integrationTestsOpts.HorizonURL),
+		utils.NetworkPassphrase(&integrationTestsOpts.NetworkPassphrase),
 	}
 	integrationTestsCmd := &cobra.Command{
 		Use:   "integration-tests",

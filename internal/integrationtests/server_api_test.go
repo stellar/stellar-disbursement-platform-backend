@@ -328,7 +328,7 @@ func Test_ReceiverRegistration(t *testing.T) {
 
 		err := sa.ReceiverRegistration(ctx, authToken, reqBody)
 
-		require.EqualError(t, err, "error trying to complete receiver registration on the server API")
+		require.EqualError(t, err, "trying to complete receiver registration on the server API (statusCode=400)")
 
 		httpClientMock.AssertExpectations(t)
 	})
