@@ -33,7 +33,7 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Usage:     "Issuer if the asset to be disbursed",
 			OptType:   types.String,
 			ConfigKey: &integrationTestsOpts.DisbursetAssetIssuer,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name:        "disbursement-name",
