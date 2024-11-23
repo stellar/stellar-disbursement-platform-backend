@@ -116,7 +116,7 @@ func Test_GetNetworkTypeFromNetworkPassphrase(t *testing.T) {
 		{
 			networkPassphrase:   "invalid",
 			expectedNetworkType: "",
-			expectedError:       "invalid network passphrase provided",
+			expectedError:       `invalid network passphrase provided "invalid"`,
 		},
 	}
 
