@@ -21,6 +21,12 @@ const VerificationField = Object.freeze({
 
 
 // ------------------------------ START: GLOBAL VARIABLES AND METHODS ------------------------------
+const reCAPTCHAWidgets = {};
+
+function resetReCAPTCHA() {
+  Object.values(reCAPTCHAWidgets).forEach(widgetId => grecaptcha.reset(widgetId));
+}
+
 const WalletRegistration = {
   jwtToken: "",
   intlTelInput: null,
@@ -130,9 +136,15 @@ const WalletRegistration = {
 
 // ------------------------------ START: INITIALIZATION ------------------------------
 window.onload = () => {
-  WalletRegistration.jwtToken = document.querySelector("[data-jwt-token]")?.innerHTML || "";
+  WalletRegistration.jwtToken = document.querySelector("#jwt-token").dataset.jwtToken
   WalletRegistration.privacyPolicyLink = document.querySelector("[data-privacy-policy-link]")?.innerHTML || "";
   WalletRegistration.intlTelInput = phoneNumberInit();
+
+  // Render reCAPTCHA instances and store their widget IDs
+  const siteKey = document.querySelector("#recaptcha-site-key").dataset.sitekey;
+  reCAPTCHAWidgets.email = grecaptcha.render('g-recaptcha-email', { sitekey: siteKey });
+  reCAPTCHAWidgets.phone = grecaptcha.render('g-recaptcha-phone', { sitekey: siteKey });
+  reCAPTCHAWidgets.passcode = grecaptcha.render('g-recaptcha-passcode', { sitekey: siteKey });
 };
 
 // Phone number input (ref: https://github.com/jackocnr/intl-tel-input)
@@ -324,7 +336,7 @@ async function handleVerificationInfoSubmitted() {
   } catch (error) {
     WalletRegistration.toggleButtonsEnabled(true);
     WalletRegistration.toggleErrorNotification("Error", error, true);
-    grecaptcha.reset(1);
+    resetReCAPTCHA();
   }
 }
 
@@ -356,7 +368,7 @@ async function handleResendOtpClicked() {
   }
 
   sendOtp(showSuccessMessage, showErrorMessage);
-  grecaptcha.reset(1);
+  resetReCAPTCHA();
 }
 // ------------------------------ END: SECTION 3 ------------------------------
 

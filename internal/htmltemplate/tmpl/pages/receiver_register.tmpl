@@ -77,7 +77,7 @@
               />
             </div>
 
-            <div class="g-recaptcha" data-sitekey="{{.ReCAPTCHASiteKey}}"></div>
+            <div id="g-recaptcha-email"></div>
 
             <div class="Form__buttons">
               <button data-button type="submit" class="Button--primary">
@@ -111,7 +111,7 @@
               />
             </div>
 
-            <div class="g-recaptcha" data-sitekey="{{.ReCAPTCHASiteKey}}"></div>
+            <div id="g-recaptcha-phone"></div>
 
             <div class="Form__buttons">
               <button data-button type="submit" class="Button--primary">
@@ -168,7 +168,7 @@
                 required
               />
 
-            <div class="g-recaptcha" data-sitekey="{{.ReCAPTCHASiteKey}}"></div>
+            <div id="g-recaptcha-passcode"></div>
 
             <div class="Form__buttons">
               <button data-button type="submit" class="Button--primary">
@@ -265,7 +265,8 @@
       </div>
 
       <!-- 👋 Injecting info for the JS here: -->
-      <span data-jwt-token style="display: none">{{.JWTToken}}</span>
+      <span id="jwt-token" data-jwt-token="{{.JWTToken}}" style="display: none"/>
+      <span id="recaptcha-site-key" data-sitekey="{{.ReCAPTCHASiteKey}}" style="display: none"/>
     </div>
 
     <!-- Scripts -->
