@@ -45,8 +45,8 @@ func (rct *RegistrationContactType) ParseFromString(input string) error {
 func AllRegistrationContactTypes() []RegistrationContactType {
 	return []RegistrationContactType{
 		RegistrationContactTypeEmail,
-		RegistrationContactTypeEmailAndWalletAddress,
 		RegistrationContactTypePhone,
+		RegistrationContactTypeEmailAndWalletAddress,
 		RegistrationContactTypePhoneAndWalletAddress,
 	}
 }

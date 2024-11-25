@@ -84,7 +84,7 @@ type ReceiverWallet struct {
 	AnchorPlatformTransactionID       string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
 	AnchorPlatformTransactionSyncedAt *time.Time `json:"anchor_platform_transaction_synced_at,omitempty" db:"anchor_platform_transaction_synced_at"`
 	InvitedAt                         *time.Time `json:"invited_at,omitempty" db:"invited_at"`
-	LastSmsSent                       *time.Time `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
+	LastMessageSentAt                 *time.Time `json:"last_message_sent_at,omitempty" db:"last_message_sent_at"`
 	InvitationSentAt                  *time.Time `json:"invitation_sent_at" db:"invitation_sent_at"`
 	ReceiverWalletStats
 }
@@ -163,7 +163,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		SELECT
 			rwc.id as receiver_wallet_id,
 			MIN(m.created_at) as invited_at,
-			MAX(m.created_at) as last_sms_sent
+			MAX(m.created_at) as last_message_sent_at
 		FROM receiver_wallets_cte rwc
 		LEFT JOIN messages m ON rwc.id = m.receiver_wallet_id
 		WHERE m.status = 'SUCCESS'
@@ -191,7 +191,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		COALESCE(rws.remaining_payments, '0') as remaining_payments,
 		rws.received_amounts,
 		rwm.invited_at as invited_at,
-		rwm.last_sms_sent as last_sms_sent
+		rwm.last_message_sent_at as last_message_sent_at
 	FROM receiver_wallets_cte rwc
 	LEFT JOIN receiver_wallets_stats_aggregate rws ON rws.receiver_wallet_id = rwc.id
 	LEFT JOIN receiver_wallets_messages rwm ON rwm.receiver_wallet_id = rwc.id

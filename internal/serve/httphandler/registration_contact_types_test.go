@@ -24,8 +24,8 @@ func Test_RegistrationContactTypesHandler_Get(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	expectedJSON := `[
 		"EMAIL",
-		"EMAIL_AND_WALLET_ADDRESS",
 		"PHONE_NUMBER",
+		"EMAIL_AND_WALLET_ADDRESS",
 		"PHONE_NUMBER_AND_WALLET_ADDRESS"
 	]`
 	assert.JSONEq(t, expectedJSON, string(respBody))
