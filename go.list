@@ -241,7 +241,7 @@ github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
 github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2
 github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 github.com/stretchr/objx v0.5.2
-github.com/stretchr/testify v1.9.0
+github.com/stretchr/testify v1.10.0
 github.com/subosito/gotenv v1.6.0
 github.com/tdewolff/minify/v2 v2.12.4
 github.com/tdewolff/parse/v2 v2.6.4
