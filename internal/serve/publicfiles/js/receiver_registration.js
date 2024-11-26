@@ -140,12 +140,40 @@ window.onload = () => {
   WalletRegistration.privacyPolicyLink = document.querySelector("[data-privacy-policy-link]")?.innerHTML || "";
   WalletRegistration.intlTelInput = phoneNumberInit();
 
-  // Render reCAPTCHA instances and store their widget IDs
-  const siteKey = document.querySelector("#recaptcha-site-key").dataset.sitekey;
-  reCAPTCHAWidgets.email = grecaptcha.render('g-recaptcha-email', { sitekey: siteKey });
-  reCAPTCHAWidgets.phone = grecaptcha.render('g-recaptcha-phone', { sitekey: siteKey });
-  reCAPTCHAWidgets.passcode = grecaptcha.render('g-recaptcha-passcode', { sitekey: siteKey });
+  ensureRecaptchaLoaded();
+  grecaptcha.ready(function(){
+    // Render reCAPTCHA instances and store their widget IDs
+    const siteKey = document.querySelector("#recaptcha-site-key").dataset.sitekey;
+    reCAPTCHAWidgets.email = grecaptcha.render('g-recaptcha-email', { sitekey: siteKey });
+    reCAPTCHAWidgets.phone = grecaptcha.render('g-recaptcha-phone', { sitekey: siteKey });
+    reCAPTCHAWidgets.passcode = grecaptcha.render('g-recaptcha-passcode', { sitekey: siteKey });
+  });
 };
+
+// https://developers.google.com/recaptcha/docs/loading#loading_recaptcha_asynchronously
+function ensureRecaptchaLoaded() {
+  // How this code snippet works:
+  // This logic overwrites the default behavior of `grecaptcha.ready()` to
+  // ensure that it can be safely called at any time. When `grecaptcha.ready()`
+  // is called before reCAPTCHA is loaded, the callback function that is passed
+  // by `grecaptcha.ready()` is enqueued for execution after reCAPTCHA is
+  // loaded.
+  if(typeof grecaptcha === 'undefined') {
+    grecaptcha = {};
+  }
+  grecaptcha.ready = function(cb){
+    if(typeof grecaptcha === 'undefined') {
+      // window.__grecaptcha_cfg is a global variable that stores reCAPTCHA's
+      // configuration. By default, any functions listed in its 'fns' property
+      // are automatically executed when reCAPTCHA loads.
+      const c = '___grecaptcha_cfg';
+      window[c] = window[c] || {};
+      (window[c]['fns'] = window[c]['fns']||[]).push(cb);
+    } else {
+      cb();
+    }
+  }
+}
 
 // Phone number input (ref: https://github.com/jackocnr/intl-tel-input)
 function phoneNumberInit() {
