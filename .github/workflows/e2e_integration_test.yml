@@ -1,11 +1,7 @@
 name: Integration Tests
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-  workflow_call: # allows this workflow to be called from another workflow
+  workflow_call: # allows this workflow to be called from another workflow, like `docker_image_public_release`
 
 env:
   USER_EMAIL: "sdp_user@stellar.org"
@@ -83,7 +79,7 @@ jobs:
           docker restart e2e-anchor-platform
         shell: bash
 
-      - name: Wait for Anchor Platform at both localhost:8080/health and localhost:8085/health
+      - name: Wait for Anchor Platform and SDP to be up
         run: |
           wait_for_server() {
             local endpoint=$1
@@ -101,6 +97,7 @@ jobs:
             echo "Server at $endpoint is up."
           }
 
+          wait_for_server http://localhost:8000/health 120
           wait_for_server http://localhost:8080/health 120
           wait_for_server http://localhost:8085/health 120
         shell: bash
