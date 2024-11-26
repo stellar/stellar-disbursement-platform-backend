@@ -44,15 +44,13 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 	ctx := context.Background()
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet1.com", "www.wallet1.com", "wallet1://")
 
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 
 	disbursement := data.Disbursement{
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Country: country,
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
 	}
 
 	stellarTransactionID, err := utils.RandomString(64)
@@ -92,7 +90,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
     		"remaining_payments": "0",
 			"registered_wallets": "0",
 			"wallets": []
-		}`, receiver.ID, receiver.ExternalID, *receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano), receiver.UpdatedAt.Format(time.RFC3339Nano))
+		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano), receiver.UpdatedAt.Format(time.RFC3339Nano))
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
@@ -172,15 +170,12 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 						"sep_10_client_domain": "www.wallet1.com",
 						"enabled": true
 					},
-					"stellar_address": %q,
-					"stellar_memo": %q,
-					"stellar_memo_type": %q,
 					"status": "DRAFT",
 					"created_at": %q,
 					"updated_at": %q,
 					"invitation_sent_at": null,
 					"invited_at": %q,
-					"last_sms_sent": %q,
+					"last_message_sent_at": %q,
 					"total_payments": "1",
 					"payments_received": "1",
 					"failed_payments": "0",
@@ -192,15 +187,13 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 							"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 							"received_amount": "50.0000000"
 						}
-					],
-					"anchor_platform_transaction_id": %q
+					]
 				}
 			]
-		}`, receiver.ID, receiver.ExternalID, *receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
+		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
 			receiver.UpdatedAt.Format(time.RFC3339Nano), receiverWallet1.ID, receiverWallet1.Receiver.ID, receiverWallet1.Wallet.ID,
-			receiverWallet1.StellarAddress, receiverWallet1.StellarMemo, receiverWallet1.StellarMemoType,
 			receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
-			message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.AnchorPlatformTransactionID)
+			message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano))
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
@@ -281,15 +274,12 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 						"sep_10_client_domain": "www.wallet1.com",
 						"enabled": true
 					},
-					"stellar_address": %q,
-					"stellar_memo": %q,
-					"stellar_memo_type": %q,
 					"status": "DRAFT",
 					"created_at": %q,
 					"updated_at": %q,
 					"invitation_sent_at": null,
 					"invited_at": %q,
-					"last_sms_sent": %q,
+					"last_message_sent_at": %q,
 					"total_payments": "1",
 					"payments_received": "1",
 					"failed_payments": "0",
@@ -301,8 +291,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 							"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 							"received_amount": "50.0000000"
 						}
-					],
-					"anchor_platform_transaction_id": %q
+					]
 				},
 				{
 					"id": %q,
@@ -324,7 +313,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"updated_at": %q,
 					"invitation_sent_at": null,
 					"invited_at": %q,
-					"last_sms_sent": %q,
+					"last_message_sent_at": %q,
 					"total_payments": "1",
 					"payments_received": "0",
 					"failed_payments": "0",
@@ -340,11 +329,10 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"anchor_platform_transaction_id": %q
 				}
 			]
-		}`, receiver.ID, receiver.ExternalID, *receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
+		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
 			receiver.UpdatedAt.Format(time.RFC3339Nano), receiverWallet1.ID, receiverWallet1.Receiver.ID,
-			receiverWallet1.Wallet.ID, receiverWallet1.StellarAddress, receiverWallet1.StellarMemo, receiverWallet1.StellarMemoType,
-			receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
-			message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.AnchorPlatformTransactionID,
+			receiverWallet1.Wallet.ID, receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
+			message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano),
 			receiverWallet2.ID, receiverWallet2.Receiver.ID, receiverWallet2.Wallet.ID,
 			receiverWallet2.StellarAddress, receiverWallet2.StellarMemo, receiverWallet2.StellarMemoType,
 			receiverWallet2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.UpdatedAt.Format(time.RFC3339Nano),
@@ -498,14 +486,13 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 
 	// create fixtures
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	// create receivers
 	date := time.Date(2022, 12, 10, 23, 40, 20, 1431, time.UTC)
 	receiver1Email := "receiver1@mock.com"
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver1Email,
+		Email:       receiver1Email,
 		ExternalID:  "external_id_1",
 		PhoneNumber: "+99991111",
 		CreatedAt:   &date,
@@ -515,7 +502,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	date = time.Date(2023, 1, 10, 23, 40, 20, 1431, time.UTC)
 	receiver2Email := "receiver2@mock.com"
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver2Email,
+		Email:       receiver2Email,
 		ExternalID:  "external_id_2",
 		PhoneNumber: "+99992222",
 		CreatedAt:   &date,
@@ -546,7 +533,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	date = time.Date(2023, 2, 10, 23, 40, 21, 1431, time.UTC)
 	receiver3Email := "receiver3@mock.com"
 	receiver3 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver3Email,
+		Email:       receiver3Email,
 		ExternalID:  "external_id_3",
 		PhoneNumber: "+99993333",
 		CreatedAt:   &date,
@@ -575,9 +562,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	})
 
 	date = time.Date(2023, 3, 10, 23, 40, 20, 1431, time.UTC)
-	receiver4Email := "receiver4@mock.com"
 	receiver4 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver4Email,
+		Email:       "receiver4@mock.com",
 		ExternalID:  "external_id_4",
 		PhoneNumber: "+99994444",
 		CreatedAt:   &date,
@@ -607,11 +593,10 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 
 	// create disbursements
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 1",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	stellarTransactionID, err := utils.RandomString(64)
@@ -687,21 +672,17 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"sep_10_client_domain": "www.wallet.com",
 									"enabled": true
 								},
-								"stellar_address": %q,
-								"stellar_memo": %q,
-								"stellar_memo_type": %q,
 								"status": "DRAFT",
 								"created_at": %q,
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
 								"canceled_payments": "0",
-								"remaining_payments": "0",
-								"anchor_platform_transaction_id": %q
+								"remaining_payments": "0"
 							}
 						]
 					},
@@ -746,7 +727,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "1",
 								"payments_received": "0",
 								"failed_payments": "0",
@@ -804,7 +785,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "1",
 								"payments_received": "1",
 								"failed_payments": "0",
@@ -840,9 +821,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 			}`,
 				receiver4.ID, receiver4.CreatedAt.Format(time.RFC3339Nano), receiver4.UpdatedAt.Format(time.RFC3339Nano),
 				receiverWallet4.ID, receiverWallet4.Receiver.ID, receiverWallet4.Wallet.ID,
-				receiverWallet4.StellarAddress, receiverWallet4.StellarMemo, receiverWallet4.StellarMemoType,
 				receiverWallet4.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.UpdatedAt.Format(time.RFC3339Nano),
-				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.AnchorPlatformTransactionID,
+				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano),
 				receiver3.ID, receiver3.CreatedAt.Format(time.RFC3339Nano), receiver3.UpdatedAt.Format(time.RFC3339Nano),
 				receiverWallet3.ID, receiverWallet3.Receiver.ID, receiverWallet3.Wallet.ID,
 				receiverWallet3.StellarAddress, receiverWallet3.StellarMemo, receiverWallet3.StellarMemoType,
@@ -947,7 +927,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "1",
 								"payments_received": "1",
 								"failed_payments": "0",
@@ -1013,30 +993,25 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"sep_10_client_domain": "www.wallet.com",
 									"enabled": true
 								},
-								"stellar_address": %q,
-								"stellar_memo": %q,
-								"stellar_memo_type": %q,
 								"status": "DRAFT",
 								"created_at": %q,
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
 								"canceled_payments": "0",
-								"remaining_payments": "0",
-								"anchor_platform_transaction_id": %q
+								"remaining_payments": "0"
 							}
 						]
 					}
 				]
 			}`, receiver4.ID, receiver4.CreatedAt.Format(time.RFC3339Nano), receiver4.UpdatedAt.Format(time.RFC3339Nano),
 				receiverWallet4.ID, receiverWallet4.Receiver.ID, receiverWallet4.Wallet.ID,
-				receiverWallet4.StellarAddress, receiverWallet4.StellarMemo, receiverWallet4.StellarMemoType,
 				receiverWallet4.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.UpdatedAt.Format(time.RFC3339Nano),
-				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.AnchorPlatformTransactionID),
+				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano)),
 		},
 		{
 			name: "fetch receivers with status draft",
@@ -1076,30 +1051,25 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"sep_10_client_domain": "www.wallet.com",
 									"enabled": true
 								},
-								"stellar_address": %q,
-								"stellar_memo": %q,
-								"stellar_memo_type": %q,
 								"status": "DRAFT",
 								"created_at": %q,
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
 								"canceled_payments": "0",
-								"remaining_payments": "0",
-								"anchor_platform_transaction_id": %q
+								"remaining_payments": "0"
 							}
 						]
 					}
 				]
 			}`, receiver4.ID, receiver4.CreatedAt.Format(time.RFC3339Nano), receiver4.UpdatedAt.Format(time.RFC3339Nano),
 				receiverWallet4.ID, receiverWallet4.Receiver.ID, receiverWallet4.Wallet.ID,
-				receiverWallet4.StellarAddress, receiverWallet4.StellarMemo, receiverWallet4.StellarMemoType,
 				receiverWallet4.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.UpdatedAt.Format(time.RFC3339Nano),
-				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.AnchorPlatformTransactionID),
+				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano)),
 		},
 		{
 			name: "fetch receivers created before 2023-01-01",
@@ -1169,30 +1139,25 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"sep_10_client_domain": "www.wallet.com",
 									"enabled": true
 								},
-								"stellar_address": %q,
-								"stellar_memo": %q,
-								"stellar_memo_type": %q,
 								"status": "DRAFT",
 								"created_at": %q,
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
 								"canceled_payments": "0",
-								"remaining_payments": "0",
-								"anchor_platform_transaction_id": %q
+								"remaining_payments": "0"
 							}
 						]
 					}
 				]
 			}`, receiver4.ID, receiver4.CreatedAt.Format(time.RFC3339Nano), receiver4.UpdatedAt.Format(time.RFC3339Nano),
 				receiverWallet4.ID, receiverWallet4.Receiver.ID, receiverWallet4.Wallet.ID,
-				receiverWallet4.StellarAddress, receiverWallet4.StellarMemo, receiverWallet4.StellarMemoType,
 				receiverWallet4.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.UpdatedAt.Format(time.RFC3339Nano),
-				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano), receiverWallet4.AnchorPlatformTransactionID),
+				message5.CreatedAt.Format(time.RFC3339Nano), message6.CreatedAt.Format(time.RFC3339Nano)),
 		},
 		{
 			name: "fetch receivers created after 2023-01-01 and before 2023-03-01",
@@ -1251,7 +1216,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "1",
 								"payments_received": "0",
 								"failed_payments": "0",
@@ -1309,7 +1274,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"updated_at": %q,
 								"invitation_sent_at": null,
 								"invited_at": %q,
-								"last_sms_sent": %q,
+								"last_message_sent_at": %q,
 								"total_payments": "1",
 								"payments_received": "1",
 								"failed_payments": "0",
@@ -1439,13 +1404,13 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 
 	receiver1Email := "receiver1@mock.com"
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver1Email,
+		Email:       receiver1Email,
 		ExternalID:  "external_id_1",
 		PhoneNumber: "+99991111",
 	})
 	receiver2Email := "receiver2@mock.com"
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email:       &receiver2Email,
+		Email:       receiver2Email,
 		ExternalID:  "external_id_2",
 		PhoneNumber: "+99992222",
 	})
@@ -1539,21 +1504,17 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 						"sep_10_client_domain": "www.wallet.com",
 						"enabled": true
 					},
-					"stellar_address": %q,
-					"stellar_memo": %q,
-					"stellar_memo_type": %q,
 					"status": "READY",
 					"created_at": %q,
 					"updated_at": %q,
 					"invitation_sent_at": null,
 					"invited_at": %q,
-					"last_sms_sent": %q,
+					"last_message_sent_at": %q,
 					"total_payments": "0",
 					"payments_received": "0",
 					"failed_payments": "0",
 					"canceled_payments": "0",
-					"remaining_payments": "0",
-					"anchor_platform_transaction_id": %q
+					"remaining_payments": "0"
 				}
 			]
 		},
@@ -1583,34 +1544,28 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 						"sep_10_client_domain": "www.wallet.com",
 						"enabled": true
 					},
-					"stellar_address": %q,
-					"stellar_memo": %q,
-					"stellar_memo_type": %q,
 					"status": "DRAFT",
 					"created_at": %q,
 					"updated_at": %q,
 					"invitation_sent_at": null,
 					"invited_at": %q,
-					"last_sms_sent": %q,
+					"last_message_sent_at": %q,
 					"total_payments": "0",
 					"payments_received": "0",
 					"failed_payments": "0",
 					"canceled_payments": "0",
-					"remaining_payments": "0",
-					"anchor_platform_transaction_id": %q
+					"remaining_payments": "0"
 				}
 			]
 		}
 	]`, receiver2.ID, receiver2.CreatedAt.Format(time.RFC3339Nano), receiver2.UpdatedAt.Format(time.RFC3339Nano),
 		receiverWallet2.ID, receiverWallet2.Receiver.ID, receiverWallet2.Wallet.ID,
-		receiverWallet2.StellarAddress, receiverWallet2.StellarMemo, receiverWallet2.StellarMemoType,
 		receiverWallet2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.UpdatedAt.Format(time.RFC3339Nano),
-		message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.AnchorPlatformTransactionID,
+		message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano),
 		receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano),
 		receiverWallet1.ID, receiverWallet1.Receiver.ID, receiverWallet1.Wallet.ID,
-		receiverWallet1.StellarAddress, receiverWallet1.StellarMemo, receiverWallet1.StellarMemoType,
 		receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
-		message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.AnchorPlatformTransactionID)
+		message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano))
 
 	assert.JSONEq(t, wantJson, string(ar))
 

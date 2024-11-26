@@ -165,7 +165,6 @@ func Test_NewCircleReconciliationService_Reconcile_partialSuccess(t *testing.T) 
 	require.NoError(t, err)
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	// Create distribution accounts
@@ -176,11 +175,10 @@ func Test_NewCircleReconciliationService_Reconcile_partialSuccess(t *testing.T) 
 	}
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
@@ -332,15 +330,13 @@ func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) 
 	require.NoError(t, err)
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)

@@ -16,6 +16,7 @@ func Test_ParseMessengerType(t *testing.T) {
 		{wantErr: fmt.Errorf("invalid message sender type \"\"")},
 		{messengerType: "foo_BAR", wantErr: fmt.Errorf("invalid message sender type \"FOO_BAR\"")},
 		{messengerType: "TWILIO_SMS"},
+		{messengerType: "TWILIO_EMAIL"},
 		{messengerType: "tWiLiO_SMS"},
 		{messengerType: "AWS_SMS"},
 		{messengerType: "AWS_EMAIL"},

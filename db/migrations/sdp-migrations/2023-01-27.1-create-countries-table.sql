@@ -22,8 +22,6 @@ ALTER TABLE disbursements ALTER COLUMN country_code SET NOT NULL;
 CREATE TRIGGER refresh_country_updated_at BEFORE UPDATE ON countries FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 
 -- +migrate Down
-DROP TRIGGER refresh_country_updated_at ON countries;
-
-ALTER TABLE disbursements DROP COLUMN country_code;
+ALTER TABLE disbursements DROP COLUMN country_code CASCADE;
 
 DROP TABLE countries CASCADE;

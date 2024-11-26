@@ -65,18 +65,16 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 	ctx := context.Background()
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 1",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	stellarTransactionID, err := utils.RandomString(64)
@@ -132,7 +130,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"status": "DRAFT",
 				"created_at": %q,
 				"updated_at": %q,
-				"sms_registration_message_template":""
+				"registration_contact_type": %q,
+				"receiver_registration_message_template":""
 			},
 			"asset": {
 				"id": %q,
@@ -150,23 +149,18 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 					"name": "wallet1",
 					"enabled": true
 				},
-				"stellar_address": %q,
-				"stellar_memo": %q,
-				"stellar_memo_type": %q,
 				"status": "DRAFT",
 				"created_at": %q,
 				"updated_at": %q,
-				"invitation_sent_at": null,
-				"anchor_platform_transaction_id": %q
+				"invitation_sent_at": null
 			},
 			"created_at": %q,
 			"updated_at": %q,
 			"external_payment_id": %q
 		}`, payment.ID, payment.StellarTransactionID, payment.StellarOperationID, payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano),
-			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano),
-			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.StellarAddress, receiverWallet.StellarMemo,
-			receiverWallet.StellarMemoType, receiverWallet.CreatedAt.Format(time.RFC3339Nano), receiverWallet.UpdatedAt.Format(time.RFC3339Nano),
-			receiverWallet.AnchorPlatformTransactionID, payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano),
+			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano), disbursement.RegistrationContactType.String(),
+			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.CreatedAt.Format(time.RFC3339Nano), receiverWallet.UpdatedAt.Format(time.RFC3339Nano),
+			payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano),
 			payment.ExternalPaymentID)
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
@@ -204,13 +198,11 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 
 	// Create fixtures
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)
@@ -473,7 +465,6 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 
 	// create fixtures
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	// create receivers
@@ -485,19 +476,17 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 
 	// create disbursements
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 1",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 2",
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 2",
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	stellarTransactionID, err := utils.RandomString(64)
@@ -770,7 +759,6 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -780,18 +768,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 	tnt := tenant.Tenant{ID: "tenant-id"}
 
-	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -799,11 +777,10 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country:           country,
 		Wallet:            wallet,
 		Asset:             asset,
 		Status:            data.StartedDisbursementStatus,
-		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationField: data.VerificationTypeDateOfBirth,
 	})
 
 	t.Run("returns Unauthorized when no token in the context", func(t *testing.T) {
@@ -1484,18 +1461,16 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 	})
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement 1",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -1537,7 +1512,8 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 			ReceiverWallet: receiverWallet,
 		})
 
-		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})
+		params := data.QueryParams{SortBy: data.DefaultPaymentSortField, SortOrder: data.DefaultPaymentSortOrder}
+		response, err := handler.getPaymentsWithCount(ctx, &params)
 		require.NoError(t, err)
 
 		assert.Equal(t, response.Total, 2)
@@ -1572,15 +1548,13 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUSA)
 
 	// create disbursements
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "ready disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// create disbursement receivers

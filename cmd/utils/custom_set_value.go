@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -285,5 +286,18 @@ func SetConfigOptionKafkaSecurityProtocol(co *config.ConfigOption) error {
 	}
 
 	*(co.ConfigKey.(*events.KafkaSecurityProtocol)) = protocolParsed
+	return nil
+}
+
+func SetRegistrationContactType(co *config.ConfigOption) error {
+	regAccountTypeStr := viper.GetString(co.Name)
+	regAccountType := data.RegistrationContactType{}
+
+	err := regAccountType.ParseFromString(regAccountTypeStr)
+	if err != nil {
+		return fmt.Errorf("couldn't parse registration contact type in %s: %w", co.Name, err)
+	}
+
+	*(co.ConfigKey.(*data.RegistrationContactType)) = regAccountType
 	return nil
 }

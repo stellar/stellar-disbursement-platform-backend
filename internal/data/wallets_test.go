@@ -154,8 +154,7 @@ func Test_WalletModelFindWallets(t *testing.T) {
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[1].ID)
 
-		findEnabled := true
-		actual, err := walletModel.FindWallets(ctx, &findEnabled)
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterEnabledWallets, true))
 		require.NoError(t, err)
 
 		require.Len(t, actual, 1)
@@ -168,8 +167,33 @@ func Test_WalletModelFindWallets(t *testing.T) {
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[1].ID)
 
-		findDisabled := false
-		actual, err := walletModel.FindWallets(ctx, &findDisabled)
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterEnabledWallets, false))
+		require.NoError(t, err)
+
+		require.Len(t, actual, 1)
+		require.Equal(t, wallets[0].ID, actual[0].ID)
+	})
+
+	t.Run("returns user_managed wallet", func(t *testing.T) {
+		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+
+		MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterUserManaged, true))
+		require.NoError(t, err)
+
+		require.Len(t, actual, 1)
+		require.Equal(t, wallets[0].ID, actual[0].ID)
+	})
+
+	t.Run("returns user_managed and enabled wallet", func(t *testing.T) {
+		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+
+		MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[0].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[1].ID)
+
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterUserManaged, true), NewFilter(FilterEnabledWallets, true))
 		require.NoError(t, err)
 
 		require.Len(t, actual, 1)
@@ -178,7 +202,7 @@ func Test_WalletModelFindWallets(t *testing.T) {
 
 	t.Run("returns empty array when no wallets", func(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		actual, err := walletModel.FindWallets(ctx, nil)
+		actual, err := walletModel.FindWallets(ctx)
 		require.NoError(t, err)
 
 		require.Equal(t, []Wallet{}, actual)
@@ -251,7 +275,7 @@ func Test_WalletModelInsert(t *testing.T) {
 	})
 
 	// Ensure that only insert one of each entry
-	t.Run("duplicated countries codes and assets IDs", func(t *testing.T) {
+	t.Run("duplicated assets IDs", func(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 
 		name := "test_wallet"

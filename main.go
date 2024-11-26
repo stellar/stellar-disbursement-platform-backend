@@ -13,7 +13,7 @@ import (
 
 // Version is the official version of this application. Whenever it's changed
 // here, it also needs to be updated at the `helmchart/Chart.yaml#appVersion“.
-const Version = "2.1.1"
+const Version = "3.0.0"
 
 // GitCommit is populated at build time by
 // go build -ldflags "-X main.GitCommit=$GIT_COMMIT"
@@ -25,6 +25,8 @@ func main() {
 	}
 
 	preConfigureLogger()
+	log.Info("Version: ", Version)
+	log.Info("GitCommit: ", GitCommit)
 
 	rootCmd := cmd.SetupCLI(Version, GitCommit)
 	if err := rootCmd.Execute(); err != nil {

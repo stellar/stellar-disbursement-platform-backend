@@ -207,10 +207,9 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 	// Create models and basic DB entries
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	// Create fixtures: asset, wallet, country
+	// Create fixtures: asset, wallet
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetIssuerTestnet)
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	// Update context with tenant and auth token
 	tnt := tenant.Tenant{ID: "tenant-id"}
@@ -337,11 +336,10 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 
 			// Create fixtures: disbursements
 			readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-				Name:    "ready disbursement",
-				Status:  data.ReadyDisbursementStatus,
-				Asset:   asset,
-				Wallet:  wallet,
-				Country: country,
+				Name:   "ready disbursement",
+				Status: data.ReadyDisbursementStatus,
+				Asset:  asset,
+				Wallet: wallet,
 				StatusHistory: []data.DisbursementStatusHistoryEntry{
 					{UserID: ownerUser.ID, Status: data.DraftDisbursementStatus},
 					{UserID: ownerUser.ID, Status: data.ReadyDisbursementStatus},
@@ -407,13 +405,13 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 					sendInviteMsg := msgs[0]
 					assert.Equal(t, events.ReceiverWalletNewInvitationTopic, sendInviteMsg.Topic)
 					assert.Equal(t, readyDisbursement.ID, sendInviteMsg.Key)
-					assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, sendInviteMsg.Type)
+					assert.Equal(t, events.BatchReceiverWalletInvitationType, sendInviteMsg.Type)
 					assert.Equal(t, tnt.ID, sendInviteMsg.TenantID)
 
-					eventData, ok := sendInviteMsg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
+					eventData, ok := sendInviteMsg.Data.([]schemas.EventReceiverWalletInvitationData)
 					require.True(t, ok)
 					require.Len(t, eventData, 2)
-					wantElements := []schemas.EventReceiverWalletSMSInvitationData{
+					wantElements := []schemas.EventReceiverWalletInvitationData{
 						{ReceiverWalletID: rwDraft.ID}, // <--- invitation for the receiver that is being included in the system for the first time
 						{ReceiverWalletID: rwReady.ID}, // <--- invitation for the receiver that is already in the system but doesn't have a Stellar wallet yet
 					}
@@ -507,22 +505,20 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 	token := "token"
 	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
-	// Create fixtures: asset, wallet, country
+	// Create fixtures: asset, wallet
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 	distributionAcc := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	// Create fixtures: disbursements
 	draftDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "draft disbursement",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "draft disbursement",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// Create fixtures: receivers, receiver wallets
@@ -572,11 +568,10 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 
 		userID := "9ae68f09-cad9-4311-9758-4ff59d2e9e6d"
 		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "disbursement #1",
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   asset,
-			Wallet:  wallet,
-			Country: country,
+			Name:   "disbursement #1",
+			Status: data.ReadyDisbursementStatus,
+			Asset:  asset,
+			Wallet: wallet,
 			StatusHistory: []data.DisbursementStatusHistoryEntry{
 				{
 					Status: data.DraftDisbursementStatus,
@@ -612,11 +607,10 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		usdt := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDT", "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG")
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "disbursement - balance insufficient",
-			Status:  data.StartedDisbursementStatus,
-			Asset:   usdt,
-			Wallet:  wallet,
-			Country: country,
+			Name:   "disbursement - balance insufficient",
+			Status: data.StartedDisbursementStatus,
+			Asset:  usdt,
+			Wallet: wallet,
 		})
 		// should consider this payment since it's the same asset
 		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -628,11 +622,10 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		})
 
 		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "disbursement #4",
-			Status:  data.StartedDisbursementStatus,
-			Asset:   asset,
-			Wallet:  wallet,
-			Country: country,
+			Name:   "disbursement #4",
+			Status: data.StartedDisbursementStatus,
+			Asset:  asset,
+			Wallet: wallet,
 		})
 		// should NOT consider this payment since it's NOT the same asset
 		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -644,11 +637,10 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		})
 
 		disbursementInsufficientBalance := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "disbursement - insufficient balance",
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   usdt,
-			Wallet:  wallet,
-			Country: country,
+			Name:   "disbursement - insufficient balance",
+			Status: data.ReadyDisbursementStatus,
+			Asset:  usdt,
+			Wallet: wallet,
 		})
 		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			ReceiverWallet: rwReady,
@@ -724,7 +716,6 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
 			Wallet:        wallet,
-			Country:       country,
 			StatusHistory: statusHistory,
 		})
 
@@ -749,8 +740,8 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 				Topic:    events.ReceiverWalletNewInvitationTopic,
 				Key:      disbursement.ID,
 				TenantID: tnt.ID,
-				Type:     events.BatchReceiverWalletSMSInvitationType,
-				Data: []schemas.EventReceiverWalletSMSInvitationData{
+				Type:     events.BatchReceiverWalletInvitationType,
+				Data: []schemas.EventReceiverWalletInvitationData{
 					{ReceiverWalletID: rwReady.ID}, // Receiver that can receive SMS
 				},
 			},
@@ -829,7 +820,6 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
 			Wallet:        wallet,
-			Country:       country,
 			StatusHistory: statusHistory,
 		})
 
@@ -852,8 +842,8 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 					Topic:    events.ReceiverWalletNewInvitationTopic,
 					Key:      disbursement.ID,
 					TenantID: tnt.ID,
-					Type:     events.BatchReceiverWalletSMSInvitationType,
-					Data: []schemas.EventReceiverWalletSMSInvitationData{
+					Type:     events.BatchReceiverWalletInvitationType,
+					Data: []schemas.EventReceiverWalletInvitationData{
 						{ReceiverWalletID: rwReady.ID}, // Receiver that can receive SMS
 					},
 				},
@@ -907,7 +897,6 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
 			Wallet:        wallet,
-			Country:       country,
 			StatusHistory: statusHistory,
 		})
 
@@ -961,7 +950,6 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
 			Wallet:        wallet,
-			Country:       country,
 			StatusHistory: statusHistory,
 		})
 
@@ -1013,8 +1001,8 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 				Topic:    events.ReceiverWalletNewInvitationTopic,
 				Key:      disbursement.ID,
 				TenantID: tnt.ID,
-				Type:     events.BatchReceiverWalletSMSInvitationType,
-				Data: []schemas.EventReceiverWalletSMSInvitationData{
+				Type:     events.BatchReceiverWalletInvitationType,
+				Data: []schemas.EventReceiverWalletInvitationData{
 					{
 						ReceiverWalletID: rwReady.ID,
 					},
@@ -1089,23 +1077,20 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUSA)
 
 	// create disbursements
 	readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "ready disbursement",
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "started disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "started disbursement",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// create disbursement receivers
@@ -1354,15 +1339,13 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 	disbursementOld := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 	_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		ReceiverWallet: rwReady,
@@ -1372,10 +1355,9 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 		Status:         data.PendingPaymentStatus,
 	})
 	disbursementNew := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset,
+		Wallet: wallet,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset,
 	})
 	_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		ReceiverWallet: rwReady,

@@ -116,13 +116,13 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
-			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
-				Models:                         models,
-				MessengerClient:                serveOpts.SMSMessengerClient,
-				MaxInvitationSMSResendAttempts: int64(serveOpts.MaxInvitationSMSResendAttempts),
-				Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
-				CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
-				JobIntervalSeconds:             schedulerOptions.ReceiverInvitationJobIntervalSeconds,
+			scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
+				Models:                      models,
+				MessageDispatcher:           serveOpts.MessageDispatcher,
+				MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
+				Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
+				CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
+				JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
 			}),
 		)
 	}
@@ -139,21 +139,22 @@ type SetupConsumersOptions struct {
 func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOptions) error {
 	kafkaConfig := cmdUtils.KafkaConfig(o.EventBrokerOptions)
 
-	smsInvitationConsumer, err := events.NewKafkaConsumer(
+	receiverInvitationConsumer, err := events.NewKafkaConsumer(
 		kafkaConfig,
 		events.ReceiverWalletNewInvitationTopic,
 		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
-			MtnDBConnectionPool:            o.ServeOpts.MtnDBConnectionPool,
-			AdminDBConnectionPool:          o.ServeOpts.AdminDBConnectionPool,
-			AnchorPlatformBaseSepURL:       o.ServeOpts.AnchorPlatformBasePlatformURL,
-			MessengerClient:                o.ServeOpts.SMSMessengerClient,
-			MaxInvitationSMSResendAttempts: int64(o.ServeOpts.MaxInvitationSMSResendAttempts),
-			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
+		eventhandlers.NewSendReceiverWalletsInvitationEventHandler(eventhandlers.SendReceiverWalletsInvitationEventHandlerOptions{
+			MtnDBConnectionPool:         o.ServeOpts.MtnDBConnectionPool,
+			AdminDBConnectionPool:       o.ServeOpts.AdminDBConnectionPool,
+			AnchorPlatformBaseSepURL:    o.ServeOpts.AnchorPlatformBasePlatformURL,
+			MessageDispatcher:           o.ServeOpts.MessageDispatcher,
+			MaxInvitationResendAttempts: int64(o.ServeOpts.MaxInvitationResendAttempts),
+			Sep10SigningPrivateKey:      o.ServeOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:          o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {
-		return fmt.Errorf("creating SMS Invitation Kafka Consumer: %w", err)
+		return fmt.Errorf("creating Receiver Invitation Kafka Consumer: %w", err)
 	}
 
 	paymentCompletedConsumer, err := events.NewKafkaConsumer(
@@ -212,7 +213,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		return fmt.Errorf("creating Kafka producer: %w", err)
 	}
 
-	go events.NewEventConsumer(smsInvitationConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
+	go events.NewEventConsumer(receiverInvitationConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 	go events.NewEventConsumer(paymentCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 	go events.NewEventConsumer(stellarPaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 	go events.NewEventConsumer(circlePaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
@@ -356,10 +357,10 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    false,
 		},
 		{
-			Name:        "max-invitation-sms-resend-attempts",
-			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
+			Name:        "max-invitation-resend-attempts",
+			Usage:       "The maximum number of attempts to resend the invitation to the Receiver Wallets.",
 			OptType:     types.Int,
-			ConfigKey:   &serveOpts.MaxInvitationSMSResendAttempts,
+			ConfigKey:   &serveOpts.MaxInvitationResendAttempts,
 			FlagDefault: 3,
 			Required:    true,
 		},
@@ -582,10 +583,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.EmailMessengerClient = emailMessengerClient
 			adminServeOpts.EmailMessengerClient = emailMessengerClient
 
-			// Setup the SMS client
-			serveOpts.SMSMessengerClient, err = di.NewSMSClient(smsOpts)
+			// Setup the Message Dispatcher
+			messageDispatcherOpts := di.MessageDispatcherOpts{
+				EmailOpts: &emailOpts,
+				SMSOpts:   &smsOpts,
+			}
+			serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(ctx, messageDispatcherOpts)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating SMS client: %s", err.Error())
+				log.Ctx(ctx).Fatalf("error creating message dispatcher: %s", err.Error())
 			}
 
 			// Setup the AP Auth enforcer
@@ -627,6 +632,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				NetworkType:          serveOpts.NetworkType,
 				EncryptionPassphrase: serveOpts.DistAccEncryptionPassphrase,
 				TenantManager:        tenant.NewManager(tenant.WithDatabase(serveOpts.AdminDBConnectionPool)),
+				MonitorService:       serveOpts.MonitorService,
 			})
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)

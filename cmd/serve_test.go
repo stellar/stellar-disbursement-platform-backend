@@ -175,7 +175,7 @@ func Test_serve(t *testing.T) {
 		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
 		DistributionAccountService:      mDistAccService,
-		MaxInvitationSMSResendAttempts:  3,
+		MaxInvitationResendAttempts:     3,
 		DistAccEncryptionPassphrase:     distributionAccPrivKey,
 		CircleService:                   mCircleService,
 	}
@@ -190,11 +190,18 @@ func Test_serve(t *testing.T) {
 	require.NoError(t, err)
 	serveOpts.CrashTrackerClient = crashTrackerClient
 
-	messengerClient, err := di.NewEmailClient(di.EmailClientOptions{EmailType: message.MessengerTypeDryRun})
+	emailOpts := di.EmailClientOptions{EmailType: message.MessengerTypeDryRun}
+	emailClient, err := di.NewEmailClient(emailOpts)
 	require.NoError(t, err)
-	serveOpts.EmailMessengerClient = messengerClient
+	serveOpts.EmailMessengerClient = emailClient
 
-	serveOpts.SMSMessengerClient, err = di.NewSMSClient(di.SMSClientOptions{SMSType: message.MessengerTypeDryRun})
+	smsOpts := di.SMSClientOptions{SMSType: message.MessengerTypeDryRun}
+
+	messageDispatcherOpts := di.MessageDispatcherOpts{
+		EmailOpts: &emailOpts,
+		SMSOpts:   &smsOpts,
+	}
+	serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(ctx, messageDispatcherOpts)
 	require.NoError(t, err)
 
 	kafkaConfig := events.KafkaConfig{
@@ -220,7 +227,7 @@ func Test_serve(t *testing.T) {
 
 	serveTenantOpts := serveadmin.ServeOptions{
 		Environment:                             "test",
-		EmailMessengerClient:                    messengerClient,
+		EmailMessengerClient:                    emailClient,
 		AdminDBConnectionPool:                   dbConnectionPool,
 		MTNDBConnectionPool:                     dbConnectionPool,
 		CrashTrackerClient:                      crashTrackerClient,

@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
 func Test_WalletsHandlerGetWallets(t *testing.T) {
@@ -111,6 +112,47 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		require.JSONEq(t, string(expectedJSON), string(respBody))
 	})
 
+	t.Run("successfully returns a list of user managed wallets", func(t *testing.T) {
+		wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+
+		// make first wallet user managed
+		data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/wallets?user_managed=true", nil)
+		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		respWallets := []data.Wallet{}
+		err = json.Unmarshal(respBody, &respWallets)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(respWallets))
+		assert.Equal(t, wallets[0].ID, respWallets[0].ID)
+		assert.Equal(t, wallets[0].Name, respWallets[0].Name)
+	})
+
+	t.Run("bad request when user_managed parameter isn't a bool", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/wallets?user_managed=xxx", nil)
+		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		var httpErr httperror.HTTPError
+		err = json.Unmarshal(respBody, &httpErr)
+		require.NoError(t, err)
+		assert.Equal(t, "invalid 'user_managed' parameter value", httpErr.Extras["validation_error"])
+	})
+
 	t.Run("bad request when enabled parameter isn't a bool", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/wallets?enabled=xxx", nil)
@@ -122,14 +164,16 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		require.JSONEq(t, `{"error": "Invalid enabled parameter value"}`, string(respBody))
+		var httpErr httperror.HTTPError
+		err = json.Unmarshal(respBody, &httpErr)
+		require.NoError(t, err)
+		assert.Equal(t, "invalid 'enabled' parameter value", httpErr.Extras["validation_error"])
 	})
 }
 
 func Test_WalletsHandlerPostWallets(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -138,44 +182,30 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	handler := &WalletsHandler{Models: models}
 
-	handler := &WalletsHandler{
-		Models: models,
-	}
-
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+	// Fixture setup
+	wallet := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 
-	t.Run("returns BadRequest when payload is invalid", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(`invalid`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-
-		rr = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(`{}`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		expected := `
-			{
+	// Define test cases
+	testCases := []struct {
+		name           string
+		payload        string
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "🔴-400-BadRequest when payload is invalid",
+			payload:        `invalid`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error": "The request was invalid in some way."}`,
+		},
+		{
+			name:           "🔴-400-BadRequest when payload is missing required fields",
+			payload:        `{}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
 				"error": "invalid request body",
 				"extras": {
 					"name": "name is required",
@@ -184,215 +214,134 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 					"sep_10_client_domain": "sep_10_client_domain is required",
 					"assets_ids": "provide at least one asset ID"
 				}
-			}
-		`
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, expected, string(respBody))
-
-		payload := `
-			{
+			}`,
+		},
+		{
+			name: "🔴-400-BadRequest when assets_ids is missing",
+			payload: `{
 				"name": "New Wallet",
 				"homepage": "https://newwallet.com",
 				"deep_link_schema": "newwallet://sdp",
 				"sep_10_client_domain": "https://newwallet.com"
-			}
-		`
-		rr = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		expected = `
-			{
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
 				"error": "invalid request body",
 				"extras": {
 					"assets_ids": "provide at least one asset ID"
 				}
-			}
-		`
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, expected, string(respBody))
-	})
-
-	t.Run("returns BadRequest when the URLs are invalids", func(t *testing.T) {
-		payload := fmt.Sprintf(`
-			{
+			}`,
+		},
+		{
+			name: "🔴-400-BadRequest when URLs are invalid",
+			payload: fmt.Sprintf(`{
 				"name": "New Wallet",
 				"homepage": "newwallet.com",
 				"deep_link_schema": "deeplink/sdp",
 				"sep_10_client_domain": "https://newwallet.com",
 				"assets_ids": [%q]
-			}
-		`, asset.ID)
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		expected := `
-			{
+			}`, asset.ID),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
 				"error": "invalid request body",
 				"extras": {
 					"deep_link_schema": "invalid deep link schema provided",
 					"homepage": "invalid homepage URL provided"
 				}
-			}
-		`
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, expected, string(respBody))
-	})
-
-	t.Run("returns Conflict when creating a duplicated wallet", func(t *testing.T) {
-		wallet := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
-
-		// Duplicated Name
-		payload := fmt.Sprintf(`
-			{
-				"name": %q,
-				"homepage": %q,
-				"deep_link_schema": %q,
-				"sep_10_client_domain": %q,
-				"assets_ids": [%q]
-			}
-		`, wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, asset.ID)
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "a wallet with this name already exists"}`, string(respBody))
-
-		// Duplicated Homepage
-		payload = fmt.Sprintf(`
-			{
-				"name": "New Wallet",
-				"homepage": %q,
-				"deep_link_schema": %q,
-				"sep_10_client_domain": %q,
-				"assets_ids": [%q]
-			}
-		`, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, asset.ID)
-		rr = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "a wallet with this homepage already exists"}`, string(respBody))
-
-		// Duplicated Deep Link Schema
-		payload = fmt.Sprintf(`
-			{
-				"name": "New Wallet",
-				"homepage": "https://newwallet.com",
-				"deep_link_schema": %q,
-				"sep_10_client_domain": %q,
-				"assets_ids": [%q]
-			}
-		`, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, asset.ID)
-		rr = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "a wallet with this deep link schema already exists"}`, string(respBody))
-
-		// Invalid asset ID
-		payload = fmt.Sprintf(`
-			{
+			}`,
+		},
+		{
+			name: "🔴-400-BadRequest when creating a wallet with an invalid asset ID",
+			payload: `{
 				"name": "New Wallet",
 				"homepage": "https://newwallet.com",
 				"deep_link_schema": "newwallet://sdp",
-				"sep_10_client_domain": %q,
-				"assets_ids": ["asset-id"]
-			}
-		`, wallet.SEP10ClientDomain)
-		rr = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "invalid asset ID"}`, string(respBody))
-	})
-
-	t.Run("creates wallet successfully", func(t *testing.T) {
-		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-
-		payload := fmt.Sprintf(`
-			{
+				"sep_10_client_domain": "https://newwallet.com",
+				"assets_ids": ["invalid-asset-id"]
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error": "invalid asset ID"}`,
+		},
+		{
+			name: "🔴-409-Conflict when creating a duplicated wallet (name)",
+			payload: fmt.Sprintf(`{
+				"name": %q,
+				"homepage": "https://newwallet.com",
+				"deep_link_schema": "newwallet://sdp",
+				"sep_10_client_domain": "https://newwallet.com",
+				"assets_ids": [%q]
+			}`, wallet.Name, asset.ID),
+			expectedStatus: http.StatusConflict,
+			expectedBody:   `{"error": "a wallet with this name already exists"}`,
+		},
+		{
+			name: "🔴-409-Conflict when creating a duplicated wallet (homepage)",
+			payload: fmt.Sprintf(`{
+				"name": "New Wallet",
+				"homepage": %q,
+				"deep_link_schema": "newwallet://sdp",
+				"sep_10_client_domain": "https://newwallet.com",
+				"assets_ids": [%q]
+			}`, wallet.Homepage, asset.ID),
+			expectedStatus: http.StatusConflict,
+			expectedBody:   `{"error": "a wallet with this homepage already exists"}`,
+		},
+		{
+			name: "🔴-409-Conflict when creating a duplicated wallet (deep_link_schema)",
+			payload: fmt.Sprintf(`{
+				"name": "New Wallet",
+				"homepage": "https://newwallet.com",
+				"deep_link_schema": %q,
+				"sep_10_client_domain": "https://newwallet.com",
+				"assets_ids": [%q]
+			}`, wallet.DeepLinkSchema, asset.ID),
+			expectedStatus: http.StatusConflict,
+			expectedBody:   `{"error": "a wallet with this deep link schema already exists"}`,
+		},
+		{
+			name: "🟢-successfully creates wallet",
+			payload: fmt.Sprintf(`{
 				"name": "New Wallet",
 				"homepage": "https://newwallet.com",
 				"deep_link_schema": "newwallet://deeplink/sdp",
 				"sep_10_client_domain": "https://newwallet.com",
 				"assets_ids": [%q]
+			}`, asset.ID),
+			expectedStatus: http.StatusCreated,
+			expectedBody:   "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(tc.payload))
+			require.NoError(t, err)
+
+			http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			if tc.expectedBody != "" {
+				assert.JSONEq(t, tc.expectedBody, string(respBody))
+			} else if tc.expectedStatus == http.StatusCreated {
+				wallet, err := models.Wallets.GetByWalletName(ctx, "New Wallet")
+				require.NoError(t, err)
+
+				walletAssets, err := models.Wallets.GetAssets(ctx, wallet.ID)
+				require.NoError(t, err)
+
+				assert.Equal(t, "https://newwallet.com", wallet.Homepage)
+				assert.Equal(t, "newwallet://deeplink/sdp", wallet.DeepLinkSchema)
+				assert.Equal(t, "newwallet.com", wallet.SEP10ClientDomain)
+				assert.Len(t, walletAssets, 1)
 			}
-		`, asset.ID)
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		wallet, err := models.Wallets.GetByWalletName(ctx, "New Wallet")
-		require.NoError(t, err)
-
-		walletAssets, err := models.Wallets.GetAssets(ctx, wallet.ID)
-		require.NoError(t, err)
-
-		assert.Equal(t, "https://newwallet.com", wallet.Homepage)
-		assert.Equal(t, "newwallet://deeplink/sdp", wallet.DeepLinkSchema)
-		assert.Equal(t, "newwallet.com", wallet.SEP10ClientDomain)
-		assert.Len(t, walletAssets, 1)
-	})
+		})
+	}
 }
 
 func Test_WalletsHandlerDeleteWallet(t *testing.T) {

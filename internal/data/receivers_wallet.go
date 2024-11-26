@@ -7,13 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const OTPExpirationTimeMinutes = 30
@@ -63,24 +66,25 @@ func (rwsh *ReceiversWalletStatusHistory) Scan(src interface{}) error {
 var _ sql.Scanner = (*ReceiversWalletStatusHistory)(nil)
 
 type ReceiverWallet struct {
-	ID              string                       `json:"id" db:"id"`
-	Receiver        Receiver                     `json:"receiver" db:"receiver"`
-	Wallet          Wallet                       `json:"wallet" db:"wallet"`
-	StellarAddress  string                       `json:"stellar_address,omitempty" db:"stellar_address"`
-	StellarMemo     string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
-	StellarMemoType string                       `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
-	Status          ReceiversWalletStatus        `json:"status" db:"status"`
-	StatusHistory   ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	CreatedAt       time.Time                    `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time                    `json:"updated_at" db:"updated_at"`
-	OTP             string                       `json:"-" db:"otp"`
-	OTPCreatedAt    *time.Time                   `json:"-" db:"otp_created_at"`
-	OTPConfirmedAt  *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
+	ID               string                       `json:"id" db:"id"`
+	Receiver         Receiver                     `json:"receiver" db:"receiver"`
+	Wallet           Wallet                       `json:"wallet" db:"wallet"`
+	StellarAddress   string                       `json:"stellar_address,omitempty" db:"stellar_address"`
+	StellarMemo      string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
+	StellarMemoType  string                       `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
+	Status           ReceiversWalletStatus        `json:"status" db:"status"`
+	StatusHistory    ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	CreatedAt        time.Time                    `json:"created_at" db:"created_at"`
+	UpdatedAt        time.Time                    `json:"updated_at" db:"updated_at"`
+	OTP              string                       `json:"-" db:"otp"`
+	OTPCreatedAt     *time.Time                   `json:"-" db:"otp_created_at"`
+	OTPConfirmedAt   *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
+	OTPConfirmedWith string                       `json:"otp_confirmed_with,omitempty" db:"otp_confirmed_with"`
 	// AnchorPlatformAccountID is the ID of the SEP24 transaction initiated by the Anchor Platform where the receiver wallet was registered.
 	AnchorPlatformTransactionID       string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
 	AnchorPlatformTransactionSyncedAt *time.Time `json:"anchor_platform_transaction_synced_at,omitempty" db:"anchor_platform_transaction_synced_at"`
 	InvitedAt                         *time.Time `json:"invited_at,omitempty" db:"invited_at"`
-	LastSmsSent                       *time.Time `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
+	LastMessageSentAt                 *time.Time `json:"last_message_sent_at,omitempty" db:"last_message_sent_at"`
 	InvitationSentAt                  *time.Time `json:"invitation_sent_at" db:"invitation_sent_at"`
 	ReceiverWalletStats
 }
@@ -92,9 +96,9 @@ type ReceiverWalletStats struct {
 	CanceledPayments  string          `json:"canceled_payments,omitempty" db:"canceled_payments"`
 	RemainingPayments string          `json:"remaining_payments,omitempty" db:"remaining_payments"`
 	ReceivedAmounts   ReceivedAmounts `json:"received_amounts,omitempty" db:"received_amounts"`
-	// TotalInvitationSMSResentAttempts holds how many times were resent the Invitation SMS to the receiver
+	// TotalInvitationResentAttempts holds how many times were resent the Invitation SMS to the receiver
 	// since the last invitation has been sent.
-	TotalInvitationSMSResentAttempts int64 `json:"-" db:"total_invitation_sms_resent_attempts"`
+	TotalInvitationResentAttempts int64 `json:"-" db:"total_invitation_sms_resent_attempts"`
 }
 
 type ReceiverWalletModel struct {
@@ -159,7 +163,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		SELECT
 			rwc.id as receiver_wallet_id,
 			MIN(m.created_at) as invited_at,
-			MAX(m.created_at) as last_sms_sent
+			MAX(m.created_at) as last_message_sent_at
 		FROM receiver_wallets_cte rwc
 		LEFT JOIN messages m ON rwc.id = m.receiver_wallet_id
 		WHERE m.status = 'SUCCESS'
@@ -187,7 +191,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		COALESCE(rws.remaining_payments, '0') as remaining_payments,
 		rws.received_amounts,
 		rwm.invited_at as invited_at,
-		rwm.last_sms_sent as last_sms_sent
+		rwm.last_message_sent_at as last_message_sent_at
 	FROM receiver_wallets_cte rwc
 	LEFT JOIN receiver_wallets_stats_aggregate rws ON rws.receiver_wallet_id = rwc.id
 	LEFT JOIN receiver_wallets_messages rwm ON rwm.receiver_wallet_id = rwc.id
@@ -199,6 +203,45 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		return nil, fmt.Errorf("error querying receivers wallets: %w", err)
 	}
 
+	return receiverWallets, nil
+}
+
+const selectReceiverWalletQuery = `
+		SELECT
+			rw.id,
+			rw.receiver_id as "receiver.id",
+			rw.status,
+			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
+			COALESCE(rw.stellar_address, '') as stellar_address,
+			COALESCE(rw.stellar_memo, '') as stellar_memo,
+			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
+			COALESCE(rw.otp, '') as otp,
+			rw.otp_created_at,
+			rw.otp_confirmed_at,
+			COALESCE(rw.otp_confirmed_with, '') as otp_confirmed_with,
+			w.id as "wallet.id",
+			w.name as "wallet.name",
+			w.sep_10_client_domain as "wallet.sep_10_client_domain",
+			w.homepage as "wallet.homepage"
+		FROM 
+			receiver_wallets rw
+		JOIN 
+			wallets w ON rw.wallet_id = w.id
+	`
+
+// GetByIDs returns a receiver wallet by IDs
+func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, ids ...string) ([]ReceiverWallet, error) {
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no receiver wallet IDs provided")
+	}
+
+	query := fmt.Sprintf("%s WHERE rw.id = ANY($1)", selectReceiverWalletQuery)
+
+	receiverWallets := make([]ReceiverWallet, len(ids))
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(ids))
+	if err != nil {
+		return nil, fmt.Errorf("querying receiver wallet: %w", err)
+	}
 	return receiverWallets, nil
 }
 
@@ -229,8 +272,8 @@ const getPendingRegistrationReceiverWalletsBaseQuery = `
 		rw.id,
 		rw.invitation_sent_at,
 		r.id AS "receiver.id",
-		r.phone_number AS "receiver.phone_number",
-		r.email AS "receiver.email",
+		COALESCE(r.phone_number, '') as "receiver.phone_number",
+		COALESCE(r.email, '') as "receiver.email",
 		w.id AS "wallet.id",
 		w.name AS "wallet.name"
 	FROM
@@ -288,20 +331,22 @@ func (rw *ReceiverWalletModel) GetAllPendingRegistrationByDisbursementID(ctx con
 	return receiverWallets, nil
 }
 
-// UpdateOTPByReceiverPhoneNumberAndWalletDomain updates receiver wallet OTP if its not verified yet,
-// and returns the number of updated rows.
-func (rw *ReceiverWalletModel) UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx context.Context, receiverPhoneNumber, sep10ClientDomain, otp string) (numberOfUpdatedRows int, err error) {
+// UpdateOTPByReceiverContactInfoAndWalletDomain updates receiver wallet OTP if its not verified yet, and returns the
+// number of updated rows.
+func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx context.Context, receiverContactInfo, sep10ClientDomain, otp string) (numberOfUpdatedRows int, err error) {
 	query := `
 		WITH rw_cte AS (
 			SELECT
 				rw.id,
 				rw.otp_confirmed_at
-			FROM receiver_wallets rw
-			INNER JOIN receivers r ON rw.receiver_id = r.id
-			INNER JOIN wallets w ON rw.wallet_id = w.id
-			WHERE r.phone_number = $1
-			AND w.sep_10_client_domain = $2
-			AND rw.otp_confirmed_at IS NULL
+			FROM 
+				receiver_wallets rw
+				INNER JOIN receivers r ON rw.receiver_id = r.id
+				INNER JOIN wallets w ON rw.wallet_id = w.id
+			WHERE
+				(r.phone_number = $1 OR r.email = $1)
+				AND w.sep_10_client_domain = $2
+				AND rw.otp_confirmed_at IS NULL
 		)
 		UPDATE
 			receiver_wallets
@@ -313,14 +358,14 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx
 			receiver_wallets.id = rw_cte.id
 	`
 
-	rows, err := rw.dbConnectionPool.ExecContext(ctx, query, receiverPhoneNumber, sep10ClientDomain, otp)
+	rows, err := rw.dbConnectionPool.ExecContext(ctx, query, receiverContactInfo, sep10ClientDomain, otp)
 	if err != nil {
-		return 0, fmt.Errorf("error updating receiver wallets otp: %w", err)
+		return 0, fmt.Errorf("updating receiver wallets otp: %w", err)
 	}
 
 	updatedRowsAffected, err := rows.RowsAffected()
 	if err != nil {
-		return 0, fmt.Errorf("error getting updated rows of receiver wallets otp: %w", err)
+		return 0, fmt.Errorf("getting updated rows of receiver wallets otp: %w", err)
 	}
 
 	return int(updatedRowsAffected), nil
@@ -344,78 +389,15 @@ func (rw *ReceiverWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 
 // GetByReceiverIDAndWalletDomain returns a receiver wallet that match the receiver ID and wallet domain.
 func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Context, receiverId string, walletDomain string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
-	var receiverWallet ReceiverWallet
-	query := `
-		SELECT
-			rw.id,
-			rw.receiver_id as "receiver.id",
-			rw.status,
-			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
-			COALESCE(rw.stellar_address, '') as stellar_address,
-			COALESCE(rw.stellar_memo, '') as stellar_memo,
-			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
-			COALESCE(rw.otp, '') as otp,
-			rw.otp_created_at,
-			rw.otp_confirmed_at,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.sep_10_client_domain as "wallet.sep_10_client_domain"
-		FROM 
-			receiver_wallets rw
-		JOIN 
-			wallets w ON rw.wallet_id = w.id
-		WHERE
-			rw.receiver_id = $1 
-		AND	
-			w.sep_10_client_domain = $2
-	`
+	query := fmt.Sprintf("%s %s", selectReceiverWalletQuery, "WHERE rw.receiver_id = $1 AND w.sep_10_client_domain = $2")
 
+	var receiverWallet ReceiverWallet
 	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverId, walletDomain)
 	if err != nil {
 		return nil, fmt.Errorf("error querying receiver wallet: %w", err)
 	}
 
 	return &receiverWallet, nil
-}
-
-// UpdateReceiverWallet updates the status, address, OTP confirmation time, and anchor platform transaction ID of a
-// receiver wallet.
-func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receiverWallet ReceiverWallet, sqlExec db.SQLExecuter) error {
-	query := `
-		UPDATE 
-			receiver_wallets rw
-		SET 
-			status = $1,
-			anchor_platform_transaction_id = $2,
-			stellar_address = $3,
-			stellar_memo = $4,
-			stellar_memo_type = $5,
-			otp_confirmed_at = $6
-		WHERE rw.id = $7
-	`
-
-	result, err := sqlExec.ExecContext(ctx, query,
-		receiverWallet.Status,
-		sql.NullString{String: receiverWallet.AnchorPlatformTransactionID, Valid: receiverWallet.AnchorPlatformTransactionID != ""},
-		receiverWallet.StellarAddress,
-		sql.NullString{String: receiverWallet.StellarMemo, Valid: receiverWallet.StellarMemo != ""},
-		sql.NullString{String: receiverWallet.StellarMemoType, Valid: receiverWallet.StellarMemoType != ""},
-		receiverWallet.OTPConfirmedAt,
-		receiverWallet.ID)
-	if err != nil {
-		return fmt.Errorf("updating receiver wallet: %w", err)
-	}
-
-	numRowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("getting number of rows affected: %w", err)
-	}
-
-	if numRowsAffected == 0 {
-		return fmt.Errorf("no receiver wallet could be found in UpdateReceiverWallet: %w", ErrRecordNotFound)
-	}
-
-	return nil
 }
 
 // VerifyReceiverWalletOTP validates the receiver wallet OTP.
@@ -481,24 +463,7 @@ func (rw *ReceiverWalletModel) UpdateStatusByDisbursementID(ctx context.Context,
 func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo, clientDomain string) (*ReceiverWallet, error) {
 	// build query
 	var receiverWallets ReceiverWallet
-	query := `
-		SELECT
-			rw.id,
-			rw.receiver_id as "receiver.id",
-			rw.status,
-			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
-			COALESCE(rw.stellar_address, '') as stellar_address,
-			COALESCE(rw.stellar_memo, '') as stellar_memo,
-			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
-			COALESCE(rw.otp, '') as otp,
-			rw.otp_created_at,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.homepage as "wallet.homepage"
-		FROM receiver_wallets rw
-		JOIN wallets w ON rw.wallet_id = w.id
-		WHERE rw.stellar_address = ?
-	`
+	query := fmt.Sprintf("%s %s", selectReceiverWalletQuery, "WHERE rw.stellar_address = ?")
 
 	// append memo to query if it is not empty
 	args := []interface{}{stellarAccount}
@@ -554,8 +519,8 @@ func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx conte
 	return receiverWallets, nil
 }
 
-// RetryInvitationSMS sets null the invitation_sent_at of a receiver wallet.
-func (rw *ReceiverWalletModel) RetryInvitationSMS(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletId string) (*ReceiverWallet, error) {
+// RetryInvitationMessage sets null the invitation_sent_at of a receiver wallet.
+func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletId string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
 	query := `
 		UPDATE 
@@ -608,4 +573,106 @@ func (rw *ReceiverWalletModel) UpdateInvitationSentAt(ctx context.Context, sqlEx
 	}
 
 	return receiverWallets, nil
+}
+
+type ReceiverWalletUpdate struct {
+	Status                      ReceiversWalletStatus `db:"status"`
+	AnchorPlatformTransactionID string                `db:"anchor_platform_transaction_id"`
+	StellarAddress              string                `db:"stellar_address"`
+	StellarMemo                 string                `db:"stellar_memo"`
+	StellarMemoType             string                `db:"stellar_memo_type"`
+	OTPConfirmedAt              time.Time             `db:"otp_confirmed_at"`
+	OTPConfirmedWith            string                `db:"otp_confirmed_with"`
+}
+
+func (rwu ReceiverWalletUpdate) Validate() error {
+	if utils.IsEmpty(rwu) {
+		return fmt.Errorf("no values provided to update receiver wallet")
+	}
+
+	if rwu.Status != "" {
+		if err := rwu.Status.Validate(); err != nil {
+			return fmt.Errorf("validating status: %w", err)
+		}
+	}
+
+	if rwu.StellarAddress != "" {
+		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) {
+			return fmt.Errorf("invalid stellar address")
+		}
+	}
+
+	if !time.Time.IsZero(rwu.OTPConfirmedAt) && rwu.OTPConfirmedWith == "" {
+		return fmt.Errorf("OTPConfirmedWith is required when OTPConfirmedAt is provided")
+	}
+
+	if rwu.OTPConfirmedWith != "" && time.Time.IsZero(rwu.OTPConfirmedAt) {
+		return fmt.Errorf("OTPConfirmedAt is required when OTPConfirmedWith is provided")
+	}
+
+	return nil
+}
+
+func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update ReceiverWalletUpdate, sqlExec db.SQLExecuter) error {
+	if err := update.Validate(); err != nil {
+		return fmt.Errorf("validating receiver wallet update: %w", err)
+	}
+
+	fields := []string{}
+	args := []interface{}{}
+
+	if update.Status != "" {
+		fields = append(fields, "status = ?")
+		args = append(args, update.Status)
+		fields = append(fields, "status_history = array_prepend(create_receiver_wallet_status_history(NOW(), ?), status_history)")
+		args = append(args, update.Status)
+	}
+	if update.AnchorPlatformTransactionID != "" {
+		fields = append(fields, "anchor_platform_transaction_id = ?")
+		args = append(args, update.AnchorPlatformTransactionID)
+	}
+	if update.StellarAddress != "" {
+		fields = append(fields, "stellar_address = ?")
+		args = append(args, update.StellarAddress)
+	}
+	if update.StellarMemo != "" {
+		fields = append(fields, "stellar_memo = ?")
+		args = append(args, update.StellarMemo)
+	}
+	if update.StellarMemoType != "" {
+		fields = append(fields, "stellar_memo_type = ?")
+		args = append(args, update.StellarMemoType)
+	}
+	if !time.Time.IsZero(update.OTPConfirmedAt) {
+		fields = append(fields, "otp_confirmed_at = ?")
+		args = append(args, update.OTPConfirmedAt)
+	}
+	if update.OTPConfirmedWith != "" {
+		fields = append(fields, "otp_confirmed_with = ?")
+		args = append(args, update.OTPConfirmedWith)
+	}
+
+	args = append(args, id)
+	query := fmt.Sprintf(`
+        UPDATE receiver_wallets
+        SET %s
+        WHERE id = ?
+    `, strings.Join(fields, ", "))
+
+	query = sqlExec.Rebind(query)
+	result, err := sqlExec.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("updating receiver wallet: %w", err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+
+	if numRowsAffected == 0 {
+		return fmt.Errorf("no receiver wallet could be found in UpdateReceiverWallet: %w", ErrRecordNotFound)
+	}
+
+	return nil
 }

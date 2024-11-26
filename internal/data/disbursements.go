@@ -14,22 +14,23 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type Disbursement struct {
-	ID                             string                    `json:"id" db:"id"`
-	Name                           string                    `json:"name" db:"name"`
-	Country                        *Country                  `json:"country,omitempty" db:"country"`
-	Wallet                         *Wallet                   `json:"wallet,omitempty" db:"wallet"`
-	Asset                          *Asset                    `json:"asset,omitempty" db:"asset"`
-	Status                         DisbursementStatus        `json:"status" db:"status"`
-	VerificationField              VerificationField         `json:"verification_field,omitempty" db:"verification_field"`
-	StatusHistory                  DisbursementStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	SMSRegistrationMessageTemplate string                    `json:"sms_registration_message_template" db:"sms_registration_message_template"`
-	FileName                       string                    `json:"file_name,omitempty" db:"file_name"`
-	FileContent                    []byte                    `json:"-" db:"file_content"`
-	CreatedAt                      time.Time                 `json:"created_at" db:"created_at"`
-	UpdatedAt                      time.Time                 `json:"updated_at" db:"updated_at"`
+	ID                                  string                    `json:"id" db:"id"`
+	Name                                string                    `json:"name" db:"name"`
+	Wallet                              *Wallet                   `json:"wallet,omitempty" db:"wallet"`
+	Asset                               *Asset                    `json:"asset,omitempty" db:"asset"`
+	Status                              DisbursementStatus        `json:"status" db:"status"`
+	VerificationField                   VerificationType          `json:"verification_field,omitempty" db:"verification_field"`
+	StatusHistory                       DisbursementStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	ReceiverRegistrationMessageTemplate string                    `json:"receiver_registration_message_template" db:"receiver_registration_message_template"`
+	FileName                            string                    `json:"file_name,omitempty" db:"file_name"`
+	FileContent                         []byte                    `json:"-" db:"file_content"`
+	CreatedAt                           time.Time                 `json:"created_at" db:"created_at"`
+	UpdatedAt                           time.Time                 `json:"updated_at" db:"updated_at"`
+	RegistrationContactType             RegistrationContactType   `json:"registration_contact_type,omitempty" db:"registration_contact_type"`
 	*DisbursementStats
 }
 
@@ -52,25 +53,6 @@ type DisbursementUpdate struct {
 	FileContent []byte
 }
 
-type VerificationField string
-
-const (
-	VerificationFieldDateOfBirth VerificationField = "DATE_OF_BIRTH"
-	VerificationFieldYearMonth   VerificationField = "YEAR_MONTH"
-	VerificationFieldPin         VerificationField = "PIN"
-	VerificationFieldNationalID  VerificationField = "NATIONAL_ID_NUMBER"
-)
-
-// GetAllVerificationFields returns all verification fields
-func GetAllVerificationFields() []VerificationField {
-	return []VerificationField{
-		VerificationFieldDateOfBirth,
-		VerificationFieldYearMonth,
-		VerificationFieldPin,
-		VerificationFieldNationalID,
-	}
-}
-
 type DisbursementStatusHistoryEntry struct {
 	UserID    string             `json:"user_id"`
 	Status    DisbursementStatus `json:"status"`
@@ -90,21 +72,21 @@ var (
 func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field, sms_registration_message_template)
+		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type)
 		VALUES 
 		    ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
-		    `
-	var newId string
-	err := d.dbConnectionPool.GetContext(ctx, &newId, q,
+	`
+	var newID string
+	err := d.dbConnectionPool.GetContext(ctx, &newID, q,
 		disbursement.Name,
 		disbursement.Status,
 		disbursement.StatusHistory,
 		disbursement.Wallet.ID,
 		disbursement.Asset.ID,
-		disbursement.Country.Code,
-		disbursement.VerificationField,
-		disbursement.SMSRegistrationMessageTemplate,
+		utils.SQLNullString(string(disbursement.VerificationField)),
+		disbursement.ReceiverRegistrationMessageTemplate,
+		disbursement.RegistrationContactType,
 	)
 	if err != nil {
 		// check if the error is a duplicate key error
@@ -114,7 +96,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		return "", fmt.Errorf("unable to create disbursement %s: %w", disbursement.Name, err)
 	}
 
-	return newId, nil
+	return newID, nil
 }
 
 func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*Disbursement, error) {
@@ -131,22 +113,19 @@ func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*
 	return disbursement, nil
 }
 
-func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Disbursement, error) {
-	var disbursement Disbursement
-
-	query := `
+const selectDisbursementQuery = `
 		SELECT
 			d.id,
 			d.name,
 			d.status,
 			d.status_history,
-			d.verification_field,
+			COALESCE(d.verification_field::text, '') as verification_field,
 			COALESCE(d.file_name, '') as file_name,
 			d.file_content,
 			d.created_at,
 			d.updated_at,
-			d.verification_field,
-			COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
+			d.registration_contact_type,
+			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
@@ -159,19 +138,17 @@ func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id 
 			a.code as "asset.code",
 			a.issuer as "asset.issuer",
 			a.created_at as "asset.created_at",
-			a.updated_at as "asset.updated_at",
-			c.code as "country.code",
-			c.name as "country.name",
-			c.created_at as "country.created_at",
-			c.updated_at as "country.updated_at"
+			a.updated_at as "asset.updated_at"
 		FROM
 			disbursements d
 		JOIN wallets w on d.wallet_id = w.id
 		JOIN assets a on d.asset_id = a.id
-		JOIN countries c on d.country_code = c.code
-		WHERE 
-			d.id = $1
-		`
+	`
+
+func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Disbursement, error) {
+	var disbursement Disbursement
+
+	query := fmt.Sprintf("%s %s", selectDisbursementQuery, "WHERE d.id = $1")
 	err := sqlExec.GetContext(ctx, &disbursement, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -186,44 +163,7 @@ func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id 
 func (d *DisbursementModel) GetByName(ctx context.Context, sqlExec db.SQLExecuter, name string) (*Disbursement, error) {
 	var disbursement Disbursement
 
-	query := `
-		SELECT
-			d.id,
-			d.name,
-			d.status,
-			d.status_history,
-			d.verification_field,
-			COALESCE(d.file_name, '') as file_name,
-			d.file_content,
-			d.created_at,
-			d.updated_at,
-			d.verification_field,
-			COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.homepage as "wallet.homepage",
-			w.sep_10_client_domain as "wallet.sep_10_client_domain",
-			w.deep_link_schema as "wallet.deep_link_schema",
-			w.enabled as "wallet.enabled",
-			w.created_at as "wallet.created_at",
-			w.updated_at as "wallet.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			a.created_at as "asset.created_at",
-			a.updated_at as "asset.updated_at",
-			c.code as "country.code",
-			c.name as "country.name",
-			c.created_at as "country.created_at",
-			c.updated_at as "country.updated_at"
-		FROM
-			disbursements d
-		JOIN wallets w on d.wallet_id = w.id
-		JOIN assets a on d.asset_id = a.id
-		JOIN countries c on d.country_code = c.code
-		WHERE
-			d.name = $1
-		`
+	query := fmt.Sprintf("%s %s", selectDisbursementQuery, "WHERE d.name = $1")
 	err := sqlExec.GetContext(ctx, &disbursement, query, name)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -313,7 +253,6 @@ func (d *DisbursementModel) Count(ctx context.Context, sqlExec db.SQLExecuter, q
 			disbursements d
 		JOIN wallets w on d.wallet_id = w.id
 		JOIN assets a on d.asset_id = a.id
-		JOIN countries c on d.country_code = c.code
 		`
 
 	query, params := d.newDisbursementQuery(baseQuery, queryParams, false)
@@ -329,43 +268,7 @@ func (d *DisbursementModel) Count(ctx context.Context, sqlExec db.SQLExecuter, q
 func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams) ([]*Disbursement, error) {
 	disbursements := []*Disbursement{}
 
-	baseQuery := `
-		SELECT
-			d.id,
-			d.name,
-			d.status,
-			d.status_history,
-			d.verification_field,
-			d.created_at,
-			d.updated_at,
-			d.verification_field,
-			COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
-			COALESCE(d.file_name, '') as file_name,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.homepage as "wallet.homepage",
-			w.sep_10_client_domain as "wallet.sep_10_client_domain",
-			w.deep_link_schema as "wallet.deep_link_schema",
-			w.enabled as "wallet.enabled",
-			w.created_at as "wallet.created_at",
-			w.updated_at as "wallet.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			a.created_at as "asset.created_at",
-			a.updated_at as "asset.updated_at",
-			c.code as "country.code",
-			c.name as "country.name",
-			c.created_at as "country.created_at",
-			c.updated_at as "country.updated_at"
-		FROM
-			disbursements d
-		JOIN wallets w on d.wallet_id = w.id
-		JOIN assets a on d.asset_id = a.id
-		JOIN countries c on d.country_code = c.code
-		`
-
-	query, params := d.newDisbursementQuery(baseQuery, queryParams, true)
+	query, params := d.newDisbursementQuery(selectDisbursementQuery, queryParams, true)
 	err := sqlExec.SelectContext(ctx, &disbursements, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("error querying disbursements: %w", err)

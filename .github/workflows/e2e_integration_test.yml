@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - main
-      - develop
-      - "release/**"
-      - "releases/**"
-      - "hotfix/**"
   pull_request:
   workflow_call: # allows this workflow to be called from another workflow
 
@@ -29,18 +25,36 @@ jobs:
       max-parallel: 1
       matrix:
         platform:
-          - "Stellar"
-          - "Circle"
+          - "Stellar-phone" # Stellar distribution account where receivers are registered with their phone number
+          - "Stellar-phone-wallet" # Stellar distribution account where receivers are registered with their phone number and wallet address
+          - "Stellar-email" # Stellar distribution account where receivers are registered with their email
+          - "Circle-phone" # Circle distribution account where receivers are registered with their email
         include:
-          - platform: "Stellar"
+          - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-          - platform: "Circle"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+          - platform: "Stellar-phone-wallet"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
+          - platform: "Stellar-email"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
+            REGISTRATION_CONTACT_TYPE: "EMAIL"
+          - platform: "Circle-phone"
             environment: "Receiver Registration - E2E Integration Tests (Circle)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
+      DISBURSEMENT_CSV_FILE_NAME: ${{ matrix.DISBURSEMENT_CSV_FILE_NAME }}
+      REGISTRATION_CONTACT_TYPE: ${{ matrix.REGISTRATION_CONTACT_TYPE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

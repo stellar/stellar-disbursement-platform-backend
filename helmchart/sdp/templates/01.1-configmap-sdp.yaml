@@ -33,5 +33,6 @@ data:
   {{- if eq .Values.global.eventBroker.type "KAFKA" }}
   KAFKA_SECURITY_PROTOCOL: {{ .Values.global.eventBroker.kafka.securityProtocol | quote }}
   {{- end }}
+  SINGLE_TENANT_MODE: {{ .Values.global.singleTenantMode | quote }}
   {{- tpl (toYaml .Values.sdp.configMap.data | nindent 2) . }}
 {{- end }}

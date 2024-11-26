@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - main
-      - develop
-      - "release/**"
-      - "releases/**"
-      - "hotfix/**"
   pull_request:
   workflow_call: # allows this workflow to be called from another workflow
 
@@ -43,7 +39,7 @@ jobs:
           echo 'Anchor-platform is up and running.'
 
       - name: Install NodeJs
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
           node-version: 14
 

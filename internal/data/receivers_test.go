@@ -17,7 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-func Test_ReceiversModelGet(t *testing.T) {
+func Test_ReceiversModel_Get(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -28,7 +28,6 @@ func Test_ReceiversModelGet(t *testing.T) {
 	ctx := context.Background()
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -36,10 +35,9 @@ func Test_ReceiversModelGet(t *testing.T) {
 
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 	disbursement := Disbursement{
-		Status:  DraftDisbursementStatus,
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Status: DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	stellarTransactionID, err := utils.RandomString(64)
@@ -338,7 +336,7 @@ func Test_ReceiversModelGet(t *testing.T) {
 	})
 }
 
-func Test_ReceiversModelCount(t *testing.T) {
+func Test_ReceiversModel_Count(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -428,7 +426,7 @@ func Test_ReceiversModelCount(t *testing.T) {
 	})
 }
 
-func Test_ReceiversModelGetAll(t *testing.T) {
+func Test_ReceiversModel_GetAll(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -462,7 +460,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 	date := time.Date(2023, 1, 10, 23, 40, 20, 1431, time.UTC)
 	receiver1Email := "receiver1@mock.com"
 	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
-		Email:       &receiver1Email,
+		Email:       receiver1Email,
 		PhoneNumber: "+99991111",
 		ExternalID:  "external-id-1",
 		CreatedAt:   &date,
@@ -472,7 +470,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 	date = time.Date(2023, 3, 10, 23, 40, 20, 1431, time.UTC)
 	receiver2Email := "receiver2@mock.com"
 	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
-		Email:       &receiver2Email,
+		Email:       receiver2Email,
 		PhoneNumber: "+99992222",
 		ExternalID:  "external-id-2",
 		CreatedAt:   &date,
@@ -853,9 +851,8 @@ func Test_ReceiversModel_GetAll_makeSureReceiversWithMultipleWalletsWillReturnAS
 	wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
 
-	receiver1Email := "receiver1@mock.com"
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
-		Email:       &receiver1Email,
+		Email:       "receiver1@mock.com",
 		PhoneNumber: "+99991111",
 		ExternalID:  "external-id-1",
 	})
@@ -902,7 +899,7 @@ func Test_ReceiversModel_ParseReceiverIDs(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_DeleteByPhoneNumber(t *testing.T) {
+func Test_DeleteByContactInfo(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -913,186 +910,195 @@ func Test_DeleteByPhoneNumber(t *testing.T) {
 	models, err := NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	// 0. returns ErrNotFound for users that don't exist:
-	t.Run("User does not exist", func(t *testing.T) {
-		err = models.Receiver.DeleteByPhoneNumber(ctx, dbConnectionPool, "+14152222222")
-		require.ErrorIs(t, err, ErrRecordNotFound)
-	})
+	for _, contactType := range GetAllReceiverContactTypes() {
+		t.Run(string(contactType), func(t *testing.T) {
+			defer func() {
+				err = db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+					DeleteAllFixtures(t, ctx, dbTx)
+					return nil
+				})
+				require.NoError(t, err)
+			}()
 
-	// 1. Create country, asset, and wallet (won't be deleted)
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "ATL", "Atlantis")
-	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
+			// 0. returns ErrNotFound for users that don't exist:
+			t.Run("User does not exist", func(t *testing.T) {
+				err = models.Receiver.DeleteByContactInfo(ctx, dbConnectionPool, "+14152222222")
+				require.ErrorIs(t, err, ErrRecordNotFound)
+			})
 
-	// 2. Create receiverX (that will be deleted) and all receiverX dependent resources that will also be deleted:
-	receiverX := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-	receiverWalletX := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverX.ID, wallet.ID, DraftReceiversWalletStatus)
-	_ = CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
-		ReceiverID:        receiverX.ID,
-		VerificationField: VerificationFieldDateOfBirth,
-		VerificationValue: "1990-01-01",
-	})
-	messageX := CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-		Type:             message.MessengerTypeTwilioSMS,
-		AssetID:          nil,
-		ReceiverID:       receiverX.ID,
-		WalletID:         wallet.ID,
-		ReceiverWalletID: &receiverWalletX.ID,
-		Status:           SuccessMessageStatus,
-		CreatedAt:        time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC),
-	})
-	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset,
-	})
-	paymentX1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-		ReceiverWallet: receiverWalletX,
-		Disbursement:   disbursement1,
-		Asset:          *asset,
-		Status:         ReadyPaymentStatus,
-		Amount:         "1",
-	})
+			// 1. Create asset, and wallet (won't be deleted)
+			asset := CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+			wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
 
-	// 3. Create receiverY (that will not be deleted) and all receiverY dependent resources that will not be deleted:
-	receiverY := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-	receiverWalletY := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverY.ID, wallet.ID, DraftReceiversWalletStatus)
-	_ = CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
-		ReceiverID:        receiverY.ID,
-		VerificationField: VerificationFieldDateOfBirth,
-		VerificationValue: "1990-01-01",
-	})
-	messageY := CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-		Type:             message.MessengerTypeTwilioSMS,
-		AssetID:          nil,
-		ReceiverID:       receiverY.ID,
-		WalletID:         wallet.ID,
-		ReceiverWalletID: &receiverWalletY.ID,
-		Status:           SuccessMessageStatus,
-		CreatedAt:        time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC),
-	})
-	disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  wallet,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset,
-	})
-	paymentY2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-		ReceiverWallet: receiverWalletY,
-		Disbursement:   disbursement2,
-		Asset:          *asset,
-		Status:         ReadyPaymentStatus,
-		Amount:         "1",
-	})
+			// 2. Create receiverX (that will be deleted) and all receiverX dependent resources that will also be deleted:
+			receiverX := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+			receiverWalletX := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverX.ID, wallet.ID, DraftReceiversWalletStatus)
+			_ = CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+				ReceiverID:        receiverX.ID,
+				VerificationField: VerificationTypeDateOfBirth,
+				VerificationValue: "1990-01-01",
+			})
+			messageX := CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
+				Type:             message.MessengerTypeTwilioSMS,
+				AssetID:          nil,
+				ReceiverID:       receiverX.ID,
+				WalletID:         wallet.ID,
+				ReceiverWalletID: &receiverWalletX.ID,
+				Status:           SuccessMessageStatus,
+				CreatedAt:        time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC),
+			})
+			disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+				Wallet: wallet,
+				Status: ReadyDisbursementStatus,
+				Asset:  asset,
+			})
+			paymentX1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+				ReceiverWallet: receiverWalletX,
+				Disbursement:   disbursement1,
+				Asset:          *asset,
+				Status:         ReadyPaymentStatus,
+				Amount:         "1",
+			})
 
-	paymentX2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-		ReceiverWallet: receiverWalletX,
-		Disbursement:   disbursement2,
-		Asset:          *asset,
-		Status:         ReadyPaymentStatus,
-		Amount:         "1",
-	}) // This payment will be deleted along with the remaining receiverX-related data
+			// 3. Create receiverY (that will not be deleted) and all receiverY dependent resources that will not be deleted:
+			receiverY := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+			receiverWalletY := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverY.ID, wallet.ID, DraftReceiversWalletStatus)
+			_ = CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+				ReceiverID:        receiverY.ID,
+				VerificationField: VerificationTypeDateOfBirth,
+				VerificationValue: "1990-01-01",
+			})
+			messageY := CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
+				Type:             message.MessengerTypeTwilioSMS,
+				AssetID:          nil,
+				ReceiverID:       receiverY.ID,
+				WalletID:         wallet.ID,
+				ReceiverWalletID: &receiverWalletY.ID,
+				Status:           SuccessMessageStatus,
+				CreatedAt:        time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC),
+			})
+			disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+				Wallet: wallet,
+				Status: ReadyDisbursementStatus,
+				Asset:  asset,
+			})
+			paymentY2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+				ReceiverWallet: receiverWalletY,
+				Disbursement:   disbursement2,
+				Asset:          *asset,
+				Status:         ReadyPaymentStatus,
+				Amount:         "1",
+			})
 
-	// 4. Delete receiverX
-	err = models.Receiver.DeleteByPhoneNumber(ctx, dbConnectionPool, receiverX.PhoneNumber)
-	require.NoError(t, err)
+			paymentX2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+				ReceiverWallet: receiverWalletX,
+				Disbursement:   disbursement2,
+				Asset:          *asset,
+				Status:         ReadyPaymentStatus,
+				Amount:         "1",
+			}) // This payment will be deleted along with the remaining receiverX-related data
 
-	type testCase struct {
-		name       string
-		query      string
-		args       []interface{}
-		wantExists bool
-	}
-
-	// 5. Prepare assertions to make sure `DeleteByPhoneNumber` DID DELETE receiverX-related data:
-	didDeleteTestCases := []testCase{
-		{
-			name:       "DID DELETE: receiverX",
-			query:      "SELECT EXISTS(SELECT 1 FROM receivers WHERE id = $1)",
-			args:       []interface{}{receiverX.ID},
-			wantExists: false,
-		},
-		{
-			name:       "DID DELETE: receiverWalletX",
-			query:      "SELECT EXISTS(SELECT 1 FROM receiver_wallets WHERE id = $1)",
-			args:       []interface{}{receiverWalletX.ID},
-			wantExists: false,
-		},
-		{
-			name:       "DID DELETE: receiverVerificationX",
-			query:      "SELECT EXISTS(SELECT 1 FROM receiver_verifications WHERE receiver_id = $1)",
-			args:       []interface{}{receiverX.ID},
-			wantExists: false,
-		},
-		{
-			name:       "DID DELETE: messageX",
-			query:      "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)",
-			args:       []interface{}{messageX.ID},
-			wantExists: false,
-		},
-		{
-			name:       "DID DELETE: paymentX",
-			query:      "SELECT EXISTS(SELECT 1 FROM payments WHERE id = ANY($1))",
-			args:       []interface{}{pq.Array([]string{paymentX1.ID, paymentX2.ID})},
-			wantExists: false,
-		},
-		{
-			name:       "DID DELETE: disbursement1",
-			query:      "SELECT EXISTS(SELECT 1 FROM disbursements WHERE id = $1)",
-			args:       []interface{}{disbursement1.ID},
-			wantExists: false,
-		},
-	}
-
-	// 6. Prepare assertions to make sure `DeleteByPhoneNumber` DID NOT DELETE receiverY-related data:
-	didNotDeleteTestCases := []testCase{
-		{
-			name:       "DID NOT DELETE: receiverY",
-			query:      "SELECT EXISTS(SELECT 1 FROM receivers WHERE id = $1)",
-			args:       []interface{}{receiverY.ID},
-			wantExists: true,
-		},
-		{
-			name:       "DID NOT DELETE: receiverWalletY",
-			query:      "SELECT EXISTS(SELECT 1 FROM receiver_wallets WHERE id = $1)",
-			args:       []interface{}{receiverWalletY.ID},
-			wantExists: true,
-		},
-		{
-			name:       "DID NOT DELETE: receiverVerificationY",
-			query:      "SELECT EXISTS(SELECT 1 FROM receiver_verifications WHERE receiver_id = $1)",
-			args:       []interface{}{receiverY.ID},
-			wantExists: true,
-		},
-		{
-			name:       "DID NOT DELETE: messageY",
-			query:      "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)",
-			args:       []interface{}{messageY.ID},
-			wantExists: true,
-		},
-		{
-			name:       "DID NOT DELETE: paymentY2",
-			query:      "SELECT EXISTS(SELECT 1 FROM payments WHERE id = $1)",
-			args:       []interface{}{paymentY2.ID},
-			wantExists: true,
-		},
-		{
-			name:       "DID NOT DELETE: paymentX2",
-			query:      "SELECT EXISTS(SELECT 1 FROM disbursements WHERE id = $1)",
-			args:       []interface{}{disbursement2.ID},
-			wantExists: true,
-		},
-	}
-
-	// 7. Run assertions
-	testCases := append(didDeleteTestCases, didNotDeleteTestCases...)
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var exists bool
-			err = dbConnectionPool.QueryRowxContext(ctx, tc.query, tc.args...).Scan(&exists)
+			// 4. Delete receiverX
+			err = models.Receiver.DeleteByContactInfo(ctx, dbConnectionPool, receiverX.ContactByType(contactType))
 			require.NoError(t, err)
-			require.Equal(t, tc.wantExists, exists)
+
+			type testCase struct {
+				name       string
+				query      string
+				args       []interface{}
+				wantExists bool
+			}
+
+			// 5. Prepare assertions to make sure `DeleteByContactInfo` DID DELETE receiverX-related data:
+			didDeleteTestCases := []testCase{
+				{
+					name:       "DID DELETE: receiverX",
+					query:      "SELECT EXISTS(SELECT 1 FROM receivers WHERE id = $1)",
+					args:       []interface{}{receiverX.ID},
+					wantExists: false,
+				},
+				{
+					name:       "DID DELETE: receiverWalletX",
+					query:      "SELECT EXISTS(SELECT 1 FROM receiver_wallets WHERE id = $1)",
+					args:       []interface{}{receiverWalletX.ID},
+					wantExists: false,
+				},
+				{
+					name:       "DID DELETE: receiverVerificationX",
+					query:      "SELECT EXISTS(SELECT 1 FROM receiver_verifications WHERE receiver_id = $1)",
+					args:       []interface{}{receiverX.ID},
+					wantExists: false,
+				},
+				{
+					name:       "DID DELETE: messageX",
+					query:      "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)",
+					args:       []interface{}{messageX.ID},
+					wantExists: false,
+				},
+				{
+					name:       "DID DELETE: paymentX",
+					query:      "SELECT EXISTS(SELECT 1 FROM payments WHERE id = ANY($1))",
+					args:       []interface{}{pq.Array([]string{paymentX1.ID, paymentX2.ID})},
+					wantExists: false,
+				},
+				{
+					name:       "DID DELETE: disbursement1",
+					query:      "SELECT EXISTS(SELECT 1 FROM disbursements WHERE id = $1)",
+					args:       []interface{}{disbursement1.ID},
+					wantExists: false,
+				},
+			}
+
+			// 6. Prepare assertions to make sure `DeleteByContactInfo` DID NOT DELETE receiverY-related data:
+			didNotDeleteTestCases := []testCase{
+				{
+					name:       "DID NOT DELETE: receiverY",
+					query:      "SELECT EXISTS(SELECT 1 FROM receivers WHERE id = $1)",
+					args:       []interface{}{receiverY.ID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: receiverWalletY",
+					query:      "SELECT EXISTS(SELECT 1 FROM receiver_wallets WHERE id = $1)",
+					args:       []interface{}{receiverWalletY.ID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: receiverVerificationY",
+					query:      "SELECT EXISTS(SELECT 1 FROM receiver_verifications WHERE receiver_id = $1)",
+					args:       []interface{}{receiverY.ID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: messageY",
+					query:      "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)",
+					args:       []interface{}{messageY.ID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: paymentY2",
+					query:      "SELECT EXISTS(SELECT 1 FROM payments WHERE id = $1)",
+					args:       []interface{}{paymentY2.ID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: paymentX2",
+					query:      "SELECT EXISTS(SELECT 1 FROM disbursements WHERE id = $1)",
+					args:       []interface{}{disbursement2.ID},
+					wantExists: true,
+				},
+			}
+
+			// 7. Run assertions
+			testCases := append(didDeleteTestCases, didNotDeleteTestCases...)
+			for _, tc := range testCases {
+				t.Run(tc.name, func(t *testing.T) {
+					var exists bool
+					err = dbConnectionPool.QueryRowxContext(ctx, tc.query, tc.args...).Scan(&exists)
+					require.NoError(t, err)
+					require.Equal(t, tc.wantExists, exists)
+				})
+			}
 		})
 	}
 }
@@ -1110,7 +1116,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 	receiverModel := ReceiverModel{}
 
 	email, externalID := "receiver@email.com", "externalID"
-	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{Email: &email, ExternalID: externalID})
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{Email: email, ExternalID: externalID})
 
 	resetReceiver := func(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, receiverID string) {
 		q := `
@@ -1123,21 +1129,18 @@ func Test_ReceiversModel_Update(t *testing.T) {
 	t.Run("returns error when no value is provided", func(t *testing.T) {
 		resetReceiver(t, ctx, dbConnectionPool, receiver.ID)
 
-		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "",
-			ExternalId: "",
-		})
-		assert.EqualError(t, err, "provide at least one of these values: Email or ExternalID")
+		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{})
+		assert.EqualError(t, err, "validating receiver update: no values provided to update receiver")
 	})
 
 	t.Run("returns error when email is invalid", func(t *testing.T) {
 		resetReceiver(t, ctx, dbConnectionPool, receiver.ID)
 
 		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "invalid",
-			ExternalId: "",
+			Email:      utils.StringPtr("invalid"),
+			ExternalId: utils.StringPtr(""),
 		})
-		assert.EqualError(t, err, `error validating email: the provided email is not valid`)
+		assert.EqualError(t, err, `validating receiver update: validating email: the provided email is not valid`)
 	})
 
 	t.Run("updates email name successfully", func(t *testing.T) {
@@ -1145,19 +1148,18 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, email, *receiver.Email)
+		assert.Equal(t, email, receiver.Email)
 		assert.Equal(t, externalID, receiver.ExternalID)
 
 		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "updated_email@email.com",
-			ExternalId: "",
+			Email: utils.StringPtr("updated_email@email.com"),
 		})
 		require.NoError(t, err)
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.NotEqual(t, email, *receiver.Email)
-		assert.Equal(t, "updated_email@email.com", *receiver.Email)
+		assert.NotEqual(t, email, receiver.Email)
+		assert.Equal(t, "updated_email@email.com", receiver.Email)
 		assert.Equal(t, externalID, receiver.ExternalID)
 	})
 
@@ -1166,20 +1168,90 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Equal(t, email, *receiver.Email)
+		assert.Equal(t, email, receiver.Email)
 		assert.Equal(t, externalID, receiver.ExternalID)
 
 		err := receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "updated_email@email.com",
-			ExternalId: "newExternalID",
+			Email:      utils.StringPtr("updated_email@email.com"),
+			ExternalId: utils.StringPtr("newExternalID"),
 		})
 		require.NoError(t, err)
 
 		receiver, err = receiverModel.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.NotEqual(t, email, *receiver.Email)
-		assert.Equal(t, "updated_email@email.com", *receiver.Email)
+		assert.NotEqual(t, email, receiver.Email)
+		assert.Equal(t, "updated_email@email.com", receiver.Email)
 		assert.NotEqual(t, externalID, receiver.ExternalID)
 		assert.Equal(t, "newExternalID", receiver.ExternalID)
 	})
+}
+
+func Test_ReceiversModel_GetByContacts(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiverModel := ReceiverModel{}
+
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+		Email:       "receiver1@stellar.org",
+		PhoneNumber: "+99991111",
+		ExternalID:  "external-id-1",
+	})
+
+	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+		Email:      "receiver2@stellar.org",
+		ExternalID: "external-id-2",
+	})
+
+	receiver3 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+		PhoneNumber: "+99992222",
+		ExternalID:  "external-id-3",
+	})
+
+	testCases := []struct {
+		name     string
+		contacts []string
+		want     []*Receiver
+		wantErr  error
+	}{
+		{
+			name:     "list of contacts is empty",
+			contacts: []string{},
+			want:     []*Receiver{},
+			wantErr:  nil,
+		},
+		{
+			name:     "successfully get receivers by email and phone",
+			contacts: []string{receiver1.PhoneNumber, receiver2.Email, receiver3.PhoneNumber},
+			want:     []*Receiver{receiver1, receiver2, receiver3},
+		},
+		{
+			name:     "successfully get receivers by email",
+			contacts: []string{receiver1.Email, receiver2.Email},
+			want:     []*Receiver{receiver1, receiver2},
+		},
+		{
+			name:     "successfully get receivers by phone",
+			contacts: []string{receiver1.PhoneNumber, receiver3.PhoneNumber},
+			want:     []*Receiver{receiver1, receiver3},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			receivers, err := receiverModel.GetByContacts(ctx, dbConnectionPool, tc.contacts...)
+			if tc.wantErr != nil {
+				assert.EqualError(t, err, tc.wantErr.Error())
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, receivers)
+			}
+		})
+	}
 }

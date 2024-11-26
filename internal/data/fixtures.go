@@ -22,9 +22,7 @@ import (
 )
 
 const (
-	FixtureCountryUSA = "USA"
-	FixtureCountryUKR = "UKR"
-	FixtureAssetUSDC  = "USDC"
+	FixtureAssetUSDC = "USDC"
 )
 
 func CreateAssetFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code, issuer string) *Asset {
@@ -226,73 +224,31 @@ func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
-func GetCountryFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code string) *Country {
+func MakeWalletUserManaged(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) {
 	const query = `
-		SELECT
-			*
-		FROM
-			countries
+		UPDATE
+			wallets
+		SET
+			user_managed = true
 		WHERE
-			code = $1
+			id = $1
 	`
 
-	country := &Country{}
-	err := sqlExec.GetContext(ctx, country, query, code)
+	_, err := sqlExec.ExecContext(ctx, query, walletID)
 	require.NoError(t, err)
-
-	return country
-}
-
-func CreateCountryFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code, name string) *Country {
-	const query = `
-		WITH create_country AS (
-			INSERT INTO countries
-				(code, name)
-			VALUES
-				($1, $2)
-			ON CONFLICT DO NOTHING
-			RETURNING *
-		)
-		SELECT created_at, updated_at FROM create_country
-		UNION ALL
-		SELECT created_at, updated_at FROM countries WHERE code = $1 AND name = $2
-	`
-
-	country := &Country{
-		Code: code,
-		Name: name,
-	}
-
-	err := sqlExec.QueryRowxContext(ctx, query, code, name).Scan(&country.CreatedAt, &country.UpdatedAt)
-	require.NoError(t, err)
-
-	return country
-}
-
-// DeleteAllCountryFixtures deletes all countries in the database
-func DeleteAllCountryFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM countries"
-	_, err := sqlExec.ExecContext(ctx, query)
-	require.NoError(t, err)
-}
-
-// ClearAndCreateCountryFixtures deletes all countries in the database then creates new countries for testing
-func ClearAndCreateCountryFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Country {
-	DeleteAllCountryFixtures(t, ctx, sqlExec)
-	expected := []Country{
-		*CreateCountryFixture(t, ctx, sqlExec, "BRA", "Brazil"),
-		*CreateCountryFixture(t, ctx, sqlExec, "UKR", "Ukraine"),
-	}
-	return expected
 }
 
 func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *Receiver) *Receiver {
-	randomSuffix, err := utils.RandomString(5)
+	t.Helper()
+
+	randomSuffix, err := utils.RandomString(5, utils.NumberBytes)
 	require.NoError(t, err)
 
-	if r.Email == nil {
-		email := fmt.Sprintf("email%s@randomemail.com", randomSuffix)
-		r.Email = &email
+	if r == nil {
+		r = &Receiver{}
+	}
+	if r.Email == "" {
+		r.Email = fmt.Sprintf("email%s@randomemail.com", randomSuffix)
 	}
 
 	if r.PhoneNumber == "" {
@@ -332,6 +288,31 @@ func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		&receiver.CreatedAt,
 		&receiver.UpdatedAt,
 	)
+	require.NoError(t, err)
+
+	return &receiver
+}
+
+func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *ReceiverInsert) *Receiver {
+	t.Helper()
+
+	if r.ExternalId == nil {
+		randString, err := utils.RandomString(56)
+		require.NoError(t, err)
+		r.ExternalId = &randString
+	}
+
+	const query = `
+		INSERT INTO receivers
+			(email, phone_number, external_id)
+		VALUES
+			($1, $2, $3)
+		RETURNING
+			id, COALESCE(phone_number, '') as phone_number, COALESCE(email, '') as email, external_id, created_at, updated_at
+	`
+
+	var receiver Receiver
+	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalId)
 	require.NoError(t, err)
 
 	return &receiver
@@ -395,32 +376,36 @@ func DeleteAllReceiverVerificationFixtures(t *testing.T, ctx context.Context, sq
 }
 
 func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, receiverID, walletID string, status ReceiversWalletStatus) *ReceiverWallet {
-	kp, err := keypair.Random()
-	require.NoError(t, err)
-	stellarAddress := kp.Address()
+	var stellarAddress, stellarMemo, stellarMemoType, anchorPlatformTransactionID string
 
-	randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
-	require.NoError(t, err)
+	if status != DraftReceiversWalletStatus && status != ReadyReceiversWalletStatus {
+		kp, err := keypair.Random()
+		require.NoError(t, err)
+		stellarAddress = kp.Address()
 
-	stellarMemo := fmt.Sprint(randNumber.Int64() + 10000)
-	stellarMemoType := "id"
+		randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
+		require.NoError(t, err)
 
-	anchorPlatformTransactionID, err := utils.RandomString(10)
-	require.NoError(t, err)
+		stellarMemo = fmt.Sprint(randNumber.Int64() + 10000)
+		stellarMemoType = "id"
+
+		anchorPlatformTransactionID, err = utils.RandomString(10)
+		require.NoError(t, err)
+	}
 
 	const query = `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
-				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, anchor_platform_transaction_id)
+				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, anchor_platform_transaction_id)
 			VALUES
-				($1, $2, $3, $4, $5, $6, $7)
+				($1, $2, $3, $4, $5, $6, ARRAY[create_receiver_wallet_status_history(now(), $6)], $7)
 			RETURNING
 				*
 		)
 		SELECT
 			rw.id, rw.stellar_address, rw.stellar_memo, rw.stellar_memo_type, rw.status, rw.status_history, rw.created_at, rw.updated_at,
 			rw.anchor_platform_transaction_id, rw.anchor_platform_transaction_synced_at,
-			r.id, r.email, r.phone_number, r.external_id, r.created_at, r.updated_at,
+			r.id, COALESCE(r.phone_number, '') as phone_number, COALESCE(r.email, '') as email, r.external_id, r.created_at, r.updated_at,
 			w.id, w.name, w.homepage, w.deep_link_schema, w.created_at, w.updated_at
 		FROM
 			inserted_receiver_wallet AS rw
@@ -429,7 +414,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err = sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
+	err := sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
 		&receiverWallet.ID,
 		&receiverWallet.StellarAddress,
 		&receiverWallet.StellarMemo,
@@ -537,11 +522,11 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	if d.Asset == nil {
 		d.Asset = GetAssetFixture(t, ctx, sqlExec, FixtureAssetUSDC)
 	}
-	if d.Country == nil {
-		d.Country = GetCountryFixture(t, ctx, sqlExec, FixtureCountryUKR)
-	}
 	if d.VerificationField == "" {
-		d.VerificationField = VerificationFieldDateOfBirth
+		d.VerificationField = VerificationTypeDateOfBirth
+	}
+	if utils.IsEmpty(d.RegistrationContactType) {
+		d.RegistrationContactType = RegistrationContactTypePhone
 	}
 
 	// insert disbursement
@@ -614,7 +599,15 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 	}
 
 	if insert.VerificationField == "" {
-		insert.VerificationField = VerificationFieldDateOfBirth
+		insert.VerificationField = VerificationTypeDateOfBirth
+	}
+
+	if utils.IsEmpty(insert.RegistrationContactType) {
+		insert.RegistrationContactType = RegistrationContactTypePhone
+	}
+
+	if utils.IsEmpty(insert.RegistrationContactType) {
+		insert.RegistrationContactType = RegistrationContactTypePhone
 	}
 
 	id, err := model.Insert(ctx, &insert)
@@ -785,5 +778,4 @@ func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter
 	DeleteAllDisbursementFixtures(t, ctx, sqlExec)
 	DeleteAllWalletFixtures(t, ctx, sqlExec)
 	DeleteAllAssetFixtures(t, ctx, sqlExec)
-	DeleteAllCountryFixtures(t, ctx, sqlExec)
 }

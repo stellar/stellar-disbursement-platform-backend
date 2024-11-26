@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/stellar/go/support/log"
@@ -17,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -114,39 +116,51 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	receiverRegistrationRequest data.ReceiverRegistrationRequest,
 ) error {
 	now := time.Now()
-	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
-	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)
+	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationField)
 	if err != nil {
-		return fmt.Errorf("error retrieving receiver verification for verification type %s: %w", receiverRegistrationRequest.VerificationType, err)
+		return fmt.Errorf("retrieving receiver verification for verification type %s: %w", receiverRegistrationRequest.VerificationField, err)
 	}
 	if len(receiverVerifications) == 0 {
-		err = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
+		err = fmt.Errorf("verification of type %s not found for receiver id %s", receiverRegistrationRequest.VerificationField, receiver.ID)
 		return &ErrorInformationNotFound{cause: err}
 	}
 	if len(receiverVerifications) > 1 {
-		log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receiver.ID, receiverRegistrationRequest.VerificationType)
+		log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receiver.ID, receiverRegistrationRequest.VerificationField)
 	}
 	receiverVerification := receiverVerifications[0]
 
 	// STEP 2: check if the number of attempts to confirm the verification value has already exceeded the max value
 	if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 		// TODO: the application currently can't recover from a max attempts exceeded error.
-		err = fmt.Errorf("the number of attempts to confirm the verification value exceededs the max attempts")
+		err = fmt.Errorf("the number of attempts to confirm the verification value exceeded the max attempts")
 		return &ErrorVerificationAttemptsExceeded{cause: err}
 	}
 
 	// STEP 3: check if the payload verification value matches the one saved in the database
-	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
-		baseErrMsg := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
-		// update the receiver verification with the confirmation that the value was checked
-		receiverVerification.Attempts = receiverVerification.Attempts + 1
-		receiverVerification.FailedAt = &now
-		receiverVerification.ConfirmedAt = nil
+	rvu := data.ReceiverVerificationUpdate{
+		ReceiverID:        receiverVerification.ReceiverID,
+		VerificationField: receiverVerification.VerificationField,
+	}
 
-		// this update is done using the DBConnectionPool and not dbTx because we don't want to roolback these changes after returning the error
-		updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, v.Models.DBConnectionPool)
+	if strings.TrimSpace(receiverRegistrationRequest.PhoneNumber) != "" {
+		rvu.VerificationChannel = message.MessageChannelSMS
+	} else if strings.TrimSpace(receiverRegistrationRequest.Email) != "" {
+		rvu.VerificationChannel = message.MessageChannelEmail
+	} else {
+		err = fmt.Errorf("no valid verification channel found resolved for receiver")
+		return &ErrorInformationNotFound{cause: err}
+	}
+
+	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
+		baseErrMsg := fmt.Sprintf("%s value does not match for receiver with id %s", receiverRegistrationRequest.VerificationField, receiver.ID)
+		// update the receiver verification with the confirmation that the value was checked
+		rvu.Attempts = utils.IntPtr(receiverVerification.Attempts + 1)
+		rvu.FailedAt = &now
+
+		// this update is done using the DBConnectionPool and not dbTx because we don't want to rollback these changes after returning the error
+		updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, v.Models.DBConnectionPool)
 		if updateErr != nil {
 			err = fmt.Errorf("%s: %w", baseErrMsg, updateErr)
 		} else {
@@ -158,8 +172,9 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 
 	// STEP 4: update the receiver verification row with the confirmation that the value was successfully validated
 	if receiverVerification.ConfirmedAt == nil {
-		receiverVerification.ConfirmedAt = &now
-		err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, dbTx)
+		rvu.ConfirmedAt = &now
+
+		err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, dbTx)
 		if err != nil {
 			return fmt.Errorf("updating successfully verified user: %w", err)
 		}
@@ -174,6 +189,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	dbTx db.DBTransaction,
 	sep24Claims anchorplatform.SEP24JWTClaims,
 	receiver data.Receiver, otp string,
+	contactInfo string,
 ) (receiverWallet data.ReceiverWallet, wasAlreadyRegistered bool, err error) {
 	// STEP 1: find the receiver wallet for the given [receiverID, clientDomain]
 	rw, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
@@ -205,6 +221,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	// STEP 5: update receiver wallet status to "REGISTERED"
 	now := time.Now()
 	rw.OTPConfirmedAt = &now
+	rw.OTPConfirmedWith = contactInfo
 	rw.Status = data.RegisteredReceiversWalletStatus
 	rw.StellarAddress = sep24Claims.SEP10StellarAccount()
 	rw.StellarMemo = sep24Claims.SEP10StellarMemo()
@@ -212,7 +229,14 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	if sep24Claims.SEP10StellarMemo() != "" {
 		rw.StellarMemoType = "id"
 	}
-	err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *rw, dbTx)
+	err = v.Models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{
+		Status:           rw.Status,
+		StellarAddress:   rw.StellarAddress,
+		StellarMemo:      rw.StellarMemo,
+		StellarMemoType:  rw.StellarMemoType,
+		OTPConfirmedAt:   now,
+		OTPConfirmedWith: rw.OTPConfirmedWith,
+	}, dbTx)
 	if err != nil {
 		err = fmt.Errorf("completing receiver wallet registration: %w", err)
 		return receiverWallet, false, err
@@ -225,8 +249,9 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 // the receiver wallet with the anchor platform transaction ID.
 func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
 	// STEP 1: update receiver wallet with the anchor platform transaction ID.
-	receiverWallet.AnchorPlatformTransactionID = sep24Claims.TransactionID()
-	err := v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, receiverWallet, dbTx)
+	err := v.Models.ReceiverWallet.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
+		AnchorPlatformTransactionID: sep24Claims.TransactionID(),
+	}, dbTx)
 	if err != nil {
 		return fmt.Errorf("updating receiver wallet with anchor platform transaction ID: %w", err)
 	}
@@ -261,19 +286,29 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		return
 	}
 
-	truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
+	var contactInfo string
+	if receiverRegistrationRequest.PhoneNumber != "" {
+		contactInfo = receiverRegistrationRequest.PhoneNumber
+	} else if receiverRegistrationRequest.Email != "" {
+		contactInfo = receiverRegistrationRequest.Email
+	} else {
+		httperror.InternalError(ctx, "Unexpected contact info", nil, nil).Render(w)
+		return
+	}
+
+	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 
 	opts := db.TransactionOptions{
 		DBConnectionPool: v.Models.DBConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
 			// STEP 2: find the receivers with the given phone number
-			receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
+			receivers, err := v.Models.Receiver.GetByContacts(ctx, dbTx, contactInfo)
 			if err != nil {
-				err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
+				err = fmt.Errorf("retrieving receiver with contact info %s: %w", truncatedContactInfo, err)
 				return nil, err
 			}
 			if len(receivers) == 0 {
-				err = fmt.Errorf("receiver with phone number %s not found in our server", truncatedPhoneNumber)
+				err = fmt.Errorf("receiver with contact info %s not found in our server", truncatedContactInfo)
 				return nil, &ErrorInformationNotFound{cause: err}
 			}
 
@@ -281,13 +316,13 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			receiver := receivers[0]
 			err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
 			if err != nil {
-				return nil, fmt.Errorf("processing receiver verification entry for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+				return nil, fmt.Errorf("processing receiver verification entry for receiver with contact info %s: %w", truncatedContactInfo, err)
 			}
 
 			// STEP 4: process OTP
-			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
+			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
 			if err != nil {
-				return nil, fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+				return nil, fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, err)
 			}
 
 			// STEP 5: build event message to trigger a transaction in the TSS

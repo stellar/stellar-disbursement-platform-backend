@@ -6,11 +6,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
-None
+## [3.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.1.1...3.0.0))
+
+Release of the Stellar Disbursement Platform `v3.0.0`. In this release, receiver registration does not need to be done
+exclusively through SMS as it now supports new types. The options are `PHONE_NUMBER`, `EMAIL`,
+`EMAIL_AND_WALLET_ADDRESS`, and `PHONE_NUMBER_AND_WALLET_ADDRESS`. If a receiver is registered with a wallet address,
+they can receive the payment right away without having to go through the SEP-24 registration flow.
+
+This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.0.0`.
+
+### Breaking Changes
+
+- Renamed properties and environment variables related to Email Registration Support [#412](https://github.com/stellar/stellar-disbursement-platform-backend/pull/412)
+  - Renamed `MAX_INVITATION_SMS_RESEND_ATTEMPT` environment variable to `MAX_INVITATION_RESEND_ATTEMPTS`
+  - Renamed `organization.sms_resend_interval` to `organization.receiver_invitation_resend_interval_days`
+  - Renamed `organization.sms_registration_message_template` to `organization.receiver_registration_message_template`
+  - Renamed `disbursement.sms_registration_message_template` to `disbursement.receiver_registration_message_template`
+
+### Added
+
+- Ability to register receivers using email addresses
+  - Update the `receiver_registered_successfully.tmpl` HTML template to display the contact info [#418](https://github.com/stellar/stellar-disbursement-platform-backend/pull/418)
+  - Update `/wallet-registration/verification` to accommodate different verification methods [#416](https://github.com/stellar/stellar-disbursement-platform-backend/pull/416)
+  - Update send and auto-retry invitation scheduler job to work with email [#415](https://github.com/stellar/stellar-disbursement-platform-backend/pull/415)
+  - Update `POST /wallet-registration/otp` to send OTPs through email [#413](https://github.com/stellar/stellar-disbursement-platform-backend/pull/413)
+  - Rename SMS-related fields in `organization` and `disbursement` to be more generic [#412](https://github.com/stellar/stellar-disbursement-platform-backend/pull/412)
+  - Update process disbursement instructions to accept email addresses [#404](https://github.com/stellar/stellar-disbursement-platform-backend/pull/404)
+  - Add an initial screen so receivers can choose between phone number and email registration during registration [#406](https://github.com/stellar/stellar-disbursement-platform-backend/pull/406)
+  - Add message channel priority to the `organizations` table [#400](https://github.com/stellar/stellar-disbursement-platform-backend/pull/400)
+  - Add `MessageDispatcher` to SDP to send messages to different channels [#391](https://github.com/stellar/stellar-disbursement-platform-backend/pull/391)
+  - Update the development endpoint `DELETE .../phone-number/...` to `DELETE .../contact-info/...`, allowing it to delete based on the email as well [#438](https://github.com/stellar/stellar-disbursement-platform-backend/pull/438)
+  - Remove the word "phone" from the default organization's `otp_message_template` [#439](https://github.com/stellar/stellar-disbursement-platform-backend/pull/439)
+  - Rename SMS-related field and update Helm docs [#468](https://github.com/stellar/stellar-disbursement-platform-backend/pull/468)
+- Ability to register receivers with a Stellar wallet address directly by providing contact info and a wallet address. The options currently are `PHONE_NUMBER_AND_WALLET_ADDRESS` and `EMAIL_AND_WALLET_ADDRESS`
+  - Create `GET /registration-contact-types` endpoint [#451](https://github.com/stellar/stellar-disbursement-platform-backend/pull/451)
+  - Update `POST /disbursements` and `GET /disbursements` APIs to persist and return the Registration Contact Type [#452](https://github.com/stellar/stellar-disbursement-platform-backend/pull/452), [#454](https://github.com/stellar/stellar-disbursement-platform-backend/pull/454)
+  - Allow `disbursement.verification_field` to be empty [#456](https://github.com/stellar/stellar-disbursement-platform-backend/pull/456)
+  - Integrate wallet address in processing disbursement instructions [#453](https://github.com/stellar/stellar-disbursement-platform-backend/pull/453)
+  - Add user-managed wallets [#458](https://github.com/stellar/stellar-disbursement-platform-backend/pull/458)
+- Add Twilio SendGrid as a supported email client [#444](https://github.com/stellar/stellar-disbursement-platform-backend/pull/444)
+
+### Changed
+
+- Replaced deprecated Circle Accounts API by adopting the Circle API endpoints `GET /v1/businessAccount/balances` and `GET /configuration` [#433](https://github.com/stellar/stellar-disbursement-platform-backend/pull/433)
+- `PATCH /receiver` now allows patching the phone number and email address of a receiver [#436](https://github.com/stellar/stellar-disbursement-platform-backend/pull/436)
+- Increased window for clients to perform token refresh [#437](https://github.com/stellar/stellar-disbursement-platform-backend/pull/437)
+- Other technical changes ([#383](https://github.com/stellar/stellar-disbursement-platform-backend/pull/383), [#450](https://github.com/stellar/stellar-disbursement-platform-backend/pull/450))
+
+### Fixed
+
+- Unable to get a token from the Forgot Password flow after messaging service failure [#466](https://github.com/stellar/stellar-disbursement-platform-backend/pull/466)
+- ReCaptcha blocks retrying verification during wallet registration [#473](https://github.com/stellar/stellar-disbursement-platform-backend/pull/473)
+
+### Removed
+
+- Removed countries from the flow and deleted any references to them from the database [#455](https://github.com/stellar/stellar-disbursement-platform-backend/pull/455), [#462](https://github.com/stellar/stellar-disbursement-platform-backend/pull/462)
+
+### Security and Dependencies
+
+- Fix HTML injection vulnerability [#419](https://github.com/stellar/stellar-disbursement-platform-backend/pull/419)
+- Fix HTML escaping [#420](https://github.com/stellar/stellar-disbursement-platform-backend/pull/420)
+- Removed support for the HTTP headers `X-XSS-Protection`, `X-Forwarded-Host`, `X-Real-IP`, and `True-Client-IP` [#448](https://github.com/stellar/stellar-disbursement-platform-backend/pull/448)
+- Improved validation to ensure the instruction file being uploaded is a `*.csv` file [#443](https://github.com/stellar/stellar-disbursement-platform-backend/pull/443)
+- Ensure validation of URLs with the HTTPS schema on Pubnet [#445](https://github.com/stellar/stellar-disbursement-platform-backend/pull/445)
+- Add path validation to the `readDisbursementCSV` method used in integration tests [#437](https://github.com/stellar/stellar-disbursement-platform-backend/pull/437)
+- Bump `golangci/golangci-lint-action` [#380](https://github.com/stellar/stellar-disbursement-platform-backend/pull/380)
+- Bump `golang` in the all-docker group [#387](https://github.com/stellar/stellar-disbursement-platform-backend/pull/387), [#394](https://github.com/stellar/stellar-disbursement-platform-backend/pull/394), [#414](https://github.com/stellar/stellar-disbursement-platform-backend/pull/414)
+- Bump minor and patch dependencies across directories [#381](https://github.com/stellar/stellar-disbursement-platform-backend/pull/381), [#395](https://github.com/stellar/stellar-disbursement-platform-backend/pull/395), [#403](https://github.com/stellar/stellar-disbursement-platform-backend/pull/403), [#411](https://github.com/stellar/stellar-disbursement-platform-backend/pull/411), [#429](https://github.com/stellar/stellar-disbursement-platform-backend/pull/429), [#430](https://github.com/stellar/stellar-disbursement-platform-backend/pull/430), [#431](https://github.com/stellar/stellar-disbursement-platform-backend/pull/431), [#441](https://github.com/stellar/stellar-disbursement-platform-backend/pull/441).
 
 ## [2.1.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.1.0...2.1.1))
 
 ### Changed
+
 - Removed calls related to the deprecated Circle Accounts API and replaced them with calls to `GET /v1/businessAccount/balances` and `GET /configuration`.  [#433](https://github.com/stellar/stellar-disbursement-platform-backend/pull/433).
 
 ## [2.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.0.0...2.1.0))

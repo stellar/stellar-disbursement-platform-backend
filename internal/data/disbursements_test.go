@@ -15,7 +15,6 @@ import (
 func Test_DisbursementModelInsert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -25,14 +24,13 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	wallet.Assets = nil
 
 	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
 
 	disbursement := Disbursement{
-		Name:   "disbursement1",
+		Name:   "disbursement",
 		Status: DraftDisbursementStatus,
 		StatusHistory: []DisbursementStatusHistoryEntry{
 			{
@@ -40,14 +38,16 @@ func Test_DisbursementModelInsert(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:                          asset,
-		Country:                        country,
-		Wallet:                         wallet,
-		VerificationField:              VerificationFieldDateOfBirth,
-		SMSRegistrationMessageTemplate: smsTemplate,
+		Asset:                               asset,
+		Wallet:                              wallet,
+		VerificationField:                   VerificationTypeDateOfBirth,
+		ReceiverRegistrationMessageTemplate: smsTemplate,
+		RegistrationContactType:             RegistrationContactTypePhone,
 	}
 
-	t.Run("returns error when disbursement already exists", func(t *testing.T) {
+	t.Run("🔴 fails to insert disbursements with non-unique name", func(t *testing.T) {
+		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
 		_, err := disbursementModel.Insert(ctx, &disbursement)
 		require.NoError(t, err)
 		_, err = disbursementModel.Insert(ctx, &disbursement)
@@ -55,8 +55,9 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		require.Equal(t, ErrRecordAlreadyExists, err)
 	})
 
-	t.Run("insert disbursement successfully", func(t *testing.T) {
-		disbursement.Name = "disbursement2"
+	t.Run("🟢 successfully insert disbursement", func(t *testing.T) {
+		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
 		id, err := disbursementModel.Insert(ctx, &disbursement)
 		require.NoError(t, err)
 		require.NotNil(t, id)
@@ -64,16 +65,40 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		actual, err := disbursementModel.Get(ctx, dbConnectionPool, id)
 		require.NoError(t, err)
 
-		assert.Equal(t, "disbursement2", actual.Name)
+		assert.Equal(t, "disbursement", actual.Name)
 		assert.Equal(t, DraftDisbursementStatus, actual.Status)
 		assert.Equal(t, asset, actual.Asset)
-		assert.Equal(t, country, actual.Country)
 		assert.Equal(t, wallet, actual.Wallet)
-		assert.Equal(t, smsTemplate, actual.SMSRegistrationMessageTemplate)
+		assert.Equal(t, smsTemplate, actual.ReceiverRegistrationMessageTemplate)
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
-		assert.Equal(t, VerificationFieldDateOfBirth, actual.VerificationField)
+		assert.Equal(t, VerificationTypeDateOfBirth, actual.VerificationField)
+	})
+
+	t.Run("🟢 successfully insert disbursement (empty:[VerificationField,ReceiverRegistrationMessageTemplate])", func(t *testing.T) {
+		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
+		d := disbursement
+		d.ReceiverRegistrationMessageTemplate = ""
+		d.VerificationField = ""
+
+		id, err := disbursementModel.Insert(ctx, &d)
+		require.NoError(t, err)
+		require.NotNil(t, id)
+
+		actual, err := disbursementModel.Get(ctx, dbConnectionPool, id)
+		require.NoError(t, err)
+
+		assert.Equal(t, "disbursement", actual.Name)
+		assert.Equal(t, DraftDisbursementStatus, actual.Status)
+		assert.Equal(t, asset, actual.Asset)
+		assert.Equal(t, wallet, actual.Wallet)
+		assert.Empty(t, actual.ReceiverRegistrationMessageTemplate)
+		assert.Equal(t, 1, len(actual.StatusHistory))
+		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
+		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
+		assert.Empty(t, actual.VerificationField)
 	})
 }
 
@@ -90,7 +115,6 @@ func Test_DisbursementModelCount(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -101,9 +125,8 @@ func Test_DisbursementModelCount(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns 0 when no disbursements exist", func(t *testing.T) {
@@ -155,7 +178,6 @@ func Test_DisbursementModelGet(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -167,9 +189,8 @@ func Test_DisbursementModelGet(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns error when disbursement does not exist", func(t *testing.T) {
@@ -200,7 +221,6 @@ func Test_DisbursementModelGetByName(t *testing.T) {
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -212,9 +232,8 @@ func Test_DisbursementModelGetByName(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns error when disbursement does not exist", func(t *testing.T) {
@@ -235,7 +254,6 @@ func Test_DisbursementModelGetByName(t *testing.T) {
 func Test_DisbursementModelGetAll(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -246,7 +264,6 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	disbursement := Disbursement{
@@ -257,9 +274,8 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:  asset,
+		Wallet: wallet,
 	}
 
 	t.Run("returns empty list when no disbursements exist", func(t *testing.T) {
@@ -280,8 +296,8 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 
 		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
 		require.NoError(t, err)
-		assert.Equal(t, 2, len(actualDisbursements))
-		assert.Equal(t, []*Disbursement{expected1, expected2}, actualDisbursements)
+		assert.Len(t, actualDisbursements, 2)
+		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
 	})
 
 	t.Run("returns disbursements successfully with limit", func(t *testing.T) {
@@ -349,7 +365,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		assert.Equal(t, []*Disbursement{expected1}, actualDisbursements)
 	})
 
-	t.Run("returns disbursements successfully with statuses parameter ", func(t *testing.T) {
+	t.Run("returns disbursements successfully with statuses parameter", func(t *testing.T) {
 		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
 		disbursement.Name = "disbursement1"
@@ -371,6 +387,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		assert.Equal(t, 2, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
 	})
+
 	t.Run("returns disbursements successfully with stats", func(t *testing.T) {
 		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
@@ -442,9 +459,9 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	disbursementFileContent := CreateInstructionsFixture(t, []*DisbursementInstruction{
-		{"1234567890", "1", "123.12", "1995-02-20", nil},
-		{"0987654321", "2", "321", "1974-07-19", nil},
-		{"0987654321", "3", "321", "1974-07-19", nil},
+		{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
+		{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
+		{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
 	})
 
 	t.Run("update instructions", func(t *testing.T) {
@@ -507,7 +524,6 @@ func Test_DisbursementModel_Update(t *testing.T) {
 func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
@@ -517,15 +533,6 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 	models, err := NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-
-	country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
@@ -538,8 +545,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            ReadyDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -566,8 +572,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            StartedDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -604,8 +609,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            StartedDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
@@ -623,8 +627,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			Status:            StartedDisbursementStatus,
 			Asset:             asset,
 			Wallet:            wallet,
-			Country:           country,
-			VerificationField: VerificationFieldDateOfBirth,
+			VerificationField: VerificationTypeDateOfBirth,
 		})
 
 		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{

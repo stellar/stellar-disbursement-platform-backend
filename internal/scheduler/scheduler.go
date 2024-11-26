@@ -228,9 +228,9 @@ func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Mode
 	}
 }
 
-func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMSInvitationJobOptions) SchedulerJobRegisterOption {
+func WithSendReceiverWalletsInvitationJobOption(o jobs.SendReceiverWalletsInvitationJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewSendReceiverWalletsSMSInvitationJob(o)
+		j := jobs.NewSendReceiverWalletsInvitationJob(o)
 		s.addJob(j)
 	}
 }

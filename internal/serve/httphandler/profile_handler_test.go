@@ -32,9 +32,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -76,8 +77,8 @@ func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool d
 			organizations
 		SET
 			name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
-			sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT,
-			sms_resend_interval = NULL, payment_cancellation_period_days = NULL, privacy_policy_link = NULL`
+			receiver_registration_message_template = DEFAULT, otp_message_template = DEFAULT,
+			receiver_invitation_resend_interval_days = NULL, payment_cancellation_period_days = NULL, privacy_policy_link = NULL`
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
 }
@@ -106,10 +107,17 @@ func Test_PatchOrganizationProfileRequest_AreAllFieldsEmpty(t *testing.T) {
 }
 
 func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
+	// Setup DB
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
 	// PNG file
 	pngImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
 	pngImgBuf := new(bytes.Buffer)
-	err := png.Encode(pngImgBuf, pngImg)
+	err = png.Encode(pngImgBuf, pngImg)
 	require.NoError(t, err)
 
 	// CSV file
@@ -137,6 +145,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
 		wantStatusCode    int
 		wantRespBody      string
+		networkType       utils.NetworkType
 	}{
 		{
 			name: "returns Unauthorized when no token is found",
@@ -221,17 +230,128 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 				}
 			}`,
 		},
+		{
+			name:  "returns BadRequest when the privacy_policy_link is invalid",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"privacy_policy_link": "example.com/privacy-policy"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"privacy_policy_link": "invalid URL format"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when the privacy_policy_link scheme is invalid",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"privacy_policy_link": "ftp://example.com/privacy-policy"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"privacy_policy_link": "invalid URL scheme is not part of [https http]"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when the privacy_policy_link scheme is invalid (pubnet)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"privacy_policy_link": "http://example.com/privacy-policy"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"privacy_policy_link": "invalid URL scheme is not part of [https]"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when receiver_registration_message_template contains HTML",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_message_template": "<a href='evil.com'>Redeem money</a>"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when receiver_registration_message_template contains JS",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_message_template": "javascript:alert(localStorage.getItem('sdp_session'))"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS"
+				}
+			}`,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Setup DB
-			dbt := dbtest.Open(t)
-			defer dbt.Close()
-			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-			require.NoError(t, err)
-			defer dbConnectionPool.Close()
-
 			// Inject authenticated token into context:
 			ctx := context.Background()
 			if tc.token != "" {
@@ -239,11 +359,15 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies
-			handler := &ProfileHandler{MaxMemoryAllocation: 1024 * 1024, PasswordValidator: pwValidator}
+			handler := &ProfileHandler{
+				MaxMemoryAllocation: 1024 * 1024,
+				PasswordValidator:   pwValidator,
+				NetworkType:         tc.networkType,
+			}
 			if tc.mockAuthManagerFn != nil {
 				authManagerMock := &auth.AuthManagerMock{}
 				tc.mockAuthManagerFn(authManagerMock)
@@ -268,12 +392,21 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 }
 
 func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
+	// Setup DB
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
 	// PNG file
 	newPNGImgBuf := func() *bytes.Buffer {
 		pngImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
 		pngImgBuf := new(bytes.Buffer)
-		err := png.Encode(pngImgBuf, pngImg)
-		require.NoError(t, err)
+		innerErr := png.Encode(pngImgBuf, pngImg)
+		require.NoError(t, innerErr)
 		return pngImgBuf
 	}
 
@@ -283,7 +416,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 	// JPEG file
 	jpegImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
 	jpegImgBuf := new(bytes.Buffer)
-	err := jpeg.Encode(jpegImgBuf, jpegImg, &jpeg.Options{Quality: jpeg.DefaultQuality})
+	err = jpeg.Encode(jpegImgBuf, jpegImg, &jpeg.Options{Quality: jpeg.DefaultQuality})
 	require.NoError(t, err)
 
 	url := "/profile/organization"
@@ -346,25 +479,25 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"organization_name": "My Org Name",
 					"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
 					"payment_cancellation_period_days": 2,
-					"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
-					"sms_resend_interval": 2,
+					"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+					"receiver_invitation_resend_interval_days": 2,
 					"timezone_utc_offset": "-03:00",
 					"privacy_policy_link": "https://example.com/privacy-policy"
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", reqBody, newPNGImgBuf())
 			},
 			resultingFieldsToCompare: map[string]interface{}{
-				"IsApprovalRequired":             true,
-				"Name":                           "My Org Name",
-				"Logo":                           newPNGImgBuf().Bytes(),
-				"OTPMessageTemplate":             "Here's your OTP Code to complete your registration. MyOrg 👋",
-				"PaymentCancellationPeriodDays":  int64(2),
-				"SMSRegistrationMessageTemplate": "My custom receiver wallet registration invite. MyOrg 👋",
-				"SMSResendInterval":              int64(2),
-				"TimezoneUTCOffset":              "-03:00",
-				"PrivacyPolicyLink":              "https://example.com/privacy-policy",
+				"IsApprovalRequired":                   true,
+				"Name":                                 "My Org Name",
+				"Logo":                                 newPNGImgBuf().Bytes(),
+				"OTPMessageTemplate":                   "Here's your OTP Code to complete your registration. MyOrg 👋",
+				"PaymentCancellationPeriodDays":        int64(2),
+				"ReceiverRegistrationMessageTemplate":  "My custom receiver wallet registration invite. MyOrg 👋",
+				"ReceiverInvitationResendIntervalDays": int64(2),
+				"TimezoneUTCOffset":                    "-03:00",
+				"PrivacyPolicyLink":                    "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', SMSResendInterval='2', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
@@ -377,37 +510,37 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			},
 			updateOrgInitialValuesFn: func(t *testing.T, ctx context.Context, models *data.Models) {
 				otpMessageTemplate := "custom OTPMessageTemplate"
-				smsRegistrationMessageTemplate := "custom SMSRegistrationMessageTemplate"
-				smsResendInterval := int64(123)
+				receiverRegistrationMessageTemplate := "custom ReceiverRegistrationMessageTemplate"
+				receiverInvitationResendInterval := int64(123)
 				paymentCancellationPeriodDays := int64(456)
 				privacyPolicyLink := "https://example.com/privacy-policy"
 				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-					SMSRegistrationMessageTemplate: &smsRegistrationMessageTemplate,
-					OTPMessageTemplate:             &otpMessageTemplate,
-					SMSResendInterval:              &smsResendInterval,
-					PaymentCancellationPeriodDays:  &paymentCancellationPeriodDays,
-					PrivacyPolicyLink:              &privacyPolicyLink,
+					ReceiverRegistrationMessageTemplate:  &receiverRegistrationMessageTemplate,
+					OTPMessageTemplate:                   &otpMessageTemplate,
+					ReceiverInvitationResendIntervalDays: &receiverInvitationResendInterval,
+					PaymentCancellationPeriodDays:        &paymentCancellationPeriodDays,
+					PrivacyPolicyLink:                    &privacyPolicyLink,
 				})
 				require.NoError(t, err)
 			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
-					"sms_registration_message_template": "",
+					"receiver_registration_message_template": "",
 					"otp_message_template": "",
-					"sms_resend_interval": 0,
+					"receiver_invitation_resend_interval_days": 0,
 					"payment_cancellation_period_days": 0,
 					"privacy_policy_link": ""
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
 			},
 			resultingFieldsToCompare: map[string]interface{}{
-				"SMSRegistrationMessageTemplate": "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.",
-				"OTPMessageTemplate":             "{{.OTP}} is your {{.OrganizationName}} phone verification code.",
-				"SMSResendInterval":              nilInt64,
-				"PaymentCancellationPeriodDays":  nilInt64,
-				"PrivacyPolicyLink":              nilString,
+				"ReceiverRegistrationMessageTemplate":  "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.",
+				"OTPMessageTemplate":                   "{{.OTP}} is your {{.OrganizationName}} verification code.",
+				"ReceiverInvitationResendIntervalDays": nilInt64,
+				"PaymentCancellationPeriodDays":        nilInt64,
+				"PrivacyPolicyLink":                    nilString,
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', SMSRegistrationMessageTemplate='', SMSResendInterval='0']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', ReceiverInvitationResendIntervalDays='0', ReceiverRegistrationMessageTemplate='']"},
 		},
 	}
 
@@ -416,15 +549,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			buf := new(strings.Builder)
 			log.DefaultLogger.SetOutput(buf)
 			log.SetLevel(log.InfoLevel)
-
-			// Setup DB
-			dbt := dbtest.Open(t)
-			defer dbt.Close()
-			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-			require.NoError(t, err)
-			defer dbConnectionPool.Close()
-			models, err := data.NewModels(dbConnectionPool)
-			require.NoError(t, err)
 
 			// Inject authenticated token into context:
 			ctx := context.Background()
@@ -447,7 +571,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies
@@ -621,7 +745,7 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies
@@ -802,7 +926,7 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 			}
 
 			// Setup password validator
-			pwValidator, err := utils.GetPasswordValidatorInstance()
+			pwValidator, err := authUtils.GetPasswordValidatorInstance()
 			require.NoError(t, err)
 
 			// Setup handler with mocked dependencies
@@ -1134,8 +1258,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required": false,
 				"privacy_policy_link": null,
-				"sms_resend_interval": 0,
-				"payment_cancellation_period_days": 0
+				"receiver_invitation_resend_interval_days": 0,
+				"payment_cancellation_period_days": 0,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1143,12 +1268,12 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns the sms_registration_message_template and otp_message_template when they aren't the default values", func(t *testing.T) {
+	t.Run("returns the receiver_registration_message_template and otp_message_template when they aren't the default values", func(t *testing.T) {
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
 		msg := "My custom receiver wallet registration invite. MyOrg 👋"
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-			SMSRegistrationMessageTemplate: &msg,
+			ReceiverRegistrationMessageTemplate: &msg,
 		})
 		require.NoError(t, err)
 
@@ -1170,10 +1295,11 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
-				"sms_resend_interval": 0,
+				"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1204,11 +1330,12 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+				"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
-				"sms_resend_interval": 0,
+				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1216,14 +1343,14 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns the custom sms_resend_interval", func(t *testing.T) {
+	t.Run("returns the custom receiver_invitation_resend_interval_days", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
-		var smsResendInterval int64 = 2
+		var resendInterval int64 = 2
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-			SMSResendInterval: &smsResendInterval,
+			ReceiverInvitationResendIntervalDays: &resendInterval,
 		})
 		require.NoError(t, err)
 
@@ -1245,9 +1372,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_resend_interval": 2,
+				"receiver_invitation_resend_interval_days": 2,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1284,9 +1412,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_resend_interval": 0,
+				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 5,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1323,9 +1452,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_resend_interval": 0,
+				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": "https://example.com/privacy-policy"
+				"privacy_policy_link": "https://example.com/privacy-policy",
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 

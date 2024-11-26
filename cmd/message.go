@@ -40,7 +40,7 @@ func (s *MessageCommand) Command(messengerService MessengerServiceInterface) *co
 		// message sender type
 		{
 			Name:           "message-sender-type",
-			Usage:          `Message Sender Type. Options: "TWILIO_SMS", "AWS_SMS", "AWS_EMAIL", "DRY_RUN"`,
+			Usage:          `Message Sender Type. Options: "TWILIO_SMS", "TWILIO_EMAIL", AWS_SMS", "AWS_EMAIL", "DRY_RUN"`,
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionMessengerType,
 			ConfigKey:      &opts.MessengerType,
@@ -115,7 +115,7 @@ func (s *MessageCommand) sendMessageCommand(messengerService MessengerServiceInt
 			Name:      "message",
 			Usage:     "The text of the message to be sent",
 			OptType:   types.String,
-			ConfigKey: &msg.Message,
+			ConfigKey: &msg.Body,
 			Required:  true,
 		},
 	}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 // QueryBuilder is a helper struct for building SQL queries
@@ -12,6 +14,7 @@ type QueryBuilder struct {
 	whereClause         string
 	whereParams         []interface{}
 	sortClause          string
+	groupByClause       string
 	paginationClause    string
 	paginationParams    []interface{}
 	forUpdateSkipLocked bool
@@ -33,6 +36,11 @@ func (qb *QueryBuilder) AddCondition(condition string, value ...interface{}) *Qu
 			qb.whereParams = append(qb.whereParams, value...)
 		}
 	}
+	return qb
+}
+
+func (qb *QueryBuilder) AddGroupBy(fields string) *QueryBuilder {
+	qb.groupByClause = fmt.Sprintf("GROUP BY %s", fields)
 	return qb
 }
 
@@ -75,6 +83,9 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 		query = fmt.Sprintf("%s WHERE 1=1%s", query, qb.whereClause)
 		params = append(params, qb.whereParams...)
 	}
+	if qb.groupByClause != "" {
+		query = fmt.Sprintf("%s %s", query, qb.groupByClause)
+	}
 	if qb.sortClause != "" {
 		query = fmt.Sprintf("%s %s", query, qb.sortClause)
 	}
@@ -85,6 +96,12 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 	if qb.forUpdateSkipLocked {
 		query = fmt.Sprintf("%s FOR UPDATE SKIP LOCKED", query)
 	}
+	return query, params
+}
+
+func (qb *QueryBuilder) BuildAndRebind(sqlExec db.SQLExecuter) (string, []interface{}) {
+	query, params := qb.Build()
+	query = sqlExec.Rebind(query)
 	return query, params
 }
 

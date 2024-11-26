@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"sort"
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
@@ -19,6 +18,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/stellar/go/support/http/httpdecode"
@@ -47,28 +47,22 @@ type ProfileHandler struct {
 	PublicFilesFS               fs.FS
 	DistributionAccountResolver signing.DistributionAccountResolver
 	PasswordValidator           *authUtils.PasswordValidator
+	utils.NetworkType
 }
 
 type PatchOrganizationProfileRequest struct {
-	OrganizationName               string  `json:"organization_name"`
-	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
-	IsApprovalRequired             *bool   `json:"is_approval_required"`
-	SMSResendInterval              *int64  `json:"sms_resend_interval"`
-	PaymentCancellationPeriodDays  *int64  `json:"payment_cancellation_period_days"`
-	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
-	OTPMessageTemplate             *string `json:"otp_message_template"`
-	PrivacyPolicyLink              *string `json:"privacy_policy_link"`
+	OrganizationName                    string  `json:"organization_name"`
+	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
+	IsApprovalRequired                  *bool   `json:"is_approval_required"`
+	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
+	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
+	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
+	OTPMessageTemplate                  *string `json:"otp_message_template"`
+	PrivacyPolicyLink                   *string `json:"privacy_policy_link"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
-	return (r.OrganizationName == "" &&
-		r.TimezoneUTCOffset == "" &&
-		r.IsApprovalRequired == nil &&
-		r.SMSRegistrationMessageTemplate == nil &&
-		r.OTPMessageTemplate == nil &&
-		r.SMSResendInterval == nil &&
-		r.PaymentCancellationPeriodDays == nil &&
-		r.PrivacyPolicyLink == nil)
+	return r == nil || utils.IsEmpty(*r)
 }
 
 type PatchUserProfileRequest struct {
@@ -105,7 +99,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 
 	// limiting the amount of memory allocated in the server to handle the request
 	if err := req.ParseMultipartForm(h.MaxMemoryAllocation); err != nil {
-		err = fmt.Errorf("error parsing multipart form: %w", err)
+		err = fmt.Errorf("parsing multipart form: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse multipart form data", err, map[string]interface{}{
 			"details": "request too large. Max size 2MB.",
@@ -115,7 +109,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 
 	multipartFile, _, err := req.FormFile("logo")
 	if err != nil && !errors.Is(err, http.ErrMissingFile) {
-		err = fmt.Errorf("error parsing logo file: %w", err)
+		err = fmt.Errorf("parsing logo file: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse request logo", err, nil).Render(rw)
 		return
@@ -145,7 +139,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	var reqBody PatchOrganizationProfileRequest
 	d := req.FormValue("data")
 	if err = json.Unmarshal([]byte(d), &reqBody); err != nil {
-		err = fmt.Errorf("error decoding data: %w", err)
+		err = fmt.Errorf("decoding data: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
@@ -159,16 +153,32 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		return
 	}
 
+	validator := validators.NewValidator()
+	if reqBody.PrivacyPolicyLink != nil && *reqBody.PrivacyPolicyLink != "" {
+		schemes := []string{"https"}
+		if !h.IsPubnet() {
+			schemes = append(schemes, "http")
+		}
+		validator.CheckError(utils.ValidateURLScheme(*reqBody.PrivacyPolicyLink, schemes...), "privacy_policy_link", "")
+	}
+	if reqBody.ReceiverRegistrationMessageTemplate != nil {
+		validator.CheckError(utils.ValidateNoHTMLNorJSNorCSS(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+	}
+	if validator.HasErrors() {
+		httperror.BadRequest("", nil, validator.Errors).Render(rw)
+		return
+	}
+
 	organizationUpdate := data.OrganizationUpdate{
-		Name:                           reqBody.OrganizationName,
-		Logo:                           fileContentBytes,
-		TimezoneUTCOffset:              reqBody.TimezoneUTCOffset,
-		IsApprovalRequired:             reqBody.IsApprovalRequired,
-		SMSRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
-		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
-		SMSResendInterval:              reqBody.SMSResendInterval,
-		PaymentCancellationPeriodDays:  reqBody.PaymentCancellationPeriodDays,
-		PrivacyPolicyLink:              reqBody.PrivacyPolicyLink,
+		Name:                                 reqBody.OrganizationName,
+		Logo:                                 fileContentBytes,
+		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
+		IsApprovalRequired:                   reqBody.IsApprovalRequired,
+		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
+		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
+		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
+		PaymentCancellationPeriodDays:        reqBody.PaymentCancellationPeriodDays,
+		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
 	if err != nil {
@@ -358,27 +368,28 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	resp := map[string]interface{}{
-		"name":                             org.Name,
-		"logo_url":                         lu.String(),
-		"distribution_account":             distributionAccount,
-		"distribution_account_public_key":  distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
-		"timezone_utc_offset":              org.TimezoneUTCOffset,
-		"is_approval_required":             org.IsApprovalRequired,
-		"sms_resend_interval":              0,
-		"payment_cancellation_period_days": 0,
-		"privacy_policy_link":              org.PrivacyPolicyLink,
+		"name":                            org.Name,
+		"logo_url":                        lu.String(),
+		"distribution_account":            distributionAccount,
+		"distribution_account_public_key": distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
+		"timezone_utc_offset":             org.TimezoneUTCOffset,
+		"is_approval_required":            org.IsApprovalRequired,
+		"receiver_invitation_resend_interval_days": 0,
+		"payment_cancellation_period_days":         0,
+		"privacy_policy_link":                      org.PrivacyPolicyLink,
+		"message_channel_priority":                 org.MessageChannelPriority,
 	}
 
-	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
-		resp["sms_registration_message_template"] = org.SMSRegistrationMessageTemplate
+	if org.ReceiverRegistrationMessageTemplate != data.DefaultReceiverRegistrationMessageTemplate {
+		resp["receiver_registration_message_template"] = org.ReceiverRegistrationMessageTemplate
 	}
 
 	if org.OTPMessageTemplate != data.DefaultOTPMessageTemplate {
 		resp["otp_message_template"] = org.OTPMessageTemplate
 	}
 
-	if org.SMSResendInterval != nil {
-		resp["sms_resend_interval"] = *org.SMSResendInterval
+	if org.ReceiverInvitationResendIntervalDays != nil {
+		resp["receiver_invitation_resend_interval_days"] = *org.ReceiverInvitationResendIntervalDays
 	}
 
 	if org.PaymentCancellationPeriodDays != nil {

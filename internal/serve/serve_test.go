@@ -304,6 +304,12 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	messengerClientMock := message.MessengerClientMock{}
 	messengerClientMock.On("SendMessage", mock.Anything).Return(nil)
 
+	messageDispatcherMock := message.NewMockMessageDispatcher(t)
+	messageDispatcherMock.
+		On("SendMessage", mock.Anything, mock.Anything).
+		Return(nil).
+		Maybe()
+
 	crashTrackerClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
 
@@ -351,7 +357,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		SEP24JWTSecret:                  "jwt_secret_1234567890",
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
 		AnchorPlatformBasePlatformURL:   "https://test.com",
-		SMSMessengerClient:              &messengerClientMock,
+		MessageDispatcher:               messageDispatcherMock,
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
@@ -448,8 +454,8 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/wallets/1234"},
 		{http.MethodGet, "/receivers/verification-types"},
-		// Countries
-		{http.MethodGet, "/countries"},
+		// Receiver Contact Types
+		{http.MethodGet, "/registration-contact-types"},
 		// Assets
 		{http.MethodGet, "/assets"},
 		{http.MethodPost, "/assets"},

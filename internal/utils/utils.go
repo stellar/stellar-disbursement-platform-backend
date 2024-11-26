@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -95,6 +96,31 @@ func StringPtr(s string) *string {
 	return &s
 }
 
+// IntPtr returns a pointer to an int
+func IntPtr(i int) *int {
+	return &i
+}
+
 func TimePtr(t time.Time) *time.Time {
 	return &t
+}
+
+func VisualBool(b bool) string {
+	if b {
+		return "🟢"
+	}
+	return "🔴"
+}
+
+// ParseBoolQueryParam parses a boolean query parameter from an HTTP request.
+func ParseBoolQueryParam(r *http.Request, param string) (*bool, error) {
+	paramValue := r.URL.Query().Get(param)
+	if paramValue == "" {
+		return nil, nil
+	}
+	parsedValue, err := strconv.ParseBool(paramValue)
+	if err != nil {
+		return nil, fmt.Errorf("invalid '%s' parameter value: %w", param, err)
+	}
+	return &parsedValue, nil
 }

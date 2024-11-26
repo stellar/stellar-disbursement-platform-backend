@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -16,6 +19,7 @@ var (
 	rxOTP                     = regexp.MustCompile(`^\d{6}$`)
 	ErrInvalidE164PhoneNumber = fmt.Errorf("the provided phone number is not a valid E.164 number")
 	ErrEmptyPhoneNumber       = fmt.Errorf("phone number cannot be empty")
+	ErrEmptyEmail             = fmt.Errorf("email cannot be empty")
 )
 
 const (
@@ -67,7 +71,7 @@ var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9
 
 func ValidateEmail(email string) error {
 	if email == "" {
-		return fmt.Errorf("email cannot be empty")
+		return ErrEmptyEmail
 	}
 
 	if !rxEmail.MatchString(email) {
@@ -157,6 +161,56 @@ func ValidateNationalIDVerification(nationalID string) error {
 
 	if len(nationalID) > VerificationFieldMaxIdLength {
 		return fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIdLength)
+	}
+
+	return nil
+}
+
+// ValidatePathIsNotTraversal will validate the given path to ensure it does not contain path traversal.
+func ValidatePathIsNotTraversal(p string) error {
+	if pathTraversalPattern.MatchString(p) {
+		return errors.New("path cannot contain path traversal")
+	}
+
+	return nil
+}
+
+var pathTraversalPattern = regexp.MustCompile(`(^|[\\/])\.\.([\\/]|$)`)
+
+// ValidateURLScheme checks if a URL is valid and if it has a valid scheme.
+func ValidateURLScheme(link string, scheme ...string) error {
+	// Use govalidator to check if it's a valid URL
+	if !govalidator.IsURL(link) {
+		return errors.New("invalid URL format")
+	}
+
+	parsedURL, err := url.ParseRequestURI(link)
+	if err != nil {
+		return errors.New("invalid URL format")
+	}
+
+	// Check if the scheme is valid
+	if len(scheme) > 0 {
+		if !slices.Contains(scheme, parsedURL.Scheme) {
+			return fmt.Errorf("invalid URL scheme is not part of %v", scheme)
+		}
+	}
+
+	return nil
+}
+
+// ValidateNoHTMLNorJSNorCSS detects HTML, <script> tags, inline JavaScript, and CSS styles in a string
+func ValidateNoHTMLNorJSNorCSS(input string) error {
+	// Regular expressions to catch HTML tags, <script> tags, javascript: URIs, <style> tags, and inline style attributes
+	htmlPattern := regexp.MustCompile(`</(?i)[a-z][\s\S]*>`)
+	inlineJSURIPattern := regexp.MustCompile(`(?i)javascript:[\s\S]*`)
+	inlineStyleAttrPattern := regexp.MustCompile(`(?i)style=['"][\s\S]*?['"]`)
+	cssExpressionPattern := regexp.MustCompile(`(?i)expression\(`)
+
+	// Check if any pattern matches the input
+	if htmlPattern.MatchString(input) || inlineJSURIPattern.MatchString(input) ||
+		inlineStyleAttrPattern.MatchString(input) || cssExpressionPattern.MatchString(input) {
+		return errors.New("input contains HTML, JavaScript, or CSS content")
 	}
 
 	return nil

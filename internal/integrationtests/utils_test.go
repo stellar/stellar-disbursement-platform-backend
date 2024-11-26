@@ -36,9 +36,17 @@ func Test_logErrorResponses(t *testing.T) {
 }
 
 func Test_readDisbursementCSV(t *testing.T) {
+	t.Run("error if file path is traversal", func(t *testing.T) {
+		expectedError := "validating file path: path cannot contain path traversal"
+
+		data, err := readDisbursementCSV("resources", "../invalid_traversal_path.csv")
+		require.EqualError(t, err, expectedError)
+		assert.Empty(t, data)
+	})
+
 	t.Run("error trying read csv file", func(t *testing.T) {
 		filePath := path.Join("resources", "invalid_file.csv")
-		expectedError := fmt.Sprintf("error reading csv file: open %s: file does not exist", filePath)
+		expectedError := fmt.Sprintf("reading csv file: open %s: file does not exist", filePath)
 
 		data, err := readDisbursementCSV("resources", "invalid_file.csv")
 		require.EqualError(t, err, expectedError)
@@ -47,17 +55,18 @@ func Test_readDisbursementCSV(t *testing.T) {
 
 	t.Run("error opening empty csv file", func(t *testing.T) {
 		data, err := readDisbursementCSV("resources", "empty_csv_file.csv")
-		require.EqualError(t, err, "error parsing csv file: empty csv file given")
+		require.EqualError(t, err, "parsing csv file: empty csv file given")
 		assert.Empty(t, data)
 	})
 
 	t.Run("reading csv file", func(t *testing.T) {
-		data, err := readDisbursementCSV("resources", "disbursement_integration_tests.csv")
+		data, err := readDisbursementCSV("resources", "disbursement_instructions_phone.csv")
 		require.NoError(t, err)
-		assert.Equal(t, data[0].Amount, "0.1")
-		assert.Equal(t, data[0].Phone, "+12025550191")
-		assert.Equal(t, data[0].ID, "1")
-		assert.Equal(t, data[0].VerificationValue, "1999-03-30")
+		assert.Equal(t, "0.1", data[0].Amount)
+		assert.NotNil(t, data[0].Phone)
+		assert.Equal(t, "+12025550191", data[0].Phone)
+		assert.Equal(t, "1", data[0].ID)
+		assert.Equal(t, "1999-03-30", data[0].VerificationValue)
 	})
 }
 

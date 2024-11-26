@@ -20,7 +20,7 @@ const (
 	OwnerUserRole UserRole = "owner"
 	// FinancialControllerUserRole has the same permissions as the OwnerUserRole except for user management.
 	FinancialControllerUserRole UserRole = "financial_controller"
-	// DeveloperUserRole has only configuration permissions. (wallets, assets, countries management. Also, statistics access permission)
+	// DeveloperUserRole has only configuration permissions. (wallets, assets management. Also, statistics access permission)
 	DeveloperUserRole UserRole = "developer"
 	// BusinessUserRole has read-only permissions - except for user management that they can't read any data.
 	BusinessUserRole UserRole = "business"

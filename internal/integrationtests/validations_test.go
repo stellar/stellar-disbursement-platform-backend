@@ -30,16 +30,15 @@ func Test_validationAfterProcessDisbursement(t *testing.T) {
 	})
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	t.Run("invalid disbursement status", func(t *testing.T) {
 		invalidDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "Invalid Disbursement",
-			Status:  data.CompletedDisbursementStatus,
-			Asset:   asset,
-			Wallet:  wallet,
-			Country: country,
+			Name:                    "Invalid Disbursement",
+			Status:                  data.CompletedDisbursementStatus,
+			Asset:                   asset,
+			Wallet:                  wallet,
+			RegistrationContactType: data.RegistrationContactTypePhone,
 		})
 
 		err = validateExpectationsAfterProcessDisbursement(ctx, invalidDisbursement.ID, models, dbConnectionPool)
@@ -47,11 +46,11 @@ func Test_validationAfterProcessDisbursement(t *testing.T) {
 	})
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.ReadyDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:                    "disbursement 1",
+		Status:                  data.ReadyDisbursementStatus,
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: data.RegistrationContactTypePhone,
 	})
 
 	t.Run("disbursement receivers not found", func(t *testing.T) {
@@ -72,7 +71,7 @@ func Test_validationAfterProcessDisbursement(t *testing.T) {
 		})
 
 		err = validateExpectationsAfterProcessDisbursement(ctx, disbursement.ID, models, dbConnectionPool)
-		require.EqualError(t, err, "invalid status for receiver_wallet after process disbursement")
+		require.EqualError(t, err, "receiver_wallet should be in DRAFT status for registrationContactType "+data.RegistrationContactTypePhone.String())
 	})
 
 	t.Run("invalid payment status", func(t *testing.T) {
@@ -135,16 +134,15 @@ func Test_validationAfterStartDisbursement(t *testing.T) {
 	})
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	t.Run("invalid disbursement status", func(t *testing.T) {
 		invalidDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "Invalid Disbursement",
-			Status:  data.CompletedDisbursementStatus,
-			Asset:   asset,
-			Wallet:  wallet,
-			Country: country,
+			Name:                    "Invalid Disbursement",
+			Status:                  data.CompletedDisbursementStatus,
+			Asset:                   asset,
+			Wallet:                  wallet,
+			RegistrationContactType: data.RegistrationContactTypePhone,
 		})
 
 		err = validateExpectationsAfterStartDisbursement(ctx, invalidDisbursement.ID, models, dbConnectionPool)
@@ -152,11 +150,11 @@ func Test_validationAfterStartDisbursement(t *testing.T) {
 	})
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "disbursement 1",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:                    "disbursement 1",
+		Status:                  data.StartedDisbursementStatus,
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: data.RegistrationContactTypePhone,
 	})
 
 	t.Run("disbursement receivers not found", func(t *testing.T) {
@@ -177,7 +175,7 @@ func Test_validationAfterStartDisbursement(t *testing.T) {
 		})
 
 		err = validateExpectationsAfterStartDisbursement(ctx, disbursement.ID, models, dbConnectionPool)
-		require.EqualError(t, err, "invalid status for receiver_wallet after start disbursement")
+		require.EqualError(t, err, "receiver_wallet should be in READY status for registrationContactType "+data.RegistrationContactTypePhone.String())
 	})
 
 	t.Run("invalid payment status", func(t *testing.T) {

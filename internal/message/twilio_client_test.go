@@ -82,7 +82,7 @@ func Test_Twilio_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Once()
 
 	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
-	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14155111111", Message: "foo bar"})
+	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14155111111", Body: "foo bar"})
 	require.EqualError(t, err, "sending Twilio SMS: test twilio error")
 
 	mTwilioApi.AssertExpectations(t)
@@ -112,7 +112,7 @@ func Test_Twilio_SendMessage_doesntReturnErrorButResponseContainsErrorEmbedded(t
 		Once()
 
 	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
-	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14152222222", Message: "foo bar"})
+	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
 	require.EqualError(t, err, `sending Twilio SMS responded an error {code: "12345", message: "Foo bar error message"}`)
 }
 
@@ -132,7 +132,7 @@ func Test_Twilio_SendMessage_success(t *testing.T) {
 		Once()
 
 	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
-	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14153333333", Message: "foo bar"})
+	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14153333333", Body: "foo bar"})
 	require.NoError(t, err)
 
 	mTwilioApi.AssertExpectations(t)

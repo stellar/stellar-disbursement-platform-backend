@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -23,7 +26,7 @@ type UpdateReceiverHandler struct {
 
 func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverRequest, receiverID string) []data.ReceiverVerificationInsert {
 	receiverVerifications := []data.ReceiverVerificationInsert{}
-	appendNewVerificationValue := func(verificationField data.VerificationField, verificationValue string) {
+	appendNewVerificationValue := func(verificationField data.VerificationType, verificationValue string) {
 		if verificationValue != "" {
 			receiverVerifications = append(receiverVerifications, data.ReceiverVerificationInsert{
 				ReceiverID:        receiverID,
@@ -33,15 +36,15 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 		}
 	}
 
-	for _, verificationField := range data.GetAllVerificationFields() {
+	for _, verificationField := range data.GetAllVerificationTypes() {
 		switch verificationField {
-		case data.VerificationFieldDateOfBirth:
+		case data.VerificationTypeDateOfBirth:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.DateOfBirth)
-		case data.VerificationFieldYearMonth:
+		case data.VerificationTypeYearMonth:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.YearMonth)
-		case data.VerificationFieldPin:
+		case data.VerificationTypePin:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.Pin)
-		case data.VerificationFieldNationalID:
+		case data.VerificationTypeNationalID:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.NationalID)
 		}
 	}
@@ -85,7 +88,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	receiver, err := db.RunInTransactionWithResult(ctx, h.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *data.Receiver, innerErr error) {
 		for _, rv := range receiverVerifications {
 			innerErr = h.Models.ReceiverVerification.UpsertVerificationValue(
-				req.Context(),
+				ctx,
 				dbTx,
 				rv.ReceiverID,
 				rv.VerificationField,
@@ -93,31 +96,61 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			)
 
 			if innerErr != nil {
-				return nil, fmt.Errorf("error updating receiver verification %s: %w", rv.VerificationField, innerErr)
+				return nil, fmt.Errorf("updating receiver verification %s: %w", rv.VerificationField, innerErr)
 			}
 		}
 
-		receiverUpdate := data.ReceiverUpdate{
-			Email:      reqBody.Email,
-			ExternalId: reqBody.ExternalID,
+		var receiverUpdate data.ReceiverUpdate
+		if reqBody.Email != "" {
+			receiverUpdate.Email = &reqBody.Email
 		}
-		if receiverUpdate.Email != "" || receiverUpdate.ExternalId != "" {
+		if reqBody.PhoneNumber != "" {
+			receiverUpdate.PhoneNumber = &reqBody.PhoneNumber
+		}
+		if reqBody.ExternalID != "" {
+			receiverUpdate.ExternalId = &reqBody.ExternalID
+		}
+
+		if !receiverUpdate.IsEmpty() {
 			if innerErr = h.Models.Receiver.Update(ctx, dbTx, receiverID, receiverUpdate); innerErr != nil {
-				return nil, fmt.Errorf("error updating receiver with ID %s: %w", receiverID, innerErr)
+				return nil, fmt.Errorf("updating receiver with ID %s: %w", receiverID, innerErr)
 			}
 		}
 
 		receiver, innerErr := h.Models.Receiver.Get(ctx, dbTx, receiverID)
 		if innerErr != nil {
-			return nil, fmt.Errorf("error querying receiver with ID %s: %w", receiverID, innerErr)
+			return nil, fmt.Errorf("querying receiver with ID %s: %w", receiverID, innerErr)
 		}
 
 		return receiver, nil
 	})
 	if err != nil {
+		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
+
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
 
 	httpjson.Render(rw, receiver, httpjson.JSON)
+}
+
+func parseHttpConflictErrorIfNeeded(err error) *httperror.HTTPError {
+	var pqErr *pq.Error
+	if err == nil || !errors.As(err, &pqErr) || pqErr.Code != "23505" {
+		return nil
+	}
+
+	allowedConstraints := []string{"receiver_unique_email", "receiver_unique_phone_number"}
+	if !slices.Contains(allowedConstraints, pqErr.Constraint) {
+		return nil
+	}
+	fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
+	msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
+
+	return httperror.Conflict(msg, err, map[string]interface{}{
+		fieldName: fieldName + " must be unique",
+	})
 }

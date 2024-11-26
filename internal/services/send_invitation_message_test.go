@@ -81,7 +81,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 	forgotPasswordLink, err := url.JoinPath(uiBaseURL, "forgot-password")
 	require.NoError(t, err)
 
-	content, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(htmltemplate.InvitationMessageTemplate{
+	content, err := htmltemplate.ExecuteHTMLTemplateForStaffInvitationEmailMessage(htmltemplate.StaffInvitationEmailMessageTemplate{
 		FirstName:          firstName,
 		Role:               roles[0],
 		ForgotPasswordLink: forgotPasswordLink,
@@ -122,7 +122,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 					On("SendMessage", message.Message{
 						ToEmail: email,
 						Title:   invitationMessageTitle,
-						Message: content,
+						Body:    content,
 					}).
 					Return(errors.New("foobar")).
 					Once()
@@ -142,7 +142,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 					On("SendMessage", message.Message{
 						ToEmail: email,
 						Title:   invitationMessageTitle,
-						Message: content,
+						Body:    content,
 					}).
 					Return(nil).
 					Once()

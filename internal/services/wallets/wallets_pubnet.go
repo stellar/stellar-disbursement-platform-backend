@@ -24,6 +24,11 @@ var PubnetWallets = []data.Wallet{
 			assets.USDCAssetPubnet,
 		},
 	},
+	{
+		Name:        "User Managed Wallet",
+		Assets:      assets.AllAssetsPubnet,
+		UserManaged: true,
+	},
 	// {
 	// 	Name:              "Beans App",
 	// 	Homepage:          "https://www.beansapp.com/disbursements",

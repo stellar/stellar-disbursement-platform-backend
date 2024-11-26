@@ -13,27 +13,34 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 // logErrorResponses logs the response body for requests with error status.
 func logErrorResponses(ctx context.Context, body io.ReadCloser) {
 	respBody, err := io.ReadAll(body)
+	defer body.Close()
 	if err == nil {
 		log.Ctx(ctx).Infof("error message response: %s", string(respBody))
 	}
 }
 
 func readDisbursementCSV(disbursementFilePath string, disbursementFileName string) ([]*data.DisbursementInstruction, error) {
+	err := utils.ValidatePathIsNotTraversal(disbursementFileName)
+	if err != nil {
+		return nil, fmt.Errorf("validating file path: %w", err)
+	}
+
 	filePath := path.Join(disbursementFilePath, disbursementFileName)
 
 	csvBytes, err := fs.ReadFile(DisbursementCSVFiles, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error reading csv file: %w", err)
+		return nil, fmt.Errorf("reading csv file: %w", err)
 	}
 
 	instructions := []*data.DisbursementInstruction{}
 	if err = gocsv.UnmarshalBytes(csvBytes, &instructions); err != nil {
-		return nil, fmt.Errorf("error parsing csv file: %w", err)
+		return nil, fmt.Errorf("parsing csv file: %w", err)
 	}
 
 	return instructions, nil

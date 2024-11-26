@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,128 +11,112 @@ import (
 func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("returns error when request body is empty", func(t *testing.T) {
-		wv := NewWalletValidator()
-		wv.ValidateCreateWalletRequest(ctx, nil)
-		assert.True(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, wv.Errors)
-	})
+	testCases := []struct {
+		name            string
+		reqBody         *WalletRequest
+		expectedErrs    map[string]interface{}
+		updateRequestFn func(wr *WalletRequest)
+		enforceHTTPS    bool
+	}{
+		{
+			name:         "🔴 error when request body is empty",
+			reqBody:      nil,
+			expectedErrs: map[string]interface{}{"body": "request body is empty"},
+		},
+		{
+			name:    "🔴 error when request body has empty fields",
+			reqBody: &WalletRequest{},
+			expectedErrs: map[string]interface{}{
+				"deep_link_schema":     "deep_link_schema is required",
+				"homepage":             "homepage is required",
+				"name":                 "name is required",
+				"sep_10_client_domain": "sep_10_client_domain is required",
+				"assets_ids":           "provide at least one asset ID",
+			},
+		},
+		{
+			name: "🔴 error when homepage,deep-link,client-domain are invalid",
+			reqBody: &WalletRequest{
+				Name:              "Wallet Provider",
+				Homepage:          "no-schema-homepage.com",
+				DeepLinkSchema:    "no-schema-deep-link",
+				SEP10ClientDomain: "-invaliddomain",
+				AssetsIDs:         []string{"asset-id"},
+			},
+			expectedErrs: map[string]interface{}{
+				"homepage":             "invalid homepage URL provided",
+				"deep_link_schema":     "invalid deep link schema provided",
+				"sep_10_client_domain": "invalid SEP-10 client domain provided",
+			},
+		},
+		{
+			name: "🟢 successfully validates the homepage,deep-link,client-domain",
+			reqBody: &WalletRequest{
+				Name:              "Wallet Provider",
+				Homepage:          "https://homepage.com",
+				DeepLinkSchema:    "wallet://deeplinkschema/sdp",
+				SEP10ClientDomain: "sep-10-client-domain.com",
+				AssetsIDs:         []string{"asset-id"},
+			},
+			expectedErrs: map[string]interface{}{},
+		},
+		{
+			name: "🟢 successfully validates the homepage,deep-link,client-domain with query params",
+			reqBody: &WalletRequest{
+				Name:              "Wallet Provider",
+				Homepage:          "http://homepage.com/sdp?redirect=true",
+				DeepLinkSchema:    "https://deeplinkschema.com/sdp?redirect=true",
+				SEP10ClientDomain: "sep-10-client-domain.com",
+				AssetsIDs:         []string{"asset-id"},
+			},
+			expectedErrs: map[string]interface{}{},
+		},
+		{
+			name: "🔴 fails if enforceHttps=true && homepage=http://...",
+			reqBody: &WalletRequest{
+				Name:              "Wallet Provider",
+				Homepage:          "http://homepage.com/sdp?redirect=true",
+				DeepLinkSchema:    "https://deeplinkschema.com/sdp?redirect=true",
+				SEP10ClientDomain: "sep-10-client-domain.com",
+				AssetsIDs:         []string{"asset-id"},
+			},
+			expectedErrs: map[string]interface{}{
+				"homepage": "invalid URL scheme is not part of [https]",
+			},
+			enforceHTTPS: true,
+		},
+		{
+			name: "🟢 successfully validates the homepage,deep-link,client-domain and values get sanitized",
+			reqBody: &WalletRequest{
+				Name:              "Wallet Provider",
+				Homepage:          "https://homepage.com",
+				DeepLinkSchema:    "wallet://deeplinkschema/sdp",
+				SEP10ClientDomain: "https://sep-10-client-domain.com",
+				AssetsIDs:         []string{"asset-id"},
+			},
+			updateRequestFn: func(wr *WalletRequest) {
+				wr.SEP10ClientDomain = "sep-10-client-domain.com"
+			},
+		},
+	}
 
-	t.Run("returns error when request body has empty fields", func(t *testing.T) {
-		wv := NewWalletValidator()
-		reqBody := &WalletRequest{}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wv := NewWalletValidator()
+			reqBody := wv.ValidateCreateWalletRequest(ctx, tc.reqBody, tc.enforceHTTPS)
 
-		wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.True(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{
-			"deep_link_schema":     "deep_link_schema is required",
-			"homepage":             "homepage is required",
-			"name":                 "name is required",
-			"sep_10_client_domain": "sep_10_client_domain is required",
-			"assets_ids":           "provide at least one asset ID",
-		}, wv.Errors)
-
-		reqBody.Name = "Wallet Provider"
-		wv.Errors = map[string]interface{}{}
-		wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.True(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{
-			"deep_link_schema":     "deep_link_schema is required",
-			"homepage":             "homepage is required",
-			"sep_10_client_domain": "sep_10_client_domain is required",
-			"assets_ids":           "provide at least one asset ID",
-		}, wv.Errors)
-	})
-
-	t.Run("returns error when homepage/deep link schema has a invalid URL", func(t *testing.T) {
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
-
-		wv := NewWalletValidator()
-		reqBody := &WalletRequest{
-			Name:              "Wallet Provider",
-			Homepage:          "no-schema-homepage.com",
-			DeepLinkSchema:    "no-schema-deep-link",
-			SEP10ClientDomain: "sep-10-client-domain.com",
-			AssetsIDs:         []string{"asset-id"},
-		}
-
-		wv.ValidateCreateWalletRequest(ctx, reqBody)
-
-		assert.True(t, wv.HasErrors())
-
-		assert.Contains(t, wv.Errors, "homepage")
-		assert.Equal(t, "invalid homepage URL provided", wv.Errors["homepage"])
-
-		assert.Contains(t, wv.Errors, "deep_link_schema")
-		assert.Equal(t, "invalid deep link schema provided", wv.Errors["deep_link_schema"])
-
-		entries := getEntries()
-		require.Len(t, entries, 2)
-		assert.Equal(t, `parsing homepage URL: parse "no-schema-homepage.com": invalid URI for request`, entries[0].Message)
-		assert.Equal(t, `parsing deep link schema: parse "no-schema-deep-link": invalid URI for request`, entries[1].Message)
-	})
-
-	t.Run("validates the homepage successfully", func(t *testing.T) {
-		wv := NewWalletValidator()
-		reqBody := &WalletRequest{
-			Name:              "Wallet Provider",
-			Homepage:          "https://homepage.com",
-			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
-			SEP10ClientDomain: "sep-10-client-domain.com",
-			AssetsIDs:         []string{"asset-id"},
-		}
-
-		wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.False(t, wv.HasErrors())
-
-		reqBody.Homepage = "http://homepage.com/sdp?redirect=true"
-		wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.False(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{}, wv.Errors)
-	})
-
-	t.Run("validates the deep link schema successfully", func(t *testing.T) {
-		wv := NewWalletValidator()
-		reqBody := &WalletRequest{
-			Name:              "Wallet Provider",
-			Homepage:          "https://homepage.com",
-			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
-			SEP10ClientDomain: "sep-10-client-domain.com",
-			AssetsIDs:         []string{"asset-id"},
-		}
-
-		wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.False(t, wv.HasErrors())
-
-		reqBody.DeepLinkSchema = "https://deeplinkschema.com/sdp?redirect=true"
-		wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.False(t, wv.HasErrors())
-	})
-
-	t.Run("validates the SEP-10 Client Domain successfully", func(t *testing.T) {
-		wv := NewWalletValidator()
-		reqBody := &WalletRequest{
-			Name:              "Wallet Provider",
-			Homepage:          "https://homepage.com",
-			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
-			SEP10ClientDomain: "https://sep-10-client-domain.com",
-			AssetsIDs:         []string{"asset-id"},
-		}
-
-		reqBody = wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.False(t, wv.HasErrors())
-		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
-
-		reqBody.SEP10ClientDomain = "https://sep-10-client-domain.com/sdp?redirect=true"
-		reqBody = wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.False(t, wv.HasErrors())
-		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
-
-		reqBody.SEP10ClientDomain = "http://localhost:8000"
-		reqBody = wv.ValidateCreateWalletRequest(ctx, reqBody)
-		assert.False(t, wv.HasErrors())
-		assert.Equal(t, "localhost:8000", reqBody.SEP10ClientDomain)
-	})
+			if len(tc.expectedErrs) == 0 {
+				require.Falsef(t, wv.HasErrors(), "expected no errors, got: %v", wv.Errors)
+				if tc.updateRequestFn != nil {
+					tc.updateRequestFn(tc.reqBody)
+				}
+				assert.Equal(t, tc.reqBody, reqBody)
+			} else {
+				assert.True(t, wv.HasErrors())
+				assert.Equal(t, tc.expectedErrs, wv.Errors)
+			}
+		})
+	}
 }
 
 func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
@@ -141,7 +124,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 
 	t.Run("returns error when request body is empty", func(t *testing.T) {
 		wv := NewWalletValidator()
-		wv.ValidateCreateWalletRequest(ctx, nil)
+		wv.ValidateCreateWalletRequest(ctx, nil, false)
 		assert.True(t, wv.HasErrors())
 		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, wv.Errors)
 	})

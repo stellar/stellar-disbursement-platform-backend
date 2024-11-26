@@ -103,10 +103,9 @@ func Test_CreateDisbursement(t *testing.T) {
 	}
 
 	reqBody := &httphandler.PostDisbursementRequest{
-		Name:        "mockDisbursement",
-		CountryCode: "USA",
-		WalletID:    "123",
-		AssetID:     "890",
+		Name:     "mockDisbursement",
+		WalletID: "123",
+		AssetID:  "890",
 	}
 
 	t.Run("error calling httpClient.Do", func(t *testing.T) {
@@ -127,7 +126,7 @@ func Test_CreateDisbursement(t *testing.T) {
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
 		d, err := sa.CreateDisbursement(ctx, authToken, reqBody)
-		require.EqualError(t, err, "error trying to create a new disbursement on the server API")
+		require.EqualError(t, err, "trying to create a new disbursement on the server API")
 		assert.Empty(t, d)
 
 		httpClientMock.AssertExpectations(t)
@@ -179,7 +178,7 @@ func Test_ProcessDisbursement(t *testing.T) {
 		HttpClient:              &httpClientMock,
 		ServerApiBaseURL:        "http://mock_server.com/",
 		DisbursementCSVFilePath: "resources",
-		DisbursementCSVFileName: "disbursement_integration_tests.csv",
+		DisbursementCSVFileName: "disbursement_instructions_phone.csv",
 	}
 
 	ctx := context.Background()
@@ -307,7 +306,7 @@ func Test_ReceiverRegistration(t *testing.T) {
 		PhoneNumber:       "+18554212274",
 		OTP:               "123456",
 		VerificationValue: "1999-01-30",
-		VerificationType:  "date_of_birth",
+		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "captchtoken",
 	}
 

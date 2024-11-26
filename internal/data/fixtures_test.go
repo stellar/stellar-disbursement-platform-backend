@@ -43,17 +43,17 @@ func Test_CreateReceiverWalletFixture(t *testing.T) {
 	// Create a random receiver wallet
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://mywallet.test.com/", "mywallet.test.com", "mtwallet://")
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-	rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+	rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 
 	// Check receiver wallet
 	require.Len(t, rw.ID, 36)
 	require.NotEmpty(t, rw.StellarAddress)
 	require.NotEmpty(t, rw.StellarMemo)
 	require.NotEmpty(t, rw.StellarMemoType)
-	require.Equal(t, DraftReceiversWalletStatus, rw.Status)
+	require.Equal(t, RegisteredReceiversWalletStatus, rw.Status)
 	require.Len(t, rw.StatusHistory, 1)
 	require.NotEmpty(t, rw.StatusHistory[0].Timestamp)
-	require.Equal(t, DraftReceiversWalletStatus, rw.StatusHistory[0].Status)
+	require.Equal(t, RegisteredReceiversWalletStatus, rw.StatusHistory[0].Status)
 	require.NotEmpty(t, rw.CreatedAt)
 	require.NotEmpty(t, rw.UpdatedAt)
 
@@ -90,8 +90,8 @@ func Test_Fixtures_CreateInstructionsFixture(t *testing.T) {
 
 	t.Run("writes records correctly", func(t *testing.T) {
 		instructions := []*DisbursementInstruction{
-			{"1234567890", "1", "123.12", "1995-02-20", nil},
-			{"0987654321", "2", "321", "1974-07-19", nil},
+			{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
+			{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
 		}
 		buf := CreateInstructionsFixture(t, instructions)
 		lines := strings.Split(string(buf), "\n")
@@ -117,9 +117,9 @@ func Test_Fixtures_UpdateDisbursementInstructionsFixture(t *testing.T) {
 	})
 
 	instructions := []*DisbursementInstruction{
-		{"1234567890", "1", "123.12", "1995-02-20", nil},
-		{"0987654321", "2", "321", "1974-07-19", nil},
-		{"0987654321", "3", "321", "1974-07-19", nil},
+		{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
+		{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
+		{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
 	}
 
 	t.Run("update instructions", func(t *testing.T) {

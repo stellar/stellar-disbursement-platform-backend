@@ -64,7 +64,7 @@ type ServeOptions struct {
 	CorsAllowedOrigins              []string
 	authManager                     auth.AuthManager
 	EmailMessengerClient            message.MessengerClient
-	SMSMessengerClient              message.MessengerClient
+	MessageDispatcher               message.MessageDispatcherInterface
 	SEP24JWTSecret                  string
 	sep24JWTManager                 *anchorplatform.JWTManager
 	BaseURL                         string
@@ -89,7 +89,7 @@ type ServeOptions struct {
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
 	EventProducer                   events.Producer
-	MaxInvitationSMSResendAttempts  int
+	MaxInvitationResendAttempts     int
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
 }
@@ -210,7 +210,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
 	))
 	mux.Use(chimiddleware.RequestID)
-	mux.Use(chimiddleware.RealIP)
 	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager, o.SingleTenantMode))
 	mux.Use(middleware.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
@@ -325,9 +324,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/countries", func(r chi.Router) {
-			r.Get("/", httphandler.CountriesHandler{Models: o.Models}.GetCountries)
-		})
+		r.
+			With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			Get("/registration-contact-types", httphandler.RegistrationContactTypesHandler{}.Get)
 
 		r.Route("/assets", func(r chi.Router) {
 			assetsHandler := httphandler.AssetsHandler{
@@ -347,7 +346,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/wallets", func(r chi.Router) {
-			walletsHandler := httphandler.WalletsHandler{Models: o.Models}
+			walletsHandler := httphandler.WalletsHandler{
+				Models:      o.Models,
+				NetworkType: o.NetworkType,
+			}
 			r.Get("/", walletsHandler.GetWallets)
 			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
 				Post("/", walletsHandler.PostWallets)
@@ -365,6 +367,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			PasswordValidator:           o.PasswordValidator,
 			PublicFilesFS:               publicfiles.PublicFiles,
+			NetworkType:                 o.NetworkType,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -396,6 +399,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
 					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
 					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+					MonitorService:              o.MonitorService,
 				}.Patch)
 		})
 
@@ -471,7 +475,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{
 				Models:             o.Models,
-				SMSMessengerClient: o.SMSMessengerClient,
+				MessageDispatcher:  o.MessageDispatcher,
 				ReCAPTCHAValidator: reCAPTCHAValidator,
 			}.ServeHTTP)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
@@ -486,7 +490,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		// This will be used for test purposes and will only be available when IsPubnet is false:
-		r.With(middleware.EnsureTenantMiddleware).Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{
+		r.With(middleware.EnsureTenantMiddleware).Delete("/contact-info/{contact_info}", httphandler.DeleteContactInfoHandler{
 			Models:            o.Models,
 			NetworkPassphrase: o.NetworkPassphrase,
 		}.ServeHTTP)

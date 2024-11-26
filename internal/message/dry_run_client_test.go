@@ -25,7 +25,7 @@ func Test_DryRunClient(t *testing.T) {
 		ToPhoneNumber: "",
 		ToEmail:       "email@email.com",
 		Title:         "My Message Title",
-		Message:       "My email content",
+		Body:          "My email content",
 	}
 	err = cc.SendMessage(msg)
 	require.NoError(t, err)
@@ -57,7 +57,7 @@ Content: My email content
 		ToPhoneNumber: "+11111111111",
 		ToEmail:       "",
 		Title:         "My Message Title",
-		Message:       "My SMS content",
+		Body:          "My SMS content",
 	}
 	err = cc.SendMessage(msg)
 	require.NoError(t, err)

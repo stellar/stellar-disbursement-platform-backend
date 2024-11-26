@@ -1,6 +1,30 @@
 package monitor
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+func PrometheusMetrics() map[MetricTag]prometheus.Collector {
+	metrics := make(map[MetricTag]prometheus.Collector)
+
+	for tag, summaryVec := range SummaryVecMetrics {
+		metrics[tag] = summaryVec
+	}
+
+	for tag, counter := range CounterMetrics {
+		metrics[tag] = counter
+	}
+
+	for tag, histogramVec := range HistogramVecMetrics {
+		metrics[tag] = histogramVec
+	}
+
+	for tag, counterVec := range CounterVecMetrics {
+		metrics[tag] = counterVec
+	}
+
+	return metrics
+}
 
 var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 	HttpRequestDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
@@ -34,13 +58,26 @@ var CounterMetrics = map[MetricTag]prometheus.Counter{
 	}),
 }
 
-var HistogramVecMetrics map[MetricTag]prometheus.HistogramVec
+var HistogramVecMetrics = map[MetricTag]*prometheus.HistogramVec{
+	CircleAPIRequestDurationTag: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "sdp", Subsystem: "circle", Name: string(CircleAPIRequestDurationTag),
+		Help: "A histogram of the Circle API request durations",
+	},
+		CircleLabelNames,
+	),
+}
 
 var CounterVecMetrics = map[MetricTag]*prometheus.CounterVec{
 	DisbursementsCounterTag: prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "sdp", Subsystem: "bussiness", Name: string(DisbursementsCounterTag),
+		Namespace: "sdp", Subsystem: "business", Name: string(DisbursementsCounterTag),
 		Help: "Disbursements Counter",
 	},
-		[]string{"asset", "country", "wallet"},
+		[]string{"asset", "wallet"},
+	),
+	CircleAPIRequestsTotalTag: prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "sdp", Subsystem: "circle", Name: string(CircleAPIRequestsTotalTag),
+		Help: "A counter of the Circle API requests",
+	},
+		CircleLabelNames,
 	),
 }

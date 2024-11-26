@@ -51,12 +51,12 @@ services:
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options
-      #ENABLE_SCHEDULER: "false" # set to disabled to use kafka for this.
-      #SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
-      #SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      ENABLE_SCHEDULER: "true" # set to disabled to use kafka for this.
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
       # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
-      EVENT_BROKER_TYPE: "KAFKA"
+      EVENT_BROKER_TYPE: "NONE"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
       KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
@@ -75,12 +75,28 @@ services:
       TWILIO_ACCOUNT_SID: MY_TWILIO_ACCOUNT_SID
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
+      TWILIO_SENDGRID_API_KEY: MY_TWILIO_SENDGRID_API_KEY
+      TWILIO_SENDGRID_SENDER_ADDRESS: MY_TWILIO_SENDGRID_SENDER_ADDRESS
       EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
       SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       SEP24_JWT_SECRET: jwt_secret_1234567890
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
-    entrypoint: "./dev/scripts/debug_entrypoint.sh"
+    entrypoint: ""
+    command:
+      - sh
+      - -c
+      - |
+        sleep 5
+        ./stellar-disbursement-platform db admin migrate up
+        ./stellar-disbursement-platform db tss migrate up
+        ./stellar-disbursement-platform db auth migrate up --all
+        ./stellar-disbursement-platform db sdp migrate up --all
+        ./stellar-disbursement-platform db setup-for-network --all
+        echo "starting dlv stellar-disbursement-platform"
+        /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
+    volumes:
+      - ./scripts/add_test_users.sh:/app/github.com/stellar/stellar-disbursement-platform/dev/scripts/add_test_users.sh
 
   db-anchor-platform:
     container_name: anchor-platform-postgres-db-mtn
@@ -118,7 +134,7 @@ services:
       DATA_DATABASE: postgres
       DATA_FLYWAY_ENABLED: "true"
       DATA_DDL_AUTO: update
-      METRICS_ENABLED: "false"  # Metrics would be available at port 8082
+      METRICS_ENABLED: "true"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_ENABLED: "true"
       SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local:8000" # Comma separated list of home domains

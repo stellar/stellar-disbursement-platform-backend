@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -13,33 +12,50 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type WalletsHandler struct {
-	Models *data.Models
+	Models      *data.Models
+	NetworkType utils.NetworkType
 }
 
 // GetWallets returns a list of wallets
 func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
-	context := r.Context()
+	ctx := r.Context()
 
-	enabledParam := r.URL.Query().Get("enabled")
-	var enabledFilter *bool
-	if enabledParam != "" {
-		enabledValue, err := strconv.ParseBool(enabledParam)
-		if err != nil {
-			httperror.BadRequest("Invalid enabled parameter value", nil, nil).Render(w)
-			return
-		}
-		enabledFilter = &enabledValue
+	filters, err := h.parseFilters(r)
+	if err != nil {
+		extras := map[string]interface{}{"validation_error": err.Error()}
+		httperror.BadRequest("Error parsing request filters", nil, extras).Render(w)
+		return
 	}
 
-	wallets, err := h.Models.Wallets.FindWallets(context, enabledFilter)
+	wallets, err := h.Models.Wallets.FindWallets(ctx, filters...)
 	if err != nil {
-		httperror.InternalError(context, "Cannot retrieve list of wallets", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot retrieve list of wallets", err, nil).Render(w)
 		return
 	}
 	httpjson.Render(w, wallets, httpjson.JSON)
+}
+
+func (h WalletsHandler) parseFilters(r *http.Request) ([]data.Filter, error) {
+	filters := []data.Filter{}
+	filterParams := map[string]data.FilterKey{
+		"enabled":      data.FilterEnabledWallets,
+		"user_managed": data.FilterUserManaged,
+	}
+
+	for param, filterType := range filterParams {
+		paramValue, err := utils.ParseBoolQueryParam(r, param)
+		if err != nil {
+			return nil, fmt.Errorf("invalid '%s' parameter value", param)
+		}
+		if paramValue != nil {
+			filters = append(filters, data.NewFilter(filterType, *paramValue))
+		}
+	}
+	return filters, nil
 }
 
 func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
@@ -52,7 +68,7 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	validator := validators.NewWalletValidator()
-	reqBody = validator.ValidateCreateWalletRequest(ctx, reqBody)
+	reqBody = validator.ValidateCreateWalletRequest(ctx, reqBody, h.NetworkType.IsPubnet())
 	if validator.HasErrors() {
 		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(rw)
 		return
@@ -67,6 +83,9 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	})
 	if err != nil {
 		switch {
+		case errors.Is(err, data.ErrInvalidAssetID):
+			httperror.BadRequest(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
+			return
 		case errors.Is(err, data.ErrWalletNameAlreadyExists):
 			httperror.Conflict(data.ErrWalletNameAlreadyExists.Error(), err, nil).Render(rw)
 			return
@@ -75,9 +94,6 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 			return
 		case errors.Is(err, data.ErrWalletDeepLinkSchemaAlreadyExists):
 			httperror.Conflict(data.ErrWalletDeepLinkSchemaAlreadyExists.Error(), err, nil).Render(rw)
-			return
-		case errors.Is(err, data.ErrInvalidAssetID):
-			httperror.Conflict(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
 			return
 		}
 

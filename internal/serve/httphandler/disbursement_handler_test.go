@@ -37,13 +37,150 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
-	const url = "/disbursements"
-	const method = "POST"
+func Test_DisbursementHandler_validateRequest(t *testing.T) {
+	type TestCase struct {
+		name           string
+		request        PostDisbursementRequest
+		expectedErrors map[string]interface{}
+	}
 
+	testCases := []TestCase{
+		{
+			name:    "🔴 all fields are empty",
+			request: PostDisbursementRequest{},
+			expectedErrors: map[string]interface{}{
+				"name":                      "name is required",
+				"wallet_id":                 "wallet_id is required",
+				"asset_id":                  "asset_id is required",
+				"registration_contact_type": fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
+				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+			},
+		},
+		{
+			name: "🔴 wallet_id and verification_field not allowed for user managed wallet",
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: data.RegistrationContactTypePhoneAndWalletAddress,
+				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+			expectedErrors: map[string]interface{}{
+				"wallet_id":          "wallet_id is not allowed for this registration contact type",
+				"verification_field": "verification_field is not allowed for this registration contact type",
+			},
+		},
+		{
+			name: "🔴 registration_contact_type and verification_field are invalid",
+			request: PostDisbursementRequest{
+				Name:     "disbursement 1",
+				AssetID:  "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID: "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: data.RegistrationContactType{
+					ReceiverContactType: "invalid1",
+				},
+				VerificationField: "invalid2",
+			},
+			expectedErrors: map[string]interface{}{
+				"registration_contact_type": fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
+				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+			},
+		},
+		{
+			name: "🔴 receiver_registration_message_template contains HTML",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "<a href='evil.com'>Redeem money</a>",
+			},
+			expectedErrors: map[string]interface{}{
+				"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS",
+			},
+		},
+		{
+			name: "🔴 receiver_registration_message_template contains JS",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "javascript:alert(localStorage.getItem('sdp_session'))",
+			},
+			expectedErrors: map[string]interface{}{
+				"receiver_registration_message_template": "receiver_registration_message_template cannot contain HTML, JS or CSS",
+			},
+		},
+		{
+			name: "🟢 all fields are valid",
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType: data.RegistrationContactTypePhone,
+				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+		},
+		{
+			name: "🟢 all fields are valid w/ receiver_registration_message_template",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "My custom invitation message",
+			},
+		},
+	}
+
+	for _, rct := range data.AllRegistrationContactTypes() {
+		var name string
+		var expectedErrors map[string]interface{}
+		if !rct.IncludesWalletAddress {
+			name = fmt.Sprintf("🔴[%s]registration_contact_type without wallet address REQUIRES verification_field", rct)
+			expectedErrors = map[string]interface{}{
+				"verification_field": fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+			}
+		} else {
+			name = fmt.Sprintf("🟢[%s]registration_contact_type with wallet address DOES NOT REQUIRE registration_contact_type", rct)
+		}
+		newTestCase := TestCase{
+			name: name,
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				RegistrationContactType: rct,
+			},
+			expectedErrors: expectedErrors,
+		}
+		if !rct.IncludesWalletAddress {
+			newTestCase.request.WalletID = "aab4a4a9-2493-4f37-9741-01d5bd31d68b"
+		}
+
+		testCases = append(testCases, newTestCase)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &DisbursementHandler{}
+			v := handler.validateRequest(tc.request)
+			if len(tc.expectedErrors) == 0 {
+				assert.False(t, v.HasErrors())
+			} else {
+				assert.True(t, v.HasErrors())
+				assert.Equal(t, tc.expectedErrors, v.Errors)
+			}
+		})
+	}
+}
+
+func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -57,18 +194,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		ID:    "user-id",
 		Email: "email@email.com",
 	}
-	authManagerMock := &auth.AuthManagerMock{}
-	authManagerMock.
-		On("GetUser", mock.Anything, token).
-		Return(user, nil)
-
-	mMonitorService := monitorMocks.NewMockMonitorService(t)
-
-	handler := &DisbursementHandler{
-		Models:         models,
-		MonitorService: mMonitorService,
-		AuthManager:    authManagerMock,
-	}
 
 	// setup fixtures
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
@@ -76,224 +201,221 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	disabledWallet := wallets[1]
 	data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
 
+	userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
+	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
+	userManagedWallet = data.GetWalletFixture(t, ctx, dbConnectionPool, userManagedWallet.Name)
+
 	enabledWallet.Assets = nil
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
-	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
-
-	t.Run("returns error when body is invalid", func(t *testing.T) {
-		requestBody := `
-       {
-			"name": "My New Disbursement name 5",
-       }`
-
-		want := `{"error":"invalid request body"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
+	existingDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name:   "existing disbursement",
+		Asset:  asset,
+		Wallet: &enabledWallet,
 	})
 
-	t.Run("returns error when name is not provided", func(t *testing.T) {
-		requestBody := `
+	type TestCase struct {
+		name               string
+		prepareMocksFn     func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService)
+		reqBody            map[string]interface{}
+		wantStatusCode     int
+		wantResponseBodyFn func(d *data.Disbursement) string
+	}
+	testCases := []TestCase{
 		{
-		  "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		  "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		  "country_code": "UKR",
-		  "verification_field": "date_of_birth"
-		}`
-
-		want := `
+			name:           "🔴 body parameters are missing",
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{
+					"error": "The request was invalid in some way.",
+					"extras": {
+						"name": "name is required",
+						"wallet_id": "wallet_id is required",
+						"asset_id": "asset_id is required",
+						"registration_contact_type": "registration_contact_type must be one of [EMAIL PHONE_NUMBER EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER_AND_WALLET_ADDRESS]",
+						"verification_field": "verification_field must be one of [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"
+					}
+				}`
+			},
+		},
 		{
-			"error":"Request invalid", 
-			"extras": {
-				"name": "name is required"
-			}
-		}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when wallet_id is not provided", func(t *testing.T) {
-		requestBody := `
+			name: "🔴 wallet_id could not be found",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement 1",
+				"asset_id":                  asset.ID,
+				"wallet_id":                 "not-found-wallet-id",
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"Wallet ID could not be retrieved"}`
+			},
+		},
 		{
-		   "name": "My New Disbursement name 5",
-		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		   "country_code": "UKR",
-		   "verification_field": "date_of_birth"
-		}`
-
-		want := `{"error":"Request invalid", "extras": {"wallet_id": "wallet_id is required"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when asset_id is not provided", func(t *testing.T) {
-		requestBody := `
+			name: "🔴 wallet is not enabled",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement 1",
+				"asset_id":                  asset.ID,
+				"wallet_id":                 disabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"Wallet is not enabled"}`
+			},
+		},
 		{
-		   "name": "My New Disbursement name 5",
-		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		   "country_code": "UKR",
-		   "verification_field": "date_of_birth"
-		}`
-
-		want := `{"error":"Request invalid", "extras": {"asset_id": "asset_id is required"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when country_code is not provided", func(t *testing.T) {
-		requestBody := `
+			name: "🔴 asset_id could not be found",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement 1",
+				"asset_id":                  "not-found-asset-id",
+				"wallet_id":                 enabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"asset ID could not be retrieved"}`
+			},
+		},
 		{
-		   "name": "My New Disbursement name 5",
-		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		   "verification_field": "date_of_birth"
-		}`
-
-		want := `{"error":"Request invalid", "extras": {"country_code": "country_code is required"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when no verification field is provided", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:        "disbursement 1",
-			CountryCode: country.Code,
-			AssetID:     asset.ID,
-			WalletID:    enabledWallet.ID,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"Verification field invalid", "extras": {"verification_field": "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"}}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when wallet_id is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			VerificationField: data.VerificationFieldDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"wallet ID is invalid"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when wallet is not enabled", func(t *testing.T) {
-		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          disabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"wallet is not enabled"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when asset_id is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"asset ID is invalid"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	t.Run("returns error when country_code is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       "AAA",
-			AssetID:           asset.ID,
-			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
-		})
-		require.NoError(t, err)
-
-		want := `{"error":"country code is invalid"}`
-
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
-	})
-
-	labels := monitor.DisbursementLabels{
-		Asset:   asset.Code,
-		Country: country.Code,
-		Wallet:  enabledWallet.Name,
+			name: "🔴 non-unique disbursement name",
+			reqBody: map[string]interface{}{
+				"name":                      existingDisbursement.Name,
+				"asset_id":                  asset.ID,
+				"wallet_id":                 enabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeDateOfBirth,
+			},
+			wantStatusCode: http.StatusConflict,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"disbursement already exists"}`
+			},
+		},
 	}
 
-	t.Run("returns error when disbursement name is not unique", func(t *testing.T) {
-		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+	// Add successful testCases
+	for i, registrationContactType := range data.AllRegistrationContactTypes() {
+		var customInviteTemplate string
+		var testNameSuffix string
+		var wallet data.Wallet
+		if i%2 == 0 {
+			customInviteTemplate = "You have a new payment waiting for you from org x. Click on the link to register."
+			testNameSuffix = "(w/ custom invite template)"
+		}
+		if registrationContactType.IncludesWalletAddress {
+			wallet = *userManagedWallet
+		} else {
+			wallet = enabledWallet
+		}
 
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+		successfulTestCase := TestCase{
+			name: fmt.Sprintf("🟢[%s]registration_contact_type%s", registrationContactType, testNameSuffix),
+			prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
+				labels := monitor.DisbursementLabels{
+					Asset:  asset.Code,
+					Wallet: wallet.Name,
+				}
+				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+			},
+			reqBody: map[string]interface{}{
+				"name":                                   fmt.Sprintf("successful disbursement %d", i),
+				"asset_id":                               asset.ID,
+				"registration_contact_type":              registrationContactType.String(),
+				"receiver_registration_message_template": customInviteTemplate,
+			},
+			wantStatusCode: http.StatusCreated,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				respMap := map[string]interface{}{
+					"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+					"id":                                     d.ID,
+					"name":                                   fmt.Sprintf("successful disbursement %d", i),
+					"receiver_registration_message_template": customInviteTemplate,
+					"registration_contact_type":              registrationContactType.String(),
+					"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
+					"status":                                 data.DraftDisbursementStatus,
+					"status_history": []map[string]interface{}{
+						{
+							"status":    data.DraftDisbursementStatus,
+							"timestamp": d.StatusHistory[0].Timestamp,
+							"user_id":   user.ID,
+						},
+					},
+					"asset": map[string]interface{}{
+						"code":       asset.Code,
+						"id":         asset.ID,
+						"issuer":     asset.Issuer,
+						"created_at": asset.CreatedAt.Format(time.RFC3339Nano),
+						"updated_at": asset.UpdatedAt.Format(time.RFC3339Nano),
+						"deleted_at": nil,
+					},
+					"wallet": map[string]interface{}{
+						"id":                   wallet.ID,
+						"name":                 wallet.Name,
+						"deep_link_schema":     wallet.DeepLinkSchema,
+						"homepage":             wallet.Homepage,
+						"sep_10_client_domain": wallet.SEP10ClientDomain,
+						"created_at":           wallet.CreatedAt.Format(time.RFC3339Nano),
+						"updated_at":           wallet.UpdatedAt.Format(time.RFC3339Nano),
+						"enabled":              true,
+					},
+				}
+
+				if !registrationContactType.IncludesWalletAddress {
+					respMap["verification_field"] = data.VerificationTypeDateOfBirth
+				}
+
+				resp, err := json.Marshal(respMap)
+				require.NoError(t, err)
+				return string(resp)
+			},
+		}
+
+		if !registrationContactType.IncludesWalletAddress {
+			successfulTestCase.reqBody["wallet_id"] = wallet.ID
+			successfulTestCase.reqBody["verification_field"] = data.VerificationTypeDateOfBirth
+		}
+		testCases = append(testCases, successfulTestCase)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mAuthManager := &auth.AuthManagerMock{}
+			mAuthManager.
+				On("GetUser", mock.Anything, token).
+				Return(user, nil)
+			mMonitorService := monitorMocks.NewMockMonitorService(t)
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(t, mMonitorService)
+			}
+
+			handler := &DisbursementHandler{
+				Models:         models,
+				AuthManager:    mAuthManager,
+				MonitorService: mMonitorService,
+			}
+
+			requestBody, err := json.Marshal(tc.reqBody)
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			req, _ := http.NewRequestWithContext(ctx, "POST", "/disbursements", bytes.NewReader(requestBody))
+			http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
+			resp := rr.Result()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			require.Equalf(t, tc.wantStatusCode, resp.StatusCode, "status code doesn't match and here's the response body: %s", respBody)
+			var actualDisbursement *data.Disbursement
+			if tc.wantResponseBodyFn != nil {
+				require.NoError(t, json.Unmarshal(respBody, &actualDisbursement))
+			}
+
+			wantBody := tc.wantResponseBodyFn(actualDisbursement)
+			assert.JSONEq(t, wantBody, string(respBody))
 		})
-		require.NoError(t, err)
-
-		want := `{"error":"disbursement already exists"}`
-
-		// create disbursement
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), "", http.StatusCreated)
-		// try creating again
-		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusConflict)
-	})
-
-	t.Run("successfully create a disbursement", func(t *testing.T) {
-		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
-
-		expectedName := "disbursement 2"
-		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:                           expectedName,
-			CountryCode:                    country.Code,
-			AssetID:                        asset.ID,
-			WalletID:                       enabledWallet.ID,
-			VerificationField:              data.VerificationFieldDateOfBirth,
-			SMSRegistrationMessageTemplate: smsTemplate,
-		})
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequestWithContext(ctx, method, url, strings.NewReader(string(requestBody)))
-		http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-
-		var actualDisbursement data.Disbursement
-		err = json.NewDecoder(resp.Body).Decode(&actualDisbursement)
-
-		require.NoError(t, err)
-		assert.Equal(t, expectedName, actualDisbursement.Name)
-		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.Status)
-		assert.Equal(t, asset, actualDisbursement.Asset)
-		assert.Equal(t, &enabledWallet, actualDisbursement.Wallet)
-		assert.Equal(t, country, actualDisbursement.Country)
-		assert.Equal(t, 1, len(actualDisbursement.StatusHistory))
-		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
-		assert.Equal(t, user.ID, actualDisbursement.StatusHistory[0].UserID)
-		assert.Equal(t, smsTemplate, actualDisbursement.SMSRegistrationMessageTemplate)
-	})
-
-	authManagerMock.AssertExpectations(t)
+	}
 }
 
 func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
@@ -431,7 +553,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	createdByUser := auth.User{
 		ID:        "User1",
@@ -494,7 +615,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -503,7 +623,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -512,7 +631,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: startedStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -521,7 +639,6 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		Country:       country,
 		CreatedAt:     time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC),
 	})
 
@@ -814,14 +931,26 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	// create disbursement
-	draftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
-		Name:    "disbursement1",
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+	phoneDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
+		Name:   "disbursement1",
+		Asset:  asset,
+		Wallet: wallet,
+	})
+
+	emailDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
+		Name:                    "disbursement with emails",
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: data.RegistrationContactTypeEmail,
+	})
+
+	emailWalletDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
+		Name:                    "disbursement with emails and wallets",
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: data.RegistrationContactTypeEmailAndWalletAddress,
 	})
 
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
@@ -840,16 +969,17 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name            string
-		disbursementID  string
-		fieldName       string
-		csvRecords      [][]string
-		expectedStatus  int
-		expectedMessage string
+		name               string
+		disbursementID     string
+		multipartFieldName string
+		actualFileName     string
+		csvRecords         [][]string
+		expectedStatus     int
+		expectedMessage    string
 	}{
 		{
 			name:           "valid input",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990-01-01"},
@@ -858,8 +988,52 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "File uploaded successfully",
 		},
 		{
+			name:           ".bat file fails",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.bat",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".sh file fails",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.sh",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".bash file fails",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "file.bash",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file extension should be .csv",
+		},
+		{
+			name:           ".csv file with transversal path ..\\.. fails",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			actualFileName:  "..\\..\\file.csv",
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "file name contains invalid traversal pattern",
+		},
+		{
 			name:           "invalid date of birth",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"+380445555555", "123456789", "100.5", "1990/01/01"},
@@ -869,7 +1043,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:           "invalid phone number",
-			disbursementID: draftDisbursement.ID,
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
 				{"380-12-345-678", "123456789", "100.5", "1990-01-01"},
@@ -884,11 +1058,11 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "disbursement ID is invalid",
 		},
 		{
-			name:            "valid input",
-			disbursementID:  draftDisbursement.ID,
-			fieldName:       "instructions",
-			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "could not parse file",
+			name:               "invalid input",
+			disbursementID:     phoneDraftDisbursement.ID,
+			multipartFieldName: "instructions",
+			expectedStatus:     http.StatusBadRequest,
+			expectedMessage:    "could not parse file",
 		},
 		{
 			name:            "disbursement not in draft/ready status",
@@ -903,29 +1077,90 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "disbursement is not in draft or ready status",
 		},
 		{
-			name:           "error parsing header",
-			disbursementID: draftDisbursement.ID,
+			name:           "no instructions found in file",
+			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
-				{},
+				{"phone", "id", "amount", "verification"},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "could not parse file",
+			expectedMessage: "could not parse csv file",
 		},
 		{
-			name:           "no instructions found in file",
-			disbursementID: draftDisbursement.ID,
+			name:           "headers invalid - email column missing for email contact type",
+			disbursementID: emailDraftDisbursement.ID,
 			csvRecords: [][]string{
-				{"phone", "id", "amount", "date-of-birth"},
+				{"id", "amount", "verification"},
+				{"123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: email column is required",
+				data.RegistrationContactTypeEmail),
+		},
+		{
+			name:           "columns invalid - email column not allowed for phone contact type",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "email", "id", "amount", "verification"},
+				{"+380445555555", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: email column is not allowed for this registration contact type",
+				data.RegistrationContactTypePhone),
+		},
+		{
+			name:           "columns invalid - phone column not allowed for email contact type",
+			disbursementID: emailDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "email", "id", "amount", "verification"},
+				{"+380445555555", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: phone column is not allowed for this registration contact type",
+				data.RegistrationContactTypeEmail),
+		},
+		{
+			name:           "columns invalid - wallet column missing for email-wallet contact type",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"email", "id", "amount"},
+				{"foobar@test.com", "123456789", "100.5"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: walletAddress column is required",
+				data.RegistrationContactTypeEmailAndWalletAddress),
+		},
+		{
+			name:           "columns invalid - verification column not allowed for wallet contact type",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"walletAddress", "email", "id", "amount", "verification"},
+				{"GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: verification column is not allowed for this registration contact type",
+				data.RegistrationContactTypeEmailAndWalletAddress),
+		},
+		{
+			name:           "instructions invalid - walletAddress is invalid",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"walletAddress", "email", "id", "amount"},
+				{"GB3SAK22KSTIFQAV5GKALBY5KJ3JRF2DLSED3E7PVH", "foobar@test.com", "123456789", "100.5"},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "no valid instructions found",
+			expectedMessage: "invalid wallet address",
 		},
 		{
 			name:            "max instructions exceeded",
-			disbursementID:  draftDisbursement.ID,
+			disbursementID:  phoneDraftDisbursement.ID,
 			csvRecords:      maxCSVRecords,
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "number of instructions exceeds maximum of : 10000",
+			expectedMessage: "number of instructions exceeds maximum of 10000",
 		},
 	}
 
@@ -934,7 +1169,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			fileContent, err := createCSVFile(t, tc.csvRecords)
 			require.NoError(t, err)
 
-			req, err := createInstructionsMultipartRequest(t, ctx, tc.fieldName, tc.disbursementID, fileContent)
+			req, err := createInstructionsMultipartRequest(t, ctx, tc.multipartFieldName, tc.actualFileName, tc.disbursementID, fileContent)
 			require.NoError(t, err)
 
 			// Record the response
@@ -1099,24 +1334,19 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	asset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool,
 		"USDC",
 		"GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	country := data.CreateCountryFixture(t, context.Background(), dbConnectionPool,
-		"FRA",
-		"France")
 
 	// create disbursements
 	disbursementWithReceivers := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
-		Name:    "disbursement with receivers",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement with receivers",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 	disbursementWithoutReceivers := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
-		Name:    "disbursement without receivers",
-		Status:  data.DraftDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
+		Name:   "disbursement without receivers",
+		Status: data.DraftDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
 	})
 
 	// create disbursement receivers
@@ -1159,7 +1389,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		{
 			ID:             receiver3.ID,
 			PhoneNumber:    receiver3.PhoneNumber,
-			Email:          *receiver3.Email,
+			Email:          receiver3.Email,
 			ExternalID:     receiver3.ExternalID,
 			ReceiverWallet: receiverWallet3,
 			Payment:        payment3,
@@ -1169,7 +1399,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		{
 			ID:             receiver2.ID,
 			PhoneNumber:    receiver2.PhoneNumber,
-			Email:          *receiver2.Email,
+			Email:          receiver2.Email,
 			ExternalID:     receiver2.ExternalID,
 			ReceiverWallet: receiverWallet2,
 			Payment:        payment2,
@@ -1179,7 +1409,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		{
 			ID:             receiver1.ID,
 			PhoneNumber:    receiver1.PhoneNumber,
-			Email:          *receiver1.Email,
+			Email:          receiver1.Email,
 			ExternalID:     receiver1.ExternalID,
 			ReceiverWallet: receiverWallet1,
 			Payment:        payment1,
@@ -1606,74 +1836,100 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
-	ctx := context.Background()
-
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
+	ctx := context.Background()
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	handler := &DisbursementHandler{
-		Models: models,
-	}
-
+	handler := &DisbursementHandler{Models: models}
 	r := chi.NewRouter()
 	r.Get("/disbursements/{id}/instructions", handler.GetDisbursementInstructions)
 
-	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
-	require.NotNil(t, disbursement)
-
-	t.Run("disbursement doesn't exist", func(t *testing.T) {
-		id := "9e0ff65f-f6e9-46e9-bf03-dc46723e3bfb"
-
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", id), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotFound.Error())
+	disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
+		{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
+		{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
+		{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
 	})
+	d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
+	require.NotNil(t, d)
 
-	t.Run("disbursement has no instructions", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", disbursement.ID), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
+	testCases := []struct {
+		name                 string
+		updateDisbursementFn func(d *data.Disbursement) error
+		getDisbursementIDFn  func(d *data.Disbursement) string
+		expectedStatus       int
+		expectedErrMessage   string
+		wantFilename         string
+	}{
+		{
+			name: "404-disbursement doesn't exist",
+			getDisbursementIDFn: func(d *data.Disbursement) string {
+				return "non-existent-disbursement-id"
+			},
+			expectedStatus:     http.StatusNotFound,
+			expectedErrMessage: services.ErrDisbursementNotFound.Error(),
+		},
+		{
+			name:                "404-disbursement has no instructions",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusNotFound,
+			expectedErrMessage:  "disbursement " + d.ID + " has no instructions file",
+		},
+		{
+			name: "200-disbursement has instructions",
+			updateDisbursementFn: func(d *data.Disbursement) error {
+				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+					ID:          d.ID,
+					FileContent: disbursementFileContent,
+					FileName:    "instructions.csv",
+				})
+			},
+			wantFilename:        "instructions.csv",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusOK,
+		},
+		{
+			name: "200-disbursement has instructions but filename is missing .csv",
+			updateDisbursementFn: func(d *data.Disbursement) error {
+				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+					ID:          d.ID,
+					FileContent: disbursementFileContent,
+					FileName:    "instructions.bat",
+				})
+			},
+			wantFilename:        "instructions.bat.csv",
+			getDisbursementIDFn: func(d *data.Disbursement) string { return d.ID },
+			expectedStatus:      http.StatusOK,
+		},
+	}
 
-		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.Contains(t, rr.Body.String(), fmt.Sprintf("disbursement %s has no instructions file", disbursement.ID))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.updateDisbursementFn != nil {
+				require.NoError(t, tc.updateDisbursementFn(d))
+			}
 
-	t.Run("disbursement has instructions", func(t *testing.T) {
-		disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
-			{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
-			{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
-			{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
+			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", tc.getDisbursementIDFn(d)), nil)
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			require.Equal(t, tc.expectedStatus, rr.Code)
+			if tc.expectedStatus != http.StatusOK {
+				require.Contains(t, rr.Body.String(), tc.expectedErrMessage)
+			} else {
+				t.Log(rr.Header())
+				require.Equal(t, "text/csv", rr.Header().Get("Content-Type"))
+				require.Equal(t, "attachment; filename=\""+tc.wantFilename+"\"", rr.Header().Get("Content-Disposition"))
+				require.Equal(t, string(disbursementFileContent), rr.Body.String())
+			}
 		})
-
-		err := models.Disbursements.Update(ctx, &data.DisbursementUpdate{
-			ID:          disbursement.ID,
-			FileContent: disbursementFileContent,
-			FileName:    "instructions.csv",
-		})
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/disbursements/%s/instructions", disbursement.ID), nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusOK, rr.Code)
-		require.Equal(t, "text/csv", rr.Header().Get("Content-Type"))
-		require.Equal(t, "attachment; filename=\"instructions.csv\"", rr.Header().Get("Content-Disposition"))
-		require.Equal(t, string(disbursementFileContent), rr.Body.String())
-	})
+	}
 }
 
 func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
@@ -1687,15 +1943,19 @@ func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
 	return &buf, nil
 }
 
-func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, fieldName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
+func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multipartFieldName, fileName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	if fieldName == "" {
-		fieldName = "file"
+	if multipartFieldName == "" {
+		multipartFieldName = "file"
 	}
 
-	part, err := writer.CreateFormFile(fieldName, "instructions.csv")
+	if fileName == "" {
+		fileName = "instructions.csv"
+	}
+
+	part, err := writer.CreateFormFile(multipartFieldName, fileName)
 	require.NoError(t, err)
 
 	_, err = io.Copy(part, fileContent)
@@ -1709,23 +1969,6 @@ func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, field
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req, nil
-}
-
-func assertPOSTResponse(t *testing.T, ctx context.Context, handler *DisbursementHandler, method, url, requestBody, want string, expectedStatus int) {
-	rr := httptest.NewRecorder()
-	req, _ := http.NewRequestWithContext(ctx, method, url, strings.NewReader(requestBody))
-	http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
-
-	resp := rr.Result()
-
-	respBody, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	assert.Equal(t, expectedStatus, resp.StatusCode)
-
-	if want != "" {
-		assert.JSONEq(t, want, string(respBody))
-	}
 }
 
 func buildURLWithQueryParams(baseURL, endpoint string, queryParams map[string]string) string {

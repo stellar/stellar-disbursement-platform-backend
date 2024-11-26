@@ -78,7 +78,7 @@ func Test_AWSSNS_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Once()
 
 	mAWS := awsSNSClient{snsService: &mAWSSNS, senderID: "senderID"}
-	err := mAWS.SendMessage(Message{ToPhoneNumber: "+14155555555", Message: "foo bar"})
+	err := mAWS.SendMessage(Message{ToPhoneNumber: "+14155555555", Body: "foo bar"})
 	require.EqualError(t, err, "sending AWS SNS SMS: test AWS SNS error")
 
 	mAWSSNS.AssertExpectations(t)
@@ -103,7 +103,7 @@ func Test_AWSSNS_SendMessage_success(t *testing.T) {
 		Once()
 
 	mAWS := awsSNSClient{snsService: &mAWSSNS, senderID: "senderID"}
-	err := mAWS.SendMessage(Message{ToPhoneNumber: "+14152222222", Message: "foo bar"})
+	err := mAWS.SendMessage(Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
 	require.NoError(t, err)
 
 	mAWSSNS.AssertExpectations(t)

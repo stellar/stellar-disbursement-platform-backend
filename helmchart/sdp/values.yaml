@@ -77,6 +77,9 @@ global:
     kafka:
       securityProtocol: #required
 
+  ## @param global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
+  singleTenantMode: false
+
 # =========================== START sdp ===========================
 ## @section Stellar Disbursement Platform (SDP) parameters
 ## @descriptionStart
@@ -108,7 +111,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "latest"
+    tag: "3.0.0-rc.1"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -139,7 +142,7 @@ sdp:
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
   ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts.
   ## @param sdp.configMap.data.METRICS_TYPE Defines the type of metrics system in use. Options: "PROMETHEUS".
-  ## @param sdp.configMap.data.EMAIL_SENDER_TYPE The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL".
+  ## @param sdp.configMap.data.EMAIL_SENDER_TYPE The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL", "TWILIO_EMAIL".
   ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS".
   ## @param sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
   ## @param sdp.configMap.data.CORS_ALLOWED_ORIGINS Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.
@@ -150,7 +153,7 @@ sdp:
   ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs are enabled in this instance ("true" or "false"). Default "false".
   ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
-  ## @param sdp.configMap.data.MAX_INVITATION_SMS_RESEND_ATTEMPTS The maximum number of times an invitation SMS can be resent. 0 or negative values disable the job.
+  ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
   ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
   configMap:
     annotations:
@@ -173,7 +176,7 @@ sdp:
       ENABLE_SCHEDULER: "false"
       SCHEDULER_PAYMENT_JOB_SECONDS: "3600"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "3600"
-      MAX_INVITATION_SMS_RESEND_ATTEMPTS: "3"
+      MAX_INVITATION_RESEND_ATTEMPTS: "3"
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
@@ -188,6 +191,8 @@ sdp:
   ## @param sdp.kubeSecrets.data.TWILIO_ACCOUNT_SID Account SID for authenticating to the Twilio service, used for sending text messages.
   ## @param sdp.kubeSecrets.data.TWILIO_AUTH_TOKEN Authentication token for the Twilio service.
   ## @param sdp.kubeSecrets.data.TWILIO_SERVICE_SID Service SID for the specific Twilio service being utilized.
+  ## @param sdp.kubeSecrets.data.TWILIO_SENDGRID_API_KEY API key for the Twilio SendGrid (email) service.
+  ## @param sdp.kubeSecrets.data.TWILIO_SENDGRID_SENDER_ADDRESS Email address used to send emails via Twilio SendGrid.
   ## @param sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token. This EC key needs to be at least as strong as prime256v1 (P-256).
   ## @param sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.
   ## @param sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token. Must be the same as Anchor Platform's SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET.
@@ -217,6 +222,8 @@ sdp:
       TWILIO_ACCOUNT_SID: MY_TWILIO_ACCOUNT_SID
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
+      TWILIO_SENDGRID_API_KEY: MY_TWILIO_SENDGRID_API_KEY
+      TWILIO_SENDGRID_SENDER_ADDRESS: MY_TWILIO_SENDGRID_SENDER_ADDRESS
       SENTRY_DSN: #optional
       EC256_PRIVATE_KEY: #required
       SEP10_SIGNING_PRIVATE_KEY: #required
@@ -245,7 +252,7 @@ sdp:
     enabled: true
     className: "nginx"
     annotations:
-      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+      nginx.ingress.kubernetes.io/custom-response-headers: "X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
       nginx.ingress.kubernetes.io/limit-rpm: "120"
       nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
     tls:
@@ -398,7 +405,7 @@ anchorPlatform:
     enabled: true
     className: "nginx"
     annotations:
-      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+      nginx.ingress.kubernetes.io/custom-response-headers: "X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
       nginx.ingress.kubernetes.io/limit-rpm: "120"
       nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
     tls:
@@ -529,7 +536,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:latest
+    fullName: stellar/stellar-disbursement-platform-frontend:3.0.0-rc.1
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.
