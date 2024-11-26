@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
 # Copy the built executable and all source files for debugging
 COPY --from=build /src/stellar-disbursement-platform /app/github.com/stellar/stellar-disbursement-platform
 # Build a debug version of the binary
-RUN go build -gcflags="all=-N -l" -o stellar-disbursement-platform .
+RUN go build -gcflags="all=-N -l" -o stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 # Install Delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 # Ensure the binary has executable permissions
