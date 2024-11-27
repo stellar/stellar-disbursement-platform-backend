@@ -90,17 +90,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y curl
         shell: bash
 
-      - name: Create integration test data
-        run: |
-          docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
-        shell: bash
-
-      - name: Restart Anchor Platform
-        run: |
-          docker restart e2e-anchor-platform
-        shell: bash
-
-      - name: Wait for Anchor Platform and SDP to be up
+      - name: Wait for the SDP to be up
         run: |
           wait_for_server() {
             local endpoint=$1
@@ -119,6 +109,37 @@ jobs:
           }
 
           wait_for_server http://localhost:8000/health 120
+          wait_for_server http://localhost:8003/health 120
+        shell: bash
+
+      - name: Create integration test data
+        run: |
+          docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
+        shell: bash
+
+      - name: Restart Anchor Platform
+        run: |
+          docker restart e2e-anchor-platform
+        shell: bash
+
+      - name: Wait for the Anchor Platform to be up
+        run: |
+          wait_for_server() {
+            local endpoint=$1
+            local max_wait_time=$2
+
+            SECONDS=0
+            while ! curl -s $endpoint > /dev/null; do
+              echo "Waiting for server at $endpoint to be up... $SECONDS seconds elapsed"
+              sleep 4
+              if [ $SECONDS -ge $max_wait_time ]; then
+                echo "Server at $endpoint is not up after $max_wait_time seconds."
+                exit 1
+              fi
+            done
+            echo "Server at $endpoint is up."
+          }
+
           wait_for_server http://localhost:8080/health 120
           wait_for_server http://localhost:8085/health 120
         shell: bash
