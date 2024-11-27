@@ -2,7 +2,6 @@ package integrationtests
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/gocarina/gocsv"
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/protocols/horizon/operations"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -46,28 +46,20 @@ func readDisbursementCSV(disbursementFilePath string, disbursementFileName strin
 	return instructions, nil
 }
 
-type PaymentHorizon struct {
-	ReceiverAccount       string `json:"to"`
-	Amount                string `json:"amount"`
-	AssetCode             string `json:"asset_code"`
-	AssetIssuer           string `json:"asset_issuer"`
-	TransactionSuccessful bool   `json:"transaction_successful"`
-}
-
-func getTransactionOnHorizon(client horizonclient.ClientInterface, transactionID string) (*PaymentHorizon, error) {
-	ph := &PaymentHorizon{}
+func getTransactionOnHorizon(client horizonclient.ClientInterface, transactionID string) (*operations.Payment, error) {
 	records, err := client.Payments(horizonclient.OperationRequest{ForTransaction: transactionID})
 	if err != nil {
-		return nil, fmt.Errorf("error checking payment in horizon: %w", err)
-	}
-	paymentRecord, err := json.Marshal(records.Embedded.Records[0])
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling payment record: %w", err)
-	}
-	err = json.Unmarshal(paymentRecord, ph)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshling payment record: %w", err)
+		return nil, fmt.Errorf("checking payment in horizon: %w", err)
 	}
 
-	return ph, nil
+	if len(records.Embedded.Records) == 0 {
+		return nil, fmt.Errorf("no payment records found in horizon for transaction %s", transactionID)
+	}
+
+	hPayment, ok := records.Embedded.Records[0].(operations.Payment)
+	if !ok {
+		return nil, fmt.Errorf("casting payment record to operations.Payment")
+	}
+
+	return &hPayment, nil
 }
