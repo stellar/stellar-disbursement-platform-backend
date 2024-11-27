@@ -69,10 +69,10 @@ Config_StellarEnvPhoneXLMFuturenet=(
 )
 
 options=(
-  # Config_StellarEnvPhoneUSDCTestnet[@]
-  # Config_CircleDBVaultPhoneUSDCTestnet[@]
-  # Config_StellarEnvEmailUSDCTestnet[@]
-  # Config_StellarEnvPhoneWithWalletUSDCTestnet[@]
+  Config_StellarEnvPhoneUSDCTestnet[@]
+  Config_CircleDBVaultPhoneUSDCTestnet[@]
+  Config_StellarEnvEmailUSDCTestnet[@]
+  Config_StellarEnvPhoneWithWalletUSDCTestnet[@]
   Config_StellarEnvPhoneXLMFuturenet[@]
 )
 
