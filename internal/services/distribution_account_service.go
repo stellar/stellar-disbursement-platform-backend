@@ -182,7 +182,6 @@ func (s *CircleDistributionAccountService) GetBalance(ctx context.Context, accou
 	if err != nil {
 		return 0, fmt.Errorf("getting balances for distribution account: %w", err)
 	}
-	log.Ctx(ctx).Warnf("accBalances: %+v", accBalances)
 
 	asset = data.Asset{Code: asset.Code, Issuer: asset.Issuer} // scrub the other fields
 	assetBalance, ok := accBalances[asset]
