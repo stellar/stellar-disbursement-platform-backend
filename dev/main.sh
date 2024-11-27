@@ -43,9 +43,8 @@ fi
 # prepare
 echo $DIVIDER
 echo "====> 👀 start calling docker compose -p sdp-multi-tenant down"
-docker ps -aq | xargs docker stop | xargs docker rm
 #docker compose -p sdp-multi-tenant down
-docker compose down
+docker compose -p sdp-multi-tenant down
 echo "====> ✅ finish calling docker compose down"
 
 # Run docker compose
