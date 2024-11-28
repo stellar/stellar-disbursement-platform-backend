@@ -22,10 +22,7 @@ services:
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE}
 
       # multi-tenant
-      EVENT_BROKER_TYPE: "KAFKA"
-      BROKER_URLS: "kafka:9092"
-      CONSUMER_GROUP_ID: "group-id"
-      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+      EVENT_BROKER_TYPE: "NONE"
     entrypoint: ""
     command:
       - sh

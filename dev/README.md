@@ -249,11 +249,20 @@ This will spin up the following services:
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
-- `kafka`: Kafka service running on ports `9092`, `9094`(external).
-- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
 - `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000`.
 
-### Remote Debugging
+
+### Using Kafka for Event Handling
+
+Using Kafka for event handling is optional. If you want to use Kafka, you can start the Kafka service by running the following command from the `dev` directory:
+
+```sh
+docker compose -p sdp-multi-tenant -f docker-compose.yml -f docker-compose-kafka.yml up -d
+```
+
+This will start the following containers on top of the ones listed above:
+- `kafka`: Kafka service running on ports `9092`, `9094`(external).
+- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
 
 ### Remote Debugging
 

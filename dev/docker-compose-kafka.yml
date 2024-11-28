@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  kafka:
+    image: docker.io/bitnami/kafka:3.6
+    ports:
+      - "9094:9094"
+      - "9092:9092"
+    volumes:
+      - "kafka-data:/bitnami"
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    healthcheck:
+      test: kafka-topics.sh --bootstrap-server kafka:9092 --list || exit -1
+      start_period: 10s
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  kafka-init:
+    image: docker.io/bitnami/kafka:3.6
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: |
+      "
+        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay --bootstrap-server kafka:9092
+
+        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay.dlq --bootstrap-server kafka:9092
+      "
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  sdp-api:
+    environment:
+      # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
+      EVENT_BROKER_TYPE: "KAFKA"
+      BROKER_URLS: "kafka:9092"
+      CONSUMER_GROUP_ID: "group-id"
+      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+
+      # scheduler has to be disabled to use kafka
+      ENABLE_SCHEDULER: "false"
+    depends_on:
+      kafka:
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
+
+  sdp-tss:
+    # Kafka Configuration
+    environment:
+      EVENT_BROKER_TYPE: "KAFKA"
+      BROKER_URLS: "kafka:9092"
+      CONSUMER_GROUP_ID: "group-id"
+      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+volumes:
+  kafka-data:
+    driver: local
