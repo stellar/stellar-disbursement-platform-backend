@@ -47,6 +47,11 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionForP
 			return fmt.Errorf("getting payment ID %s: %w", tx.PaymentID, err)
 		}
 
+		if payment.Disbursement.RegistrationContactType.IncludesWalletAddress {
+			log.Ctx(ctx).Debugf("skipping patching anchor transaction. Known-wallet ID payment %s wasn't registered with anchor platform", payment.ID)
+			return nil
+		}
+
 		if payment.ReceiverWallet.AnchorPlatformTransactionSyncedAt != nil && !payment.ReceiverWallet.AnchorPlatformTransactionSyncedAt.IsZero() {
 			log.Ctx(ctx).Infof("AP Transaction ID %s already patched", payment.ReceiverWallet.AnchorPlatformTransactionID)
 			return nil
@@ -92,7 +97,15 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 		// Step 2: Iterate over the payments.
 		receiverWalletIDs := make([]string, 0)
 		for _, payment := range payments {
-			// Step 3: Check if the AP transaction was already patched as completed. If it's true we don't need to report it anymore.
+			// Step 3: Check if the payment is a known wallet ID payment. If it is we don't need to patch the transaction in AP.
+			if payment.Disbursement.RegistrationContactType.IncludesWalletAddress {
+				log.Ctx(ctx).Debugf("[%s] skipping patching anchor transaction. Known-wallet ID payment %s wasn't registered with anchor platform",
+					utils.GetTypeName(s),
+					payment.ID)
+				return nil
+			}
+
+			// Step 4: Check if the AP transaction was already patched as completed. If it's true we don't need to report it anymore.
 			if _, ok := successfulPaymentsForAPTransactionID[payment.ReceiverWallet.AnchorPlatformTransactionID]; ok {
 				log.Ctx(ctx).Debugf(
 					"[%s] anchor platform transaction ID %q already patched as completed. No action needed",
@@ -102,7 +115,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 				continue
 			}
 
-			// Step 4: patch the transaction on the AP with the respective status
+			// Step 5: patch the transaction on the AP with the respective status
 			var statusMessage string
 			if payment.Status == data.FailedPaymentStatus {
 				statusMessage = failedStatusMessageFromPayment(payment)
@@ -116,13 +129,13 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 				successfulPaymentsForAPTransactionID[payment.ReceiverWallet.AnchorPlatformTransactionID] = struct{}{}
 			}
 
-			// Step 5: If the transaction was successfully patched we select it to be marked as synced.
+			// Step 6: If the transaction was successfully patched we select it to be marked as synced.
 			receiverWalletIDs = append(receiverWalletIDs, payment.ReceiverWallet.ID)
 		}
 
 		log.Ctx(ctx).Debugf("[%s] updating anchor platform transaction synced at for %d receiver wallet(s)", utils.GetTypeName(s), len(receiverWalletIDs))
 
-		// Step 6: we update the receiver_wallets table saying that the AP transaction associated with the user registration
+		// Step 7: we update the receiver_wallets table saying that the AP transaction associated with the user registration
 		// was successfully patched/synced.
 		_, err = s.sdpModels.ReceiverWallet.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbTx, receiverWalletIDs...)
 		if err != nil {

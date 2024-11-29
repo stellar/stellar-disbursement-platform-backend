@@ -63,6 +63,52 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		return syncedAt.Time
 	}
 
+	t.Run("doesn't patch the transaction when disbursement registration contact type is direct to wallet address", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallet.ID)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet:                  wallet,
+			Asset:                   asset,
+			Status:                  data.StartedDisbursementStatus,
+			VerificationField:       data.VerificationTypeDateOfBirth,
+			RegistrationContactType: data.RegistrationContactTypeEmailAndWalletAddress,
+		})
+
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		sErr := svc.PatchAPTransactionForPaymentEvent(ctx, schemas.EventPaymentCompletedData{
+			PaymentID:            payment.ID,
+			PaymentStatus:        string(data.SuccessPaymentStatus),
+			PaymentStatusMessage: "",
+			StellarTransactionID: "tx-hash",
+		})
+		assert.NoError(t, sErr)
+
+		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
+		assert.True(t, syncedAt.IsZero())
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Equal(t, fmt.Sprintf("skipping patching anchor transaction. Known-wallet ID payment %s wasn't registered with anchor platform", payment.ID), entries[0].Message)
+	})
+
 	t.Run("doesn't patch the transaction when payment isn't on Success or Failed status", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
@@ -425,6 +471,46 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 		require.Len(t, entries, 2)
 		assert.Equal(t, "[PatchAnchorPlatformTransactionCompletionService] got 0 payments to process", entries[0].Message)
 		assert.Equal(t, "[PatchAnchorPlatformTransactionCompletionService] updating anchor platform transaction synced at for 0 receiver wallet(s)", entries[1].Message)
+	})
+
+	t.Run("doesn't patch transactions when known wallet ID payment wasn't registered with anchor platform", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallet.ID)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet:                  wallet,
+			Asset:                   asset,
+			Status:                  data.StartedDisbursementStatus,
+			VerificationField:       data.VerificationTypeDateOfBirth,
+			RegistrationContactType: data.RegistrationContactTypeEmailAndWalletAddress,
+		})
+
+		kwaPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+		err := svc.PatchAPTransactionsForPayments(ctx)
+		require.NoError(t, err)
+
+		entries := getEntries()
+		require.Len(t, entries, 2)
+
+		assert.Equal(t, "[PatchAnchorPlatformTransactionCompletionService] got 1 payments to process", entries[0].Message)
+		assert.Equal(t, fmt.Sprintf("[PatchAnchorPlatformTransactionCompletionService] skipping patching anchor transaction. "+
+			"Known-wallet ID payment %s wasn't registered with anchor platform", kwaPayment.ID), entries[1].Message)
 	})
 
 	t.Run("doesn't mark as synced when fails patching anchor platform transaction when payment is success", func(t *testing.T) {
