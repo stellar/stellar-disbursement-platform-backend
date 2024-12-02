@@ -560,7 +560,7 @@ func Test_AuthManager_CreateUser(t *testing.T) {
 
 		u, err := authManager.CreateUser(ctx, user, password)
 
-		assert.EqualError(t, err, "error creating user: unexpected error")
+		assert.EqualError(t, err, "creating user: unexpected error")
 		assert.Nil(t, u)
 	})
 

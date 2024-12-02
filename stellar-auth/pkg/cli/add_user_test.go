@@ -237,22 +237,22 @@ func Test_execAddUserFunc(t *testing.T) {
 
 		// Invalid invalid
 		err := execAddUser(ctx, dbt.DSN, "", firstName, lastName, password, false, []string{}, tenantID)
-		assert.EqualError(t, err, "error creating user: error creating user: error validating user fields: email is required")
+		assert.EqualError(t, err, "creating user: creating user: validating user fields: email is required")
 
 		err = execAddUser(ctx, dbt.DSN, "wrongemail", firstName, lastName, password, false, []string{}, tenantID)
-		assert.EqualError(t, err, `error creating user: error creating user: error validating user fields: email is invalid: the provided email "wrongemail" is not valid`)
+		assert.EqualError(t, err, `creating user: creating user: validating user fields: email is invalid: the provided email "wrongemail" is not valid`)
 
 		// Invalid password
 		err = execAddUser(ctx, dbt.DSN, email, firstName, lastName, "pass", false, []string{}, tenantID)
-		assert.EqualError(t, err, fmt.Sprintf("error creating user: error creating user: error encrypting password: password should have at least %d characters", auth.MinPasswordLength))
+		assert.EqualError(t, err, fmt.Sprintf("creating user: creating user: encrypting password: password should have at least %d characters", auth.MinPasswordLength))
 
 		// Invalid first name
 		err = execAddUser(ctx, dbt.DSN, email, "", lastName, "pass", false, []string{}, tenantID)
-		assert.EqualError(t, err, "error creating user: error creating user: error validating user fields: first name is required")
+		assert.EqualError(t, err, "creating user: creating user: validating user fields: first name is required")
 
 		// Invalid last name
 		err = execAddUser(ctx, dbt.DSN, email, firstName, "", "pass", false, []string{}, tenantID)
-		assert.EqualError(t, err, "error creating user: error creating user: error validating user fields: last name is required")
+		assert.EqualError(t, err, "creating user: creating user: validating user fields: last name is required")
 
 		// Valid user
 		err = execAddUser(ctx, dbt.DSN, email, firstName, lastName, password, false, []string{}, tenantID)
@@ -284,7 +284,7 @@ func Test_execAddUserFunc(t *testing.T) {
 		require.NoError(t, err)
 
 		err = execAddUser(ctx, dbt.DSN, email, firstName, lastName, password, false, []string{}, tenantID)
-		assert.EqualError(t, err, `error creating user: error creating user: a user with this email already exists`)
+		assert.EqualError(t, err, `creating user: creating user: a user with this email already exists`)
 	})
 
 	t.Run("set the user roles", func(t *testing.T) {
