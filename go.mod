@@ -18,7 +18,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/manifoldco/promptui v0.9.0
-	github.com/nyaruka/phonenumbers v1.4.2
+	github.com/nyaruka/phonenumbers v1.4.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.11.1
 	github.com/rubenv/sql-migrate v1.7.0

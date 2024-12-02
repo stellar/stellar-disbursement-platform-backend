@@ -192,7 +192,7 @@ github.com/nats-io/nuid v1.0.1
 github.com/nelsam/hel/v2 v2.3.3
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
 github.com/nxadm/tail v1.4.11
-github.com/nyaruka/phonenumbers v1.4.2
+github.com/nyaruka/phonenumbers v1.4.3
 github.com/olekukonko/tablewriter v0.0.5
 github.com/onsi/ginkgo v1.16.5
 github.com/onsi/gomega v1.27.10
