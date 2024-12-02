@@ -10,6 +10,7 @@ import (
 
 func Test_AllNetworkTypes(t *testing.T) {
 	expectedNetworkTypes := []NetworkType{
+		FuturenetNetworkType,
 		TestnetNetworkType,
 		PubnetNetworkType,
 	}
@@ -115,7 +116,7 @@ func Test_GetNetworkTypeFromNetworkPassphrase(t *testing.T) {
 		{
 			networkPassphrase:   "invalid",
 			expectedNetworkType: "",
-			expectedError:       "invalid network passphrase provided",
+			expectedError:       `invalid network passphrase provided "invalid"`,
 		},
 	}
 

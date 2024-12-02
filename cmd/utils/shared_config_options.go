@@ -231,14 +231,7 @@ func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) 
 			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
-		&config.ConfigOption{
-			Name:        "horizon-url",
-			Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
-			OptType:     types.String,
-			ConfigKey:   &opts.HorizonURL,
-			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-			Required:    true,
-		},
+		HorizonURL(&opts.HorizonURL),
 	)
 }
 
@@ -337,6 +330,17 @@ func NetworkPassphrase(targetPointer interface{}) *config.ConfigOption {
 		OptType:     types.String,
 		FlagDefault: network.TestNetworkPassphrase,
 		ConfigKey:   targetPointer,
+		Required:    true,
+	}
+}
+
+func HorizonURL(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "horizon-url",
+		Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
+		OptType:     types.String,
+		ConfigKey:   targetPointer,
+		FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
 		Required:    true,
 	}
 }

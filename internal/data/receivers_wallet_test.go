@@ -742,6 +742,14 @@ func Test_VerifyReceiverWalletOTP(t *testing.T) {
 			otpCreatedAt:      expiredOTPCreatedAt,
 			wantErr:           nil,
 		},
+		{
+			name:              "matching OTP fails when OTP is expired but we pass TestnetAlwaysValidOTP in Futurenet",
+			networkPassphrase: network.FutureNetworkPassphrase,
+			attemptedOTP:      TestnetAlwaysValidOTP,
+			otp:               "123456",
+			otpCreatedAt:      expiredOTPCreatedAt,
+			wantErr:           nil,
+		},
 
 		// OTP is valid 🎉
 		{
@@ -763,6 +771,14 @@ func Test_VerifyReceiverWalletOTP(t *testing.T) {
 		{
 			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Testnet",
 			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      TestnetAlwaysValidOTP,
+			otp:               TestnetAlwaysValidOTP,
+			otpCreatedAt:      validOTPTime,
+			wantErr:           nil,
+		},
+		{
+			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Futurenet",
+			networkPassphrase: network.FutureNetworkPassphrase,
 			attemptedOTP:      TestnetAlwaysValidOTP,
 			otp:               TestnetAlwaysValidOTP,
 			otpCreatedAt:      validOTPTime,

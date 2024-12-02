@@ -53,6 +53,8 @@ type IntegrationTestsOpts struct {
 	AdminServerApiKey          string
 	CircleUSDCWalletID         string
 	CircleAPIKey               string
+	HorizonURL                 string
+	NetworkPassphrase          string
 }
 
 type IntegrationTestsService struct {
@@ -116,7 +118,10 @@ func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsSer
 
 func (it *IntegrationTestsService) initServices(_ context.Context, opts IntegrationTestsOpts) {
 	// initialize default testnet horizon client
-	it.horizonClient = horizonclient.DefaultTestNetClient
+	it.horizonClient = &horizonclient.Client{
+		HorizonURL: opts.HorizonURL,
+		HTTP:       httpclient.DefaultClient(),
+	}
 
 	// initialize anchor platform integration tests service
 	it.anchorPlatform = &AnchorPlatformIntegrationTests{
@@ -309,7 +314,7 @@ func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Conte
 		return fmt.Errorf("payment was not processed successfully by TSS: %+v", payment)
 	}
 
-	log.Ctx(ctx).Info("Validating transaction on Stellar network...")
+	log.Ctx(ctx).Infof("Validating transaction %s is on the Stellar network...", payment.StellarTransactionID)
 	hPayment, getPaymentErr := getTransactionOnHorizon(it.horizonClient, payment.StellarTransactionID)
 	if getPaymentErr != nil {
 		return fmt.Errorf("getting transaction on Stellar network: %w", getPaymentErr)

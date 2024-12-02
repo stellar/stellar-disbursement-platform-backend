@@ -17,8 +17,9 @@ import (
 type WalletsNetworkMapType map[utils.NetworkType][]data.Wallet
 
 var DefaultWalletsNetworkMap = WalletsNetworkMapType{
-	utils.PubnetNetworkType:  wallets.PubnetWallets,
-	utils.TestnetNetworkType: wallets.TestnetWallets,
+	utils.PubnetNetworkType:    wallets.PubnetWallets,
+	utils.TestnetNetworkType:   wallets.TestnetWallets,
+	utils.FuturenetNetworkType: wallets.FuturenetWallets,
 }
 
 // SetupWalletsForProperNetwork updates and inserts wallets for the given Network Passphrase (`network`). So it avoids the application having
