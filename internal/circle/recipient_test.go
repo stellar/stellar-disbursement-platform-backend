@@ -9,7 +9,7 @@ import (
 )
 
 func Test_RecipientRequest_validate(t *testing.T) {
-	idempotencykey := uuid.NewString()
+	idempotencyKey := uuid.NewString()
 
 	testCases := []struct {
 		name            string
@@ -31,14 +31,14 @@ func Test_RecipientRequest_validate(t *testing.T) {
 		{
 			name: "🔴Address is required",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 			},
 			wantErrContains: "address must be provided",
 		},
 		{
 			name: "🔴Address must be a valid Stellar public key",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 				Address:        "invalid",
 			},
 			wantErrContains: "address is not a valid Stellar public key",
@@ -46,7 +46,7 @@ func Test_RecipientRequest_validate(t *testing.T) {
 		{
 			name: "🔴Chain must be XLM or left empty",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 				Address:        "GCESKSSHPZKB6IE67LFZRZBGSX2FTHP4LUOIOZ54BUQFHYCQGH3WGUNX",
 				Chain:          "FOO",
 			},
@@ -55,7 +55,7 @@ func Test_RecipientRequest_validate(t *testing.T) {
 		{
 			name: "🔴Matadata is required",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 				Address:        "GCESKSSHPZKB6IE67LFZRZBGSX2FTHP4LUOIOZ54BUQFHYCQGH3WGUNX",
 				Chain:          StellarChainCode,
 			},
@@ -64,7 +64,7 @@ func Test_RecipientRequest_validate(t *testing.T) {
 		{
 			name: "🔴Metadata.Nickname is required",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 				Address:        "GCESKSSHPZKB6IE67LFZRZBGSX2FTHP4LUOIOZ54BUQFHYCQGH3WGUNX",
 				Chain:          StellarChainCode,
 				Metadata: RecipientMetadata{
@@ -76,7 +76,7 @@ func Test_RecipientRequest_validate(t *testing.T) {
 		{
 			name: "🔴Metadata.Email must be a valid email",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 				Address:        "GCESKSSHPZKB6IE67LFZRZBGSX2FTHP4LUOIOZ54BUQFHYCQGH3WGUNX",
 				Chain:          StellarChainCode,
 				Metadata: RecipientMetadata{
@@ -89,7 +89,7 @@ func Test_RecipientRequest_validate(t *testing.T) {
 		{
 			name: "🟢valid without email nor chain",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 				Address:        "GCESKSSHPZKB6IE67LFZRZBGSX2FTHP4LUOIOZ54BUQFHYCQGH3WGUNX",
 				Metadata: RecipientMetadata{
 					Nickname: "+14155556789",
@@ -99,7 +99,7 @@ func Test_RecipientRequest_validate(t *testing.T) {
 		{
 			name: "🟢valid with email and chain",
 			abr: &RecipientRequest{
-				IdempotencyKey: idempotencykey,
+				IdempotencyKey: idempotencyKey,
 				Address:        "GCESKSSHPZKB6IE67LFZRZBGSX2FTHP4LUOIOZ54BUQFHYCQGH3WGUNX",
 				Chain:          StellarChainCode,
 				Metadata: RecipientMetadata{

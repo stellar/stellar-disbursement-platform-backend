@@ -36,37 +36,37 @@ type RecipientRequest struct {
 	Metadata       RecipientMetadata `json:"metadata"`
 }
 
-func (abr *RecipientRequest) validate() error {
-	if abr.IdempotencyKey == "" {
+func (rr *RecipientRequest) validate() error {
+	if rr.IdempotencyKey == "" {
 		return errors.New("idempotency key must be provided")
 	}
-	if _, err := uuid.Parse(abr.IdempotencyKey); err != nil {
+	if _, err := uuid.Parse(rr.IdempotencyKey); err != nil {
 		return errors.New("idempotency key is not a valid UUID")
 	}
 
-	if abr.Address == "" {
+	if rr.Address == "" {
 		return errors.New("address must be provided")
 	}
-	if !strkey.IsValidEd25519PublicKey(abr.Address) {
+	if !strkey.IsValidEd25519PublicKey(rr.Address) {
 		return errors.New("address is not a valid Stellar public key")
 	}
 
-	if abr.Chain != "" && abr.Chain != StellarChainCode {
-		return fmt.Errorf("invalid chain provided %q", abr.Chain)
-	} else if abr.Chain == "" {
-		abr.Chain = StellarChainCode
+	if rr.Chain != "" && rr.Chain != StellarChainCode {
+		return fmt.Errorf("invalid chain provided %q", rr.Chain)
+	} else if rr.Chain == "" {
+		rr.Chain = StellarChainCode
 	}
 
-	if utils.IsEmpty(abr.Metadata) {
+	if utils.IsEmpty(rr.Metadata) {
 		return errors.New("metadata must be provided")
 	}
 
-	if abr.Metadata.Nickname == "" {
+	if rr.Metadata.Nickname == "" {
 		return errors.New("metadata nickname must be provided")
 	}
 
-	if abr.Metadata.Email != "" {
-		if err := utils.ValidateEmail(abr.Metadata.Email); err != nil {
+	if rr.Metadata.Email != "" {
+		if err := utils.ValidateEmail(rr.Metadata.Email); err != nil {
 			return errors.New("metadata email is not a valid email")
 		}
 	}
