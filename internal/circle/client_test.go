@@ -593,6 +593,97 @@ func Test_Client_PostPayout(t *testing.T) {
 	})
 }
 
+func Test_Client_GetPayoutByID(t *testing.T) {
+	ctx := context.Background()
+	t.Run("get payout by id error", func(t *testing.T) {
+		cc, cMocks := newClientWithMocks(t)
+		testError := errors.New("test error")
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(nil, testError).
+			Once()
+
+		payout, err := cc.GetPayoutByID(ctx, "test-id")
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/payouts/test-id: %w", testError).Error())
+		assert.Nil(t, payout)
+	})
+
+	t.Run("get payout by id fails auth", func(t *testing.T) {
+		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
+		cc, cMocks := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
+			}, nil).
+			Once()
+		cMocks.tenantManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+		expectedLabels := map[string]string{
+			"endpoint":    payoutPath,
+			"method":      http.MethodGet,
+			"status":      "success",
+			"status_code": strconv.Itoa(http.StatusUnauthorized),
+			"tenant_name": tnt.Name,
+		}
+		cMocks.monitorServiceMock.
+			On("MonitorHistogram", mock.Anything, monitor.CircleAPIRequestDurationTag, expectedLabels).
+			Return(nil).Once()
+		cMocks.monitorServiceMock.
+			On("MonitorCounters", monitor.CircleAPIRequestsTotalTag, expectedLabels).
+			Return(nil).Once()
+
+		payout, err := cc.GetPayoutByID(ctx, "test-id")
+		assert.EqualError(t, err, "handling API response error: circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.Nil(t, payout)
+	})
+
+	t.Run("get payout by id successful", func(t *testing.T) {
+		cc, cMocks := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"data": {"id": "test-id"}}`)),
+			}, nil).
+			Run(func(args mock.Arguments) {
+				req, ok := args.Get(0).(*http.Request)
+				assert.True(t, ok)
+
+				assert.Equal(t, "http://localhost:8080/v1/payouts/test-id", req.URL.String())
+				assert.Equal(t, http.MethodGet, req.Method)
+				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+			}).
+			Once()
+
+		expectedLabels := map[string]string{
+			"endpoint":    payoutPath,
+			"method":      http.MethodGet,
+			"status":      "success",
+			"status_code": strconv.Itoa(http.StatusOK),
+			"tenant_name": tnt.Name,
+		}
+		cMocks.monitorServiceMock.
+			On("MonitorHistogram", mock.Anything, monitor.CircleAPIRequestDurationTag, expectedLabels).
+			Return(nil).Once()
+		cMocks.monitorServiceMock.
+			On("MonitorCounters", monitor.CircleAPIRequestsTotalTag, expectedLabels).
+			Return(nil).Once()
+
+		payout, err := cc.GetPayoutByID(ctx, "test-id")
+		assert.NoError(t, err)
+		assert.Equal(t, "test-id", payout.ID)
+	})
+}
+
 func Test_Client_GetBusinessBalances(t *testing.T) {
 	ctx := context.Background()
 	t.Run("get business balances error", func(t *testing.T) {
