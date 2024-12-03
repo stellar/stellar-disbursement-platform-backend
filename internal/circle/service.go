@@ -151,6 +151,38 @@ func (s *Service) GetTransferByID(ctx context.Context, transferID string) (*Tran
 	return client.GetTransferByID(ctx, transferID)
 }
 
+func (s *Service) PostRecipient(ctx context.Context, recipientRequest RecipientRequest) (*Recipient, error) {
+	client, err := s.getClientForTenantInContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.PostRecipient(ctx, recipientRequest)
+}
+
+func (s *Service) GetRecipientByID(ctx context.Context, recipientID string) (*Recipient, error) {
+	client, err := s.getClientForTenantInContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.GetRecipientByID(ctx, recipientID)
+}
+
+func (s *Service) PostPayout(ctx context.Context, payoutRequest PayoutRequest) (*Payout, error) {
+	client, err := s.getClientForTenantInContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.PostPayout(ctx, payoutRequest)
+}
+
+func (s *Service) GetPayoutByID(ctx context.Context, payoutID string) (*Payout, error) {
+	client, err := s.getClientForTenantInContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.GetPayoutByID(ctx, payoutID)
+}
+
 func (s *Service) GetBusinessBalances(ctx context.Context) (*Balances, error) {
 	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {

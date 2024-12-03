@@ -37,8 +37,12 @@ var authErrorStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
 //go:generate mockery --name=ClientInterface --case=underscore --structname=MockClient --filename=client_mock.go --inpackage
 type ClientInterface interface {
 	Ping(ctx context.Context) (bool, error)
-	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error)
-	GetTransferByID(ctx context.Context, id string) (*Transfer, error)
+	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error) // TODO: remove
+	GetTransferByID(ctx context.Context, id string) (*Transfer, error)                    // TODO: remove
+	PostRecipient(ctx context.Context, recipientRequest RecipientRequest) (*Recipient, error)
+	GetRecipientByID(ctx context.Context, id string) (*Recipient, error)
+	PostPayout(ctx context.Context, payoutRequest PayoutRequest) (*Payout, error)
+	GetPayoutByID(ctx context.Context, id string) (*Payout, error)
 	GetBusinessBalances(ctx context.Context) (*Balances, error)
 	GetAccountConfiguration(ctx context.Context) (*AccountConfiguration, error)
 }
