@@ -24,6 +24,7 @@ import (
 const (
 	pingPath             = "/ping"
 	transferPath         = "/v1/transfers"
+	payoutPath           = "/v1/payouts"
 	businessBalancesPath = "/v1/businessAccount/balances"
 	configurationPath    = "/v1/configuration"
 	addressRecipientPath = "/v1/addressBook/recipients"
@@ -228,6 +229,41 @@ func (client *Client) GetRecipientByID(ctx context.Context, id string) (*Recipie
 	}
 
 	return parseRecipientResponse(resp)
+}
+
+// PostPayout creates a new payout to a recipient.
+//
+// Circle API documentation:
+// https://developers.circle.com/api-reference/circle-mint/payouts/create-payout.
+func (client *Client) PostPayout(ctx context.Context, payoutRequest PayoutRequest) (*Payout, error) {
+	err := payoutRequest.validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating payout request: %w", err)
+	}
+
+	u, err := url.JoinPath(client.BasePath, payoutPath)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	payload, err := json.Marshal(payoutRequest)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling request: %w", err)
+	}
+
+	resp, err := client.request(ctx, payoutPath, u, http.MethodPost, true, payload)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parsePayoutResponse(resp)
 }
 
 // GetBusinessBalances retrieves the available and unsettled balances for different currencies.
