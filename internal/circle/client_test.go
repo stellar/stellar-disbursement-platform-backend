@@ -486,6 +486,113 @@ func Test_Client_GetRecipientByID(t *testing.T) {
 	})
 }
 
+func Test_Client_PostPayout(t *testing.T) {
+	ctx := context.Background()
+	validPayoutReq := PayoutRequest{
+		IdempotencyKey: uuid.NewString(),
+		Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "source-id"},
+		Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: StellarChainCode, Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF", AddressTag: "txmemo2"},
+		Amount:         Balance{Amount: "100.00", Currency: "USD"},
+		ToAmount:       ToAmount{Currency: "USD"},
+	}
+
+	t.Run("post payout error", func(t *testing.T) {
+		cc, cMocks := newClientWithMocks(t)
+		testError := errors.New("test error")
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(nil, testError).
+			Once()
+
+		payout, err := cc.PostPayout(ctx, validPayoutReq)
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/payouts: %w", testError).Error())
+		assert.Nil(t, payout)
+	})
+
+	t.Run("post payout fails to validate request", func(t *testing.T) {
+		cc, _ := newClientWithMocks(t)
+		payout, err := cc.PostPayout(ctx, PayoutRequest{})
+		assert.EqualError(t, err, "validating payout request: idempotency key must be provided")
+		assert.Nil(t, payout)
+	})
+
+	t.Run("post payout fails auth", func(t *testing.T) {
+		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
+		cc, cMocks := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
+			}, nil).
+			Once()
+		cMocks.tenantManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+		expectedLabels := map[string]string{
+			"endpoint":    payoutPath,
+			"method":      http.MethodPost,
+			"status":      "success",
+			"status_code": strconv.Itoa(http.StatusUnauthorized),
+			"tenant_name": tnt.Name,
+		}
+		cMocks.monitorServiceMock.
+			On("MonitorHistogram", mock.Anything, monitor.CircleAPIRequestDurationTag, expectedLabels).
+			Return(nil).Once()
+		cMocks.monitorServiceMock.
+			On("MonitorCounters", monitor.CircleAPIRequestsTotalTag, expectedLabels).
+			Return(nil).Once()
+
+		payout, err := cc.PostPayout(ctx, validPayoutReq)
+		assert.EqualError(t, err, "handling API response error: circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.Nil(t, payout)
+	})
+
+	t.Run("post transfer successful", func(t *testing.T) {
+		cc, cMocks := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusCreated,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"data": {"id": "test-id"}}`)),
+			}, nil).
+			Run(func(args mock.Arguments) {
+				req, ok := args.Get(0).(*http.Request)
+				assert.True(t, ok)
+
+				assert.Equal(t, "http://localhost:8080/v1/payouts", req.URL.String())
+				assert.Equal(t, http.MethodPost, req.Method)
+				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+				assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+			}).
+			Once()
+
+		expectedLabels := map[string]string{
+			"endpoint":    payoutPath,
+			"method":      http.MethodPost,
+			"status":      "success",
+			"status_code": strconv.Itoa(http.StatusCreated),
+			"tenant_name": "test-tenant",
+		}
+		cMocks.monitorServiceMock.
+			On("MonitorHistogram", mock.Anything, monitor.CircleAPIRequestDurationTag, expectedLabels).
+			Return(nil).Once()
+		cMocks.monitorServiceMock.
+			On("MonitorCounters", monitor.CircleAPIRequestsTotalTag, expectedLabels).
+			Return(nil).Once()
+
+		payout, err := cc.PostPayout(ctx, validPayoutReq)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-id", payout.ID)
+	})
+}
+
 func Test_Client_GetBusinessBalances(t *testing.T) {
 	ctx := context.Background()
 	t.Run("get business balances error", func(t *testing.T) {
