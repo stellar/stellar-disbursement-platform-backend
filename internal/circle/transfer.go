@@ -128,7 +128,7 @@ func (tr TransferRequest) validate() error {
 	return nil
 }
 
-// parseTransferResponse parses the response from the Circle APIs
+// parseTransferResponse parses the response from the Circle APIs.
 func parseTransferResponse(resp *http.Response) (*Transfer, error) {
 	var transferResponse TransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&transferResponse); err != nil {

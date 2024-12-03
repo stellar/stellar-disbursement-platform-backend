@@ -101,7 +101,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 		Message string `json:"message"`
 	}
 	if err = json.NewDecoder(resp.Body).Decode(&pingResp); err != nil {
-		return false, err
+		return false, fmt.Errorf("decoding Ping response: %w", err)
 	}
 
 	if pingResp.Message == "pong" {
@@ -127,7 +127,7 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 
 	transferData, err := json.Marshal(transferReq)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshalling transfer request: %w", err)
 	}
 
 	resp, err := client.request(ctx, transferPath, u, http.MethodPost, true, transferData)
@@ -226,13 +226,13 @@ func (re RetryableError) Error() string {
 }
 
 // request makes an HTTP request to the Circle API.
-func (client *Client) request(ctx context.Context, path, u, method string, isAuthed bool, bodyBytes []byte) (*http.Response, error) {
+func (client *Client) request(ctx context.Context, path, rURL, method string, isAuthed bool, bodyBytes []byte) (*http.Response, error) {
 	var resp *http.Response
 	err := retry.Do(
 		func() error {
 			startTime := time.Now()
 			bodyReader := bytes.NewReader(bodyBytes)
-			req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
+			req, err := http.NewRequestWithContext(ctx, method, rURL, bodyReader)
 			if err != nil {
 				return fmt.Errorf("creating request: %w", err)
 			}
@@ -249,12 +249,12 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 			client.recordCircleAPIMetrics(ctx, method, path, startTime, resp, err)
 
 			if err != nil {
-				return fmt.Errorf("submitting request to %s: %w", u, err)
+				return fmt.Errorf("submitting request to %s: %w", rURL, err)
 			}
 
 			if resp.StatusCode == http.StatusTooManyRequests {
 				retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-				log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, retry after: %s", u, retryAfter)
+				log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, retry after: %s", rURL, retryAfter)
 				return RetryableError{
 					err:        fmt.Errorf("rate limited, retry after: %s", retryAfter),
 					retryAfter: retryAfter,
@@ -278,7 +278,7 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 			return errors.As(err, &RetryableError{})
 		}),
 		retry.OnRetry(func(n uint, err error) {
-			log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, Retry number %d due to: %s", u, n, err)
+			log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, Retry number %d due to: %s", rURL, n, err)
 		}),
 		retry.LastErrorOnly(true),
 	)
