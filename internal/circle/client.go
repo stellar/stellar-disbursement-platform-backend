@@ -26,6 +26,7 @@ const (
 	transferPath         = "/v1/transfers"
 	businessBalancesPath = "/v1/businessAccount/balances"
 	configurationPath    = "/v1/configuration"
+	addressRecipientPath = "/v1/addressBook/recipients"
 )
 
 var authErrorStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
@@ -167,6 +168,42 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	}
 
 	return parseTransferResponse(resp)
+}
+
+// PostRecipient registers a new recipient in Circle's address book. This is needed in order to send a payout to that
+// recipient.
+//
+// Circle API documentation:
+// https://developers.circle.com/api-reference/circle-mint/payouts/create-address-book-recipient.
+func (client *Client) PostRecipient(ctx context.Context, recipientRequest RecipientRequest) (*Recipient, error) {
+	err := recipientRequest.validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating recipient request: %w", err)
+	}
+
+	u, err := url.JoinPath(client.BasePath, addressRecipientPath)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	recipientData, err := json.Marshal(recipientRequest)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling recipient request: %w", err)
+	}
+
+	resp, err := client.request(ctx, addressRecipientPath, u, http.MethodPost, true, recipientData)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parseRecipientResponse(resp)
 }
 
 // GetBusinessBalances retrieves the available and unsettled balances for different currencies.

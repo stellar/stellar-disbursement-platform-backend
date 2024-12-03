@@ -1,8 +1,10 @@
 package circle
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go/strkey"
@@ -70,4 +72,19 @@ func (abr *RecipientRequest) validate() error {
 	}
 
 	return nil
+}
+
+// RecipientResponse represents the response from the Circle APIs.
+type RecipientResponse struct {
+	Data Recipient `json:"data"`
+}
+
+// parseRecipientResponse parses the response from the Circle APIs.
+func parseRecipientResponse(resp *http.Response) (*Recipient, error) {
+	var recipientResponse RecipientResponse
+	if err := json.NewDecoder(resp.Body).Decode(&recipientResponse); err != nil {
+		return nil, fmt.Errorf("decoding recipient response: %w", err)
+	}
+
+	return &recipientResponse.Data, nil
 }
