@@ -206,6 +206,30 @@ func (client *Client) PostRecipient(ctx context.Context, recipientRequest Recipi
 	return parseRecipientResponse(resp)
 }
 
+// GetRecipientByID retrieves a recipient by its ID.
+//
+// Circle API documentation: https://developers.circle.com/api-reference/circle-mint/payouts/get-address-book-recipient.
+func (client *Client) GetRecipientByID(ctx context.Context, id string) (*Recipient, error) {
+	u, err := url.JoinPath(client.BasePath, addressRecipientPath, id)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	resp, err := client.request(ctx, addressRecipientPath, u, http.MethodGet, true, nil)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parseRecipientResponse(resp)
+}
+
 // GetBusinessBalances retrieves the available and unsettled balances for different currencies.
 func (client *Client) GetBusinessBalances(ctx context.Context) (*Balances, error) {
 	url, err := url.JoinPath(client.BasePath, businessBalancesPath)
