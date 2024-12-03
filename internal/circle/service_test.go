@@ -289,6 +289,83 @@ func Test_Service_allMethods(t *testing.T) {
 		assert.Equal(t, &Transfer{ID: "transfer-id"}, res)
 	})
 
+	t.Run("PostRecipient", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		recipientRequest := RecipientRequest{
+			IdempotencyKey: "idempotency-key",
+			Address:        pubKey,
+			Chain:          StellarChainCode,
+			Metadata:       RecipientMetadata{Nickname: "foo-bar"},
+		}
+		mCircleClient.
+			On("PostRecipient", ctx, recipientRequest).
+			Return(&Recipient{ID: "recipient-id"}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.PostRecipient(ctx, recipientRequest)
+		assert.NoError(t, err)
+		assert.Equal(t, &Recipient{ID: "recipient-id"}, res)
+	})
+
+	t.Run("GetRecipientByID", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		mCircleClient.
+			On("GetRecipientByID", ctx, "recipient-id").
+			Return(&Recipient{ID: "recipient-id"}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.GetRecipientByID(ctx, "recipient-id")
+		assert.NoError(t, err)
+		assert.Equal(t, &Recipient{ID: "recipient-id"}, res)
+	})
+
+	t.Run("PostPayout", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		payoutRequest := PayoutRequest{
+			IdempotencyKey: "idempotency-key",
+			Source: TransferAccount{
+				Type: TransferAccountTypeWallet,
+				ID:   "wallet-id",
+			},
+			Destination: TransferAccount{
+				Type:    TransferAccountTypeWallet,
+				Chain:   StellarChainCode,
+				Address: pubKey,
+			},
+			Amount: Balance{
+				Amount:   "123.45",
+				Currency: "USD",
+			},
+			ToAmount: ToAmount{
+				Currency: "USD",
+			},
+		}
+		mCircleClient.
+			On("PostPayout", ctx, payoutRequest).
+			Return(&Payout{ID: "payout-id"}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.PostPayout(ctx, payoutRequest)
+		assert.NoError(t, err)
+		assert.Equal(t, &Payout{ID: "payout-id"}, res)
+	})
+
+	t.Run("GetPayoutByID", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		mCircleClient.
+			On("GetPayoutByID", ctx, "payout-id").
+			Return(&Payout{ID: "payout-id"}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.GetPayoutByID(ctx, "payout-id")
+		assert.NoError(t, err)
+		assert.Equal(t, &Payout{ID: "payout-id"}, res)
+	})
+
 	t.Run("GetAccountConfiguration", func(t *testing.T) {
 		mClient := NewMockClient(t)
 		mClient.
