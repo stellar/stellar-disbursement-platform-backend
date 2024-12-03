@@ -125,7 +125,6 @@ func Test_NewService(t *testing.T) {
 		wantService := &Service{
 			ClientFactory:        clientFactory,
 			ClientConfigModel:    clientConfigModel,
-			TenantManager:        mockTntManager,
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		}
