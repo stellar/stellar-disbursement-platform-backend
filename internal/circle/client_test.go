@@ -395,6 +395,97 @@ func Test_Client_PostRecipient(t *testing.T) {
 	})
 }
 
+func Test_Client_GetRecipientByID(t *testing.T) {
+	ctx := context.Background()
+	t.Run("get recipient by id error", func(t *testing.T) {
+		cc, cMocks := newClientWithMocks(t)
+		testError := errors.New("test error")
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(nil, testError).
+			Once()
+
+		recipient, err := cc.GetRecipientByID(ctx, "test-id")
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/addressBook/recipients/test-id: %w", testError).Error())
+		assert.Nil(t, recipient)
+	})
+
+	t.Run("get recipient by id fails auth", func(t *testing.T) {
+		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
+		cc, cMocks := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
+			}, nil).
+			Once()
+		cMocks.tenantManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+		expectedLabels := map[string]string{
+			"endpoint":    addressRecipientPath,
+			"method":      http.MethodGet,
+			"status":      "success",
+			"status_code": strconv.Itoa(http.StatusUnauthorized),
+			"tenant_name": tnt.Name,
+		}
+		cMocks.monitorServiceMock.
+			On("MonitorHistogram", mock.Anything, monitor.CircleAPIRequestDurationTag, expectedLabels).
+			Return(nil).Once()
+		cMocks.monitorServiceMock.
+			On("MonitorCounters", monitor.CircleAPIRequestsTotalTag, expectedLabels).
+			Return(nil).Once()
+
+		recipient, err := cc.GetRecipientByID(ctx, "test-id")
+		assert.EqualError(t, err, "handling API response error: circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.Nil(t, recipient)
+	})
+
+	t.Run("get recipient by id successful", func(t *testing.T) {
+		cc, cMocks := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+		cMocks.httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"data": {"id": "test-id"}}`)),
+			}, nil).
+			Run(func(args mock.Arguments) {
+				req, ok := args.Get(0).(*http.Request)
+				assert.True(t, ok)
+
+				assert.Equal(t, "http://localhost:8080/v1/addressBook/recipients/test-id", req.URL.String())
+				assert.Equal(t, http.MethodGet, req.Method)
+				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+			}).
+			Once()
+
+		expectedLabels := map[string]string{
+			"endpoint":    addressRecipientPath,
+			"method":      http.MethodGet,
+			"status":      "success",
+			"status_code": strconv.Itoa(http.StatusOK),
+			"tenant_name": tnt.Name,
+		}
+		cMocks.monitorServiceMock.
+			On("MonitorHistogram", mock.Anything, monitor.CircleAPIRequestDurationTag, expectedLabels).
+			Return(nil).Once()
+		cMocks.monitorServiceMock.
+			On("MonitorCounters", monitor.CircleAPIRequestsTotalTag, expectedLabels).
+			Return(nil).Once()
+
+		recipient, err := cc.GetRecipientByID(ctx, "test-id")
+		assert.NoError(t, err)
+		assert.Equal(t, "test-id", recipient.ID)
+	})
+}
+
 func Test_Client_GetBusinessBalances(t *testing.T) {
 	ctx := context.Background()
 	t.Run("get business balances error", func(t *testing.T) {
