@@ -17,6 +17,7 @@ type CircleTransferRequest struct {
 	IdempotencyKey    string                `db:"idempotency_key"`
 	PaymentID         string                `db:"payment_id"`
 	CircleTransferID  *string               `db:"circle_transfer_id"`
+	CirclePayoutID    *string               `db:"circle_payout_id"`
 	Status            *CircleTransferStatus `db:"status"`
 	ResponseBody      []byte                `db:"response_body"`
 	SourceWalletID    *string               `db:"source_wallet_id"`
@@ -45,6 +46,7 @@ func (s CircleTransferStatus) IsCompleted() bool {
 
 type CircleTransferRequestUpdate struct {
 	CircleTransferID  string               `db:"circle_transfer_id"`
+	CirclePayoutID    string               `db:"circle_payout_id"`
 	Status            CircleTransferStatus `db:"status"`
 	ResponseBody      []byte               `db:"response_body"`
 	SourceWalletID    string               `db:"source_wallet_id"`
