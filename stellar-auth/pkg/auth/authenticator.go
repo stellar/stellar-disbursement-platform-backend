@@ -71,7 +71,7 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 		FROM
 			auth_users u
 		WHERE
-			LOWER(email) = LOWER($1) AND is_active = true
+			email = $1 AND is_active = true
 	`
 
 	au := authUser{}
@@ -274,7 +274,7 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQ
 			SELECT 1
 			FROM auth_user_password_reset ar
 			INNER JOIN auth_users au ON ar.auth_user_id = au.id
-			WHERE LOWER(au.email) = LOWER($1)
+			WHERE au.email = $1
 			AND ar.is_valid = true
 			AND (ar.created_at + INTERVAL '20 minutes') > now()
 		)
@@ -291,7 +291,7 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQ
 
 	q := `
 		WITH auth_user_reset_token_info AS (
-			SELECT id, $2 as reset_token FROM auth_users WHERE LOWER(email) = LOWER($1)
+			SELECT id, $2 as reset_token FROM auth_users WHERE email = $1
 		)
 		INSERT INTO
 			auth_user_password_reset (auth_user_id, token)
