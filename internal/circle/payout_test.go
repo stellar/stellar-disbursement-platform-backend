@@ -12,9 +12,9 @@ func Test_PayoutRequest_validate(t *testing.T) {
 	idempotencyKey := uuid.NewString()
 	source := TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"}
 	destination := TransferAccount{
-		Type:    TransferAccountTypeBlockchain,
-		Chain:   StellarChainCode,
-		Address: "GCESKSSHPZKB6IE67LFZRZBGSX2FTHP4LUOIOZ54BUQFHYCQGH3WGUNX",
+		Type:  TransferAccountTypeAddressBook,
+		Chain: StellarChainCode,
+		ID:    uuid.NewString(),
 	}
 
 	testCases := []struct {
@@ -59,13 +59,13 @@ func Test_PayoutRequest_validate(t *testing.T) {
 		},
 		// Destination:
 		{
-			name: "🔴Destination.Type is not blockchain",
+			name: "🔴Destination.Type is not address book",
 			pr: &PayoutRequest{
 				IdempotencyKey: idempotencyKey,
 				Source:         source,
 				Destination:    TransferAccount{Type: TransferAccountTypeWallet},
 			},
-			wantErrContains: "destination type must be blockchain",
+			wantErrContains: "destination type must be address_book",
 		},
 		{
 			name: "🔴Destination.Chain is not XLM",
@@ -73,24 +73,24 @@ func Test_PayoutRequest_validate(t *testing.T) {
 				IdempotencyKey: idempotencyKey,
 				Source:         source,
 				Destination: TransferAccount{
-					Type:  TransferAccountTypeBlockchain,
+					Type:  TransferAccountTypeAddressBook,
 					Chain: "FOO",
 				},
 			},
 			wantErrContains: `invalid destination chain provided "FOO"`,
 		},
 		{
-			name: "🔴Destination.Address must be a valid Stellar public key",
+			name: "🔴Destination.ID must be provided",
 			pr: &PayoutRequest{
 				IdempotencyKey: idempotencyKey,
 				Source:         source,
 				Destination: TransferAccount{
-					Type:    TransferAccountTypeBlockchain,
-					Chain:   StellarChainCode,
-					Address: "invalid",
+					Type:  TransferAccountTypeAddressBook,
+					Chain: StellarChainCode,
+					ID:    "",
 				},
 			},
-			wantErrContains: "destination address is not a valid Stellar public key",
+			wantErrContains: "destination ID must be provided",
 		},
 		{
 			name: "🔴Amount.Currency must be provided",
@@ -136,7 +136,7 @@ func Test_PayoutRequest_validate(t *testing.T) {
 			pr: &PayoutRequest{
 				IdempotencyKey: idempotencyKey,
 				Source:         source,
-				Destination:    TransferAccount{Type: destination.Type, Address: destination.Address, AddressTag: destination.AddressTag},
+				Destination:    TransferAccount{Type: destination.Type, ID: destination.ID, AddressTag: destination.AddressTag},
 				Amount:         Balance{Currency: "USD", Amount: "1"},
 				ToAmount:       ToAmount{Currency: "USD"},
 			},

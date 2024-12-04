@@ -56,10 +56,11 @@ const (
 type TransferAccountType string
 
 const (
-	TransferAccountTypeCard       TransferAccountType = "card"
-	TransferAccountTypeWire       TransferAccountType = "wire"
-	TransferAccountTypeBlockchain TransferAccountType = "blockchain"
-	TransferAccountTypeWallet     TransferAccountType = "wallet"
+	TransferAccountTypeCard        TransferAccountType = "card"
+	TransferAccountTypeWire        TransferAccountType = "wire"
+	TransferAccountTypeBlockchain  TransferAccountType = "blockchain"
+	TransferAccountTypeAddressBook TransferAccountType = "address_book"
+	TransferAccountTypeWallet      TransferAccountType = "wallet"
 )
 
 // TransferAccount represents the source or destination of the transfer.
