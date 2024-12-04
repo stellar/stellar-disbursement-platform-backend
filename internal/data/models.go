@@ -26,6 +26,7 @@ type Models struct {
 	DisbursementReceivers    *DisbursementReceiverModel
 	Message                  *MessageModel
 	CircleTransferRequests   *CircleTransferRequestModel
+	CircleRecipient          *CircleRecipientModel
 	DBConnectionPool         db.DBConnectionPool
 }
 
@@ -46,6 +47,7 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		DisbursementReceivers:    &DisbursementReceiverModel{dbConnectionPool: dbConnectionPool},
 		Message:                  &MessageModel{dbConnectionPool: dbConnectionPool},
 		CircleTransferRequests:   &CircleTransferRequestModel{dbConnectionPool: dbConnectionPool},
+		CircleRecipient:          &CircleRecipientModel{dbConnectionPool: dbConnectionPool},
 		DBConnectionPool:         dbConnectionPool,
 	}, nil
 }
