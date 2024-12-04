@@ -491,7 +491,7 @@ func Test_Client_PostPayout(t *testing.T) {
 	validPayoutReq := PayoutRequest{
 		IdempotencyKey: uuid.NewString(),
 		Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "source-id"},
-		Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: StellarChainCode, Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF", AddressTag: "txmemo2"},
+		Destination:    TransferAccount{Type: TransferAccountTypeAddressBook, Chain: StellarChainCode, ID: uuid.NewString(), AddressTag: "txmemo2"},
 		Amount:         Balance{Amount: "100.00", Currency: "USD"},
 		ToAmount:       ToAmount{Currency: "USD"},
 	}

@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/strkey"
 )
 
 type RiskEvaluation struct {
@@ -62,19 +61,16 @@ func (pr *PayoutRequest) validate() error {
 		return fmt.Errorf("source ID must be provided for wallet transfers")
 	}
 
-	if pr.Destination.Type != TransferAccountTypeBlockchain {
-		return fmt.Errorf("destination type must be blockchain")
+	if pr.Destination.Type != TransferAccountTypeAddressBook {
+		return fmt.Errorf("destination type must be address_book")
 	}
 	if pr.Destination.Chain != "" && pr.Destination.Chain != StellarChainCode {
 		return fmt.Errorf("invalid destination chain provided %q", pr.Destination.Chain)
 	} else if pr.Destination.Chain == "" {
 		pr.Destination.Chain = StellarChainCode
 	}
-	if pr.Destination.Address == "" {
-		return fmt.Errorf("destination address must be provided")
-	}
-	if !strkey.IsValidEd25519PublicKey(pr.Destination.Address) {
-		return errors.New("destination address is not a valid Stellar public key")
+	if pr.Destination.ID == "" {
+		return fmt.Errorf("destination ID must be provided")
 	}
 
 	if pr.Amount.Currency == "" {
