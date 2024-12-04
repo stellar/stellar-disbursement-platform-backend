@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,6 +136,30 @@ func Test_DefaultAuthenticator_ValidateCredential(t *testing.T) {
 		assert.Equal(t, randUser.LastName, user.LastName)
 	})
 
+	t.Run("returns user successfully - case-insensitive", func(t *testing.T) {
+		encryptedPassword := "encryptedpassword"
+
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return(encryptedPassword, nil).
+			Once()
+
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+
+		passwordEncrypterMock.
+			On("ComparePassword", ctx, randUser.EncryptedPassword, randUser.Password).
+			Return(true, nil).
+			Once()
+
+		uppercaseEmail := strings.ToUpper(randUser.Email)
+		user, err := authenticator.ValidateCredentials(ctx, uppercaseEmail, randUser.Password)
+		require.NoError(t, err)
+
+		assert.Equal(t, randUser.Email, user.Email)
+		assert.Equal(t, randUser.ID, user.ID)
+		assert.Equal(t, randUser.FirstName, user.FirstName)
+		assert.Equal(t, randUser.LastName, user.LastName)
+	})
 	passwordEncrypterMock.AssertExpectations(t)
 }
 
@@ -163,27 +188,27 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 		u, err := authenticator.CreateUser(ctx, user, password)
 
 		assert.Nil(t, u)
-		assert.EqualError(t, err, "error validating user fields: email is required")
+		assert.EqualError(t, err, "validating user fields: email is required")
 
 		user.Email = "invalid"
 		u, err = authenticator.CreateUser(ctx, user, password)
 
 		assert.Nil(t, u)
-		assert.EqualError(t, err, `error validating user fields: email is invalid: the provided email "invalid" is not valid`)
+		assert.EqualError(t, err, `validating user fields: email is invalid: the provided email "invalid" is not valid`)
 
 		// First name
 		user.Email = "email@email.com"
 		u, err = authenticator.CreateUser(ctx, user, password)
 
 		assert.Nil(t, u)
-		assert.EqualError(t, err, "error validating user fields: first name is required")
+		assert.EqualError(t, err, "validating user fields: first name is required")
 
 		// Last name
 		user.FirstName = "First"
 		u, err = authenticator.CreateUser(ctx, user, password)
 
 		assert.Nil(t, u)
-		assert.EqualError(t, err, "error validating user fields: last name is required")
+		assert.EqualError(t, err, "validating user fields: last name is required")
 	})
 
 	t.Run("returns error when password is invalid", func(t *testing.T) {
@@ -203,7 +228,7 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 		u, err := authenticator.CreateUser(ctx, user, password)
 
 		assert.Nil(t, u)
-		assert.EqualError(t, err, fmt.Sprintf("error encrypting password: password should have at least %d characters", MinPasswordLength))
+		assert.EqualError(t, err, fmt.Sprintf("encrypting password: password should have at least %d characters", MinPasswordLength))
 
 		passwordEncrypterMock.
 			On("Encrypt", ctx, password).
@@ -213,7 +238,7 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 		u, err = authenticator.CreateUser(ctx, user, password)
 
 		assert.Nil(t, u)
-		assert.EqualError(t, err, "error encrypting password: unexpected error")
+		assert.EqualError(t, err, "encrypting password: unexpected error")
 	})
 
 	t.Run("returns error when user is duplicated", func(t *testing.T) {
@@ -298,6 +323,35 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 		assert.Equal(t, newUser.FirstName, u.FirstName)
 		assert.Equal(t, newUser.LastName, u.LastName)
 		assert.Equal(t, "encryptedpassword", encryptedPassword)
+	})
+
+	t.Run("creates a new user correctly - case-insensitive", func(t *testing.T) {
+		user := &User{
+			Email:     "  EMAIL-TEST2@email.com",
+			FirstName: "  First",
+			LastName:  " Last",
+		}
+
+		password := "mysecret"
+
+		passwordEncrypterMock.
+			On("Encrypt", ctx, password).
+			Return("encryptedpassword", nil).
+			Once()
+
+		u, err := authenticator.CreateUser(ctx, user, password)
+		require.NoError(t, err)
+
+		const query = "SELECT id, email, first_name, last_name FROM auth_users WHERE email = $1"
+
+		var newUser User
+		err = dbConnectionPool.QueryRowxContext(ctx, query, user.Email).Scan(&newUser.ID, &newUser.Email, &newUser.FirstName, &newUser.LastName)
+		require.NoError(t, err)
+
+		assert.Equal(t, u.ID, newUser.ID)
+		assert.Equal(t, strings.ToLower(strings.TrimSpace(u.Email)), newUser.Email)
+		assert.Equal(t, strings.TrimSpace(u.FirstName), newUser.FirstName)
+		assert.Equal(t, strings.TrimSpace(u.LastName), newUser.LastName)
 	})
 
 	passwordEncrypterMock.AssertExpectations(t)
@@ -504,7 +558,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 	t.Run("Should return an error if the email is empty", func(t *testing.T) {
 		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, "")
-		assert.EqualError(t, err, "error generating user reset password token: email cannot be empty")
+		assert.EqualError(t, err, "generating user reset password token: email cannot be empty")
 		assert.Empty(t, resetToken)
 	})
 
@@ -585,6 +639,23 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
 		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
+		require.NoError(t, err)
+
+		assert.NotEmpty(t, resetToken)
+	})
+
+	t.Run("Should return reset token with a valid user - case-insensitive", func(t *testing.T) {
+		encryptedPassword := "encryptedpassword"
+
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return(encryptedPassword, nil).
+			Once()
+
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+
+		uppercaseEmail := strings.ToUpper(randUser.Email)
+		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, uppercaseEmail)
 		require.NoError(t, err)
 
 		assert.NotEmpty(t, resetToken)
@@ -753,7 +824,7 @@ func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 
 	t.Run("returns error when email is invalid", func(t *testing.T) {
 		err := authenticator.UpdateUser(ctx, "user-id", "", "", "invalid", "")
-		assert.EqualError(t, err, `error validating email: the provided email "invalid" is not valid`)
+		assert.EqualError(t, err, `validating email: the provided email "invalid" is not valid`)
 	})
 
 	t.Run("returns error when password is too short", func(t *testing.T) {
@@ -777,7 +848,7 @@ func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 			Once()
 
 		err := authenticator.UpdateUser(ctx, "user-id", "", "", "", "short")
-		assert.EqualError(t, err, "error encrypting password: unexpected error")
+		assert.EqualError(t, err, "encrypting password: unexpected error")
 	})
 
 	t.Run("updates first name successfully", func(t *testing.T) {
@@ -872,7 +943,7 @@ func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 	})
 
 	t.Run("updates all fields successfully", func(t *testing.T) {
-		firstName, lastName, email, password := "FirstName", "LastName", "new_email@email.com", "newpassword"
+		firstName, lastName, email, password := "FirstName  ", "  LastName  ", "  new_EMail@email.com", "newpassword"
 
 		passwordEncrypterMock.
 			On("Encrypt", ctx, mock.AnythingOfType("string")).
@@ -893,9 +964,9 @@ func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 
 		u := getUser(t, ctx, randUser.ID)
 
-		assert.Equal(t, firstName, u.FirstName)
-		assert.Equal(t, lastName, u.LastName)
-		assert.Equal(t, email, u.Email)
+		assert.Equal(t, "FirstName", u.FirstName)
+		assert.Equal(t, "LastName", u.LastName)
+		assert.Equal(t, "new_email@email.com", u.Email)
 		assert.Equal(t, "newpassowrdencrypted", u.EncryptedPassword)
 	})
 }
