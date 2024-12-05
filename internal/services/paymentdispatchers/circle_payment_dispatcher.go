@@ -259,7 +259,6 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Co
 		retry.DelayType(retry.BackOffDelay), // Exponential backoff
 		retry.Context(ctx),                  // Respect the context's cancellation
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to ensure recipient is ready: %w", err)
 	}
