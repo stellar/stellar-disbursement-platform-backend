@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -21,8 +22,8 @@ type Payout struct {
 	Amount          Balance           `json:"amount"`
 	ToAmount        Balance           `json:"toAmount"`
 	TransactionHash string            `json:"externalRef,omitempty"`
-	CreateDate      string            `json:"createDate"`
-	UpdateDate      string            `json:"updateDate"`
+	CreateDate      time.Time         `json:"createDate"`
+	UpdateDate      time.Time         `json:"updateDate"`
 	SourceWalletID  string            `json:"sourceWalletId"`
 	Fees            Balance           `json:"fees,omitempty"`
 	Status          TransferStatus    `json:"status"`

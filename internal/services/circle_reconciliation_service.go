@@ -72,7 +72,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		// Step 4: Reconcile the pending Circle transfer requests.
 		reconciliationCount = len(circleRequests)
 		for _, circleRequest := range circleRequests {
-			err = s.reconcileTransferRequest(ctx, dbTx, tnt, circleRequest)
+			err = s.reconcilePayoutRequest(ctx, dbTx, tnt, circleRequest)
 			if err != nil {
 				err = fmt.Errorf("reconciling Circle transfer request: %w", err)
 				reconciliationErrors = append(reconciliationErrors, err)
@@ -92,11 +92,46 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// reconcileTransferRequest reconciles a Circle transfer request and updates the payment status in the DB. It returns an
-// error if the reconciliation fails.
-func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
+// reconcilePayoutRequest reconciles a Circle transfer request with the status from the Circle payout, and updates the
+// payment status in the DB. It returns an error if the reconciliation fails.
+func (s *CircleReconciliationService) reconcilePayoutRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
+	const (
+		objTypePayout   = "payout"
+		objTypeTransfer = "transfer"
+	)
+
+	var errorCode, transactionHash, objType, id string
+	var status circle.TransferStatus
+	var respBody interface{}
+	var err error
+
+	if circleRequest.CircleTransferID != nil {
+		objType = objTypeTransfer
+		var transfer *circle.Transfer
+		transfer, err = s.CircleService.GetTransferByID(ctx, *circleRequest.CircleTransferID)
+		if err == nil {
+			status = transfer.Status
+			errorCode = string(transfer.ErrorCode)
+			transactionHash = transfer.TransactionHash
+			respBody = transfer
+			id = *circleRequest.CircleTransferID
+		}
+	} else if circleRequest.CirclePayoutID != nil {
+		objType = objTypePayout
+		var payout *circle.Payout
+		payout, err = s.CircleService.GetPayoutByID(ctx, *circleRequest.CirclePayoutID)
+		if err == nil {
+			status = payout.Status
+			errorCode = string(payout.ErrorCode)
+			transactionHash = payout.TransactionHash
+			respBody = payout
+			id = *circleRequest.CirclePayoutID
+		}
+	} else {
+		return fmt.Errorf("Circle transfer request %q has neither Circle transfer ID nor Circle payout ID", circleRequest.IdempotencyKey)
+	}
+
 	// 4.1. get the Circle transfer by ID
-	transfer, err := s.CircleService.GetTransferByID(ctx, *circleRequest.CircleTransferID)
 	if err != nil {
 		var cAPIErr *circle.APIError
 		if errors.As(err, &cAPIErr) && cAPIErr.StatusCode == http.StatusBadRequest {
@@ -114,18 +149,18 @@ func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Conte
 				ResponseBody:      errJSONBody,
 			})
 			if updateErr != nil {
-				return fmt.Errorf("updating Circle transfer request sync attempts: %w", updateErr)
+				return fmt.Errorf("updating Circle transfer/payout request sync attempts: %w", updateErr)
 			}
 		}
-		return fmt.Errorf("getting Circle transfer by ID %q: %w", *circleRequest.CircleTransferID, err)
+		return fmt.Errorf("getting Circle %s by ID %q: %w", objType, id, err)
 	}
-	jsonBody, err := json.Marshal(transfer)
+	jsonBody, err := json.Marshal(respBody)
 	if err != nil {
 		return fmt.Errorf("converting transfer body to json: %w", err)
 	}
 
 	// 4.2. update the circle transfer request entry in the DB.
-	newStatus := data.CircleTransferStatus(transfer.Status)
+	newStatus := data.CircleTransferStatus(status)
 	if *circleRequest.Status == newStatus {
 		// this condition should be unrechable, but we're adding this log just in case...
 		log.Ctx(ctx).Debugf("[tenant=%s] Circle transfer request %q is already in status %q, skipping reconciliation...", tnt.Name, circleRequest.IdempotencyKey, newStatus)
@@ -149,26 +184,26 @@ func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Conte
 	}
 
 	// 4.3. update the payment status in the DB.
-	newPaymentStatus, err := transfer.Status.ToPaymentStatus()
+	newPaymentStatus, err := status.ToPaymentStatus()
 	if err != nil {
 		return fmt.Errorf("converting Circle transfer status to Payment status: %w", err)
 	}
 	var statusMsg string
 	switch newStatus {
 	case data.CircleTransferStatusSuccess:
-		statusMsg = fmt.Sprintf("Circle transfer completed successfully with the Stellar transaction hash: %q", transfer.TransactionHash)
+		statusMsg = fmt.Sprintf("Circle payout completed successfully with the Stellar transaction hash: %q", transactionHash)
 	case data.CircleTransferStatusFailed:
-		statusMsg = fmt.Sprintf("Circle transfer failed with error: %q", transfer.ErrorCode)
+		statusMsg = fmt.Sprintf("Circle payout failed with error: %q", errorCode)
 	default:
-		return fmt.Errorf("unexpected Circle transfer status: %q", newStatus)
+		return fmt.Errorf("unexpected Circle payout status: %q", newStatus)
 	}
 
-	err = s.Models.Payment.UpdateStatus(ctx, dbTx, circleRequest.PaymentID, newPaymentStatus, &statusMsg, transfer.TransactionHash)
+	err = s.Models.Payment.UpdateStatus(ctx, dbTx, circleRequest.PaymentID, newPaymentStatus, &statusMsg, transactionHash)
 	if err != nil {
 		return fmt.Errorf("updating payment status: %w", err)
 	}
 
-	log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle transfer request %q with status %q", tnt.Name, *circleRequest.CircleTransferID, newStatus)
+	log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle transfer/payout request %q with status %q", tnt.Name, id, newStatus)
 
 	return nil
 }

@@ -444,7 +444,39 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 }
 
 func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM receiver_wallets"
+	const query = "DELETE FROM receiver_wallets CASCADE"
+	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
+func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, insert CircleRecipient) *CircleRecipient {
+	const query = `
+		INSERT INTO circle_recipients
+			(receiver_wallet_id, idempotency_key, circle_recipient_id, status, created_at, updated_at, sync_attempts, last_sync_attempt_at)
+		VALUES
+			($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING
+			*
+	`
+
+	var circleRecipient CircleRecipient
+	err := sqlExec.GetContext(ctx, &circleRecipient, query,
+		insert.ReceiverWalletID,
+		insert.IdempotencyKey,
+		insert.CircleRecipientID,
+		insert.Status,
+		insert.CreatedAt,
+		insert.UpdatedAt,
+		insert.SyncAttempts,
+		insert.LastSyncAttemptAt,
+	)
+	require.NoError(t, err)
+
+	return &circleRecipient
+}
+
+func DeleteAllCircleRecipientsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	const query = "DELETE FROM circle_recipients"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
@@ -788,4 +820,5 @@ func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter
 	DeleteAllDisbursementFixtures(t, ctx, sqlExec)
 	DeleteAllWalletFixtures(t, ctx, sqlExec)
 	DeleteAllAssetFixtures(t, ctx, sqlExec)
+	DeleteAllCircleRecipientsFixtures(t, ctx, sqlExec)
 }

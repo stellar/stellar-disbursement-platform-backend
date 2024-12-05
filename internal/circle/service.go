@@ -27,7 +27,7 @@ const StellarChainCode = "XLM"
 //go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService --output=. --filename=service_mock.go --inpackage
 type ServiceInterface interface {
 	ClientInterface
-	SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error)
+	SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error)
 }
 
 var _ ServiceInterface = (*Service)(nil)
@@ -86,7 +86,7 @@ func NewService(opts ServiceOptions) (*Service, error) {
 	}, nil
 }
 
-func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error) {
+func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
 	if err := paymentRequest.Validate(); err != nil {
 		return nil, fmt.Errorf("validating payment request: %w", err)
 	}
@@ -96,21 +96,22 @@ func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest
 		return nil, fmt.Errorf("getting Circle asset code: %w", err)
 	}
 
-	return s.PostTransfer(ctx, TransferRequest{
+	return s.PostPayout(ctx, PayoutRequest{
 		IdempotencyKey: paymentRequest.IdempotencyKey,
-		Amount: Balance{
-			Amount:   paymentRequest.Amount,
-			Currency: circleAssetCode,
-		},
 		Source: TransferAccount{
 			Type: TransferAccountTypeWallet,
 			ID:   paymentRequest.SourceWalletID,
 		},
 		Destination: TransferAccount{
-			Type:    TransferAccountTypeBlockchain,
-			Chain:   StellarChainCode,
-			Address: paymentRequest.DestinationStellarAddress,
+			Type:  TransferAccountTypeAddressBook,
+			Chain: StellarChainCode,
+			ID:    paymentRequest.RecipientID,
 		},
+		Amount: Balance{
+			Amount:   paymentRequest.Amount,
+			Currency: circleAssetCode,
+		},
+		ToAmount: ToAmount{Currency: circleAssetCode},
 	})
 }
 
