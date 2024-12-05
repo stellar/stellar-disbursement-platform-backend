@@ -3,9 +3,12 @@ package paymentdispatchers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/avast/retry-go"
+	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -15,6 +18,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
+
+var ErrCircleRecipientCreationFailedTooManyTimes = errors.New("Circle recipient creation failed too many times")
+
+const maxCircleRecipientCreationAttempts = 5
 
 type CirclePaymentDispatcher struct {
 	sdpModels           *data.Models
@@ -56,6 +63,12 @@ var _ PaymentDispatcherInterface = (*CirclePaymentDispatcher)(nil)
 
 func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
 	for _, payment := range paymentsToSubmit {
+		// 0. Ensure the recipient is ready
+		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet)
+		if err != nil {
+			return fmt.Errorf("ensuring recipient is ready: %w", err)
+		}
+
 		// 1. Create a new circle transfer request
 		transferRequest, err := c.sdpModels.CircleTransferRequests.GetOrInsert(ctx, payment.ID)
 		if err != nil {
@@ -63,12 +76,12 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 		}
 
 		// 2. Submit the payment to Circle
-		transfer, err := c.circleService.SendPayment(ctx, circle.PaymentRequest{
-			SourceWalletID:            circleWalletID,
-			DestinationStellarAddress: payment.ReceiverWallet.StellarAddress,
-			Amount:                    payment.Amount,
-			StellarAssetCode:          payment.Asset.Code,
-			IdempotencyKey:            transferRequest.IdempotencyKey,
+		payout, err := c.circleService.SendPayment(ctx, circle.PaymentRequest{
+			SourceWalletID:   circleWalletID,
+			RecipientID:      *recipient.CircleRecipientID,
+			Amount:           payment.Amount,
+			StellarAssetCode: payment.Asset.Code,
+			IdempotencyKey:   transferRequest.IdempotencyKey,
 		})
 
 		if err != nil {
@@ -80,12 +93,12 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 			}
 		} else {
 			// 4. Update the circle transfer request with the response from Circle
-			if err = c.updateCircleTransferRequest(ctx, sdpDBTx, circleWalletID, transfer, transferRequest); err != nil {
+			if err = c.updateCircleTransferRequest(ctx, sdpDBTx, circleWalletID, payout, transferRequest); err != nil {
 				return fmt.Errorf("updating circle transfer request: %w", err)
 			}
 
 			// 5. Update the payment status based on the transfer status
-			if err = c.updatePaymentStatusForCircleTransfer(ctx, sdpDBTx, transfer, payment); err != nil {
+			if err = c.updatePaymentStatusForCirclePayout(ctx, sdpDBTx, payout, payment); err != nil {
 				return fmt.Errorf("updating payment status for Circle transfer: %w", err)
 			}
 		}
@@ -93,35 +106,35 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 	return nil
 }
 
-// updateCircleTransferRequest updates the circle_transfer_request table with the response from Circle.
+// updateCircleTransferRequest updates the circle_transfer_request table with the response from Circle POST /payouts.
 func (c *CirclePaymentDispatcher) updateCircleTransferRequest(
 	ctx context.Context,
 	sdpDBTx db.DBTransaction,
 	circleWalletID string,
-	transfer *circle.Transfer,
+	payout *circle.Payout,
 	transferRequest *data.CircleTransferRequest,
 ) error {
-	if transfer == nil {
-		return fmt.Errorf("transfer cannot be nil")
+	if payout == nil {
+		return fmt.Errorf("payout cannot be nil")
 	}
 
-	jsonBody, err := json.Marshal(transfer)
+	jsonBody, err := json.Marshal(payout)
 	if err != nil {
 		return fmt.Errorf("converting transfer body to json: %w", err)
 	}
 
 	var completedAt *time.Time
-	circleStatus := data.CircleTransferStatus(transfer.Status)
+	circleStatus := data.CircleTransferStatus(payout.Status)
 	if circleStatus.IsCompleted() {
 		completedAt = utils.TimePtr(time.Now())
 	}
 
 	_, err = c.sdpModels.CircleTransferRequests.Update(ctx, sdpDBTx, transferRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
-		CircleTransferID: transfer.ID,
-		Status:           circleStatus,
-		ResponseBody:     jsonBody,
-		SourceWalletID:   circleWalletID,
-		CompletedAt:      completedAt,
+		CirclePayoutID: payout.ID,
+		Status:         circleStatus,
+		ResponseBody:   jsonBody,
+		SourceWalletID: circleWalletID,
+		CompletedAt:    completedAt,
 	})
 	if err != nil {
 		return fmt.Errorf("updating circle transfer request: %w", err)
@@ -130,18 +143,126 @@ func (c *CirclePaymentDispatcher) updateCircleTransferRequest(
 	return nil
 }
 
-// updatePaymentStatusForCircleTransfer updates the payment status based on the transfer status.
-func (c *CirclePaymentDispatcher) updatePaymentStatusForCircleTransfer(ctx context.Context, sdpDBTx db.DBTransaction, transfer *circle.Transfer, payment *data.Payment) error {
-	paymentStatus, err := transfer.Status.ToPaymentStatus()
+// updatePaymentStatusForCirclePayout updates the payment status based on the status coming from Circle.
+func (c *CirclePaymentDispatcher) updatePaymentStatusForCirclePayout(ctx context.Context, sdpDBTx db.DBTransaction, payout *circle.Payout, payment *data.Payment) error {
+	paymentStatus, err := payout.Status.ToPaymentStatus()
 	if err != nil {
-		return fmt.Errorf("converting CIRCLE transfer status to SDP Payment status: %w", err)
+		return fmt.Errorf("converting CIRCLE payout status to SDP Payment status: %w", err)
 	}
 
-	statusMsg := fmt.Sprintf("Transfer %s is %s in Circle", transfer.ID, transfer.Status)
-	err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, paymentStatus, &statusMsg, transfer.TransactionHash)
+	statusMsg := fmt.Sprintf("Transfer %s is %s in Circle", payout.ID, payout.Status)
+	err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, paymentStatus, &statusMsg, payout.TransactionHash)
 	if err != nil {
 		return fmt.Errorf("marking payment as %s: %w", paymentStatus, err)
 	}
 
 	return nil
+}
+
+func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
+	dataRecipient, err := c.sdpModels.CircleRecipient.GetByReceiverWalletID(ctx, c.sdpModels.DBConnectionPool, receiverWallet.ID)
+	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
+		return nil, fmt.Errorf("getting Circle recipient: %w", err)
+	}
+
+	// SUCCESS
+	if dataRecipient != nil && dataRecipient.Status != nil && *dataRecipient.Status == data.CircleRecipientStatusActive {
+		return dataRecipient, nil
+	}
+
+	// DOES NOT EXIST in the DB
+	shouldBumpSyncAttempts := true
+	if dataRecipient == nil {
+		log.Ctx(ctx).Infof("Inserting circle_recipient for receiver_wallet_id %q...", receiverWallet.ID)
+		shouldBumpSyncAttempts = false // Don't bump sync_attempts for newly created recipients
+		dataRecipient, err = c.sdpModels.CircleRecipient.Insert(ctx, receiverWallet.ID)
+		if err != nil {
+			return nil, fmt.Errorf("inserting Circle recipient: %w", err)
+		}
+	}
+
+	// FAILED -> refresh the idempotency key
+	if dataRecipient.Status != nil && *dataRecipient.Status == data.CircleRecipientStatusDenied {
+		if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
+			return nil, ErrCircleRecipientCreationFailedTooManyTimes
+		}
+
+		log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q...", receiverWallet.ID)
+		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, c.sdpModels.DBConnectionPool, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
+			IdempotencyKey: uuid.NewString(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("updating Circle recipient's idempotency key: %w", err)
+		}
+	}
+
+	// NULL, PENDING or FAILED (with renovated idempotency_key) -> (re)submit the recipient creation request
+	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
+		IdempotencyKey: dataRecipient.IdempotencyKey,
+		Address:        receiverWallet.StellarAddress,
+		Chain:          circle.StellarChainCode,
+		Metadata: circle.RecipientMetadata{
+			Nickname: receiverWallet.ID, // TODO: replace with phone number if available
+			// TODO: add email
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating Circle recipient: %w", err)
+	}
+
+	dataRecipientStatus, err := data.ParseRecipientStatus(recipient.Status)
+	if err != nil {
+		return nil, fmt.Errorf("parsing Circle recipient status: %w", err)
+	}
+	updateDataRecipient := data.CircleRecipientUpdate{
+		IdempotencyKey:    dataRecipient.IdempotencyKey,
+		CircleRecipientID: &recipient.ID,
+		Status:            &dataRecipientStatus,
+	}
+	if shouldBumpSyncAttempts {
+		updateDataRecipient.SyncAttempts = dataRecipient.SyncAttempts + 1
+		updateDataRecipient.LastSyncAttemptAt = utils.TimePtr(time.Now())
+	}
+	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, c.sdpModels.DBConnectionPool, dataRecipient.ReceiverWalletID, updateDataRecipient)
+	if err != nil {
+		return nil, fmt.Errorf("updating Circle recipient: %w", err)
+	}
+
+	return dataRecipient, nil
+}
+
+func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
+	var recipient *data.CircleRecipient
+	err := retry.Do(
+		func() error {
+			var err error
+			recipient, err = c.ensureRecipientIsReady(ctx, receiverWallet)
+			if err != nil {
+				if errors.Is(err, ErrCircleRecipientCreationFailedTooManyTimes) {
+					// Stop retrying on this specific error
+					return retry.Unrecoverable(err)
+				}
+				// Retry on other errors
+				return err
+			}
+
+			// Check the recipient status
+			if *recipient.Status != data.CircleRecipientStatusActive {
+				// Retry if the status isn't "completed"
+				return fmt.Errorf("recipient not ready, status: %s", *recipient.Status)
+			}
+
+			// Successful case, no retry needed
+			return nil
+		},
+		retry.Attempts(4),                   // Maximum 4 attempts
+		retry.DelayType(retry.BackOffDelay), // Exponential backoff
+		retry.Context(ctx),                  // Respect the context's cancellation
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure recipient is ready: %w", err)
+	}
+
+	return recipient, nil
 }

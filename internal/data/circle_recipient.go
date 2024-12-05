@@ -28,13 +28,14 @@ type CircleRecipient struct {
 type CircleRecipientStatus string
 
 const (
-	CircleRecipientStatusPending CircleRecipientStatus = "pending"
-	CircleRecipientStatusSuccess CircleRecipientStatus = "complete" // means success
-	CircleRecipientStatusFailed  CircleRecipientStatus = "failed"
+	CircleRecipientStatusPending  CircleRecipientStatus = "pending"
+	CircleRecipientStatusActive   CircleRecipientStatus = "active"   // means success
+	CircleRecipientStatusInactive CircleRecipientStatus = "inactive" // means success
+	CircleRecipientStatusDenied   CircleRecipientStatus = "denied"
 )
 
 func CompletedCircleRecipientStatuses() []CircleRecipientStatus {
-	return []CircleRecipientStatus{CircleRecipientStatusSuccess, CircleRecipientStatusFailed}
+	return []CircleRecipientStatus{CircleRecipientStatusActive, CircleRecipientStatusDenied}
 }
 
 func (s CircleRecipientStatus) IsCompleted() bool {
@@ -47,10 +48,12 @@ func ParseRecipientStatus(statusStr string) (CircleRecipientStatus, error) {
 	switch statusStr {
 	case string(CircleRecipientStatusPending):
 		return CircleRecipientStatusPending, nil
-	case string(CircleRecipientStatusSuccess):
-		return CircleRecipientStatusSuccess, nil
-	case string(CircleRecipientStatusFailed):
-		return CircleRecipientStatusFailed, nil
+	case string(CircleRecipientStatusActive):
+		return CircleRecipientStatusActive, nil
+	case string(CircleRecipientStatusInactive):
+		return CircleRecipientStatusInactive, nil
+	case string(CircleRecipientStatusDenied):
+		return CircleRecipientStatusDenied, nil
 	default:
 		return "", fmt.Errorf("unknown recipient status %q", statusStr)
 	}
