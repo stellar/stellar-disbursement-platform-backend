@@ -92,6 +92,7 @@ func Test_PayoutRequest_validate(t *testing.T) {
 			},
 			wantErrContains: "destination ID must be provided",
 		},
+		// Amount:
 		{
 			name: "🔴Amount.Currency must be provided",
 			pr: &PayoutRequest{
@@ -121,6 +122,7 @@ func Test_PayoutRequest_validate(t *testing.T) {
 			},
 			wantErrContains: "amount must be a valid number",
 		},
+		// ToAmount:
 		{
 			name: "🔴ToAmount.Currency must be provided",
 			pr: &PayoutRequest{
@@ -131,6 +133,7 @@ func Test_PayoutRequest_validate(t *testing.T) {
 			},
 			wantErrContains: "toAmount.currency must be provided",
 		},
+		// 🎉 Successful:
 		{
 			name: "🟢valid without chain",
 			pr: &PayoutRequest{

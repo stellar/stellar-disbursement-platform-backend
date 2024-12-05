@@ -107,6 +107,7 @@ func (s *CircleReconciliationService) reconcilePayoutRequest(ctx context.Context
 
 	if circleRequest.CircleTransferID != nil {
 		objType = objTypeTransfer
+		id = *circleRequest.CircleTransferID
 		var transfer *circle.Transfer
 		transfer, err = s.CircleService.GetTransferByID(ctx, *circleRequest.CircleTransferID)
 		if err == nil {
@@ -114,10 +115,10 @@ func (s *CircleReconciliationService) reconcilePayoutRequest(ctx context.Context
 			errorCode = string(transfer.ErrorCode)
 			transactionHash = transfer.TransactionHash
 			respBody = transfer
-			id = *circleRequest.CircleTransferID
 		}
 	} else if circleRequest.CirclePayoutID != nil {
 		objType = objTypePayout
+		id = *circleRequest.CirclePayoutID
 		var payout *circle.Payout
 		payout, err = s.CircleService.GetPayoutByID(ctx, *circleRequest.CirclePayoutID)
 		if err == nil {
@@ -125,7 +126,6 @@ func (s *CircleReconciliationService) reconcilePayoutRequest(ctx context.Context
 			errorCode = string(payout.ErrorCode)
 			transactionHash = payout.TransactionHash
 			respBody = payout
-			id = *circleRequest.CirclePayoutID
 		}
 	} else {
 		return fmt.Errorf("Circle transfer request %q has neither Circle transfer ID nor Circle payout ID", circleRequest.IdempotencyKey)
@@ -143,7 +143,7 @@ func (s *CircleReconciliationService) reconcilePayoutRequest(ctx context.Context
 
 			// increment the sync attempts and update the last sync attempt time.
 			var updateErr error
-			circleRequest, updateErr = s.Models.CircleTransferRequests.Update(ctx, dbTx, circleRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
+			_, updateErr = s.Models.CircleTransferRequests.Update(ctx, dbTx, circleRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
 				LastSyncAttemptAt: utils.TimePtr(time.Now()),
 				SyncAttempts:      circleRequest.SyncAttempts + 1,
 				ResponseBody:      errJSONBody,
@@ -203,7 +203,7 @@ func (s *CircleReconciliationService) reconcilePayoutRequest(ctx context.Context
 		return fmt.Errorf("updating payment status: %w", err)
 	}
 
-	log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle transfer/payout request %q with status %q", tnt.Name, id, newStatus)
+	log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle %s request %q with status %q", tnt.Name, objType, id, newStatus)
 
 	return nil
 }

@@ -444,7 +444,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 }
 
 func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM receiver_wallets CASCADE"
+	const query = "DELETE FROM receiver_wallets"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
