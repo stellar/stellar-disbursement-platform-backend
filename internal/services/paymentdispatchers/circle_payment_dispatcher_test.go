@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -31,7 +32,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 	require.NoError(t, err)
 
 	circleWalletID := "22322112"
-	circleTransferID := uuid.NewString()
+	circlePayoutID := uuid.NewString()
 
 	tenantID := "tenant-id"
 
@@ -43,6 +44,14 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 
 	// Receiver Wallets
 	rw1Registered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	// Circle Recipient
+	recipientSuccessStatus := data.CircleRecipientStatusActive
+	circleRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
+		ReceiverWalletID:  rw1Registered.ID,
+		Status:            &recipientSuccessStatus,
+		CircleRecipientID: utils.StringPtr(uuid.NewString()),
+	})
 
 	// Payments
 	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -63,7 +72,10 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 		{
 			name: "failure validating payment ready for sending",
 			paymentsToDispatch: []*data.Payment{
-				{ID: "123"},
+				{
+					ID:             "123",
+					ReceiverWallet: rw1Registered,
+				},
 			},
 			wantErr: fmt.Errorf("payment with ID 123 does not exist"),
 		},
@@ -76,11 +88,11 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 				require.NoError(t, setupErr)
 
 				m.On("SendPayment", ctx, circle.PaymentRequest{
-					SourceWalletID:            circleWalletID,
-					DestinationStellarAddress: payment1.ReceiverWallet.StellarAddress,
-					Amount:                    payment1.Amount,
-					StellarAssetCode:          payment1.Asset.Code,
-					IdempotencyKey:            transferRequest.IdempotencyKey,
+					SourceWalletID:   circleWalletID,
+					RecipientID:      *circleRecipient.CircleRecipientID,
+					Amount:           payment1.Amount,
+					StellarAssetCode: payment1.Asset.Code,
+					IdempotencyKey:   transferRequest.IdempotencyKey,
 				}).
 					Return(nil, fmt.Errorf("error posting transfer to Circle")).
 					Once()
@@ -95,7 +107,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 		{
 			name:               "error updating circle transfer request",
 			paymentsToDispatch: []*data.Payment{payment1},
-			wantErr:            fmt.Errorf("updating circle transfer request: transfer cannot be nil"),
+			wantErr:            fmt.Errorf("updating circle transfer request: payout cannot be nil"),
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
 					Return(nil, nil).
@@ -108,8 +120,8 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 			wantErr:            fmt.Errorf("invalid input value for enum circle_transfer_status"),
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
-					Return(&circle.Transfer{
-						ID:     "transfer_id",
+					Return(&circle.Payout{
+						ID:     "payout_id",
 						Status: "wrong-status",
 					}, nil).
 					Once()
@@ -121,8 +133,8 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 			wantErr:            nil,
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
-					Return(&circle.Transfer{
-						ID:     circleTransferID,
+					Return(&circle.Payout{
+						ID:     circlePayoutID,
 						Status: circle.TransferStatusPending,
 						Amount: circle.Balance{
 							Amount:   payment1.Amount,
@@ -141,13 +153,13 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 				var transferRequest data.CircleTransferRequest
 				assertErr = dbConnectionPool.GetContext(ctx, &transferRequest, "SELECT * FROM circle_transfer_requests WHERE payment_id = $1", payment1.ID)
 				require.NoError(t, assertErr)
-				assert.Nil(t, transferRequest.CircleTransferID)
+				assert.Nil(t, transferRequest.CirclePayoutID)
 				assert.Nil(t, transferRequest.SourceWalletID)
 
 				// Transfer request is updated for the transaction
 				assertErr = sqlExecuter.GetContext(ctx, &transferRequest, "SELECT * FROM circle_transfer_requests WHERE payment_id = $1", payment1.ID)
 				require.NoError(t, assertErr)
-				assert.Equal(t, circleTransferID, *transferRequest.CircleTransferID)
+				assert.Equal(t, circlePayoutID, *transferRequest.CirclePayoutID)
 				assert.Equal(t, circleWalletID, *transferRequest.SourceWalletID)
 				assert.Equal(t, data.CircleTransferStatusPending, *transferRequest.Status)
 			},
