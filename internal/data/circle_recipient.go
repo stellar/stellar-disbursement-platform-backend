@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lib/pq"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -130,19 +128,17 @@ func (m CircleRecipientModel) Update(ctx context.Context, sqlExec db.SQLExecuter
 }
 
 func (m CircleRecipientModel) GetByReceiverWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (*CircleRecipient, error) {
-	queryParams := QueryParams{
-		Filters: map[FilterKey]interface{}{
-			FilterKeyReceiverWalletID: receiverWalletID,
-		},
-	}
-	return m.Get(ctx, m.dbConnectionPool, queryParams)
-}
-
-func (m CircleRecipientModel) Get(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) (*CircleRecipient, error) {
-	query, params := buildCircleRecipientQuery(baseCircleRecipientQuery, queryParams, sqlExec)
+	const query = `
+		SELECT
+			*
+		FROM
+			circle_recipients c
+		WHERE
+			c.receiver_wallet_id = $1
+	`
 
 	var circleRecipient CircleRecipient
-	err := sqlExec.GetContext(ctx, &circleRecipient, query, params...)
+	err := sqlExec.GetContext(ctx, &circleRecipient, query, receiverWalletID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
@@ -151,46 +147,4 @@ func (m CircleRecipientModel) Get(ctx context.Context, sqlExec db.SQLExecuter, q
 	}
 
 	return &circleRecipient, nil
-}
-
-const baseCircleRecipientQuery = `
-	SELECT
-		*
-	FROM
-		circle_recipients c
-`
-
-func buildCircleRecipientQuery(baseQuery string, queryParams QueryParams, sqlExec db.SQLExecuter) (string, []interface{}) {
-	qb := NewQueryBuilder(baseQuery)
-
-	if queryParams.Filters[FilterKeyStatus] != nil {
-		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]CircleRecipientStatus); ok {
-			if len(statusSlice) > 0 {
-				qb.AddCondition("c.status = ANY(?)", pq.Array(statusSlice))
-			}
-		} else {
-			qb.AddCondition("c.status = ?", queryParams.Filters[FilterKeyStatus])
-		}
-	}
-
-	if receiverWalletID := queryParams.Filters[FilterKeyReceiverWalletID]; receiverWalletID != nil {
-		qb.AddCondition("c.receiver_wallet_id = ?", receiverWalletID)
-	}
-
-	if queryParams.Filters[LowerThan(FilterKeySyncAttempts)] != nil {
-		qb.AddCondition("c.sync_attempts < ?", queryParams.Filters[LowerThan(FilterKeySyncAttempts)])
-	}
-
-	if queryParams.SortBy != "" && queryParams.SortOrder != "" {
-		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "c")
-	}
-
-	if queryParams.PageLimit > 0 && queryParams.Page > 0 {
-		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
-	}
-
-	qb.forUpdateSkipLocked = queryParams.ForUpdateSkipLocked
-
-	query, params := qb.Build()
-	return sqlExec.Rebind(query), params
 }
