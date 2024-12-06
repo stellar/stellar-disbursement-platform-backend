@@ -267,6 +267,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Post("/", handler.PostDisbursement)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+				Delete("/{id}", handler.DeleteDisbursement)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/{id}/instructions", handler.PostDisbursementInstructions)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).

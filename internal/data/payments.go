@@ -302,14 +302,15 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	return payments, nil
 }
 
-// DeleteAllForDisbursement deletes all payments for a given disbursement.
-func (p *PaymentModel) DeleteAllForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
+// DeleteAllDraftForDisbursement deletes all payments for a given disbursement.
+func (p *PaymentModel) DeleteAllDraftForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
 	query := `
 		DELETE FROM payments
 		WHERE disbursement_id = $1
+			AND status = $2
 		`
 
-	result, err := sqlExec.ExecContext(ctx, query, disbursementID)
+	result, err := sqlExec.ExecContext(ctx, query, disbursementID, DraftPaymentStatus)
 	if err != nil {
 		return fmt.Errorf("error deleting payments for disbursement: %w", err)
 	}
