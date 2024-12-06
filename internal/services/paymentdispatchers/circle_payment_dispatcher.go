@@ -160,7 +160,7 @@ func (c *CirclePaymentDispatcher) updatePaymentStatusForCirclePayout(ctx context
 }
 
 func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
-	dataRecipient, err := c.sdpModels.CircleRecipient.GetByReceiverWalletID(ctx, c.sdpModels.DBConnectionPool, receiverWallet.ID)
+	dataRecipient, err := c.sdpModels.CircleRecipient.GetByReceiverWalletID(ctx, receiverWallet.ID)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		return nil, fmt.Errorf("getting Circle recipient: %w", err)
 	}
@@ -188,7 +188,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		}
 
 		log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q...", receiverWallet.ID)
-		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, c.sdpModels.DBConnectionPool, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
+		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 			IdempotencyKey: uuid.NewString(),
 		})
 		if err != nil {
@@ -223,7 +223,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		updateDataRecipient.SyncAttempts = dataRecipient.SyncAttempts + 1
 		updateDataRecipient.LastSyncAttemptAt = utils.TimePtr(time.Now())
 	}
-	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, c.sdpModels.DBConnectionPool, dataRecipient.ReceiverWalletID, updateDataRecipient)
+	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, updateDataRecipient)
 	if err != nil {
 		return nil, fmt.Errorf("updating Circle recipient: %w", err)
 	}

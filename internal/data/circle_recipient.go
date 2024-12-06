@@ -21,14 +21,15 @@ type CircleRecipient struct {
 	UpdatedAt         time.Time              `db:"updated_at"`
 	SyncAttempts      int                    `db:"sync_attempts"`
 	LastSyncAttemptAt *time.Time             `db:"last_sync_attempt_at"`
+	ResponseBody      []byte                 `db:"response_body"`
 }
 
 type CircleRecipientStatus string
 
 const (
 	CircleRecipientStatusPending  CircleRecipientStatus = "pending"
-	CircleRecipientStatusActive   CircleRecipientStatus = "active"   // means success
-	CircleRecipientStatusInactive CircleRecipientStatus = "inactive" // means success
+	CircleRecipientStatusActive   CircleRecipientStatus = "active" // means success
+	CircleRecipientStatusInactive CircleRecipientStatus = "inactive"
 	CircleRecipientStatusDenied   CircleRecipientStatus = "denied"
 )
 
@@ -63,6 +64,7 @@ type CircleRecipientUpdate struct {
 	Status            *CircleRecipientStatus `db:"status"`
 	SyncAttempts      int                    `db:"sync_attempts"`
 	LastSyncAttemptAt *time.Time             `db:"last_sync_attempt_at"`
+	ResponseBody      []byte                 `db:"response_body"`
 }
 
 type CircleRecipientModel struct {
@@ -92,7 +94,7 @@ func (m CircleRecipientModel) Insert(ctx context.Context, receiverWalletID strin
 	return &circleRecipient, nil
 }
 
-func (m CircleRecipientModel) Update(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string, update CircleRecipientUpdate) (*CircleRecipient, error) {
+func (m CircleRecipientModel) Update(ctx context.Context, receiverWalletID string, update CircleRecipientUpdate) (*CircleRecipient, error) {
 	if receiverWalletID == "" {
 		return nil, fmt.Errorf("receiverWalletID is required")
 	}
@@ -113,10 +115,10 @@ func (m CircleRecipientModel) Update(ctx context.Context, sqlExec db.SQLExecuter
 			*
 	`, setClause)
 	params = append(params, receiverWalletID)
-	query = sqlExec.Rebind(query)
+	query = m.dbConnectionPool.Rebind(query)
 
 	var circleRecipient CircleRecipient
-	err := sqlExec.GetContext(ctx, &circleRecipient, query, params...)
+	err := m.dbConnectionPool.GetContext(ctx, &circleRecipient, query, params...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("circle recipient with receiver_wallet_id %s not found: %w", receiverWalletID, ErrRecordNotFound)
@@ -127,7 +129,11 @@ func (m CircleRecipientModel) Update(ctx context.Context, sqlExec db.SQLExecuter
 	return &circleRecipient, nil
 }
 
-func (m CircleRecipientModel) GetByReceiverWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (*CircleRecipient, error) {
+func (m CircleRecipientModel) GetByReceiverWalletID(ctx context.Context, receiverWalletID string) (*CircleRecipient, error) {
+	if receiverWalletID == "" {
+		return nil, fmt.Errorf("receiverWalletID is required")
+	}
+
 	const query = `
 		SELECT
 			*
@@ -138,7 +144,7 @@ func (m CircleRecipientModel) GetByReceiverWalletID(ctx context.Context, sqlExec
 	`
 
 	var circleRecipient CircleRecipient
-	err := sqlExec.GetContext(ctx, &circleRecipient, query, receiverWalletID)
+	err := m.dbConnectionPool.GetContext(ctx, &circleRecipient, query, receiverWalletID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
