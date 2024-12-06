@@ -123,9 +123,9 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, opts Disb
 			}
 		}
 
-		// Step 4: Delete all pre-existing payments tied to this disbursement for each receiver in one call
-		if err = di.paymentModel.DeleteAllForDisbursement(ctx, dbTx, opts.Disbursement.ID); err != nil {
-			return fmt.Errorf("deleting payments: %w", err)
+		// Step 4: Delete all pre-existing draft payments tied to this disbursement for each receiver in one call
+		if err = di.paymentModel.DeleteAllDraftForDisbursement(ctx, dbTx, opts.Disbursement.ID); err != nil {
+			return fmt.Errorf("deleting draft payments: %w", err)
 		}
 
 		// Step 5: Create payments for all receivers

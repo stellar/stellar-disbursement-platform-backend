@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -1930,6 +1931,147 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_DisbursementHandler_DeleteDisbursement(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	ctx := context.Background()
+	handler := &DisbursementHandler{
+		Models: models,
+	}
+
+	r := chi.NewRouter()
+	r.Delete("/disbursements/{id}", handler.DeleteDisbursement)
+
+	// Create test fixtures
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+
+	t.Run("successfully deletes draft disbursement", func(t *testing.T) {
+		disbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, data.Disbursement{
+			Name:   uuid.NewString(),
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/disbursements/%s", disbursement.ID), nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var response data.Disbursement
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&response))
+		assert.Equal(t, *disbursement, response)
+
+		// Verify disbursement was deleted
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.Error(t, err)
+		assert.Equal(t, data.ErrRecordNotFound, err)
+	})
+
+	t.Run("successfully deletes ready disbursement", func(t *testing.T) {
+		disbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, data.Disbursement{
+			Name:   uuid.NewString(),
+			Status: data.ReadyDisbursementStatus,
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/disbursements/%s", disbursement.ID), nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var response data.Disbursement
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&response))
+		assert.Equal(t, *disbursement, response)
+
+		// Verify disbursement was deleted
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.Error(t, err)
+		assert.Equal(t, data.ErrRecordNotFound, err)
+	})
+
+	t.Run("returns 404 when disbursement not found", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodDelete, "/disbursements/non-existent-id", nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("returns 400 when disbursement is not in draft status", func(t *testing.T) {
+		disbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, data.Disbursement{
+			Name:   uuid.NewString(),
+			Status: data.StartedDisbursementStatus,
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/disbursements/%s", disbursement.ID), nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Cannot delete a disbursement that has started")
+
+		// Verify disbursement still exists
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+	})
+
+	t.Run("returns error when disbursement has associated payments", func(t *testing.T) {
+		disbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, data.Disbursement{
+			Name:   uuid.NewString(),
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		// Create a receiver and receiver wallet
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+
+		// Create an associated payment
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/disbursements/%s", disbursement.ID), nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusInternalServerError, rr.Code)
+		assert.Contains(t, rr.Body.String(), "Cannot delete disbursement")
+
+		// Verify disbursement still exists
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+	})
 }
 
 func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {

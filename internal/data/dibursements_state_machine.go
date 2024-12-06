@@ -15,6 +15,8 @@ const (
 	CompletedDisbursementStatus DisbursementStatus = "COMPLETED"
 )
 
+var NotStartedDisbursementStatuses = []DisbursementStatus{DraftDisbursementStatus, ReadyDisbursementStatus}
+
 // TransitionTo transitions the disbursement status to the target state
 func (status DisbursementStatus) TransitionTo(targetState DisbursementStatus) error {
 	return DisbursementStateMachineWithInitialState(status).TransitionTo(targetState.State())

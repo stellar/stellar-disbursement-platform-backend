@@ -457,3 +457,25 @@ func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec d
 
 	return nil
 }
+
+// Delete deletes a disbursement by ID
+func (d *DisbursementModel) Delete(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
+	disbursementQuery := `DELETE FROM disbursements WHERE id = $1 AND status = ANY($2)`
+	result, err := sqlExec.ExecContext(ctx, disbursementQuery, disbursementID, pq.Array(NotStartedDisbursementStatuses))
+	if err != nil {
+		if strings.Contains(err.Error(), "violates foreign key constraint") {
+			return fmt.Errorf("deleting disbursement %s because it has associated payments: %w", disbursementID, err)
+		}
+		return fmt.Errorf("deleting disbursement %s: %w", disbursementID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
+	return nil
+}
