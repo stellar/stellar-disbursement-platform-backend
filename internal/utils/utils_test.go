@@ -246,7 +246,7 @@ func Test_GetTypeName(t *testing.T) {
 	}
 }
 
-func TestStringPtr(t *testing.T) {
+func Test_StringPtr(t *testing.T) {
 	t.Run("returns a pointer to the string", func(t *testing.T) {
 		s := "test string"
 		result := StringPtr(s)
