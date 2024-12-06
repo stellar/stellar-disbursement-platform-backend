@@ -443,6 +443,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/disbursements/1234"},
 		{http.MethodGet, "/disbursements/1234/receivers"},
 		{http.MethodPatch, "/disbursements/1234/status"},
+		{http.MethodDelete, "/disbursements/1234"},
 		// Payments
 		{http.MethodGet, "/payments"},
 		{http.MethodGet, "/payments/1234"},
