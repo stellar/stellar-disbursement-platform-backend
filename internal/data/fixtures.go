@@ -347,9 +347,9 @@ func CreateReceiverVerificationFixture(t *testing.T, ctx context.Context, sqlExe
 func CreateCircleTransferRequestFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, insert CircleTransferRequest) *CircleTransferRequest {
 	const query = `
 		INSERT INTO circle_transfer_requests
-			(payment_id, circle_transfer_id, status, source_wallet_id, completed_at, last_sync_attempt_at, sync_attempts)
+			(payment_id, circle_transfer_id, circle_payout_id, status, source_wallet_id, completed_at, last_sync_attempt_at, sync_attempts)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7)
+			($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING
 			*
 	`
@@ -358,6 +358,7 @@ func CreateCircleTransferRequestFixture(t *testing.T, ctx context.Context, sqlEx
 	err := sqlExec.GetContext(ctx, &circleTransferRequest, query,
 		insert.PaymentID,
 		insert.CircleTransferID,
+		insert.CirclePayoutID,
 		insert.Status,
 		insert.SourceWalletID,
 		insert.CompletedAt,
@@ -367,6 +368,12 @@ func CreateCircleTransferRequestFixture(t *testing.T, ctx context.Context, sqlEx
 	require.NoError(t, err)
 
 	return &circleTransferRequest
+}
+
+func DeleteAllCircleTransferRequests(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	const query = "DELETE FROM circle_transfer_requests"
+	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
 }
 
 func DeleteAllReceiverVerificationFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
@@ -814,6 +821,7 @@ func CreateMockImage(t *testing.T, width, height int, size ImageSize) image.Imag
 func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	DeleteAllMessagesFixtures(t, ctx, sqlExec)
 	DeleteAllPaymentsFixtures(t, ctx, sqlExec)
+	DeleteAllCircleTransferRequests(t, ctx, sqlExec)
 	DeleteAllReceiverVerificationFixtures(t, ctx, sqlExec)
 	DeleteAllReceiverWalletsFixtures(t, ctx, sqlExec)
 	DeleteAllReceiversFixtures(t, ctx, sqlExec)
