@@ -15,6 +15,7 @@ CREATE TABLE circle_recipients (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     sync_attempts INT NOT NULL DEFAULT 0,
     last_sync_attempt_at TIMESTAMPTZ,
+    response_body JSONB,
     CONSTRAINT unique_idempotency_key UNIQUE (idempotency_key)
 );
 
