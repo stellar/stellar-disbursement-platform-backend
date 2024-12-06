@@ -171,18 +171,18 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	}
 
 	// DOES NOT EXIST in the DB
-	shouldBumpSyncAttempts := true
 	if dataRecipient == nil {
 		log.Ctx(ctx).Infof("Inserting circle_recipient for receiver_wallet_id %q...", receiverWallet.ID)
-		shouldBumpSyncAttempts = false // Don't bump sync_attempts for newly created recipients
 		dataRecipient, err = c.sdpModels.CircleRecipient.Insert(ctx, receiverWallet.ID)
 		if err != nil {
 			return nil, fmt.Errorf("inserting Circle recipient: %w", err)
 		}
 	}
 
-	// FAILED -> refresh the idempotency key
-	if dataRecipient.Status != nil && *dataRecipient.Status == data.CircleRecipientStatusDenied {
+	// FAILED or INACTIVE -> refresh the idempotency key
+	shouldBumpSyncAttempts := false
+	if dataRecipient.Status != nil && dataRecipient.Status.IsCompleted() {
+		shouldBumpSyncAttempts = true // Only bump sync_attempts when trying to re-register the recipient
 		if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
 			return nil, ErrCircleRecipientCreationFailedTooManyTimes
 		}
@@ -196,7 +196,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		}
 	}
 
-	// NULL, PENDING or FAILED (with renovated idempotency_key) -> (re)submit the recipient creation request
+	// NULL, PENDING, INACTIVE (with renovated idempotency_key) or FAILED (with renovated idempotency_key) -> (re)submit the recipient creation request
 	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
 		IdempotencyKey: dataRecipient.IdempotencyKey,
 		Address:        receiverWallet.StellarAddress,
@@ -210,6 +210,11 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		return nil, fmt.Errorf("creating Circle recipient: %w", err)
 	}
 
+	recipientJson, err := json.Marshal(recipient)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling Circle recipient: %w", err)
+	}
+
 	dataRecipientStatus, err := data.ParseRecipientStatus(recipient.Status)
 	if err != nil {
 		return nil, fmt.Errorf("parsing Circle recipient status: %w", err)
@@ -218,6 +223,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		IdempotencyKey:    dataRecipient.IdempotencyKey,
 		CircleRecipientID: &recipient.ID,
 		Status:            &dataRecipientStatus,
+		ResponseBody:      recipientJson,
 	}
 	if shouldBumpSyncAttempts {
 		updateDataRecipient.SyncAttempts = dataRecipient.SyncAttempts + 1

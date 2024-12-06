@@ -148,10 +148,10 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 			receiverRegistered := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 			rwRegistered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverRegistered.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-			recipientSuccessStatus := data.CircleRecipientStatusActive
+			recipientActiveStatus := data.CircleRecipientStatusActive
 			cRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
 				ReceiverWalletID:  rwRegistered.ID,
-				Status:            &recipientSuccessStatus,
+				Status:            &recipientActiveStatus,
 				CircleRecipientID: &circleRecipientID,
 			})
 			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
