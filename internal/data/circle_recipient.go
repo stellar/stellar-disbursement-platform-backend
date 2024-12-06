@@ -88,7 +88,7 @@ func (m CircleRecipientModel) Insert(ctx context.Context, receiverWalletID strin
 	var circleRecipient CircleRecipient
 	err := m.dbConnectionPool.GetContext(ctx, &circleRecipient, query, receiverWalletID)
 	if err != nil {
-		return nil, fmt.Errorf("inserting circle recipient: %w", err)
+		return nil, fmt.Errorf("getting context: %w", err)
 	}
 
 	return &circleRecipient, nil
