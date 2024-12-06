@@ -4,10 +4,7 @@
 CREATE TYPE circle_recipient_status AS ENUM ('pending', 'active', 'inactive', 'denied');
 
 CREATE TABLE circle_recipients (
-    receiver_wallet_id VARCHAR(36) PRIMARY KEY
-        CONSTRAINT fk_circle_recipient_receiver_wallet_id
-        REFERENCES receiver_wallets(id)
-        ON DELETE CASCADE,
+    receiver_wallet_id VARCHAR(36) PRIMARY KEY,
     idempotency_key VARCHAR(36) NOT NULL DEFAULT public.uuid_generate_v4(),
     circle_recipient_id VARCHAR(36),
     status circle_recipient_status,
