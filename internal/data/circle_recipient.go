@@ -34,7 +34,7 @@ const (
 )
 
 func CompletedCircleRecipientStatuses() []CircleRecipientStatus {
-	return []CircleRecipientStatus{CircleRecipientStatusActive, CircleRecipientStatusDenied}
+	return []CircleRecipientStatus{CircleRecipientStatusActive, CircleRecipientStatusDenied, CircleRecipientStatusInactive}
 }
 
 func (s CircleRecipientStatus) IsCompleted() bool {
