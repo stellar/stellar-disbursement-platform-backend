@@ -454,6 +454,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"auth_user_password_reset",
 		"auth_users",
 		"circle_client_config",
+		"circle_recipients",
 		"circle_transfer_requests",
 		"disbursements",
 		"messages",

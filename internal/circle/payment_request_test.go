@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,76 +55,72 @@ func Test_PaymentRequest_GetCircleAssetCode(t *testing.T) {
 }
 
 func Test_PaymentRequest_Validate(t *testing.T) {
-	validDestinationAddress := keypair.MustRandom().Address()
-
 	tests := []struct {
 		name       string
 		paymentReq PaymentRequest
 		wantErr    string
 	}{
 		{
-			name: "missing source wallet ID",
+			name: "🔴missing source wallet ID",
 			paymentReq: PaymentRequest{
-				SourceWalletID:            "",
-				DestinationStellarAddress: validDestinationAddress,
-				Amount:                    "100.00",
-				StellarAssetCode:          "USDC",
-				IdempotencyKey:            uuid.New().String(),
+				SourceWalletID:   "",
+				Amount:           "100.00",
+				StellarAssetCode: "USDC",
+				IdempotencyKey:   uuid.New().String(),
 			},
 			wantErr: "source wallet ID is required",
 		},
 		{
-			name: "invalid destination stellar address",
+			name: "🔴missing recipient id",
 			paymentReq: PaymentRequest{
-				SourceWalletID:            "source_wallet_123",
-				DestinationStellarAddress: "invalid_address",
-				Amount:                    "100.00",
-				StellarAssetCode:          "USDC",
-				IdempotencyKey:            uuid.New().String(),
+				SourceWalletID:   "source_wallet_123",
+				Amount:           "100.00",
+				StellarAssetCode: "USDC",
+				IdempotencyKey:   uuid.New().String(),
 			},
-			wantErr: "destination stellar address is not a valid public key",
+			wantErr: "recipient ID is required",
 		},
 		{
-			name: "invalid amount",
+			name: "🔴invalid amount",
 			paymentReq: PaymentRequest{
-				SourceWalletID:            "source_wallet_123",
-				DestinationStellarAddress: validDestinationAddress,
-				Amount:                    "invalid_amount",
-				StellarAssetCode:          "USDC",
-				IdempotencyKey:            uuid.New().String(),
+				SourceWalletID:   "source_wallet_123",
+				RecipientID:      "recipient_id_123",
+				Amount:           "invalid_amount",
+				StellarAssetCode: "USDC",
+				IdempotencyKey:   uuid.New().String(),
 			},
 			wantErr: "amount is not valid",
 		},
 		{
-			name: "missing stellar asset code",
+			name: "🔴missing stellar asset code",
 			paymentReq: PaymentRequest{
-				SourceWalletID:            "source_wallet_123",
-				DestinationStellarAddress: validDestinationAddress,
-				Amount:                    "100.00",
-				StellarAssetCode:          "",
-				IdempotencyKey:            uuid.New().String(),
+				SourceWalletID:   "source_wallet_123",
+				RecipientID:      "recipient_id_123",
+				Amount:           "100.00",
+				StellarAssetCode: "",
+				IdempotencyKey:   uuid.New().String(),
 			},
 			wantErr: "stellar asset code is required",
 		},
 		{
-			name: "invalid idempotency key",
+			name: "🔴invalid idempotency key",
 			paymentReq: PaymentRequest{
-				SourceWalletID:            "source_wallet_123",
-				DestinationStellarAddress: validDestinationAddress,
-				Amount:                    "100.00",
-				StellarAssetCode:          "USDC",
-				IdempotencyKey:            "invalid_uuid",
+				SourceWalletID:   "source_wallet_123",
+				RecipientID:      "recipient_id_123",
+				Amount:           "100.00",
+				StellarAssetCode: "USDC",
+				IdempotencyKey:   "invalid_uuid",
 			},
 			wantErr: "idempotency key is not valid",
 		},
 		{
-			name: "valid payment request",
+			name: "🟢valid payment request",
 			paymentReq: PaymentRequest{
-				SourceWalletID:            "source_wallet_123",
-				DestinationStellarAddress: validDestinationAddress,
-				Amount:                    "100.00",
-				StellarAssetCode:          "USDC",
-				IdempotencyKey:            uuid.New().String(),
+				SourceWalletID:   "source_wallet_123",
+				RecipientID:      "recipient_id_123",
+				Amount:           "100.00",
+				StellarAssetCode: "USDC",
+				IdempotencyKey:   uuid.New().String(),
 			},
 			wantErr: "",
 		},
