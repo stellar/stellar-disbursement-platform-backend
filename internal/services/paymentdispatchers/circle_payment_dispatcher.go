@@ -197,13 +197,17 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	}
 
 	// NULL, PENDING, INACTIVE (with renovated idempotency_key) or FAILED (with renovated idempotency_key) -> (re)submit the recipient creation request
+	nickname := receiverWallet.ID
+	if receiverWallet.Receiver.PhoneNumber != "" {
+		nickname = receiverWallet.Receiver.PhoneNumber
+	}
 	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
 		IdempotencyKey: dataRecipient.IdempotencyKey,
 		Address:        receiverWallet.StellarAddress,
 		Chain:          circle.StellarChainCode,
 		Metadata: circle.RecipientMetadata{
-			Nickname: receiverWallet.ID, // TODO: replace with phone number if available
-			// TODO: add email
+			Nickname: nickname,
+			Email:    receiverWallet.Receiver.Email,
 		},
 	})
 	if err != nil {

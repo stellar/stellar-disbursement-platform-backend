@@ -89,7 +89,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 						assert.Equal(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
 						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
 						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
-						assert.Equal(t, receiverWallet.ID, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
 					}).
 					Return(&circle.Recipient{ID: "new-circle-recipient-id", Status: "active"}, nil).
 					Once()
@@ -116,7 +117,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 						assert.NotEqual(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
 						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
 						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
-						assert.Equal(t, receiverWallet.ID, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
 					}).
 					Return(&circle.Recipient{ID: "new-circle-recipient-id", Status: "active"}, nil).
 					Once()
@@ -150,7 +152,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 						assert.NotEqual(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
 						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
 						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
-						assert.Equal(t, receiverWallet.ID, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
 					}).
 					Return(&circle.Recipient{ID: "new-circle-recipient-id", Status: "active"}, nil).
 					Once()
@@ -236,7 +239,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 						assert.Equal(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
 						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
 						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
-						assert.Equal(t, receiverWallet.ID, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
 					}).
 					Return(nil, errors.New("got 400 from vendor's API")).
 					Once()
@@ -293,7 +297,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 	require.NoError(t, err)
 
 	circleWalletID := "22322112"
-	circlePayoutID := uuid.NewString()
+	circlePayoutID := "dce3a913-9043-4d20-ba6c-fe27f630f2a0"
 
 	tenantID := "tenant-id"
 
