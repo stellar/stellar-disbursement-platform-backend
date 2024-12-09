@@ -6,7 +6,7 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/aws/aws-sdk-go v1.55.5
-	github.com/getsentry/sentry-go v0.29.1
+	github.com/getsentry/sentry-go v0.30.0
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/httprate v0.14.1
@@ -30,8 +30,8 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
 	github.com/stretchr/testify v1.10.0
-	github.com/twilio/twilio-go v1.23.6
-	golang.org/x/crypto v0.29.0
+	github.com/twilio/twilio-go v1.23.7
+	golang.org/x/crypto v0.30.0
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
 )
 
@@ -74,8 +74,8 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/tylerb/graceful.v1 v1.2.15 // indirect
