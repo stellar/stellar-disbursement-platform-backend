@@ -21,17 +21,17 @@ var (
 )
 
 type Wallet struct {
-	ID                string       `json:"id" db:"id"`
+	ID                string       `json:"id" csv:"-" db:"id"`
 	Name              string       `json:"name" db:"name"`
-	Homepage          string       `json:"homepage,omitempty" db:"homepage"`
-	SEP10ClientDomain string       `json:"sep_10_client_domain,omitempty" db:"sep_10_client_domain"`
-	DeepLinkSchema    string       `json:"deep_link_schema,omitempty" db:"deep_link_schema"`
-	Enabled           bool         `json:"enabled" db:"enabled"`
-	UserManaged       bool         `json:"user_managed,omitempty" db:"user_managed"`
-	Assets            WalletAssets `json:"assets,omitempty" db:"assets"`
-	CreatedAt         *time.Time   `json:"created_at,omitempty" db:"created_at"`
-	UpdatedAt         *time.Time   `json:"updated_at,omitempty" db:"updated_at"`
-	DeletedAt         *time.Time   `json:"-" db:"deleted_at"`
+	Homepage          string       `json:"homepage,omitempty" csv:"-" db:"homepage"`
+	SEP10ClientDomain string       `json:"sep_10_client_domain,omitempty" csv:"-" db:"sep_10_client_domain"`
+	DeepLinkSchema    string       `json:"deep_link_schema,omitempty" csv:"-" db:"deep_link_schema"`
+	Enabled           bool         `json:"enabled" csv:"-" db:"enabled"`
+	UserManaged       bool         `json:"user_managed,omitempty" csv:"-" db:"user_managed"`
+	Assets            WalletAssets `json:"assets,omitempty" csv:"-" db:"assets"`
+	CreatedAt         *time.Time   `json:"created_at,omitempty" csv:"-" db:"created_at"`
+	UpdatedAt         *time.Time   `json:"updated_at,omitempty" csv:"-" db:"updated_at"`
+	DeletedAt         *time.Time   `json:"-" csv:"-" db:"deleted_at"`
 }
 
 type WalletInsert struct {

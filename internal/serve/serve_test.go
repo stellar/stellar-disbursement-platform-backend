@@ -478,6 +478,8 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
+		// Exports
+		{http.MethodGet, "/exports/disbursements"},
 	}
 
 	// Expect 401 as a response:

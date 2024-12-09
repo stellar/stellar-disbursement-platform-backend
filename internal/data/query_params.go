@@ -2,6 +2,14 @@ package data
 
 import "fmt"
 
+type QueryType string
+
+const (
+	QueryTypeSelectPaginated QueryType = "SELECT_PAGINATED"
+	QueryTypeSelectAll       QueryType = "SELECT_ALL"
+	QueryTypeCount           QueryType = "COUNT"
+)
+
 type QueryParams struct {
 	Query               string
 	Page                int

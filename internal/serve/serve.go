@@ -412,6 +412,14 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkType:                 o.NetworkType,
 		}
 		r.Get("/balances", balancesHandler.Get)
+
+		exportHandler := httphandler.ExportHandler{
+			Models: o.Models,
+		}
+		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			Route("/exports", func(r chi.Router) {
+				r.Get("/disbursements", exportHandler.ExportDisbursements)
+			})
 	})
 
 	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())

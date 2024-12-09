@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/gocarina/gocsv"
 )
 
 // RegistrationContactType represents the type of contact information to be used when creating and validating a disbursement.
@@ -89,9 +91,14 @@ func (rct *RegistrationContactType) Scan(value interface{}) error {
 	return rct.ParseFromString(strValue)
 }
 
+func (rct RegistrationContactType) MarshalCSV() (string, error) {
+	return rct.String(), nil
+}
+
 var (
-	_ json.Marshaler   = (*RegistrationContactType)(nil)
-	_ json.Unmarshaler = (*RegistrationContactType)(nil)
-	_ driver.Valuer    = (*RegistrationContactType)(nil)
-	_ sql.Scanner      = (*RegistrationContactType)(nil)
+	_ gocsv.TypeMarshaller = (*RegistrationContactType)(nil)
+	_ json.Marshaler       = (*RegistrationContactType)(nil)
+	_ json.Unmarshaler     = (*RegistrationContactType)(nil)
+	_ driver.Valuer        = (*RegistrationContactType)(nil)
+	_ sql.Scanner          = (*RegistrationContactType)(nil)
 )
