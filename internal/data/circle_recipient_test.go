@@ -116,7 +116,7 @@ func Test_CircleRecipientModel_Update(t *testing.T) {
 		assert.Equal(t, updateRequest.Status, updatedCircleRecipient.Status)
 		assert.JSONEq(t, string(updateRequest.ResponseBody), string(updatedCircleRecipient.ResponseBody))
 		assert.Equal(t, updateRequest.SyncAttempts, updatedCircleRecipient.SyncAttempts)
-		assert.True(t, updateRequest.LastSyncAttemptAt.Equal(*updatedCircleRecipient.LastSyncAttemptAt), "expected LastSyncAttemptAt to be equal")
+		assert.Truef(t, updateRequest.LastSyncAttemptAt.Equal(*updatedCircleRecipient.LastSyncAttemptAt), "LastSyncAttemptAt doesn't match: %v != %v", updateRequest.LastSyncAttemptAt, updatedCircleRecipient.LastSyncAttemptAt)
 	})
 }
 
