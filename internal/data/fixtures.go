@@ -536,20 +536,30 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 			Status:    d.Status,
 		}}
 	}
-	id, err := model.Insert(ctx, d)
-	require.NoError(t, err)
 
-	// update created_at
-	const query = `
-		UPDATE disbursements
-		SET created_at = $1
-		WHERE id = $2
-		`
-	_, err = sqlExec.ExecContext(ctx, query, d.CreatedAt, id)
+	const q = `
+		INSERT INTO 
+		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type, created_at)
+		VALUES 
+		    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id
+	`
+	var newID string
+	err := sqlExec.GetContext(ctx, &newID, q,
+		d.Name,
+		d.Status,
+		d.StatusHistory,
+		d.Wallet.ID,
+		d.Asset.ID,
+		utils.SQLNullString(string(d.VerificationField)),
+		d.ReceiverRegistrationMessageTemplate,
+		d.RegistrationContactType,
+		d.CreatedAt,
+	)
 	require.NoError(t, err)
 
 	// get disbursement
-	disbursement, err := model.Get(ctx, model.dbConnectionPool, id)
+	disbursement, err := model.Get(ctx, sqlExec, newID)
 	require.NoError(t, err)
 	return disbursement
 }

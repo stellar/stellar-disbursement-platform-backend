@@ -282,7 +282,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 
 	t.Run("returns empty list when no disbursements exist", func(t *testing.T) {
 		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		disbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+		disbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(disbursements))
 	})
@@ -296,7 +296,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		expected2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Len(t, actualDisbursements, 2)
 		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
@@ -311,7 +311,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 1, PageLimit: 1})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 1, PageLimit: 1}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected1}, actualDisbursements)
@@ -326,7 +326,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		expected2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 2, PageLimit: 1})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 2, PageLimit: 1}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected2}, actualDisbursements)
@@ -341,7 +341,9 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		expected2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{SortBy: SortFieldName, SortOrder: SortOrderDESC})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool,
+			&QueryParams{SortBy: SortFieldName, SortOrder: SortOrderDESC},
+			QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
@@ -361,7 +363,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: []DisbursementStatus{DraftDisbursementStatus},
 		}
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Filters: filters})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Filters: filters}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected1}, actualDisbursements)
@@ -383,7 +385,9 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: []DisbursementStatus{DraftDisbursementStatus, CompletedDisbursementStatus},
 		}
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Filters: filters, SortBy: SortFieldCreatedAt, SortOrder: SortOrderDESC})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool,
+			&QueryParams{Filters: filters, SortBy: SortFieldCreatedAt, SortOrder: SortOrderDESC},
+			QueryTypeSelectPaginated)
 
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualDisbursements))
@@ -437,7 +441,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 
 		expectedDisbursement.DisbursementStats = expectedStats
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expectedDisbursement}, actualDisbursements)
