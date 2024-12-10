@@ -146,7 +146,7 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 
 			var disbursements []*data.Disbursement
 			if totalDisbursements != 0 {
-				disbursements, err = s.Models.Disbursements.GetAll(ctx, dbTx, queryParams)
+				disbursements, err = s.Models.Disbursements.GetAll(ctx, dbTx, queryParams, data.QueryTypeSelectPaginated)
 				if err != nil {
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
