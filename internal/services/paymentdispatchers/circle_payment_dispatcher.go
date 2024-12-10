@@ -63,29 +63,27 @@ var _ PaymentDispatcherInterface = (*CirclePaymentDispatcher)(nil)
 
 func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
 	for _, payment := range paymentsToSubmit {
-		// 0. Ensure the recipient is ready
+		// 1. Ensure the recipient is ready
 		// TODO: When clicking retries, we should reset the recipient count?
 		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet, 100*time.Millisecond)
 		if err != nil {
-			if !errors.Is(err, ErrCircleRecipientCreationFailedTooManyTimes) {
-				return fmt.Errorf("ensuring recipient is ready: %w", err)
-			} else {
-				err = fmt.Errorf("failed to create Circle recipient for payment %s on Circle: %w", payment.ID, err)
-				err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.Ptr(err.Error()), "")
-				if err != nil {
-					return fmt.Errorf("marking payment as failed: %w", err)
-				}
-				continue
+			// 2. If the recipient creation fails, set the payment status to failed
+			err = fmt.Errorf("failed to create Circle recipient for payment ID %s: %w", payment.ID, err)
+			log.Ctx(ctx).Error(err)
+			err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.Ptr(err.Error()), "")
+			if err != nil {
+				return fmt.Errorf("marking payment as failed: %w", err)
 			}
+			continue
 		}
 
-		// 1. Create a new circle transfer request
+		// 3. Create a new circle transfer request
 		transferRequest, err := c.sdpModels.CircleTransferRequests.GetOrInsert(ctx, payment.ID)
 		if err != nil {
 			return fmt.Errorf("inserting circle transfer request: %w", err)
 		}
 
-		// 2. Submit the payment to Circle
+		// 4. Submit the payment to Circle
 		payout, err := c.circleService.SendPayment(ctx, circle.PaymentRequest{
 			SourceWalletID:   circleWalletID,
 			RecipientID:      recipient.CircleRecipientID,
@@ -93,26 +91,29 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 			StellarAssetCode: payment.Asset.Code,
 			IdempotencyKey:   transferRequest.IdempotencyKey,
 		})
-
 		if err != nil {
-			// 3. If the transfer fails, set the payment status to failed
-			log.Ctx(ctx).Errorf("Failed to submit payment %s to Circle: %v", payment.ID, err)
-			err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.StringPtr(err.Error()), "")
+			// 5. If the transfer fails, set the payment status to failed
+			err = fmt.Errorf("failed to submit payment ID %s to Circle: %w", payment.ID, err)
+			log.Ctx(ctx).Error(err)
+			err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.Ptr(err.Error()), "")
 			if err != nil {
 				return fmt.Errorf("marking payment as failed: %w", err)
 			}
-		} else {
-			// 4. Update the circle transfer request with the response from Circle
-			if err = c.updateCircleTransferRequest(ctx, sdpDBTx, circleWalletID, payout, transferRequest); err != nil {
-				return fmt.Errorf("updating circle transfer request: %w", err)
-			}
 
-			// 5. Update the payment status based on the transfer status
-			if err = c.updatePaymentStatusForCirclePayout(ctx, sdpDBTx, payout, payment); err != nil {
-				return fmt.Errorf("updating payment status for Circle transfer: %w", err)
-			}
+			continue
+		}
+
+		// 6. Update the circle transfer request with the response from Circle
+		if err = c.updateCircleTransferRequest(ctx, sdpDBTx, circleWalletID, payout, transferRequest); err != nil {
+			return fmt.Errorf("updating circle transfer request: %w", err)
+		}
+
+		// 7. Update the payment status based on the transfer status
+		if err = c.updatePaymentStatusForCirclePayout(ctx, sdpDBTx, payout, payment); err != nil {
+			return fmt.Errorf("updating payment status for Circle transfer: %w", err)
 		}
 	}
+
 	return nil
 }
 
