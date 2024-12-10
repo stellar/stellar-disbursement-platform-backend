@@ -191,9 +191,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	}
 
 	// FAILED or INACTIVE -> refresh the idempotency key
-	shouldBumpSyncAttempts := false
 	if dataRecipient.Status.IsCompleted() {
-		shouldBumpSyncAttempts = true // Only bump sync_attempts when trying to re-register the recipient
 		if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
 			return nil, ErrCircleRecipientCreationFailedTooManyTimes
 		}
@@ -248,10 +246,8 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		CircleRecipientID: recipient.ID,
 		Status:            dataRecipientStatus,
 		ResponseBody:      recipientJson,
-	}
-	if shouldBumpSyncAttempts {
-		updateDataRecipient.SyncAttempts = dataRecipient.SyncAttempts + 1
-		updateDataRecipient.LastSyncAttemptAt = time.Now()
+		SyncAttempts:      dataRecipient.SyncAttempts + 1,
+		LastSyncAttemptAt: time.Now(),
 	}
 	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, updateDataRecipient)
 	if err != nil {
