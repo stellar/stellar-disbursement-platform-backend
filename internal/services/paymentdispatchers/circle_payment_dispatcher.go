@@ -65,7 +65,7 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 	for _, payment := range paymentsToSubmit {
 		// 0. Ensure the recipient is ready
 		// TODO: When clicking retries, we should reset the recipient count?
-		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet)
+		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet, 100*time.Millisecond)
 		if err != nil {
 			if !errors.Is(err, ErrCircleRecipientCreationFailedTooManyTimes) {
 				return fmt.Errorf("ensuring recipient is ready: %w", err)
@@ -188,14 +188,12 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		if err != nil {
 			return nil, fmt.Errorf("inserting Circle recipient: %w", err)
 		}
+	} else if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
+		return nil, ErrCircleRecipientCreationFailedTooManyTimes
 	}
 
 	// FAILED or INACTIVE -> refresh the idempotency key
-	if dataRecipient.Status.IsCompleted() {
-		if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
-			return nil, ErrCircleRecipientCreationFailedTooManyTimes
-		}
-
+	if dataRecipient.Status == nil || dataRecipient.Status.IsCompleted() {
 		log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q...", receiverWallet.ID)
 		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 			IdempotencyKey: uuid.NewString(),
@@ -257,7 +255,11 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	return dataRecipient, nil
 }
 
-func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
+func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Context, receiverWallet data.ReceiverWallet, initialDelay time.Duration) (*data.CircleRecipient, error) {
+	if initialDelay <= 0 || initialDelay > time.Second {
+		initialDelay = 100 * time.Millisecond
+	}
+
 	var recipient *data.CircleRecipient
 	err := retry.Do(
 		func() error {
@@ -265,10 +267,8 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Co
 			recipient, err = c.ensureRecipientIsReady(ctx, receiverWallet)
 			if err != nil {
 				if errors.Is(err, ErrCircleRecipientCreationFailedTooManyTimes) {
-					// Stop retrying on this specific error
-					return retry.Unrecoverable(err)
+					return retry.Unrecoverable(err) // Stop retrying on this specific error
 				}
-				// Retry on other errors
 				return err
 			}
 
@@ -281,9 +281,10 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Co
 			// Successful case, no retry needed
 			return nil
 		},
-		retry.Attempts(4),                   // Maximum 4 attempts
-		retry.DelayType(retry.BackOffDelay), // Exponential backoff
-		retry.Context(ctx),                  // Respect the context's cancellation
+		retry.Attempts(maxCircleRecipientCreationAttempts), // Maximum attempts
+		retry.DelayType(retry.BackOffDelay),                // Exponential backoff
+		retry.Delay(initialDelay),                          // Initial delay (optional, default is 100ms)
+		retry.Context(ctx),                                 // Respect the context's cancellation
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ensure recipient is ready: %w", err)
