@@ -93,16 +93,21 @@ func GetTypeName(v interface{}) string {
 
 // StringPtr returns a pointer to a string
 func StringPtr(s string) *string {
-	return &s
+	return Ptr(s)
 }
 
 // IntPtr returns a pointer to an int
 func IntPtr(i int) *int {
-	return &i
+	return Ptr(i)
 }
 
 func TimePtr(t time.Time) *time.Time {
-	return &t
+	return Ptr(t)
+}
+
+// Ptr returns a pointer to the given value of any type.
+func Ptr[T any](v T) *T {
+	return &v
 }
 
 func VisualBool(b bool) string {

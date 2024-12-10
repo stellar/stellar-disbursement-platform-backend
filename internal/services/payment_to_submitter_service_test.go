@@ -40,6 +40,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
 	nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	circleRecipientID := "circle-recipient-id"
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -125,6 +126,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 			defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 			defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllCircleRecipientsFixtures(t, ctx, dbConnectionPool)
 			defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
 			startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -146,6 +148,11 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 			receiverRegistered := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 			rwRegistered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverRegistered.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+			cRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
+				ReceiverWalletID:  rwRegistered.ID,
+				Status:            data.CircleRecipientStatusActive,
+				CircleRecipientID: circleRecipientID,
+			})
 			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwRegistered,
 				Disbursement:   startedDisbursement,
@@ -163,10 +170,10 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			mCircleService := circle.NewMockService(t)
 			if tc.distributionAccount.IsCircle() {
 				wantPaymentReques := circle.PaymentRequest{
-					SourceWalletID:            tc.distributionAccount.CircleWalletID,
-					DestinationStellarAddress: rwRegistered.StellarAddress,
-					Amount:                    paymentRegistered.Amount,
-					StellarAssetCode:          paymentRegistered.Asset.Code,
+					SourceWalletID:   tc.distributionAccount.CircleWalletID,
+					RecipientID:      cRecipient.CircleRecipientID,
+					Amount:           paymentRegistered.Amount,
+					StellarAssetCode: paymentRegistered.Asset.Code,
 				}
 				var circleAssetCode string
 				circleAssetCode, err = wantPaymentReques.GetCircleAssetCode()
@@ -181,30 +188,29 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 						// Validate payment
 						assert.Equal(t, wantPaymentReques.SourceWalletID, gotPayment.SourceWalletID)
-						assert.Equal(t, wantPaymentReques.DestinationStellarAddress, gotPayment.DestinationStellarAddress)
+						assert.Equal(t, wantPaymentReques.RecipientID, gotPayment.RecipientID)
 						assert.Equal(t, wantPaymentReques.Amount, gotPayment.Amount)
 						assert.Equal(t, wantPaymentReques.StellarAssetCode, gotPayment.StellarAssetCode)
 						assert.NoError(t, uuid.Validate(gotPayment.IdempotencyKey), "Idempotency key should be a valid UUID")
 						wantPaymentReques.IdempotencyKey = gotPayment.IdempotencyKey
 					}).
-					Return(&circle.Transfer{
-						ID: "62955621-2cf7-4b1f-9f8b-34294ae52938",
-						Source: circle.TransferAccount{
-							ID:   tc.distributionAccount.CircleWalletID,
-							Type: circle.TransferAccountTypeWallet,
-						},
+					Return(&circle.Payout{
+						ID:             "62955621-2cf7-4b1f-9f8b-34294ae52938",
+						SourceWalletID: tc.distributionAccount.CircleWalletID,
 						Destination: circle.TransferAccount{
-							Address: rwRegistered.StellarAddress,
-							Type:    circle.TransferAccountTypeBlockchain,
-							Chain:   circle.StellarChainCode,
+							ID:    circleRecipientID,
+							Type:  circle.TransferAccountTypeAddressBook,
+							Chain: circle.StellarChainCode,
 						},
 						Amount: circle.Balance{
 							Amount:   paymentRegistered.Amount,
 							Currency: circleAssetCode,
 						},
+						ToAmount:        circle.Balance{Currency: circleAssetCode},
 						TransactionHash: "f7397c3b61f224401952219061fd3b1ac8c7c7d7e472d14926da7fc35fa9246e",
 						Status:          circle.TransferStatusPending,
 						CreateDate:      createDate,
+						UpdateDate:      createDate,
 					}, nil).
 					Once()
 			}
@@ -278,7 +284,8 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 				assert.Equal(t, paymentRegistered.ID, circleTransferRequest.PaymentID)
 				assert.Equal(t, data.CircleTransferStatusPending, *circleTransferRequest.Status)
-				assert.Equal(t, "62955621-2cf7-4b1f-9f8b-34294ae52938", *circleTransferRequest.CircleTransferID)
+				assert.Nil(t, circleTransferRequest.CircleTransferID)
+				assert.Equal(t, "62955621-2cf7-4b1f-9f8b-34294ae52938", *circleTransferRequest.CirclePayoutID)
 				assert.Equal(t, tc.distributionAccount.CircleWalletID, *circleTransferRequest.SourceWalletID)
 			}
 		})

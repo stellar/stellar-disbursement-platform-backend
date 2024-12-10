@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -959,6 +960,11 @@ func Test_DeleteByContactInfo(t *testing.T) {
 				Status:         ReadyPaymentStatus,
 				Amount:         "1",
 			})
+			circleRecipientX := CreateCircleRecipientFixture(t, ctx, dbConnectionPool, CircleRecipient{
+				IdempotencyKey:   uuid.NewString(),
+				ReceiverWalletID: receiverWalletX.ID,
+			})
+			circleTransferRequestX1 := CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{PaymentID: paymentX1.ID})
 
 			// 3. Create receiverY (that will not be deleted) and all receiverY dependent resources that will not be deleted:
 			receiverY := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -997,6 +1003,12 @@ func Test_DeleteByContactInfo(t *testing.T) {
 				Status:         ReadyPaymentStatus,
 				Amount:         "1",
 			}) // This payment will be deleted along with the remaining receiverX-related data
+
+			circleRecipientY := CreateCircleRecipientFixture(t, ctx, dbConnectionPool, CircleRecipient{
+				IdempotencyKey:   uuid.NewString(),
+				ReceiverWalletID: receiverWalletY.ID,
+			})
+			circleTransferRequestY2 := CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{PaymentID: paymentY2.ID})
 
 			// 4. Delete receiverX
 			err = models.Receiver.DeleteByContactInfo(ctx, dbConnectionPool, receiverX.ContactByType(contactType))
@@ -1047,6 +1059,18 @@ func Test_DeleteByContactInfo(t *testing.T) {
 					args:       []interface{}{disbursement1.ID},
 					wantExists: false,
 				},
+				{
+					name:       "DID DELETE: circleRecipientX",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_recipients WHERE receiver_wallet_id = $1)",
+					args:       []interface{}{circleRecipientX.ReceiverWalletID},
+					wantExists: false,
+				},
+				{
+					name:       "DID DELETE: circleTransferRequestX1",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_transfer_requests WHERE payment_id = $1)",
+					args:       []interface{}{circleTransferRequestX1.PaymentID},
+					wantExists: false,
+				},
 			}
 
 			// 6. Prepare assertions to make sure `DeleteByContactInfo` DID NOT DELETE receiverY-related data:
@@ -1085,6 +1109,18 @@ func Test_DeleteByContactInfo(t *testing.T) {
 					name:       "DID NOT DELETE: paymentX2",
 					query:      "SELECT EXISTS(SELECT 1 FROM disbursements WHERE id = $1)",
 					args:       []interface{}{disbursement2.ID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: circleRecipientY",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_recipients WHERE receiver_wallet_id = $1)",
+					args:       []interface{}{circleRecipientY.ReceiverWalletID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: circleTransferRequestY2",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_transfer_requests WHERE payment_id = $1)",
+					args:       []interface{}{circleTransferRequestY2.PaymentID},
 					wantExists: true,
 				},
 			}

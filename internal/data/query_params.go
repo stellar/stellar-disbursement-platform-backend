@@ -40,13 +40,14 @@ const (
 type FilterKey string
 
 const (
-	FilterKeyStatus          FilterKey = "status"
-	FilterKeyReceiverID      FilterKey = "receiver_id"
-	FilterKeyPaymentID       FilterKey = "payment_id"
-	FilterKeyCompletedAt     FilterKey = "completed_at"
-	FilterKeyCreatedAtAfter  FilterKey = "created_at_after"
-	FilterKeyCreatedAtBefore FilterKey = "created_at_before"
-	FilterKeySyncAttempts    FilterKey = "sync_attempts"
+	FilterKeyStatus           FilterKey = "status"
+	FilterKeyReceiverID       FilterKey = "receiver_id"
+	FilterKeyPaymentID        FilterKey = "payment_id"
+	FilterKeyReceiverWalletID FilterKey = "receiver_wallet_id"
+	FilterKeyCompletedAt      FilterKey = "completed_at"
+	FilterKeyCreatedAtAfter   FilterKey = "created_at_after"
+	FilterKeyCreatedAtBefore  FilterKey = "created_at_before"
+	FilterKeySyncAttempts     FilterKey = "sync_attempts"
 )
 
 func (fk FilterKey) Equals() string {

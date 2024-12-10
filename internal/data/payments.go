@@ -224,38 +224,11 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
 
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
-			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
-			p.status,
-			p.created_at,
-			p.updated_at,
-			d.id as "disbursement.id",
-			d.status as "disbursement.status",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status"
-		FROM
-			payments p
-				JOIN assets a on p.asset_id = a.id
-				JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-				JOIN disbursements d on p.disbursement_id = d.id
-		WHERE p.status = $1 -- 'READY'::payment_status
-		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
-		AND d.status = $3 -- 'STARTED'::disbursement_status
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, `
 		ORDER BY p.disbursement_id ASC, p.updated_at ASC
 		LIMIT $4
-		FOR UPDATE SKIP LOCKED
-		`
+		FOR UPDATE SKIP LOCKED`,
+	)
 
 	var payments []*Payment
 	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
@@ -403,15 +376,18 @@ const getReadyPaymentsBaseQuery = `
 		a.issuer as "asset.issuer",
 		rw.id as "receiver_wallet.id",
 		rw.receiver_id as "receiver_wallet.receiver.id",
+		COALESCE(r.phone_number, '') as "receiver_wallet.receiver.phone_number",
+		COALESCE(r.email, '') as "receiver_wallet.receiver.email",
 		COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
 		COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
 		COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
 		rw.status as "receiver_wallet.status"
 	FROM
 		payments p
-		JOIN assets a on p.asset_id = a.id
-		JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-		JOIN disbursements d on p.disbursement_id = d.id
+		JOIN assets a ON p.asset_id = a.id
+		JOIN disbursements d ON p.disbursement_id = d.id
+		JOIN receiver_wallets rw ON p.receiver_wallet_id = rw.id
+		JOIN receivers r ON rw.receiver_id = r.id
 	WHERE
 		p.status = $1 -- 'READY'::payment_status
 		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status

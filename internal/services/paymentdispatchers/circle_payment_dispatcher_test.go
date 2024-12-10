@@ -2,8 +2,10 @@ package paymentdispatchers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -18,6 +20,269 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
+func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	// Fixtures
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
+	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	initialTime := time.Now().Add(-time.Hour)
+	recipientInsertTemplate := data.CircleRecipient{
+		ReceiverWalletID:  receiverWallet.ID,
+		CircleRecipientID: "circle-recipient-id",
+		IdempotencyKey:    "idepotency-key",
+		CreatedAt:         initialTime,
+		UpdatedAt:         initialTime,
+		SyncAttempts:      0,
+		LastSyncAttemptAt: time.Time{},
+		ResponseBody:      nil,
+	}
+	type TestCase struct {
+		name                       string
+		populateInitialRecipientFn func(t *testing.T) *data.CircleRecipient
+		prepareMocksFn             func(t *testing.T, mCircleService *circle.MockService)
+		assertRecipients           func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient)
+	}
+	testCases := []TestCase{
+		{
+			name: "recipient already exists [status=active]",
+			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
+				recipientInsert := recipientInsertTemplate
+				recipientInsert.Status = data.CircleRecipientStatusActive
+				recipientInsert.SyncAttempts = 1
+				recipientInsert.LastSyncAttemptAt = initialTime
+				recipientInsert.ResponseBody = []byte(`{"foo": "bar"}`)
+				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
+			},
+			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
+				assert.Equal(t, initialRecipient, finalRecipient)
+			},
+		},
+		{
+			name: "recipient already exists [status=pending]",
+			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
+				recipientInsert := recipientInsertTemplate
+				recipientInsert.Status = data.CircleRecipientStatusPending
+				recipientInsert.SyncAttempts = 1
+				recipientInsert.LastSyncAttemptAt = initialTime
+				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
+				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
+			},
+			prepareMocksFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("PostRecipient", ctx, mock.Anything).
+					Run(func(args mock.Arguments) {
+						recipientRequest, ok := args.Get(1).(circle.RecipientRequest)
+						require.True(t, ok)
+						assert.Equal(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
+						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
+						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
+					}).
+					Return(&circle.Recipient{ID: "new-circle-recipient-id", Status: "active"}, nil).
+					Once()
+			},
+			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
+				assert.Equal(t, data.CircleRecipientStatusPending, initialRecipient.Status)
+				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
+				assert.Equal(t, initialRecipient.SyncAttempts, finalRecipient.SyncAttempts)
+				assert.Equal(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
+				assert.NotEqual(t, initialRecipient.ResponseBody, finalRecipient.ResponseBody)
+			},
+		},
+		{
+			name: "recipient does not exist in the DB",
+			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
+				return nil
+			},
+			prepareMocksFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("PostRecipient", ctx, mock.Anything).
+					Run(func(args mock.Arguments) {
+						recipientRequest, ok := args.Get(1).(circle.RecipientRequest)
+						require.True(t, ok)
+						assert.NotEqual(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
+						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
+						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
+					}).
+					Return(&circle.Recipient{ID: "new-circle-recipient-id", Status: "active"}, nil).
+					Once()
+			},
+			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
+				assert.Nil(t, initialRecipient)
+				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
+				assert.Empty(t, finalRecipient.SyncAttempts)
+				assert.Empty(t, finalRecipient.LastSyncAttemptAt)
+			},
+		},
+	}
+
+	for _, failedStatus := range []data.CircleRecipientStatus{data.CircleRecipientStatusInactive, data.CircleRecipientStatusDenied} {
+		testCases = append(testCases, TestCase{
+			name: fmt.Sprintf("recipient already exists [status=%s]", failedStatus),
+			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
+				recipientInsert := recipientInsertTemplate
+				recipientInsert.Status = failedStatus
+				recipientInsert.SyncAttempts = 1
+				recipientInsert.LastSyncAttemptAt = initialTime
+				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
+				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
+			},
+			prepareMocksFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("PostRecipient", ctx, mock.Anything).
+					Run(func(args mock.Arguments) {
+						recipientRequest, ok := args.Get(1).(circle.RecipientRequest)
+						require.True(t, ok)
+						assert.NotEqual(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
+						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
+						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
+					}).
+					Return(&circle.Recipient{ID: "new-circle-recipient-id", Status: "active"}, nil).
+					Once()
+			},
+			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
+				assert.Equal(t, failedStatus, initialRecipient.Status)
+				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
+				assert.Equal(t, initialRecipient.SyncAttempts+1, finalRecipient.SyncAttempts)
+				assert.Greater(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
+			},
+		})
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer data.DeleteAllCircleRecipientsFixtures(t, ctx, dbConnectionPool)
+			initialRecipient := tc.populateInitialRecipientFn(t)
+
+			mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
+			mCircleService := circle.NewMockService(t)
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(t, mCircleService)
+			}
+
+			dispatcher := NewCirclePaymentDispatcher(models, mCircleService, mDistAccountResolver)
+
+			finalRecipient, err := dispatcher.ensureRecipientIsReady(ctx, *receiverWallet)
+			require.NoError(t, err)
+			tc.assertRecipients(t, initialRecipient, finalRecipient)
+		})
+	}
+}
+
+func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	// Fixtures
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
+	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	now := time.Now()
+	initialTime := now.Add(-time.Hour)
+	recipientInsertTemplate := data.CircleRecipient{
+		ReceiverWalletID:  receiverWallet.ID,
+		CircleRecipientID: "circle-recipient-id",
+		IdempotencyKey:    "idepotency-key",
+		CreatedAt:         initialTime,
+		UpdatedAt:         initialTime,
+		SyncAttempts:      maxCircleRecipientCreationAttempts,
+		LastSyncAttemptAt: now,
+	}
+	type TestCase struct {
+		name                       string
+		populateInitialRecipientFn func(t *testing.T) *data.CircleRecipient
+		prepareMocksFn             func(t *testing.T, mCircleService *circle.MockService)
+		wantErrContains            string
+	}
+	testCases := []TestCase{
+		{
+			name: "PostRecipient returns an error [status=pending]",
+			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
+				recipientInsert := recipientInsertTemplate
+				recipientInsert.Status = data.CircleRecipientStatusPending
+				recipientInsert.ResponseBody = []byte(`{"foo": "bar"}`)
+				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
+			},
+			prepareMocksFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("PostRecipient", ctx, mock.Anything).
+					Run(func(args mock.Arguments) {
+						recipientRequest, ok := args.Get(1).(circle.RecipientRequest)
+						require.True(t, ok)
+						assert.Equal(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
+						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
+						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
+					}).
+					Return(nil, errors.New("got 400 from vendor's API")).
+					Once()
+			},
+			wantErrContains: "creating Circle recipient: got 400 from vendor's API",
+		},
+	}
+
+	for _, failedStatus := range []data.CircleRecipientStatus{data.CircleRecipientStatusInactive, data.CircleRecipientStatusDenied} {
+		testCases = append(testCases, TestCase{
+			name: fmt.Sprintf("recipient has reached maxCircleRecipientCreationAttempts [status=%s]", failedStatus),
+			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
+				recipientInsert := recipientInsertTemplate
+				recipientInsert.Status = failedStatus
+				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
+				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
+			},
+			wantErrContains: ErrCircleRecipientCreationFailedTooManyTimes.Error(),
+		})
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer data.DeleteAllCircleRecipientsFixtures(t, ctx, dbConnectionPool)
+			_ = tc.populateInitialRecipientFn(t)
+
+			mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
+			mCircleService := circle.NewMockService(t)
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(t, mCircleService)
+			}
+
+			dispatcher := NewCirclePaymentDispatcher(models, mCircleService, mDistAccountResolver)
+
+			finalRecipient, err := dispatcher.ensureRecipientIsReady(ctx, *receiverWallet)
+			if tc.wantErrContains != "" {
+				assert.ErrorContains(t, err, tc.wantErrContains)
+				assert.Nil(t, finalRecipient)
+			}
+		})
+	}
+}
+
 func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -31,7 +296,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 	require.NoError(t, err)
 
 	circleWalletID := "22322112"
-	circleTransferID := uuid.NewString()
+	circlePayoutID := "dce3a913-9043-4d20-ba6c-fe27f630f2a0"
 
 	tenantID := "tenant-id"
 
@@ -43,6 +308,13 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 
 	// Receiver Wallets
 	rw1Registered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	// Circle Recipient
+	circleRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
+		ReceiverWalletID:  rw1Registered.ID,
+		Status:            data.CircleRecipientStatusActive,
+		CircleRecipientID: uuid.NewString(),
+	})
 
 	// Payments
 	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -63,7 +335,10 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 		{
 			name: "failure validating payment ready for sending",
 			paymentsToDispatch: []*data.Payment{
-				{ID: "123"},
+				{
+					ID:             "123",
+					ReceiverWallet: rw1Registered,
+				},
 			},
 			wantErr: fmt.Errorf("payment with ID 123 does not exist"),
 		},
@@ -76,11 +351,11 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 				require.NoError(t, setupErr)
 
 				m.On("SendPayment", ctx, circle.PaymentRequest{
-					SourceWalletID:            circleWalletID,
-					DestinationStellarAddress: payment1.ReceiverWallet.StellarAddress,
-					Amount:                    payment1.Amount,
-					StellarAssetCode:          payment1.Asset.Code,
-					IdempotencyKey:            transferRequest.IdempotencyKey,
+					SourceWalletID:   circleWalletID,
+					RecipientID:      circleRecipient.CircleRecipientID,
+					Amount:           payment1.Amount,
+					StellarAssetCode: payment1.Asset.Code,
+					IdempotencyKey:   transferRequest.IdempotencyKey,
 				}).
 					Return(nil, fmt.Errorf("error posting transfer to Circle")).
 					Once()
@@ -95,7 +370,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 		{
 			name:               "error updating circle transfer request",
 			paymentsToDispatch: []*data.Payment{payment1},
-			wantErr:            fmt.Errorf("updating circle transfer request: transfer cannot be nil"),
+			wantErr:            fmt.Errorf("updating circle transfer request: payout cannot be nil"),
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
 					Return(nil, nil).
@@ -108,8 +383,8 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 			wantErr:            fmt.Errorf("invalid input value for enum circle_transfer_status"),
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
-					Return(&circle.Transfer{
-						ID:     "transfer_id",
+					Return(&circle.Payout{
+						ID:     "payout_id",
 						Status: "wrong-status",
 					}, nil).
 					Once()
@@ -121,8 +396,8 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 			wantErr:            nil,
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
-					Return(&circle.Transfer{
-						ID:     circleTransferID,
+					Return(&circle.Payout{
+						ID:     circlePayoutID,
 						Status: circle.TransferStatusPending,
 						Amount: circle.Balance{
 							Amount:   payment1.Amount,
@@ -141,13 +416,13 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 				var transferRequest data.CircleTransferRequest
 				assertErr = dbConnectionPool.GetContext(ctx, &transferRequest, "SELECT * FROM circle_transfer_requests WHERE payment_id = $1", payment1.ID)
 				require.NoError(t, assertErr)
-				assert.Nil(t, transferRequest.CircleTransferID)
+				assert.Nil(t, transferRequest.CirclePayoutID)
 				assert.Nil(t, transferRequest.SourceWalletID)
 
 				// Transfer request is updated for the transaction
 				assertErr = sqlExecuter.GetContext(ctx, &transferRequest, "SELECT * FROM circle_transfer_requests WHERE payment_id = $1", payment1.ID)
 				require.NoError(t, assertErr)
-				assert.Equal(t, circleTransferID, *transferRequest.CircleTransferID)
+				assert.Equal(t, circlePayoutID, *transferRequest.CirclePayoutID)
 				assert.Equal(t, circleWalletID, *transferRequest.SourceWalletID)
 				assert.Equal(t, data.CircleTransferStatusPending, *transferRequest.Status)
 			},
@@ -170,7 +445,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 
 			mCircleService := circle.NewMockService(t)
 
-			mDistAccountResolver := &mocks.MockDistributionAccountResolver{}
+			mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
 			mDistAccountResolver.
 				On("DistributionAccountFromContext", ctx).
 				Return(schema.TransactionAccount{
