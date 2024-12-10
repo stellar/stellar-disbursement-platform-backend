@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -97,8 +98,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
 				assert.Equal(t, data.CircleRecipientStatusPending, initialRecipient.Status)
 				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
-				assert.Equal(t, initialRecipient.SyncAttempts, finalRecipient.SyncAttempts)
-				assert.Equal(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
+				assert.Equal(t, initialRecipient.SyncAttempts+1, finalRecipient.SyncAttempts)
+				assert.Greater(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
 				assert.NotEqual(t, initialRecipient.ResponseBody, finalRecipient.ResponseBody)
 			},
 		},
@@ -125,8 +126,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
 				assert.Nil(t, initialRecipient)
 				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
-				assert.Empty(t, finalRecipient.SyncAttempts)
-				assert.Empty(t, finalRecipient.LastSyncAttemptAt)
+				assert.Equal(t, 1, finalRecipient.SyncAttempts)
+				assert.NotEmpty(t, finalRecipient.LastSyncAttemptAt)
 			},
 		},
 	}
@@ -211,13 +212,14 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 		IdempotencyKey:    "idepotency-key",
 		CreatedAt:         initialTime,
 		UpdatedAt:         initialTime,
-		SyncAttempts:      maxCircleRecipientCreationAttempts,
-		LastSyncAttemptAt: now,
+		SyncAttempts:      0,
+		LastSyncAttemptAt: initialTime,
 	}
 	type TestCase struct {
 		name                       string
 		populateInitialRecipientFn func(t *testing.T) *data.CircleRecipient
 		prepareMocksFn             func(t *testing.T, mCircleService *circle.MockService)
+		assertRecipients           func(t *testing.T, initialRecipient, finalRecipient data.CircleRecipient)
 		wantErrContains            string
 	}
 	testCases := []TestCase{
@@ -244,27 +246,91 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 					Return(nil, errors.New("got 400 from vendor's API")).
 					Once()
 			},
+			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient data.CircleRecipient) {
+				assert.Equal(t, initialRecipient.SyncAttempts+1, finalRecipient.SyncAttempts)
+				assert.Greater(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
+			},
 			wantErrContains: "creating Circle recipient: got 400 from vendor's API",
 		},
 	}
 
-	for _, failedStatus := range []data.CircleRecipientStatus{data.CircleRecipientStatusInactive, data.CircleRecipientStatusDenied} {
+	for _, failedStatus := range []*data.CircleRecipientStatus{
+		utils.Ptr(data.CircleRecipientStatusInactive),
+		utils.Ptr(data.CircleRecipientStatusDenied),
+		nil,
+	} {
+		statusValue := "<nil>"
+		if failedStatus != nil {
+			statusValue = string(*failedStatus)
+		}
 		testCases = append(testCases, TestCase{
-			name: fmt.Sprintf("recipient has reached maxCircleRecipientCreationAttempts [status=%s]", failedStatus),
+			name: fmt.Sprintf("recipient has reached maxCircleRecipientCreationAttempts [status=%s]", statusValue),
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
 				recipientInsert := recipientInsertTemplate
-				recipientInsert.Status = failedStatus
+				if failedStatus != nil {
+					recipientInsert.Status = *failedStatus
+				}
 				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
+				recipientInsert.SyncAttempts = maxCircleRecipientCreationAttempts
+				recipientInsert.LastSyncAttemptAt = now
 				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
 			},
+			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient data.CircleRecipient) {
+				assert.Equal(t, initialRecipient, finalRecipient)
+			},
 			wantErrContains: ErrCircleRecipientCreationFailedTooManyTimes.Error(),
+		})
+	}
+
+	for _, failedStatus := range []*data.CircleRecipientStatus{
+		utils.Ptr(data.CircleRecipientStatusInactive),
+		utils.Ptr(data.CircleRecipientStatusDenied),
+		nil,
+	} {
+		statusValue := "<nil>"
+		if failedStatus != nil {
+			statusValue = string(*failedStatus)
+		}
+		testCases = append(testCases, TestCase{
+			name: fmt.Sprintf("recover failure if recipient can still retry [status=%s]", statusValue),
+			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
+				recipientInsert := recipientInsertTemplate
+				if failedStatus != nil {
+					recipientInsert.Status = *failedStatus
+				}
+				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
+				recipientInsert.SyncAttempts = 1
+				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
+			},
+			prepareMocksFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("PostRecipient", ctx, mock.Anything).
+					Run(func(args mock.Arguments) {
+						recipientRequest, ok := args.Get(1).(circle.RecipientRequest)
+						require.True(t, ok)
+						assert.NotEqual(t, recipientInsertTemplate.IdempotencyKey, recipientRequest.IdempotencyKey)
+						assert.Equal(t, receiverWallet.StellarAddress, recipientRequest.Address)
+						assert.Equal(t, circle.StellarChainCode, recipientRequest.Chain)
+						assert.Equal(t, receiverWallet.Receiver.PhoneNumber, recipientRequest.Metadata.Nickname)
+						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
+					}).
+					Return(&circle.Recipient{ID: "new-circle-recipient-id", Status: "active"}, nil).
+					Once()
+			},
+			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient data.CircleRecipient) {
+				assert.NotEqual(t, initialRecipient.IdempotencyKey, finalRecipient.IdempotencyKey)
+				assert.Equal(t, initialRecipient.SyncAttempts+1, finalRecipient.SyncAttempts)
+				assert.Greater(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
+				assert.Equal(t, "new-circle-recipient-id", finalRecipient.CircleRecipientID)
+				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
+			},
 		})
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			defer data.DeleteAllCircleRecipientsFixtures(t, ctx, dbConnectionPool)
-			_ = tc.populateInitialRecipientFn(t)
+			initialRecipient := tc.populateInitialRecipientFn(t)
 
 			mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
 			mCircleService := circle.NewMockService(t)
@@ -275,10 +341,15 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 			dispatcher := NewCirclePaymentDispatcher(models, mCircleService, mDistAccountResolver)
 
 			finalRecipient, err := dispatcher.ensureRecipientIsReady(ctx, *receiverWallet)
+
 			if tc.wantErrContains != "" {
 				assert.ErrorContains(t, err, tc.wantErrContains)
 				assert.Nil(t, finalRecipient)
 			}
+
+			finalRecipient, err = models.CircleRecipient.GetByReceiverWalletID(ctx, receiverWallet.ID)
+			require.NoError(t, err)
+			tc.assertRecipients(t, *initialRecipient, *finalRecipient)
 		})
 	}
 }
