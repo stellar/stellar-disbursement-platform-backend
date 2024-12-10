@@ -17,7 +17,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -41,12 +40,12 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 	initialTime := time.Now().Add(-time.Hour)
 	recipientInsertTemplate := data.CircleRecipient{
 		ReceiverWalletID:  receiverWallet.ID,
-		CircleRecipientID: utils.Ptr("circle-recipient-id"),
+		CircleRecipientID: "circle-recipient-id",
 		IdempotencyKey:    "idepotency-key",
 		CreatedAt:         initialTime,
 		UpdatedAt:         initialTime,
 		SyncAttempts:      0,
-		LastSyncAttemptAt: nil,
+		LastSyncAttemptAt: time.Time{},
 		ResponseBody:      nil,
 	}
 	type TestCase struct {
@@ -60,9 +59,9 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 			name: "recipient already exists [status=active]",
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
 				recipientInsert := recipientInsertTemplate
-				recipientInsert.Status = utils.Ptr(data.CircleRecipientStatusActive)
+				recipientInsert.Status = data.CircleRecipientStatusActive
 				recipientInsert.SyncAttempts = 1
-				recipientInsert.LastSyncAttemptAt = &initialTime
+				recipientInsert.LastSyncAttemptAt = initialTime
 				recipientInsert.ResponseBody = []byte(`{"foo": "bar"}`)
 				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
 			},
@@ -74,9 +73,9 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 			name: "recipient already exists [status=pending]",
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
 				recipientInsert := recipientInsertTemplate
-				recipientInsert.Status = utils.Ptr(data.CircleRecipientStatusPending)
+				recipientInsert.Status = data.CircleRecipientStatusPending
 				recipientInsert.SyncAttempts = 1
-				recipientInsert.LastSyncAttemptAt = &initialTime
+				recipientInsert.LastSyncAttemptAt = initialTime
 				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
 				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
 			},
@@ -96,8 +95,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 					Once()
 			},
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
-				assert.Equal(t, data.CircleRecipientStatusPending, *initialRecipient.Status)
-				assert.Equal(t, data.CircleRecipientStatusActive, *finalRecipient.Status)
+				assert.Equal(t, data.CircleRecipientStatusPending, initialRecipient.Status)
+				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
 				assert.Equal(t, initialRecipient.SyncAttempts, finalRecipient.SyncAttempts)
 				assert.Equal(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
 				assert.NotEqual(t, initialRecipient.ResponseBody, finalRecipient.ResponseBody)
@@ -125,7 +124,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 			},
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
 				assert.Nil(t, initialRecipient)
-				assert.Equal(t, data.CircleRecipientStatusActive, *finalRecipient.Status)
+				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
 				assert.Empty(t, finalRecipient.SyncAttempts)
 				assert.Empty(t, finalRecipient.LastSyncAttemptAt)
 			},
@@ -137,9 +136,9 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 			name: fmt.Sprintf("recipient already exists [status=%s]", failedStatus),
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
 				recipientInsert := recipientInsertTemplate
-				recipientInsert.Status = utils.Ptr(failedStatus)
+				recipientInsert.Status = failedStatus
 				recipientInsert.SyncAttempts = 1
-				recipientInsert.LastSyncAttemptAt = &initialTime
+				recipientInsert.LastSyncAttemptAt = initialTime
 				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
 				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
 			},
@@ -159,8 +158,8 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 					Once()
 			},
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient *data.CircleRecipient) {
-				assert.Equal(t, failedStatus, *initialRecipient.Status)
-				assert.Equal(t, data.CircleRecipientStatusActive, *finalRecipient.Status)
+				assert.Equal(t, failedStatus, initialRecipient.Status)
+				assert.Equal(t, data.CircleRecipientStatusActive, finalRecipient.Status)
 				assert.Equal(t, initialRecipient.SyncAttempts+1, finalRecipient.SyncAttempts)
 				assert.Greater(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
 			},
@@ -208,12 +207,12 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 	initialTime := now.Add(-time.Hour)
 	recipientInsertTemplate := data.CircleRecipient{
 		ReceiverWalletID:  receiverWallet.ID,
-		CircleRecipientID: utils.Ptr("circle-recipient-id"),
+		CircleRecipientID: "circle-recipient-id",
 		IdempotencyKey:    "idepotency-key",
 		CreatedAt:         initialTime,
 		UpdatedAt:         initialTime,
 		SyncAttempts:      maxCircleRecipientCreationAttempts,
-		LastSyncAttemptAt: &now,
+		LastSyncAttemptAt: now,
 	}
 	type TestCase struct {
 		name                       string
@@ -226,7 +225,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 			name: "PostRecipient returns an error [status=pending]",
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
 				recipientInsert := recipientInsertTemplate
-				recipientInsert.Status = utils.Ptr(data.CircleRecipientStatusPending)
+				recipientInsert.Status = data.CircleRecipientStatusPending
 				recipientInsert.ResponseBody = []byte(`{"foo": "bar"}`)
 				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
 			},
@@ -254,7 +253,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 			name: fmt.Sprintf("recipient has reached maxCircleRecipientCreationAttempts [status=%s]", failedStatus),
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
 				recipientInsert := recipientInsertTemplate
-				recipientInsert.Status = utils.Ptr(failedStatus)
+				recipientInsert.Status = failedStatus
 				recipientInsert.ResponseBody = []byte(`{"error": "test"}`)
 				return data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, recipientInsert)
 			},
@@ -311,11 +310,10 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 	rw1Registered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	// Circle Recipient
-	recipientActiveStatus := data.CircleRecipientStatusActive
 	circleRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
 		ReceiverWalletID:  rw1Registered.ID,
-		Status:            &recipientActiveStatus,
-		CircleRecipientID: utils.StringPtr(uuid.NewString()),
+		Status:            data.CircleRecipientStatusActive,
+		CircleRecipientID: uuid.NewString(),
 	})
 
 	// Payments
@@ -354,7 +352,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 
 				m.On("SendPayment", ctx, circle.PaymentRequest{
 					SourceWalletID:   circleWalletID,
-					RecipientID:      *circleRecipient.CircleRecipientID,
+					RecipientID:      circleRecipient.CircleRecipientID,
 					Amount:           payment1.Amount,
 					StellarAssetCode: payment1.Asset.Code,
 					IdempotencyKey:   transferRequest.IdempotencyKey,

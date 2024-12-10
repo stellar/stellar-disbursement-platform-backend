@@ -78,7 +78,7 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 		// 2. Submit the payment to Circle
 		payout, err := c.circleService.SendPayment(ctx, circle.PaymentRequest{
 			SourceWalletID:   circleWalletID,
-			RecipientID:      *recipient.CircleRecipientID,
+			RecipientID:      recipient.CircleRecipientID,
 			Amount:           payment.Amount,
 			StellarAssetCode: payment.Asset.Code,
 			IdempotencyKey:   transferRequest.IdempotencyKey,
@@ -167,7 +167,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	}
 
 	// SUCCESS
-	if dataRecipient != nil && dataRecipient.Status != nil && *dataRecipient.Status == data.CircleRecipientStatusActive {
+	if dataRecipient != nil && dataRecipient.Status == data.CircleRecipientStatusActive {
 		return dataRecipient, nil
 	}
 
@@ -182,7 +182,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 
 	// FAILED or INACTIVE -> refresh the idempotency key
 	shouldBumpSyncAttempts := false
-	if dataRecipient.Status != nil && dataRecipient.Status.IsCompleted() {
+	if dataRecipient.Status.IsCompleted() {
 		shouldBumpSyncAttempts = true // Only bump sync_attempts when trying to re-register the recipient
 		if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
 			return nil, ErrCircleRecipientCreationFailedTooManyTimes
@@ -226,13 +226,13 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	}
 	updateDataRecipient := data.CircleRecipientUpdate{
 		IdempotencyKey:    dataRecipient.IdempotencyKey,
-		CircleRecipientID: &recipient.ID,
-		Status:            &dataRecipientStatus,
+		CircleRecipientID: recipient.ID,
+		Status:            dataRecipientStatus,
 		ResponseBody:      recipientJson,
 	}
 	if shouldBumpSyncAttempts {
 		updateDataRecipient.SyncAttempts = dataRecipient.SyncAttempts + 1
-		updateDataRecipient.LastSyncAttemptAt = utils.TimePtr(time.Now())
+		updateDataRecipient.LastSyncAttemptAt = time.Now()
 	}
 	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, updateDataRecipient)
 	if err != nil {
@@ -258,9 +258,9 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Co
 			}
 
 			// Check the recipient status
-			if *recipient.Status != data.CircleRecipientStatusActive {
+			if recipient.Status != data.CircleRecipientStatusActive {
 				// Retry if the status isn't "completed"
-				return fmt.Errorf("recipient not ready, status: %s", *recipient.Status)
+				return fmt.Errorf("recipient not ready, status: %s", recipient.Status)
 			}
 
 			// Successful case, no retry needed

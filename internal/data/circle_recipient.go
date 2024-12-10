@@ -13,18 +13,36 @@ import (
 )
 
 type CircleRecipient struct {
-	ReceiverWalletID  string                 `db:"receiver_wallet_id"`
-	IdempotencyKey    string                 `db:"idempotency_key"`
-	CircleRecipientID *string                `db:"circle_recipient_id"`
-	Status            *CircleRecipientStatus `db:"status"`
-	CreatedAt         time.Time              `db:"created_at"`
-	UpdatedAt         time.Time              `db:"updated_at"`
-	SyncAttempts      int                    `db:"sync_attempts"`
-	LastSyncAttemptAt *time.Time             `db:"last_sync_attempt_at"`
-	ResponseBody      []byte                 `db:"response_body"`
+	ReceiverWalletID  string                `db:"receiver_wallet_id"`
+	IdempotencyKey    string                `db:"idempotency_key"`
+	CircleRecipientID string                `db:"circle_recipient_id"`
+	Status            CircleRecipientStatus `db:"status"`
+	CreatedAt         time.Time             `db:"created_at"`
+	UpdatedAt         time.Time             `db:"updated_at"`
+	SyncAttempts      int                   `db:"sync_attempts"`
+	LastSyncAttemptAt time.Time             `db:"last_sync_attempt_at"`
+	ResponseBody      []byte                `db:"response_body"`
 }
 
 type CircleRecipientStatus string
+
+func (s *CircleRecipientStatus) Scan(value interface{}) error {
+	if value == nil {
+		*s = ""
+		return nil
+	}
+
+	switch v := value.(type) {
+	case string:
+		*s = CircleRecipientStatus(v)
+	case []uint8:
+		*s = CircleRecipientStatus(string(v)) // Convert byte slice to string
+	default:
+		return fmt.Errorf("invalid type for CircleRecipientStatus: %T", value)
+	}
+
+	return nil
+}
 
 const (
 	CircleRecipientStatusPending  CircleRecipientStatus = "pending"
@@ -59,17 +77,29 @@ func ParseRecipientStatus(statusStr string) (CircleRecipientStatus, error) {
 }
 
 type CircleRecipientUpdate struct {
-	IdempotencyKey    string                 `db:"idempotency_key"`
-	CircleRecipientID *string                `db:"circle_recipient_id"`
-	Status            *CircleRecipientStatus `db:"status"`
-	SyncAttempts      int                    `db:"sync_attempts"`
-	LastSyncAttemptAt *time.Time             `db:"last_sync_attempt_at"`
-	ResponseBody      []byte                 `db:"response_body"`
+	IdempotencyKey    string                `db:"idempotency_key"`
+	CircleRecipientID string                `db:"circle_recipient_id"`
+	Status            CircleRecipientStatus `db:"status"`
+	SyncAttempts      int                   `db:"sync_attempts"`
+	LastSyncAttemptAt time.Time             `db:"last_sync_attempt_at"`
+	ResponseBody      []byte                `db:"response_body"`
 }
 
 type CircleRecipientModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
+
+const circleRecipientFields = `
+	receiver_wallet_id,
+	idempotency_key,
+	COALESCE(circle_recipient_id, '') AS circle_recipient_id,
+	status,
+	created_at,
+	updated_at,
+	sync_attempts,
+	COALESCE(last_sync_attempt_at, '0001-01-01 00:00:00+00') AS last_sync_attempt_at,
+	response_body
+`
 
 func (m CircleRecipientModel) Insert(ctx context.Context, receiverWalletID string) (*CircleRecipient, error) {
 	if receiverWalletID == "" {
@@ -82,8 +112,7 @@ func (m CircleRecipientModel) Insert(ctx context.Context, receiverWalletID strin
 		VALUES
 			($1)
 		RETURNING
-			*
-	`
+	` + circleRecipientFields
 
 	var circleRecipient CircleRecipient
 	err := m.dbConnectionPool.GetContext(ctx, &circleRecipient, query, receiverWalletID)
@@ -111,9 +140,8 @@ func (m CircleRecipientModel) Update(ctx context.Context, receiverWalletID strin
 			%s
 		WHERE
 			receiver_wallet_id = ?
-		RETURNING
-			*
-	`, setClause)
+		RETURNING `+circleRecipientFields,
+		setClause)
 	params = append(params, receiverWalletID)
 	query = m.dbConnectionPool.Rebind(query)
 
@@ -134,14 +162,14 @@ func (m CircleRecipientModel) GetByReceiverWalletID(ctx context.Context, receive
 		return nil, fmt.Errorf("receiverWalletID is required")
 	}
 
-	const query = `
+	query := fmt.Sprintf(`
 		SELECT
-			*
+			%s
 		FROM
 			circle_recipients c
 		WHERE
 			c.receiver_wallet_id = $1
-	`
+	`, circleRecipientFields)
 
 	var circleRecipient CircleRecipient
 	err := m.dbConnectionPool.GetContext(ctx, &circleRecipient, query, receiverWalletID)

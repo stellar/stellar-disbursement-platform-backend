@@ -463,19 +463,18 @@ func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.
 		VALUES
 			($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING
-			*
-	`
+	` + circleRecipientFields
 
 	var circleRecipient CircleRecipient
 	err := sqlExec.GetContext(ctx, &circleRecipient, query,
 		insert.ReceiverWalletID,
 		insert.IdempotencyKey,
-		insert.CircleRecipientID,
-		insert.Status,
+		utils.SQLNullString(insert.CircleRecipientID),
+		utils.SQLNullString(string(insert.Status)),
 		insert.CreatedAt,
 		insert.UpdatedAt,
 		insert.SyncAttempts,
-		insert.LastSyncAttemptAt,
+		utils.SQLNullTime(insert.LastSyncAttemptAt),
 	)
 	require.NoError(t, err)
 

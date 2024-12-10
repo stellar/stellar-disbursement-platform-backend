@@ -11,7 +11,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_CircleRecipientModel_Insert(t *testing.T) {
@@ -46,7 +45,7 @@ func Test_CircleRecipientModel_Insert(t *testing.T) {
 		assert.NotEmpty(t, circleRecipient.UpdatedAt)
 		assert.NotEmpty(t, circleRecipient.CreatedAt)
 		assert.Empty(t, circleRecipient.SyncAttempts)
-		assert.Nil(t, circleRecipient.LastSyncAttemptAt)
+		assert.Empty(t, circleRecipient.LastSyncAttemptAt)
 		assert.NoError(t, uuid.Validate(circleRecipient.IdempotencyKey), "idempotency key should be a valid UUID")
 	})
 
@@ -75,14 +74,13 @@ func Test_CircleRecipientModel_Update(t *testing.T) {
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 	m := CircleRecipientModel{dbConnectionPool: dbConnectionPool}
 
-	synchedAt := time.Now()
 	updateRequest := CircleRecipientUpdate{
 		IdempotencyKey:    "new-idempotency-key",
-		CircleRecipientID: utils.StringPtr("circle-recipient-id"),
-		Status:            utils.Ptr(CircleRecipientStatusActive),
+		CircleRecipientID: "circle-recipient-id",
+		Status:            CircleRecipientStatusActive,
 		ResponseBody:      []byte(`{"foo":"bar"}`),
 		SyncAttempts:      1,
-		LastSyncAttemptAt: &synchedAt,
+		LastSyncAttemptAt: time.Now(),
 	}
 
 	t.Run("return an error if the receiverWalletID is empty", func(t *testing.T) {

@@ -148,11 +148,10 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 			receiverRegistered := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 			rwRegistered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverRegistered.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-			recipientActiveStatus := data.CircleRecipientStatusActive
 			cRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
 				ReceiverWalletID:  rwRegistered.ID,
-				Status:            &recipientActiveStatus,
-				CircleRecipientID: &circleRecipientID,
+				Status:            data.CircleRecipientStatusActive,
+				CircleRecipientID: circleRecipientID,
 			})
 			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwRegistered,
@@ -172,7 +171,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			if tc.distributionAccount.IsCircle() {
 				wantPaymentReques := circle.PaymentRequest{
 					SourceWalletID:   tc.distributionAccount.CircleWalletID,
-					RecipientID:      *cRecipient.CircleRecipientID,
+					RecipientID:      cRecipient.CircleRecipientID,
 					Amount:           paymentRegistered.Amount,
 					StellarAssetCode: paymentRegistered.Asset.Code,
 				}
