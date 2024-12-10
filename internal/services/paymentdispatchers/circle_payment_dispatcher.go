@@ -64,9 +64,19 @@ var _ PaymentDispatcherInterface = (*CirclePaymentDispatcher)(nil)
 func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
 	for _, payment := range paymentsToSubmit {
 		// 0. Ensure the recipient is ready
+		// TODO: When clicking retries, we should reset the recipient count?
 		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet)
 		if err != nil {
-			return fmt.Errorf("ensuring recipient is ready: %w", err)
+			if !errors.Is(err, ErrCircleRecipientCreationFailedTooManyTimes) {
+				return fmt.Errorf("ensuring recipient is ready: %w", err)
+			} else {
+				err = fmt.Errorf("failed to create Circle recipient for payment %s on Circle: %w", payment.ID, err)
+				err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.Ptr(err.Error()), "")
+				if err != nil {
+					return fmt.Errorf("marking payment as failed: %w", err)
+				}
+				continue
+			}
 		}
 
 		// 1. Create a new circle transfer request
@@ -212,6 +222,15 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		},
 	})
 	if err != nil {
+		// Bump the sync_attempt count if the recipient creation failed
+		_, updateErr := c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
+			SyncAttempts:      dataRecipient.SyncAttempts + 1,
+			LastSyncAttemptAt: time.Now(),
+		})
+		if updateErr != nil {
+			return nil, fmt.Errorf("updating Circle recipient after postRecipientErr: %w", updateErr)
+		}
+
 		return nil, fmt.Errorf("creating Circle recipient: %w", err)
 	}
 
