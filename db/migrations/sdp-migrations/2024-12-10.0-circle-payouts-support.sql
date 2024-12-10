@@ -17,6 +17,10 @@ CREATE TABLE circle_recipients (
     CONSTRAINT unique_idempotency_key UNIQUE (idempotency_key)
 );
 
+-- Create a partial unique index for circle_recipient_id only when it's NOT NULL
+CREATE UNIQUE INDEX unique_circle_recipient_id ON circle_recipients(circle_recipient_id)
+    WHERE circle_recipient_id IS NOT NULL;
+
 CREATE TRIGGER refresh_circle_recipient_updated_at BEFORE UPDATE ON circle_recipients FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 
 -- circle_transfer_requests

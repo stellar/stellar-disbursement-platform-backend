@@ -110,17 +110,17 @@ func Test_PayoutRequest_validate(t *testing.T) {
 				Destination:    destination,
 				Amount:         Balance{Currency: "USD"},
 			},
-			wantErrContains: "amount must be provided",
+			wantErrContains: "amount cannot be empty",
 		},
 		{
-			name: "🔴Amount.Amount must be provided",
+			name: "🔴Amount.Amount must be valid",
 			pr: &PayoutRequest{
 				IdempotencyKey: idempotencyKey,
 				Source:         source,
 				Destination:    destination,
 				Amount:         Balance{Currency: "USD", Amount: "not-a-number"},
 			},
-			wantErrContains: "amount must be a valid number",
+			wantErrContains: "the provided amount is not a valid number",
 		},
 		// ToAmount:
 		{

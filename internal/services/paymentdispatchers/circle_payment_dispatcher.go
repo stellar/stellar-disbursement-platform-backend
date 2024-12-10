@@ -150,7 +150,7 @@ func (c *CirclePaymentDispatcher) updatePaymentStatusForCirclePayout(ctx context
 		return fmt.Errorf("converting CIRCLE payout status to SDP Payment status: %w", err)
 	}
 
-	statusMsg := fmt.Sprintf("Transfer %s is %s in Circle", payout.ID, payout.Status)
+	statusMsg := fmt.Sprintf("Payout ID %s has status=%s in Circle", payout.ID, payout.Status)
 	err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, paymentStatus, &statusMsg, payout.TransactionHash)
 	if err != nil {
 		return fmt.Errorf("marking payment as %s: %w", paymentStatus, err)
@@ -159,6 +159,7 @@ func (c *CirclePaymentDispatcher) updatePaymentStatusForCirclePayout(ctx context
 	return nil
 }
 
+// TODO: split this in multiple methods (https://github.com/stellar/stellar-disbursement-platform-backend/pull/486#discussion_r1878843074)
 func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
 	dataRecipient, err := c.sdpModels.CircleRecipient.GetByReceiverWalletID(ctx, receiverWallet.ID)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {

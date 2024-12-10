@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type RiskEvaluation struct {
@@ -77,11 +78,8 @@ func (pr *PayoutRequest) validate() error {
 	if pr.Amount.Currency == "" {
 		return fmt.Errorf("currency must be provided")
 	}
-	if pr.Amount.Amount == "" {
-		return fmt.Errorf("amount must be provided")
-	}
-	if _, err := strconv.ParseFloat(pr.Amount.Amount, 64); err != nil {
-		return fmt.Errorf("amount must be a valid number")
+	if err := utils.ValidateAmount(pr.Amount.Amount); err != nil {
+		return fmt.Errorf("validating amount: %w", err)
 	}
 
 	if pr.ToAmount.Currency == "" {
