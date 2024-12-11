@@ -194,7 +194,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	}
 
 	// FAILED or INACTIVE -> refresh the idempotency key
-	if dataRecipient.Status == nil || dataRecipient.Status.IsCompleted() {
+	if dataRecipient.Status.IsCompleted() {
 		log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q...", receiverWallet.ID)
 		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 			IdempotencyKey: uuid.NewString(),
