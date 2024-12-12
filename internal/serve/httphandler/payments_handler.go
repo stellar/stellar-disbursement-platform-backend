@@ -178,6 +178,11 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 				return nil, fmt.Errorf("retrying failed payments: %w", err)
 			}
 
+			_, err = p.Models.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, dbTx, reqBody.PaymentIDs...)
+			if err != nil {
+				return nil, fmt.Errorf("resetting circle recipients for retry if needed: %w", err)
+			}
+
 			// Producing event to send ready payments to TSS
 			var payments []*data.Payment
 			payments, err = p.Models.Payment.GetReadyByID(ctx, dbTx, reqBody.PaymentIDs...)

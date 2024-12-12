@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -121,6 +123,39 @@ func (m CircleRecipientModel) Insert(ctx context.Context, receiverWalletID strin
 	}
 
 	return &circleRecipient, nil
+}
+
+// ResetRecipientsForRetryIfNeeded resets the status of the circle recipients for the given payment IDs to NULL if the status is not active.
+func (m CircleRecipientModel) ResetRecipientsForRetryIfNeeded(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs ...string) ([]*CircleRecipient, error) {
+	if len(paymentIDs) == 0 {
+		return nil, fmt.Errorf("at least one payment ID is required: %w", ErrMissingInput)
+	}
+
+	const query = `
+		UPDATE
+			circle_recipients
+		SET
+			status = NULL,
+			sync_attempts = 0,
+			last_sync_attempt_at = NULL,
+			response_body = NULL
+		WHERE 
+			receiver_wallet_id IN (
+				SELECT DISTINCT receiver_wallet_id
+				FROM payments
+				WHERE id = ANY($1)
+			)
+		 	AND (status != $2 OR status IS NULL)
+		RETURNING
+	` + circleRecipientFields
+
+	var updatedRecipients []*CircleRecipient
+	err := sqlExec.SelectContext(ctx, &updatedRecipients, query, pq.Array(paymentIDs), CircleRecipientStatusActive)
+	if err != nil {
+		return nil, fmt.Errorf("getting context: %w", err)
+	}
+
+	return updatedRecipients, nil
 }
 
 func (m CircleRecipientModel) Update(ctx context.Context, receiverWalletID string, update CircleRecipientUpdate) (*CircleRecipient, error) {
