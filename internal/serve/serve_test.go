@@ -480,6 +480,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/balances"},
 		// Exports
 		{http.MethodGet, "/exports/disbursements"},
+		{http.MethodGet, "/exports/payments"},
 	}
 
 	// Expect 401 as a response:
