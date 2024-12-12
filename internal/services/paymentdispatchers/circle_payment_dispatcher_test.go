@@ -407,7 +407,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReadyWithRetry(t *testing.T) 
 				assert.Equal(t, initialRecipient.SyncAttempts+maxCircleRecipientCreationAttempts, finalRecipient.SyncAttempts)
 				assert.Greater(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
 			},
-			wantErrContains: "failed to ensure recipient is ready: All attempts fail:\n#1: creating Circle recipient: got 400 from vendor's API",
+			wantErrContains: "failed to ensure recipient is ready: All attempts fail:\n#1: submitting recipient to Circle: creating Circle recipient: got 400 from vendor's API",
 		},
 		{
 			name: "gives up if maxCircleRecipientCreationAttempts is reached",

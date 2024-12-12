@@ -170,32 +170,36 @@ func (c *CirclePaymentDispatcher) updatePaymentStatusForCirclePayout(ctx context
 	return nil
 }
 
-// TODO: split this in multiple methods (https://github.com/stellar/stellar-disbursement-platform-backend/pull/486#discussion_r1878843074)
-func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
+// getOrCreateRecipient gets or creates a circle_recipient entry from the database for the given receiver_wallet_id.
+func (c *CirclePaymentDispatcher) getOrCreateRecipient(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
 	dataRecipient, err := c.sdpModels.CircleRecipient.GetByReceiverWalletID(ctx, receiverWallet.ID)
-	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
-		return nil, fmt.Errorf("getting Circle recipient: %w", err)
-	}
 
-	// SUCCESS
-	if dataRecipient != nil && dataRecipient.Status == data.CircleRecipientStatusActive {
-		return dataRecipient, nil
-	}
-
-	// DOES NOT EXIST in the DB
-	if dataRecipient == nil {
+	if errors.Is(err, data.ErrRecordNotFound) {
+		// DOES NOT EXIST in the DB
 		log.Ctx(ctx).Infof("Inserting circle_recipient for receiver_wallet_id %q...", receiverWallet.ID)
 		dataRecipient, err = c.sdpModels.CircleRecipient.Insert(ctx, receiverWallet.ID)
 		if err != nil {
 			return nil, fmt.Errorf("inserting Circle recipient: %w", err)
 		}
-	} else if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
+	} else if err != nil {
+		return nil, fmt.Errorf("getting Circle recipient: %w", err)
+	}
+
+	// Too many attempts
+	if dataRecipient.SyncAttempts >= maxCircleRecipientCreationAttempts {
 		return nil, ErrCircleRecipientCreationFailedTooManyTimes
 	}
 
+	return dataRecipient, nil
+}
+
+// handleFailedOrInactiveRecipientIfNeeded handles the case when the recipient is in a FAILED or INACTIVE state.
+func (c *CirclePaymentDispatcher) handleFailedOrInactiveRecipientIfNeeded(ctx context.Context, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
+	var err error
+
 	// FAILED or INACTIVE -> refresh the idempotency key
 	if dataRecipient.Status.IsCompleted() {
-		log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q...", receiverWallet.ID)
+		log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q and status %s", dataRecipient.ReceiverWalletID, dataRecipient.Status)
 		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 			IdempotencyKey: uuid.NewString(),
 		})
@@ -204,6 +208,11 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 		}
 	}
 
+	return dataRecipient, nil
+}
+
+// submitRecipientToCircle submits the recipient creation request to Circle.
+func (c *CirclePaymentDispatcher) submitRecipientToCircle(ctx context.Context, receiverWallet data.ReceiverWallet, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
 	// NULL, PENDING, INACTIVE (with renovated idempotency_key) or FAILED (with renovated idempotency_key) -> (re)submit the recipient creation request
 	nickname := receiverWallet.ID
 	if receiverWallet.Receiver.PhoneNumber != "" {
@@ -240,15 +249,15 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	if err != nil {
 		return nil, fmt.Errorf("parsing Circle recipient status: %w", err)
 	}
-	updateDataRecipient := data.CircleRecipientUpdate{
+
+	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 		IdempotencyKey:    dataRecipient.IdempotencyKey,
 		CircleRecipientID: recipient.ID,
 		Status:            dataRecipientStatus,
 		ResponseBody:      recipientJson,
 		SyncAttempts:      dataRecipient.SyncAttempts + 1,
 		LastSyncAttemptAt: time.Now(),
-	}
-	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, updateDataRecipient)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("updating Circle recipient: %w", err)
 	}
@@ -256,6 +265,35 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	return dataRecipient, nil
 }
 
+// ensureRecipientIsReady ensures that the recipient is ready to receive payments, creating it in the database and in
+// the Circle API if needed.
+func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
+	dataRecipient, err := c.getOrCreateRecipient(ctx, receiverWallet)
+	if err != nil {
+		return nil, fmt.Errorf("getting or creating Circle recipient: %w", err)
+	}
+
+	// SUCCESS
+	if dataRecipient.Status == data.CircleRecipientStatusActive {
+		return dataRecipient, nil
+	}
+
+	// FAILED or INACTIVE
+	dataRecipient, err = c.handleFailedOrInactiveRecipientIfNeeded(ctx, dataRecipient)
+	if err != nil {
+		return nil, fmt.Errorf("handling failed or inactive recipient: %w", err)
+	}
+
+	// NULL, PENDING, INACTIVE (with renovated idempotency_key) or FAILED (with renovated idempotency_key) -> (re)submit the recipient creation request
+	dataRecipient, err = c.submitRecipientToCircle(ctx, receiverWallet, dataRecipient)
+	if err != nil {
+		return nil, fmt.Errorf("submitting recipient to Circle: %w", err)
+	}
+
+	return dataRecipient, nil
+}
+
+// calls ensureRecipientIsReadyWithRetry with a retry policy.
 func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Context, receiverWallet data.ReceiverWallet, initialDelay time.Duration) (*data.CircleRecipient, error) {
 	if initialDelay <= 0 || initialDelay > time.Second {
 		initialDelay = 100 * time.Millisecond
