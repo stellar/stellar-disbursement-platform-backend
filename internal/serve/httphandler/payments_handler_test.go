@@ -1119,6 +1119,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 	t.Run("successfully retries failed circle payment", func(t *testing.T) {
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllCircleRecipientsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllCircleTransferRequests(t, ctx, dbConnectionPool)
 
 		failedPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
@@ -1129,22 +1131,31 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
 		})
+		circleRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
+			ReceiverWalletID:  receiverWallet.ID,
+			Status:            data.CircleRecipientStatusDenied,
+			CircleRecipientID: "circle-recipient-id-1",
+			SyncAttempts:      5,
+			LastSyncAttemptAt: time.Now(),
+		})
 
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		circleTnt := tenant.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
+		circleCtx := tenant.SaveTenantInContext(context.Background(), &circleTnt)
+		circleCtx = context.WithValue(circleCtx, middleware.TokenContextKey, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`{ "payment_ids": [%q] } `, failedPayment.ID))
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
+		req, err := http.NewRequestWithContext(circleCtx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
-			On("GetUser", ctx, "mytoken").
+			On("GetUser", circleCtx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
 		eventProducerMock := events.NewMockProducer(t)
 		eventProducerMock.
-			On("WriteMessages", ctx, []events.Message{
+			On("WriteMessages", circleCtx, []events.Message{
 				{
 					Topic:    events.CirclePaymentReadyToPayTopic,
 					Key:      tnt.ID,
@@ -1175,20 +1186,27 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
-
 		resp := rw.Result()
 		defer resp.Body.Close()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
+		// Assert response
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"message": "Payments retried successfully"}`, string(respBody))
 
-		previouslyFailedPayment, err := models.Payment.Get(ctx, failedPayment.ID, dbConnectionPool)
+		// Assert payment status
+		previouslyFailedPayment, err := models.Payment.Get(circleCtx, failedPayment.ID, dbConnectionPool)
 		require.NoError(t, err)
-
 		assert.Equal(t, data.ReadyPaymentStatus, previouslyFailedPayment.Status)
+
+		// Assert circle transfer request status
+		circleRecipient, err = models.CircleRecipient.GetByReceiverWalletID(circleCtx, circleRecipient.ReceiverWalletID)
+		require.NoError(t, err)
+		assert.Empty(t, circleRecipient.Status)
+		assert.Empty(t, circleRecipient.SyncAttempts)
+		assert.Empty(t, circleRecipient.LastSyncAttemptAt)
+		assert.Empty(t, circleRecipient.ResponseBody)
 	})
 
 	t.Run("returns error when tenant is not in the context", func(t *testing.T) {
@@ -1231,10 +1249,6 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
 		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
-		distAccountResolverMock.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-			Once()
 		handler := PaymentsHandler{
 			Models:                      models,
 			DBConnectionPool:            dbConnectionPool,
@@ -1244,10 +1258,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
-
 		resp := rw.Result()
 		defer resp.Body.Close()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
