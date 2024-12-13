@@ -25,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PaymentsHandler struct {
@@ -178,9 +179,14 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 				return nil, fmt.Errorf("retrying failed payments: %w", err)
 			}
 
-			_, err = p.Models.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, dbTx, reqBody.PaymentIDs...)
-			if err != nil {
-				return nil, fmt.Errorf("resetting circle recipients for retry if needed: %w", err)
+			var tnt *tenant.Tenant
+			if tnt, err = tenant.GetTenantFromContext(ctx); err != nil {
+				return nil, fmt.Errorf("getting tenant from context: %w", err)
+			} else if tnt.DistributionAccountType.IsCircle() {
+				_, err = p.Models.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, dbTx, reqBody.PaymentIDs...)
+				if err != nil {
+					return nil, fmt.Errorf("resetting circle recipients for retry if needed: %w", err)
+				}
 			}
 
 			// Producing event to send ready payments to TSS
