@@ -419,6 +419,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 			Route("/exports", func(r chi.Router) {
 				r.Get("/disbursements", exportHandler.ExportDisbursements)
+				r.Get("/payments", exportHandler.ExportPayments)
 			})
 	})
 

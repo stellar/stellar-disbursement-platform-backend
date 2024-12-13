@@ -249,7 +249,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns empty list when no payments exist", func(t *testing.T) {
-		payments, errPayment := paymentModel.GetAll(ctx, &QueryParams{}, dbConnectionPool)
+		payments, errPayment := paymentModel.GetAll(ctx, &QueryParams{}, dbConnectionPool, QueryTypeSelectPaginated)
 		require.NoError(t, errPayment)
 		assert.Equal(t, 0, len(payments))
 	})
@@ -302,7 +302,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 
 	t.Run("returns payments successfully", func(t *testing.T) {
 		params := QueryParams{SortBy: DefaultPaymentSortField, SortOrder: DefaultPaymentSortOrder}
-		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool)
+		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2, *expectedPayment1}, actualPayments)
@@ -315,7 +315,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 			Page:      1,
 			PageLimit: 1,
 		}
-		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool)
+		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2}, actualPayments)
@@ -328,14 +328,15 @@ func Test_PaymentModelGetAll(t *testing.T) {
 			SortBy:    DefaultPaymentSortField,
 			SortOrder: DefaultPaymentSortOrder,
 		}
-		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool)
+		actualPayments, err := paymentModel.GetAll(ctx, &params, dbConnectionPool, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment1}, actualPayments)
 	})
 
 	t.Run("returns payments successfully with created at order", func(t *testing.T) {
-		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC}, dbConnectionPool)
+		params := &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC}
+		actualPayments, err := paymentModel.GetAll(ctx, params, dbConnectionPool, QueryTypeSelectPaginated)
 
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualPayments))
@@ -343,7 +344,8 @@ func Test_PaymentModelGetAll(t *testing.T) {
 	})
 
 	t.Run("returns payments successfully with updated at order", func(t *testing.T) {
-		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{SortBy: SortFieldUpdatedAt, SortOrder: SortOrderASC}, dbConnectionPool)
+		params := &QueryParams{SortBy: SortFieldUpdatedAt, SortOrder: SortOrderASC}
+		actualPayments, err := paymentModel.GetAll(ctx, params, dbConnectionPool, QueryTypeSelectPaginated)
 
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualPayments))
@@ -354,7 +356,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: PendingPaymentStatus,
 		}
-		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{Filters: filters}, dbConnectionPool)
+		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{Filters: filters}, dbConnectionPool, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2}, actualPayments)
@@ -372,7 +374,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 			SortBy:    DefaultPaymentSortField,
 			SortOrder: DefaultPaymentSortOrder,
 		}
-		actualPayments, err := paymentModel.GetAll(ctx, &queryParams, dbConnectionPool)
+		actualPayments, err := paymentModel.GetAll(ctx, &queryParams, dbConnectionPool, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2, *expectedPayment1}, actualPayments)
@@ -435,7 +437,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 			},
 			SortBy:    DefaultPaymentSortField,
 			SortOrder: DefaultPaymentSortOrder,
-		}, dbConnectionPool)
+		}, dbConnectionPool, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 
 		assert.Len(t, payments, 2)
@@ -606,7 +608,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 		name           string
 		baseQuery      string
 		queryParams    QueryParams
-		paginated      bool
+		queryType      QueryType
 		expectedQuery  string
 		expectedParams []interface{}
 	}{
@@ -614,7 +616,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 			name:           "build payment query without params and pagination",
 			baseQuery:      "SELECT * FROM payments p",
 			queryParams:    QueryParams{},
-			paginated:      false,
+			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p",
 			expectedParams: []interface{}{},
 		},
@@ -626,7 +628,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 					FilterKeyStatus: "draft",
 				},
 			},
-			paginated:      false,
+			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1",
 			expectedParams: []interface{}{"draft"},
 		},
@@ -638,7 +640,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 					FilterKeyReceiverID: "receiver_id",
 				},
 			},
-			paginated:      false,
+			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.receiver_id = $1",
 			expectedParams: []interface{}{"receiver_id"},
 		},
@@ -651,7 +653,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 					FilterKeyCreatedAtBefore: "00-01-31",
 				},
 			},
-			paginated:      false,
+			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.created_at >= $1 AND p.created_at <= $2",
 			expectedParams: []interface{}{"00-01-01", "00-01-31"},
 		},
@@ -664,7 +666,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 				SortBy:    "created_at",
 				SortOrder: "ASC",
 			},
-			paginated:      true,
+			queryType:      QueryTypeSelectPaginated,
 			expectedQuery:  "SELECT * FROM payments p ORDER BY p.created_at ASC LIMIT $1 OFFSET $2",
 			expectedParams: []interface{}{20, 0},
 		},
@@ -683,7 +685,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 					FilterKeyCreatedAtBefore: "00-01-31",
 				},
 			},
-			paginated:      true,
+			queryType:      QueryTypeSelectPaginated,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1 AND p.receiver_id = $2 AND p.created_at >= $3 AND p.created_at <= $4 ORDER BY p.created_at ASC LIMIT $5 OFFSET $6",
 			expectedParams: []interface{}{"draft", "receiver_id", "00-01-01", "00-01-31", 20, 0},
 		},
@@ -691,7 +693,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			query, params := newPaymentQuery(tc.baseQuery, &tc.queryParams, tc.paginated, dbConnectionPool)
+			query, params := newPaymentQuery(tc.baseQuery, &tc.queryParams, dbConnectionPool, tc.queryType)
 
 			assert.Equal(t, tc.expectedQuery, query)
 			assert.Equal(t, tc.expectedParams, params)

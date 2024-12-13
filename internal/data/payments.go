@@ -252,7 +252,7 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
 		`
 
-	query, params := newPaymentQuery(baseQuery, queryParams, false, sqlExec)
+	query, params := newPaymentQuery(baseQuery, queryParams, sqlExec, QueryTypeCount)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -262,10 +262,10 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 }
 
 // GetAll returns all PAYMENTS matching the given query parameters.
-func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sqlExec db.SQLExecuter) ([]Payment, error) {
+func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) ([]Payment, error) {
 	payments := []Payment{}
 
-	query, params := newPaymentQuery(basePaymentQuery, queryParams, true, sqlExec)
+	query, params := newPaymentQuery(basePaymentQuery, queryParams, sqlExec, queryType)
 
 	err := sqlExec.SelectContext(ctx, &payments, query, params...)
 	if err != nil {
@@ -620,7 +620,7 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 }
 
 // newPaymentQuery generates the full query and parameters for a payment search query
-func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool, sqlExec db.SQLExecuter) (string, []interface{}) {
+func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyStatus] != nil {
 		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]PaymentStatus); ok {
@@ -640,9 +640,12 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool,
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("p.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
-	if paginated {
-		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
+	if queryType == QueryTypeSelectPaginated {
 		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
+	}
+
+	if queryType == QueryTypeSelectAll || queryType == QueryTypeSelectPaginated {
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
 	}
 	query, params := qb.Build()
 	return sqlExec.Rebind(query), params

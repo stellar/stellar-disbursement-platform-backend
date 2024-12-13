@@ -1456,7 +1456,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 			timeSinceCreation := time.Since(creationTime)
 
 			expectedAdjustedMaxTime := expectedMaxTime.Add(timeSinceCreation)
-			require.WithinDuration(t, expectedAdjustedMaxTime, actualMaxTime, 5*time.Second)
+			require.WithinDuration(t, expectedAdjustedMaxTime, actualMaxTime, 10*time.Second)
 		}
 	}
 

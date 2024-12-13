@@ -258,7 +258,7 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 
 		var payments []data.Payment
 		if totalPayments != 0 {
-			payments, innerErr = p.Models.Payment.GetAll(ctx, queryParams, dbTx)
+			payments, innerErr = p.Models.Payment.GetAll(ctx, queryParams, dbTx, data.QueryTypeSelectPaginated)
 			if innerErr != nil {
 				return nil, fmt.Errorf("error querying payments: %w", innerErr)
 			}

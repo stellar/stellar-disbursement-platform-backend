@@ -346,7 +346,7 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 		Filters: map[data.FilterKey]interface{}{
 			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
 		},
-	}, dbTx)
+	}, dbTx, data.QueryTypeSelectAll)
 	if err != nil {
 		return fmt.Errorf("cannot retrieve incomplete payments: %w", err)
 	}
