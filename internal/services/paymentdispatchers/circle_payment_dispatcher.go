@@ -302,7 +302,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 // calls ensureRecipientIsReadyWithRetry with a retry policy.
 func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Context, receiverWallet data.ReceiverWallet, initialDelay time.Duration) (*data.CircleRecipient, error) {
 	if initialDelay <= 0 || initialDelay > time.Second {
-		initialDelay = 100 * time.Millisecond
+		initialDelay = initialBackoffDelay
 	}
 
 	var recipient *data.CircleRecipient
