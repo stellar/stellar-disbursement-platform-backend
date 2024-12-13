@@ -11,6 +11,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/nyaruka/phonenumbers"
+	"golang.org/x/net/html"
 )
 
 var (
@@ -199,18 +200,11 @@ func ValidateURLScheme(link string, scheme ...string) error {
 	return nil
 }
 
-// ValidateNoHTMLNorJSNorCSS detects HTML, <script> tags, inline JavaScript, and CSS styles in a string
+// ValidateNoHTMLNorJSNorCSS returns an error if the input contains any of the following HTML-related characters: [<, >, &, ', "].
 func ValidateNoHTMLNorJSNorCSS(input string) error {
-	// Regular expressions to catch HTML tags, <script> tags, javascript: URIs, <style> tags, and inline style attributes
-	htmlPattern := regexp.MustCompile(`</(?i)[a-z][\s\S]*>`)
-	inlineJSURIPattern := regexp.MustCompile(`(?i)javascript:[\s\S]*`)
-	inlineStyleAttrPattern := regexp.MustCompile(`(?i)style=['"][\s\S]*?['"]`)
-	cssExpressionPattern := regexp.MustCompile(`(?i)expression\(`)
-
-	// Check if any pattern matches the input
-	if htmlPattern.MatchString(input) || inlineJSURIPattern.MatchString(input) ||
-		inlineStyleAttrPattern.MatchString(input) || cssExpressionPattern.MatchString(input) {
-		return errors.New("input contains HTML, JavaScript, or CSS content")
+	escapedStr := html.EscapeString(input)
+	if escapedStr != input {
+		return errors.New(`input contains one or more of the following HTML-related charactetes [<, >, &, ', "]`)
 	}
 
 	return nil
