@@ -21,7 +21,13 @@ import (
 
 var ErrCircleRecipientCreationFailedTooManyTimes = errors.New("Circle recipient creation failed too many times")
 
-const maxCircleRecipientCreationAttempts = 5
+const (
+	// maxCircleRecipientCreationAttempts is the maximum number of attempts to create a Circle recipient before giving up.
+	maxCircleRecipientCreationAttempts = 5
+	// initialBackoffDelay is the initial delay for the retry policy when creating a Circle recipient. The retry policy
+	// uses exponential backoff with this value as the starting point.
+	initialBackoffDelay = 100 * time.Millisecond
+)
 
 type CirclePaymentDispatcher struct {
 	sdpModels           *data.Models
@@ -65,7 +71,7 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 	for _, payment := range paymentsToSubmit {
 		// 1. Ensure the recipient is ready
 		// TODO: When clicking retries, we should reset the recipient count?
-		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet, 100*time.Millisecond)
+		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet, initialBackoffDelay)
 		if err != nil {
 			// 2. If the recipient creation fails, set the payment status to failed
 			err = fmt.Errorf("failed to create Circle recipient for payment ID %s: %w", payment.ID, err)
