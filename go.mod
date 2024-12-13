@@ -33,6 +33,7 @@ require (
 	github.com/twilio/twilio-go v1.23.8
 	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
+	golang.org/x/net v0.30.0
 )
 
 require (
@@ -73,7 +74,6 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
