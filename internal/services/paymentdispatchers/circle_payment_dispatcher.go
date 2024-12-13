@@ -70,7 +70,6 @@ var _ PaymentDispatcherInterface = (*CirclePaymentDispatcher)(nil)
 func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
 	for _, payment := range paymentsToSubmit {
 		// 1. Ensure the recipient is ready
-		// TODO: When clicking retries, we should reset the recipient count?
 		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet, initialBackoffDelay)
 		if err != nil {
 			// 2. If the recipient creation fails, set the payment status to failed
