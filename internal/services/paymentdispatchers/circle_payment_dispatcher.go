@@ -237,6 +237,7 @@ func (c *CirclePaymentDispatcher) submitRecipientToCircle(ctx context.Context, r
 		_, updateErr := c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 			SyncAttempts:      dataRecipient.SyncAttempts + 1,
 			LastSyncAttemptAt: time.Now(),
+			ResponseBody:      []byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())),
 		})
 		if updateErr != nil {
 			return nil, fmt.Errorf("updating Circle recipient after postRecipientErr: %w", updateErr)

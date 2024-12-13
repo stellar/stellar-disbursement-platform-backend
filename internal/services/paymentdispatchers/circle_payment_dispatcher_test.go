@@ -248,6 +248,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient data.CircleRecipient) {
 				assert.Equal(t, initialRecipient.SyncAttempts+1, finalRecipient.SyncAttempts)
 				assert.Greater(t, finalRecipient.LastSyncAttemptAt.Unix(), initialRecipient.LastSyncAttemptAt.Unix())
+				assert.JSONEq(t, `{"error": "got 400 from vendor's API"}`, string(finalRecipient.ResponseBody))
 			},
 			wantErrContains: "creating Circle recipient: got 400 from vendor's API",
 		},
