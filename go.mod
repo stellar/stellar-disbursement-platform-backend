@@ -21,7 +21,7 @@ require (
 	github.com/nyaruka/phonenumbers v1.4.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.11.1
-	github.com/rubenv/sql-migrate v1.7.0
+	github.com/rubenv/sql-migrate v1.7.1
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/sendgrid/rest v2.6.9+incompatible
 	github.com/sendgrid/sendgrid-go v3.16.0+incompatible
@@ -30,7 +30,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
 	github.com/stretchr/testify v1.10.0
-	github.com/twilio/twilio-go v1.23.7
+	github.com/twilio/twilio-go v1.23.8
 	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
 )
