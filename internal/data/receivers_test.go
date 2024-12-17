@@ -448,7 +448,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		receivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{})
+		receivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(receivers))
 
@@ -490,7 +490,9 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx,
+			&QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC},
+			QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualReceivers))
 
@@ -548,7 +550,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			SortOrder: SortOrderASC,
 			Page:      1,
 			PageLimit: 1,
-		})
+		}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -591,7 +593,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			SortOrder: SortOrderASC,
 			Page:      2,
 			PageLimit: 1,
-		})
+		}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -634,7 +636,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: DraftReceiversWalletStatus,
 		}
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -672,7 +674,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: receiver1Email})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: receiver1Email}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -710,7 +712,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: "+99992222"})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: "+99992222"}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -752,7 +754,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			FilterKeyCreatedAtAfter:  "2023-01-01",
 			FilterKeyCreatedAtBefore: "2023-03-01",
 		}
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -790,7 +792,9 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx,
+			&QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC},
+			QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualReceivers))
 
@@ -861,7 +865,7 @@ func Test_ReceiversModel_GetAll_makeSureReceiversWithMultipleWalletsWillReturnAS
 	CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, ReadyReceiversWalletStatus)
 	CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
 
-	receivers, err := receiverModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+	receivers, err := receiverModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 	require.NoError(t, err)
 
 	assert.Len(t, receivers, 1)
@@ -889,7 +893,9 @@ func Test_ReceiversModel_ParseReceiverIDs(t *testing.T) {
 		err = dbTx.Rollback()
 		require.Error(t, err, "not in transaction")
 	}()
-	receivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC})
+	receivers, err := receiverModel.GetAll(ctx, dbTx,
+		&QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC},
+		QueryTypeSelectPaginated)
 	require.NoError(t, err)
 
 	receiverIds := receiverModel.ParseReceiverIDs(receivers)

@@ -1466,7 +1466,9 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 		require.Error(t, err, "not in transaction")
 	}()
 
-	receivers, err := handler.Models.Receiver.GetAll(ctx, dbTx, &data.QueryParams{SortBy: data.SortFieldUpdatedAt, SortOrder: data.SortOrderDESC})
+	receivers, err := handler.Models.Receiver.GetAll(ctx, dbTx,
+		&data.QueryParams{SortBy: data.SortFieldUpdatedAt, SortOrder: data.SortOrderDESC},
+		data.QueryTypeSelectPaginated)
 	require.NoError(t, err)
 	receiversId := handler.Models.Receiver.ParseReceiverIDs(receivers)
 	receiversWallets, err := handler.Models.ReceiverWallet.GetWithReceiverIds(ctx, dbTx, receiversId)

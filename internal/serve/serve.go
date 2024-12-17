@@ -420,6 +420,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Route("/exports", func(r chi.Router) {
 				r.Get("/disbursements", exportHandler.ExportDisbursements)
 				r.Get("/payments", exportHandler.ExportPayments)
+				r.Get("/receivers", exportHandler.ExportReceivers)
 			})
 	})
 

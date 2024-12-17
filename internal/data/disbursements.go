@@ -336,12 +336,14 @@ func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *
 		qb.AddCondition("d.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
 
-	if queryType == QueryTypeSelectPaginated {
+	switch queryType {
+	case QueryTypeSelectPaginated:
 		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
-	}
-
-	if queryType == QueryTypeSelectAll || queryType == QueryTypeSelectPaginated {
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
+	case QueryTypeSelectAll:
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
+	case QueryTypeCount:
+		// no need to sort or paginate.
 	}
 
 	query, params := qb.Build()
