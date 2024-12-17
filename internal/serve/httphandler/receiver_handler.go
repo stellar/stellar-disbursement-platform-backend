@@ -108,7 +108,7 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 			return &httpResponse, nil
 		}
 
-		receivers, err := rh.Models.Receiver.GetAll(ctx, dbTx, queryParams)
+		receivers, err := rh.Models.Receiver.GetAll(ctx, dbTx, queryParams, data.QueryTypeSelectPaginated)
 		if err != nil {
 			return nil, fmt.Errorf("error retrieving receivers: %w", err)
 		}
