@@ -640,13 +640,17 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("p.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
-	if queryType == QueryTypeSelectPaginated {
+
+	switch queryType {
+	case QueryTypeSelectPaginated:
 		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
+	case QueryTypeSelectAll:
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
+	case QueryTypeCount:
+		// no need to sort or paginate.
 	}
 
-	if queryType == QueryTypeSelectAll || queryType == QueryTypeSelectPaginated {
-		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
-	}
 	query, params := qb.Build()
 	return sqlExec.Rebind(query), params
 }

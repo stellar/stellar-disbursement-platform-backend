@@ -275,3 +275,136 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 		})
 	}
 }
+
+func Test_ExportHandler_ExportReceivers(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	ctx := context.Background()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &ExportHandler{
+		Models: models,
+	}
+
+	r := chi.NewRouter()
+	r.Get("/exports/receivers", handler.ExportReceivers)
+
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	createdFirst := time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)
+	createdLast := time.Date(2023, 3, 21, 23, 40, 20, 1431, time.UTC)
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		CreatedAt: &createdLast,
+	})
+	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		CreatedAt: &createdFirst,
+	})
+	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	tests := []struct {
+		name               string
+		queryParams        string
+		expectedStatusCode int
+		expectedReceivers  []*data.Receiver
+	}{
+		{
+			name:               "success - returns CSV with no receivers",
+			queryParams:        "status=draft",
+			expectedStatusCode: http.StatusOK,
+			expectedReceivers:  []*data.Receiver{},
+		},
+		{
+			name:               "success - returns CSV with all receivers",
+			queryParams:        "sort=created_at&direction=desc",
+			expectedStatusCode: http.StatusOK,
+			expectedReceivers:  []*data.Receiver{receiver, receiver2},
+		},
+		{
+			name:               "success - return CSV with reverse order of receivers",
+			expectedStatusCode: http.StatusOK,
+			queryParams:        "sort=created_at&direction=asc",
+			expectedReceivers:  []*data.Receiver{receiver2, receiver},
+		},
+		{
+			name:               "success - return CSV with only registered receivers",
+			expectedStatusCode: http.StatusOK,
+			queryParams:        "status=registered",
+			expectedReceivers:  []*data.Receiver{receiver},
+		},
+		{
+			name:               "success - return CSV with only ready receivers",
+			expectedStatusCode: http.StatusOK,
+			queryParams:        "status=ready",
+			expectedReceivers:  []*data.Receiver{receiver2},
+		},
+		{
+			name:               "error - invalid status",
+			queryParams:        "status=invalid",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedReceivers:  nil,
+		},
+		{
+			name:               "error - invalid sort field",
+			queryParams:        "sort=invalid",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedReceivers:  nil,
+		},
+		{
+			name:               "error - invalid direction",
+			queryParams:        "direction=invalid",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedReceivers:  nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			url := "/exports/receivers"
+			if tc.queryParams != "" {
+				url += "?" + tc.queryParams
+			}
+			req, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatusCode, rr.Code)
+
+			if tc.expectedStatusCode == http.StatusOK {
+				csvReader := csv.NewReader(strings.NewReader(rr.Body.String()))
+
+				header, err := csvReader.Read()
+				require.NoError(t, err)
+
+				expectedHeaders := []string{
+					"ID", "Email", "PhoneNumber", "ExternalID", "CreatedAt", "UpdatedAt",
+					"TotalPayments", "SuccessfulPayments", "FailedPayments", "CanceledPayments",
+					"RemainingPayments", "RegisteredWallets", "ReceivedAmounts",
+				}
+				assert.Equal(t, expectedHeaders, header)
+
+				assert.Equal(t, "text/csv", rr.Header().Get("Content-Type"))
+				today := time.Now().Format("2006-01-02")
+				assert.Contains(t, rr.Header().Get("Content-Disposition"), fmt.Sprintf("attachment; filename=receivers_%s", today))
+
+				rows, err := csvReader.ReadAll()
+				require.NoError(t, err)
+				assert.Len(t, rows, len(tc.expectedReceivers))
+
+				for i, row := range rows {
+					assert.Equal(t, tc.expectedReceivers[i].ID, row[0])
+					assert.Equal(t, tc.expectedReceivers[i].Email, row[1])
+					assert.Equal(t, tc.expectedReceivers[i].PhoneNumber, row[2])
+					assert.Equal(t, tc.expectedReceivers[i].ExternalID, row[3])
+				}
+			}
+		})
+	}
+}
