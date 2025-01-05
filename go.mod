@@ -6,9 +6,9 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/avast/retry-go/v4 v4.6.0
 	github.com/aws/aws-sdk-go v1.55.5
-	github.com/getsentry/sentry-go v0.30.0
+	github.com/getsentry/sentry-go v0.31.1
 	github.com/go-chi/chi v4.1.2+incompatible
-	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/chi/v5 v5.2.0
 	github.com/go-chi/httprate v0.14.1
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
 	github.com/golang-jwt/jwt/v4 v4.5.1
@@ -18,10 +18,10 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/manifoldco/promptui v0.9.0
-	github.com/nyaruka/phonenumbers v1.4.3
+	github.com/nyaruka/phonenumbers v1.4.4
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.11.1
-	github.com/rubenv/sql-migrate v1.7.0
+	github.com/rubenv/sql-migrate v1.7.1
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/sendgrid/rest v2.6.9+incompatible
 	github.com/sendgrid/sendgrid-go v3.16.0+incompatible
@@ -30,7 +30,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
 	github.com/stretchr/testify v1.10.0
-	github.com/twilio/twilio-go v1.23.7
+	github.com/twilio/twilio-go v1.23.8
 	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
 )
