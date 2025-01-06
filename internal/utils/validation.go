@@ -200,8 +200,9 @@ func ValidateURLScheme(link string, scheme ...string) error {
 	return nil
 }
 
-// ValidateNoHTMLNorJSNorCSS returns an error if the input contains any of the following HTML-related characters: [<, >, &, ', "].
-func ValidateNoHTMLNorJSNorCSS(input string) error {
+// ValidateNoHTML returns an error if the input contains any of the following HTML-related characters: [<, >, &, ', "],
+// either in encoded or decoded form.
+func ValidateNoHTML(input string) error {
 	if escapedStr := html.EscapeString(input); escapedStr != input {
 		return errors.New(`input contains one or more of the following HTML-related charactetes [<, >, &, ', "]`)
 	}

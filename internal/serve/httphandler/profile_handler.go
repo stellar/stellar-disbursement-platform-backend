@@ -162,7 +162,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		validator.CheckError(utils.ValidateURLScheme(*reqBody.PrivacyPolicyLink, schemes...), "privacy_policy_link", "")
 	}
 	if reqBody.ReceiverRegistrationMessageTemplate != nil {
-		validator.CheckError(utils.ValidateNoHTMLNorJSNorCSS(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+		validator.CheckError(utils.ValidateNoHTML(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 	}
 	if validator.HasErrors() {
 		httperror.BadRequest("", nil, validator.Errors).Render(rw)

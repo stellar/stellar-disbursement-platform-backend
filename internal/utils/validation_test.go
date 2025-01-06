@@ -293,7 +293,7 @@ func Test_ValidateURLScheme(t *testing.T) {
 	}
 }
 
-func Test_ValidateNoHTMLNorJSNorCSS(t *testing.T) {
+func Test_ValidateNoHTML(t *testing.T) {
 	rawHTMLTestCases := []string{
 		"<a href='evil.com'>Click here</a>",
 		"<A HREF='evil.com'>Click here</A>",
@@ -311,16 +311,16 @@ func Test_ValidateNoHTMLNorJSNorCSS(t *testing.T) {
 
 	for i, tc := range rawHTMLTestCases {
 		t.Run(fmt.Sprintf("rawHTML/%d(%s)", i, tc), func(t *testing.T) {
-			err := ValidateNoHTMLNorJSNorCSS(tc)
-			require.Error(t, err, "ValidateNoHTMLNorJSNorCSS(%q) didn't catch the error", tc)
+			err := ValidateNoHTML(tc)
+			require.Error(t, err, "ValidateNoHTML(%q) didn't catch the error", tc)
 		})
 	}
 
 	for i, tc := range rawHTMLTestCases {
 		encodedHtmlStr := html.EscapeString(tc)
 		t.Run(fmt.Sprintf("encodedHTML/%d(%s)", i, encodedHtmlStr), func(t *testing.T) {
-			err := ValidateNoHTMLNorJSNorCSS(encodedHtmlStr)
-			require.Error(t, err, "ValidateNoHTMLNorJSNorCSS(%q) didn't catch the error", encodedHtmlStr)
+			err := ValidateNoHTML(encodedHtmlStr)
+			require.Error(t, err, "ValidateNoHTML(%q) didn't catch the error", encodedHtmlStr)
 		})
 	}
 }
