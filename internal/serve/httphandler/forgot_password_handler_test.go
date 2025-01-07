@@ -87,6 +87,7 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 	}
 }
 
+// TODO: tests with reCaptcha enabled and disabled
 func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

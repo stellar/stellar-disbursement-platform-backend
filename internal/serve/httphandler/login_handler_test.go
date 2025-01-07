@@ -100,6 +100,7 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 	}
 }
 
+// TODO: tests with reCaptcha enabled and disabled
 func Test_LoginHandler_ServeHTTP(t *testing.T) {
 	r := chi.NewRouter()
 
