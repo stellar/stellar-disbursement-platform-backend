@@ -1,6 +1,8 @@
 package httphandler
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -98,6 +100,12 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func requestToJSON(t *testing.T, req interface{}) io.Reader {
+	body, err := json.Marshal(req)
+	require.NoError(t, err)
+	return bytes.NewReader(body)
 }
 
 // TODO: tests with reCaptcha enabled and disabled
