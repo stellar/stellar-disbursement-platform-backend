@@ -110,42 +110,52 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Step 4.A: If MFA is disabled, return the token
+	// 4: Handle MFA logic as needed
+	canSkipMFA, httpErr := h.handleMFA(ctx, req, user)
+	switch {
+	case httpErr != nil: // If an error occurred, render it
+		httpErr.Render(rw)
+	case canSkipMFA: // MFA can be skipped, log the user in
+		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
+		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
+	default: // MFA is required, send response about MFA code
+		httpjson.RenderStatus(rw,
+			http.StatusOK,
+			map[string]string{"message": "MFA code sent to email. Check your inbox and spam folders."},
+			httpjson.JSON)
+	}
+}
+
+// handleMFA handles the MFA logic for the login flow.
+func (h LoginHandler) handleMFA(ctx context.Context, req *http.Request, user *auth.User) (canSkipMFA bool, httpErr *httperror.HTTPError) {
+	truncatedEmail := utils.TruncateString(user.Email, 3)
+	// 1: If MFA is disabled, return the token
 	if h.MFADisabled {
 		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
-		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
-		return
+		return true, nil
 	}
 
-	// Step 4.B: If MFA is enabled, check if the device is remembered
+	// 2: If MFA is enabled, check if the device is remembered
 	deviceID := req.Header.Get(DeviceIDHeader)
-	var isRemembered bool
-	if isRemembered, err = h.AuthManager.MFADeviceRemembered(ctx, deviceID, user.ID); err != nil {
+	if isRemembered, err := h.AuthManager.MFADeviceRemembered(ctx, deviceID, user.ID); err != nil {
 		err = fmt.Errorf("checking if device is remembered for user with email %s: %w", truncatedEmail, err)
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
-		return
+		return false, httperror.InternalError(ctx, "", err, nil)
 	} else if isRemembered {
 		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
-		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
-		return
+		return true, nil
 	}
 
-	// Step 4.C: If MFA is enabled and the device is not remembered, send the MFA code
+	// 3: If MFA is enabled and the device is not remembered, send the MFA code
 	code, err := h.AuthManager.GetMFACode(ctx, deviceID, user.ID)
 	if err != nil {
-		log.Ctx(ctx).Errorf("getting MFA code for user with email %s: %s", truncatedEmail, err.Error())
-		httperror.InternalError(ctx, "Cannot get MFA code", err, nil).Render(rw)
-		return
+		err = fmt.Errorf("getting MFA code for user with email %s: %w", truncatedEmail, err)
+		return false, httperror.InternalError(ctx, "Cannot get MFA code", err, nil)
 	}
 	if httpErr := h.sendMFAEmail(ctx, user, code); httpErr != nil {
-		httpErr.Render(rw)
-		return
+		return false, httpErr
 	}
 
-	responseBody := map[string]string{
-		"message": "MFA code sent to email. Check your inbox and spam folders.",
-	}
-	httpjson.RenderStatus(rw, http.StatusOK, responseBody, httpjson.JSON)
+	return false, nil
 }
 
 func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code string) *httperror.HTTPError {
