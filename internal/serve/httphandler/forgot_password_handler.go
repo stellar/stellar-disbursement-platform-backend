@@ -67,7 +67,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	var forgotPasswordRequest ForgotPasswordRequest
 	err = json.NewDecoder(r.Body).Decode(&forgotPasswordRequest)
 	if err != nil {
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		httperror.BadRequest("", err, nil).Render(w)
 		return
 	}
 	if httpErr := h.validateRequest(forgotPasswordRequest); httpErr != nil {

@@ -267,7 +267,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			reCAPTCHAValidatorMock := &validators.ReCAPTCHAValidatorMock{}
+			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManager := auth.NewAuthManagerMock(t)
 			if tc.prepareMocks != nil {
 				tc.prepareMocks(t, reCAPTCHAValidatorMock, authManager)
