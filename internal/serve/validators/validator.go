@@ -14,7 +14,7 @@ func (v *Validator) HasErrors() bool {
 
 func (v *Validator) Check(ok bool, key, message string) {
 	if !ok {
-		v.addError(key, message)
+		v.AddError(key, message)
 	}
 }
 
@@ -26,6 +26,6 @@ func (v *Validator) CheckError(err error, key, message string) {
 	v.Check(err == nil, key, message)
 }
 
-func (v *Validator) addError(key, message string) {
+func (v *Validator) AddError(key, message string) {
 	v.Errors[key] = message
 }

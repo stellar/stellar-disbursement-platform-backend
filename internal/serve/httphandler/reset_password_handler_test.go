@@ -11,9 +11,60 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
+
+func Test_ResetPasswordHandler_validateRequest(t *testing.T) {
+	pwValidator, err := utils.GetPasswordValidatorInstance()
+	require.NoError(t, err)
+	handler := ResetPasswordHandler{
+		PasswordValidator: pwValidator,
+	}
+
+	type Req struct {
+		body ResetPasswordRequest
+	}
+	testCases := []struct {
+		name     string
+		req      Req
+		expected *httperror.HTTPError
+	}{
+		{
+			name: "🔴 invalid body fields",
+			expected: httperror.BadRequest("", nil, map[string]interface{}{
+				"digit":             "password must contain at least one numberical digit",
+				"length":            "password length must be between 12 and 36 characters",
+				"lowercase":         "password must contain at least one lowercase letter",
+				"reset_token":       "reset token is required",
+				"special character": "password must contain at least one special character",
+				"uppercase":         "password must contain at least one uppercase letter",
+			}),
+		},
+		{
+			name: "🟢 valid request",
+			req: Req{
+				body: ResetPasswordRequest{
+					Password:   "!1Az?2By.3Cx",
+					ResetToken: "goodtoken",
+				},
+			},
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := handler.validateRequest(tc.req.body)
+			if tc.expected == nil {
+				require.Nil(t, err)
+			} else {
+				require.Equal(t, tc.expected, err)
+			}
+		})
+	}
+}
 
 func Test_ResetPasswordHandlerPost(t *testing.T) {
 	const url = "/reset-password"
@@ -23,7 +74,8 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	authManager := auth.NewAuthManager(
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
-	pwValidator, _ := utils.GetPasswordValidatorInstance()
+	pwValidator, err := utils.GetPasswordValidatorInstance()
+	require.NoError(t, err)
 	handler := &ResetPasswordHandler{
 		AuthManager:       authManager,
 		PasswordValidator: pwValidator,
@@ -51,7 +103,7 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[ResetUserPassword] - Reset password for user with token go...en")
+		require.Contains(t, buf.String(), "[ResetUserPassword] - Successfully reset password for user with token go...en")
 	})
 
 	t.Run("Should return an error with an invalid token", func(t *testing.T) {
@@ -90,7 +142,7 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 
 		expectedBody := `
 			{
-				"error":"request invalid",
+				"error":"The request was invalid in some way.",
 				"extras": {
 					"digit":"password must contain at least one numberical digit",
 					"length":"password length must be between 12 and 36 characters",

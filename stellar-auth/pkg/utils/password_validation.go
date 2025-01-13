@@ -84,7 +84,7 @@ func GetPasswordValidatorInstance() (*PasswordValidator, error) {
 }
 
 // ValidatePassword returns an error if the password does not meet the requirements.
-func (pv *PasswordValidator) ValidatePassword(input string) error {
+func (pv *PasswordValidator) ValidatePassword(input string) *ValidatePasswordError {
 	var (
 		hasLength          bool
 		hasLower           bool

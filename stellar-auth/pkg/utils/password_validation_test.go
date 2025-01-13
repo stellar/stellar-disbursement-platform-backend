@@ -146,7 +146,7 @@ func Test_ValidatePassword(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := pwValidator.ValidatePassword(tc.input)
 			if tc.errContains == nil {
-				require.NoError(t, err)
+				require.Nil(t, err)
 			} else {
 				var e *ValidatePasswordError
 				require.ErrorAs(t, err, &e)
