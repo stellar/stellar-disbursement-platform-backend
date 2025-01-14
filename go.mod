@@ -30,7 +30,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
 	github.com/stretchr/testify v1.10.0
-	github.com/twilio/twilio-go v1.23.8
+	github.com/twilio/twilio-go v1.23.9
 	golang.org/x/crypto v0.32.0
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
 	golang.org/x/net v0.34.0
