@@ -111,7 +111,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "3.0.0"
+    tag: "3.1.0"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -536,7 +536,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:3.0.0
+    fullName: stellar/stellar-disbursement-platform-frontend:3.1.0
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.
