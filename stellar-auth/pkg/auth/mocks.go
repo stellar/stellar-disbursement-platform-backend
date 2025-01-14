@@ -172,33 +172,6 @@ func (rm *RoleManagerMock) UpdateRoles(ctx context.Context, user *User, roleName
 
 var _ RoleManager = (*RoleManagerMock)(nil)
 
-// MFAManager
-type MFAManagerMock struct {
-	mock.Mock
-}
-
-func (m *MFAManagerMock) MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error) {
-	args := m.Called(ctx, deviceID, userID)
-	return args.Get(0).(bool), args.Error(1)
-}
-
-func (m *MFAManagerMock) GenerateMFACode(ctx context.Context, deviceID, userID string) (string, error) {
-	args := m.Called(ctx, deviceID, userID)
-	return args.Get(0).(string), args.Error(1)
-}
-
-func (m *MFAManagerMock) ValidateMFACode(ctx context.Context, deviceID, code string) (string, error) {
-	args := m.Called(ctx, deviceID, code)
-	return args.Get(0).(string), args.Error(1)
-}
-
-func (m *MFAManagerMock) RememberDevice(ctx context.Context, deviceID, code string) error {
-	args := m.Called(ctx, deviceID, code)
-	return args.Error(0)
-}
-
-var _ MFAManager = (*MFAManagerMock)(nil)
-
 // AuthManager
 type AuthManagerMock struct {
 	mock.Mock
