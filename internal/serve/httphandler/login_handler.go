@@ -139,7 +139,7 @@ func (h LoginHandler) handleMFA(ctx context.Context, req *http.Request, user *au
 	deviceID := req.Header.Get(DeviceIDHeader)
 	if isRemembered, err := h.AuthManager.MFADeviceRemembered(ctx, deviceID, user.ID); err != nil {
 		err = fmt.Errorf("checking if device is remembered for user with email %s: %w", truncatedEmail, err)
-		return false, httperror.InternalError(ctx, "", err, nil)
+		return false, httperror.InternalError(ctx, "Cannot check if MFA code is remembered", err, nil)
 	} else if isRemembered {
 		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 		return true, nil
@@ -151,17 +151,17 @@ func (h LoginHandler) handleMFA(ctx context.Context, req *http.Request, user *au
 		err = fmt.Errorf("getting MFA code for user with email %s: %w", truncatedEmail, err)
 		return false, httperror.InternalError(ctx, "Cannot get MFA code", err, nil)
 	}
-	if httpErr := h.sendMFAEmail(ctx, user, code); httpErr != nil {
-		return false, httpErr
+	if err = h.sendMFAEmail(ctx, user, code); err != nil {
+		return false, httperror.InternalError(ctx, "Failed to send send MFA code", err, nil)
 	}
 
 	return false, nil
 }
 
-func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code string) *httperror.HTTPError {
+func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code string) error {
 	organization, err := h.Models.Organizations.Get(ctx)
 	if err != nil {
-		return httperror.InternalError(ctx, "Cannot fetch organization", err, nil)
+		return fmt.Errorf("fetching organization: %w", err)
 	}
 
 	msgTemplate := htmltemplate.StaffMFAEmailMessageTemplate{
@@ -170,7 +170,7 @@ func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code st
 	}
 	msgContent, err := htmltemplate.ExecuteHTMLTemplateForStaffMFAEmailMessage(msgTemplate)
 	if err != nil {
-		return httperror.InternalError(ctx, "Cannot execute mfa message template", err, nil)
+		return fmt.Errorf("executing MFA message template: %w", err)
 	}
 
 	msg := message.Message{
@@ -179,8 +179,7 @@ func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code st
 		Body:    msgContent,
 	}
 	if err = h.MessengerClient.SendMessage(msg); err != nil {
-		err = fmt.Errorf("sending mfa code for email %s: %w", user.Email, err)
-		return httperror.InternalError(ctx, "", err, nil)
+		return fmt.Errorf("sending MFA code to email %s: %w", user.Email, err)
 	}
 
 	return nil
