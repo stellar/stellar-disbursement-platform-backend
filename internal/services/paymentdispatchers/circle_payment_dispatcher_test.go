@@ -131,7 +131,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 		},
 	}
 
-	for _, failedStatus := range []data.CircleRecipientStatus{data.CircleRecipientStatusInactive, data.CircleRecipientStatusDenied} {
+	for _, failedStatus := range []data.CircleRecipientStatus{data.CircleRecipientStatusInactive, data.CircleRecipientStatusDenied, data.CircleRecipientStatusFailed} {
 		testCases = append(testCases, TestCase{
 			name: fmt.Sprintf("recipient already exists [status=%s]", failedStatus),
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
@@ -257,6 +257,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 	for _, failedStatus := range []data.CircleRecipientStatus{
 		data.CircleRecipientStatusInactive,
 		data.CircleRecipientStatusDenied,
+		data.CircleRecipientStatusFailed,
 		"",
 	} {
 		testCases = append(testCases, TestCase{
@@ -428,7 +429,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReadyWithRetry(t *testing.T) 
 		},
 	}
 
-	for _, nonSuccessfulState := range []data.CircleRecipientStatus{data.CircleRecipientStatusInactive, data.CircleRecipientStatusDenied, data.CircleRecipientStatusPending} {
+	for _, nonSuccessfulState := range []data.CircleRecipientStatus{data.CircleRecipientStatusInactive, data.CircleRecipientStatusDenied, data.CircleRecipientStatusFailed, data.CircleRecipientStatusPending} {
 		testCases = append(testCases, TestCase{
 			name: fmt.Sprintf("tries 5 times [status=%s]", nonSuccessfulState),
 			populateInitialRecipientFn: func(t *testing.T) *data.CircleRecipient {
