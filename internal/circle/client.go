@@ -270,6 +270,12 @@ func (client *Client) PostPayout(ctx context.Context, payoutRequest PayoutReques
 	return parsePayoutResponse(resp)
 }
 
+// DestinationAddressErrorCodes are the error codes that indicate an issue with the destination address. If they show up
+// when sending a payout, the Circle recipient will likely become unusable and will need to be recreated.
+//
+// Circle API documentation: https://developers.circle.com/circle-mint/circle-apis-api-errors.
+var DestinationAddressErrorCodes = []int{5003, 5004, 5011}
+
 // GetPayoutByID retrieves a payout by its ID.
 //
 // Circle API documentation: https://developers.circle.com/api-reference/circle-mint/payouts/get-payout.

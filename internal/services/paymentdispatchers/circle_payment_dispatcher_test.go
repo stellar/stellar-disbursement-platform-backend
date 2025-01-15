@@ -279,6 +279,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 	for _, failedStatus := range []data.CircleRecipientStatus{
 		data.CircleRecipientStatusInactive,
 		data.CircleRecipientStatusDenied,
+		data.CircleRecipientStatusFailed,
 		"",
 	} {
 		testCases = append(testCases, TestCase{
