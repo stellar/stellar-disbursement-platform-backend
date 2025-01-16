@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stellar/go/protocols/horizon/operations"
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
@@ -67,7 +70,6 @@ func validateExpectationsAfterStartDisbursement(ctx context.Context, disbursemen
 	}
 
 	for _, receiver := range receivers {
-
 		// Validate receiver_wallet status
 		expectedStatusByRegistrationContactType := map[data.RegistrationContactType]data.ReceiversWalletStatus{
 			data.RegistrationContactTypePhone:                 data.ReadyReceiversWalletStatus,
@@ -101,20 +103,26 @@ func validateExpectationsAfterReceiverRegistration(ctx context.Context, models *
 	return nil
 }
 
-func validateStellarTransaction(paymentHorizon *PaymentHorizon, receiverAccount, disbursedAssetCode, disbursedAssetIssuer, amount string) error {
-	if !paymentHorizon.TransactionSuccessful {
+func validateStellarTransaction(hPayment *operations.Payment, receiverAccount, disbursedAssetCode, disbursedAssetIssuer, amount string) error {
+	if !hPayment.TransactionSuccessful {
 		return fmt.Errorf("transaction was not successful on horizon network")
 	}
 
-	if paymentHorizon.ReceiverAccount != receiverAccount {
+	if hPayment.To != receiverAccount {
 		return fmt.Errorf("transaction sent to wrong receiver account")
 	}
 
-	if paymentHorizon.Amount != amount {
+	if hPayment.Amount != amount {
 		return fmt.Errorf("transaction with wrong amount")
 	}
 
-	if paymentHorizon.AssetCode != disbursedAssetCode || paymentHorizon.AssetIssuer != disbursedAssetIssuer {
+	dataAsset := data.Asset{
+		Code:   disbursedAssetCode,
+		Issuer: disbursedAssetIssuer,
+	}
+	if !dataAsset.EqualsHorizonAsset(hPayment.Asset) {
+		log.Errorf("disbursed.asset: %s:%s", disbursedAssetCode, disbursedAssetIssuer)
+		log.Errorf("hAsset: %+v", hPayment.Asset)
 		return fmt.Errorf("transaction with wrong disbursed asset")
 	}
 

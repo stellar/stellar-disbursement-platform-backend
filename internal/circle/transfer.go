@@ -56,10 +56,11 @@ const (
 type TransferAccountType string
 
 const (
-	TransferAccountTypeCard       TransferAccountType = "card"
-	TransferAccountTypeWire       TransferAccountType = "wire"
-	TransferAccountTypeBlockchain TransferAccountType = "blockchain"
-	TransferAccountTypeWallet     TransferAccountType = "wallet"
+	TransferAccountTypeCard        TransferAccountType = "card"
+	TransferAccountTypeWire        TransferAccountType = "wire"
+	TransferAccountTypeBlockchain  TransferAccountType = "blockchain"
+	TransferAccountTypeAddressBook TransferAccountType = "address_book"
+	TransferAccountTypeWallet      TransferAccountType = "wallet"
 )
 
 // TransferAccount represents the source or destination of the transfer.
@@ -128,7 +129,7 @@ func (tr TransferRequest) validate() error {
 	return nil
 }
 
-// parseTransferResponse parses the response from the Circle APIs
+// parseTransferResponse parses the response from the Circle APIs.
 func parseTransferResponse(resp *http.Response) (*Transfer, error) {
 	var transferResponse TransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&transferResponse); err != nil {

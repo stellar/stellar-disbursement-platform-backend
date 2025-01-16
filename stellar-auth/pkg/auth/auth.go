@@ -147,7 +147,7 @@ func (am *defaultAuthManager) AnyRolesInTokenUser(ctx context.Context, tokenStri
 func (am *defaultAuthManager) CreateUser(ctx context.Context, user *User, password string) (*User, error) {
 	user, err := am.authenticator.CreateUser(ctx, user, password)
 	if err != nil {
-		return nil, fmt.Errorf("error creating user: %w", err)
+		return nil, fmt.Errorf("creating user: %w", err)
 	}
 
 	return user, nil

@@ -21,30 +21,77 @@ wait_for_server() {
   echo "Server at $endpoint is up."
 }
 
-options=(
-  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
-  "platform=Circle;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
-  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv;REGISTRATION_CONTACT_TYPE=EMAIL"
-  "platform=Stellar;DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV;DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv;REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
+# Configuration arrays with key-value strings
+Config_StellarEnvPhoneUSDCTestnet=(
+  "platform=Stellar"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "DISBURSED_ASSET_CODE=USDC"
+  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 )
 
-for option in "${options[@]}"; do
-  # Parse the properties in the option
-  IFS=';' read -r -a properties <<< "$option"
+Config_CircleDBVaultPhoneUSDCTestnet=(
+  "platform=Circle"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "DISBURSED_ASSET_CODE=USDC"
+  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+)
 
-  for property in "${properties[@]}"; do
-    # Split each property into key and value
-    IFS='=' read -r key value <<< "$property"
+Config_StellarEnvEmailUSDCTestnet=(
+  "platform=Stellar"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv"
+  "REGISTRATION_CONTACT_TYPE=EMAIL"
+  "DISBURSED_ASSET_CODE=USDC"
+  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+)
+
+Config_StellarEnvPhoneWithWalletUSDCTestnet=(
+  "platform=Stellar"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
+  "DISBURSED_ASSET_CODE=USDC"
+  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+)
+
+Config_StellarEnvPhoneXLMFuturenet=(
+  "platform=Stellar"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "DISBURSED_ASSET_CODE=XLM"
+  "NETWORK_PASSPHRASE=Test SDF Future Network ; October 2022"
+  "HORIZON_URL=https://horizon-futurenet.stellar.org"
+)
+
+options=(
+  Config_StellarEnvPhoneUSDCTestnet[@]
+  Config_CircleDBVaultPhoneUSDCTestnet[@]
+  Config_StellarEnvEmailUSDCTestnet[@]
+  Config_StellarEnvPhoneWithWalletUSDCTestnet[@]
+  Config_StellarEnvPhoneXLMFuturenet[@]
+)
+
+# Iterate over each configuration
+for config_name in "${options[@]}"; do
+  # Use indirect variable reference to get the array
+  config=("${!config_name}")
+
+  echo -e "\n====> 👀 Starting e2e setup and integration test for ${config_name}"
+
+  # Parse and export key-value pairs
+  for pair in "${config[@]}"; do
+    IFS="=" read -r key value <<< "$pair"
+    echo -e "\t- $key=$value"
     export "$key"="$value"
   done
 
   # Example of using the exported variables
-  export DESCRIPTION="$platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
-  echo -e "\n====> 👀Starting e2e setup and integration test ($DESCRIPTION)"
-  echo -e "\t- Platform: $platform"
-  echo -e "\t- DISTRIBUTION_ACCOUNT_TYPE: $DISTRIBUTION_ACCOUNT_TYPE"
-  echo -e "\t- DISBURSEMENT_CSV_FILE_NAME: $DISBURSEMENT_CSV_FILE_NAME"
-  echo -e "\t- REGISTRATION_CONTACT_TYPE: $REGISTRATION_CONTACT_TYPE"
+  DESCRIPTION="$platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
 
   echo $DIVIDER
   echo "====> 👀Step 1: start preparation"

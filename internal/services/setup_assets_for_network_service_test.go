@@ -80,7 +80,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 	t.Run("[Stellar,Testnet] updates existing asset with wrong issuer and inserts new assets", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		// Start with USDC:{randomIssuer}
+		// Start with EURC:{randomIssuer}
 		randomIssuer := keypair.MustRandom().Address()
 		data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, randomIssuer)
 
@@ -113,6 +113,39 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.EURCAssetCode, assets.USDCAssetCode, assets.XLMAssetCode}),
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerTestnet),
 			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerTestnet),
+			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
+		}
+
+		logs := buf.String()
+		for _, expectedLog := range expectedLogs {
+			assert.Contains(t, logs, expectedLog)
+		}
+	})
+
+	t.Run("[Stellar,Futurenet] updates existing asset with wrong issuer and inserts new assets", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+
+		allAssets, err := models.Assets.GetAll(ctx)
+		require.NoError(t, err)
+		assert.Len(t, allAssets, 0)
+
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetLevel(log.InfoLevel)
+		log.DefaultLogger.SetOutput(buf)
+
+		err = SetupAssetsForProperNetwork(ctx, dbConnectionPool, utils.FuturenetNetworkType, schema.StellarPlatform)
+		require.NoError(t, err)
+
+		allAssets, err = models.Assets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, allAssets, 1)
+		assert.Equal(t, assets.XLMAssetCode, allAssets[0].Code)
+		assert.Empty(t, allAssets[0].Issuer)
+
+		expectedLogs := []string{
+			"updating/inserting assets for the 'futurenet' network",
+			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.XLMAssetCode}),
 			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 		}
 

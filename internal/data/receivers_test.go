@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -447,7 +448,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		receivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{})
+		receivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(receivers))
 
@@ -489,7 +490,9 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx,
+			&QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC},
+			QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualReceivers))
 
@@ -547,7 +550,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			SortOrder: SortOrderASC,
 			Page:      1,
 			PageLimit: 1,
-		})
+		}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -590,7 +593,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			SortOrder: SortOrderASC,
 			Page:      2,
 			PageLimit: 1,
-		})
+		}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -633,7 +636,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: DraftReceiversWalletStatus,
 		}
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -671,7 +674,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: receiver1Email})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: receiver1Email}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -709,7 +712,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: "+99992222"})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Query: "+99992222"}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -751,7 +754,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			FilterKeyCreatedAtAfter:  "2023-01-01",
 			FilterKeyCreatedAtBefore: "2023-03-01",
 		}
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{Filters: filters}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualReceivers))
 
@@ -789,7 +792,9 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actualReceivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC})
+		actualReceivers, err := receiverModel.GetAll(ctx, dbTx,
+			&QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC},
+			QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualReceivers))
 
@@ -860,7 +865,7 @@ func Test_ReceiversModel_GetAll_makeSureReceiversWithMultipleWalletsWillReturnAS
 	CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, ReadyReceiversWalletStatus)
 	CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
 
-	receivers, err := receiverModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+	receivers, err := receiverModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 	require.NoError(t, err)
 
 	assert.Len(t, receivers, 1)
@@ -888,7 +893,9 @@ func Test_ReceiversModel_ParseReceiverIDs(t *testing.T) {
 		err = dbTx.Rollback()
 		require.Error(t, err, "not in transaction")
 	}()
-	receivers, err := receiverModel.GetAll(ctx, dbTx, &QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC})
+	receivers, err := receiverModel.GetAll(ctx, dbTx,
+		&QueryParams{SortBy: SortFieldCreatedAt, SortOrder: SortOrderASC},
+		QueryTypeSelectPaginated)
 	require.NoError(t, err)
 
 	receiverIds := receiverModel.ParseReceiverIDs(receivers)
@@ -959,6 +966,11 @@ func Test_DeleteByContactInfo(t *testing.T) {
 				Status:         ReadyPaymentStatus,
 				Amount:         "1",
 			})
+			circleRecipientX := CreateCircleRecipientFixture(t, ctx, dbConnectionPool, CircleRecipient{
+				IdempotencyKey:   uuid.NewString(),
+				ReceiverWalletID: receiverWalletX.ID,
+			})
+			circleTransferRequestX1 := CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{PaymentID: paymentX1.ID})
 
 			// 3. Create receiverY (that will not be deleted) and all receiverY dependent resources that will not be deleted:
 			receiverY := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -997,6 +1009,12 @@ func Test_DeleteByContactInfo(t *testing.T) {
 				Status:         ReadyPaymentStatus,
 				Amount:         "1",
 			}) // This payment will be deleted along with the remaining receiverX-related data
+
+			circleRecipientY := CreateCircleRecipientFixture(t, ctx, dbConnectionPool, CircleRecipient{
+				IdempotencyKey:   uuid.NewString(),
+				ReceiverWalletID: receiverWalletY.ID,
+			})
+			circleTransferRequestY2 := CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{PaymentID: paymentY2.ID})
 
 			// 4. Delete receiverX
 			err = models.Receiver.DeleteByContactInfo(ctx, dbConnectionPool, receiverX.ContactByType(contactType))
@@ -1047,6 +1065,18 @@ func Test_DeleteByContactInfo(t *testing.T) {
 					args:       []interface{}{disbursement1.ID},
 					wantExists: false,
 				},
+				{
+					name:       "DID DELETE: circleRecipientX",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_recipients WHERE receiver_wallet_id = $1)",
+					args:       []interface{}{circleRecipientX.ReceiverWalletID},
+					wantExists: false,
+				},
+				{
+					name:       "DID DELETE: circleTransferRequestX1",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_transfer_requests WHERE payment_id = $1)",
+					args:       []interface{}{circleTransferRequestX1.PaymentID},
+					wantExists: false,
+				},
 			}
 
 			// 6. Prepare assertions to make sure `DeleteByContactInfo` DID NOT DELETE receiverY-related data:
@@ -1085,6 +1115,18 @@ func Test_DeleteByContactInfo(t *testing.T) {
 					name:       "DID NOT DELETE: paymentX2",
 					query:      "SELECT EXISTS(SELECT 1 FROM disbursements WHERE id = $1)",
 					args:       []interface{}{disbursement2.ID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: circleRecipientY",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_recipients WHERE receiver_wallet_id = $1)",
+					args:       []interface{}{circleRecipientY.ReceiverWalletID},
+					wantExists: true,
+				},
+				{
+					name:       "DID NOT DELETE: circleTransferRequestY2",
+					query:      "SELECT EXISTS(SELECT 1 FROM circle_transfer_requests WHERE payment_id = $1)",
+					args:       []interface{}{circleTransferRequestY2.PaymentID},
 					wantExists: true,
 				},
 			}

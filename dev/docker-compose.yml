@@ -13,10 +13,6 @@ services:
     depends_on:
       db:
         condition: service_started
-      kafka:
-        condition: service_started
-      kafka-init:
-        condition: service_completed_successfully
   db-anchor-platform:
     extends:
       file: docker-compose-sdp-anchor.yml
@@ -38,7 +34,6 @@ services:
     depends_on:
       - db
       - sdp-api
-      - kafka
   sdp-frontend:
     extends:
       file: docker-compose-frontend.yml
@@ -46,19 +41,6 @@ services:
     depends_on:
       - db
       - sdp-api
-  kafka:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: kafka
-    volumes:
-      - kafka-data:/bitnami
-  kafka-init:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: kafka-init
-    depends_on:
-      kafka:
-        condition: service_healthy
   demo-wallet:
     extends:
       file: docker-compose-sdp-anchor.yml
@@ -68,6 +50,4 @@ volumes:
   postgres-db:
     driver: local
   postgres-ap-db:
-    driver: local
-  kafka-data:
     driver: local

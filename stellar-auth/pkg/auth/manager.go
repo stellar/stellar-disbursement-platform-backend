@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -20,7 +21,11 @@ type User struct {
 	Roles     []string `json:"roles"`
 }
 
-func (u *User) Validate() error {
+func (u *User) SanitizeAndValidate() error {
+	u.Email = strings.TrimSpace(strings.ToLower(u.Email))
+	u.FirstName = strings.TrimSpace(u.FirstName)
+	u.LastName = strings.TrimSpace(u.LastName)
+
 	if u.Email == "" {
 		return fmt.Errorf("email is required")
 	} else if err := utils.ValidateEmail(u.Email); err != nil {

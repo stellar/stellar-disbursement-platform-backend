@@ -741,7 +741,7 @@ func Test_getCurrentTenant(t *testing.T) {
 			Once()
 		defer tenantManagerMock.AssertExpectations(t)
 
-		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, false, "tenant_name")
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, false, "tenant_name.stellar.org")
 		assert.Equal(t,
 			httperror.InternalError(ctx, "Failed to load tenant by name", fmt.Errorf("failed to load tenant by name for tenant name tenant_name: %w", tenant.ErrTenantDoesNotExist), nil),
 			httpErr)
@@ -756,7 +756,7 @@ func Test_getCurrentTenant(t *testing.T) {
 			Once()
 		defer tenantManagerMock.AssertExpectations(t)
 
-		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, false, "tenant_name")
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, false, "tenant_name.stellar.org")
 		require.Nil(t, httpErr)
 		assert.Equal(t, &expectedTenant, currentTnt)
 	})

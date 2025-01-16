@@ -10,12 +10,14 @@ import (
 type NetworkType string
 
 const (
-	PubnetNetworkType  NetworkType = "pubnet"
-	TestnetNetworkType NetworkType = "testnet"
+	FuturenetNetworkType NetworkType = "futurenet"
+	TestnetNetworkType   NetworkType = "testnet"
+	PubnetNetworkType    NetworkType = "pubnet"
 )
 
 func AllNetworkTypes() []NetworkType {
 	return []NetworkType{
+		FuturenetNetworkType,
 		TestnetNetworkType,
 		PubnetNetworkType,
 	}
@@ -42,7 +44,9 @@ func GetNetworkTypeFromNetworkPassphrase(networkPassphrase string) (NetworkType,
 		return PubnetNetworkType, nil
 	case network.TestNetworkPassphrase:
 		return TestnetNetworkType, nil
+	case network.FutureNetworkPassphrase:
+		return FuturenetNetworkType, nil
 	default:
-		return "", fmt.Errorf("invalid network passphrase provided")
+		return "", fmt.Errorf("invalid network passphrase provided %q", networkPassphrase)
 	}
 }

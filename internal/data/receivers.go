@@ -17,11 +17,11 @@ import (
 
 type Receiver struct {
 	ID          string     `json:"id" db:"id"`
+	Email       string     `json:"email,omitempty" db:"email"`
+	PhoneNumber string     `json:"phone_number,omitempty" db:"phone_number"`
 	ExternalID  string     `json:"external_id,omitempty" db:"external_id"`
 	CreatedAt   *time.Time `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at,omitempty" db:"updated_at"`
-	Email       string     `json:"email,omitempty" db:"email"`
-	PhoneNumber string     `json:"phone_number,omitempty" db:"phone_number"`
 	ReceiverStats
 }
 
@@ -225,7 +225,7 @@ func (r *ReceiverModel) Count(ctx context.Context, sqlExec db.SQLExecuter, query
 		FROM receivers r
 		LEFT JOIN receiver_wallets rw ON rw.receiver_id = r.id
 	`
-	query, params := newReceiverQuery(baseQuery, queryParams, false, sqlExec)
+	query, params := newReceiverQuery(baseQuery, queryParams, sqlExec, QueryTypeCount)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -236,7 +236,7 @@ func (r *ReceiverModel) Count(ctx context.Context, sqlExec db.SQLExecuter, query
 }
 
 // GetAll returns all RECEIVERS matching the given query parameters.
-func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams) ([]Receiver, error) {
+func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams, queryType QueryType) ([]Receiver, error) {
 	receivers := []Receiver{}
 
 	baseQuery := `
@@ -309,7 +309,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 	`
 
 	query := fmt.Sprintf(baseQuery, receiverQuery)
-	query, params := newReceiverQuery(query, queryParams, true, sqlExec)
+	query, params := newReceiverQuery(query, queryParams, sqlExec, queryType)
 
 	err := sqlExec.SelectContext(ctx, &receivers, query, params...)
 	if err != nil {
@@ -320,7 +320,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 }
 
 // newReceiverQuery generates the full query and parameters for a receiver search query
-func newReceiverQuery(baseQuery string, queryParams *QueryParams, paginated bool, sqlExec db.SQLExecuter) (string, []interface{}) {
+func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Query != "" {
 		q := "%" + queryParams.Query + "%"
@@ -336,10 +336,17 @@ func newReceiverQuery(baseQuery string, queryParams *QueryParams, paginated bool
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("r.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
-	if paginated {
-		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "r")
+
+	switch queryType {
+	case QueryTypeSelectPaginated:
 		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "r")
+	case QueryTypeSelectAll:
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "r")
+	case QueryTypeCount:
+		// no need to sort or paginate.
 	}
+
 	query, params := qb.Build()
 	return sqlExec.Rebind(query), params
 }
@@ -485,6 +492,7 @@ func (r *ReceiverModel) DeleteByContactInfo(ctx context.Context, dbConnectionPoo
 			{"DELETE FROM messages WHERE receiver_id = $1", []interface{}{receiverID}},
 			{"DELETE FROM receiver_verifications WHERE receiver_id = $1", []interface{}{receiverID}},
 			{"DELETE FROM circle_transfer_requests WHERE payment_id IN (SELECT id FROM payments WHERE receiver_id = $1)", []interface{}{receiverID}},
+			{"DELETE FROM circle_recipients WHERE receiver_wallet_id IN (SELECT id FROM receiver_wallets WHERE receiver_id = $1)", []interface{}{receiverID}},
 			{"DELETE FROM payments WHERE receiver_id = $1", []interface{}{receiverID}},
 			{"DELETE FROM receiver_wallets WHERE receiver_id = $1", []interface{}{receiverID}},
 			{"DELETE FROM receivers WHERE id = $1", []interface{}{receiverID}},

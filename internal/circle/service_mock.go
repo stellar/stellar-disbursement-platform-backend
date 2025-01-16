@@ -73,6 +73,66 @@ func (_m *MockService) GetBusinessBalances(ctx context.Context) (*Balances, erro
 	return r0, r1
 }
 
+// GetPayoutByID provides a mock function with given fields: ctx, id
+func (_m *MockService) GetPayoutByID(ctx context.Context, id string) (*Payout, error) {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPayoutByID")
+	}
+
+	var r0 *Payout
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*Payout, error)); ok {
+		return rf(ctx, id)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *Payout); ok {
+		r0 = rf(ctx, id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*Payout)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetRecipientByID provides a mock function with given fields: ctx, id
+func (_m *MockService) GetRecipientByID(ctx context.Context, id string) (*Recipient, error) {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetRecipientByID")
+	}
+
+	var r0 *Recipient
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*Recipient, error)); ok {
+		return rf(ctx, id)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *Recipient); ok {
+		r0 = rf(ctx, id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*Recipient)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetTransferByID provides a mock function with given fields: ctx, id
 func (_m *MockService) GetTransferByID(ctx context.Context, id string) (*Transfer, error) {
 	ret := _m.Called(ctx, id)
@@ -131,6 +191,66 @@ func (_m *MockService) Ping(ctx context.Context) (bool, error) {
 	return r0, r1
 }
 
+// PostPayout provides a mock function with given fields: ctx, payoutRequest
+func (_m *MockService) PostPayout(ctx context.Context, payoutRequest PayoutRequest) (*Payout, error) {
+	ret := _m.Called(ctx, payoutRequest)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PostPayout")
+	}
+
+	var r0 *Payout
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, PayoutRequest) (*Payout, error)); ok {
+		return rf(ctx, payoutRequest)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, PayoutRequest) *Payout); ok {
+		r0 = rf(ctx, payoutRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*Payout)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, PayoutRequest) error); ok {
+		r1 = rf(ctx, payoutRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// PostRecipient provides a mock function with given fields: ctx, recipientRequest
+func (_m *MockService) PostRecipient(ctx context.Context, recipientRequest RecipientRequest) (*Recipient, error) {
+	ret := _m.Called(ctx, recipientRequest)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PostRecipient")
+	}
+
+	var r0 *Recipient
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, RecipientRequest) (*Recipient, error)); ok {
+		return rf(ctx, recipientRequest)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, RecipientRequest) *Recipient); ok {
+		r0 = rf(ctx, recipientRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*Recipient)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, RecipientRequest) error); ok {
+		r1 = rf(ctx, recipientRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // PostTransfer provides a mock function with given fields: ctx, transferRequest
 func (_m *MockService) PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error) {
 	ret := _m.Called(ctx, transferRequest)
@@ -162,23 +282,23 @@ func (_m *MockService) PostTransfer(ctx context.Context, transferRequest Transfe
 }
 
 // SendPayment provides a mock function with given fields: ctx, paymentRequest
-func (_m *MockService) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error) {
+func (_m *MockService) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
 	ret := _m.Called(ctx, paymentRequest)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SendPayment")
 	}
 
-	var r0 *Transfer
+	var r0 *Payout
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, PaymentRequest) (*Transfer, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, PaymentRequest) (*Payout, error)); ok {
 		return rf(ctx, paymentRequest)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, PaymentRequest) *Transfer); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, PaymentRequest) *Payout); ok {
 		r0 = rf(ctx, paymentRequest)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*Transfer)
+			r0 = ret.Get(0).(*Payout)
 		}
 	}
 

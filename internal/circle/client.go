@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/avast/retry-go"
+	"github.com/avast/retry-go/v4"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -24,8 +24,10 @@ import (
 const (
 	pingPath             = "/ping"
 	transferPath         = "/v1/transfers"
+	payoutPath           = "/v1/payouts"
 	businessBalancesPath = "/v1/businessAccount/balances"
 	configurationPath    = "/v1/configuration"
+	addressRecipientPath = "/v1/addressBook/recipients"
 )
 
 var authErrorStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
@@ -35,8 +37,12 @@ var authErrorStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
 //go:generate mockery --name=ClientInterface --case=underscore --structname=MockClient --filename=client_mock.go --inpackage
 type ClientInterface interface {
 	Ping(ctx context.Context) (bool, error)
-	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error)
-	GetTransferByID(ctx context.Context, id string) (*Transfer, error)
+	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error) // TODO: remove this method in https://stellarorg.atlassian.net/browse/SDP-1448
+	GetTransferByID(ctx context.Context, id string) (*Transfer, error)                    // TODO: remove this method in https://stellarorg.atlassian.net/browse/SDP-1448
+	PostRecipient(ctx context.Context, recipientRequest RecipientRequest) (*Recipient, error)
+	GetRecipientByID(ctx context.Context, id string) (*Recipient, error)
+	PostPayout(ctx context.Context, payoutRequest PayoutRequest) (*Payout, error)
+	GetPayoutByID(ctx context.Context, id string) (*Payout, error)
 	GetBusinessBalances(ctx context.Context) (*Balances, error)
 	GetAccountConfiguration(ctx context.Context) (*AccountConfiguration, error)
 }
@@ -101,7 +107,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 		Message string `json:"message"`
 	}
 	if err = json.NewDecoder(resp.Body).Decode(&pingResp); err != nil {
-		return false, err
+		return false, fmt.Errorf("decoding Ping response: %w", err)
 	}
 
 	if pingResp.Message == "pong" {
@@ -127,7 +133,7 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 
 	transferData, err := json.Marshal(transferReq)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshalling transfer request: %w", err)
 	}
 
 	resp, err := client.request(ctx, transferPath, u, http.MethodPost, true, transferData)
@@ -167,6 +173,131 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	}
 
 	return parseTransferResponse(resp)
+}
+
+// PostRecipient registers a new recipient in Circle's address book. This is needed in order to send a payout to that
+// recipient.
+//
+// Circle API documentation:
+// https://developers.circle.com/api-reference/circle-mint/payouts/create-address-book-recipient.
+func (client *Client) PostRecipient(ctx context.Context, recipientRequest RecipientRequest) (*Recipient, error) {
+	err := recipientRequest.validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating recipient request: %w", err)
+	}
+
+	u, err := url.JoinPath(client.BasePath, addressRecipientPath)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	recipientData, err := json.Marshal(recipientRequest)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling recipient request: %w", err)
+	}
+
+	resp, err := client.request(ctx, addressRecipientPath, u, http.MethodPost, true, recipientData)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parseRecipientResponse(resp)
+}
+
+// GetRecipientByID retrieves a recipient by its ID.
+//
+// Circle API documentation: https://developers.circle.com/api-reference/circle-mint/payouts/get-address-book-recipient.
+func (client *Client) GetRecipientByID(ctx context.Context, id string) (*Recipient, error) {
+	u, err := url.JoinPath(client.BasePath, addressRecipientPath, id)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	resp, err := client.request(ctx, addressRecipientPath, u, http.MethodGet, true, nil)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parseRecipientResponse(resp)
+}
+
+// PostPayout creates a new payout to a recipient.
+//
+// Circle API documentation:
+// https://developers.circle.com/api-reference/circle-mint/payouts/create-payout.
+func (client *Client) PostPayout(ctx context.Context, payoutRequest PayoutRequest) (*Payout, error) {
+	err := payoutRequest.validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating payout request: %w", err)
+	}
+
+	u, err := url.JoinPath(client.BasePath, payoutPath)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	payload, err := json.Marshal(payoutRequest)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling request: %w", err)
+	}
+
+	resp, err := client.request(ctx, payoutPath, u, http.MethodPost, true, payload)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parsePayoutResponse(resp)
+}
+
+// DestinationAddressErrorCodes are the error codes that indicate an issue with the destination address. If they show up
+// when sending a payout, the Circle recipient will likely become unusable and will need to be recreated.
+//
+// Circle API documentation: https://developers.circle.com/circle-mint/circle-apis-api-errors.
+var DestinationAddressErrorCodes = []int{5003, 5004, 5011}
+
+// GetPayoutByID retrieves a payout by its ID.
+//
+// Circle API documentation: https://developers.circle.com/api-reference/circle-mint/payouts/get-payout.
+func (client *Client) GetPayoutByID(ctx context.Context, id string) (*Payout, error) {
+	u, err := url.JoinPath(client.BasePath, payoutPath, id)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	resp, err := client.request(ctx, payoutPath, u, http.MethodGet, true, nil)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
+		}
+	}
+
+	return parsePayoutResponse(resp)
 }
 
 // GetBusinessBalances retrieves the available and unsettled balances for different currencies.

@@ -1,11 +1,7 @@
 name: Integration Tests
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-  workflow_call: # allows this workflow to be called from another workflow
+  workflow_call: # allows this workflow to be called from another workflow, like `docker_image_public_release`
 
 env:
   USER_EMAIL: "sdp_user@stellar.org"
@@ -26,6 +22,7 @@ jobs:
       matrix:
         platform:
           - "Stellar-phone" # Stellar distribution account where receivers are registered with their phone number
+          - "Stellar-phone-FUTURENET" # Stellar distribution account where receivers are registered with their phone number
           - "Stellar-phone-wallet" # Stellar distribution account where receivers are registered with their phone number and wallet address
           - "Stellar-email" # Stellar distribution account where receivers are registered with their email
           - "Circle-phone" # Circle distribution account where receivers are registered with their email
@@ -35,26 +32,46 @@ jobs:
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
           - platform: "Stellar-phone-wallet"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
           - platform: "Stellar-email"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
             REGISTRATION_CONTACT_TYPE: "EMAIL"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
           - platform: "Circle-phone"
             environment: "Receiver Registration - E2E Integration Tests (Circle)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+          - platform: "Stellar-phone-FUTURENET"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "XLM"
+            NETWORK_PASSPHRASE: "Test SDF Future Network ; October 2022"
+            HORIZON_URL: "https://horizon-futurenet.stellar.org"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
       DISBURSEMENT_CSV_FILE_NAME: ${{ matrix.DISBURSEMENT_CSV_FILE_NAME }}
       REGISTRATION_CONTACT_TYPE: ${{ matrix.REGISTRATION_CONTACT_TYPE }}
+      DISBURSED_ASSET_CODE: ${{ matrix.DISBURSED_ASSET_CODE }}
+      DISBURSED_ASSET_ISSUER: ${{ matrix.DISBURSED_ASSET_ISSUER }}
+      NETWORK_PASSPHRASE: ${{ matrix.NETWORK_PASSPHRASE }}
+      HORIZON_URL: ${{ matrix.HORIZON_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,6 +90,28 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y curl
         shell: bash
 
+      - name: Wait for the SDP to be up
+        run: |
+          wait_for_server() {
+            local endpoint=$1
+            local max_wait_time=$2
+
+            SECONDS=0
+            while ! curl -s $endpoint > /dev/null; do
+              echo "Waiting for server at $endpoint to be up... $SECONDS seconds elapsed"
+              sleep 4
+              if [ $SECONDS -ge $max_wait_time ]; then
+                echo "Server at $endpoint is not up after $max_wait_time seconds."
+                exit 1
+              fi
+            done
+            echo "Server at $endpoint is up."
+          }
+
+          wait_for_server http://localhost:8000/health 120
+          wait_for_server http://localhost:8003/health 120
+        shell: bash
+
       - name: Create integration test data
         run: |
           docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
@@ -83,7 +122,7 @@ jobs:
           docker restart e2e-anchor-platform
         shell: bash
 
-      - name: Wait for Anchor Platform at both localhost:8080/health and localhost:8085/health
+      - name: Wait for the Anchor Platform to be up
         run: |
           wait_for_server() {
             local endpoint=$1

@@ -182,28 +182,7 @@ JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.
 `
 
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
-	const query = `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
-			p.status,
-			p.status_history,
-			p.updated_at,
-			a.id AS "asset.id",
-			a.code AS "asset.code",
-			a.issuer AS "asset.issuer",
-			rw.id AS "receiver_wallet.id",
-			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
-			COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallet.anchor_platform_transaction_id",
-			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
-		FROM
-			payments p
-			INNER JOIN disbursements d ON p.disbursement_id = d.id
-			INNER JOIN assets a ON a.id = d.asset_id
-			INNER JOIN wallets w ON d.wallet_id = w.id
-			INNER JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+	query := fmt.Sprintf(`%s
 		WHERE
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
@@ -212,7 +191,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 		ORDER BY
 			p.created_at
 		FOR UPDATE SKIP LOCKED
-	`
+	`, basePaymentQuery)
 
 	payments := make([]Payment, 0)
 	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
@@ -245,38 +224,11 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
 
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
-			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
-			p.status,
-			p.created_at,
-			p.updated_at,
-			d.id as "disbursement.id",
-			d.status as "disbursement.status",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status"
-		FROM
-			payments p
-				JOIN assets a on p.asset_id = a.id
-				JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-				JOIN disbursements d on p.disbursement_id = d.id
-		WHERE p.status = $1 -- 'READY'::payment_status
-		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
-		AND d.status = $3 -- 'STARTED'::disbursement_status
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, `
 		ORDER BY p.disbursement_id ASC, p.updated_at ASC
 		LIMIT $4
-		FOR UPDATE SKIP LOCKED
-		`
+		FOR UPDATE SKIP LOCKED`,
+	)
 
 	var payments []*Payment
 	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
@@ -300,7 +252,7 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
 		`
 
-	query, params := newPaymentQuery(baseQuery, queryParams, false, sqlExec)
+	query, params := newPaymentQuery(baseQuery, queryParams, sqlExec, QueryTypeCount)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -310,10 +262,10 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 }
 
 // GetAll returns all PAYMENTS matching the given query parameters.
-func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sqlExec db.SQLExecuter) ([]Payment, error) {
+func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) ([]Payment, error) {
 	payments := []Payment{}
 
-	query, params := newPaymentQuery(basePaymentQuery, queryParams, true, sqlExec)
+	query, params := newPaymentQuery(basePaymentQuery, queryParams, sqlExec, queryType)
 
 	err := sqlExec.SelectContext(ctx, &payments, query, params...)
 	if err != nil {
@@ -323,14 +275,15 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	return payments, nil
 }
 
-// DeleteAllForDisbursement deletes all payments for a given disbursement.
-func (p *PaymentModel) DeleteAllForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
+// DeleteAllDraftForDisbursement deletes all payments for a given disbursement.
+func (p *PaymentModel) DeleteAllDraftForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
 	query := `
 		DELETE FROM payments
 		WHERE disbursement_id = $1
+			AND status = $2
 		`
 
-	result, err := sqlExec.ExecContext(ctx, query, disbursementID)
+	result, err := sqlExec.ExecContext(ctx, query, disbursementID, DraftPaymentStatus)
 	if err != nil {
 		return fmt.Errorf("error deleting payments for disbursement: %w", err)
 	}
@@ -423,15 +376,18 @@ const getReadyPaymentsBaseQuery = `
 		a.issuer as "asset.issuer",
 		rw.id as "receiver_wallet.id",
 		rw.receiver_id as "receiver_wallet.receiver.id",
+		COALESCE(r.phone_number, '') as "receiver_wallet.receiver.phone_number",
+		COALESCE(r.email, '') as "receiver_wallet.receiver.email",
 		COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
 		COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
 		COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
 		rw.status as "receiver_wallet.status"
 	FROM
 		payments p
-		JOIN assets a on p.asset_id = a.id
-		JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-		JOIN disbursements d on p.disbursement_id = d.id
+		JOIN assets a ON p.asset_id = a.id
+		JOIN disbursements d ON p.disbursement_id = d.id
+		JOIN receiver_wallets rw ON p.receiver_wallet_id = rw.id
+		JOIN receivers r ON rw.receiver_id = r.id
 	WHERE
 		p.status = $1 -- 'READY'::payment_status
 		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
@@ -664,7 +620,7 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 }
 
 // newPaymentQuery generates the full query and parameters for a payment search query
-func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool, sqlExec db.SQLExecuter) (string, []interface{}) {
+func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyStatus] != nil {
 		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]PaymentStatus); ok {
@@ -684,10 +640,17 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool,
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("p.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
-	if paginated {
-		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
+
+	switch queryType {
+	case QueryTypeSelectPaginated:
 		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
+	case QueryTypeSelectAll:
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
+	case QueryTypeCount:
+		// no need to sort or paginate.
 	}
+
 	query, params := qb.Build()
 	return sqlExec.Rebind(query), params
 }

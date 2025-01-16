@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -59,7 +60,7 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 		"registration_contact_type",
 		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
 	)
-	v.CheckError(utils.ValidateNoHTMLNorJSNorCSS(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 	if !req.RegistrationContactType.IncludesWalletAddress {
 		v.Check(
 			slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
@@ -184,6 +185,53 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	}
 
 	httpjson.RenderStatus(w, http.StatusCreated, newDisbursement, httpjson.JSON)
+}
+
+// DeleteDisbursement deletes a draft or ready disbursement and its associated payments
+func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.Request) {
+	disbursementID := chi.URLParam(r, "id")
+	ctx := r.Context()
+
+	ErrDisbursementStarted := errors.New("can't delete disbursement that has started")
+
+	disbursement, err := db.RunInTransactionWithResult(ctx, d.Models.DBConnectionPool, nil, func(tx db.DBTransaction) (*data.Disbursement, error) {
+		// Check if disbursement exists and is in draft or ready status
+		disbursement, err := d.Models.Disbursements.Get(ctx, tx, disbursementID)
+		if err != nil {
+			return nil, fmt.Errorf("getting disbursement: %w", err)
+		}
+
+		if !slices.Contains(data.NotStartedDisbursementStatuses, disbursement.Status) {
+			return nil, ErrDisbursementStarted
+		}
+
+		// Delete associated payments
+		err = d.Models.Payment.DeleteAllDraftForDisbursement(ctx, tx, disbursementID)
+		if err != nil {
+			return nil, fmt.Errorf("deleting payments: %w", err)
+		}
+
+		// Delete disbursement
+		err = d.Models.Disbursements.Delete(ctx, tx, disbursementID)
+		if err != nil {
+			return nil, fmt.Errorf("deleting draft or ready disbursement: %w", err)
+		}
+
+		return disbursement, nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			httperror.NotFound("Disbursement not found", err, nil).Render(w)
+		case errors.Is(err, ErrDisbursementStarted):
+			httperror.BadRequest("Cannot delete a disbursement that has started", err, nil).Render(w)
+		default:
+			httperror.InternalError(ctx, "Cannot delete disbursement", err, nil).Render(w)
+		}
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, disbursement, httpjson.JSON)
 }
 
 // GetDisbursements returns a paginated list of disbursements

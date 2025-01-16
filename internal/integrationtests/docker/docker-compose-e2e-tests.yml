@@ -31,7 +31,8 @@ services:
       METRICS_TYPE: PROMETHEUS
       EMAIL_SENDER_TYPE: DRY_RUN
       SMS_SENDER_TYPE: DRY_RUN
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
       ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
@@ -60,8 +61,8 @@ services:
       TENANT_NAME: "integration-tests"
       USER_EMAIL: ${USER_EMAIL}
       USER_PASSWORD: ${USER_PASSWORD}
-      DISBURSED_ASSET_CODE: USDC
-      DISBURSED_ASSET_ISSUER: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+      DISBURSED_ASSET_CODE: ${DISBURSED_ASSET_CODE} # e.g. USDC, XLM, etc.
+      DISBURSED_ASSET_ISSUER: ${DISBURSED_ASSET_ISSUER} # e.g. GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
       RECEIVER_ACCOUNT_PUBLIC_KEY: GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU
       RECEIVER_ACCOUNT_PRIVATE_KEY: SDSAVUWVNOFG2JEHKIWEUHAYIA6PLGEHLMHX2TMVKEQGZKOFQ7XXKDFE
       DISTRIBUTION_ACCOUNT_TYPE: ${DISTRIBUTION_ACCOUNT_TYPE}
@@ -122,8 +123,8 @@ services:
     environment:
       QUEUE_POLLING_INTERVAL: "6"
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-      HORIZON_URL: "https://horizon-testnet.stellar.org"
+      NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       NUM_CHANNEL_ACCOUNTS: "1"
       MAX_BASE_FEE: "1000000"
       TSS_METRICS_PORT: "9002"
@@ -199,6 +200,9 @@ services:
       SEP24_INTERACTIVE_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
       SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
       SEP24_MORE_INFO_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
+      STELLAR_NETWORK_NETWORK: ${NETWORK_NETWORK:-TESTNET}
+      STELLAR_NETWORK_NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      STELLAR_NETWORK_HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       SEP1_ENABLED: "true"
       SEP1_TOML_TYPE: url
       SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
@@ -211,6 +215,21 @@ services:
               "schema": "stellar",
               "code": "USDC",
               "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            },
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "XLM",
               "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
               "significant_decimals": 7,
               "deposit": {

@@ -43,9 +43,8 @@ fi
 # prepare
 echo $DIVIDER
 echo "====> 👀 start calling docker compose -p sdp-multi-tenant down"
-docker ps -aq | xargs docker stop | xargs docker rm
 #docker compose -p sdp-multi-tenant down
-docker compose down
+docker compose -p sdp-multi-tenant down
 echo "====> ✅ finish calling docker compose down"
 
 # Run docker compose
@@ -53,7 +52,7 @@ echo $DIVIDER
 
 # Check if "--delete_pv" is passed as a parameter
 if [[ " $@ " =~ " --delete_pv " ]]; then
-    echo "====> 👀 deleting persistent volumes sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db"
+    echo "====> 👀 deleting persistent volumes sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db"
     
     # Function to delete volume if it exists
     delete_volume() {
@@ -67,7 +66,6 @@ if [[ " $@ " =~ " --delete_pv " ]]; then
     }
 
     # Delete volumes
-    delete_volume "sdp-multi-tenant_kafka-data"
     delete_volume "sdp-multi-tenant_postgres-ap-db"
     delete_volume "sdp-multi-tenant_postgres-db"
 fi

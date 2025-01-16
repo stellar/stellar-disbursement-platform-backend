@@ -24,10 +24,10 @@ type Disbursement struct {
 	Asset                               *Asset                    `json:"asset,omitempty" db:"asset"`
 	Status                              DisbursementStatus        `json:"status" db:"status"`
 	VerificationField                   VerificationType          `json:"verification_field,omitempty" db:"verification_field"`
-	StatusHistory                       DisbursementStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	ReceiverRegistrationMessageTemplate string                    `json:"receiver_registration_message_template" db:"receiver_registration_message_template"`
-	FileName                            string                    `json:"file_name,omitempty" db:"file_name"`
-	FileContent                         []byte                    `json:"-" db:"file_content"`
+	StatusHistory                       DisbursementStatusHistory `json:"status_history,omitempty" csv:"-" db:"status_history"`
+	ReceiverRegistrationMessageTemplate string                    `json:"receiver_registration_message_template" csv:"-" db:"receiver_registration_message_template"`
+	FileName                            string                    `json:"file_name,omitempty" csv:"-" db:"file_name"`
+	FileContent                         []byte                    `json:"-" csv:"-" db:"file_content"`
 	CreatedAt                           time.Time                 `json:"created_at" db:"created_at"`
 	UpdatedAt                           time.Time                 `json:"updated_at" db:"updated_at"`
 	RegistrationContactType             RegistrationContactType   `json:"registration_contact_type,omitempty" db:"registration_contact_type"`
@@ -255,7 +255,7 @@ func (d *DisbursementModel) Count(ctx context.Context, sqlExec db.SQLExecuter, q
 		JOIN assets a on d.asset_id = a.id
 		`
 
-	query, params := d.newDisbursementQuery(baseQuery, queryParams, false)
+	query, params := d.newDisbursementQuery(baseQuery, queryParams, QueryTypeCount)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -265,10 +265,10 @@ func (d *DisbursementModel) Count(ctx context.Context, sqlExec db.SQLExecuter, q
 }
 
 // GetAll returns all disbursements matching the given query parameters.
-func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams) ([]*Disbursement, error) {
+func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams, queryType QueryType) ([]*Disbursement, error) {
 	disbursements := []*Disbursement{}
 
-	query, params := d.newDisbursementQuery(selectDisbursementQuery, queryParams, true)
+	query, params := d.newDisbursementQuery(selectDisbursementQuery, queryParams, queryType)
 	err := sqlExec.SelectContext(ctx, &disbursements, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("error querying disbursements: %w", err)
@@ -319,7 +319,7 @@ func (d *DisbursementModel) UpdateStatus(ctx context.Context, sqlExec db.SQLExec
 }
 
 // newDisbursementQuery generates the full query and parameters for a disbursement search query
-func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *QueryParams, paginated bool) (string, []interface{}) {
+func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *QueryParams, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 
 	if queryParams.Query != "" {
@@ -335,10 +335,17 @@ func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("d.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
-	if paginated {
-		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
+
+	switch queryType {
+	case QueryTypeSelectPaginated:
 		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
+	case QueryTypeSelectAll:
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
+	case QueryTypeCount:
+		// no need to sort or paginate.
 	}
+
 	query, params := qb.Build()
 	return d.dbConnectionPool.Rebind(query), params
 }
@@ -453,6 +460,28 @@ func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec d
 	_, err := sqlExec.ExecContext(ctx, query, CompletedDisbursementStatus, pq.Array(disbursementIDs), StartedDisbursementStatus, SuccessPaymentStatus)
 	if err != nil {
 		return fmt.Errorf("error completing disbursement: %w", err)
+	}
+
+	return nil
+}
+
+// Delete deletes a disbursement by ID
+func (d *DisbursementModel) Delete(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
+	disbursementQuery := `DELETE FROM disbursements WHERE id = $1 AND status = ANY($2)`
+	result, err := sqlExec.ExecContext(ctx, disbursementQuery, disbursementID, pq.Array(NotStartedDisbursementStatuses))
+	if err != nil {
+		if strings.Contains(err.Error(), "violates foreign key constraint") {
+			return fmt.Errorf("deleting disbursement %s because it has associated payments: %w", disbursementID, err)
+		}
+		return fmt.Errorf("deleting disbursement %s: %w", disbursementID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
 	}
 
 	return nil

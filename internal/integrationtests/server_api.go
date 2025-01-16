@@ -222,7 +222,7 @@ func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, auth
 
 	if resp.StatusCode/100 != 2 {
 		logErrorResponses(ctx, resp.Body)
-		return fmt.Errorf("error trying to start the disbursement on the server API")
+		return fmt.Errorf("error trying to start the disbursement on the server API (statusCode=%d)", resp.StatusCode)
 	}
 
 	return nil
@@ -256,7 +256,7 @@ func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, a
 
 	if resp.StatusCode/100 != 2 {
 		logErrorResponses(ctx, resp.Body)
-		return fmt.Errorf("error trying to complete receiver registration on the server API")
+		return fmt.Errorf("trying to complete receiver registration on the server API (statusCode=%d)", resp.StatusCode)
 	}
 
 	return nil

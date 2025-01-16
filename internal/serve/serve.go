@@ -267,6 +267,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Post("/", handler.PostDisbursement)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+				Delete("/{id}", handler.DeleteDisbursement)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/{id}/instructions", handler.PostDisbursementInstructions)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
@@ -409,6 +412,16 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkType:                 o.NetworkType,
 		}
 		r.Get("/balances", balancesHandler.Get)
+
+		exportHandler := httphandler.ExportHandler{
+			Models: o.Models,
+		}
+		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			Route("/exports", func(r chi.Router) {
+				r.Get("/disbursements", exportHandler.ExportDisbursements)
+				r.Get("/payments", exportHandler.ExportPayments)
+				r.Get("/receivers", exportHandler.ExportReceivers)
+			})
 	})
 
 	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())

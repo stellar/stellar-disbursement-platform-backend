@@ -265,7 +265,7 @@ func Test_StartDisbursement(t *testing.T) {
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
 		err := sa.StartDisbursement(ctx, authToken, mockDisbursementID, reqBody)
-		require.EqualError(t, err, "error trying to start the disbursement on the server API")
+		require.EqualError(t, err, "error trying to start the disbursement on the server API (statusCode=400)")
 
 		httpClientMock.AssertExpectations(t)
 	})
@@ -328,7 +328,7 @@ func Test_ReceiverRegistration(t *testing.T) {
 
 		err := sa.ReceiverRegistration(ctx, authToken, reqBody)
 
-		require.EqualError(t, err, "error trying to complete receiver registration on the server API")
+		require.EqualError(t, err, "trying to complete receiver registration on the server API (statusCode=400)")
 
 		httpClientMock.AssertExpectations(t)
 	})

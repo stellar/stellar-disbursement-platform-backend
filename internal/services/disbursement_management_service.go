@@ -146,7 +146,7 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 
 			var disbursements []*data.Disbursement
 			if totalDisbursements != 0 {
-				disbursements, err = s.Models.Disbursements.GetAll(ctx, dbTx, queryParams)
+				disbursements, err = s.Models.Disbursements.GetAll(ctx, dbTx, queryParams, data.QueryTypeSelectPaginated)
 				if err != nil {
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
@@ -346,7 +346,7 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 		Filters: map[data.FilterKey]interface{}{
 			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
 		},
-	}, dbTx)
+	}, dbTx, data.QueryTypeSelectAll)
 	if err != nil {
 		return fmt.Errorf("cannot retrieve incomplete payments: %w", err)
 	}

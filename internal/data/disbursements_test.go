@@ -2,9 +2,11 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -280,7 +282,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 
 	t.Run("returns empty list when no disbursements exist", func(t *testing.T) {
 		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		disbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+		disbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 0, len(disbursements))
 	})
@@ -294,7 +296,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		expected2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Len(t, actualDisbursements, 2)
 		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
@@ -309,7 +311,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 1, PageLimit: 1})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 1, PageLimit: 1}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected1}, actualDisbursements)
@@ -324,7 +326,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		expected2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 2, PageLimit: 1})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Page: 2, PageLimit: 1}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected2}, actualDisbursements)
@@ -339,7 +341,9 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		disbursement.Name = "disbursement2"
 		expected2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{SortBy: SortFieldName, SortOrder: SortOrderDESC})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool,
+			&QueryParams{SortBy: SortFieldName, SortOrder: SortOrderDESC},
+			QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected2, expected1}, actualDisbursements)
@@ -359,7 +363,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: []DisbursementStatus{DraftDisbursementStatus},
 		}
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Filters: filters})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Filters: filters}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expected1}, actualDisbursements)
@@ -381,7 +385,9 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: []DisbursementStatus{DraftDisbursementStatus, CompletedDisbursementStatus},
 		}
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{Filters: filters, SortBy: SortFieldCreatedAt, SortOrder: SortOrderDESC})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool,
+			&QueryParams{Filters: filters, SortBy: SortFieldCreatedAt, SortOrder: SortOrderDESC},
+			QueryTypeSelectPaginated)
 
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualDisbursements))
@@ -435,7 +441,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 
 		expectedDisbursement.DisbursementStats = expectedStats
 
-		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{})
+		actualDisbursements, err := disbursementModel.GetAll(ctx, dbConnectionPool, &QueryParams{}, QueryTypeSelectPaginated)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualDisbursements))
 		assert.Equal(t, []*Disbursement{expectedDisbursement}, actualDisbursements)
@@ -660,5 +666,109 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 		disbursement2, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement2.ID)
 		require.NoError(t, err)
 		assert.Equal(t, CompletedDisbursementStatus, disbursement2.Status)
+	})
+}
+
+func Test_DisbursementModel_Delete(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	disbursementModel := &DisbursementModel{dbConnectionPool: dbConnectionPool}
+	ctx := context.Background()
+
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN")
+
+	t.Run("successfully deletes draft disbursement", func(t *testing.T) {
+		disbursement := CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, Disbursement{
+			Name:   uuid.NewString(),
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		err := disbursementModel.Delete(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.Error(t, err)
+		assert.Equal(t, ErrRecordNotFound, err)
+	})
+
+	t.Run("successfully deletes ready disbursement", func(t *testing.T) {
+		disbursement := CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, Disbursement{
+			Name:   uuid.NewString(),
+			Status: ReadyDisbursementStatus,
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		err := disbursementModel.Delete(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.Error(t, err)
+		assert.Equal(t, ErrRecordNotFound, err)
+	})
+
+	t.Run("returns error when disbursement not found", func(t *testing.T) {
+		err := disbursementModel.Delete(ctx, dbConnectionPool, "non-existent-id")
+		require.Error(t, err)
+		assert.EqualError(t, err, ErrRecordNotFound.Error())
+	})
+
+	t.Run("returns error when disbursement is not in draft status", func(t *testing.T) {
+		disbursement := CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, Disbursement{
+			Name:   uuid.NewString(),
+			Status: StartedDisbursementStatus,
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		err := disbursementModel.Delete(ctx, dbConnectionPool, disbursement.ID)
+		require.Error(t, err)
+		assert.EqualError(t, err, ErrRecordNotFound.Error())
+
+		// Verify disbursement still exists
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+	})
+
+	t.Run("returns error when disbursement has associated payments", func(t *testing.T) {
+		disbursement := CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, Disbursement{
+			Name:   uuid.NewString(),
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		// Create a receiver and receiver wallet
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+
+		// Create an associated payment
+		CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		// Attempt to delete the disbursement
+		err := disbursementModel.Delete(ctx, dbConnectionPool, disbursement.ID)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, fmt.Sprintf("deleting disbursement %s because it has associated payments", disbursement.ID))
+
+		// Verify disbursement still exists
+		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
 	})
 }

@@ -48,6 +48,27 @@ jobs:
           docker cp internal/integrationtests/resources/single_tenant_dump.sql e2e-sdp-v2-database:/tmp/single_tenant_dump.sql
           docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -f /tmp/single_tenant_dump.sql"
 
+      - name: Wait for SDP to be up at localhost:8000/health
+        run: |
+          wait_for_server() {
+            local endpoint=$1
+            local max_wait_time=$2
+
+            SECONDS=0
+            while ! curl -s $endpoint > /dev/null; do
+              echo "Waiting for server at $endpoint to be up... $SECONDS seconds elapsed"
+              sleep 4
+              if [ $SECONDS -ge $max_wait_time ]; then
+                echo "Server at $endpoint is not up after $max_wait_time seconds."
+                exit 1
+              fi
+            done
+            echo "Server at $endpoint is up."
+          }
+
+          wait_for_server http://localhost:8000/health 120
+        shell: bash
+
       - name: Provision New Tenant
         run: |
           adminAccount="SDP-admin"

@@ -59,9 +59,12 @@ type authUser struct {
 }
 
 func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, password string) (*User, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+
 	const query = `
 		SELECT
 			u.id,
+			u.email,
 			u.first_name,
 			u.last_name,
 			u.encrypted_password
@@ -91,7 +94,7 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 
 	return &User{
 		ID:        au.ID,
-		Email:     email,
+		Email:     au.Email,
 		FirstName: au.FirstName,
 		LastName:  au.LastName,
 	}, nil
@@ -100,8 +103,8 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 // CreateUser creates a user in the database. If a empty password is passed by parameter, a random password is generated,
 // so the user can go through the ForgotPassword flow.
 func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, password string) (*User, error) {
-	if err := user.Validate(); err != nil {
-		return nil, fmt.Errorf("error validating user fields: %w", err)
+	if err := user.SanitizeAndValidate(); err != nil {
+		return nil, fmt.Errorf("validating user fields: %w", err)
 	}
 
 	// In case no password is passed we generate a random OTP (One Time Password)
@@ -109,19 +112,19 @@ func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, passw
 		// Random length pasword
 		randomNumber, err := rand.Int(rand.Reader, big.NewInt(MaxPasswordLength-MinPasswordLength+1))
 		if err != nil {
-			return nil, fmt.Errorf("error generating random number in create user: %w", err)
+			return nil, fmt.Errorf("generating random number in create user: %w", err)
 		}
 
 		passwordLength := int(randomNumber.Int64() + MinPasswordLength)
 		password, err = utils.StringWithCharset(passwordLength, utils.PasswordCharset)
 		if err != nil {
-			return nil, fmt.Errorf("error generating random password string in create user: %w", err)
+			return nil, fmt.Errorf("generating random password string in create user: %w", err)
 		}
 	}
 
 	encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, password)
 	if err != nil {
-		return nil, fmt.Errorf("error encrypting password: %w", err)
+		return nil, fmt.Errorf("encrypting password: %w", err)
 	}
 
 	const query = `
@@ -138,7 +141,7 @@ func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, passw
 		if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "auth_users_email_key" {
 			return nil, ErrUserEmailAlreadyExists
 		}
-		return nil, fmt.Errorf("error inserting user: %w", err)
+		return nil, fmt.Errorf("inserting user: %w", err)
 	}
 
 	user.ID = userID
@@ -148,6 +151,10 @@ func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, passw
 }
 
 func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, lastName, email, password string) error {
+	firstName = strings.TrimSpace(firstName)
+	lastName = strings.TrimSpace(lastName)
+	email = strings.TrimSpace(strings.ToLower(email))
+
 	if firstName == "" && lastName == "" && email == "" && password == "" {
 		return fmt.Errorf("provide at least one of these values: firstName, lastName, email or password")
 	}
@@ -174,7 +181,7 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 
 	if email != "" {
 		if err := utils.ValidateEmail(email); err != nil {
-			return fmt.Errorf("error validating email: %w", err)
+			return fmt.Errorf("validating email: %w", err)
 		}
 
 		fields = append(fields, "email = ?")
@@ -185,7 +192,7 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 		encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, password)
 		if err != nil {
 			if !errors.Is(err, ErrPasswordTooShort) {
-				return fmt.Errorf("error encrypting password: %w", err)
+				return fmt.Errorf("encrypting password: %w", err)
 			}
 			return err
 		}
@@ -199,12 +206,12 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 
 	res, err := a.dbConnectionPool.ExecContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("error updating user in the database: %w", err)
+		return fmt.Errorf("updating user in the database: %w", err)
 	}
 
 	numRowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("error getting the number of rows affected: %w", err)
+		return fmt.Errorf("getting the number of rows affected: %w", err)
 	}
 	if numRowsAffected == 0 {
 		return ErrNoRowsAffected
@@ -252,13 +259,14 @@ func (a *defaultAuthenticator) DeactivateUser(ctx context.Context, userID string
 }
 
 func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
-		return "", fmt.Errorf("error generating user reset password token: email cannot be empty")
+		return "", fmt.Errorf("generating user reset password token: email cannot be empty")
 	}
 
 	resetToken, err := utils.StringWithCharset(resetTokenLength, utils.DefaultCharset)
 	if err != nil {
-		return "", fmt.Errorf("error generating random reset token in forgot password: %w", err)
+		return "", fmt.Errorf("generating random reset token in forgot password: %w", err)
 	}
 
 	checkValidTokenQuery := `
@@ -274,7 +282,7 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQ
 	var hasValidToken bool
 	err = sqlExec.GetContext(ctx, &hasValidToken, checkValidTokenQuery, email)
 	if err != nil {
-		return "", fmt.Errorf("error checking if user has valid token: %w", err)
+		return "", fmt.Errorf("checking if user has valid token: %w", err)
 	}
 
 	if hasValidToken {
@@ -291,11 +299,11 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQ
 	`
 	result, err := sqlExec.ExecContext(ctx, q, email, resetToken)
 	if err != nil {
-		return "", fmt.Errorf("error inserting user reset password token in the database: %w", err)
+		return "", fmt.Errorf("inserting user reset password token in the database: %w", err)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return "", fmt.Errorf("error getting rows affected inserting user reset password token in the database: %w", err)
+		return "", fmt.Errorf("getting rows affected inserting user reset password token in the database: %w", err)
 	}
 	if rowsAffected == 0 {
 		return "", ErrUserNotFound

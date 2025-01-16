@@ -16,12 +16,12 @@ import (
 )
 
 type Asset struct {
-	ID        string     `json:"id" db:"id"`
+	ID        string     `json:"id" csv:"-" db:"id"`
 	Code      string     `json:"code" db:"code"`
 	Issuer    string     `json:"issuer" db:"issuer"`
-	CreatedAt *time.Time `json:"created_at,omitempty" db:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty" db:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at" db:"deleted_at"`
+	CreatedAt *time.Time `json:"created_at,omitempty" csv:"-" db:"created_at"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty" csv:"-" db:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at" csv:"-" db:"deleted_at"`
 }
 
 // IsNative returns true if the asset is the native asset (XLM).

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,7 @@ func randStringRunes(t *testing.T, n int) string {
 
 func CreateRandomAuthUserFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, passwordEncrypter PasswordEncrypter, isAdmin bool, roles ...string) *RandomAuthUser {
 	randomSuffix := randStringRunes(t, 5)
+	randomSuffix = strings.TrimSpace(strings.ToLower(randomSuffix))
 	email := fmt.Sprintf("email%s@randomemail.com", randomSuffix)
 	password := "password" + randomSuffix
 	firstName := "firstName" + randomSuffix
