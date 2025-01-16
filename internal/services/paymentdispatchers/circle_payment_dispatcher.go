@@ -101,7 +101,7 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 			var cAPIErr *circle.APIError
 			// 5.1. If the destination address is invalid, mark the recipient as failed
 			if errors.As(err, &cAPIErr) && slices.Contains(circle.DestinationAddressErrorCodes, cAPIErr.Code) {
-				log.Ctx(ctx).Error("the destination address is deemed invalid by Circle, marking the recipient as pending...")
+				log.Ctx(ctx).Error("the destination address is deemed invalid by Circle, marking the recipient as denied...")
 				_, cRecipientUpdateErr := c.sdpModels.CircleRecipient.Update(ctx, recipient.ReceiverWalletID, data.CircleRecipientUpdate{Status: data.CircleRecipientStatusDenied})
 				if cRecipientUpdateErr != nil {
 					return fmt.Errorf("updating Circle recipient status: %w", cRecipientUpdateErr)
