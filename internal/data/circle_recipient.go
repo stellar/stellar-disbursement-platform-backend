@@ -51,10 +51,11 @@ const (
 	CircleRecipientStatusActive   CircleRecipientStatus = "active" // means success
 	CircleRecipientStatusInactive CircleRecipientStatus = "inactive"
 	CircleRecipientStatusDenied   CircleRecipientStatus = "denied"
+	CircleRecipientStatusFailed   CircleRecipientStatus = "failed"
 )
 
 func CompletedCircleRecipientStatuses() []CircleRecipientStatus {
-	return []CircleRecipientStatus{CircleRecipientStatusActive, CircleRecipientStatusDenied, CircleRecipientStatusInactive}
+	return []CircleRecipientStatus{CircleRecipientStatusActive, CircleRecipientStatusDenied, CircleRecipientStatusFailed, CircleRecipientStatusInactive}
 }
 
 func (s CircleRecipientStatus) IsCompleted() bool {
@@ -73,6 +74,8 @@ func ParseRecipientStatus(statusStr string) (CircleRecipientStatus, error) {
 		return CircleRecipientStatusInactive, nil
 	case string(CircleRecipientStatusDenied):
 		return CircleRecipientStatusDenied, nil
+	case string(CircleRecipientStatusFailed):
+		return CircleRecipientStatusFailed, nil
 	default:
 		return "", fmt.Errorf("unknown recipient status %q", statusStr)
 	}

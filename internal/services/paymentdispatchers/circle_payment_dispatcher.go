@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -97,7 +98,17 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 			IdempotencyKey:   transferRequest.IdempotencyKey,
 		})
 		if err != nil {
-			// 5. If the transfer fails, set the payment status to failed
+			var cAPIErr *circle.APIError
+			// 5.1. If the destination address is invalid, mark the recipient as failed
+			if errors.As(err, &cAPIErr) && slices.Contains(circle.DestinationAddressErrorCodes, cAPIErr.Code) {
+				log.Ctx(ctx).Error("the destination address is deemed invalid by Circle, marking the recipient as denied...")
+				_, cRecipientUpdateErr := c.sdpModels.CircleRecipient.Update(ctx, recipient.ReceiverWalletID, data.CircleRecipientUpdate{Status: data.CircleRecipientStatusDenied})
+				if cRecipientUpdateErr != nil {
+					return fmt.Errorf("updating Circle recipient status: %w", cRecipientUpdateErr)
+				}
+			}
+
+			// 5.2 If the payout fails, set the payment status to failed
 			err = fmt.Errorf("failed to submit payment ID %s to Circle: %w", payment.ID, err)
 			log.Ctx(ctx).Error(err)
 			err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.Ptr(err.Error()), "")
@@ -198,19 +209,20 @@ func (c *CirclePaymentDispatcher) getOrCreateRecipient(ctx context.Context, rece
 	return dataRecipient, nil
 }
 
-// handleFailedOrInactiveRecipientIfNeeded handles the case when the recipient is in a FAILED or INACTIVE state.
-func (c *CirclePaymentDispatcher) handleFailedOrInactiveRecipientIfNeeded(ctx context.Context, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
-	var err error
+// handleFailedRecipientIfNeeded handles the case when the recipient is in a FAILED or INACTIVE state.
+func (c *CirclePaymentDispatcher) handleFailedRecipientIfNeeded(ctx context.Context, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
+	if !dataRecipient.Status.IsCompleted() {
+		return dataRecipient, nil
+	}
 
-	// FAILED or INACTIVE -> refresh the idempotency key
-	if dataRecipient.Status.IsCompleted() {
-		log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q and status %s", dataRecipient.ReceiverWalletID, dataRecipient.Status)
-		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
-			IdempotencyKey: uuid.NewString(),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("updating Circle recipient's idempotency key: %w", err)
-		}
+	// FAILED, DENIED or INACTIVE -> renovate the idempotency key
+	var err error
+	log.Ctx(ctx).Infof("Renovating idempotency_key for circle_recipient with receiver_wallet_id %q and status %s", dataRecipient.ReceiverWalletID, dataRecipient.Status)
+	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
+		IdempotencyKey: uuid.NewString(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("updating Circle recipient's idempotency key: %w", err)
 	}
 
 	return dataRecipient, nil
@@ -285,7 +297,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 	}
 
 	// FAILED or INACTIVE
-	dataRecipient, err = c.handleFailedOrInactiveRecipientIfNeeded(ctx, dataRecipient)
+	dataRecipient, err = c.handleFailedRecipientIfNeeded(ctx, dataRecipient)
 	if err != nil {
 		return nil, fmt.Errorf("handling failed or inactive recipient: %w", err)
 	}
