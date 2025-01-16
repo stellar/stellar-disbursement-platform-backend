@@ -98,13 +98,7 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 				return
 			}
 
-			tenantName, err := utils.ExtractTenantNameFromHostName(sep24Claims.HomeDomain())
-			if err != nil || tenantName == "" {
-				httperror.BadRequest("Tenant name not found in SEP24Claims or invalid", err, nil).Render(rw)
-				return
-			}
-
-			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, tenantName)
+			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, sep24Claims.HomeDomain())
 			if httpErr != nil {
 				httpErr.Render(rw)
 				return
@@ -160,13 +154,7 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 				return
 			}
 
-			tenantName, err := utils.ExtractTenantNameFromHostName(sep24Claims.HomeDomain())
-			if err != nil || tenantName == "" {
-				httperror.BadRequest("Tenant name not found in SEP24Claims or invalid", err, nil).Render(rw)
-				return
-			}
-
-			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, tenantName)
+			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, sep24Claims.HomeDomain())
 			if httpErr != nil {
 				httpErr.Render(rw)
 				return
@@ -182,7 +170,7 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 	}
 }
 
-func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface, singleTenantMode bool, tenantName string) (currentTenant *tenant.Tenant, httpError *httperror.HTTPError) {
+func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface, singleTenantMode bool, homeDomain string) (currentTenant *tenant.Tenant, httpError *httperror.HTTPError) {
 	var err error
 	if singleTenantMode {
 		currentTenant, err = tenantManager.GetDefault(ctx)
@@ -190,13 +178,19 @@ func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface
 			err = fmt.Errorf("failed to load default tenant: %w", err)
 			return nil, httperror.InternalError(ctx, "Failed to load default tenant", err, nil)
 		}
-	} else {
-		currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
-		if err != nil {
-			err = fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
-			return nil, httperror.InternalError(ctx, "Failed to load tenant by name", err, nil)
-		}
+		return currentTenant, nil
 	}
 
-	return
+	tenantName, err := utils.ExtractTenantNameFromHostName(homeDomain)
+	if err != nil || tenantName == "" {
+		return nil, httperror.BadRequest("Tenant name not found in SEP24Claims or invalid", err, nil)
+	}
+
+	currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
+	if err != nil {
+		err = fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
+		return nil, httperror.InternalError(ctx, "Failed to load tenant by name", err, nil)
+	}
+
+	return currentTenant, nil
 }
