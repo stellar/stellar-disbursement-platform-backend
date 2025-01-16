@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## [3.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.0.0...3.1.0))
+
+Release of the Stellar Disbursement Platform `v3.1.0`. This release introduces key updates, including the migration to
+Circle's Payouts API, aligning with Circle's latest recommendations. It also enhances platform functionality by enabling
+data export through dedicated endpoints, allowing users to export disbursements, payments, and receivers with filters.
+Additionally, users now have the ability to delete disbursements in `DRAFT` or `READY` status, streamlining data
+management workflows.
+
+> [!WARNING]  
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `3.1.0`.
+
+### Added
+
+- Export functionality, allowing users to export:
+  - Disbursements with filters. [#490](https://github.com/stellar/stellar-disbursement-platform-backend/pull/490)
+  - Payments with filters. [#493](https://github.com/stellar/stellar-disbursement-platform-backend/pull/493)
+  - Receivers with filters. [#496](https://github.com/stellar/stellar-disbursement-platform-backend/pull/496)
+- Option to delete a disbursement in `DRAFT` or `READY` status. [#487](https://github.com/stellar/stellar-disbursement-platform-backend/pull/487)
+- Add futurenet as one of the e2e tests scenarios applied to the e2e GitHub Action. [#472](https://github.com/stellar/stellar-disbursement-platform-backend/pull/472)
+
+### Changed
+
+- Update Circle API to use Circle payouts, which is the new officially suggested (and supported) API. [#486](https://github.com/stellar/stellar-disbursement-platform-backend/pull/486), [#491](https://github.com/stellar/stellar-disbursement-platform-backend/pull/491)
+- Only execute the GitHub e2e tests workflow prior to publishing Docker images, removing it from the pull requests test suite. [#479](https://github.com/stellar/stellar-disbursement-platform-backend/pull/479)
+- Simplify docker compose by making Kafka optional and defaulting to scheduled jobs. [#481](https://github.com/stellar/stellar-disbursement-platform-backend/pull/481)
+- Make Dashboard User E-mails case insensitive. [#485](https://github.com/stellar/stellar-disbursement-platform-backend/pull/485)
+
+### Fixed
+
+- Fix XLM support on the integration tests. [#470](https://github.com/stellar/stellar-disbursement-platform-backend/pull/470)
+- Fix `main.sh` script so that it doesn't kill non-sdp containers. [#480](https://github.com/stellar/stellar-disbursement-platform-backend/pull/480)
+- Skip patching transaction in AP for known-wallet address payments. [#482](https://github.com/stellar/stellar-disbursement-platform-backend/pull/482)
+- Workaround for Circle's bug where retries are not handled correctly when a trustline is missing. [#504](https://github.com/stellar/stellar-disbursement-platform-backend/pull/504)
+- Fix default tenant resolution during SEP24 registration. [#505](https://github.com/stellar/stellar-disbursement-platform-backend/pull/505)
+
+### Security and Dependencies
+
+- Prevent any html (encoded or not) in the invite templates set by staff users. [494](https://github.com/stellar/stellar-disbursement-platform-backend/pull/494)
+- Bump dependencies:
+  - github.com/stretchr/testify from 1.9.0 to 1.10.0. [#471](https://github.com/stellar/stellar-disbursement-platform-backend/pull/471)
+  - github.com/nyaruka/phonenumbers from 1.4.2 to 1.4.3. [#483](https://github.com/stellar/stellar-disbursement-platform-backend/pull/483)
+  - minor-and-patch group with 3 updates. [#489](https://github.com/stellar/stellar-disbursement-platform-backend/pull/489)
+  - golang.org/x/crypto from 0.30.0 to 0.31.0. [#492](https://github.com/stellar/stellar-disbursement-platform-backend/pull/492)
+  - minor-and-patch group across 1 directory with 5 updates. [#498](https://github.com/stellar/stellar-disbursement-platform-backend/pull/498)
+  - github.com/twilio/twilio-go from 1.23.8 to 1.23.9. [#500](https://github.com/stellar/stellar-disbursement-platform-backend/pull/500)
+- Bump docker/build-push-action from 6.9.0 to 6.11.0 in the all-actions group. [#484](https://github.com/stellar/stellar-disbursement-platform-backend/pull/484), [#501](https://github.com/stellar/stellar-disbursement-platform-backend/pull/501)
+- Bump golang from 1.23.3-bullseye to 1.23.4-bullseye in the all-docker group. [#488](https://github.com/stellar/stellar-disbursement-platform-backend/pull/488)
+
 ## [3.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.1.1...3.0.0))
 
 Release of the Stellar Disbursement Platform `v3.0.0`. In this release, receiver registration does not need to be done
@@ -13,7 +61,8 @@ exclusively through SMS as it now supports new types. The options are `PHONE_NUM
 `EMAIL_AND_WALLET_ADDRESS`, and `PHONE_NUMBER_AND_WALLET_ADDRESS`. If a receiver is registered with a wallet address,
 they can receive the payment right away without having to go through the SEP-24 registration flow.
 
-This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.0.0`.
+> [!WARNING]  
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `3.0.0`.
 
 ### Breaking Changes
 
@@ -87,7 +136,8 @@ the option to set different distribution account signers per tenant, as well
 as Circle support, so the tenant can choose to run their payments through the
 Circle API rather than directly on the Stellar network.
 
-This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.1.0`.
+> [!WARNING]  
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `2.1.0`.
 
 ### Changed
 
@@ -148,7 +198,8 @@ release introduces multi-tenancy support, allowing multiple tenants
 
 Each organization has its own set of users, receivers, disbursements, etc.
 
-This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.0.0`.
+> [!WARNING]  
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `2.0.0`.
 
 ### Changed
 
