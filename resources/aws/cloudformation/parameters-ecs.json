@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "FrontendImage",
+    "ParameterValue": "245943599471.dkr.ecr.us-west-2.amazonaws.com/sdp-dev:frontend-3.0.0"
+  },
+  {
+    "ParameterKey": "BackendImage", 
+    "ParameterValue": "245943599471.dkr.ecr.us-west-2.amazonaws.com/sdp-dev:development-amd64"
+  },
+  {
+    "ParameterKey": "AnchorImage",
+    "ParameterValue": "245943599471.dkr.ecr.us-west-2.amazonaws.com/sdp-dev:anchor-2.6.0"
+  },
+  {
+    "ParameterKey": "DomainName",
+    "ParameterValue": "mystellarsdpdomain.org"
+  },
+  {
+    "ParameterKey": "HostedZoneId",
+    "ParameterValue": "Z06404593U3HC3DPDLDQK"
+  },
+  {
+    "ParameterKey": "EmailSenderType",
+    "ParameterValue": "AWS_EMAIL"
+  }
+]

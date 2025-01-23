@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "env",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "AWSRegion",
+    "ParameterValue": "us-west-2"
+  }
+]

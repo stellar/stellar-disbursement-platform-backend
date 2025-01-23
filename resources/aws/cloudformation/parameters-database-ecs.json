@@ -1,0 +1,42 @@
+[
+  {
+    "ParameterKey": "NetworkStackName",
+    "ParameterValue": "sdp-network-eks"
+  },
+  {
+    "ParameterKey": "env",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "namespace",
+    "ParameterValue": "sdp"
+  },
+  {
+    "ParameterKey": "DBInstanceClass",
+    "ParameterValue": "db.t3.small"
+  },
+  {
+    "ParameterKey": "DBAllocatedStorage",
+    "ParameterValue": "20"
+  },
+  {
+    "ParameterKey": "DBUsername",
+    "ParameterValue": "postgres"
+  },
+  {
+    "ParameterKey": "BackupRetentionPeriod",
+    "ParameterValue": "7"
+  },
+  {
+    "ParameterKey": "MultiAZ",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DeletionProtection",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DBPassword",
+    "ParameterValue": "postgres"
+  }
+]

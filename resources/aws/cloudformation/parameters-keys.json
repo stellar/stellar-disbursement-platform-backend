@@ -1,0 +1,34 @@
+[
+  {
+    "ParameterKey": "EC256PrivateKey",
+    "ParameterValue": "-----BEGIN EC PRIVATE KEY-----\\nMHcCAQEEIPRRtyc5EQoNPFhkcDzC47B2Zpo5b0NiM3Ftvky86+bEoAoGCCqGSM49\\nAwEHoUQDQgAEWinhVw0QHkZDeZ777zfBKT0cupULkpEd8Y52iPs76AT7JQ1cuGbm\\njxJASNwp907KzNzOZJSV07bFdN/Tkwebgg==\\n-----END EC PRIVATE KEY-----"
+  },
+  {
+    "ParameterKey": "EC256PublicKey",
+    "ParameterValue": "-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWinhVw0QHkZDeZ777zfBKT0cupUL\\nkpEd8Y52iPs76AT7JQ1cuGbmjxJASNwp907KzNzOZJSV07bFdN/Tkwebgg==\\n-----END PUBLIC KEY-----"
+  },
+  {
+    "ParameterKey": "SEP10SigningPrivateKey",
+    "ParameterValue": "SBTLJ5S6A67SZZPRCIFKXJJO2OMZE5XNKSB7SZYLHWUCQ7XYA5MAOF6M"
+  },
+  {
+    "ParameterKey": "SEP10SigningPublicKey",
+    "ParameterValue": "GB3H55YEBHRT7ONUIYYXOXH5JXX4XLXSBIXHWSS2S5AOHPCZBVJH5LYH"
+  },
+  {
+    "ParameterKey": "DistributionPublicKey",
+    "ParameterValue": "GCIA55CO7M7VJNDMQYEJKP4WQRB45CL2RJYPDW64PD2X7VDOZS53A4KK"
+  },
+  {
+    "ParameterKey": "DistributionSeed",
+    "ParameterValue": "SBOTKS44HJCPKL5VZ5774IZ7ALV4OQEZD4PNCKBVQ522TH6OLNGXSLRI"
+  },
+  {
+    "ParameterKey": "DistributionAccountEncryptionPassphrase",
+    "ParameterValue": "SBOTKS44HJCPKL5VZ5774IZ7ALV4OQEZD4PNCKBVQ522TH6OLNGXSLRI"
+  },
+  {
+    "ParameterKey": "ChannelAccountEncryptionPassphrase",
+    "ParameterValue": "SBOTKS44HJCPKL5VZ5774IZ7ALV4OQEZD4PNCKBVQ522TH6OLNGXSLRI"
+  }
+]

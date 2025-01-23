@@ -1,0 +1,239 @@
+global:
+  isPubnet: false
+  ephemeralDatabase: false
+  eventBroker:
+    type: "NONE"
+    urls: "kafka:9092"
+    consumerGroupId: "group-id"
+
+sdp:
+  route:
+    domain: sdp-backend.mystellarsdpdomain.org
+    mtnDomain: "*.sdp-backend.mystellarsdpdomain.org"
+  deployment:
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "sdp.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 1
+  serviceAccount:
+    create: true
+    name: sdp-service-account
+    annotations:
+      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
+  # =========================== START sdp.kubeSecrets ===========================
+  kubeSecrets:
+    secretName: sdp-secrets
+    create: false
+    data:
+      EC256_PRIVATE_KEY: "{{ .Release.Namespace }}/EC256_PRIVATE_KEY"
+      EC256_PUBLIC_KEY: "{{ .Release.Namespace }}/EC256_PUBLIC_KEY"
+      SEP10_SIGNING_PRIVATE_KEY: "{{ .Release.Namespace }}/SEP10_SIGNING_PRIVATE_KEY"
+      SEP10_SIGNING_PUBLIC_KEY: "{{ .Release.Namespace }}/SEP10_SIGNING_PUBLIC_KEY"
+      DISTRIBUTION_SEED: "{{ .Release.Namespace }}/DISTRIBUTION_SEED"
+      DISTRIBUTION_PUBLIC_KEY: "{{ .Release.Namespace }}/DISTRIBUTION_PUBLIC_KEY"
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "{{ .Release.Namespace }}/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "{{ .Release.Namespace }}/channel-encryption-passphrase"
+      DATABASE_URL: "{{ .Release.Namespace }}/DATABASE_URL"
+  # =========================== START sdp.configMap ===========================
+  configMap:
+    data:
+      ADMIN_ACCOUNT: "reece@stellar.org"
+      ENVIRONMENT: "dev"
+      LOG_LEVEL: "debug"
+      METRICS_TYPE: "PROMETHEUS"
+      EMAIL_SENDER_TYPE: "DRY_RUN"
+      SMS_SENDER_TYPE: "DRY_RUN"
+      ENABLE_MFA: "false"
+      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      HORIZON_URL: "https://horizon-testnet.stellar.org"
+      INSTANCE_NAME: "Stellar Disbursement Platform"
+      CORS_ALLOWED_ORIGINS: "*"
+      ENABLE_SCHEDULER: "true"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      SDP_UI_BASE_URL: "https://dashboard.mystellarsdpdomain.org"
+  # =========================== START sdp.ingress ===========================
+  ingress:
+    enabled: true
+    className: "ingress-public"
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - hosts:
+          - 'sdp-backend.mystellarsdpdomain.org'
+          - '*.sdp-backend.mystellarsdpdomain.org'
+        secretName: sdp-backend-cert
+# ============================= anchorPlatform ===================================
+anchorPlatform:
+  route:
+    domain: ap-sdp-backend.mystellarsdpdomain.org
+  deployment:
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "sdp.ap.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 1
+  kubeSecrets:
+    create: false
+    secretName: sdp-secrets
+    data:
+      SECRET_DATA_USERNAME: "{{ .Release.Namespace }}/SECRET_DATA_USERNAME"
+      SECRET_DATA_PASSWORD: "{{ .Release.Namespace }}/SECRET_DATA_PASSWORD"
+      DATA_SERVER: "{{ .Release.Namespace }}/DATA_SERVER"
+      SECRET_SEP10_SIGNING_SEED: "{{ .Release.Namespace }}/SEP10_SIGNING_PRIVATE_KEY"
+      SECRET_PLATFORM_API_AUTH_SECRET: "{{ .Release.Namespace }}/SECRET_PLATFORM_API_AUTH_SECRET"
+      SECRET_SEP10_JWT_SECRET: "{{ .Release.Namespace }}/SECRET_SEP10_JWT_SECRET"
+      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: "{{ .Release.Namespace }}/SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET"
+      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: "{{ .Release.Namespace }}/SECRET_SEP24_MORE_INFO_URL_JWT_SECRET"
+      DISTRIBUTION_PUBLIC_KEY: "{{ .Release.Namespace }}/DISTRIBUTION_PUBLIC_KEY"
+  serviceAccount:
+    create: true
+    name: anchor-service-account
+    annotations:
+      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
+  configMap:
+    data:
+      HOST_URL: https://ap-sdp-backend.mystellarsdpdomain.org
+      SEP_SERVER_PORT: "8080"
+      CALLBACK_API_BASE_URL: https://sdp-backend.mystellarsdpdomain.org
+      CALLBACK_API_AUTH_TYPE: "none"
+      PLATFORM_SERVER_AUTH_TYPE: "JWT"
+      APP_LOGGING_LEVEL: "INFO"
+      DATA_TYPE: "postgres"
+      DATA_DATABASE: "sdp_dev"
+      DATA_FLYWAY_ENABLED: "true"
+      DATA_DDL_AUTO: "update"
+      METRICS_ENABLED: "false"
+      METRICS_EXTRAS_ENABLED: "false"
+      EVENT_BROKER_TYPE: "NONE"
+      SEP10_ENABLED: "true"
+      SEP10_WEB_AUTH_DOMAIN: ap-sdp-backend.mystellarsdpdomain.org
+      SEP10_HOME_DOMAINS: "*.sdp-backend.mystellarsdpdomain.org"
+      SEP24_ENABLED: "true"
+      SEP24_INTERACTIVE_URL_BASE_URL: https://sdp-backend.mystellarsdpdomain.org/wallet-registration/start
+      SEP24_INTERACTIVE_URL_JWT_EXPIRATION: "1800"
+      SEP24_MORE_INFO_URL_BASE_URL: https://sdp-backend.mystellarsdpdomain.org/wallet-registration/start
+      SEP1_ENABLED: "true"
+      SEP1_TOML_TYPE: "url"
+      SEP1_TOML_VALUE: https://sdp-backend.mystellarsdpdomain.org/.well-known/stellar.toml
+      ASSETS_TYPE: "json"
+      ASSETS_VALUE: |
+        {
+          "assets": [
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "USDC",
+              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+              "distribution_account": "GCIA55CO7M7VJNDMQYEJKP4WQRB45CL2RJYPDW64PD2X7VDOZS53A4KK",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            },
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "XLM",
+              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            }
+          ]
+        }
+  ingress:
+    enabled: true
+    className: "ingress-public"
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - hosts:
+          - 'ap-sdp-backend.mystellarsdpdomain.org'
+        secretName: sdp-ap-cert
+
+# ============================= tss ===================================
+tss:
+  deployment:
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "tss.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    strategy:
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 1
+  kubeSecrets:
+    create: false
+    secretName: sdp-secrets
+    data:
+      DISTRIBUTION_PUBLIC_KEY: "{{ .Release.Namespace }}/DISTRIBUTION_PUBLIC_KEY"
+      DISTRIBUTION_SEED: "{{ .Release.Namespace }}/DISTRIBUTION_SEED"
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "{{ .Release.Namespace }}/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "{{ .Release.Namespace }}/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
+      DATABASE_URL: "{{ .Release.Namespace }}/DATABASE_URL"
+  serviceAccount:
+    create: true
+    name: tss-service-account
+    annotations:
+      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
+  configMap:
+    data:
+      LOG_LEVEL: "info"
+      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      HORIZON_URL: "https://horizon-testnet.stellar.org"
+      NUM_CHANNEL_ACCOUNTS: "3"
+      MAX_BASE_FEE: "100"
+      TSS_METRICS_PORT: "9002"
+      TSS_METRICS_TYPE: "TSS_PROMETHEUS"
+      EVENT_BROKER_TYPE: "NONE"
+      BROKER_URLS: "kafka:9092"
+      CONSUMER_GROUP_ID: "group-id"
+      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+# ============================= dashboard ===================================
+dashboard:
+  enabled: true
+  route:
+    domain: "dashboard.mystellarsdpdomain.org"
+    mtnDomain: "*.dashboard.mystellarsdpdomain.org"
+  deployment:
+    strategy:
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+  configMap:
+    data:
+      RECAPTCHA_SITE_KEY: "6Lcw864qAAAAAMRkQZwXdOIMy-EYlqXPkOPf_Jzb"
+  ingress:
+    enabled: true
+    className: "ingress-public"
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - hosts:
+          - 'dashboard.mystellarsdpdomain.org'
+          - '*.dashboard.mystellarsdpdomain.org'
+        secretName: sdp-dashboard-cert

@@ -1,0 +1,285 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS Database Stack for SDP
+
+Parameters:
+  NetworkStackName:
+    Type: String
+    Default: sdp-network
+    Description: Name of the network stack to import VPC and subnet values from
+
+  env:
+    Type: String
+    Default: "dev"
+    AllowedValues: 
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+  namespace:
+    Type: String
+    Description: "Kubernetes only. namespace where SDP will be deployed"
+    Default: "sdp"
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.small
+    AllowedValues:
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+      - db.r5.large
+    Description: Database instance size
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 1000
+    Description: Size of database storage in GB
+
+  DBUsername:
+    Type: String
+    Default: postgres
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
+    Description: Database admin username
+
+  BackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    MinValue: 0
+    MaxValue: 35
+    Description: Number of days to retain automated backups
+
+  MultiAZ:
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    Description: Enable Multi-AZ deployment
+
+  DeletionProtection:
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    Description: Enable deletion protection
+  
+  DBPassword:
+    Type: String
+    Default: postgres
+    NoEcho: true
+    MinLength: 8
+    Description: Password for database admin user
+
+Resources:
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS instance
+      VpcId: 
+        Fn::ImportValue: !Sub ${NetworkStackName}-vpc-id
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub ${NetworkStackName}-ecs-services-sg
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-rds-security-group
+        - Key: Environment
+          Value: !Ref env
+
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/db/credentials
+      Description: RDS database credentials and connection information
+      SecretString: !Sub '{"username": "${DBUsername}", "password": "${DBPassword}", "dbname": "sdp_${env}", "port": 5432, "host": "${PostgresInstance.Endpoint.Address}"}' 
+
+  DatabaseURLSecret: 
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/db/url
+      Description: Complete database connection URL
+      SecretString: !Sub '{"DATABASE_URL": "postgres://${DBUsername}:${DBPassword}@${PostgresInstance.Endpoint.Address}:${PostgresInstance.Endpoint.Port}/sdp_${env}"}'
+
+  DatabaseHostSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/db/host
+      Description: Database host
+      SecretString: !GetAtt PostgresInstance.Endpoint.Address
+
+  DatabasePortSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/db/port
+      Description: Database port
+      SecretString: !GetAtt PostgresInstance.Endpoint.Port
+
+  DatabaseNameSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/db/name
+      Description: Database name
+      SecretString: !Sub sdp_${env}
+
+  SecretDataUsernameSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SECRET_DATA_USERNAME
+      Description: Anchor Platform DATA_USER
+      SecretString: !Ref DBUsername
+
+  SecretDataPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SECRET_DATA_PASSWORD
+      Description:  Anchor Platform SECRET_DATA_PASSWORD
+      SecretString: !Ref DBPassword
+   
+  DataServerSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/DATA_SERVER
+      Description:  Anchor Platform DATA_SERVER
+      SecretString: !GetAtt PostgresInstance.Endpoint.Address
+
+  DatabaseURLSecret: 
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/DATABASE_URL
+      Description: Complete database connection URL
+      SecretString: !Sub "postgres://${DBUsername}:${DBPassword}@${PostgresInstance.Endpoint.Address}:${PostgresInstance.Endpoint.Port}/sdp_${env}"
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub ${env}-database-subnet-group
+      SubnetIds: 
+        - Fn::ImportValue: !Sub ${NetworkStackName}-private-subnet-1
+        - Fn::ImportValue: !Sub ${NetworkStackName}-private-subnet-2
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-database-subnet-group
+        - Key: Environment
+          Value: !Ref env
+
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Family: postgres14
+      Description: Custom parameter group for SDP database
+      Parameters:
+        max_connections: "50"
+        shared_buffers: "4096"
+        ssl: "1"
+      Tags:
+        - Key: Environment
+          Value: !Ref env
+
+  PostgresInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Sub sdp_${env}
+      Engine: postgres
+      EngineVersion: 14
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp2
+      StorageEncrypted: true
+      MultiAZ: !Ref MultiAZ
+      PubliclyAccessible: false
+      DeletionProtection: !Ref DeletionProtection
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      DBParameterGroupName: !Ref DBParameterGroup
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      MonitoringInterval: 0
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-sdp-database
+        - Key: Environment
+          Value: !Ref env
+
+  DBEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sdp/${env}/DB_ENDPOINT
+      Type: String
+      Value: !GetAtt PostgresInstance.Endpoint.Address
+      Description: Database endpoint
+      Tags:
+        Environment: !Ref env
+
+  DBPortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sdp/${env}/DB_PORT
+      Type: String
+      Value: !GetAtt PostgresInstance.Endpoint.Port
+      Description: Database port
+      Tags:
+        Environment: !Ref env
+
+  DBNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /sdp/${env}/DB_NAME
+      Type: String
+      Value: !Sub sdp_${env}
+      Description: Database name
+      Tags:
+        Environment: !Ref env
+
+Outputs:
+  DatabaseEndpoint:
+    Description: Database endpoint
+    Value: !GetAtt PostgresInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${AWS::StackName}-db-endpoint
+
+  DatabasePort:
+    Description: Database port
+    Value: !GetAtt PostgresInstance.Endpoint.Port
+    Export:
+      Name: !Sub ${AWS::StackName}-db-port
+
+  DatabaseName:
+    Description: Database name
+    Value: !Sub sdp_${env}
+    Export:
+      Name: !Sub ${AWS::StackName}-db-name
+  
+  DatabaseSecretArn:
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-db-secret-arn
+  
+  DatabaseUrlSecret:
+    Value: !Ref DatabaseURLSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-database-url-secret
+
+  DatabaseSecurityGroup:
+    Description: Security Group ID for RDS instance
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-db-sg

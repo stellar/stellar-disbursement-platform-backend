@@ -1,0 +1,491 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Stack for managing Stellar and encryption keys in Secrets Manager'
+
+Parameters:
+  env:
+    Type: String
+    Default: "dev"
+  
+  namespace:
+    Type: String
+    Description: "Kubernetes only. namespace where SDP will be deployed"
+    Default: "sdp"
+
+  DistributionAccountEncryptionPassphrase:
+    Type: String
+    Default: ""
+    NoEcho: true
+
+  ChannelAccountEncryptionPassphrase:
+    Type: String
+    Default: ""
+    NoEcho: true
+
+  SEP10SigningPrivateKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+
+  SEP10SigningPublicKey:
+    Type: String
+    Default: ""
+
+  DistributionSeed:
+    Type: String
+    Default: ""
+    NoEcho: true
+
+  DistributionPublicKey:
+    Type: String
+    Default: ""
+
+  EC256PrivateKey:
+    Type: String
+    NoEcho: true
+    Default: |
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIPRRtyc5EQoNPFhkcDzC47B2Zpo5b0NiM3Ftvky86+bEoAoGCCqGSM49
+      AwEHoUQDQgAEWinhVw0QHkZDeZ777zfBKT0cupULkpEd8Y52iPs76AT7JQ1cuGbm
+      jxJASNwp907KzNzOZJSV07bFdN/Tkwebgg==
+      -----END EC PRIVATE KEY-----
+
+  EC256PublicKey:
+    Type: String
+    Default: |
+      -----BEGIN PUBLIC KEY-----
+      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWinhVw0QHkZDeZ777zfBKT0cupUL
+      kpEd8Y52iPs76AT7JQ1cuGbmjxJASNwp907KzNzOZJSV07bFdN/Tkwebgg==
+      -----END PUBLIC KEY-----
+
+Conditions:
+  GenerateSep10Keys: !Equals [ !Ref SEP10SigningPrivateKey, "" ]
+  GenerateDistributionKeys: !Equals [ !Ref DistributionSeed, "" ]
+  GenerateChannelKeys: !Equals [ !Ref ChannelAccountEncryptionPassphrase, "" ]
+
+Resources:
+  StellarKeyGenRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:UpdateSecret
+                Resource: 
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/*'
+
+  StellarKeyGenRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${AWS::StackName}-stellar-keygen-policy
+      Roles: 
+        - !Ref StellarKeyGenRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: 
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+
+  StellarSDKLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: stellar-sdk-layer
+      Content: 
+        S3Bucket: stellar-layer  
+        S3Key: stellar-layer.zip
+      CompatibleRuntimes:
+        - nodejs18.x
+
+  StellarKeyGenFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt StellarKeyGenRole.Arn
+      Timeout: 30
+      Layers:
+        - !Ref StellarSDKLayer
+      Code:
+        ZipFile: |
+          const { Keypair } = require('@stellar/stellar-sdk');
+          const https = require('https');
+          const url = require('url');
+
+          async function fundTestnetAccount(publicKey) {
+            return new Promise((resolve, reject) => {
+              https.get(`https://friendbot.stellar.org?addr=${publicKey}`, (resp) => {
+                let data = '';
+                resp.on('data', (chunk) => data += chunk);
+                resp.on('end', () => {
+                  console.log('Funding response:', data);
+                  resolve(data);
+                });
+              }).on('error', (err) => {
+                console.error('Error funding account:', err);
+                reject(err);
+              });
+            });
+          }
+
+          function sendResponse(event, response) {
+            return new Promise((resolve, reject) => {
+              const parsedUrl = url.parse(event.ResponseURL);
+              const requestOptions = {
+                hostname: parsedUrl.hostname,
+                port: 443,
+                path: parsedUrl.path,
+                method: 'PUT',
+                headers: {
+                  'Content-Type': '',
+                  'Content-Length': Buffer.byteLength(JSON.stringify(response))
+                }
+              };
+
+              const request = https.request(requestOptions, (resp) => {
+                resolve();
+              });
+
+              request.on('error', (error) => {
+                console.error('Error sending response:', error);
+                reject(error);
+              });
+
+              request.write(JSON.stringify(response));
+              request.end();
+            });
+          }
+
+          exports.handler = async (event, context) => {
+            try {
+              let response = {
+                Status: 'SUCCESS',
+                RequestId: event.RequestId,
+                LogicalResourceId: event.LogicalResourceId,
+                StackId: event.StackId,
+                PhysicalResourceId: context.logStreamName
+              };
+
+              if (event.RequestType === 'Delete') {
+                console.log('Delete request, sending success response');
+              } else {
+                console.log('Generating new keypair');
+                const pair = Keypair.random();
+                response.Data = {
+                  publicKey: pair.publicKey(),
+                  secretKey: pair.secret()
+                };
+
+                if (event.ResourceProperties.KeyPairId === 'distribution') {
+                  console.log('Funding distribution account on testnet');
+                  try {
+                    await fundTestnetAccount(pair.publicKey());
+                    console.log('Successfully funded account');
+                  } catch (fundError) {
+                    console.error('Error funding account:', fundError);
+                  }
+                }
+              }
+
+              await sendResponse(event, response);
+              return response;
+
+            } catch (error) {
+              console.error('Error:', error);
+              const response = {
+                Status: 'FAILED',
+                RequestId: event.RequestId,
+                LogicalResourceId: event.LogicalResourceId,
+                StackId: event.StackId,
+                PhysicalResourceId: context.logStreamName,
+                Reason: error.toString()
+              };
+              await sendResponse(event, response);
+              return response;
+            }
+          };
+
+  Sep10KeyGenPair:
+    Type: Custom::StellarKeyPair
+    Condition: GenerateSep10Keys
+    Properties:
+      ServiceToken: !GetAtt StellarKeyGenFunction.Arn
+      KeyPairId: sep10
+  
+  DistributionKeyGenPair:
+    Type: Custom::StellarKeyPair
+    Condition: GenerateDistributionKeys
+    Properties:
+      ServiceToken: !GetAtt StellarKeyGenFunction.Arn
+      KeyPairId: distribution
+  
+  ChannelKeyGenPair:
+    Type: Custom::StellarKeyPair
+    Condition: GenerateChannelKeys
+    Properties:
+      ServiceToken: !GetAtt StellarKeyGenFunction.Arn
+      KeyPairId: channel
+
+  Sep10Secret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/sep10
+      Description: "SEP10 signing keys"
+      SecretString: !Join
+        - ''
+        - - '{"signing_public_key":"'
+          - !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.publicKey, !Ref SEP10SigningPublicKey]
+          - '","signing_private_key":"'
+          - !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.secretKey, !Ref SEP10SigningPrivateKey]
+          - '"}'
+
+  DistributionSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/distribution
+      Description: "Distribution account keys and passphrase"
+      SecretString: !Join
+        - ''
+        - - '{"seed":"'
+          - !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.secretKey, !Ref DistributionSeed]
+          - '","public_key":"'
+          - !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.publicKey, !Ref DistributionPublicKey]
+          - '","encryption_passphrase":"'
+          - !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.secretKey, !Ref DistributionAccountEncryptionPassphrase]
+          - '"}'
+
+  ChannelSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/channel
+      Description: "Channel account encryption passphrase"
+      SecretString: !Join
+        - ''
+        - - '{"encryption_passphrase":"'
+          - !If [GenerateChannelKeys, !GetAtt ChannelKeyGenPair.secretKey, !Ref ChannelAccountEncryptionPassphrase]
+          - '"}'
+
+  Ec256Secret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/ec256
+      Description: "EC256 key pair"
+      SecretString: !Join
+        - ''
+        - - '{"private_key":"'
+          - !Ref EC256PrivateKey
+          - '","public_key":"'
+          - !Ref EC256PublicKey
+          - '"}'
+  # below this line is secrets for EKS.  TODO: consolidate
+  
+  Ec256PrivateKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/EC256_PRIVATE_KEY
+      Description: "EC256 private key"
+      SecretString: !Ref EC256PrivateKey
+
+  Ec256PublicKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/EC256_PUBLIC_KEY
+      Description: "EC256 public key"
+      SecretString: !Ref EC256PublicKey
+  
+  Sep10SigningPrivateKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SEP10_SIGNING_PRIVATE_KEY
+      Description: "SEP10 signing private key"
+      SecretString: !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.secretKey, !Ref SEP10SigningPrivateKey]
+
+  SecretSep10SigningSeed:
+    Type: AWS::SecretsManager::Secret
+    DependsOn: Sep10SigningPrivateKeySecret
+    Properties:
+      Name: !Sub /${namespace}/SECRET_SEP10_SIGNING_SEED
+      Description: "SEP10 signing private key"
+      SecretString: !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.secretKey, !Ref SEP10SigningPrivateKey]
+
+  Sep10SigningPublicKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SEP10_SIGNING_PUBLIC_KEY
+      Description: "SEP10 signing public key"
+      SecretString: !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.publicKey, !Ref SEP10SigningPublicKey]
+
+  DistributionSeedSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/DISTRIBUTION_SEED
+      Description: "Distribution account seed"
+      SecretString: !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.secretKey, !Ref DistributionSeed]
+
+  DistributionPublicKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/DISTRIBUTION_PUBLIC_KEY
+      Description: "Distribution account public key"
+      SecretString: !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.publicKey, !Ref DistributionPublicKey]
+
+  DistributionEncryptionPassphraseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE
+      Description: "Distribution account encryption passphrase"
+      SecretString: !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.secretKey, !Ref DistributionAccountEncryptionPassphrase]
+
+  ChannelEncryptionPassphraseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE
+      Description: "Channel account encryption passphrase"
+      SecretString: !If [GenerateChannelKeys, !GetAtt ChannelKeyGenPair.secretKey, !Ref ChannelAccountEncryptionPassphrase]
+  
+  SecretPlatformApiAuthSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SECRET_PLATFORM_API_AUTH_SECRET
+      SecretString: "mySdpToAnchorPlatformSecret"
+
+  SecretSep10JwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SECRET_SEP10_JWT_SECRET
+      SecretString: "jwt_secret_1234567890"
+
+  SecretSep24InteractiveUrlJwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET
+      SecretString: "jwt_secret_1234567890"
+
+  SecretSep24MoreInfoUrlJwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SECRET_SEP24_MORE_INFO_URL_JWT_SECRET
+      Description: "Distribution account encryption passphrase"
+      SecretString: "jwt_secret_1234567890"
+
+  Sep24JwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/SEP24_JWT_SECRET
+      SecretString: "jwt_secret_1234567890"
+
+  AnchorPlatformOutgoingJwtSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
+      SecretString: "jwt_secret_1234567890"
+
+  RecaptchaSiteKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /${namespace}/RECAPTCHA_SITE_KEY
+      SecretString: "6Lcw864qAAAAAJCtS-7NSSbu-iRX2ZS8iu4xUGIc"  
+      
+  RecaptchaSiteSecretKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/recaptcha-site-secret-key
+      Description: "Recaptcha site secret key"
+      SecretString: "6Lcw864qAAAAAJCtS-7NSSbu-iRX2ZS8iu4xUGIc"
+  
+  RecaptchaSiteSecretKeyEKS:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/RECAPTCHA_SITE_SECRET_KEY
+      SecretString: "6Lcw864qAAAAAJCtS-7NSSbu-iRX2ZS8iu4xUGIc"
+
+  AdminApiKey:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/ADMIN_API_KEY
+      SecretString: "admin-api-key"
+
+Outputs:
+  Sep10SecretArn:
+    Value: !Ref Sep10Secret
+    Export:
+      Name: !Sub ${AWS::StackName}-sep10-secret-arn
+
+  DistributionSecretArn:
+    Value: !Ref DistributionSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-distribution-secret-arn
+
+  ChannelSecretArn:
+    Value: !Ref ChannelSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-channel-secret-arn
+
+  Ec256SecretArn:
+    Value: !Ref Ec256Secret
+    Export:
+      Name: !Sub ${AWS::StackName}-ec256-secret-arn
+  
+  Sep10SigningPrivateKeySecretArn:
+    Value: !Ref Sep10SigningPrivateKeySecret
+    Export:
+      Name: !Sub ${AWS::StackName}-sep10-signing-private-key-secret-arn
+
+  Sep10SigningPublicKeySecretArn:
+    Value: !Ref Sep10SigningPublicKeySecret
+    Export:
+      Name: !Sub ${AWS::StackName}-sep10-signing-public-key-secret-arn
+
+  DistributionSeedSecretArn:
+    Value: !Ref DistributionSeedSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-distribution-seed-secret-arn
+
+  DistributionPublicKeySecretArn:
+    Value: !Ref DistributionPublicKeySecret
+    Export:
+      Name: !Sub ${AWS::StackName}-distribution-public-key-secret-arn
+
+  DistributionEncryptionPassphraseSecretArn:
+    Value: !Ref DistributionEncryptionPassphraseSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-distribution-encryption-passphrase-secret-arn
+
+  ChannelEncryptionPassphraseSecretArn:
+    Value: !Ref ChannelEncryptionPassphraseSecret
+    Export:
+      Name: !Sub ${AWS::StackName}-channel-encryption-passphrase-secret-arn
+
+  Ec256PrivateKeySecretArn:
+    Value: !Ref Ec256PrivateKeySecret
+    Export:
+      Name: !Sub ${AWS::StackName}-ec256-private-key-secret-arn
+  
+  Ec256PublicKeySecretArn:
+    Value: !Ref Ec256PublicKeySecret
+    Export:
+      Name: !Sub ${AWS::StackName}-ec256-public-key-secret-arn
+
+  RecaptchaSiteSecretKeyArn:
+    Value: !Ref RecaptchaSiteSecretKey
+    Export:
+      Name: !Sub ${AWS::StackName}-recaptcha-site-secret-key-arn
+  
