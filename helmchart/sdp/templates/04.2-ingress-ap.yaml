@@ -8,11 +8,6 @@ metadata:
     {{- include "sdp.labels" . | nindent 4 }}
   annotations:
     {{- toYaml .Values.anchorPlatform.ingress.annotations | nindent 4 }}
-    # This is a way to block the stellar.toml file from being served on the "sdp.domain":
-    nginx.ingress.kubernetes.io/server-snippet: |
-      location ~ /.well-known/stellar.toml {
-        proxy_pass {{ include "sdp.ap.sepServiceAddress" . }};
-      }
 spec:
   {{- if .Values.anchorPlatform.ingress.className }}
   ingressClassName: {{ .Values.anchorPlatform.ingress.className }}
