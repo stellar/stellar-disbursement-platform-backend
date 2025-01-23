@@ -387,7 +387,7 @@
               - Name: USDC_ASSET_ISSUER
                 Value: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
               - Name: RECAPTCHA_SITE_KEY
-                Value: 6Lcw864qAAAAAMRkQZwXdOIMy-EYlqXPkOPf_Jzb
+                Value: RECAPTCHA_SITE_KEY_VALUE
               - Name: SINGLE_TENANT_MODE
                 Value: "false"
               - Name: PUBLIC_ALB_DNS
@@ -1059,7 +1059,7 @@
       Properties:
         Name: !Sub "/sdp/${env}/RECAPTCHA_SITE_SECRET_KEY"
         Type: String
-        Value: "6Lcw864qAAAAAJCtS-7NSSbu-iRX2ZS8iu4xUGIc"
+        Value: "RECAPTCHA_SITE_KEY_VALUE"
         Tags:
           env: !Ref env
     
