@@ -937,7 +937,7 @@ func Test_AuthManager_ForgotPassword(t *testing.T) {
 			Once()
 
 		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "wrongemail@email.com")
-		assert.EqualError(t, err, "error on forgot password: unexpected error")
+		assert.EqualError(t, err, "calling authenticator's ForgotPassword: unexpected error")
 		assert.Empty(t, resetToken)
 	})
 
