@@ -58,7 +58,6 @@ type ServeOptions struct {
 	MonitorService                  monitor.MonitorServiceInterface
 	MtnDBConnectionPool             db.DBConnectionPool
 	AdminDBConnectionPool           db.DBConnectionPool
-	EC256PublicKey                  string
 	EC256PrivateKey                 string
 	Models                          *data.Models
 	CorsAllowedOrigins              []string
@@ -115,7 +114,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 	// Setup Stellar Auth JWT manager
 	opts.authManager, err = createAuthManager(
-		opts.MtnDBConnectionPool, opts.EC256PublicKey, opts.EC256PrivateKey, opts.ResetTokenExpirationHours,
+		opts.MtnDBConnectionPool, opts.EC256PrivateKey, opts.ResetTokenExpirationHours,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating Stellar Auth manager: %w", err)
@@ -519,14 +518,18 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 // createAuthManager builds the default AuthManager struct to be injected
 // in all the authentication related routes.
-func createAuthManager(dbConnectionPool db.DBConnectionPool, ec256PublicKey, ec256PrivateKey string, resetTokenExpirationHours int) (auth.AuthManager, error) {
+func createAuthManager(dbConnectionPool db.DBConnectionPool, ec256PrivateKey string, resetTokenExpirationHours int) (auth.AuthManager, error) {
 	if dbConnectionPool == nil {
 		return nil, fmt.Errorf("db connection pool cannot be nil")
 	}
 
-	err := utils.ValidateStrongECKeyPair(ec256PublicKey, ec256PrivateKey)
+	err := utils.ValidateStrongECPrivateKey(ec256PrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("validating auth manager keys: %w", err)
+		return nil, fmt.Errorf("validating auth manager private key: %w", err)
+	}
+	ec256PublicKey, err := utils.GetEC256PublicKeyFromPrivateKey(ec256PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("validating auth manager public key: %w", err)
 	}
 
 	if resetTokenExpirationHours < 1 {

@@ -81,27 +81,6 @@ func SetConfigOptionLogLevel(co *config.ConfigOption) error {
 	return nil
 }
 
-// SetConfigOptionEC256PublicKey parses the config option incoming value and validates if it is a valid EC256PublicKey.
-func SetConfigOptionEC256PublicKey(co *config.ConfigOption) error {
-	key, ok := co.ConfigKey.(*string)
-	if !ok {
-		return fmt.Errorf("not a valid EC256PublicKey in %s: the expected type for this config key is a string, but got a %T instead", co.Name, co.ConfigKey)
-	}
-
-	publicKey := viper.GetString(co.Name)
-
-	// We must remove the literal \n in case of the config options being set this way
-	publicKey = strings.Replace(publicKey, `\n`, "\n", -1)
-
-	_, err := utils.ParseStrongECPublicKey(publicKey)
-	if err != nil {
-		return fmt.Errorf("parsing EC256PublicKey in %s: %w", co.Name, err)
-	}
-
-	*key = publicKey
-	return nil
-}
-
 // SetConfigOptionEC256PrivateKey parses the config option incoming value and validates if it is a valid EC256PrivateKey.
 func SetConfigOptionEC256PrivateKey(co *config.ConfigOption) error {
 	key, ok := co.ConfigKey.(*string)

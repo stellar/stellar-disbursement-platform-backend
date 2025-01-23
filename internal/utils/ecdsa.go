@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -79,14 +80,9 @@ func ParseStrongECPrivateKey(privateKeyStr string) (*ecdsa.PrivateKey, error) {
 	return privateKey, nil
 }
 
-// ValidateStrongECKeyPair validates if the given public and private keys are a valid EC keypair
+// ValidateStrongECPrivateKey validates if the given private key is a valid EC key
 // using a curve that's at least as strong as prime256v1 (P-256).
-func ValidateStrongECKeyPair(publicKeyStr, privateKeyStr string) error {
-	publicKey, err := ParseStrongECPublicKey(publicKeyStr)
-	if err != nil {
-		return fmt.Errorf("validating EC public key: %w", err)
-	}
-
+func ValidateStrongECPrivateKey(privateKeyStr string) error {
 	privateKey, err := ParseStrongECPrivateKey(privateKeyStr)
 	if err != nil {
 		return fmt.Errorf("validating EC private key: %w", err)
@@ -100,6 +96,8 @@ func ValidateStrongECKeyPair(publicKeyStr, privateKeyStr string) error {
 		return fmt.Errorf("signing message for validation: %w", err)
 	}
 
+	publicKey := &privateKey.PublicKey
+
 	// Verify the signature using the public key
 	valid := ecdsa.Verify(publicKey, hash[:], r, s)
 	if !valid {
@@ -107,4 +105,24 @@ func ValidateStrongECKeyPair(publicKeyStr, privateKeyStr string) error {
 	}
 
 	return nil
+}
+
+// GetEC256PublicKeyFromPrivateKey returns the public key of the given EC private key.
+func GetEC256PublicKeyFromPrivateKey(key string) (string, error) {
+	privateKey, err := ParseStrongECPrivateKey(key)
+	if err != nil {
+		return "", fmt.Errorf("validating EC private key: %w", err)
+	}
+
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return "", fmt.Errorf("marshaling public key: %w", err)
+	}
+
+	publicKeyPEMEncoded := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	})
+
+	return strings.TrimSpace(string(publicKeyPEMEncoded)), nil
 }
