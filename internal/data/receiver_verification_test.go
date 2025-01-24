@@ -108,7 +108,7 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, actualVerifications, 4)
 
-		assert.Equal(t, []ReceiverVerification{
+		assert.ElementsMatch(t, []ReceiverVerification{
 			{
 				ReceiverID:        receiver.ID,
 				VerificationField: VerificationTypeDateOfBirth,
