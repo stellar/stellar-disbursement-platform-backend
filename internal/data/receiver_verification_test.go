@@ -327,16 +327,12 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 		assert.True(t, verified)
 
 		// Receiver confirmed the verification value
-		now := time.Now()
-		err = receiverVerificationModel.UpdateReceiverVerification(ctx, ReceiverVerificationUpdate{
-			ConfirmedByType:     ConfirmedByTypeUser,
-			ConfirmedByID:       "my-user-id",
-			ReceiverID:          receiver.ID,
-			VerificationField:   VerificationTypeNationalID,
-			ConfirmedAt:         &now,
-			VerificationChannel: message.MessageChannelSMS,
-		}, dbConnectionPool)
+		ConfirmVerificationForRecipient(t, ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
+		intermediateRV := getReceiverVerification(t, ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID)
+		assert.NotEmpty(t, intermediateRV.ConfirmedAt)
+		assert.Equal(t, utils.Ptr(ConfirmedByTypeReceiver), intermediateRV.ConfirmedByType)
+		assert.Equal(t, utils.Ptr(receiver.ID), intermediateRV.ConfirmedByID)
 
 		newVerificationValue := "0301017821085"
 		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, "my-user-id", receiver.ID, VerificationTypeNationalID, newVerificationValue)
@@ -344,6 +340,9 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 
 		finalRV := getReceiverVerification(t, ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID)
 		assert.NotEmpty(t, finalRV.HashedValue)
+		assert.NotEmpty(t, finalRV.ConfirmedAt)
+		assert.Equal(t, utils.Ptr(ConfirmedByTypeUser), finalRV.ConfirmedByType)
+		assert.Equal(t, utils.Ptr("my-user-id"), finalRV.ConfirmedByID)
 
 		// Checking if the hashed value is NOT the first one.
 		verified = CompareVerificationValue(finalRV.HashedValue, firstVerificationValue)

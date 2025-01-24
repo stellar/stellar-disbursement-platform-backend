@@ -60,19 +60,12 @@ func (rvi *ReceiverVerificationInsert) Validate() error {
 func (m *ReceiverVerificationModel) GetByReceiverIDsAndVerificationField(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, verificationField VerificationType) ([]*ReceiverVerification, error) {
 	receiverVerifications := []*ReceiverVerification{}
 	query := `
-		SELECT 
-		    receiver_id, 
-		    verification_field, 
-		    hashed_value,
-		    attempts,
-		    created_at,
-		    updated_at,
-		    confirmed_at,
-		    failed_at
-		FROM 
+		SELECT
+		    *
+		FROM
 		    receiver_verifications
-		WHERE 
-		    receiver_id = ANY($1) AND 
+		WHERE
+		    receiver_id = ANY($1) AND
 		    verification_field = $2
 	`
 	err := sqlExec.SelectContext(ctx, &receiverVerifications, query, pq.Array(receiverIds), verificationField)
@@ -201,10 +194,18 @@ func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context,
 		ON CONFLICT (receiver_id, verification_field)
 		DO UPDATE SET
 			hashed_value = EXCLUDED.hashed_value,
-			updated_at = NOW()
+			-- If the verification is already confirmed, the USER is updating it:
+			confirmed_by_type = CASE
+				WHEN receiver_verifications.confirmed_at IS NOT NULL THEN 'USER'
+				ELSE receiver_verifications.confirmed_by_type
+			END,
+			confirmed_by_id = CASE
+				WHEN receiver_verifications.confirmed_at IS NOT NULL THEN $4
+				ELSE receiver_verifications.confirmed_by_id
+			END
 	`
 
-	_, err = sqlExec.ExecContext(ctx, query, receiverID, verificationField, hashedValue)
+	_, err = sqlExec.ExecContext(ctx, query, receiverID, verificationField, hashedValue, userID)
 	if err != nil {
 		return fmt.Errorf("upserting receiver verification: %w", err)
 	}
