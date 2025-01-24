@@ -15,14 +15,9 @@ SET
 WHERE
     confirmed_at IS NOT NULL;
 
--- Add constraint where confirmed_by_id cannot be empty if confirmed_at is populated
-ALTER TABLE receiver_verifications
-    ADD CONSTRAINT confirmed_by_id_not_empty_when_completed CHECK (confirmed_by_id IS NOT NULL OR confirmed_at IS NULL);
-
 
 -- +migrate Down
 ALTER TABLE receiver_verifications
-    DROP CONSTRAINT confirmed_by_id_not_empty_when_completed,
     DROP COLUMN confirmed_by_type,
     DROP COLUMN confirmed_by_id;
 
