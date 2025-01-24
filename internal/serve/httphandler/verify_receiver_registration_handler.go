@@ -173,6 +173,8 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	// STEP 4: update the receiver verification row with the confirmation that the value was successfully validated
 	if receiverVerification.ConfirmedAt == nil {
 		rvu.ConfirmedAt = &now
+		rvu.ConfirmedByID = receiver.ID
+		rvu.ConfirmedByType = data.ConfirmedByTypeReceiver
 
 		err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, dbTx)
 		if err != nil {
