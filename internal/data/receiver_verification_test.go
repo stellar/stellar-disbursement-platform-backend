@@ -274,7 +274,6 @@ func Test_ReceiverVerificationModel_UpdateVerificationValue(t *testing.T) {
 func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -317,7 +316,7 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 		assert.True(t, verified)
 	})
 
-	t.Run("doesn't update the verification value when it was confirmed by the receiver", func(t *testing.T) {
+	t.Run("update the verification value even when it was already confirmed by the receiver", func(t *testing.T) {
 		// Inserts the verification value
 		firstVerificationValue := "0301016957187"
 		err := receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID, firstVerificationValue)
@@ -345,14 +344,12 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 		afterUpdateHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationTypeNationalID)
 		assert.NotEmpty(t, currentHashedValue)
 
-		// Checking if the hashed value is NOT the new one.
-		verified = CompareVerificationValue(afterUpdateHashedValue, newVerificationValue)
-		assert.False(t, verified)
-		// Checking if the hashed value is equal the first verification value
+		// Checking if the hashed value is NOT the first one.
 		verified = CompareVerificationValue(afterUpdateHashedValue, firstVerificationValue)
+		assert.False(t, verified)
+		// Checking if the hashed value is equal the updated verification value
+		verified = CompareVerificationValue(afterUpdateHashedValue, newVerificationValue)
 		assert.True(t, verified)
-
-		assert.Equal(t, currentHashedValue, afterUpdateHashedValue)
 	})
 }
 
