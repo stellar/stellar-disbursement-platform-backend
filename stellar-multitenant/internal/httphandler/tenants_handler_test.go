@@ -354,6 +354,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"organizations",
 			"payments",
 			"receiver_verifications",
+			"receiver_verifications_audit",
 			"receiver_wallets",
 			"receivers",
 			"sdp_migrations",
