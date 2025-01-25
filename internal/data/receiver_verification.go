@@ -23,6 +23,8 @@ type ReceiverVerification struct {
 	HashedValue         string                  `json:"hashed_value" db:"hashed_value"`
 	Attempts            int                     `json:"attempts" db:"attempts"`
 	CreatedAt           time.Time               `json:"created_at" db:"created_at"`
+	ConfirmedByType     *ConfirmedByType        `json:"confirmed_by_type" db:"confirmed_by_type"`
+	ConfirmedByID       *string                 `json:"confirmed_by_id" db:"confirmed_by_id"`
 	UpdatedAt           time.Time               `json:"updated_at" db:"updated_at"`
 	ConfirmedAt         *time.Time              `json:"confirmed_at" db:"confirmed_at"`
 	FailedAt            *time.Time              `json:"failed_at" db:"failed_at"`
@@ -58,19 +60,12 @@ func (rvi *ReceiverVerificationInsert) Validate() error {
 func (m *ReceiverVerificationModel) GetByReceiverIDsAndVerificationField(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, verificationField VerificationType) ([]*ReceiverVerification, error) {
 	receiverVerifications := []*ReceiverVerification{}
 	query := `
-		SELECT 
-		    receiver_id, 
-		    verification_field, 
-		    hashed_value,
-		    attempts,
-		    created_at,
-		    updated_at,
-		    confirmed_at,
-		    failed_at
-		FROM 
+		SELECT
+		    *
+		FROM
 		    receiver_verifications
-		WHERE 
-		    receiver_id = ANY($1) AND 
+		WHERE
+		    receiver_id = ANY($1) AND
 		    verification_field = $2
 	`
 	err := sqlExec.SelectContext(ctx, &receiverVerifications, query, pq.Array(receiverIds), verificationField)
@@ -182,9 +177,9 @@ func (m *ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
 	return nil
 }
 
-// UpsertVerificationValue creates or updates the receiver's verification. In case the verification exists and it's already confirmed by the receiver
-// it's not updated.
-func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context, sqlExec db.SQLExecuter, receiverID string, verificationField VerificationType, verificationValue string) error {
+// UpsertVerificationValue creates or updates the receiver's verification. Even if the verification exists and is
+// already confirmed by the receiver, it will be updated.
+func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context, sqlExec db.SQLExecuter, userID, receiverID string, verificationField VerificationType, verificationValue string) error {
 	log.Ctx(ctx).Infof("Calling UpsertVerificationValue for receiver %s and verification field %s", receiverID, verificationField)
 	hashedValue, err := HashVerificationValue(verificationValue)
 	if err != nil {
@@ -199,12 +194,18 @@ func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context,
 		ON CONFLICT (receiver_id, verification_field)
 		DO UPDATE SET
 			hashed_value = EXCLUDED.hashed_value,
-			updated_at = NOW()
-		WHERE
-			receiver_verifications.confirmed_at IS NULL
+			-- If the verification is already confirmed, the USER is updating it:
+			confirmed_by_type = CASE
+				WHEN receiver_verifications.confirmed_at IS NOT NULL THEN 'USER'
+				ELSE receiver_verifications.confirmed_by_type
+			END,
+			confirmed_by_id = CASE
+				WHEN receiver_verifications.confirmed_at IS NOT NULL THEN $4
+				ELSE receiver_verifications.confirmed_by_id
+			END
 	`
 
-	_, err = sqlExec.ExecContext(ctx, query, receiverID, verificationField, hashedValue)
+	_, err = sqlExec.ExecContext(ctx, query, receiverID, verificationField, hashedValue, userID)
 	if err != nil {
 		return fmt.Errorf("upserting receiver verification: %w", err)
 	}
@@ -218,8 +219,17 @@ type ReceiverVerificationUpdate struct {
 	VerificationChannel message.MessageChannel `db:"verification_channel"`
 	Attempts            *int                   `db:"attempts"`
 	ConfirmedAt         *time.Time             `db:"confirmed_at"`
+	ConfirmedByType     ConfirmedByType        `db:"confirmed_by_type"`
+	ConfirmedByID       string                 `db:"confirmed_by_id"`
 	FailedAt            *time.Time             `db:"failed_at"`
 }
+
+type ConfirmedByType string
+
+const (
+	ConfirmedByTypeReceiver ConfirmedByType = "RECEIVER"
+	ConfirmedByTypeUser     ConfirmedByType = "USER"
+)
 
 func (rvu ReceiverVerificationUpdate) Validate() error {
 	if strings.TrimSpace(rvu.ReceiverID) == "" {
@@ -251,6 +261,16 @@ func (m *ReceiverVerificationModel) UpdateReceiverVerification(ctx context.Conte
 	if update.ConfirmedAt != nil {
 		fields = append(fields, "confirmed_at = ?")
 		args = append(args, update.ConfirmedAt)
+	}
+
+	if update.ConfirmedByID != "" {
+		fields = append(fields, "confirmed_by_id = ?")
+		args = append(args, update.ConfirmedByID)
+	}
+
+	if update.ConfirmedByType != "" {
+		fields = append(fields, "confirmed_by_type = ?")
+		args = append(args, update.ConfirmedByType)
 	}
 
 	if update.FailedAt != nil {

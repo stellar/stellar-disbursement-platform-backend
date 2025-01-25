@@ -16,12 +16,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type UpdateReceiverHandler struct {
 	Models           *data.Models
 	DBConnectionPool db.DBConnectionPool
+	AuthManager      auth.AuthManager
 }
 
 func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverRequest, receiverID string) []data.ReceiverVerificationInsert {
@@ -55,8 +58,20 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
+	// Grab token and user
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		httperror.Unauthorized("", nil, nil).Render(rw)
+		return
+	}
+	userID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
+		return
+	}
+
 	var reqBody validators.UpdateReceiverRequest
-	err := httpdecode.DecodeJSON(req, &reqBody)
+	err = httpdecode.DecodeJSON(req, &reqBody)
 	if err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
 		log.Ctx(ctx).Error(err)
@@ -90,6 +105,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			innerErr = h.Models.ReceiverVerification.UpsertVerificationValue(
 				ctx,
 				dbTx,
+				userID,
 				rv.ReceiverID,
 				rv.VerificationField,
 				rv.VerificationValue,

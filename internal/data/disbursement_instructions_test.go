@@ -590,7 +590,9 @@ func ConfirmVerificationForRecipient(t *testing.T, ctx context.Context, dbConnec
 		UPDATE
 			receiver_verifications
 		SET
-			confirmed_at = now()
+			confirmed_at = NOW(),
+			confirmed_by_id = $1,
+			confirmed_by_type = 'RECEIVER'
 		WHERE
 			receiver_id = $1
 		`
