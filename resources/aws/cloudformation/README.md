@@ -9,20 +9,30 @@
 This guide walks through deploying the Stellar Disbursement Platform (SDP) infrastructure on AWS. The deployment consists of four CloudFormation stacks that create the necessary infrastructure in a specific order:
 
 - Network Stack (sdp-network-eks.yaml)
-  - Creates or uses existing VPC and subnets Sets up networking for both public and private resources. Exports used (imported) by database and EKS stack to deploy resources.
+  - Creates or uses existing VPC and subnets
+  - Sets up networking for both public and private resources
+  - Exports used (imported) by database and EKS stack to deploy resources
+
 - Database Stack (sdp-database-eks.yaml)
   - Deploys RDS PostgreSQL database in private subnet
-  - creates necessary database secrets in AWS Secrets Manager
-- Keys Stack (sdp-keys.yaml) 
-  - Manages Stellar keys and encryption secrets
-  - Provide keys as parameters or leave blank to auto-generate
-  - Stores all secrets in AWS Secrets Manager
+  - Creates necessary database secrets in AWS Secrets Manager
+
+- Keys Stack (sdp-keys.yaml) [Optional]
+  - Manages Stellar and encryption keys by either:
+    - Using provided keys via parameters, or
+    - Auto-generating keys using Lambda function for dev/test environments
+  - Stores all keys and secrets in AWS Secrets Manager under /sdp/${env}/ path
+  - Keys include SEP-10 signing keys, distribution account keys, JWT secrets, etc.
+
 - EKS Stack (sdp-eks.yaml)
   - Creates EKS cluster and node group
   - Sets up IAM roles and security groups
-  - Configures necessary permissions for Kubernetes services
-After the CloudFormation stacks are deployed, additional Kubernetes resources are installed via Helm charts to complete the setup.
+  - Configures IRSA (IAM Roles for Service Accounts)
+  - Sets up permissions for pods to access secrets stored in AWS Secrets Manager 
 
+After the CloudFormation stacks are deployed, additional Kubernetes resources are installed via Helm charts to complete the setup. The SDP expects secrets to be available as Kubernetes secrets, but how those secrets are synchronized (whether through ExternalSecrets, direct creation, or other means) is left to the deployer's preference.
+
+Note: Both the Keys stack and ExternalSecrets are optional implementation choices. You can manage and sync secrets to Kubernetes secrets through whatever mechanism best fits your security requirements and operational preferences.
 ##Verify AWS CLI Configuration
 ```bash
 aws configure list
@@ -341,6 +351,39 @@ helm install sdp stellar/stellar-disbursement-platform \
 # Verify deployment
 kubectl -n sdp get pods
 ```
+
+## Security
+The following outlines the security infrastructure implemented across the SDP stacks, including network access controls, IAM roles, and service accounts.
+VPC Security Groups
+- EKS Cluster Security Group
+Purpose: Controls access to the EKS cluster control plane
+Inbound Rules:
+- Port 443 (HTTPS) from VPC CIDR
+- All traffic from Node Security Group
+Usage: Applied to EKS cluster control plane endpoints
+
+1. EKS Node Security Group
+
+Purpose: Controls access to EKS worker nodes
+Inbound Rules:
+
+All traffic from EKS Cluster Security Group
+All traffic from other nodes (self-referential)
+
+
+Usage: Applied to all EKS worker nodes
+
+3. RDS Security Group
+
+Purpose: Controls access to PostgreSQL database
+Inbound Rules:
+
+Port 5432 from EKS Cluster Security Group
+Port 5432 from EKS Node Security Group
+Port 5432 from EKS Created Security Group
+
+
+Usage: Applied to RDS instance
 
 ## Troubleshooting
 

@@ -397,24 +397,12 @@ Resources:
     Properties:
       Name: !Sub /${namespace}/ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
       SecretString: "jwt_secret_1234567890"
-
-  RecaptchaSiteKey:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /${namespace}/RECAPTCHA_SITE_KEY
-      SecretString: "6Lcw864qAAAAAJCtS-7NSSbu-iRX2ZS8iu4xUGIc"  
       
   RecaptchaSiteSecretKey:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub /sdp/${env}/recaptcha-site-secret-key
       Description: "Recaptcha site secret key"
-      SecretString: "6Lcw864qAAAAAJCtS-7NSSbu-iRX2ZS8iu4xUGIc"
-  
-  RecaptchaSiteSecretKeyEKS:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/RECAPTCHA_SITE_SECRET_KEY
       SecretString: "6Lcw864qAAAAAJCtS-7NSSbu-iRX2ZS8iu4xUGIc"
 
   AdminApiKey:

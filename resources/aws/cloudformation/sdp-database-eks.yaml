@@ -133,28 +133,28 @@ Resources:
   SecretDataUsernameSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /${namespace}/SECRET_DATA_USERNAME
+      Name: !Sub /${namespace}/${env}/SECRET_DATA_USERNAME
       Description: Anchor Platform DATA_USER
       SecretString: !Ref DBUsername
 
   SecretDataPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /${namespace}/SECRET_DATA_PASSWORD
+      Name: !Sub /${namespace}/${env}/SECRET_DATA_PASSWORD
       Description: Anchor Platform SECRET_DATA_PASSWORD
       SecretString: !Ref DBPassword
    
   DataServerSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /${namespace}/DATA_SERVER
+      Name: !Sub /${namespace}/${env}/DATA_SERVER
       Description: Anchor Platform DATA_SERVER
       SecretString: !GetAtt PostgresInstance.Endpoint.Address
 
   DatabaseURLSecret: 
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /${namespace}/DATABASE_URL
+      Name: !Sub /${namespace}/${env}/DATABASE_URL
       Description: Complete database connection URL
       SecretString: !Sub "postgres://${DBUsername}:${DBPassword}@${PostgresInstance.Endpoint.Address}:${PostgresInstance.Endpoint.Port}/sdp_${env}"
 
