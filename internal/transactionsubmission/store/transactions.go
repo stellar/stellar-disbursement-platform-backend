@@ -62,6 +62,13 @@ type Transaction struct {
 	LockedUntilLedgerNumber sql.NullInt32 `db:"locked_until_ledger_number"`
 }
 
+// func (tx *Transaction) BuildMemo() txnbuild.Memo {
+// 	if tx.MemoType == nil {
+// 		return nil
+// 	}
+// 	return txnbuild.MemoText(*tx.Memo)
+// }
+
 func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {
 	return tx.LockedUntilLedgerNumber.Valid && currentLedgerNumber <= tx.LockedUntilLedgerNumber.Int32
 }
@@ -103,6 +110,33 @@ func NewTransactionModel(dbConnectionPool db.DBConnectionPool) *TransactionModel
 	return &TransactionModel{DBConnectionPool: dbConnectionPool}
 }
 
+const TransactionColumns = `
+    id,
+    external_id,
+    tenant_id,
+    distribution_account,
+    asset_code,
+    asset_issuer,
+    amount,
+    destination,
+    COALESCE(memo, '') AS memo,
+    COALESCE(memo_type::text, '') AS memo_type,
+    status,
+    status_message,
+    status_history,
+    attempts_count,
+    stellar_transaction_hash,
+    xdr_sent,
+    xdr_received,
+    created_at,
+    updated_at,
+    started_at,
+    sent_at,
+    completed_at,
+    synced_at,
+    locked_at,
+    locked_until_ledger_number`
+
 // Insert adds a new Transaction to the database.
 func (t *TransactionModel) Insert(ctx context.Context, tx Transaction) (*Transaction, error) {
 	transactions, err := t.BulkInsert(ctx, t.DBConnectionPool, []Transaction{tx})
@@ -141,7 +175,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 
 	var insertedTransctions []Transaction
 	queryBuilder.WriteString(strings.Join(valueStrings, ", "))
-	queryBuilder.WriteString(" RETURNING *")
+	queryBuilder.WriteString(" RETURNING " + TransactionColumns)
 	query := sqlExec.Rebind(queryBuilder.String())
 	err := sqlExec.SelectContext(ctx, &insertedTransctions, query, valueArgs...)
 	if err != nil {
@@ -156,7 +190,7 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 	var transaction Transaction
 	q := `
 		SELECT
-			* 
+			` + TransactionColumns + `
 		FROM 
 			submitter_transactions t 
 		WHERE
@@ -176,7 +210,7 @@ func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []
 	var transactions []*Transaction
 	q := `
 		SELECT
-			* 
+			` + TransactionColumns + `
 		FROM 
 			submitter_transactions t 
 		WHERE
@@ -208,8 +242,7 @@ func (t *TransactionModel) UpdateStatusToSuccess(ctx context.Context, tx Transac
 			WHERE
 				id = $2
 			RETURNING
-				*
-			`
+				` + TransactionColumns
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusSuccess, tx.ID)
 	if err != nil {
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusSuccess: %w", err)
@@ -238,8 +271,7 @@ func (t *TransactionModel) UpdateStatusToError(ctx context.Context, tx Transacti
 			WHERE
 				id = $3
 			RETURNING
-				*
-			`
+				` + TransactionColumns
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusError, message, tx.ID)
 	if err != nil {
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusError: %w", err)
@@ -271,8 +303,7 @@ func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Co
 		WHERE 
 			id = $3
 		RETURNING
-			*
-	`
+			` + TransactionColumns
 	var tx Transaction
 	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, txID)
 	if err != nil {
@@ -302,8 +333,7 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 		WHERE 
 			id = $2
 		RETURNING
-			*
-		`
+			` + TransactionColumns
 	var updatedTx Transaction
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, xdrReceived, txID)
 	if err != nil {
@@ -329,7 +359,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 
 	query := `
 		SELECT 
-		    *
+		    ` + TransactionColumns + `
 		FROM 
 		    submitter_transactions
 		WHERE 
@@ -354,7 +384,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
 	query := `
 		SELECT 
-			*
+			` + TransactionColumns + `
 		FROM 
 			submitter_transactions
 		WHERE
@@ -435,8 +465,10 @@ func (ca *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, tr
 			AND %s
 			AND synced_at IS NULL
 			AND status = ANY($4)
-		RETURNING *
-	`, ca.queryFilterForLockedState(false, currentLedger))
+		RETURNING
+			`+TransactionColumns,
+		ca.queryFilterForLockedState(false, currentLedger),
+	)
 	var transaction Transaction
 	allowedTxStatuses := []TransactionStatus{TransactionStatusPending, TransactionStatusProcessing}
 	err := sqlExec.GetContext(ctx, &transaction, q, nextLedgerLock, TransactionStatusProcessing, transactionID, pq.Array(allowedTxStatuses))
@@ -460,8 +492,8 @@ func (ca *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, 
 			locked_until_ledger_number = NULL
 		WHERE
 			id = $1
-		RETURNING *
-	`
+		RETURNING
+			` + TransactionColumns
 	var transaction Transaction
 	err := sqlExec.GetContext(ctx, &transaction, q, publicKey)
 	if err != nil {
@@ -489,8 +521,8 @@ func (ca *TransactionModel) PrepareTransactionForReprocessing(ctx context.Contex
 			id = $1
 			AND synced_at IS NULL
 			AND status = ANY($2)
-		RETURNING *
-	`
+		RETURNING
+			` + TransactionColumns
 	var transaction Transaction
 	allowedTxStatuses := []TransactionStatus{TransactionStatusPending, TransactionStatusProcessing}
 	err := sqlExec.GetContext(ctx, &transaction, q, transactionID, pq.Array(allowedTxStatuses))
