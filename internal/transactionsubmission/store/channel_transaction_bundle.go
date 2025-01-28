@@ -57,7 +57,7 @@ func (m *ChannelTransactionBundleModel) LoadAndLockTuples(ctx context.Context, c
 		// STEP 1: get transactions available to be processed:
 		q := fmt.Sprintf(`
 			SELECT
-				*
+				`+TransactionColumns+`
 			FROM
 				submitter_transactions
 			WHERE
