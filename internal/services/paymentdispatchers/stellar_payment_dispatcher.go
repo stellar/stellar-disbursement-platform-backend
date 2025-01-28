@@ -68,9 +68,9 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			AssetIssuer: payment.Asset.Issuer,
 			Amount:      amount,
 			Destination: payment.ReceiverWallet.StellarAddress,
-			Memo:        "?", // TODO: inject a memo here
-			MemoType:    "?", // TODO: inject a memo type here
-			TenantID:    tenantID,
+			// Memo:        "?", // TODO: inject a memo here
+			// MemoType:    "?", // TODO: inject a memo type here
+			TenantID: tenantID,
 		}
 		transactions = append(transactions, transaction)
 	}
