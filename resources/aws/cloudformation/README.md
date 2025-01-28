@@ -315,7 +315,9 @@ kubectl apply -f eks-helm/cluster-issuer.yaml
 ```
 
 ## 6. Install External-DNS
-```bash
+Replace the domainFilters with your registered domain below.
+
+```bashd
 # Add and update repository
 helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
 helm repo update
@@ -343,47 +345,8 @@ kubectl get pods -n external-dns
 helm repo add stellar https://helm.stellar.org
 ```
 
-### Update your Values file with the Distribution Account Public Key 
-replace `YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY` with the distribution account public key stored in Secrets Manager 
-
-```yaml
-ASSETS_VALUE: |
-        {
-          "assets": [
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "USDC",
-              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            },
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "native",
-              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            }
-          ]
-        }
-```
+### Modify Values File
+Replace occurrences of "mystellarsdpdomain.org" in [values-dev.yaml](aws/cloudformation/values-dev.yaml) with your registered domain.
 
 ### Install SDP
 
