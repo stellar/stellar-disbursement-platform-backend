@@ -264,7 +264,7 @@ kubectl get secretstore aws-backend -n sdp
 
 ## 3. Create External Secrets
 ```bash
-kubectl apply -n sdp -f eks/helm/sdp-secrets.yaml
+kubectl apply -n sdp -f eks-helm/sdp-secrets-dev.yaml
 kubectl get externalsecret sdp-secrets -n sdp
 ```
 
@@ -335,51 +335,64 @@ kubectl get pods -n external-dns
 ```
 
 ## 7. Deploy SDP Helm Chart
+
+### Add Stellar Repository
 ```bash
-# Add Stellar repository
 helm repo add stellar https://helm.stellar.org
+```
 
-# Install SDP
-helm install sdp stellar/stellar-disbursement-platform \
-    -f eks-helm/values.yaml \
-    --namespace sdp
+### Update your Values file with the Distribution Account Public Key 
+replace `YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY` with the distribution account public key stored in Secrets Manager 
 
-# Verify deployment
+```yaml
+ASSETS_VALUE: |
+        {
+          "assets": [
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "USDC",
+              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            },
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "native",
+              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            }
+          ]
+        }
+```
+
+### Install SDP
+
+```bash
+helm install sdp stellar/stellar-disbursement-platform -f eks-helm/values.yaml --namespace sdp
+```
+### Verify Pods are healthy 
+```
 kubectl -n sdp get pods
 ```
 
-## Security
-The following outlines the security infrastructure implemented across the SDP stacks, including network access controls, IAM roles, and service accounts.
-VPC Security Groups
-- EKS Cluster Security Group
-Purpose: Controls access to the EKS cluster control plane
-Inbound Rules:
-- Port 443 (HTTPS) from VPC CIDR
-- All traffic from Node Security Group
-Usage: Applied to EKS cluster control plane endpoints
-
-1. EKS Node Security Group
-
-Purpose: Controls access to EKS worker nodes
-Inbound Rules:
-
-All traffic from EKS Cluster Security Group
-All traffic from other nodes (self-referential)
-
-
-Usage: Applied to all EKS worker nodes
-
-3. RDS Security Group
-
-Purpose: Controls access to PostgreSQL database
-Inbound Rules:
-
-Port 5432 from EKS Cluster Security Group
-Port 5432 from EKS Node Security Group
-Port 5432 from EKS Created Security Group
-
-
-Usage: Applied to RDS instance
 
 ## Troubleshooting
 
