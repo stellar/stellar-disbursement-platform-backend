@@ -101,7 +101,9 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
     ParameterKey=env,ParameterValue=dev \
-    ParameterKey=namespace,ParameterValue=sdp
+    ParameterKey=namespace,ParameterValue=sdp \
+    ParameterKey=RecaptchaSiteSecretKey,ParameterValue=YOUR_RECAPTCHA_SITE_SECRET_KEY \
+    ParameterKey=RecaptchaSiteKey,ParameterValue=YOUR_RECAPTCHA_SITE_KEY
 ```
 
 **Note**: Leave the following parameters empty to auto-generate new keys:
