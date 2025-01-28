@@ -153,13 +153,12 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 			}
 
 			if tc.isRecaptchaValidFnResponse != nil {
-				reCAPTCHAValidatorMock := &validators.ReCAPTCHAValidatorMock{}
+				reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 				handler.ReCAPTCHAValidator = reCAPTCHAValidatorMock
 				reCAPTCHAValidatorMock.
 					On("IsTokenValid", mock.Anything, "token").
 					Return(tc.isRecaptchaValidFnResponse...).
 					Once()
-				defer reCAPTCHAValidatorMock.AssertExpectations(t)
 			}
 
 			gotReceiverRegistrationRequest, gotSep24Claims, httpErr := handler.validate(req)

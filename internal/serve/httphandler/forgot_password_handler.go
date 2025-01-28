@@ -39,14 +39,23 @@ type ForgotPasswordRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
-type ForgotPasswordResponseBody struct {
-	Message string `json:"message"`
+func (h ForgotPasswordHandler) validateRequest(req ForgotPasswordRequest) *httperror.HTTPError {
+	v := validators.NewValidator()
+	v.Check(req.Email != "", "email", "email is required")
+	v.Check(h.ReCAPTCHADisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
+
+	if v.HasErrors() {
+		return httperror.BadRequest("", nil, v.Errors)
+	}
+
+	return nil
 }
 
 // ServeHTTP implements the http.Handler interface.
 func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Step 1: Get tenant from context
 	tnt, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {
 		err = fmt.Errorf("getting tenant from context: %w", err)
@@ -54,13 +63,21 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Step 2: Decode and validate the incoming request
 	var forgotPasswordRequest ForgotPasswordRequest
 	err = json.NewDecoder(r.Body).Decode(&forgotPasswordRequest)
 	if err != nil {
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		httperror.BadRequest("", err, nil).Render(w)
+		return
+	}
+	if httpErr := h.validateRequest(forgotPasswordRequest); httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
+	truncatedEmail := utils.TruncateString(forgotPasswordRequest.Email, 3)
+
+	// Step 3: Run the reCAPTCHA validation if it is enabled
 	if !h.ReCAPTCHADisabled {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
@@ -70,20 +87,13 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 
 		if !isValid {
-			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with email %s", utils.TruncateString(forgotPasswordRequest.Email, 3))
+			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with email %s", truncatedEmail)
 			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(w)
 			return
 		}
 	}
 
-	// validate request
-	v := validators.NewValidator()
-	v.Check(forgotPasswordRequest.Email != "", "email", "email is required")
-	if v.HasErrors() {
-		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
-		return
-	}
-
+	// Step 4: Find the user by email and send the forgot password message
 	err = db.RunInTransaction(ctx, h.Models.DBConnectionPool, nil, func(tx db.DBTransaction) error {
 		resetToken, txErr := h.AuthManager.ForgotPassword(ctx, tx, forgotPasswordRequest.Email)
 		if txErr != nil {
@@ -101,19 +111,18 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		// if we don't find the user by email, we just return an ok response
 		// to prevent malicious client from searching accounts in the system
 		if errors.Is(err, auth.ErrUserNotFound) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
+			log.Ctx(ctx).Errorf("in forgot password handler, email not found: %s", truncatedEmail)
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, user has a valid token")
+			log.Ctx(ctx).Errorf("in forgot password handler, user has a valid token")
 		} else {
-			httperror.InternalError(ctx, "", err, nil).Render(w)
+			httperror.InternalError(ctx, err.Error(), err, nil).Render(w)
 			return
 		}
 	}
 
-	responseBody := ForgotPasswordResponseBody{
-		Message: "Password reset requested. If the email is registered, you'll receive a reset link shortly. Check your inbox and spam folders.",
+	responseBody := map[string]string{
+		"message": "Password reset requested. If the email is registered, you'll receive a reset link shortly. Check your inbox and spam folders.",
 	}
-
 	httpjson.RenderStatus(w, http.StatusOK, responseBody, httpjson.JSON)
 }
 
@@ -145,7 +154,7 @@ func (h ForgotPasswordHandler) SendForgotPasswordMessage(ctx context.Context, ui
 	}
 	err = h.MessengerClient.SendMessage(msg)
 	if err != nil {
-		return fmt.Errorf("sending forgot password email for email %s: %w", utils.TruncateString(email, 3), err)
+		return fmt.Errorf("sending forgot password email for %s: %w", utils.TruncateString(email, 3), err)
 	}
 
 	return nil

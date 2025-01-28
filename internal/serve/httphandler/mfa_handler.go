@@ -33,51 +33,61 @@ type MFAHandler struct {
 
 const DeviceIDHeader = "Device-ID"
 
+func (h MFAHandler) validateRequest(req MFARequest, deviceID string) *httperror.HTTPError {
+	lv := validators.NewValidator()
+
+	lv.Check(req.MFACode != "", "mfa_code", "MFA Code is required")
+	lv.Check(h.ReCAPTCHADisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
+
+	lv.Check(deviceID != "", DeviceIDHeader, DeviceIDHeader+" header is required")
+
+	if lv.HasErrors() {
+		return httperror.BadRequest("", nil, lv.Errors)
+	}
+
+	return nil
+}
+
 func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
+	// Step 1: Decode and validate the incoming request
 	var reqBody MFARequest
 	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		log.Ctx(ctx).Errorf("decoding the request body: %s", err.Error())
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
 	}
+	deviceID := req.Header.Get(DeviceIDHeader)
+	if httpErr := h.validateRequest(reqBody, deviceID); httpErr != nil {
+		httpErr.Render(rw)
+		return
+	}
 
-	// validating reCAPTCHA Token
+	// Step 2: Run the reCAPTCHA validation if it is enabled
 	if !h.ReCAPTCHADisabled {
-		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
-		if recaptchaErr != nil {
-			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)
+		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
+		if err != nil {
+			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil).Render(rw)
 			return
 		}
 
 		if !isValid {
-			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with email")
+			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with device ID %s", deviceID)
 			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(rw)
 			return
 		}
 	}
 
-	if reqBody.MFACode == "" {
-		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
-		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
-		return
-	}
-
-	deviceID := req.Header.Get(DeviceIDHeader)
-	if deviceID == "" {
-		httperror.BadRequest("Device-ID header is required", nil, nil).Render(rw)
-		return
-	}
-
+	// Step 3: Authenticate the user with the MFA code
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
 		if errors.Is(err, auth.ErrMFACodeInvalid) {
 			httperror.Unauthorized("", err, nil).Render(rw)
-			return
+		} else {
+			log.Ctx(ctx).Errorf("authenticating user: %s", err.Error())
+			httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		}
-		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
-		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
 	}
 

@@ -34,8 +34,8 @@ func Test_HasErrors(t *testing.T) {
 
 func Test_addError(t *testing.T) {
 	validator := NewValidator()
-	validator.addError("key", "error message")
-	validator.addError("key2", "error message 2")
+	validator.AddError("key", "error message")
+	validator.AddError("key2", "error message 2")
 	assert.Equal(t, len(validator.Errors), 2)
 	assert.Equal(t, validator.Errors["key"], "error message")
 	assert.Equal(t, validator.Errors["key2"], "error message 2")
