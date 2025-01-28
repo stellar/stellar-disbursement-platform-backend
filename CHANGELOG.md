@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## [3.2.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.2.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.1.0...3.2.0))
+
+Release of the Stellar Disbursement Platform `v3.2.0`. This release focuses on enhancing the platform’s reliability and
+data tracking capabilities. Users can now patch already confirmed verification fields for receivers, providing greater
+flexibility in managing locked-out accounts. Additionally, audit logging has been introduced to track changes made to
+critical verification data, ensuring improved accountability and transparency.
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.2.0`.
+
+### Added
+
+- Dynamic Audit Table Creation through the `create_audit_table` Postgres function. This is initially applied to the receiver_verifications table to track changes. [#513](https://github.com/stellar/stellar-disbursement-platform-backend/pull/513)
+
+### Changed
+
+- Enabled patching of already confirmed verification fields for receivers, addressing scenarios where users might get locked out of a partner’s system. [#512](https://github.com/stellar/stellar-disbursement-platform-backend/pull/512)
+
 ## [3.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.0.0...3.1.0))
 
 Release of the Stellar Disbursement Platform `v3.1.0`. This release introduces key updates, including the migration to
@@ -14,8 +32,8 @@ data export through dedicated endpoints, allowing users to export disbursements,
 Additionally, users now have the ability to delete disbursements in `DRAFT` or `READY` status, streamlining data
 management workflows.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `3.1.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.1.0`.
 
 ### Added
 
@@ -61,8 +79,8 @@ exclusively through SMS as it now supports new types. The options are `PHONE_NUM
 `EMAIL_AND_WALLET_ADDRESS`, and `PHONE_NUMBER_AND_WALLET_ADDRESS`. If a receiver is registered with a wallet address,
 they can receive the payment right away without having to go through the SEP-24 registration flow.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `3.0.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.0.0`.
 
 ### Breaking Changes
 
@@ -136,8 +154,8 @@ the option to set different distribution account signers per tenant, as well
 as Circle support, so the tenant can choose to run their payments through the
 Circle API rather than directly on the Stellar network.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `2.1.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.1.0`.
 
 ### Changed
 
@@ -198,8 +216,8 @@ release introduces multi-tenancy support, allowing multiple tenants
 
 Each organization has its own set of users, receivers, disbursements, etc.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `2.0.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.0.0`.
 
 ### Changed
 

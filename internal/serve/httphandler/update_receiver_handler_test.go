@@ -12,13 +12,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func Test_UpdateReceiverHandler_createVerificationInsert(t *testing.T) {
@@ -108,15 +111,18 @@ func Test_UpdateReceiverHandler_400(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	handler := &UpdateReceiverHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
-	}
-
 	ctx := context.Background()
+	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
 
 	// setup
+	authManager := &auth.AuthManagerMock{}
+	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
+	handler := &UpdateReceiverHandler{
+		AuthManager:      authManager,
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
 	r := chi.NewRouter()
 	r.Patch("/receivers/{id}", handler.UpdateReceiver)
 
@@ -239,7 +245,7 @@ func Test_UpdateReceiverHandler_400(t *testing.T) {
 			route := fmt.Sprintf("/receivers/%s", receiver.ID)
 			reqBody, err := json.Marshal(tc.request)
 			require.NoError(t, err)
-			req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
+			req, err := http.NewRequestWithContext(ctx, "PATCH", route, strings.NewReader(string(reqBody)))
 			require.NoError(t, err)
 
 			rr := httptest.NewRecorder()
@@ -265,7 +271,14 @@ func Test_UpdateReceiverHandler_404(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+
+	// setup
+	authManager := &auth.AuthManagerMock{}
+	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
+		AuthManager:      authManager,
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
 	}
@@ -279,7 +292,7 @@ func Test_UpdateReceiverHandler_404(t *testing.T) {
 	route := fmt.Sprintf("/receivers/%s", "invalid_receiver_id")
 	reqBody, err := json.Marshal(request)
 	require.NoError(t, err)
-	req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
+	req, err := http.NewRequestWithContext(ctx, "PATCH", route, strings.NewReader(string(reqBody)))
 	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
@@ -299,12 +312,17 @@ func Test_UpdateReceiverHandler_409(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+
+	// setup
+	authManager := &auth.AuthManagerMock{}
+	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
+		AuthManager:      authManager,
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
 	}
-
-	ctx := context.Background()
 
 	// setup
 	r := chi.NewRouter()
@@ -351,7 +369,7 @@ func Test_UpdateReceiverHandler_409(t *testing.T) {
 			route := fmt.Sprintf("/receivers/%s", receiver.ID)
 			reqBody, err := json.Marshal(tc.request)
 			require.NoError(t, err)
-			req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, strings.NewReader(string(reqBody)))
 			require.NoError(t, err)
 
 			rr := httptest.NewRecorder()
@@ -377,12 +395,17 @@ func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+
+	// setup
+	authManager := &auth.AuthManagerMock{}
+	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
+		AuthManager:      authManager,
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
 	}
-
-	ctx := context.Background()
 
 	// setup
 	r := chi.NewRouter()
@@ -446,11 +469,18 @@ func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
 				VerificationField: data.VerificationTypeDateOfBirth,
 				VerificationValue: "2000-01-01",
 			})
+			rvSlice, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
+			require.NoError(t, err)
+			require.Len(t, rvSlice, 1)
+			rv := rvSlice[0]
+			assert.Empty(t, rv.ConfirmedAt)
+			assert.Empty(t, rv.ConfirmedByID)
+			assert.Empty(t, rv.ConfirmedByType)
 
 			route := fmt.Sprintf("/receivers/%s", receiver.ID)
 			reqBody, err := json.Marshal(tc.request)
 			require.NoError(t, err)
-			req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, strings.NewReader(string(reqBody)))
 			require.NoError(t, err)
 
 			rr := httptest.NewRecorder()
@@ -492,14 +522,17 @@ func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+
+	// setup
+	authManager := &auth.AuthManagerMock{}
+	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
+		AuthManager:      authManager,
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
 	}
-
-	ctx := context.Background()
-
-	// setup
 	r := chi.NewRouter()
 	r.Patch("/receivers/{id}", handler.UpdateReceiver)
 
@@ -609,7 +642,7 @@ func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
 				route := fmt.Sprintf("/receivers/%s", receiver.ID)
 				reqBody, err := json.Marshal(tc.request)
 				require.NoError(t, err)
-				req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
+				req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, strings.NewReader(string(reqBody)))
 				require.NoError(t, err)
 
 				rr := httptest.NewRecorder()
