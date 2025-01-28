@@ -138,7 +138,7 @@ anchorPlatform:
               "schema": "stellar",
               "code": "USDC",
               "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
+              "distribution_account": "NOT_APPLICABLE",
               "significant_decimals": 7,
               "deposit": {
                 "enabled": true,
@@ -153,7 +153,7 @@ anchorPlatform:
               "sep24_enabled": true,
               "schema": "stellar",
               "code": "native",
-              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
+              "distribution_account": "NOT_APPLICABLE",
               "significant_decimals": 7,
               "deposit": {
                 "enabled": true,
