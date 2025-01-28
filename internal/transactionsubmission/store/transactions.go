@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 var ErrRecordNotFound = errors.New("record not found")
@@ -31,6 +32,8 @@ type Transaction struct {
 	AssetIssuer   string                   `db:"asset_issuer"`
 	Amount        float64                  `db:"amount"`
 	Destination   string                   `db:"destination"`
+	Memo          string                   `db:"memo"`
+	MemoType      utils.MemoType           `db:"memo_type"`
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`

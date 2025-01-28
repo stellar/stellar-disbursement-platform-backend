@@ -238,7 +238,8 @@ func (c *CirclePaymentDispatcher) submitRecipientToCircle(ctx context.Context, r
 	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
 		IdempotencyKey: dataRecipient.IdempotencyKey,
 		Address:        receiverWallet.StellarAddress,
-		Chain:          circle.StellarChainCode,
+		// AddressTag:     receiverWallet.StellarMemo, // TODO: inject a memo here
+		Chain: circle.StellarChainCode,
 		Metadata: circle.RecipientMetadata{
 			Nickname: nickname,
 			Email:    receiverWallet.Receiver.Email,
