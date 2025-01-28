@@ -104,7 +104,7 @@ Parameters:
   SecretPlatformApiAuthSecret:
     Type: String
     NoEcho: true
-    Default: "platform-api-auth-secret"
+    Default: "jwt_secret_1234567890"
     Description: "Environment varible SECRET_PLATFORM_API_AUTH_SECRET"
   
   AnchorPlatformOutgoingJwtSecret:
@@ -124,6 +124,12 @@ Parameters:
     NoEcho: true
     Default: "YOUR_RECAPTCHA_KEY"
     Description: "Environment variable: RECAPTCHA_SITE_KEY"
+
+  RecaptchaSiteSecretKey:
+    Type: String
+    NoEcho: true
+    Default: "YOUR_RECAPTCHA_SECRET_KEY"
+    Description: "Environment variable: RECAPTCHA_SITE_SECRET_KEY"
 
 Conditions:
   GenerateSep10Keys: !Equals [ !Ref Sep10SigningPrivateKey, "" ]
@@ -435,7 +441,7 @@ Resources:
     Properties:
       Name: !Sub /sdp/${env}/RECAPTCHA_SITE_SECRET_KEY
       Description: "Recaptcha site secret key"
-      SecretString: !Ref RecaptchaSiteKey
+      SecretString: !Ref RecaptchaSiteSecretKey
 
 Outputs:
   Sep10SigningPrivateKeySmArn:

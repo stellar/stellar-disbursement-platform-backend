@@ -1,4 +1,4 @@
-# # Stellar Disbursement Platform (SDP) Kubernetes Deployment Guide
+# # Stellar Disbursement Platform (SDP) AWS Kubernetes (EKS) Deployment Guide
 
 ## Prerequisites
 - AWS CLI installed and configured
@@ -47,10 +47,7 @@ aws cloudformation create-stack \
   --stack-name sdp-network \
   --template-body file://sdp-network-eks.yaml \
   --parameters \
-    ParameterKey=env,ParameterValue=dev \
-    ParameterKey=AWSRegion,ParameterValue=us-west-2 \
-    ParameterKey=ExistingVPCId,ParameterValue="" \
-    ParameterKey=VPCCidr,ParameterValue="10.0.0.0/16"
+    ParameterKey=env,ParameterValue=dev
 ```
 
 **Note**: To use existing network resources, provide the VPC and subnet IDs:
@@ -99,7 +96,7 @@ Deploy the secrets and keys management stack:
 
 ```bash
 aws cloudformation create-stack \
-  --stack-name sdp-keys \
+  --stack-name sdp-keys-eks \
   --template-body file://sdp-keys.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
@@ -131,8 +128,7 @@ aws cloudformation create-stack \
   --parameters \
     ParameterKey=env,ParameterValue=dev \
     ParameterKey=NetworkStackName,ParameterValue=sdp-network \
-    ParameterKey=DatabaseStackName,ParameterValue=sdp-database \
-    ParameterKey=KeysStackName,ParameterValue=sdp-keys
+    ParameterKey=DatabaseStackName,ParameterValue=sdp-database
 ```
 
 Wait for stack completion (this will take ~15-20 minutes):

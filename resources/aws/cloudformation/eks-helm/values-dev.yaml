@@ -34,12 +34,14 @@ sdp:
       EC256_PUBLIC_KEY: "/dev/sdp/EC256_PUBLIC_KEY"
       SEP10_SIGNING_PRIVATE_KEY: "/dev/sdp/SEP10_SIGNING_PRIVATE_KEY"
       SEP10_SIGNING_PUBLIC_KEY: "/dev/sdp/SEP10_SIGNING_PUBLIC_KEY"
-      SEP24_JWT_SECRRET: "/dev/sdp/SEP24_JWT_SECRET"
+      SEP24_JWT_SECRET: "/dev/sdp/SEP24_JWT_SECRET"
       DISTRIBUTION_SEED: "/dev/sdp/DISTRIBUTION_SEED"
       DISTRIBUTION_PUBLIC_KEY: "/dev/sdp/DISTRIBUTION_PUBLIC_KEY"
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "/dev/sdp/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/dev/sdp/channel-encryption-passphrase"
       DATABASE_URL: "/dev/sdp/DATABASE_URL"
+      RECAPTCHA_SITE_KEY: "/sdp/dev/RECAPTCHA_SITE_KEY"
+      RECAPTCHA_SITE_SECRET_KEY: "/sdp/dev/RECAPTCHA_SITE_SECRET_KEY"
   # =========================== START sdp.configMap ===========================
   configMap:
     data:
@@ -136,7 +138,7 @@ anchorPlatform:
               "schema": "stellar",
               "code": "USDC",
               "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-              "distribution_account": "GCIA55CO7M7VJNDMQYEJKP4WQRB45CL2RJYPDW64PD2X7VDOZS53A4KK",
+              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
               "significant_decimals": 7,
               "deposit": {
                 "enabled": true,
@@ -150,8 +152,8 @@ anchorPlatform:
             {
               "sep24_enabled": true,
               "schema": "stellar",
-              "code": "XLM",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
+              "code": "native",
+              "distribution_account": "YOUR_DISTRIBUTION_ACCOUNT_PUBLIC_KEY",
               "significant_decimals": 7,
               "deposit": {
                 "enabled": true,
@@ -225,9 +227,11 @@ dashboard:
       rollingUpdate:
         maxUnavailable: 0
         maxSurge: 1
-  configMap:
+  kubeSecrets:
+    create: false
+    secretName: sdp-secrets
     data:
-      RECAPTCHA_SITE_KEY: "6Lcw864qAAAAAMRkQZwXdOIMy-EYlqXPkOPf_Jzb"
+      RECAPTCHA_SITE_KEY: "/sdp/dev/RECAPTCHA_SITE_KEY"
   ingress:
     enabled: true
     className: "ingress-public"
