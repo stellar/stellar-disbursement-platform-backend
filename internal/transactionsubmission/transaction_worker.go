@@ -535,6 +535,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 					Asset:         asset,
 				},
 			},
+			// TODO: inject memo here
 			BaseFee: int64(tw.engine.MaxBaseFee),
 			Preconditions: txnbuild.Preconditions{
 				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
