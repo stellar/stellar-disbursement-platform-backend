@@ -19,11 +19,11 @@ import (
 
 func Test_ReceiversWalletColumnNames(t *testing.T) {
 	testCases := []struct {
-		tableAlias string
-		expected   string
+		tableReference string
+		expected       string
 	}{
 		{
-			tableAlias: "",
+			tableReference: "",
 			expected: strings.Join([]string{
 				"id",
 				`receiver_id AS "receiver.id"`,
@@ -45,7 +45,7 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 			}, ",\n"),
 		},
 		{
-			tableAlias: "rw",
+			tableReference: "rw",
 			expected: strings.Join([]string{
 				"rw.id",
 				`rw.receiver_id AS "receiver.id"`,
@@ -68,45 +68,10 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(fmt.Sprintf("tableAlias=%s", testCase.tableAlias), func(t *testing.T) {
-			actual := ReceiverWalletColumnNames(testCase.tableAlias)
-			assert.Equal(t, testCase.expected, actual)
-		})
-	}
-}
-
-func Test_WalletColumnNamesForRW(t *testing.T) {
-	testCases := []struct {
-		tableAlias string
-		expected   string
-	}{
-		{
-			tableAlias: "",
-			expected: strings.Join([]string{
-				`id AS "wallet.id"`,
-				`name AS "wallet.name"`,
-				`sep_10_client_domain AS "wallet.sep_10_client_domain"`,
-				`homepage AS "wallet.homepage"`,
-				`enabled AS "wallet.enabled"`,
-			}, ",\n"),
-		},
-		{
-			tableAlias: "w",
-			expected: strings.Join([]string{
-				`w.id AS "wallet.id"`,
-				`w.name AS "wallet.name"`,
-				`w.sep_10_client_domain AS "wallet.sep_10_client_domain"`,
-				`w.homepage AS "wallet.homepage"`,
-				`w.enabled AS "wallet.enabled"`,
-			}, ",\n"),
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(fmt.Sprintf("tableAlias=%s", testCase.tableAlias), func(t *testing.T) {
-			actual := WalletColumnNamesForRW(testCase.tableAlias)
-			assert.Equal(t, testCase.expected, actual)
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("tableReference=%s", tc.tableReference), func(t *testing.T) {
+			actual := ReceiverWalletColumnNames(tc.tableReference)
+			assert.Equal(t, tc.expected, actual)
 		})
 	}
 }
@@ -599,6 +564,7 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 				Name:              wallet.Name,
 				Homepage:          wallet.Homepage,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
+				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
 			Status:                      receiverWallet.Status,
@@ -1377,6 +1343,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				Name:              wallet.Name,
 				Homepage:          wallet.Homepage,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
+				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
 			OTP:                         "123456",
@@ -1410,6 +1377,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				Name:              wallet.Name,
 				Homepage:          wallet.Homepage,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
+				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
 			Status:                      receiverWallet.Status,
