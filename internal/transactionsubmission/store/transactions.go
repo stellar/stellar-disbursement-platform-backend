@@ -12,6 +12,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/strkey"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -62,12 +63,9 @@ type Transaction struct {
 	LockedUntilLedgerNumber sql.NullInt32 `db:"locked_until_ledger_number"`
 }
 
-// func (tx *Transaction) BuildMemo() txnbuild.Memo {
-// 	if tx.MemoType == nil {
-// 		return nil
-// 	}
-// 	return txnbuild.MemoText(*tx.Memo)
-// }
+func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
+	return utils.NewMemo(tx.MemoType, tx.Memo)
+}
 
 func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {
 	return tx.LockedUntilLedgerNumber.Valid && currentLedgerNumber <= tx.LockedUntilLedgerNumber.Int32
