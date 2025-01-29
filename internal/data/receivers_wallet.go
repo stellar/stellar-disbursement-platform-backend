@@ -241,22 +241,6 @@ func ReceiverWalletColumnNames(tableReference string) string {
 	return strings.Join(columns, ",\n")
 }
 
-func WalletColumnNamesForRW(tableAlias string) string {
-	columns := GenerateColumnNames(SQLColumnConfig{
-		TableAlias:  tableAlias,
-		AliasPrefix: "wallet",
-		Columns: []string{
-			"id",
-			"name",
-			"sep_10_client_domain",
-			"homepage",
-			"enabled",
-		},
-	})
-
-	return strings.Join(columns, ",\n")
-}
-
 // GetByIDs returns a receiver wallet by IDs
 func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, ids ...string) ([]ReceiverWallet, error) {
 	if len(ids) == 0 {
@@ -266,7 +250,7 @@ func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecu
 	query := `
 		SELECT
 			` + ReceiverWalletColumnNames("rw") + `,
-			` + WalletColumnNamesForRW("w") + `
+			` + WalletColumnNamesWhenNested("w", "wallet") + `
 		FROM
 			receiver_wallets rw
 		JOIN
@@ -426,7 +410,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	query := `
 		SELECT
 			` + ReceiverWalletColumnNames("rw") + `,
-			` + WalletColumnNamesForRW("w") + `
+			` + WalletColumnNamesWhenNested("w", "wallet") + `
 		FROM
 			receiver_wallets rw
 		JOIN
@@ -511,7 +495,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	query := `
 		SELECT
 			` + ReceiverWalletColumnNames("rw") + `,
-			` + WalletColumnNamesForRW("w") + `
+			` + WalletColumnNamesWhenNested("w", "wallet") + `
 		FROM
 			receiver_wallets rw
 		JOIN

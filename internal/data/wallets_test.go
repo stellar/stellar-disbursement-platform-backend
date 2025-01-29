@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +12,74 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
+
+func Test_WalletColumnNamesWhenNested(t *testing.T) {
+	testCases := []struct {
+		tableReference string
+		resultAlias    string
+		expected       string
+	}{
+		{
+			tableReference: "",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"id",
+				"name",
+				"sep_10_client_domain",
+				"homepage",
+				"enabled",
+				"deep_link_schema",
+				"user_managed",
+			}, ",\n"),
+		},
+		{
+			tableReference: "",
+			resultAlias:    "wallet",
+			expected: strings.Join([]string{
+				`id AS "wallet.id"`,
+				`name AS "wallet.name"`,
+				`sep_10_client_domain AS "wallet.sep_10_client_domain"`,
+				`homepage AS "wallet.homepage"`,
+				`enabled AS "wallet.enabled"`,
+				`deep_link_schema AS "wallet.deep_link_schema"`,
+				`user_managed AS "wallet.user_managed"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "w",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"w.id",
+				"w.name",
+				"w.sep_10_client_domain",
+				"w.homepage",
+				"w.enabled",
+				"w.deep_link_schema",
+				"w.user_managed",
+			}, ",\n"),
+		},
+		{
+			tableReference: "w",
+			resultAlias:    "wallet",
+			expected: strings.Join([]string{
+				`w.id AS "wallet.id"`,
+				`w.name AS "wallet.name"`,
+				`w.sep_10_client_domain AS "wallet.sep_10_client_domain"`,
+				`w.homepage AS "wallet.homepage"`,
+				`w.enabled AS "wallet.enabled"`,
+				`w.deep_link_schema AS "wallet.deep_link_schema"`,
+				`w.user_managed AS "wallet.user_managed"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("tableReference=%s, resultAlias=%s", tc.tableReference, tc.resultAlias), func(t *testing.T) {
+			actual := WalletColumnNamesWhenNested(tc.tableReference, tc.resultAlias)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
 
 func Test_WalletModelGet(t *testing.T) {
 	dbt := dbtest.Open(t)

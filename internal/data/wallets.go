@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -61,6 +62,25 @@ func (wa *WalletAssets) Scan(src interface{}) error {
 
 type WalletModel struct {
 	dbConnectionPool db.DBConnectionPool
+}
+
+// WalletColumnNamesWhenNested returns the column names for a wallet when it is nested in another object.
+func WalletColumnNamesWhenNested(tableReference, resultAlias string) string {
+	columns := GenerateColumnNames(SQLColumnConfig{
+		TableReference: tableReference,
+		ResultAlias:    resultAlias,
+		Columns: []string{
+			"id",
+			"name",
+			"sep_10_client_domain",
+			"homepage",
+			"enabled",
+			"deep_link_schema",
+			"user_managed",
+		},
+	})
+
+	return strings.Join(columns, ",\n")
 }
 
 const getQuery = `
@@ -198,24 +218,12 @@ func (wm *WalletModel) GetOrCreate(ctx context.Context, name, homepage, deepLink
 			($1, $2, $3, $4)
 		ON CONFLICT (name, homepage, deep_link_schema) DO NOTHING
 		RETURNING
-			id, 
-			name, 
-			homepage,
-			sep_10_client_domain,
-			deep_link_schema,
-			created_at,
-			updated_at
+			*
 	)
 	SELECT * FROM create_wallet cw
 	UNION ALL
 	SELECT
-		id, 
-		name, 
-		homepage,
-		sep_10_client_domain,
-		deep_link_schema,
-		created_at,
-		updated_at
+		*
 	FROM wallets w
 	WHERE w.name = $1
 	`
