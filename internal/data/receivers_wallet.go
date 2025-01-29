@@ -208,63 +208,53 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 }
 
 func ReceiverWalletColumnNames(tableAlias string) string {
-	columns := []string{
-		"id",
-		`receiver_id as "receiver.id"`,
-		`wallet_id as "wallet.id"`,
-		"otp_created_at",
-		"otp_confirmed_at",
-		"status",
-		"status_history",
-		"created_at",
-		"updated_at",
-		"invitation_sent_at",
-		"anchor_platform_transaction_synced_at",
-	}
+	columns := GenerateColumnNames(SQLColumnConfig{
+		TableAlias: tableAlias,
+		Columns: []string{
+			"id",
+			`receiver_id AS "receiver.id"`,
+			`wallet_id AS "wallet.id"`,
+			"otp_created_at",
+			"otp_confirmed_at",
+			"status",
+			"status_history",
+			"created_at",
+			"updated_at",
+			"invitation_sent_at",
+			"anchor_platform_transaction_synced_at",
+		},
+	})
 
-	if tableAlias != "" {
-		tableAlias += "."
-	}
+	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
+		TableAlias:            tableAlias,
+		CoalesceToEmptyString: true,
+		Columns: []string{
+			"anchor_platform_transaction_id",
+			"stellar_address",
+			"stellar_memo",
+			"stellar_memo_type",
+			"otp",
+			"otp_confirmed_with",
+		},
+	})...)
 
-	var fullColumnNames []string
-	for _, column := range columns {
-		fullColumnNames = append(fullColumnNames, fmt.Sprintf("%s%s", tableAlias, column))
-	}
-
-	columnsRequiringCoalesce := []string{
-		"anchor_platform_transaction_id",
-		"stellar_address",
-		"stellar_memo",
-		"stellar_memo_type",
-		"otp",
-		"otp_confirmed_with",
-	}
-	for _, column := range columnsRequiringCoalesce {
-		fullColumnNames = append(fullColumnNames, fmt.Sprintf("COALESCE(%s%s, '') as %s", tableAlias, column, column))
-	}
-
-	return strings.Join(fullColumnNames, ",\n")
+	return strings.Join(columns, ",\n")
 }
 
 func WalletColumnNamesForRW(tableAlias string) string {
-	columns := []string{
-		"id",
-		"name",
-		"sep_10_client_domain",
-		"homepage",
-		"enabled",
-	}
+	columns := GenerateColumnNames(SQLColumnConfig{
+		TableAlias:  tableAlias,
+		AliasPrefix: "wallet",
+		Columns: []string{
+			"id",
+			"name",
+			"sep_10_client_domain",
+			"homepage",
+			"enabled",
+		},
+	})
 
-	if tableAlias != "" {
-		tableAlias += "."
-	}
-
-	var fullColumnNames []string
-	for _, column := range columns {
-		fullColumnNames = append(fullColumnNames, fmt.Sprintf(`%s%s AS "wallet.%s"`, tableAlias, column, column))
-	}
-
-	return strings.Join(fullColumnNames, ",\n")
+	return strings.Join(columns, ",\n")
 }
 
 // GetByIDs returns a receiver wallet by IDs
