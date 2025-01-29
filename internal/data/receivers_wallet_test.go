@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,100 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+func Test_ReceiversWalletColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableAlias string
+		expected   string
+	}{
+		{
+			tableAlias: "",
+			expected: strings.Join([]string{
+				"id",
+				`receiver_id AS "receiver.id"`,
+				`wallet_id AS "wallet.id"`,
+				"otp_created_at",
+				"otp_confirmed_at",
+				"status",
+				"status_history",
+				"created_at",
+				"updated_at",
+				"invitation_sent_at",
+				"anchor_platform_transaction_synced_at",
+				"COALESCE(anchor_platform_transaction_id, '') AS anchor_platform_transaction_id",
+				"COALESCE(stellar_address, '') AS stellar_address",
+				"COALESCE(stellar_memo, '') AS stellar_memo",
+				"COALESCE(stellar_memo_type, '') AS stellar_memo_type",
+				"COALESCE(otp, '') AS otp",
+				"COALESCE(otp_confirmed_with, '') AS otp_confirmed_with",
+			}, ",\n"),
+		},
+		{
+			tableAlias: "rw",
+			expected: strings.Join([]string{
+				"rw.id",
+				"rw.receiver_id AS \"receiver.id\"",
+				"rw.wallet_id AS \"wallet.id\"",
+				"rw.otp_created_at",
+				"rw.otp_confirmed_at",
+				"rw.status",
+				"rw.status_history",
+				"rw.created_at",
+				"rw.updated_at",
+				"rw.invitation_sent_at",
+				"rw.anchor_platform_transaction_synced_at",
+				"COALESCE(rw.anchor_platform_transaction_id, '') AS anchor_platform_transaction_id",
+				"COALESCE(rw.stellar_address, '') AS stellar_address",
+				"COALESCE(rw.stellar_memo, '') AS stellar_memo",
+				"COALESCE(rw.stellar_memo_type, '') AS stellar_memo_type",
+				"COALESCE(rw.otp, '') AS otp",
+				"COALESCE(rw.otp_confirmed_with, '') AS otp_confirmed_with",
+			}, ",\n"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprintf("tableAlias=%s", testCase.tableAlias), func(t *testing.T) {
+			actual := ReceiverWalletColumnNames(testCase.tableAlias)
+			assert.Equal(t, testCase.expected, actual)
+		})
+	}
+}
+
+func Test_WalletColumnNamesForRW(t *testing.T) {
+	testCases := []struct {
+		tableAlias string
+		expected   string
+	}{
+		{
+			tableAlias: "",
+			expected: strings.Join([]string{
+				`id AS "wallet.id"`,
+				`name AS "wallet.name"`,
+				`sep_10_client_domain AS "wallet.sep_10_client_domain"`,
+				`homepage AS "wallet.homepage"`,
+				`enabled AS "wallet.enabled"`,
+			}, ",\n"),
+		},
+		{
+			tableAlias: "w",
+			expected: strings.Join([]string{
+				`w.id AS "wallet.id"`,
+				`w.name AS "wallet.name"`,
+				`w.sep_10_client_domain AS "wallet.sep_10_client_domain"`,
+				`w.homepage AS "wallet.homepage"`,
+				`w.enabled AS "wallet.enabled"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprintf("tableAlias=%s", testCase.tableAlias), func(t *testing.T) {
+			actual := WalletColumnNamesForRW(testCase.tableAlias)
+			assert.Equal(t, testCase.expected, actual)
+		})
+	}
+}
 
 func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 	dbt := dbtest.Open(t)
