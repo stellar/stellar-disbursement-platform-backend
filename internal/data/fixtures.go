@@ -308,7 +308,7 @@ func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		VALUES
 			($1, $2, $3)
 		RETURNING
-			` + ReceiverColumnNames("")
+			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
 	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalId)
@@ -399,7 +399,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		require.NoError(t, err)
 	}
 
-	const query = `
+	query := `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
 				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, anchor_platform_transaction_id)
@@ -409,10 +409,11 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 				*
 		)
 		SELECT
-			rw.id, rw.stellar_address, rw.stellar_memo, rw.stellar_memo_type, rw.status, rw.status_history, rw.created_at, rw.updated_at,
-			rw.anchor_platform_transaction_id, rw.anchor_platform_transaction_synced_at,
-			r.id, COALESCE(r.phone_number, '') as phone_number, COALESCE(r.email, '') as email, r.external_id, r.created_at, r.updated_at,
-			w.id, w.name, w.homepage, w.deep_link_schema, w.created_at, w.updated_at
+			` + ReceiverWalletColumnNames("rw") + `,
+			` + ReceiverColumnNames("r", "receiver") + `,
+			` + WalletColumnNamesWhenNested("w", "wallet") + `,
+			w.created_at AS "wallet.created_at",
+			w.updated_at AS "wallet.updated_at"
 		FROM
 			inserted_receiver_wallet AS rw
 			JOIN receivers AS r ON rw.receiver_id = r.id
@@ -420,30 +421,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err := sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
-		&receiverWallet.ID,
-		&receiverWallet.StellarAddress,
-		&receiverWallet.StellarMemo,
-		&receiverWallet.StellarMemoType,
-		&receiverWallet.Status,
-		&receiverWallet.StatusHistory,
-		&receiverWallet.CreatedAt,
-		&receiverWallet.UpdatedAt,
-		&receiverWallet.AnchorPlatformTransactionID,
-		&receiverWallet.AnchorPlatformTransactionSyncedAt,
-		&receiverWallet.Receiver.ID,
-		&receiverWallet.Receiver.Email,
-		&receiverWallet.Receiver.PhoneNumber,
-		&receiverWallet.Receiver.ExternalID,
-		&receiverWallet.Receiver.CreatedAt,
-		&receiverWallet.Receiver.UpdatedAt,
-		&receiverWallet.Wallet.ID,
-		&receiverWallet.Wallet.Name,
-		&receiverWallet.Wallet.Homepage,
-		&receiverWallet.Wallet.DeepLinkSchema,
-		&receiverWallet.Wallet.CreatedAt,
-		&receiverWallet.Wallet.UpdatedAt,
-	)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID)
 	require.NoError(t, err)
 
 	return &receiverWallet
