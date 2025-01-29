@@ -56,9 +56,10 @@ type ReceiverRegistrationRequest struct {
 	ReCAPTCHAToken    string           `json:"recaptcha_token"`
 }
 
-func ReceiverColumnNames(tableReference string) string {
+func ReceiverColumnNames(tableReference, resultAlias string) string {
 	columns := GenerateColumnNames(SQLColumnConfig{
 		TableReference: tableReference,
+		ResultAlias:    resultAlias,
 		Columns: []string{
 			"id",
 			"external_id",
@@ -69,6 +70,7 @@ func ReceiverColumnNames(tableReference string) string {
 
 	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
 		TableReference:        tableReference,
+		ResultAlias:           resultAlias,
 		CoalesceToEmptyString: true,
 		Columns: []string{
 			"phone_number",
@@ -204,7 +206,7 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 		GROUP BY (rs.receiver_id)
 	)
 	SELECT
-		` + ReceiverColumnNames("rc") + `,
+		` + ReceiverColumnNames("rc", "") + `,
 		COALESCE(total_payments, 0) as total_payments,
 		COALESCE(successful_payments, 0) as successful_payments,
 		COALESCE(rs.failed_payments, '0') as failed_payments,
@@ -255,7 +257,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 	query := `
 		WITH receivers_cte AS (
 			SELECT
-				` + ReceiverColumnNames("r") + `
+				` + ReceiverColumnNames("r", "") + `
 			FROM
 				receivers r
 		), registered_receiver_wallets_count_cte AS (
@@ -384,7 +386,7 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 			$2,
 		    $3
 		) RETURNING
-			` + ReceiverColumnNames("")
+			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
 	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalId)
@@ -453,7 +455,7 @@ func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecute
 
 	query := `
 	SELECT
-		` + ReceiverColumnNames("r") + `
+		` + ReceiverColumnNames("r", "") + `
 	FROM receivers r
 	WHERE r.phone_number = ANY($1) OR r.email = ANY($1)
 	`

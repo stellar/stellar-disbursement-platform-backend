@@ -22,10 +22,12 @@ import (
 func Test_ReceiverColumnNames(t *testing.T) {
 	testCases := []struct {
 		tableReference string
+		resultAlias    string
 		expected       string
 	}{
 		{
 			tableReference: "",
+			resultAlias:    "",
 			expected: strings.Join([]string{
 				`id`,
 				`external_id`,
@@ -36,7 +38,20 @@ func Test_ReceiverColumnNames(t *testing.T) {
 			}, ",\n"),
 		},
 		{
+			tableReference: "",
+			resultAlias:    "receiver",
+			expected: strings.Join([]string{
+				`id AS "receiver.id"`,
+				`external_id AS "receiver.external_id"`,
+				`created_at AS "receiver.created_at"`,
+				`updated_at AS "receiver.updated_at"`,
+				`COALESCE(phone_number, '') AS "receiver.phone_number"`,
+				`COALESCE(email, '') AS "receiver.email"`,
+			}, ",\n"),
+		},
+		{
 			tableReference: "r",
+			resultAlias:    "",
 			expected: strings.Join([]string{
 				`r.id`,
 				`r.external_id`,
@@ -46,12 +61,24 @@ func Test_ReceiverColumnNames(t *testing.T) {
 				`COALESCE(r.email, '') AS "email"`,
 			}, ",\n"),
 		},
+		{
+			tableReference: "r",
+			resultAlias:    "receiver",
+			expected: strings.Join([]string{
+				`r.id AS "receiver.id"`,
+				`r.external_id AS "receiver.external_id"`,
+				`r.created_at AS "receiver.created_at"`,
+				`r.updated_at AS "receiver.updated_at"`,
+				`COALESCE(r.phone_number, '') AS "receiver.phone_number"`,
+				`COALESCE(r.email, '') AS "receiver.email"`,
+			}, ",\n"),
+		},
 	}
 
-	for _, testCase := range testCases {
-		t.Run(fmt.Sprintf("tableReference=%s", testCase.tableReference), func(t *testing.T) {
-			actual := ReceiverColumnNames(testCase.tableReference)
-			assert.Equal(t, testCase.expected, actual)
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("tableReference=%s, resultAlias=%s", tc.tableReference, tc.resultAlias), func(t *testing.T) {
+			actual := ReceiverColumnNames(tc.tableReference, tc.resultAlias)
+			assert.Equal(t, tc.expected, actual)
 		})
 	}
 }
