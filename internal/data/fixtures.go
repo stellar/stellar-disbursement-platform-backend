@@ -302,14 +302,13 @@ func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		r.ExternalId = &randString
 	}
 
-	const query = `
+	query := `
 		INSERT INTO receivers
 			(email, phone_number, external_id)
 		VALUES
 			($1, $2, $3)
 		RETURNING
-			id, COALESCE(phone_number, '') as phone_number, COALESCE(email, '') as email, external_id, created_at, updated_at
-	`
+			` + ReceiverColumnNames("")
 
 	var receiver Receiver
 	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalId)

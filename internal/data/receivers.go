@@ -56,6 +56,29 @@ type ReceiverRegistrationRequest struct {
 	ReCAPTCHAToken    string           `json:"recaptcha_token"`
 }
 
+func ReceiverColumnNames(tableAlias string) string {
+	columns := GenerateColumnNames(SQLColumnConfig{
+		TableAlias: tableAlias,
+		Columns: []string{
+			"id",
+			"external_id",
+			"created_at",
+			"updated_at",
+		},
+	})
+
+	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
+		TableAlias:            tableAlias,
+		CoalesceToEmptyString: true,
+		Columns: []string{
+			"phone_number",
+			"email",
+		},
+	})...)
+
+	return strings.Join(columns, ",\n")
+}
+
 type ReceiverStats struct {
 	TotalPayments      string          `json:"total_payments,omitempty" db:"total_payments"`
 	SuccessfulPayments string          `json:"successful_payments,omitempty" db:"successful_payments"`
@@ -141,13 +164,8 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 
 	query := `
 	WITH receivers_cte AS (
-		SELECT 
-			r.id,
-			r.external_id,
-			r.phone_number,
-			r.email,
-			r.created_at,
-			r.updated_at
+		SELECT
+			*
 		FROM receivers r
 		WHERE r.id = $1
 	), receiver_wallets_cte AS (
@@ -184,14 +202,9 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 			jsonb_agg(jsonb_build_object('asset_code', rs.asset_code, 'asset_issuer', rs.asset_issuer, 'received_amount', rs.received_amount::text)) as received_amounts
 		FROM receiver_stats rs
 		GROUP BY (rs.receiver_id)
-	) 
+	)
 	SELECT
-		rc.id,
-		rc.external_id,
-		COALESCE(rc.phone_number, '') as phone_number,
-		COALESCE(rc.email, '') as email,
-		rc.created_at,
-		rc.updated_at,
+		` + ReceiverColumnNames("rc") + `,
 		COALESCE(total_payments, 0) as total_payments,
 		COALESCE(successful_payments, 0) as successful_payments,
 		COALESCE(rs.failed_payments, '0') as failed_payments,
@@ -239,9 +252,12 @@ func (r *ReceiverModel) Count(ctx context.Context, sqlExec db.SQLExecuter, query
 func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams, queryType QueryType) ([]Receiver, error) {
 	receivers := []Receiver{}
 
-	baseQuery := `
+	query := `
 		WITH receivers_cte AS (
-			%s
+			SELECT
+				` + ReceiverColumnNames("r") + `
+			FROM
+				receivers r
 		), registered_receiver_wallets_count_cte AS (
 			SELECT
 				rc.id as receiver_id,
@@ -276,7 +292,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 				jsonb_agg(jsonb_build_object('asset_code', rs.asset_code, 'asset_issuer', rs.asset_issuer, 'received_amount', rs.received_amount::text)) as received_amounts
 			FROM receiver_stats rs
 			GROUP BY (rs.receiver_id)
-		) 
+		)
 		SELECT
 			distinct(r.id),
 			r.external_id,
@@ -296,19 +312,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 		LEFT JOIN receiver_wallets rw ON rw.receiver_id = r.id
 		LEFT JOIN registered_receiver_wallets_count_cte rrwc ON rrwc.receiver_id = r.id
 		`
-	receiverQuery := `
-		SELECT
-			r.id,
-			COALESCE(r.phone_number, '') as phone_number,
-			COALESCE(r.email, '') as email,
-			r.external_id,
-			r.created_at,
-			r.updated_at
-		FROM
-			receivers r
-	`
 
-	query := fmt.Sprintf(baseQuery, receiverQuery)
 	query, params := newReceiverQuery(query, queryParams, sqlExec, queryType)
 
 	err := sqlExec.SelectContext(ctx, &receivers, query, params...)
@@ -380,13 +384,7 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 			$2,
 		    $3
 		) RETURNING
-			id,
-			COALESCE(phone_number, '') as phone_number,
-			COALESCE(email, '') as email,
-			external_id,
-			created_at,
-			updated_at
-		`
+			` + ReceiverColumnNames("")
 
 	var receiver Receiver
 	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalId)
@@ -455,12 +453,7 @@ func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecute
 
 	query := `
 	SELECT
-		r.id,
-		COALESCE(r.phone_number, '') as phone_number,
-		COALESCE(r.email, '') as email,
-		r.external_id,
-		r.created_at,
-		r.updated_at
+		` + ReceiverColumnNames("r") + `
 	FROM receivers r
 	WHERE r.phone_number = ANY($1) OR r.email = ANY($1)
 	`
