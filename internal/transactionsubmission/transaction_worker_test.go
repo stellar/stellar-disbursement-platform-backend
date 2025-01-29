@@ -1670,7 +1670,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		getAccountResponseObj   horizon.Account
 		getAccountResponseError *horizonclient.Error
 		wantErrorContains       string
-		memoType                utils.MemoType
+		memoType                schema.MemoType
 		memoValue               string
 		wantMemo                txnbuild.Memo
 	}{
@@ -1709,7 +1709,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			assetCode:             "USDC",
 			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
-			memoType:              utils.MemoTypeText,
+			memoType:              schema.MemoTypeText,
 			memoValue:             "HelloWorld!",
 			wantMemo:              txnbuild.MemoText("HelloWorld!"),
 		},

@@ -16,7 +16,7 @@ import (
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var ErrRecordNotFound = errors.New("record not found")
@@ -34,7 +34,7 @@ type Transaction struct {
 	Amount        float64                  `db:"amount"`
 	Destination   string                   `db:"destination"`
 	Memo          string                   `db:"memo"`
-	MemoType      utils.MemoType           `db:"memo_type"`
+	MemoType      schema.MemoType          `db:"memo_type"`
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
@@ -64,7 +64,7 @@ type Transaction struct {
 }
 
 func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
-	return utils.NewMemo(tx.MemoType, tx.Memo)
+	return schema.NewMemo(tx.MemoType, tx.Memo)
 }
 
 func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {
