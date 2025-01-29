@@ -21,11 +21,11 @@ import (
 
 func Test_ReceiverColumnNames(t *testing.T) {
 	testCases := []struct {
-		tableAlias string
-		expected   string
+		tableReference string
+		expected       string
 	}{
 		{
-			tableAlias: "",
+			tableReference: "",
 			expected: strings.Join([]string{
 				`id`,
 				`external_id`,
@@ -36,7 +36,7 @@ func Test_ReceiverColumnNames(t *testing.T) {
 			}, ",\n"),
 		},
 		{
-			tableAlias: "r",
+			tableReference: "r",
 			expected: strings.Join([]string{
 				`r.id`,
 				`r.external_id`,
@@ -49,8 +49,8 @@ func Test_ReceiverColumnNames(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		t.Run(fmt.Sprintf("tableAlias=%s", testCase.tableAlias), func(t *testing.T) {
-			actual := ReceiverColumnNames(testCase.tableAlias)
+		t.Run(fmt.Sprintf("tableReference=%s", testCase.tableReference), func(t *testing.T) {
+			actual := ReceiverColumnNames(testCase.tableReference)
 			assert.Equal(t, testCase.expected, actual)
 		})
 	}

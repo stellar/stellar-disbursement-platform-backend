@@ -56,9 +56,9 @@ type ReceiverRegistrationRequest struct {
 	ReCAPTCHAToken    string           `json:"recaptcha_token"`
 }
 
-func ReceiverColumnNames(tableAlias string) string {
+func ReceiverColumnNames(tableReference string) string {
 	columns := GenerateColumnNames(SQLColumnConfig{
-		TableAlias: tableAlias,
+		TableReference: tableReference,
 		Columns: []string{
 			"id",
 			"external_id",
@@ -68,7 +68,7 @@ func ReceiverColumnNames(tableAlias string) string {
 	})
 
 	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
-		TableAlias:            tableAlias,
+		TableReference:        tableReference,
 		CoalesceToEmptyString: true,
 		Columns: []string{
 			"phone_number",
