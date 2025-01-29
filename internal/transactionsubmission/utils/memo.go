@@ -19,6 +19,9 @@ const (
 
 func NewMemo(memoType MemoType, memoValue string) (txnbuild.Memo, error) {
 	switch memoType {
+	case "":
+		return nil, nil
+
 	case MemoTypeText:
 		// Memo Text (up to 28 bytes)
 		if len(memoValue) > 28 {

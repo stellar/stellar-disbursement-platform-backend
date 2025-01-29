@@ -25,6 +25,11 @@ func Test_NewMemo(t *testing.T) {
 		wantErrContains string
 	}{
 		{
+			memoType:  "",
+			memoValue: "",
+			wantMemo:  nil,
+		},
+		{
 			memoType:        MemoTypeText,
 			memoValue:       "This is a very long text that should exceed the 28-byte limit",
 			wantErrContains: "text memo must be 28 bytes or less",

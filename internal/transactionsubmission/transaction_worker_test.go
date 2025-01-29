@@ -1670,6 +1670,9 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		getAccountResponseObj   horizon.Account
 		getAccountResponseError *horizonclient.Error
 		wantErrorContains       string
+		memoType                utils.MemoType
+		memoValue               string
+		wantMemo                txnbuild.Memo
 	}{
 		{
 			name:              "returns an error if the asset code is empty",
@@ -1701,6 +1704,15 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			assetIssuer:           "",
 			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
 		},
+		{
+			name:                  "🎉 successfully build and sign a transaction with memo",
+			assetCode:             "USDC",
+			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+			memoType:              utils.MemoTypeText,
+			memoValue:             "HelloWorld!",
+			wantMemo:              txnbuild.MemoText("HelloWorld!"),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1713,6 +1725,8 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
 			txJob.Transaction.AssetCode = tc.assetCode
 			txJob.Transaction.AssetIssuer = tc.assetIssuer
+			txJob.Transaction.Memo = tc.memoValue
+			txJob.Transaction.MemoType = tc.memoType
 
 			// mock horizon
 			mockHorizon := &horizonclient.MockClient{}
@@ -1764,6 +1778,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 							AccountID: txJob.ChannelAccount.PublicKey,
 							Sequence:  accountSequence,
 						},
+						Memo: tc.wantMemo,
 						Operations: []txnbuild.Operation{
 							&txnbuild.Payment{
 								SourceAccount: distributionKP.Address(),

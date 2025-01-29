@@ -30,9 +30,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-// Review these TODOs originally created by Stephen:
-// TODO - memo/memoType not supported yet - [SDP-463]
-
 type TxJob store.ChannelTransactionBundle
 
 func (job TxJob) String() string {
@@ -445,7 +442,6 @@ func (tw *TransactionWorker) validateJob(txJob *TxJob) error {
 		return fmt.Errorf("invalid transaction status: %v", txJob.Transaction.Status)
 	}
 
-	// TODO: make sure we're handling 429s upstream
 	currentLedgerNumber, err := tw.engine.LedgerNumberTracker.GetLedgerNumber()
 	if err != nil {
 		return fmt.Errorf("getting current ledger number: %w", err)
@@ -520,6 +516,11 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 
+	memo, err := txJob.Transaction.BuildMemo()
+	if err != nil {
+		return nil, fmt.Errorf("building memo: %w", err)
+	}
+
 	// build the inner payment transaction
 	paymentTx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
@@ -530,13 +531,12 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
 					SourceAccount: distributionAccount.Address,
-					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32), // TODO find a better way to do this
+					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32),
 					Destination:   txJob.Transaction.Destination,
 					Asset:         asset,
 				},
 			},
-			// TODO: inject memo here
-			// Memo:    txJob.Transaction.BuildMemo(),
+			Memo:    memo,
 			BaseFee: int64(tw.engine.MaxBaseFee),
 			Preconditions: txnbuild.Preconditions{
 				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
