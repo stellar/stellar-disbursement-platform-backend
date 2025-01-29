@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,43 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+func Test_ReceiverColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableAlias string
+		expected   string
+	}{
+		{
+			tableAlias: "",
+			expected: strings.Join([]string{
+				`id`,
+				`external_id`,
+				`created_at`,
+				`updated_at`,
+				`COALESCE(phone_number, '') AS "phone_number"`,
+				`COALESCE(email, '') AS "email"`,
+			}, ",\n"),
+		},
+		{
+			tableAlias: "r",
+			expected: strings.Join([]string{
+				`r.id`,
+				`r.external_id`,
+				`r.created_at`,
+				`r.updated_at`,
+				`COALESCE(r.phone_number, '') AS "phone_number"`,
+				`COALESCE(r.email, '') AS "email"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprintf("tableAlias=%s", testCase.tableAlias), func(t *testing.T) {
+			actual := ReceiverColumnNames(testCase.tableAlias)
+			assert.Equal(t, testCase.expected, actual)
+		})
+	}
+}
 
 func Test_ReceiversModel_Get(t *testing.T) {
 	dbt := dbtest.Open(t)
