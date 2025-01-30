@@ -530,7 +530,7 @@ func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) 
 						Models:        models,
 						CircleService: mCircleService,
 					}
-					err = svc.reconcilePayoutRequest(ctx, dbTx, tnt, circleRequest)
+					err = svc.reconcilePaymentRequest(ctx, dbTx, tnt, circleRequest)
 
 					// get the updated CircleRequestTransfer and Payment from the DB
 					circleReqFromDB, dbErr := models.CircleTransferRequests.Get(ctx, dbTx, data.QueryParams{
