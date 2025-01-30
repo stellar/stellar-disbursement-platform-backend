@@ -131,6 +131,24 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			continue
 		}
 
+		shortCode, err := s.Models.URLShortener.CreateShortURL(ctx, registrationLink)
+		if err != nil {
+			log.Ctx(ctx).Errorf(
+				"shortening registration link to receiver wallet ID %s and asset ID %s: %v",
+				rwa.ReceiverWallet.ID, rwa.Asset.ID, err,
+			)
+			continue
+		}
+
+		shortenedRegistrationLink, err := url.JoinPath(*currentTenant.BaseURL, "r", shortCode)
+		if err != nil {
+			log.Ctx(ctx).Errorf(
+				"building shortened registration link for shortCode %s: %v",
+				shortCode, err,
+			)
+			continue
+		}
+
 		disbursementReceiverRegistrationMessageTemplate := rwa.DisbursementReceiverRegistrationMsgTemplate
 		if disbursementReceiverRegistrationMessageTemplate != nil && *disbursementReceiverRegistrationMessageTemplate != "" {
 			if !strings.Contains(*disbursementReceiverRegistrationMessageTemplate, "{{.RegistrationLink}}") {
@@ -149,7 +167,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			RegistrationLink template.HTML
 		}{
 			OrganizationName: organization.Name,
-			RegistrationLink: template.HTML(registrationLink),
+			RegistrationLink: template.HTML(shortenedRegistrationLink),
 		})
 		if err != nil {
 			return fmt.Errorf("executing registration message template: %w", err)
