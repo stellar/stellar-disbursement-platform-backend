@@ -1,6 +1,9 @@
 package data
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // SQLColumnConfig contains configuration for generating SQL column names.
 type SQLColumnConfig struct {
@@ -35,6 +38,7 @@ func GenerateColumnNames(config SQLColumnConfig) []string {
 		// Apply alias if needed
 		var columnAlias string
 		if config.ResultAlias != "" || config.CoalesceToEmptyString {
+			column = strings.SplitN(column, "::", 2)[0]
 			columnAlias = fmt.Sprintf(` AS "%s%s"`, config.ResultAlias, column)
 		}
 

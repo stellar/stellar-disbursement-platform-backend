@@ -151,12 +151,7 @@ SELECT
 	p.created_at,
 	p.updated_at,
 	COALESCE(p.external_payment_id, '') as external_payment_id,
-	d.id as "disbursement.id",
-	d.name as "disbursement.name",
-	d.status as "disbursement.status",
-	d.created_at as "disbursement.created_at",
-	d.updated_at as "disbursement.updated_at",
-	d.registration_contact_type as "disbursement.registration_contact_type",
+	` + DisbursementColumnNames("d", "disbursement") + `,
 	` + AssetColumnNames("a", "asset", false) + `,
 	rw.id as "receiver_wallet.id",
 	COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
@@ -246,7 +241,7 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 			payments p
 		JOIN disbursements d on p.disbursement_id = d.id
 		JOIN assets a on p.asset_id = a.id
-		JOIN wallets w on d.wallet_id = w.id			
+		JOIN wallets w on d.wallet_id = w.id
 		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
 		`
 
@@ -367,8 +362,7 @@ var getReadyPaymentsBaseQuery = `
 		p.status,
 		p.created_at,
 		p.updated_at,
-		d.id as "disbursement.id",
-		d.status as "disbursement.status",
+		` + DisbursementColumnNames("d", "disbursement") + `,
 		` + AssetColumnNames("a", "asset", false) + `,
 		rw.id as "receiver_wallet.id",
 		rw.receiver_id as "receiver_wallet.receiver.id",
@@ -589,8 +583,7 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 			p.status,
 			p.created_at,
 			p.updated_at,
-			d.id as "disbursement.id",
-			d.status as "disbursement.status",
+			` + DisbursementColumnNames("d", "disbursement") + `,
 			` + AssetColumnNames("a", "asset", false) + `,
 			rw.id as "receiver_wallet.id",
 			rw.receiver_id as "receiver_wallet.receiver.id",
