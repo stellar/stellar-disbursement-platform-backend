@@ -250,7 +250,7 @@ func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecu
 	query := `
 		SELECT
 			` + ReceiverWalletColumnNames("rw") + `,
-			` + WalletColumnNamesWhenNested("w", "wallet") + `
+			` + WalletColumnNames("w", "wallet", false) + `
 		FROM
 			receiver_wallets rw
 		JOIN
@@ -410,7 +410,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	query := `
 		SELECT
 			` + ReceiverWalletColumnNames("rw") + `,
-			` + WalletColumnNamesWhenNested("w", "wallet") + `
+			` + WalletColumnNames("w", "wallet", false) + `
 		FROM
 			receiver_wallets rw
 		JOIN
@@ -495,7 +495,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	query := `
 		SELECT
 			` + ReceiverWalletColumnNames("rw") + `,
-			` + WalletColumnNamesWhenNested("w", "wallet") + `
+			` + WalletColumnNames("w", "wallet", false) + `
 		FROM
 			receiver_wallets rw
 		JOIN

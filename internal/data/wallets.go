@@ -64,20 +64,26 @@ type WalletModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
-// WalletColumnNamesWhenNested returns the column names for a wallet when it is nested in another object.
-func WalletColumnNamesWhenNested(tableReference, resultAlias string) string {
+// WalletColumnNames returns a comma-separated string of wallet column names for SQL queries. It includes optional date
+// fields based on the provided parameter.
+func WalletColumnNames(tableReference, resultAlias string, includeDates bool) string {
+	colNames := []string{
+		"id",
+		"name",
+		"sep_10_client_domain",
+		"homepage",
+		"enabled",
+		"deep_link_schema",
+		"user_managed",
+	}
+	if includeDates {
+		colNames = append(colNames, "created_at", "updated_at", "deleted_at")
+	}
+
 	columns := GenerateColumnNames(SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
-		Columns: []string{
-			"id",
-			"name",
-			"sep_10_client_domain",
-			"homepage",
-			"enabled",
-			"deep_link_schema",
-			"user_managed",
-		},
+		Columns:        colNames,
 	})
 
 	return strings.Join(columns, ",\n")

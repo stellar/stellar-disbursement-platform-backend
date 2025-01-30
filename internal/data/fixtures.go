@@ -411,9 +411,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		SELECT
 			` + ReceiverWalletColumnNames("rw") + `,
 			` + ReceiverColumnNames("r", "receiver") + `,
-			` + WalletColumnNamesWhenNested("w", "wallet") + `,
-			w.created_at AS "wallet.created_at",
-			w.updated_at AS "wallet.updated_at"
+			` + WalletColumnNames("w", "wallet", true) + `
 		FROM
 			inserted_receiver_wallet AS rw
 			JOIN receivers AS r ON rw.receiver_id = r.id

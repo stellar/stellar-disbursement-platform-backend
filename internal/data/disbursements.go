@@ -126,14 +126,7 @@ var selectDisbursementQuery = `
 			d.updated_at,
 			d.registration_contact_type,
 			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.homepage as "wallet.homepage",
-			w.sep_10_client_domain as "wallet.sep_10_client_domain",
-			w.deep_link_schema as "wallet.deep_link_schema",
-			w.enabled as "wallet.enabled",
-			w.created_at as "wallet.created_at",
-			w.updated_at as "wallet.updated_at",
+			` + WalletColumnNames("w", "wallet", true) + `,
 			` + AssetColumnNames("a", "asset", true) + `
 		FROM
 			disbursements d
