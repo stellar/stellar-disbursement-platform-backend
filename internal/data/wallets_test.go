@@ -17,11 +17,13 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 	testCases := []struct {
 		tableReference string
 		resultAlias    string
+		includeDates   bool
 		expected       string
 	}{
 		{
 			tableReference: "",
 			resultAlias:    "",
+			includeDates:   false,
 			expected: strings.Join([]string{
 				"id",
 				"name",
@@ -35,6 +37,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 		{
 			tableReference: "",
 			resultAlias:    "wallet",
+			includeDates:   false,
 			expected: strings.Join([]string{
 				`id AS "wallet.id"`,
 				`name AS "wallet.name"`,
@@ -48,6 +51,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 		{
 			tableReference: "w",
 			resultAlias:    "",
+			includeDates:   false,
 			expected: strings.Join([]string{
 				"w.id",
 				"w.name",
@@ -61,6 +65,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 		{
 			tableReference: "w",
 			resultAlias:    "wallet",
+			includeDates:   false,
 			expected: strings.Join([]string{
 				`w.id AS "wallet.id"`,
 				`w.name AS "wallet.name"`,
@@ -71,11 +76,28 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 				`w.user_managed AS "wallet.user_managed"`,
 			}, ",\n"),
 		},
+		{
+			tableReference: "w",
+			resultAlias:    "wallet",
+			includeDates:   true,
+			expected: strings.Join([]string{
+				`w.id AS "wallet.id"`,
+				`w.name AS "wallet.name"`,
+				`w.sep_10_client_domain AS "wallet.sep_10_client_domain"`,
+				`w.homepage AS "wallet.homepage"`,
+				`w.enabled AS "wallet.enabled"`,
+				`w.deep_link_schema AS "wallet.deep_link_schema"`,
+				`w.user_managed AS "wallet.user_managed"`,
+				`w.created_at AS "wallet.created_at"`,
+				`w.updated_at AS "wallet.updated_at"`,
+				`w.deleted_at AS "wallet.deleted_at"`,
+			}, ",\n"),
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("tableReference=%s, resultAlias=%s", tc.tableReference, tc.resultAlias), func(t *testing.T) {
-			actual := WalletColumnNamesWhenNested(tc.tableReference, tc.resultAlias)
+			actual := WalletColumnNames(tc.tableReference, tc.resultAlias, tc.includeDates)
 			assert.Equal(t, tc.expected, actual)
 		})
 	}
