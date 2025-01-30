@@ -70,12 +70,12 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 				StellarAssetCode: "USDC",
 				IdempotencyKey:   uuid.New().String(),
 			},
-			wantErr: `API type "" is not valid, must be one of [transfers payout]`,
+			wantErr: `invalid Circle API type "", must be one of [PAYOUTS TRANSFERS]`,
 		},
 		{
 			name: "🔴 missing source wallet ID",
 			paymentReq: PaymentRequest{
-				APIType:          APITypePayout,
+				APIType:          APITypePayouts,
 				SourceWalletID:   "",
 				Amount:           "100.00",
 				StellarAssetCode: "USDC",
@@ -86,7 +86,7 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 		{
 			name: "🔴 missing recipient id",
 			paymentReq: PaymentRequest{
-				APIType:          APITypePayout,
+				APIType:          APITypePayouts,
 				SourceWalletID:   "source_wallet_123",
 				Amount:           "100.00",
 				StellarAssetCode: "USDC",
@@ -97,7 +97,7 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 		{
 			name: "🔴 invalid amount",
 			paymentReq: PaymentRequest{
-				APIType:          APITypePayout,
+				APIType:          APITypePayouts,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "invalid_amount",
@@ -109,7 +109,7 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 		{
 			name: "🔴 missing stellar asset code",
 			paymentReq: PaymentRequest{
-				APIType:          APITypePayout,
+				APIType:          APITypePayouts,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "100.00",
@@ -121,7 +121,7 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 		{
 			name: "🔴 invalid idempotency key",
 			paymentReq: PaymentRequest{
-				APIType:          APITypePayout,
+				APIType:          APITypePayouts,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "100.00",
@@ -146,7 +146,7 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 		{
 			name: "🟢 valid payout payment request",
 			paymentReq: PaymentRequest{
-				APIType:          APITypePayout,
+				APIType:          APITypePayouts,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "100.00",

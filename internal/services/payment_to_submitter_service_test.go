@@ -170,7 +170,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods_payouts(t *testing.T) {
 			mCircleService := circle.NewMockService(t)
 			if tc.distributionAccount.IsCircle() {
 				wantPaymentReques := circle.PaymentRequest{
-					APIType:          circle.APITypePayout,
+					APIType:          circle.APITypePayouts,
 					SourceWalletID:   tc.distributionAccount.CircleWalletID,
 					RecipientID:      cRecipient.CircleRecipientID,
 					Amount:           paymentRegistered.Amount,

@@ -3,6 +3,7 @@ package circle
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -15,9 +16,24 @@ import (
 type APIType string
 
 const (
-	APITypeTransfers APIType = "transfers"
-	APITypePayout    APIType = "payout"
+	APITypePayouts   APIType = "PAYOUTS"
+	APITypeTransfers APIType = "TRANSFERS"
 )
+
+func AllAPITypes() []APIType {
+	return []APIType{APITypePayouts, APITypeTransfers}
+}
+
+func ParseAPIType(messengerTypeStr string) (APIType, error) {
+	messageTypeStrUpper := strings.ToUpper(messengerTypeStr)
+	mType := APIType(messageTypeStrUpper)
+
+	if slices.Contains(AllAPITypes(), mType) {
+		return mType, nil
+	}
+
+	return "", fmt.Errorf("invalid Circle API type %q, must be one of %v", messageTypeStrUpper, AllAPITypes())
+}
 
 type PaymentRequest struct {
 	SourceWalletID            string
@@ -42,15 +58,15 @@ func (p PaymentRequest) GetCircleAssetCode() (string, error) {
 }
 
 func (p PaymentRequest) Validate() error {
-	if !slices.Contains([]APIType{APITypeTransfers, APITypePayout}, p.APIType) {
-		return fmt.Errorf("API type %q is not valid, must be one of %v", p.APIType, []APIType{APITypeTransfers, APITypePayout})
+	if _, err := ParseAPIType(string(p.APIType)); err != nil {
+		return err
 	}
 
 	if p.SourceWalletID == "" {
 		return fmt.Errorf("source wallet ID is required")
 	}
 
-	if p.APIType == APITypePayout && p.RecipientID == "" {
+	if p.APIType == APITypePayouts && p.RecipientID == "" {
 		return fmt.Errorf("recipient ID is required")
 	} else if p.APIType == APITypeTransfers && !strkey.IsValidEd25519PublicKey(p.DestinationStellarAddress) {
 		return fmt.Errorf("destination stellar address is not a valid public key")

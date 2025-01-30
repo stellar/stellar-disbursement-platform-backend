@@ -532,7 +532,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 				require.NoError(t, setupErr)
 
 				m.On("SendPayment", ctx, circle.PaymentRequest{
-					APIType:          circle.APITypePayout,
+					APIType:          circle.APITypePayouts,
 					SourceWalletID:   circleWalletID,
 					RecipientID:      circleRecipient.CircleRecipientID,
 					Amount:           payment.Amount,
@@ -617,7 +617,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 				require.NoError(t, setupErr)
 
 				m.On("SendPayment", ctx, circle.PaymentRequest{
-					APIType:          circle.APITypePayout,
+					APIType:          circle.APITypePayouts,
 					SourceWalletID:   circleWalletID,
 					RecipientID:      circleRecipient.CircleRecipientID,
 					Amount:           payment.Amount,

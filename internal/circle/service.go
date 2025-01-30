@@ -120,7 +120,7 @@ func (s *Service) SendTransfer(ctx context.Context, paymentRequest PaymentReques
 }
 
 func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
-	if paymentRequest.APIType != APITypePayout {
+	if paymentRequest.APIType != APITypePayouts {
 		return nil, fmt.Errorf("SendPayment requires APITypePayout")
 	}
 
