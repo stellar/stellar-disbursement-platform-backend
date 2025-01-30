@@ -32,6 +32,7 @@ type CirclePaymentToSubmitterJobOptions struct {
 	Models              *data.Models
 	DistAccountResolver signing.DistributionAccountResolver
 	CircleService       circle.ServiceInterface
+	CircleAPYType       circle.APIType
 }
 
 func NewCirclePaymentToSubmitterJob(opts CirclePaymentToSubmitterJobOptions) Job {
@@ -39,7 +40,12 @@ func NewCirclePaymentToSubmitterJob(opts CirclePaymentToSubmitterJobOptions) Job
 		log.Fatalf("job interval is not set for %s. Instantiation failed", circlePaymentToSubmitterJobName)
 	}
 
-	circlePaymentDispatcher := paymentdispatchers.NewCirclePaymentDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
+	var circlePaymentDispatcher paymentdispatchers.PaymentDispatcherInterface
+	if opts.CircleAPYType == circle.APITypePayouts {
+		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
+	} else {
+		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentTransferDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
+	}
 
 	return &circlePaymentToSubmitterJob{
 		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(services.PaymentToSubmitterServiceOptions{

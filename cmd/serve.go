@@ -107,6 +107,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 				Models:              models,
 				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 				CircleService:       serveOpts.CircleService,
+				CircleAPYType:       circle.APITypeTransfers,
 			}),
 			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
 				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
@@ -202,6 +203,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:         o.ServeOpts.CircleService,
+			CircleAPYType:         circle.APITypeTransfers,
 		}),
 	)
 	if err != nil {
