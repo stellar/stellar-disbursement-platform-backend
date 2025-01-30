@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,72 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
+
+func Test_AssetColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableReference string
+		resultAlias    string
+		includeDates   bool
+		expectedResult string
+	}{
+		{
+			tableReference: "",
+			resultAlias:    "",
+			includeDates:   true,
+			expectedResult: strings.Join([]string{
+				"id",
+				"code",
+				"created_at",
+				"updated_at",
+				"deleted_at",
+				`COALESCE(issuer, '') AS "issuer"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "",
+			resultAlias:    "",
+			includeDates:   false,
+			expectedResult: strings.Join([]string{
+				"id",
+				"code",
+				`COALESCE(issuer, '') AS "issuer"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "",
+			resultAlias:    "asset",
+			includeDates:   true,
+			expectedResult: strings.Join([]string{
+				`id AS "asset.id"`,
+				`code AS "asset.code"`,
+				`created_at AS "asset.created_at"`,
+				`updated_at AS "asset.updated_at"`,
+				`deleted_at AS "asset.deleted_at"`,
+				`COALESCE(issuer, '') AS "asset.issuer"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "a",
+			resultAlias:    "",
+			includeDates:   true,
+			expectedResult: strings.Join([]string{
+				"a.id",
+				"a.code",
+				"a.created_at",
+				"a.updated_at",
+				"a.deleted_at",
+				`COALESCE(a.issuer, '') AS "issuer"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("tableReference=%s,resultAlias=%s,includeDates=%t", tc.tableReference, tc.resultAlias, tc.includeDates), func(t *testing.T) {
+			got := AssetColumnNames(tc.tableReference, tc.resultAlias, tc.includeDates)
+			assert.Equal(t, tc.expectedResult, got)
+		})
+	}
+}
 
 func Test_Asset_IsNative(t *testing.T) {
 	cases := []struct {

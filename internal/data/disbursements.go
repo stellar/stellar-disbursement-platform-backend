@@ -113,7 +113,7 @@ func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*
 	return disbursement, nil
 }
 
-const selectDisbursementQuery = `
+var selectDisbursementQuery = `
 		SELECT
 			d.id,
 			d.name,
@@ -134,11 +134,7 @@ const selectDisbursementQuery = `
 			w.enabled as "wallet.enabled",
 			w.created_at as "wallet.created_at",
 			w.updated_at as "wallet.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			a.created_at as "asset.created_at",
-			a.updated_at as "asset.updated_at"
+			` + AssetColumnNames("a", "asset", true) + `
 		FROM
 			disbursements d
 		JOIN wallets w on d.wallet_id = w.id
