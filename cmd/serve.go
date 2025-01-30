@@ -107,7 +107,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 				Models:              models,
 				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 				CircleService:       serveOpts.CircleService,
-				CircleAPYType:       circle.APITypeTransfers,
+				CircleAPYType:       serveOpts.CircleAPIType,
 			}),
 			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
 				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
@@ -203,7 +203,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:         o.ServeOpts.CircleService,
-			CircleAPYType:         circle.APITypeTransfers,
+			CircleAPYType:         o.ServeOpts.CircleAPIType,
 		}),
 	)
 	if err != nil {
@@ -364,6 +364,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.SingleTenantMode,
 			FlagDefault: false,
+		},
+		{
+			Name:           "circle-api-type",
+			Usage:          `The Circle API type. Options: ["TRANSFERS", "PAYOUTS"]. `,
+			OptType:        types.String,
+			ConfigKey:      &serveOpts.CircleAPIType,
+			Required:       true,
+			CustomSetValue: cmdUtils.SetConfigOptionCircleAPIType,
+			FlagDefault:    string(circle.APITypeTransfers),
 		},
 	}
 

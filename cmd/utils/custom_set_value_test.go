@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -708,6 +709,57 @@ func Test_SetRegistrationContactType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.RegistrationContactType = data.RegistrationContactType{}
 			customSetterTester[data.RegistrationContactType](t, tc, co)
+		})
+	}
+}
+
+func Test_SetConfigOptionCircleAPIType(t *testing.T) {
+	opts := struct{ circleAPIType circle.APIType }{}
+
+	co := config.ConfigOption{
+		Name:           "circle-api-type",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionCircleAPIType,
+		ConfigKey:      &opts.circleAPIType,
+	}
+
+	testCases := []customSetterTestCase[circle.APIType]{
+		{
+			name:            "returns an error if the API type is empty",
+			args:            []string{},
+			wantErrContains: `couldn't parse circle API type in circle-api-type: invalid Circle API type "", must be one of [PAYOUTS TRANSFERS]`,
+		},
+		{
+			name:            "returns an error if the API type is invalid",
+			args:            []string{"--circle-api-type", "test"},
+			wantErrContains: `couldn't parse circle API type in circle-api-type: invalid Circle API type "TEST", must be one of [PAYOUTS TRANSFERS]`,
+		},
+		{
+			name:       "🎉 handles API type PAYOUTS (through CLI args)",
+			args:       []string{"--circle-api-type", "PaYoUtS"},
+			wantResult: circle.APITypePayouts,
+		},
+		{
+			name:       "🎉 handles API type PAYOUTS (through ENV vars)",
+			envValue:   "PAYOUTS",
+			wantResult: circle.APITypePayouts,
+		},
+		{
+			name:       "🎉 handles API type TRANSFERS (through CLI args)",
+			args:       []string{"--circle-api-type", "TrAnSfErS"},
+			wantResult: circle.APITypeTransfers,
+		},
+		{
+			name:       "🎉 handles API type TRANSFERS (through ENV vars)",
+			envValue:   "TRANSFERS",
+			wantResult: circle.APITypeTransfers,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.circleAPIType = ""
+			customSetterTester[circle.APIType](t, tc, co)
 		})
 	}
 }
