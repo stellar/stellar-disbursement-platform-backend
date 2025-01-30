@@ -409,7 +409,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 				*
 		)
 		SELECT
-			` + ReceiverWalletColumnNames("rw") + `,
+			` + ReceiverWalletColumnNames("rw", "") + `,
 			` + ReceiverColumnNames("r", "receiver") + `,
 			` + WalletColumnNames("w", "wallet", true) + `
 		FROM

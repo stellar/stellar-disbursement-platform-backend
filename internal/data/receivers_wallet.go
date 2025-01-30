@@ -207,9 +207,10 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 	return receiverWallets, nil
 }
 
-func ReceiverWalletColumnNames(tableReference string) string {
+func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 	columns := GenerateColumnNames(SQLColumnConfig{
 		TableReference: tableReference,
+		ResultAlias:    resultAlias,
 		Columns: []string{
 			"id",
 			`receiver_id AS "receiver.id"`,
@@ -227,6 +228,7 @@ func ReceiverWalletColumnNames(tableReference string) string {
 
 	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
 		TableReference:        tableReference,
+		ResultAlias:           resultAlias,
 		CoalesceToEmptyString: true,
 		Columns: []string{
 			"anchor_platform_transaction_id",
@@ -249,7 +251,7 @@ func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecu
 
 	query := `
 		SELECT
-			` + ReceiverWalletColumnNames("rw") + `,
+			` + ReceiverWalletColumnNames("rw", "") + `,
 			` + WalletColumnNames("w", "wallet", false) + `
 		FROM
 			receiver_wallets rw
@@ -272,7 +274,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	receiverWallets := []*ReceiverWallet{}
 	query := `
 		SELECT
-			` + ReceiverWalletColumnNames("rw") + `
+			` + ReceiverWalletColumnNames("rw", "") + `
 		FROM receiver_wallets rw
 		WHERE rw.receiver_id = ANY($1)
 		AND rw.wallet_id = $2
@@ -409,7 +411,7 @@ func (rw *ReceiverWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Context, receiverId string, walletDomain string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
 	query := `
 		SELECT
-			` + ReceiverWalletColumnNames("rw") + `,
+			` + ReceiverWalletColumnNames("rw", "") + `,
 			` + WalletColumnNames("w", "wallet", false) + `
 		FROM
 			receiver_wallets rw
@@ -494,7 +496,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	var receiverWallets ReceiverWallet
 	query := `
 		SELECT
-			` + ReceiverWalletColumnNames("rw") + `,
+			` + ReceiverWalletColumnNames("rw", "") + `,
 			` + WalletColumnNames("w", "wallet", false) + `
 		FROM
 			receiver_wallets rw
@@ -542,7 +544,7 @@ func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx conte
 			id = ANY($1)
 			AND anchor_platform_transaction_synced_at IS NULL
 			AND status = $2 -- 'REGISTERED'::receiver_wallet_status
-		RETURNING ` + ReceiverWalletColumnNames("")
+		RETURNING ` + ReceiverWalletColumnNames("", "")
 
 	var receiverWallets []ReceiverWallet
 	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), RegisteredReceiversWalletStatus)
@@ -563,7 +565,7 @@ func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlEx
 			invitation_sent_at = NULL
 		WHERE rw.id = $1
 		AND rw.status = 'READY'
-		RETURNING ` + ReceiverWalletColumnNames("")
+		RETURNING ` + ReceiverWalletColumnNames("", "")
 
 	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverWalletId)
 	if err != nil {
@@ -585,7 +587,7 @@ func (rw *ReceiverWalletModel) UpdateInvitationSentAt(ctx context.Context, sqlEx
 		WHERE
 			id = ANY($1)
 			AND status = $2 -- 'READY'::receiver_wallet_status
-		RETURNING ` + ReceiverWalletColumnNames("")
+		RETURNING ` + ReceiverWalletColumnNames("", "")
 
 	var receiverWallets []ReceiverWallet
 	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), ReadyReceiversWalletStatus)
