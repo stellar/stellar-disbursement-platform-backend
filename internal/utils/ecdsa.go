@@ -3,8 +3,6 @@ package utils
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -78,33 +76,6 @@ func ParseStrongECPrivateKey(privateKeyStr string) (*ecdsa.PrivateKey, error) {
 	}
 
 	return privateKey, nil
-}
-
-// ValidateStrongECPrivateKey validates if the given private key is a valid EC key
-// using a curve that's at least as strong as prime256v1 (P-256).
-func ValidateStrongECPrivateKey(privateKeyStr string) error {
-	privateKey, err := ParseStrongECPrivateKey(privateKeyStr)
-	if err != nil {
-		return fmt.Errorf("validating EC private key: %w", err)
-	}
-
-	// Sign a test message using the private key
-	msg := "test message"
-	hash := sha256.Sum256([]byte(msg))
-	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
-	if err != nil {
-		return fmt.Errorf("signing message for validation: %w", err)
-	}
-
-	publicKey := &privateKey.PublicKey
-
-	// Verify the signature using the public key
-	valid := ecdsa.Verify(publicKey, hash[:], r, s)
-	if !valid {
-		return fmt.Errorf("signature verification failed for the provided pair of keys")
-	}
-
-	return nil
 }
 
 // GetEC256PublicKeyFromPrivateKey returns the public key of the given EC private key.

@@ -183,48 +183,6 @@ func Test_ParseStrongECPrivateKey(t *testing.T) {
 	}
 }
 
-func Test_ValidateStrongECPrivateKey(t *testing.T) {
-	testCases := []struct {
-		name            string
-		privateKeyStr   string
-		wantErrContains string
-	}{
-		{
-			name:            "returns an error if the private key is invalid",
-			privateKeyStr:   "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----",
-			wantErrContains: fmt.Sprintf("validating EC private key: failed to parse EC private key: %v", ErrInvalidECPrivateKey),
-		},
-		{
-			name:          "🎉 Successfully validates a valid ECDSA private key (1)",
-			privateKeyStr: ecdsaKeypair1.privateKeyStr,
-		},
-		{
-			name:          "🎉 Successfully validates a valid ECDSA private key (2)",
-			privateKeyStr: ecdsaKeypair2.privateKeyStr,
-		},
-		{
-			name:          "🎉 Successfully validates a valid EC256 private key",
-			privateKeyStr: ec256Keypair.privateKeyStr,
-		},
-		{
-			name:          "🎉 Successfully validates a valid EC386 private key",
-			privateKeyStr: ec386Keypair.privateKeyStr,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateStrongECPrivateKey(tc.privateKeyStr)
-			if tc.wantErrContains == "" {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.wantErrContains)
-			}
-		})
-	}
-}
-
 func Test_GetEC256PublicKeyFromPrivateKey(t *testing.T) {
 	testCases := []struct {
 		name            string

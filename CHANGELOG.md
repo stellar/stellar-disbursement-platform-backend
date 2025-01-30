@@ -4,7 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## [3.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.2.0...develop)) Unreleased
+
+Release of the Stellar Disbursement Platform `v3.3.0`. 
+
+### Added
+
+- Audit functionality for the `receivers` table to track changes. [#520](https://github.com/stellar/stellar-disbursement-platform-backend/pull/520)
+
+### Changed
+
+- Refactor MFA and reCAPTCHA handling for better modularity in preparation for API-only usage. [#499](https://github.com/stellar/stellar-disbursement-platform-backend/pull/499)
+
+### Removed 
+
+- Removed `EC256_PUBLIC_KEY` environment variable as it can be derived from the `EC256_PRIVATE_KEY` [#511](https://github.com/stellar/stellar-disbursement-platform-backend/pull/511)
+- Removed `nginx.ingress.kubernetes.io/server-snippet` annotation from SDP and AP ingress resources. [#510](https://github.com/stellar/stellar-disbursement-platform-backend/pull/510)
 
 ## [3.2.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.2.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.1.0...3.2.0))
 

@@ -523,10 +523,6 @@ func createAuthManager(dbConnectionPool db.DBConnectionPool, ec256PrivateKey str
 		return nil, fmt.Errorf("db connection pool cannot be nil")
 	}
 
-	err := utils.ValidateStrongECPrivateKey(ec256PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("validating auth manager private key: %w", err)
-	}
 	ec256PublicKey, err := utils.GetEC256PublicKeyFromPrivateKey(ec256PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("validating auth manager public key: %w", err)
