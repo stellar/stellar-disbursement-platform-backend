@@ -21,6 +21,17 @@ Release of the Stellar Disbursement Platform `v3.3.0`.
 - Removed `EC256_PUBLIC_KEY` environment variable as it can be derived from the `EC256_PRIVATE_KEY` [#511](https://github.com/stellar/stellar-disbursement-platform-backend/pull/511)
 - Removed `nginx.ingress.kubernetes.io/server-snippet` annotation from SDP and AP ingress resources. [#510](https://github.com/stellar/stellar-disbursement-platform-backend/pull/510)
 
+## [3.3.0] UNRELEASED
+
+### Added
+
+- Add audit table for changes in the `receivers` table. [#520](https://github.com/stellar/stellar-disbursement-platform-backend/pull/520)
+- Add support for Circle API type `TRANSFERS`, and allow users to choose between `TRANSFERS` and `PAYOUTS` through the `CIRCLE_API_TYPE` environment variable. It defaults to `TRANSFERS`. [#522](https://github.com/stellar/stellar-disbursement-platform-backend/pull/522)
+
+### Removed
+
+- Remove the `EC256_PUBLIC_KEY` config and derive it from private key. [#511](https://github.com/stellar/stellar-disbursement-platform-backend/pull/511)
+
 ## [3.2.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.2.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.1.0...3.2.0))
 
 Release of the Stellar Disbursement Platform `v3.2.0`. This release focuses on enhancing the platform’s reliability and
