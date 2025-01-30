@@ -136,7 +136,6 @@ sdp:
   ## @param sdp.configMap.annotations Annotations to be added to the ConfigMap.
   ## @extra sdp.configMap.data Used to inject non-sensitive environment variables into the SDP deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @param sdp.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
-  ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes. This EC key needs to be at least as strong as prime256v1 (P-256).
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
@@ -159,7 +158,6 @@ sdp:
     annotations:
     data:
       CRASH_TRACKER_TYPE: "DRY_RUN"
-      EC256_PUBLIC_KEY: #required
       ENVIRONMENT: "dev"
       LOG_LEVEL: "INFO"
       SEP10_SIGNING_PUBLIC_KEY: #required
