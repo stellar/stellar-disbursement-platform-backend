@@ -311,6 +311,36 @@ func (_m *MockService) SendPayment(ctx context.Context, paymentRequest PaymentRe
 	return r0, r1
 }
 
+// SendTransfer provides a mock function with given fields: ctx, paymentRequest
+func (_m *MockService) SendTransfer(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error) {
+	ret := _m.Called(ctx, paymentRequest)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SendTransfer")
+	}
+
+	var r0 *Transfer
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, PaymentRequest) (*Transfer, error)); ok {
+		return rf(ctx, paymentRequest)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, PaymentRequest) *Transfer); ok {
+		r0 = rf(ctx, paymentRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*Transfer)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, PaymentRequest) error); ok {
+		r1 = rf(ctx, paymentRequest)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // NewMockService creates a new instance of MockService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockService(t interface {

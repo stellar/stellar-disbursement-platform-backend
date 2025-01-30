@@ -28,6 +28,7 @@ const StellarChainCode = "XLM"
 type ServiceInterface interface {
 	ClientInterface
 	SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error)
+	SendTransfer(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error)
 }
 
 var _ ServiceInterface = (*Service)(nil)
@@ -86,7 +87,43 @@ func NewService(opts ServiceOptions) (*Service, error) {
 	}, nil
 }
 
+func (s *Service) SendTransfer(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error) {
+	if paymentRequest.APIType != APITypeTransfers {
+		return nil, fmt.Errorf("SendTransfer requires APITypeTransfers")
+	}
+
+	if err := paymentRequest.Validate(); err != nil {
+		return nil, fmt.Errorf("validating payment request: %w", err)
+	}
+
+	circleAssetCode, err := paymentRequest.GetCircleAssetCode()
+	if err != nil {
+		return nil, fmt.Errorf("getting Circle asset code: %w", err)
+	}
+
+	return s.PostTransfer(ctx, TransferRequest{
+		IdempotencyKey: paymentRequest.IdempotencyKey,
+		Amount: Balance{
+			Amount:   paymentRequest.Amount,
+			Currency: circleAssetCode,
+		},
+		Source: TransferAccount{
+			Type: TransferAccountTypeWallet,
+			ID:   paymentRequest.SourceWalletID,
+		},
+		Destination: TransferAccount{
+			Type:    TransferAccountTypeBlockchain,
+			Chain:   StellarChainCode,
+			Address: paymentRequest.DestinationStellarAddress,
+		},
+	})
+}
+
 func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
+	if paymentRequest.APIType != APITypePayout {
+		return nil, fmt.Errorf("SendPayment requires APITypePayout")
+	}
+
 	if err := paymentRequest.Validate(); err != nil {
 		return nil, fmt.Errorf("validating payment request: %w", err)
 	}
