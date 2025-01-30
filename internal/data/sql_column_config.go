@@ -29,16 +29,25 @@ func GenerateColumnNames(config SQLColumnConfig) []string {
 
 	var completeColumnNames []string
 	for _, column := range config.Columns {
+		columnNameAndAlias := strings.SplitN(column, " AS ", 2)
+		columnNameAndParser := strings.SplitN(column, "::", 2)
+
 		// Apply COALESCE if needed
-		scanName := fmt.Sprintf("%s%s", config.TableReference, column)
+		scanName := fmt.Sprintf("%s%s", config.TableReference, columnNameAndAlias[0])
 		if config.CoalesceToEmptyString {
 			scanName = fmt.Sprintf("COALESCE(%s, '')", scanName)
 		}
 
 		// Apply alias if needed
 		var columnAlias string
-		if config.ResultAlias != "" || config.CoalesceToEmptyString {
-			column = strings.SplitN(column, "::", 2)[0]
+		if config.ResultAlias != "" || config.CoalesceToEmptyString || len(columnNameAndAlias) > 1 || len(columnNameAndParser) > 1 {
+			// verification_field::text
+			// receiver_id AS "receiver.id"
+			if len(columnNameAndAlias) > 1 {
+				column = strings.Trim(columnNameAndAlias[1], `"`)
+			} else if len(columnNameAndParser) > 1 {
+				column = columnNameAndParser[0]
+			}
 			columnAlias = fmt.Sprintf(` AS "%s%s"`, config.ResultAlias, column)
 		}
 
