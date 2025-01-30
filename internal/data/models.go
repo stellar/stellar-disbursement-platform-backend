@@ -27,6 +27,7 @@ type Models struct {
 	Message                  *MessageModel
 	CircleTransferRequests   *CircleTransferRequestModel
 	CircleRecipient          *CircleRecipientModel
+	URLShortener             *URLShortenerModel
 	DBConnectionPool         db.DBConnectionPool
 }
 
@@ -48,6 +49,7 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		Message:                  &MessageModel{dbConnectionPool: dbConnectionPool},
 		CircleTransferRequests:   &CircleTransferRequestModel{dbConnectionPool: dbConnectionPool},
 		CircleRecipient:          &CircleRecipientModel{dbConnectionPool: dbConnectionPool},
+		URLShortener:             &URLShortenerModel{dbConnectionPool: dbConnectionPool},
 		DBConnectionPool:         dbConnectionPool,
 	}, nil
 }
