@@ -20,7 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
+func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -177,7 +177,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 				tc.prepareMocksFn(t, mCircleService)
 			}
 
-			dispatcher := NewCirclePaymentDispatcher(models, mCircleService, mDistAccountResolver)
+			dispatcher := NewCirclePaymentPayoutDispatcher(models, mCircleService, mDistAccountResolver)
 
 			finalRecipient, err := dispatcher.ensureRecipientIsReady(ctx, *receiverWallet)
 			require.NoError(t, err)
@@ -186,7 +186,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_success(t *testing.T) {
 	}
 }
 
-func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
+func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -331,7 +331,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 				tc.prepareMocksFn(t, mCircleService)
 			}
 
-			dispatcher := NewCirclePaymentDispatcher(models, mCircleService, mDistAccountResolver)
+			dispatcher := NewCirclePaymentPayoutDispatcher(models, mCircleService, mDistAccountResolver)
 
 			finalRecipient, err := dispatcher.ensureRecipientIsReady(ctx, *receiverWallet)
 
@@ -347,7 +347,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReady_failure(t *testing.T) {
 	}
 }
 
-func Test_CirclePaymentDispatcher_ensureRecipientIsReadyWithRetry(t *testing.T) {
+func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReadyWithRetry(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -471,7 +471,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReadyWithRetry(t *testing.T) 
 				tc.prepareMocksFn(t, mCircleService)
 			}
 
-			dispatcher := NewCirclePaymentDispatcher(models, mCircleService, mDistAccountResolver)
+			dispatcher := NewCirclePaymentPayoutDispatcher(models, mCircleService, mDistAccountResolver)
 
 			finalRecipient, err := dispatcher.ensureRecipientIsReadyWithRetry(ctx, *receiverWallet, 1*time.Millisecond)
 
@@ -487,7 +487,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReadyWithRetry(t *testing.T) 
 	}
 }
 
-func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
+func Test_CirclePaymentPayoutDispatcher_DispatchPayments(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -526,12 +526,12 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 			wantErrContains: []string{"payment with ID", "does not exist"},
 		},
 		{
-			name: "🔴 if SendPayment fails return error",
+			name: "🔴 if SendPayout fails return error",
 			fnSetup: func(t *testing.T, m *circle.MockService, payment *data.Payment, circleRecipient *data.CircleRecipient) {
 				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, payment.ID)
 				require.NoError(t, setupErr)
 
-				m.On("SendPayment", ctx, circle.PaymentRequest{
+				m.On("SendPayout", ctx, circle.PaymentRequest{
 					APIType:          circle.APITypePayouts,
 					SourceWalletID:   circleWalletID,
 					RecipientID:      circleRecipient.CircleRecipientID,
@@ -553,7 +553,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 			name: "🔴 if the payout is unexpectedly nil return an error",
 			fnSetup: func(t *testing.T, m *circle.MockService, payment *data.Payment, circleRecipient *data.CircleRecipient) {
 				m.
-					On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
+					On("SendPayout", ctx, mock.AnythingOfType("circle.PaymentRequest")).
 					Return(nil, nil).
 					Once()
 			},
@@ -563,17 +563,17 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 			name: "🔴 if the payout status is unsupported return an error",
 			fnSetup: func(t *testing.T, m *circle.MockService, payment *data.Payment, circleRecipient *data.CircleRecipient) {
 				m.
-					On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
+					On("SendPayout", ctx, mock.AnythingOfType("circle.PaymentRequest")).
 					Return(&circle.Payout{ID: "payout_id", Status: "unsupported-status"}, nil).
 					Once()
 			},
 			wantErrContains: []string{"invalid input value for enum circle_transfer_status"},
 		},
 		{
-			name: "🟢 successful SendPayment",
+			name: "🟢 successful SendPayout",
 			fnSetup: func(t *testing.T, m *circle.MockService, payment *data.Payment, circleRecipient *data.CircleRecipient) {
 				m.
-					On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
+					On("SendPayout", ctx, mock.AnythingOfType("circle.PaymentRequest")).
 					Return(&circle.Payout{
 						ID:     circlePayoutID,
 						Status: circle.TransferStatusPending,
@@ -616,7 +616,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, payment.ID)
 				require.NoError(t, setupErr)
 
-				m.On("SendPayment", ctx, circle.PaymentRequest{
+				m.On("SendPayout", ctx, circle.PaymentRequest{
 					APIType:          circle.APITypePayouts,
 					SourceWalletID:   circleWalletID,
 					RecipientID:      circleRecipient.CircleRecipientID,
@@ -684,7 +684,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 					Status:         schema.AccountStatusActive,
 				}, nil).Maybe()
 
-			dispatcher := NewCirclePaymentDispatcher(models, mCircleService, mDistAccountResolver)
+			dispatcher := NewCirclePaymentPayoutDispatcher(models, mCircleService, mDistAccountResolver)
 
 			if tt.fnSetup != nil {
 				tt.fnSetup(t, mCircleService, payment, circleRecipient)
@@ -705,7 +705,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 	}
 }
 
-func Test_CirclePaymentDispatcher_SupportedPlatform(t *testing.T) {
-	dispatcher := CirclePaymentDispatcher{}
+func Test_CirclePaymentPayoutDispatcher_SupportedPlatform(t *testing.T) {
+	dispatcher := CirclePaymentPayoutDispatcher{}
 	assert.Equal(t, schema.CirclePlatform, dispatcher.SupportedPlatform())
 }

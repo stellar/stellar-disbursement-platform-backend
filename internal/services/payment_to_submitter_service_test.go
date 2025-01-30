@@ -182,7 +182,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods_payouts(t *testing.T) {
 				createDate := time.Now()
 
 				mCircleService.
-					On("SendPayment", ctx, mock.Anything).
+					On("SendPayout", ctx, mock.Anything).
 					Run(func(args mock.Arguments) {
 						gotPayment, ok := args.Get(1).(circle.PaymentRequest)
 						require.True(t, ok)
@@ -220,7 +220,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods_payouts(t *testing.T) {
 			if tc.distributionAccount.IsStellar() {
 				paymentDispatcher = paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccResolver)
 			} else if tc.distributionAccount.IsCircle() {
-				paymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(models, mCircleService, mDistAccResolver)
+				paymentDispatcher = paymentdispatchers.NewCirclePaymentPayoutDispatcher(models, mCircleService, mDistAccResolver)
 			} else {
 				t.Fatalf("unknown distribution account type: %s", tc.distributionAccount.Type)
 			}

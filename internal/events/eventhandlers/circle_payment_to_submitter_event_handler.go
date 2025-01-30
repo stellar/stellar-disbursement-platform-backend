@@ -44,7 +44,7 @@ func NewCirclePaymentToSubmitterEventHandler(opts CirclePaymentToSubmitterEventH
 
 	var circlePaymentDispatcher paymentdispatchers.PaymentDispatcherInterface
 	if opts.CircleAPYType == circle.APITypePayouts {
-		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(models, opts.CircleService, opts.DistAccountResolver)
+		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentPayoutDispatcher(models, opts.CircleService, opts.DistAccountResolver)
 	} else {
 		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentTransferDispatcher(models, opts.CircleService, opts.DistAccountResolver)
 	}

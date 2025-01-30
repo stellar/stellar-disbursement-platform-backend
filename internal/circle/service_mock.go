@@ -281,12 +281,12 @@ func (_m *MockService) PostTransfer(ctx context.Context, transferRequest Transfe
 	return r0, r1
 }
 
-// SendPayment provides a mock function with given fields: ctx, paymentRequest
-func (_m *MockService) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
+// SendPayout provides a mock function with given fields: ctx, paymentRequest
+func (_m *MockService) SendPayout(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
 	ret := _m.Called(ctx, paymentRequest)
 
 	if len(ret) == 0 {
-		panic("no return value specified for SendPayment")
+		panic("no return value specified for SendPayout")
 	}
 
 	var r0 *Payout

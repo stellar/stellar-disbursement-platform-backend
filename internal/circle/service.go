@@ -27,7 +27,7 @@ const StellarChainCode = "XLM"
 //go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService --output=. --filename=service_mock.go --inpackage
 type ServiceInterface interface {
 	ClientInterface
-	SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error)
+	SendPayout(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error)
 	SendTransfer(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error)
 }
 
@@ -119,9 +119,9 @@ func (s *Service) SendTransfer(ctx context.Context, paymentRequest PaymentReques
 	})
 }
 
-func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
+func (s *Service) SendPayout(ctx context.Context, paymentRequest PaymentRequest) (*Payout, error) {
 	if paymentRequest.APIType != APITypePayouts {
-		return nil, fmt.Errorf("SendPayment requires APITypePayout")
+		return nil, fmt.Errorf("SendPayout requires APITypePayouts")
 	}
 
 	if err := paymentRequest.Validate(); err != nil {

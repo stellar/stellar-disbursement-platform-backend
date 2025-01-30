@@ -42,7 +42,7 @@ func NewCirclePaymentToSubmitterJob(opts CirclePaymentToSubmitterJobOptions) Job
 
 	var circlePaymentDispatcher paymentdispatchers.PaymentDispatcherInterface
 	if opts.CircleAPYType == circle.APITypePayouts {
-		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
+		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentPayoutDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
 	} else {
 		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentTransferDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
 	}
