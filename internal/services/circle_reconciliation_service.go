@@ -31,7 +31,7 @@ type CircleReconciliationService struct {
 }
 
 // Reconcile reconciles the pending Circle transfer requests for the tenant in the context. It fetches the rows from
-// circte_transfer_request where status is set to pending, and then fetches the transfer details from Circle API. It
+// circle_transfer_request where status is set to pending, and then fetches the transfer details from Circle API. It
 // updates the status of the transfer request in the DB based on the status of the transfer in Circle. If the transfer
 // reached a successful/failure status, it updates the payment status in the DB as well to reflect that.
 func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
@@ -72,7 +72,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		// Step 4: Reconcile the pending Circle transfer requests.
 		reconciliationCount = len(circleRequests)
 		for _, circleRequest := range circleRequests {
-			err = s.reconcilePayoutRequest(ctx, dbTx, tnt, circleRequest)
+			err = s.reconcilePaymentRequest(ctx, dbTx, tnt, circleRequest)
 			if err != nil {
 				err = fmt.Errorf("reconciling Circle transfer request: %w", err)
 				reconciliationErrors = append(reconciliationErrors, err)
@@ -92,10 +92,10 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// reconcilePayoutRequest reconciles a Circle transfer request with the status from the Circle payout, and updates the
+// reconcilePaymentRequest reconciles a Circle transfer request with the status from the Circle payout/transfer, and updates the
 // payment status in the DB. It returns an error if the reconciliation fails.
-func (s *CircleReconciliationService) reconcilePayoutRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
-	// 4.1. get the Circle (or transfer) by ID
+func (s *CircleReconciliationService) reconcilePaymentRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
+	// 4.1. get the circle_transfer_request from our DB by transfer/payout ID
 	cObjData, err := s.fetchCircleData(ctx, circleRequest)
 	if err != nil {
 		var cAPIErr *circle.APIError

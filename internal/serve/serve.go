@@ -91,6 +91,7 @@ type ServeOptions struct {
 	MaxInvitationResendAttempts     int
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
+	CircleAPIType                   circle.APIType
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

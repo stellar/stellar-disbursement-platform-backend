@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -19,6 +20,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+func SetConfigOptionCircleAPIType(co *config.ConfigOption) error {
+	apiType := viper.GetString(co.Name)
+
+	circleAPIType, err := circle.ParseAPIType(apiType)
+	if err != nil {
+		return fmt.Errorf("couldn't parse circle API type in %s: %w", co.Name, err)
+	}
+
+	*(co.ConfigKey.(*circle.APIType)) = circleAPIType
+	return nil
+}
 
 func SetConfigOptionMessengerType(co *config.ConfigOption) error {
 	senderType := viper.GetString(co.Name)

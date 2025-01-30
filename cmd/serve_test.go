@@ -177,6 +177,7 @@ func Test_serve(t *testing.T) {
 		MaxInvitationResendAttempts:     3,
 		DistAccEncryptionPassphrase:     distributionAccPrivKey,
 		CircleService:                   mCircleService,
+		CircleAPIType:                   circle.APITypeTransfers,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
