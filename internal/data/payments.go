@@ -140,7 +140,7 @@ func (p *PaymentUpdate) Validate() error {
 	return nil
 }
 
-const basePaymentQuery = `
+var basePaymentQuery = `
 SELECT
 	p.id,
 	p.amount,
@@ -157,9 +157,7 @@ SELECT
 	d.created_at as "disbursement.created_at",
 	d.updated_at as "disbursement.updated_at",
 	d.registration_contact_type as "disbursement.registration_contact_type",
-	a.id as "asset.id",
-	a.code as "asset.code",
-	a.issuer as "asset.issuer",
+	` + AssetColumnNames("a", "asset", false) + `,
 	rw.id as "receiver_wallet.id",
 	COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
 	COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
@@ -360,7 +358,7 @@ func (p *PaymentModel) UpdateStatusByDisbursementID(ctx context.Context, sqlExec
 	return nil
 }
 
-const getReadyPaymentsBaseQuery = `
+var getReadyPaymentsBaseQuery = `
 	SELECT
 		p.id,
 		p.amount,
@@ -371,9 +369,7 @@ const getReadyPaymentsBaseQuery = `
 		p.updated_at,
 		d.id as "disbursement.id",
 		d.status as "disbursement.status",
-		a.id as "asset.id",
-		a.code as "asset.code",
-		a.issuer as "asset.issuer",
+		` + AssetColumnNames("a", "asset", false) + `,
 		rw.id as "receiver_wallet.id",
 		rw.receiver_id as "receiver_wallet.receiver.id",
 		COALESCE(r.phone_number, '') as "receiver_wallet.receiver.phone_number",
@@ -595,9 +591,7 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 			p.updated_at,
 			d.id as "disbursement.id",
 			d.status as "disbursement.status",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
+			` + AssetColumnNames("a", "asset", false) + `,
 			rw.id as "receiver_wallet.id",
 			rw.receiver_id as "receiver_wallet.receiver.id",
 			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
