@@ -113,19 +113,50 @@ func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*
 	return disbursement, nil
 }
 
+func DisbursementColumnNames(tableReference, resultAlias string) string {
+	columns := GenerateColumnNames(SQLColumnConfig{
+		TableReference: tableReference,
+		ResultAlias:    resultAlias,
+		Columns: []string{
+			"id",
+			"name",
+			"status",
+			"status_history",
+			"file_content",
+			"created_at",
+			"updated_at",
+			"registration_contact_type",
+			"receiver_registration_message_template",
+		},
+	})
+
+	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
+		TableReference:        tableReference,
+		CoalesceToEmptyString: true,
+		ResultAlias:           resultAlias,
+		Columns: []string{
+			"verification_field::text",
+			"file_name",
+			"receiver_registration_message_template",
+		},
+	})...)
+
+	return strings.Join(columns, ",\n")
+}
+
 var selectDisbursementQuery = `
 		SELECT
 			d.id,
 			d.name,
 			d.status,
 			d.status_history,
-			COALESCE(d.verification_field::text, '') as verification_field,
-			COALESCE(d.file_name, '') as file_name,
+			COALESCE(d.verification_field::text, '') AS verification_field,
+			COALESCE(d.file_name, '') AS file_name,
 			d.file_content,
 			d.created_at,
 			d.updated_at,
 			d.registration_contact_type,
-			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
+			COALESCE(d.receiver_registration_message_template, '') AS receiver_registration_message_template,
 			` + WalletColumnNames("w", "wallet", true) + `,
 			` + AssetColumnNames("a", "asset", true) + `
 		FROM
