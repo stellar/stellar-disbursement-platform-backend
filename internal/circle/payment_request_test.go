@@ -1,12 +1,40 @@
 package circle
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func Test_ParseAPIType(t *testing.T) {
+	testCases := []struct {
+		apiType string
+		wantErr error
+	}{
+		{wantErr: fmt.Errorf(`invalid Circle API type "", must be one of [PAYOUTS TRANSFERS]`)},
+		{apiType: "foo_BAR", wantErr: fmt.Errorf(`invalid Circle API type "FOO_BAR", must be one of [PAYOUTS TRANSFERS]`)},
+		{apiType: "PAYOUTS"},
+		{apiType: "TRANSFERS"},
+		{apiType: "pAyOuTs"},
+		{apiType: "tRaNsFeRs"},
+	}
+
+	for _, tc := range testCases {
+		t.Run("apiType: "+tc.apiType, func(t *testing.T) {
+			got, err := ParseAPIType(tc.apiType)
+			if tc.wantErr != nil {
+				assert.Equal(t, tc.wantErr, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, APIType(strings.ToUpper(tc.apiType)), got)
+			}
+		})
+	}
+}
 
 func Test_PaymentRequest_GetCircleAssetCode(t *testing.T) {
 	tests := []struct {
