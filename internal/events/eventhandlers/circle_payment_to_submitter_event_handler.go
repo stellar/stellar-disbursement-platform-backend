@@ -23,7 +23,7 @@ type CirclePaymentToSubmitterEventHandlerOptions struct {
 	MtnDBConnectionPool   db.DBConnectionPool
 	DistAccountResolver   signing.DistributionAccountResolver
 	CircleService         circle.ServiceInterface
-	CircleAPYType         circle.APIType
+	CircleAPIType         circle.APIType
 }
 
 type CirclePaymentToSubmitterEventHandler struct {
@@ -43,7 +43,7 @@ func NewCirclePaymentToSubmitterEventHandler(opts CirclePaymentToSubmitterEventH
 	}
 
 	var circlePaymentDispatcher paymentdispatchers.PaymentDispatcherInterface
-	if opts.CircleAPYType == circle.APITypePayouts {
+	if opts.CircleAPIType == circle.APITypePayouts {
 		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentPayoutDispatcher(models, opts.CircleService, opts.DistAccountResolver)
 	} else {
 		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentTransferDispatcher(models, opts.CircleService, opts.DistAccountResolver)

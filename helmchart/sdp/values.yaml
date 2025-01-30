@@ -154,7 +154,7 @@ sdp:
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
   ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
-  ## @param sdp.configMap.data.CIRCLE_APY_TYPE The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".
+  ## @param sdp.configMap.data.CIRCLE_API_TYPE The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".
   configMap:
     annotations:
     data:
@@ -177,7 +177,7 @@ sdp:
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "60"
       MAX_INVITATION_RESEND_ATTEMPTS: "3"
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
-      CIRCLE_APY_TYPE: "TRANSFERS"
+      CIRCLE_API_TYPE: "TRANSFERS"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.

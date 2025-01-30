@@ -32,7 +32,7 @@ type CirclePaymentToSubmitterJobOptions struct {
 	Models              *data.Models
 	DistAccountResolver signing.DistributionAccountResolver
 	CircleService       circle.ServiceInterface
-	CircleAPYType       circle.APIType
+	CircleAPIType       circle.APIType
 }
 
 func NewCirclePaymentToSubmitterJob(opts CirclePaymentToSubmitterJobOptions) Job {
@@ -41,7 +41,7 @@ func NewCirclePaymentToSubmitterJob(opts CirclePaymentToSubmitterJobOptions) Job
 	}
 
 	var circlePaymentDispatcher paymentdispatchers.PaymentDispatcherInterface
-	if opts.CircleAPYType == circle.APITypePayouts {
+	if opts.CircleAPIType == circle.APITypePayouts {
 		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentPayoutDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
 	} else {
 		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentTransferDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
