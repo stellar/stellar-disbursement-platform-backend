@@ -487,7 +487,7 @@ func Test_CirclePaymentDispatcher_ensureRecipientIsReadyWithRetry(t *testing.T) 
 	}
 }
 
-func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
+func Test_CirclePaymentDispatcher_DispatchPayments_payouts(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -532,6 +532,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 				require.NoError(t, setupErr)
 
 				m.On("SendPayment", ctx, circle.PaymentRequest{
+					APIType:          circle.APITypePayout,
 					SourceWalletID:   circleWalletID,
 					RecipientID:      circleRecipient.CircleRecipientID,
 					Amount:           payment.Amount,
@@ -616,6 +617,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 				require.NoError(t, setupErr)
 
 				m.On("SendPayment", ctx, circle.PaymentRequest{
+					APIType:          circle.APITypePayout,
 					SourceWalletID:   circleWalletID,
 					RecipientID:      circleRecipient.CircleRecipientID,
 					Amount:           payment.Amount,

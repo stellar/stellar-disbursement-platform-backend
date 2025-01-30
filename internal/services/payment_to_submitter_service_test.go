@@ -26,7 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
+func Test_PaymentToSubmitterService_SendPaymentsMethods_payouts(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -170,6 +170,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			mCircleService := circle.NewMockService(t)
 			if tc.distributionAccount.IsCircle() {
 				wantPaymentReques := circle.PaymentRequest{
+					APIType:          circle.APITypePayout,
 					SourceWalletID:   tc.distributionAccount.CircleWalletID,
 					RecipientID:      cRecipient.CircleRecipientID,
 					Amount:           paymentRegistered.Amount,

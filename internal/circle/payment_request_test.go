@@ -61,8 +61,21 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 		wantErr    string
 	}{
 		{
-			name: "🔴missing source wallet ID",
+			name: "🔴 invalid API type",
 			paymentReq: PaymentRequest{
+				APIType:          "",
+				SourceWalletID:   "source_wallet_123",
+				RecipientID:      "recipient_id_123",
+				Amount:           "100.00",
+				StellarAssetCode: "USDC",
+				IdempotencyKey:   uuid.New().String(),
+			},
+			wantErr: `API type "" is not valid, must be one of [transfers payout]`,
+		},
+		{
+			name: "🔴 missing source wallet ID",
+			paymentReq: PaymentRequest{
+				APIType:          APITypePayout,
 				SourceWalletID:   "",
 				Amount:           "100.00",
 				StellarAssetCode: "USDC",
@@ -71,8 +84,9 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 			wantErr: "source wallet ID is required",
 		},
 		{
-			name: "🔴missing recipient id",
+			name: "🔴 missing recipient id",
 			paymentReq: PaymentRequest{
+				APIType:          APITypePayout,
 				SourceWalletID:   "source_wallet_123",
 				Amount:           "100.00",
 				StellarAssetCode: "USDC",
@@ -81,8 +95,9 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 			wantErr: "recipient ID is required",
 		},
 		{
-			name: "🔴invalid amount",
+			name: "🔴 invalid amount",
 			paymentReq: PaymentRequest{
+				APIType:          APITypePayout,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "invalid_amount",
@@ -92,8 +107,9 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 			wantErr: "amount is not valid",
 		},
 		{
-			name: "🔴missing stellar asset code",
+			name: "🔴 missing stellar asset code",
 			paymentReq: PaymentRequest{
+				APIType:          APITypePayout,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "100.00",
@@ -103,8 +119,9 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 			wantErr: "stellar asset code is required",
 		},
 		{
-			name: "🔴invalid idempotency key",
+			name: "🔴 invalid idempotency key",
 			paymentReq: PaymentRequest{
+				APIType:          APITypePayout,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "100.00",
@@ -114,13 +131,39 @@ func Test_PaymentRequest_Validate(t *testing.T) {
 			wantErr: "idempotency key is not valid",
 		},
 		{
-			name: "🟢valid payment request",
+			name: "🔴 invalid destination stellar address for transfers",
 			paymentReq: PaymentRequest{
+				APIType:                   APITypeTransfers,
+				SourceWalletID:            "source_wallet_123",
+				RecipientID:               "recipient_id_123",
+				Amount:                    "100.00",
+				StellarAssetCode:          "USDC",
+				IdempotencyKey:            uuid.New().String(),
+				DestinationStellarAddress: "invalid-stellar-address",
+			},
+			wantErr: "destination stellar address is not a valid public key",
+		},
+		{
+			name: "🟢 valid payout payment request",
+			paymentReq: PaymentRequest{
+				APIType:          APITypePayout,
 				SourceWalletID:   "source_wallet_123",
 				RecipientID:      "recipient_id_123",
 				Amount:           "100.00",
 				StellarAssetCode: "USDC",
 				IdempotencyKey:   uuid.New().String(),
+			},
+			wantErr: "",
+		},
+		{
+			name: "🟢 valid transfer payment request",
+			paymentReq: PaymentRequest{
+				APIType:                   APITypeTransfers,
+				SourceWalletID:            "source_wallet_123",
+				DestinationStellarAddress: "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+				Amount:                    "100.00",
+				StellarAssetCode:          "USDC",
+				IdempotencyKey:            uuid.New().String(),
 			},
 			wantErr: "",
 		},

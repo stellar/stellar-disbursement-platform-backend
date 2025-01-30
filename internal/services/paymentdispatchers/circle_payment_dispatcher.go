@@ -91,6 +91,7 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 
 		// 4. Submit the payment to Circle
 		payout, err := c.circleService.SendPayment(ctx, circle.PaymentRequest{
+			APIType:          circle.APITypePayout,
 			SourceWalletID:   circleWalletID,
 			RecipientID:      recipient.CircleRecipientID,
 			Amount:           payment.Amount,
