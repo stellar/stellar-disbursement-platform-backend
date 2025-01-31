@@ -275,17 +275,9 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 
 	// validate if the password format attends the requirements
 	badRequestExtras := map[string]interface{}{}
-	err := h.PasswordValidator.ValidatePassword(reqBody.NewPassword)
-	if err != nil {
-		var validatePasswordError *authUtils.ValidatePasswordError
-		if errors.As(err, &validatePasswordError) {
-			for k, v := range validatePasswordError.FailedValidations() {
-				badRequestExtras[k] = v
-			}
-			log.Ctx(ctx).Errorf("validating password in PatchUserPassword: %v", err)
-		} else {
-			httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
-			return
+	if validatePasswordError := h.PasswordValidator.ValidatePassword(reqBody.NewPassword); validatePasswordError != nil {
+		for k, v := range validatePasswordError.FailedValidations() {
+			badRequestExtras[k] = v
 		}
 	}
 	if len(badRequestExtras) > 0 {
@@ -294,7 +286,7 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 	}
 
 	log.Ctx(ctx).Warnf("[PatchUserPassword] - Will update password for user account ID %s", user.ID)
-	err = h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
+	err := h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
 		return

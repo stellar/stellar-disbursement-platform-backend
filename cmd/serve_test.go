@@ -155,7 +155,6 @@ func Test_serve(t *testing.T) {
 		MonitorService:                  mMonitorService,
 		AdminDBConnectionPool:           dbConnectionPool,
 		MtnDBConnectionPool:             dbConnectionPool,
-		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
 		SEP24JWTSecret:                  "jwt_secret_1234567890",
@@ -178,6 +177,7 @@ func Test_serve(t *testing.T) {
 		MaxInvitationResendAttempts:     3,
 		DistAccEncryptionPassphrase:     distributionAccPrivKey,
 		CircleService:                   mCircleService,
+		CircleAPIType:                   circle.APITypeTransfers,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
@@ -291,7 +291,6 @@ func Test_serve(t *testing.T) {
 	require.True(t, serveCmdFound, "serve command not found")
 
 	t.Setenv("DATABASE_URL", dbt.DSN)
-	t.Setenv("EC256_PUBLIC_KEY", serveOpts.EC256PublicKey)
 	t.Setenv("EC256_PRIVATE_KEY", serveOpts.EC256PrivateKey)
 	t.Setenv("SEP24_JWT_SECRET", serveOpts.SEP24JWTSecret)
 	t.Setenv("SEP10_SIGNING_PUBLIC_KEY", serveOpts.Sep10SigningPublicKey)

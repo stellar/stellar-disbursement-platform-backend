@@ -107,6 +107,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 				Models:              models,
 				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 				CircleService:       serveOpts.CircleService,
+				CircleAPIType:       serveOpts.CircleAPIType,
 			}),
 			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
 				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
@@ -202,6 +203,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:         o.ServeOpts.CircleService,
+			CircleAPIType:         o.ServeOpts.CircleAPIType,
 		}),
 	)
 	if err != nil {
@@ -239,14 +241,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:   types.String,
 			ConfigKey: &serveOpts.InstanceName,
 			Required:  true,
-		},
-		{
-			Name:           "ec256-public-key",
-			Usage:          "The EC256 Public Key used to validate the token signature. This EC key needs to be at least as strong as prime256v1 (P-256).",
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionEC256PublicKey,
-			ConfigKey:      &serveOpts.EC256PublicKey,
-			Required:       true,
 		},
 		{
 			Name:           "ec256-private-key",
@@ -370,6 +364,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.SingleTenantMode,
 			FlagDefault: false,
+		},
+		{
+			Name:           "circle-api-type",
+			Usage:          `The Circle API type. Options: ["TRANSFERS", "PAYOUTS"]. `,
+			OptType:        types.String,
+			ConfigKey:      &serveOpts.CircleAPIType,
+			Required:       true,
+			CustomSetValue: cmdUtils.SetConfigOptionCircleAPIType,
+			FlagDefault:    string(circle.APITypeTransfers),
 		},
 	}
 

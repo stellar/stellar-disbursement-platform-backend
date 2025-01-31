@@ -111,7 +111,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "3.1.0"
+    tag: "3.3.0"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -136,7 +136,6 @@ sdp:
   ## @param sdp.configMap.annotations Annotations to be added to the ConfigMap.
   ## @extra sdp.configMap.data Used to inject non-sensitive environment variables into the SDP deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @param sdp.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
-  ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes. This EC key needs to be at least as strong as prime256v1 (P-256).
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
@@ -155,11 +154,11 @@ sdp:
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
   ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
+  ## @param sdp.configMap.data.CIRCLE_API_TYPE The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".
   configMap:
     annotations:
     data:
       CRASH_TRACKER_TYPE: "DRY_RUN"
-      EC256_PUBLIC_KEY: #required
       ENVIRONMENT: "dev"
       LOG_LEVEL: "INFO"
       SEP10_SIGNING_PUBLIC_KEY: #required
@@ -178,6 +177,7 @@ sdp:
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "60"
       MAX_INVITATION_RESEND_ATTEMPTS: "3"
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
+      CIRCLE_API_TYPE: "TRANSFERS"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
@@ -536,7 +536,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:3.1.0
+    fullName: stellar/stellar-disbursement-platform-frontend:3.3.0
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.
