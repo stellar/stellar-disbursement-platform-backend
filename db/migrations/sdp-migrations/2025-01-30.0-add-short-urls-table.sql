@@ -10,5 +10,12 @@ CREATE TABLE short_urls (
 
 CREATE INDEX short_urls_original_url_idx ON short_urls (original_url);
 
+ALTER TABLE organizations
+    ADD COLUMN is_link_shortener_enabled boolean NOT NULL DEFAULT false;
+
+
 -- +migrate Down
 DROP TABLE short_urls;
+
+ALTER TABLE organizations
+    DROP COLUMN is_link_shortener_enabled;

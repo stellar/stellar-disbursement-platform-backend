@@ -122,30 +122,9 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			TenantBaseURL:    *currentTenant.BaseURL,
 		}
 
-		registrationLink, err := wdl.GetSignedRegistrationLink(s.sep10SigningPrivateKey)
+		registrationLink, err := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
 		if err != nil {
-			log.Ctx(ctx).Errorf(
-				"error getting signed registration link to receiver wallet ID %s for wallet ID %s and asset ID %s: %s",
-				rwa.ReceiverWallet.ID, wallet.ID, rwa.Asset.ID, err.Error(),
-			)
-			continue
-		}
-
-		shortCode, err := s.Models.URLShortener.CreateShortURL(ctx, registrationLink)
-		if err != nil {
-			log.Ctx(ctx).Errorf(
-				"shortening registration link to receiver wallet ID %s and asset ID %s: %v",
-				rwa.ReceiverWallet.ID, rwa.Asset.ID, err,
-			)
-			continue
-		}
-
-		shortenedRegistrationLink, err := url.JoinPath(*currentTenant.BaseURL, "r", shortCode)
-		if err != nil {
-			log.Ctx(ctx).Errorf(
-				"building shortened registration link for shortCode %s: %v",
-				shortCode, err,
-			)
+			log.Ctx(ctx).Errorf("getting registration link for receiver wallet ID %s: %v", rwa.ReceiverWallet.ID, err)
 			continue
 		}
 
@@ -167,7 +146,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			RegistrationLink template.HTML
 		}{
 			OrganizationName: organization.Name,
-			RegistrationLink: template.HTML(shortenedRegistrationLink),
+			RegistrationLink: template.HTML(registrationLink),
 		})
 		if err != nil {
 			return fmt.Errorf("executing registration message template: %w", err)
@@ -226,6 +205,29 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		return nil
 	})
+}
+
+func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context, wdl WalletDeepLink, isLinkShortenerEnabled bool) (string, error) {
+	registrationLink, err := wdl.GetSignedRegistrationLink(s.sep10SigningPrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("getting signed registration link: %w", err)
+	}
+
+	if !isLinkShortenerEnabled {
+		return registrationLink, nil
+	}
+
+	shortCode, err := s.Models.URLShortener.CreateShortURL(ctx, registrationLink)
+	if err != nil {
+		return "", fmt.Errorf("creating short URL for registration link: %w", err)
+	}
+
+	shortenedRegistrationLink, err := url.JoinPath(wdl.TenantBaseURL, "r", shortCode)
+	if err != nil {
+		return "", fmt.Errorf("building shortened registration link: %w", err)
+	}
+
+	return shortenedRegistrationLink, nil
 }
 
 // resolveReceiverWalletsPendingRegistration returns the receiver wallets pending registration based on the receiverWalletInvitationData.
