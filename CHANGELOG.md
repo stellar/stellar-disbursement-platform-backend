@@ -4,9 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [3.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.2.0...develop)) Unreleased
+## [3.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.2.0...3.3.0))
 
-Release of the Stellar Disbursement Platform `v3.3.0`.
+Release of the Stellar Disbursement Platform `v3.3.0`. This release adds support to Circle's Transfers API, as an
+alternative to the Payouts API. It also adds audit functionality for the `receivers` table to track changes.
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.3.0`.
 
 ### Added
 
