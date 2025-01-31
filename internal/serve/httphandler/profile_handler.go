@@ -54,6 +54,7 @@ type PatchOrganizationProfileRequest struct {
 	OrganizationName                    string  `json:"organization_name"`
 	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
 	IsApprovalRequired                  *bool   `json:"is_approval_required"`
+	IsLinkShortenerEnabled              *bool   `json:"is_link_shortener_enabled"`
 	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
 	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
 	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
@@ -174,6 +175,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		Logo:                                 fileContentBytes,
 		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
 		IsApprovalRequired:                   reqBody.IsApprovalRequired,
+		IsLinkShortenerEnabled:               reqBody.IsLinkShortenerEnabled,
 		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
 		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
 		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,

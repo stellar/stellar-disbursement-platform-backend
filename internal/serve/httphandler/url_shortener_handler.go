@@ -35,7 +35,7 @@ func (u URLShortenerHandler) HandleRedirect(w http.ResponseWriter, r *http.Reque
 
 	// TODO: Run this increment in a separate goroutine
 	if incrErr := u.Models.URLShortener.IncrementHits(ctx, shortCode); incrErr != nil {
-		log.Errorf("Failed to increment hits for %s: %v", shortCode, incrErr)
+		log.Ctx(ctx).Errorf("Failed to increment hits for %s: %v", shortCode, incrErr)
 	}
 
 	http.Redirect(w, r, originalURL, http.StatusMovedPermanently)
