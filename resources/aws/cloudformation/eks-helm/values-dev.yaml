@@ -42,15 +42,19 @@ sdp:
       DATABASE_URL: "/sdp/dev/DATABASE_URL"
       RECAPTCHA_SITE_KEY: "/sdp/dev/RECAPTCHA_SITE_KEY"
       RECAPTCHA_SITE_SECRET_KEY: "/sdp/dev/RECAPTCHA_SITE_SECRET_KEY"
+      AWS_SECRET_ACCESS_KEY: "/sdp/dev/AWS_SECRET_ACCESS_KEY"
+      AWS_ACCESS_KEY_ID: "/sdp/dev/AWS_ACCESS_KEY_ID"
   # =========================== START sdp.configMap ===========================
   configMap:
     data:
+      AWS_SNS_SENDER_ID: ""
+      AWS_REGION: "us-west-2"
       ADMIN_ACCOUNT: "reece@stellar.org"
       ENVIRONMENT: "dev"
       LOG_LEVEL: "debug"
       METRICS_TYPE: "PROMETHEUS"
       EMAIL_SENDER_TYPE: "DRY_RUN"
-      SMS_SENDER_TYPE: "DRY_RUN"
+      SMS_SENDER_TYPE: "AWS_SMS"
       ENABLE_MFA: "false"
       NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
       HORIZON_URL: "https://horizon-testnet.stellar.org"

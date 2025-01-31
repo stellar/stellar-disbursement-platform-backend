@@ -17,7 +17,7 @@ This guide walks through deploying the Stellar Disbursement Platform (SDP) infra
   - Deploys RDS PostgreSQL database in private subnet
   - Creates necessary database secrets in AWS Secrets Manager
 
-- Keys Stack (sdp-keys.yaml) [Optional]
+- Keys Stack (sdp-keys-eks.yaml) [Optional]
   - Manages Stellar and encryption keys by either:
     - Using provided keys via parameters, or
     - Auto-generating keys using Lambda function for dev/test environments
@@ -97,7 +97,7 @@ Deploy the secrets and keys management stack:
 ```bash
 aws cloudformation create-stack \
   --stack-name sdp-keys-eks \
-  --template-body file://sdp-keys.yaml \
+  --template-body file://sdp-keys-eks.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
     ParameterKey=env,ParameterValue=dev \
@@ -351,13 +351,60 @@ Replace occurrences of "mystellarsdpdomain.org" in [values-dev.yaml](aws/cloudfo
 ### Install SDP
 
 ```bash
-helm install sdp stellar/stellar-disbursement-platform -f eks-helm/values.yaml --namespace sdp
+helm install sdp stellar/stellar-disbursement-platform -f eks-helm/values-dev.yaml --namespace sdp
 ```
 ### Verify Pods are healthy 
 ```
 kubectl -n sdp get pods
 ```
 
+## Adding a tenant from the SDP Pod
+
+### Get the SDP Pod name and exec to its shell
+```bash
+kubectl -n sdp get pods
+
+reecemarkowsky  …/cloudformation   reece/SDP-1491-sdp-cloudformation ● ?  kubectl -n sdp get pods                                                                                                   ✔  11:30:38
+NAME                             READY   STATUS    RESTARTS   AGE
+sdp-5bddb74b4d-skqsv             1/1     Running   0          13m
+sdp-ap-58b6cc978-8q4sg           1/1     Running   0          13m
+sdp-dashboard-7799755844-nwnw5   1/1     Running   0          13m
+sdp-tss-84bc97659-bf9pb          1/1     Running   0          13m
+
+kubectl -n sdp exec -it sdp-5bddb74b4d-skqsv -- /bin/bash
+```
+#### Install curl and use the /tenant endpoint to add a tenant
+```bash
+Setting up curl (8.5.0-2ubuntu10.6) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.3) ...
+root@sdp-5bddb74b4d-skqsv:/app# curl --location 'http://localhost:8003/tenants/' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Basic cmVlY2VAc3RlbGxhci5vcmc6YWRtaW4tYXBpLWtleQ==' \
+--data-raw '{
+    "name": "ridedash",
+    "owner_email": "reece@stellar.org",
+    "owner_first_name": "reece",
+    "owner_last_name": "markowsky",
+    "organization_name": "aid-retreat",
+    "sdp_ui_base_url": "https://ridedash.mystellarsdpdomain.org",
+    "base_url": "https://ridedash.mystellarsdpdomain.org",
+    "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
+}'
+{
+  "id": "db10d670-d126-4935-a7ad-4a6abe312ada",
+  "name": "ridedash",
+  "base_url": "https://ridedash.mystellarsdpdomain.org",
+  "sdp_ui_base_url": "https://ridedash.mystellarsdpdomain.org",
+  "status": "TENANT_PROVISIONED",
+  "is_default": false,
+  "created_at": "2025-01-30T19:30:15.315509Z",
+  "updated_at": "2025-01-30T19:30:16.711518Z",
+  "deleted_at": null,
+  "distribution_account_address": "GCKNCA7EZYZEQNQR22XGL47WCRL3VVDQDKLF7DOIK6O3Y5TLBAWQYQWA",
+  "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+  "distribution_account_status": "ACTIVE"
+}root@sdp-5bddb74b4d-skqsv:/app#
+```
 
 ## Troubleshooting
 

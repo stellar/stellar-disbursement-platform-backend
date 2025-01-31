@@ -131,6 +131,25 @@ Parameters:
     Default: "YOUR_RECAPTCHA_SECRET_KEY"
     Description: "Environment variable: RECAPTCHA_SITE_SECRET_KEY"
 
+  AwsSnsSenderId:
+    Type: String
+    NoEcho: true
+    Default: "AWS_SNS_SENDER_ID"
+    Description: "Environment variable: AWS_SNS_SENDER_ID"
+
+  AwsSecretAccessKey:
+    Type: String
+    NoEcho: true
+    Default: "AWS_SECRET_ACCESS_KEY"
+    Description: "Environment variable: AWS_SECRET_ACCESS_KEY"
+
+  AwsAccessKeyId:
+    Type: String
+    NoEcho: true
+    Default: "AWS_ACCESS_KEY_ID"
+    Description: "Environment variable: AWS_ACCESS_KEY_ID"
+
+
 Conditions:
   GenerateSep10Keys: !Equals [ !Ref Sep10SigningPrivateKey, "" ]
   GenerateDistributionKeys: !Equals [ !Ref DistributionSeed, "" ]
@@ -442,6 +461,27 @@ Resources:
       Name: !Sub /sdp/${env}/RECAPTCHA_SITE_SECRET_KEY
       Description: "Recaptcha site secret key"
       SecretString: !Ref RecaptchaSiteSecretKey
+
+  AwsSnsSenderIdSm:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/AWS_SNS_SENDER_ID
+      Description: "Recaptcha site secret key"
+      SecretString: !Ref AwsSnsSenderId
+
+  AwsSecretAccessKeySm:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/AWS_SECRET_ACCESS_KEY
+      Description: "Recaptcha site secret key"
+      SecretString: !Ref AwsSecretAccessKey
+
+  AwsAccessKeyIdSm:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/AWS_ACCESS_KEY_ID
+      Description: "Recaptcha site secret key"
+      SecretString: !Ref AwsAccessKeyId
 
 Outputs:
   Sep10SigningPrivateKeySmArn:
