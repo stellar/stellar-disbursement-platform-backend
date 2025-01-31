@@ -48,6 +48,7 @@ type Organization struct {
 	PrivacyPolicyLink      *string                `json:"privacy_policy_link" db:"privacy_policy_link"`
 	Logo                   []byte                 `db:"logo"`
 	IsApprovalRequired     bool                   `json:"is_approval_required" db:"is_approval_required"`
+	IsLinkShortenerEnabled bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
 	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
 	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
@@ -58,6 +59,7 @@ type OrganizationUpdate struct {
 	Logo                                 []byte `json:",omitempty"`
 	TimezoneUTCOffset                    string `json:",omitempty"`
 	IsApprovalRequired                   *bool  `json:",omitempty"`
+	IsLinkShortenerEnabled               *bool  `json:",omitempty"`
 	ReceiverInvitationResendIntervalDays *int64 `json:",omitempty"`
 	PaymentCancellationPeriodDays        *int64 `json:",omitempty"`
 
@@ -126,6 +128,7 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		len(ou.Logo) == 0 &&
 		ou.TimezoneUTCOffset == "" &&
 		ou.IsApprovalRequired == nil &&
+		ou.IsLinkShortenerEnabled == nil &&
 		ou.ReceiverRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
 		ou.ReceiverInvitationResendIntervalDays == nil &&
@@ -195,6 +198,11 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.IsApprovalRequired != nil {
 		fields = append(fields, "is_approval_required = ?")
 		args = append(args, *ou.IsApprovalRequired)
+	}
+
+	if ou.IsLinkShortenerEnabled != nil {
+		fields = append(fields, "is_link_shortener_enabled = ?")
+		args = append(args, *ou.IsLinkShortenerEnabled)
 	}
 
 	if ou.ReceiverRegistrationMessageTemplate != nil {
