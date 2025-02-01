@@ -248,7 +248,7 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 			payments p
 		JOIN disbursements d on p.disbursement_id = d.id
 		JOIN assets a on p.asset_id = a.id
-		JOIN wallets w on d.wallet_id = w.id			
+		JOIN wallets w on d.wallet_id = w.id
 		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
 		`
 
@@ -622,6 +622,11 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 // newPaymentQuery generates the full query and parameters for a payment search query
 func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
+	if queryParams.Query != "" {
+		q := "%" + queryParams.Query + "%"
+		qb.AddCondition("(p.id ILIKE ? OR p.external_payment_id ILIKE ? OR rw.stellar_address ILIKE ? OR d.name ILIKE ?)", q, q, q, q)
+	}
+
 	if queryParams.Filters[FilterKeyStatus] != nil {
 		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]PaymentStatus); ok {
 			if len(statusSlice) > 0 {
