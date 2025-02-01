@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -469,10 +470,10 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 
 	// create receivers
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiverWallet1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, data.DraftReceiversWalletStatus)
+	receiverWallet1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiverWallet2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.DraftReceiversWalletStatus)
+	receiverWallet2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	// create disbursements
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -497,6 +498,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	// create payments
 	paymentDraft := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "50",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
 		Status:               data.DraftPaymentStatus,
@@ -514,6 +516,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 
 	paymentReady := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "150",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
 		Status:               data.ReadyPaymentStatus,
@@ -531,6 +534,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 
 	paymentPending := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "200.50",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
 		Status:               data.PendingPaymentStatus,
@@ -548,6 +552,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 
 	paymentPaused := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "20",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
 		Status:               data.PausedPaymentStatus,
@@ -565,6 +570,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	for i, paymentStatus := range []data.PaymentStatus{data.SuccessPaymentStatus, data.FailedPaymentStatus, data.CanceledPaymentStatus} {
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "50",
+			ExternalPaymentID:    uuid.NewString(),
 			StellarTransactionID: stellarTransactionID,
 			StellarOperationID:   stellarOperationID,
 			Status:               paymentStatus,
@@ -741,6 +747,54 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Total: 2,
 			},
 			expectedPayments: []data.Payment{*paymentPending, *paymentReady},
+		},
+		{
+			name: "query[p.id]",
+			queryParams: map[string]string{
+				"q": paymentDraft.ID[:5],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 1,
+			},
+			expectedPayments: []data.Payment{*paymentDraft},
+		},
+		{
+			name: "query[p.external_payment_id]",
+			queryParams: map[string]string{
+				"q": paymentReady.ExternalPaymentID[:5],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 1,
+			},
+			expectedPayments: []data.Payment{*paymentReady},
+		},
+		{
+			name: "query[rw.stellar_address]",
+			queryParams: map[string]string{
+				"q": receiverWallet1.StellarAddress[:5],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 5,
+			},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentDraft, *paymentPending},
+		},
+		{
+			name: "query[d.name]",
+			queryParams: map[string]string{
+				"q": disbursement2.Name[5:],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 2,
+			},
+			expectedPayments: []data.Payment{*paymentPaused, *paymentPending},
 		},
 	}
 
