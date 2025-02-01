@@ -610,7 +610,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 7,
 			},
-			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentPaused, *paymentDraft, *paymentPending, *paymentReady},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentPaused, *paymentDraft, *paymentPending, *paymentReady}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "fetch first page of payments with limit 1 and sort by created_at",
@@ -675,7 +675,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 5,
 			},
-			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentDraft, *paymentPending},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentDraft, *paymentPending}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "fetch payments for receiver2 with default sorter (updated_at DESC)",
@@ -689,7 +689,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 2,
 			},
-			expectedPayments: []data.Payment{*paymentPaused, *paymentReady},
+			expectedPayments: []data.Payment{*paymentPaused, *paymentReady}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "returns empty list when receiver_id is not found",
@@ -731,7 +731,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 4,
 			},
-			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentPaused},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentPaused}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "fetch payment created at after 2023-01-01 and before 2023-03-01",
@@ -746,7 +746,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 2,
 			},
-			expectedPayments: []data.Payment{*paymentPending, *paymentReady},
+			expectedPayments: []data.Payment{*paymentPending, *paymentReady}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "query[p.id]",
@@ -782,7 +782,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next: "", Prev: "",
 				Pages: 1, Total: 5,
 			},
-			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentDraft, *paymentPending},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentDraft, *paymentPending}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "query[d.name]",
@@ -794,7 +794,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next: "", Prev: "",
 				Pages: 1, Total: 2,
 			},
-			expectedPayments: []data.Payment{*paymentPaused, *paymentPending},
+			expectedPayments: []data.Payment{*paymentPaused, *paymentPending}, // default sorter: (updated_at DESC)
 		},
 	}
 
