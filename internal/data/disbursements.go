@@ -146,17 +146,7 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 
 var selectDisbursementQuery = `
 		SELECT
-			d.id,
-			d.name,
-			d.status,
-			d.status_history,
-			COALESCE(d.verification_field::text, '') AS verification_field,
-			COALESCE(d.file_name, '') AS file_name,
-			d.file_content,
-			d.created_at,
-			d.updated_at,
-			d.registration_contact_type,
-			COALESCE(d.receiver_registration_message_template, '') AS receiver_registration_message_template,
+			` + DisbursementColumnNames("d", "") + `,
 			` + WalletColumnNames("w", "wallet", true) + `,
 			` + AssetColumnNames("a", "asset", true) + `
 		FROM
