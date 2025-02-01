@@ -224,7 +224,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.Len(t, receiver2Verifications, 0)
 
 		// Verify Receiver Wallets
-		receiverWallets, err := di.receiverWalletModel.GetWithReceiverIds(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID})
+		receiverWallets, err := di.receiverWalletModel.GetWithReceiverIDs(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID})
 		require.NoError(t, err)
 		assert.Len(t, receiverWallets, 2)
 		for _, receiverWallet := range receiverWallets {
