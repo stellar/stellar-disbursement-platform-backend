@@ -111,11 +111,11 @@ type ReceiverWalletInsert struct {
 	WalletID   string
 }
 
-func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec db.SQLExecuter, receiverIds ReceiverIDs) ([]ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverIDs ReceiverIDs) ([]ReceiverWallet, error) {
 	receiverWallets := []ReceiverWallet{}
 	query := `
 	WITH receiver_wallets_cte AS (
-		SELECT 
+		SELECT
 			rw.id,
 			rw.receiver_id,
 			rw.anchor_platform_transaction_id,
@@ -199,7 +199,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 	ORDER BY rwc.created_at
 	`
 
-	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.StringArray(receiverIds))
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.StringArray(receiverIDs))
 	if err != nil {
 		return nil, fmt.Errorf("error querying receivers wallets: %w", err)
 	}

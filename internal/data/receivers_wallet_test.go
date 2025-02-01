@@ -148,7 +148,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, errReceiver := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{"invalid_id"})
+		actual, errReceiver := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{"invalid_id"})
 		require.NoError(t, errReceiver)
 		require.Empty(t, actual)
 
@@ -165,7 +165,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, errReceiver := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, errReceiver := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, errReceiver)
 		require.Empty(t, actual)
 
@@ -226,7 +226,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
@@ -291,7 +291,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
@@ -397,7 +397,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
@@ -512,7 +512,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
