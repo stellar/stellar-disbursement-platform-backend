@@ -588,6 +588,8 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			paymentFailed = payment
 		case data.CanceledPaymentStatus:
 			paymentCanceled = payment
+		default:
+			panic(fmt.Sprintf("invalid payment status: %s", paymentStatus))
 		}
 	}
 

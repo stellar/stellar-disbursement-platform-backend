@@ -11,7 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"net/url"
 	"testing"
 	"time"
 
@@ -2114,13 +2114,15 @@ func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multi
 }
 
 func buildURLWithQueryParams(baseURL, endpoint string, queryParams map[string]string) string {
-	url := baseURL + endpoint
-	if len(queryParams) > 0 {
-		url += "?"
-		for k, v := range queryParams {
-			url += fmt.Sprintf("%s=%s&", k, v)
-		}
-		url = strings.TrimSuffix(url, "&")
+	u, err := url.Parse(baseURL + endpoint)
+	if err != nil {
+		panic(fmt.Sprintf("invalid URL: %v", err))
 	}
-	return url
+
+	q := u.Query()
+	for k, v := range queryParams {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
