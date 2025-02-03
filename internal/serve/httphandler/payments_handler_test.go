@@ -39,7 +39,6 @@ import (
 func Test_PaymentsHandlerGet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -156,9 +155,18 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"wallet": {
 					"id": "` + wallet.ID + `",
 					"name": "wallet1",
+					"deep_link_schema": "` + wallet.DeepLinkSchema + `",
+					"homepage": "` + wallet.Homepage + `",
+					"sep_10_client_domain": "` + wallet.SEP10ClientDomain + `",
 					"enabled": true
 				},
 				"status": "DRAFT",
+				"status_history": [
+					{
+						"status": "DRAFT",
+						"timestamp": "` + receiverWallet.StatusHistory[0].Timestamp.Format(time.RFC3339Nano) + `"
+					}
+				],
 				"created_at": "` + receiverWallet.CreatedAt.Format(time.RFC3339Nano) + `",
 				"updated_at": "` + receiverWallet.UpdatedAt.Format(time.RFC3339Nano) + `",
 				"invitation_sent_at": null
@@ -838,12 +846,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			assert.Equal(t, tc.expectedPagination, actualResponse.Pagination)
 
 			// Parse the response data
-			var actualPayments []data.Payment
-			err = json.Unmarshal(actualResponse.Data, &actualPayments)
+			expectedJson, err := json.Marshal(tc.expectedPayments)
 			require.NoError(t, err)
-
-			// Assert on the payments data
-			assert.Equal(t, tc.expectedPayments, actualPayments)
+			assert.JSONEq(t, string(expectedJson), string(actualResponse.Data))
 		})
 	}
 }

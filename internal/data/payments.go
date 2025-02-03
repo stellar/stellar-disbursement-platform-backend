@@ -153,19 +153,8 @@ SELECT
 	COALESCE(p.external_payment_id, '') as external_payment_id,
 	` + DisbursementColumnNames("d", "disbursement") + `,
 	` + AssetColumnNames("a", "asset", false) + `,
-	rw.id as "receiver_wallet.id",
-	COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-	COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-	COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-	rw.status as "receiver_wallet.status",
-	rw.created_at as "receiver_wallet.created_at",
-	rw.updated_at as "receiver_wallet.updated_at",
-	rw.receiver_id as "receiver_wallet.receiver.id",
-	COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallet.anchor_platform_transaction_id",
-	rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
-	w.id as "receiver_wallet.wallet.id",
-	w.name as "receiver_wallet.wallet.name",
-	w.enabled as "receiver_wallet.wallet.enabled"
+	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
 FROM
 	payments p
 JOIN disbursements d ON p.disbursement_id = d.id
@@ -364,14 +353,7 @@ var getReadyPaymentsBaseQuery = `
 		p.updated_at,
 		` + DisbursementColumnNames("d", "disbursement") + `,
 		` + AssetColumnNames("a", "asset", false) + `,
-		rw.id as "receiver_wallet.id",
-		rw.receiver_id as "receiver_wallet.receiver.id",
-		COALESCE(r.phone_number, '') as "receiver_wallet.receiver.phone_number",
-		COALESCE(r.email, '') as "receiver_wallet.receiver.email",
-		COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-		COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-		COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-		rw.status as "receiver_wallet.status"
+		` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `
 	FROM
 		payments p
 		JOIN assets a ON p.asset_id = a.id
@@ -581,21 +563,17 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
 			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
 			p.status,
+			p.status_history,
 			p.created_at,
 			p.updated_at,
 			` + DisbursementColumnNames("d", "disbursement") + `,
 			` + AssetColumnNames("a", "asset", false) + `,
-			rw.id as "receiver_wallet.id",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status"
+			` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `
 		FROM
 			payments p
-				JOIN assets a on p.asset_id = a.id
-				JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-				JOIN disbursements d on p.disbursement_id = d.id
+			JOIN assets a on p.asset_id = a.id
+			JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
+			JOIN disbursements d on p.disbursement_id = d.id
 		WHERE p.id = ANY($1)
 	`
 
