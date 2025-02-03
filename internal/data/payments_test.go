@@ -448,153 +448,116 @@ func Test_PaymentModelGetAll(t *testing.T) {
 	})
 }
 
-// func Test_PaymentsModelGetByIDs(t *testing.T) {
-// 	dbt := dbtest.Open(t)
-// 	defer dbt.Close()
+func Test_PaymentModel_GetByIDs(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-// 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-// 	require.NoError(t, err)
-// 	defer dbConnectionPool.Close()
+	ctx := context.Background()
 
-// 	ctx := context.Background()
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
-// 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-// 	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
-// 	wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverWallet1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, DraftReceiversWalletStatus)
 
-// 	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-// 	receiverWallet1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, DraftReceiversWalletStatus)
+	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverWallet2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, DraftReceiversWalletStatus)
 
-// 	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-// 	receiverWallet2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, DraftReceiversWalletStatus)
+	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
+	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &Disbursement{
+		Name:      "disbursement 1",
+		Status:    DraftDisbursementStatus,
+		Asset:     asset,
+		Wallet:    wallet1,
+		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+	})
 
-// 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
-// 	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &Disbursement{
-// 		Name:      "disbursement 1",
-// 		Status:    Draft,
-// 		Asset:     asset,
-// 		Wallet:    wallet1,
-// 		Country:   country,
-// 		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
-// 	})
+	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
 
-// 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
+	stellarTransactionID, err := utils.RandomString(64)
+	require.NoError(t, err)
+	stellarOperationID, err := utils.RandomString(32)
+	require.NoError(t, err)
+	payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
+		Amount:               "50",
+		StellarTransactionID: stellarTransactionID,
+		StellarOperationID:   stellarOperationID,
+		Status:               DraftPaymentStatus,
+		StatusHistory: []PaymentStatusHistoryEntry{
+			{
+				Status:        DraftPaymentStatus,
+				StatusMessage: "",
+				Timestamp:     time.Now(),
+			},
+		},
+		Disbursement:   disbursement1,
+		Asset:          *asset,
+		ReceiverWallet: receiverWallet1,
+	})
 
-// 	t.Run("returns empty list when payments ids are not found", func(t *testing.T) {
-// 		payments, err := paymentModel.GetByIDs(ctx, dbConnectionPool, []string{"invalid_id"})
-// 		require.NoError(t, err)
-// 		require.Empty(t, payments)
-// 	})
+	stellarTransactionID, err = utils.RandomString(64)
+	require.NoError(t, err)
+	stellarOperationID, err = utils.RandomString(32)
+	require.NoError(t, err)
+	payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
+		Amount:               "150",
+		StellarTransactionID: stellarTransactionID,
+		StellarOperationID:   stellarOperationID,
+		Status:               DraftPaymentStatus,
+		StatusHistory: []PaymentStatusHistoryEntry{
+			{
+				Status:        DraftPaymentStatus,
+				StatusMessage: "",
+				Timestamp:     time.Now(),
+			},
+		},
+		Disbursement:   disbursement1,
+		Asset:          *asset,
+		ReceiverWallet: receiverWallet2,
+	})
 
-// 	t.Run("returns payments successfully", func(t *testing.T) {
-// 		stellarTransactionID, err := utils.RandomString(64)
-// 		require.NoError(t, err)
-// 		stellarOperationID, err := utils.RandomString(32)
-// 		require.NoError(t, err)
+	t.Run("returns empty list when payments ids are not found", func(t *testing.T) {
+		payments, err := paymentModel.GetByIDs(ctx, dbConnectionPool, []string{"invalid_id"})
+		require.NoError(t, err)
+		require.Empty(t, payments)
+	})
 
-// 		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
-// 			Amount:               "50",
-// 			StellarTransactionID: stellarTransactionID,
-// 			StellarOperationID:   stellarOperationID,
-// 			Status:               DraftPaymentStatus,
-// 			StatusHistory: []PaymentStatusHistoryEntry{
-// 				{
-// 					Status:        DraftPaymentStatus,
-// 					StatusMessage: "",
-// 					Timestamp:     time.Now(),
-// 				},
-// 			},
-// 			Disbursement:   disbursement1,
-// 			Asset:          *asset,
-// 			ReceiverWallet: receiverWallet1,
-// 		})
+	// assertPaymentEqual is a helper function to assert that two payments are equal,
+	// ignoring some fields that are not returned in the query.
+	assertPaymentEqual := func(t *testing.T, expected, actual *Payment) {
+		t.Helper()
+		expectedRW := *expected.ReceiverWallet
+		actualRW := *actual.ReceiverWallet
+		// Some fields are not returned in this query, so we're erasing them before the comparison
+		expectedRW.Wallet = Wallet{ID: expectedRW.Wallet.ID}
+		require.NotNil(t, actualRW.StatusHistory)
+		require.NotNil(t, expectedRW.StatusHistory)
+		expectedRW.StatusHistory = actualRW.StatusHistory
+		require.Equal(t, expectedRW, actualRW)
 
-// 		stellarTransactionID, err = utils.RandomString(64)
-// 		require.NoError(t, err)
-// 		stellarOperationID, err = utils.RandomString(32)
-// 		require.NoError(t, err)
+		expectedPayment := *expected
+		expectedPayment.ReceiverWallet = &expectedRW
+		assert.Equal(t, expectedPayment, *actual)
+	}
 
-// 		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
-// 			Amount:               "150",
-// 			StellarTransactionID: stellarTransactionID,
-// 			StellarOperationID:   stellarOperationID,
-// 			Status:               DraftPaymentStatus,
-// 			StatusHistory: []PaymentStatusHistoryEntry{
-// 				{
-// 					Status:        DraftPaymentStatus,
-// 					StatusMessage: "",
-// 					Timestamp:     time.Now(),
-// 				},
-// 			},
-// 			Disbursement:   disbursement1,
-// 			Asset:          *asset,
-// 			ReceiverWallet: receiverWallet2,
-// 		})
-// 		actual, err := paymentModel.GetByIDs(ctx, dbConnectionPool, []string{payment1.ID, payment2.ID})
-// 		require.NoError(t, err)
+	t.Run("returns subset of payments successfully", func(t *testing.T) {
+		payments, err := paymentModel.GetByIDs(ctx, dbConnectionPool, []string{payment1.ID})
+		require.NoError(t, err)
+		require.Len(t, payments, 1)
+		assertPaymentEqual(t, payment1, payments[0])
+	})
 
-// 		p1 := Payment{
-// 			ID:                   payment1.ID,
-// 			Amount:               payment1.Amount,
-// 			StellarTransactionID: payment1.StellarTransactionID,
-// 			StellarOperationID:   payment1.StellarOperationID,
-// 			Status:               payment1.Status,
-// 			CreatedAt:            payment1.CreatedAt,
-// 			UpdatedAt:            payment1.UpdatedAt,
-// 			Disbursement: &Disbursement{
-// 				ID:     payment1.Disbursement.ID,
-// 				Status: payment1.Disbursement.Status,
-// 			},
-// 			Asset: Asset{
-// 				ID:     payment1.Asset.ID,
-// 				Code:   payment1.Asset.Code,
-// 				Issuer: payment1.Asset.Issuer,
-// 			},
-// 			ReceiverWallet: &ReceiverWallet{
-// 				ID:              payment1.ReceiverWallet.ID,
-// 				StellarAddress:  payment1.ReceiverWallet.StellarAddress,
-// 				StellarMemo:     payment1.ReceiverWallet.StellarMemo,
-// 				StellarMemoType: payment1.ReceiverWallet.StellarMemoType,
-// 				Status:          payment1.ReceiverWallet.Status,
-// 				Receiver: Receiver{
-// 					ID: payment1.ReceiverWallet.Receiver.ID,
-// 				},
-// 			},
-// 		}
-
-// 		p2 := Payment{
-// 			ID:                   payment2.ID,
-// 			Amount:               payment2.Amount,
-// 			StellarTransactionID: payment2.StellarTransactionID,
-// 			StellarOperationID:   payment2.StellarOperationID,
-// 			Status:               payment2.Status,
-// 			CreatedAt:            payment2.CreatedAt,
-// 			UpdatedAt:            payment2.UpdatedAt,
-// 			Disbursement: &Disbursement{
-// 				ID:     payment2.Disbursement.ID,
-// 				Status: payment2.Disbursement.Status,
-// 			},
-// 			Asset: Asset{
-// 				ID:     payment2.Asset.ID,
-// 				Code:   payment2.Asset.Code,
-// 				Issuer: payment2.Asset.Issuer,
-// 			},
-// 			ReceiverWallet: &ReceiverWallet{
-// 				ID:              payment2.ReceiverWallet.ID,
-// 				StellarAddress:  payment2.ReceiverWallet.StellarAddress,
-// 				StellarMemo:     payment2.ReceiverWallet.StellarMemo,
-// 				StellarMemoType: payment2.ReceiverWallet.StellarMemoType,
-// 				Status:          payment2.ReceiverWallet.Status,
-// 				Receiver: Receiver{
-// 					ID: payment2.ReceiverWallet.Receiver.ID,
-// 				},
-// 			},
-// 		}
-
-// 		payments := []*Payment{&p1, &p2}
-// 		assert.Equal(t, payments, actual)
-// 	})
-// }
+	t.Run("returns all payments successfully", func(t *testing.T) {
+		payments, err := paymentModel.GetByIDs(ctx, dbConnectionPool, []string{payment1.ID, payment2.ID})
+		require.NoError(t, err)
+		require.Len(t, payments, 2)
+		assertPaymentEqual(t, payment1, payments[0])
+		assertPaymentEqual(t, payment2, payments[1])
+	})
+}
 
 func Test_PaymentNewPaymentQuery(t *testing.T) {
 	dbt := dbtest.Open(t)
