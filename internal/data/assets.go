@@ -273,7 +273,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 				m.receiver_wallet_id,
 				m.wallet_id,
 				m.asset_id,
-				COUNT(*) AS total_invitation_sms_resent_attempts
+				COUNT(*) AS total_invitation_resent_attempts
 			FROM
 				messages m
 				INNER JOIN receiver_wallets rw ON rw.id = m.receiver_wallet_id AND rw.wallet_id = m.wallet_id
@@ -292,7 +292,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			lpw.receiver_registration_message_template,
 			rw.id AS "receiver_wallet.id",
 			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
-			COALESCE(mrsi.total_invitation_sms_resent_attempts, 0) AS "receiver_wallet.total_invitation_sms_resent_attempts",
+			COALESCE(mrsi.total_invitation_resent_attempts, 0) AS "receiver_wallet.total_invitation_resent_attempts",
 			r.id AS "receiver_wallet.receiver.id",
 			COALESCE(r.phone_number, '') AS "receiver_wallet.receiver.phone_number",
 			COALESCE(r.email, '') AS "receiver_wallet.receiver.email",

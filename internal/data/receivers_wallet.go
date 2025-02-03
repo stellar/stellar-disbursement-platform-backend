@@ -99,7 +99,7 @@ type ReceiverWalletStats struct {
 	ReceivedAmounts   ReceivedAmounts `json:"received_amounts,omitempty" db:"received_amounts"`
 	// TotalInvitationResentAttempts holds how many times were resent the Invitation SMS to the receiver
 	// since the last invitation has been sent.
-	TotalInvitationResentAttempts int64 `json:"-" db:"total_invitation_sms_resent_attempts"`
+	TotalInvitationResentAttempts int64 `json:"-" db:"total_invitation_resent_attempts"`
 }
 
 type ReceiverWalletModel struct {
