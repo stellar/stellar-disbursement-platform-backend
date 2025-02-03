@@ -254,7 +254,7 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
 		`
 
-	query, params := newPaymentQuery(baseQuery, queryParams, sqlExec, QueryTypeCount)
+	query, params := newPaymentQuery(baseQuery, queryParams, sqlExec, QueryTypeSingle)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -624,7 +624,7 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
 	case QueryTypeSelectAll:
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "p")
-	case QueryTypeCount:
+	case QueryTypeSingle:
 		// no need to sort or paginate.
 	}
 

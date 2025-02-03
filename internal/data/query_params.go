@@ -7,7 +7,7 @@ type QueryType string
 const (
 	QueryTypeSelectPaginated QueryType = "SELECT_PAGINATED"
 	QueryTypeSelectAll       QueryType = "SELECT_ALL"
-	QueryTypeCount           QueryType = "COUNT"
+	QueryTypeSingle          QueryType = "SINGLE"
 )
 
 type QueryParams struct {

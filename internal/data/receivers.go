@@ -240,7 +240,7 @@ func (r *ReceiverModel) Count(ctx context.Context, sqlExec db.SQLExecuter, query
 		FROM receivers r
 		LEFT JOIN receiver_wallets rw ON rw.receiver_id = r.id
 	`
-	query, params := newReceiverQuery(baseQuery, queryParams, sqlExec, QueryTypeCount)
+	query, params := newReceiverQuery(baseQuery, queryParams, sqlExec, QueryTypeSingle)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -353,7 +353,7 @@ func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQL
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "r")
 	case QueryTypeSelectAll:
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "r")
-	case QueryTypeCount:
+	case QueryTypeSingle:
 		// no need to sort or paginate.
 	}
 

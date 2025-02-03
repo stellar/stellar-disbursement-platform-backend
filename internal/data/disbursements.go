@@ -265,7 +265,7 @@ func (d *DisbursementModel) Count(ctx context.Context, sqlExec db.SQLExecuter, q
 		JOIN assets a on d.asset_id = a.id
 		`
 
-	query, params := d.newDisbursementQuery(baseQuery, queryParams, QueryTypeCount)
+	query, params := d.newDisbursementQuery(baseQuery, queryParams, QueryTypeSingle)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -352,7 +352,7 @@ func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
 	case QueryTypeSelectAll:
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
-	case QueryTypeCount:
+	case QueryTypeSingle:
 		// no need to sort or paginate.
 	}
 
