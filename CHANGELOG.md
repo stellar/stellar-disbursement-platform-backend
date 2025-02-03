@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.3.0...3.4.0))
+
+Release of the Stellar Disbursement Platform `v3.4.0`. This release adds support for `q={term}` query searches in the
+`GET /payments` endpoint, and updates the CSV parser to ignore BOM (Byte Order Mark) characters.
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.4.0`.
+
+### Changed
+
+- Update the `GET /payments` endpoint to accept `q={term}` query searches. [#530](https://github.com/stellar/stellar-disbursement-platform-backend/pull/530)
+- Update the CSV parser to ignore BOM (Byte Order Mark) characters. [#531](https://github.com/stellar/stellar-disbursement-platform-backend/pull/531)
+
+### Security and Dependencies
+
+- Bump golang in the all-docker group. [#507](https://github.com/stellar/stellar-disbursement-platform-backend/pull/507)
+- Bump the all-actions group. [#514](https://github.com/stellar/stellar-disbursement-platform-backend/pull/514)
+- Bump the minor-and-patch group. [#529](https://github.com/stellar/stellar-disbursement-platform-backend/pull/529)
+
 ## [3.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.2.0...3.3.0))
 
 Release of the Stellar Disbursement Platform `v3.3.0`. This release adds support to Circle's Transfers API, as an

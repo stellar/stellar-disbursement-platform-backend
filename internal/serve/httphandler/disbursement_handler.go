@@ -14,6 +14,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/dimchansky/utfbom"
 	"github.com/go-chi/chi/v5"
 	"github.com/gocarina/gocsv"
 	"github.com/stellar/go/support/log"
@@ -586,16 +587,23 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
 func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType) error {
-	headers, err := csv.NewReader(file).Read()
+	const (
+		phoneHeader         = "phone"
+		emailHeader         = "email"
+		walletAddressHeader = "walletAddress"
+		verificationHeader  = "verification"
+	)
+
+	headers, err := csv.NewReader(utfbom.SkipOnly(file)).Read()
 	if err != nil {
 		return fmt.Errorf("reading csv headers: %w", err)
 	}
 
 	hasHeaders := map[string]bool{
-		"phone":         false,
-		"email":         false,
-		"walletAddress": false,
-		"verification":  false,
+		phoneHeader:         false,
+		emailHeader:         false,
+		walletAddressHeader: false,
+		verificationHeader:  false,
 	}
 
 	// Populate header presence map
@@ -613,20 +621,20 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 
 	rules := map[data.RegistrationContactType]headerRules{
 		data.RegistrationContactTypePhone: {
-			required:   []string{"phone", "verification"},
-			disallowed: []string{"email", "walletAddress"},
+			required:   []string{phoneHeader, verificationHeader},
+			disallowed: []string{emailHeader, walletAddressHeader},
 		},
 		data.RegistrationContactTypeEmail: {
-			required:   []string{"email", "verification"},
-			disallowed: []string{"phone", "walletAddress"},
+			required:   []string{emailHeader, verificationHeader},
+			disallowed: []string{phoneHeader, walletAddressHeader},
 		},
 		data.RegistrationContactTypeEmailAndWalletAddress: {
-			required:   []string{"email", "walletAddress"},
-			disallowed: []string{"phone", "verification"},
+			required:   []string{emailHeader, walletAddressHeader},
+			disallowed: []string{phoneHeader, verificationHeader},
 		},
 		data.RegistrationContactTypePhoneAndWalletAddress: {
-			required:   []string{"phone", "walletAddress"},
-			disallowed: []string{"email", "verification"},
+			required:   []string{phoneHeader, walletAddressHeader},
+			disallowed: []string{emailHeader, verificationHeader},
 		},
 	}
 
