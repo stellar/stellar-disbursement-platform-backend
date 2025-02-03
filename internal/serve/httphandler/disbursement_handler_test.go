@@ -989,6 +989,16 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "File uploaded successfully",
 		},
 		{
+			name:           "valid input with BOM",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"\xef\xbb\xbf" + "phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusOK,
+			expectedMessage: "File uploaded successfully",
+		},
+		{
 			name:           ".bat file fails",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
