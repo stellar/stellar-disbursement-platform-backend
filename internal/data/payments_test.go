@@ -621,6 +621,16 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 			expectedParams: []interface{}{},
 		},
 		{
+			name:      "build payment query with a query search",
+			baseQuery: "SELECT * FROM payments p",
+			queryParams: QueryParams{
+				Query: "foo-bar",
+			},
+			queryType:      QueryTypeSelectAll,
+			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND (p.id ILIKE $1 OR p.external_payment_id ILIKE $2 OR rw.stellar_address ILIKE $3 OR d.name ILIKE $4)",
+			expectedParams: []interface{}{"%foo-bar%", "%foo-bar%", "%foo-bar%", "%foo-bar%"},
+		},
+		{
 			name:      "build payment query with status filter",
 			baseQuery: "SELECT * FROM payments p",
 			queryParams: QueryParams{
