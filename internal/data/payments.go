@@ -140,27 +140,47 @@ func (p *PaymentUpdate) Validate() error {
 	return nil
 }
 
+func PaymentColumnNames(tableReference, resultAlias string) string {
+	columns := GenerateColumnNames(SQLColumnConfig{
+		TableReference: tableReference,
+		ResultAlias:    resultAlias,
+		Columns: []string{
+			"id",
+			"amount",
+			"status",
+			"status_history",
+			"created_at",
+			"updated_at",
+		},
+	})
+
+	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
+		TableReference:        tableReference,
+		ResultAlias:           resultAlias,
+		CoalesceToEmptyString: true,
+		Columns: []string{
+			"stellar_transaction_id",
+			"stellar_operation_id",
+			"external_payment_id",
+		},
+	})...)
+
+	return strings.Join(columns, ",\n")
+}
+
 var basePaymentQuery = `
 SELECT
-	p.id,
-	p.amount,
-	COALESCE(p.stellar_transaction_id, '') as stellar_transaction_id,
-	COALESCE(p.stellar_operation_id, '') as stellar_operation_id,
-	p.status,
-	p.status_history,
-	p.created_at,
-	p.updated_at,
-	COALESCE(p.external_payment_id, '') as external_payment_id,
+	` + PaymentColumnNames("p", "") + `,
 	` + DisbursementColumnNames("d", "disbursement") + `,
 	` + AssetColumnNames("a", "asset", false) + `,
 	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
 	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
 FROM
 	payments p
-JOIN disbursements d ON p.disbursement_id = d.id
-JOIN assets a ON p.asset_id = a.id
-JOIN wallets w on d.wallet_id = w.id
-JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+	JOIN disbursements d ON p.disbursement_id = d.id
+	JOIN assets a ON p.asset_id = a.id
+	JOIN wallets w on d.wallet_id = w.id
+	JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
 `
 
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
@@ -344,13 +364,7 @@ func (p *PaymentModel) UpdateStatusByDisbursementID(ctx context.Context, sqlExec
 
 var getReadyPaymentsBaseQuery = `
 	SELECT
-		p.id,
-		p.amount,
-		COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
-		COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
-		p.status,
-		p.created_at,
-		p.updated_at,
+		` + PaymentColumnNames("p", "") + `,
 		` + DisbursementColumnNames("d", "disbursement") + `,
 		` + AssetColumnNames("a", "asset", false) + `,
 		` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `
@@ -558,14 +572,7 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 
 	query := `
 		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
-			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
-			p.status,
-			p.status_history,
-			p.created_at,
-			p.updated_at,
+			` + PaymentColumnNames("p", "") + `,
 			` + DisbursementColumnNames("d", "disbursement") + `,
 			` + AssetColumnNames("a", "asset", false) + `,
 			` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `
