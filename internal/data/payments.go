@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -184,7 +183,7 @@ FROM
 `
 
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
-	query := fmt.Sprintf(`%s
+	query := basePaymentQuery + `
 		WHERE
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
@@ -193,7 +192,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 		ORDER BY
 			p.created_at
 		FOR UPDATE SKIP LOCKED
-	`, basePaymentQuery)
+	`
 
 	payments := make([]Payment, 0)
 	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
@@ -205,20 +204,21 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 }
 
 func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecuter) (*Payment, error) {
-	payment := Payment{}
-
-	query := fmt.Sprintf(`%s WHERE p.id = $1`, basePaymentQuery)
-
-	err := sqlExec.GetContext(ctx, &payment, query, id)
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyID: id,
+		},
+	}
+	payments, err := p.GetAll(ctx, queryParams, sqlExec, QueryTypeSingle)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
-		} else {
-			return nil, fmt.Errorf("error querying payment ID: %w", err)
-		}
+		return nil, fmt.Errorf("getting payment by ID %s: %w", id, err)
 	}
 
-	return &payment, nil
+	if len(payments) == 0 {
+		return nil, ErrRecordNotFound
+	}
+
+	return &payments[0], nil
 }
 
 func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExecuter, batchSize int) ([]*Payment, error) {
@@ -226,11 +226,10 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
 
-	query := fmt.Sprintf(getReadyPaymentsBaseQuery, `
+	query := getReadyPaymentsBaseQuery + `
 		ORDER BY p.disbursement_id ASC, p.updated_at ASC
 		LIMIT $4
-		FOR UPDATE SKIP LOCKED`,
-	)
+		FOR UPDATE SKIP LOCKED`
 
 	var payments []*Payment
 	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
@@ -271,7 +270,7 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 
 	err := sqlExec.SelectContext(ctx, &payments, query, params...)
 	if err != nil {
-		return nil, fmt.Errorf("error querying payments: %w", err)
+		return nil, fmt.Errorf("selecting payments: %w", err)
 	}
 
 	return payments, nil
@@ -362,29 +361,17 @@ func (p *PaymentModel) UpdateStatusByDisbursementID(ctx context.Context, sqlExec
 	return nil
 }
 
-var getReadyPaymentsBaseQuery = `
-	SELECT
-		` + PaymentColumnNames("p", "") + `,
-		` + DisbursementColumnNames("d", "disbursement") + `,
-		` + AssetColumnNames("a", "asset", false) + `,
-		` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `
-	FROM
-		payments p
-		JOIN assets a ON p.asset_id = a.id
-		JOIN disbursements d ON p.disbursement_id = d.id
-		JOIN receiver_wallets rw ON p.receiver_wallet_id = rw.id
-		JOIN receivers r ON rw.receiver_id = r.id
+var getReadyPaymentsBaseQuery = basePaymentQuery + `
 	WHERE
 		p.status = $1 -- 'READY'::payment_status
 		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
 		AND d.status = $3 -- 'STARTED'::disbursement_status
-	%s
 `
 
 var getReadyPaymentsBaseArgs = []any{ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus}
 
 func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) ([]*Payment, error) {
-	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.disbursement_id = $4")
+	query := getReadyPaymentsBaseQuery + "AND p.disbursement_id = $4"
 
 	var payments []*Payment
 	args := append(getReadyPaymentsBaseArgs, disbursementID)
@@ -397,7 +384,7 @@ func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.
 }
 
 func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs ...string) ([]*Payment, error) {
-	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.id = ANY($4) ORDER BY p.updated_at ASC")
+	query := getReadyPaymentsBaseQuery + "AND p.id = ANY($4) ORDER BY p.updated_at ASC"
 
 	var payments []*Payment
 	args := append(getReadyPaymentsBaseArgs, pq.Array(paymentIDs))
@@ -410,7 +397,7 @@ func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter,
 }
 
 func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) ([]*Payment, error) {
-	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND rw.id = $4")
+	query := getReadyPaymentsBaseQuery + "AND rw.id = $4"
 
 	var payments []*Payment
 	args := append(getReadyPaymentsBaseArgs, receiverWalletID)
@@ -563,50 +550,43 @@ func (p *PaymentModel) RetryFailedPayments(ctx context.Context, sqlExec db.SQLEx
 }
 
 // GetByIDs returns a list of payments for the given IDs.
-func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs []string) ([]*Payment, error) {
-	payments := []*Payment{}
-
-	if len(paymentIDs) == 0 {
-		return payments, nil
+func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs []string) ([]Payment, error) {
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyID: paymentIDs,
+		},
+		SortBy:    SortFieldUpdatedAt,
+		SortOrder: SortOrderASC,
 	}
 
-	query := `
-		SELECT
-			` + PaymentColumnNames("p", "") + `,
-			` + DisbursementColumnNames("d", "disbursement") + `,
-			` + AssetColumnNames("a", "asset", false) + `,
-			` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `
-		FROM
-			payments p
-			JOIN assets a on p.asset_id = a.id
-			JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-			JOIN disbursements d on p.disbursement_id = d.id
-		WHERE p.id = ANY($1)
-	`
-
-	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array(paymentIDs))
+	payments, err := p.GetAll(ctx, queryParams, sqlExec, QueryTypeSelectAll)
 	if err != nil {
-		return nil, fmt.Errorf("error getting payments: %w", err)
+		return nil, fmt.Errorf("getting payments by IDs: %w", err)
 	}
+
 	return payments, nil
 }
 
-// newPaymentQuery generates the full query and parameters for a payment search query
+func addArrayOrSingleCondition[T any](qb *QueryBuilder, fieldName string, value interface{}) {
+	if slice, ok := value.([]T); ok && len(slice) > 0 {
+		qb.AddCondition(fieldName+" = ANY(?)", pq.Array(slice))
+	} else {
+		qb.AddCondition(fieldName+" = ?", value)
+	}
+}
+
+// newPaymentQuery generates the full query and parameters for a payment search query.
 func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Query != "" {
 		q := "%" + queryParams.Query + "%"
 		qb.AddCondition("(p.id ILIKE ? OR p.external_payment_id ILIKE ? OR rw.stellar_address ILIKE ? OR d.name ILIKE ?)", q, q, q, q)
 	}
-
+	if queryParams.Filters[FilterKeyID] != nil {
+		addArrayOrSingleCondition[string](qb, "p.id", queryParams.Filters[FilterKeyID])
+	}
 	if queryParams.Filters[FilterKeyStatus] != nil {
-		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]PaymentStatus); ok {
-			if len(statusSlice) > 0 {
-				qb.AddCondition("p.status = ANY(?)", pq.Array(statusSlice))
-			}
-		} else {
-			qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
-		}
+		addArrayOrSingleCondition[PaymentStatus](qb, "p.status", queryParams.Filters[FilterKeyStatus])
 	}
 	if queryParams.Filters[FilterKeyReceiverID] != nil {
 		qb.AddCondition("p.receiver_id = ?", queryParams.Filters[FilterKeyReceiverID])

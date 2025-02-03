@@ -48,13 +48,7 @@ func (m DisbursementReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExe
 			` + ReceiverColumnNames("r", "") + `,
 			` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
 			` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `,
-			p.id as "payment.id",
-			p.amount as "payment.amount",
-			p.status as "payment.status",
-			COALESCE(p.stellar_transaction_id, '') as "payment.stellar_transaction_id",
-			COALESCE(p.stellar_operation_id, '') as "payment.stellar_operation_id",
-			p.created_at as "payment.created_at",
-			p.updated_at as "payment.updated_at",
+			` + PaymentColumnNames("p", "payment") + `,
 			` + AssetColumnNames("a", "payment.asset", false) + `
 		FROM
 			receivers r

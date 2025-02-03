@@ -525,37 +525,19 @@ func Test_PaymentModel_GetByIDs(t *testing.T) {
 		require.Empty(t, payments)
 	})
 
-	// assertPaymentEqual is a helper function to assert that two payments are equal,
-	// ignoring some fields that are not returned in the query.
-	assertPaymentEqual := func(t *testing.T, expected, actual *Payment) {
-		t.Helper()
-		expectedRW := *expected.ReceiverWallet
-		actualRW := *actual.ReceiverWallet
-		// Some fields are not returned in this query, so we're erasing them before the comparison
-		expectedRW.Wallet = Wallet{ID: expectedRW.Wallet.ID}
-		require.NotNil(t, actualRW.StatusHistory)
-		require.NotNil(t, expectedRW.StatusHistory)
-		expectedRW.StatusHistory = actualRW.StatusHistory
-		require.Equal(t, expectedRW, actualRW)
-
-		expectedPayment := *expected
-		expectedPayment.ReceiverWallet = &expectedRW
-		assert.Equal(t, expectedPayment, *actual)
-	}
-
 	t.Run("returns subset of payments successfully", func(t *testing.T) {
 		payments, err := paymentModel.GetByIDs(ctx, dbConnectionPool, []string{payment1.ID})
 		require.NoError(t, err)
 		require.Len(t, payments, 1)
-		assertPaymentEqual(t, payment1, payments[0])
+		assert.Equal(t, *payment1, payments[0])
 	})
 
 	t.Run("returns all payments successfully", func(t *testing.T) {
 		payments, err := paymentModel.GetByIDs(ctx, dbConnectionPool, []string{payment1.ID, payment2.ID})
 		require.NoError(t, err)
 		require.Len(t, payments, 2)
-		assertPaymentEqual(t, payment1, payments[0])
-		assertPaymentEqual(t, payment2, payments[1])
+		assert.Equal(t, *payment1, payments[0])
+		assert.Equal(t, *payment2, payments[1])
 	})
 }
 
