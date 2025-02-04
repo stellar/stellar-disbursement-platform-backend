@@ -837,7 +837,16 @@ func Test_DisbursementColumnNames(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("tableReference=%s", tc.tableReference), func(t *testing.T) {
+		originalColName := "{column_name}"
+		scanText := originalColName
+		if tc.tableReference != "" {
+			scanText = fmt.Sprintf("%s.%s", tc.tableReference, scanText)
+		}
+		if tc.resultAlias != "" {
+			scanText = fmt.Sprintf("%s AS %s.%s", scanText, tc.resultAlias, originalColName)
+		}
+
+		t.Run(scanText, func(t *testing.T) {
 			actual := DisbursementColumnNames(tc.tableReference, tc.resultAlias)
 			assert.Equal(t, tc.expected, actual)
 		})

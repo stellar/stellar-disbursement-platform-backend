@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1837,4 +1839,74 @@ func Test_PaymentModel_UpdateStatus(t *testing.T) {
 		assert.Equal(t, len(payment.StatusHistory)+2, len(paymentDB.StatusHistory), "a new status history should have been created")
 		assert.Equal(t, stellarTransactionID, paymentDB.StellarTransactionID)
 	})
+}
+
+func Test_PaymentColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableReference string
+		resultAlias    string
+		expected       string
+	}{
+		{
+			tableReference: "",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"id",
+				"amount",
+				"status",
+				"status_history",
+				"created_at",
+				"updated_at",
+				`COALESCE(stellar_transaction_id, '') AS "stellar_transaction_id"`,
+				`COALESCE(stellar_operation_id, '') AS "stellar_operation_id"`,
+				`COALESCE(external_payment_id, '') AS "external_payment_id"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "p",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"p.id",
+				"p.amount",
+				"p.status",
+				"p.status_history",
+				"p.created_at",
+				"p.updated_at",
+				`COALESCE(p.stellar_transaction_id, '') AS "stellar_transaction_id"`,
+				`COALESCE(p.stellar_operation_id, '') AS "stellar_operation_id"`,
+				`COALESCE(p.external_payment_id, '') AS "external_payment_id"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "p",
+			resultAlias:    "payment",
+			expected: strings.Join([]string{
+				`p.id AS "payment.id"`,
+				`p.amount AS "payment.amount"`,
+				`p.status AS "payment.status"`,
+				`p.status_history AS "payment.status_history"`,
+				`p.created_at AS "payment.created_at"`,
+				`p.updated_at AS "payment.updated_at"`,
+				`COALESCE(p.stellar_transaction_id, '') AS "payment.stellar_transaction_id"`,
+				`COALESCE(p.stellar_operation_id, '') AS "payment.stellar_operation_id"`,
+				`COALESCE(p.external_payment_id, '') AS "payment.external_payment_id"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, tc := range testCases {
+		originalColName := "{column_name}"
+		scanText := originalColName
+		if tc.tableReference != "" {
+			scanText = fmt.Sprintf("%s.%s", tc.tableReference, scanText)
+		}
+		if tc.resultAlias != "" {
+			scanText = fmt.Sprintf("%s AS %s.%s", scanText, tc.resultAlias, originalColName)
+		}
+
+		t.Run(scanText, func(t *testing.T) {
+			actual := PaymentColumnNames(tc.tableReference, tc.resultAlias)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
 }
