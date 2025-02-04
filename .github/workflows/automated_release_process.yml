@@ -10,6 +10,7 @@ on:
 
 env:
   REPO_NAME: marcelosalloum/stellar-disbursement-platform-backend
+  REVIEWER: marcelosalloum
 
 jobs:
   create-release:
@@ -65,7 +66,9 @@ jobs:
             --base main \
             --head release/${{ inputs.version }} \
             --title "Release \`${{ inputs.version }}\` to \`main\`" \
-            --body "Release \`${{ inputs.version }}\` to \`main\`"
+            --body "Release \`${{ inputs.version }}\` to \`main\`" \
+            --assignee "${{ github.actor }}" \
+            --reviewer "${{ env.REVIEWER }}"
 
       - name: Create release/${{ inputs.version }}-dev branch
         working-directory: stellar-disbursement-platform-backend
@@ -80,7 +83,9 @@ jobs:
             --base develop \
             --head release/${{ inputs.version }}-dev \
             --title "Release \`${{ inputs.version }}\` to \`dev\`" \
-            --body "Release \`${{ inputs.version }}\` to \`dev\`"
+            --body "Release \`${{ inputs.version }}\` to \`dev\`" \
+            --assignee "${{ github.actor }}" \
+            --reviewer "${{ env.REVIEWER }}"
 
       - name: Create Draft Release
         run: gh release create ${{ inputs.version }} --title "${{ inputs.version }}" --draft --notes "Initial draft for release \`${{ inputs.version }}\`"
