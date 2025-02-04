@@ -29,7 +29,7 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Create Issue
-        run: gh issue create --title "Release ${{ inputs.version }}" --body "Automating release process for ${{ inputs.version }}" --label "release" --assignee "${{ github.actor }}"
+        run: gh issue create --title "Release \`${{ inputs.version }}\`" --body "Automating release process for \`${{ inputs.version }}\`" --label "release" --assignee "${{ github.actor }}"
 
       - name: Configure Git User
         env:
@@ -55,8 +55,8 @@ jobs:
           gh pr create --repo ${{ env.REPO_NAME }} \
             --base main \
             --head release/${{ inputs.version }} \
-            --title "Release ${{ inputs.version }} to main" \
-            --body "Release ${{ inputs.version }} to main"
+            --title "Release \`${{ inputs.version }}\` to \`main\`" \
+            --body "Release \`${{ inputs.version }}\` to \`main\`"
 
       - name: Create release/${{ inputs.version }}-dev branch
         working-directory: stellar-disbursement-platform-backend
@@ -70,8 +70,8 @@ jobs:
           gh pr create --repo ${{ env.REPO_NAME }} \
             --base develop \
             --head release/${{ inputs.version }}-dev \
-            --title "Release ${{ inputs.version }} to dev" \
-            --body "Release ${{ inputs.version }} to dev"
+            --title "Release \`${{ inputs.version }}\` to \`dev\`" \
+            --body "Release \`${{ inputs.version }}\` to \`dev\`"
 
       - name: Create Draft Release
-        run: gh release create ${{ inputs.version }} --title "${{ inputs.version }}" --draft --notes "Initial draft for release ${{ inputs.version }}"
+        run: gh release create ${{ inputs.version }} --title "${{ inputs.version }}" --draft --notes "Initial draft for release \`${{ inputs.version }}\`"
