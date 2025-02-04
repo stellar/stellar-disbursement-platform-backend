@@ -6,9 +6,6 @@ on:
   release:
     types:
       - published
-  push:
-    branches:
-      - develop
 jobs:
   tests:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml
