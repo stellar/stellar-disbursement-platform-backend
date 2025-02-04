@@ -33,10 +33,10 @@ jobs:
 
       - name: Create Issue
         run: |
+          sed '/^---$/,/^---$/d' .github/ISSUE_TEMPLATE/release_a_new_version.md | \
           gh issue create \
             --title "Release \`${{ inputs.version }}\`" \
-            --template release_a_new_version.md \
-            --body "Release process for version ${{ inputs.version }}" \
+            --body-file - \
             --label "release" \
             --assignee "${{ github.actor }}"
 
