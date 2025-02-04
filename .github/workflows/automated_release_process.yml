@@ -35,7 +35,8 @@ jobs:
         run: |
           gh issue create \
             --title "Release \`${{ inputs.version }}\`" \
-            --body-file .github/ISSUE_TEMPLATE/release_a_new_version.md \
+            --template release_a_new_version.md \
+            --body "Release process for version ${{ inputs.version }}" \
             --label "release" \
             --assignee "${{ github.actor }}"
 
