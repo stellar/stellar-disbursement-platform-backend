@@ -260,13 +260,6 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 				` + ReceiverColumnNames("r", "") + `
 			FROM
 				receivers r
-		), registered_receiver_wallets_count_cte AS (
-			SELECT
-				rc.id as receiver_id,
-				COUNT(rw) FILTER(WHERE rw.status = 'REGISTERED') as registered_wallets
-			FROM receivers_cte rc
-			JOIN receiver_wallets rw ON rc.id = rw.receiver_id
-			GROUP BY rc.id
 		), receiver_stats AS (
 			SELECT
 				rc.id as receiver_id,
@@ -295,24 +288,23 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 			FROM receiver_stats rs
 			GROUP BY (rs.receiver_id)
 		)
-		SELECT
-			distinct(r.id),
-			r.external_id,
-			COALESCE(r.email, '') as email,
-			COALESCE(r.phone_number, '') as phone_number,
-			r.created_at,
-			r.updated_at,
+		SELECT DISTINCT
+			` + ReceiverColumnNames("r", "") + `,
 			COALESCE(total_payments, 0) as total_payments,
 			COALESCE(successful_payments, 0) as successful_payments,
 			COALESCE(rs.failed_payments, '0') as failed_payments,
 			COALESCE(rs.canceled_payments, '0') as canceled_payments,
 			COALESCE(rs.remaining_payments, '0') as remaining_payments,
 			rs.received_amounts,
-			COALESCE(rrwc.registered_wallets, 0) as registered_wallets
+			COALESCE((
+				SELECT COUNT(*)
+				FROM receiver_wallets rw
+				WHERE rw.receiver_id = r.id
+				AND rw.status = 'REGISTERED'
+			), 0) as registered_wallets
 		FROM receivers_cte r
 		LEFT JOIN receiver_stats_aggregate rs ON rs.receiver_id = r.id
 		LEFT JOIN receiver_wallets rw ON rw.receiver_id = r.id
-		LEFT JOIN registered_receiver_wallets_count_cte rrwc ON rrwc.receiver_id = r.id
 		`
 
 	query, params := newReceiverQuery(query, queryParams, sqlExec, queryType)
