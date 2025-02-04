@@ -162,73 +162,20 @@ func (ra *ReceivedAmounts) Scan(src interface{}) error {
 
 // Get returns a RECEIVER matching the given ID.
 func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Receiver, error) {
-	receiver := Receiver{}
-
-	query := `
-	WITH receivers_cte AS (
-		SELECT
-			*
-		FROM receivers r
-		WHERE r.id = $1
-	), receiver_wallets_cte AS (
-		SELECT
-			rc.id as receiver_id,
-			COUNT(rw) FILTER(WHERE rw.status = 'REGISTERED') as registered_wallets
-		FROM receivers_cte rc
-		JOIN receiver_wallets rw ON rc.id = rw.receiver_id
-		GROUP BY rc.id
-	),  receiver_stats AS (
-		SELECT
-			rc.id as receiver_id,
-			COUNT(p) as total_payments,
-			COUNT(p) FILTER(WHERE p.status = 'SUCCESS') as successful_payments,
-			COUNT(p) FILTER(WHERE p.status = 'FAILED') as failed_payments,
-			COUNT(p) FILTER(WHERE p.status = 'CANCELED') as canceled_payments,
-			COUNT(p) FILTER(WHERE p.status IN ('DRAFT', 'READY', 'PENDING', 'PAUSED')) as remaining_payments,
-			a.code as asset_code,
-			a.issuer as asset_issuer,
-			COALESCE(SUM(p.amount) FILTER(WHERE p.asset_id = a.id AND p.status = 'SUCCESS'), '0') as received_amount
-		FROM receivers_cte rc
-		JOIN payments p ON rc.id = p.receiver_id
-		JOIN disbursements d ON p.disbursement_id = d.id
-		JOIN assets a ON a.id = p.asset_id
-		GROUP BY (rc.id, a.code, a.issuer)
-	), receiver_stats_aggregate AS (
-		SELECT
-			rs.receiver_id,
-			SUM(rs.total_payments) as total_payments,
-			SUM(rs.successful_payments) as successful_payments,
-			SUM(rs.failed_payments) as failed_payments,
-			SUM(rs.canceled_payments) as canceled_payments,
-			SUM(rs.remaining_payments) as remaining_payments,
-			jsonb_agg(jsonb_build_object('asset_code', rs.asset_code, 'asset_issuer', rs.asset_issuer, 'received_amount', rs.received_amount::text)) as received_amounts
-		FROM receiver_stats rs
-		GROUP BY (rs.receiver_id)
-	)
-	SELECT
-		` + ReceiverColumnNames("rc", "") + `,
-		COALESCE(total_payments, 0) as total_payments,
-		COALESCE(successful_payments, 0) as successful_payments,
-		COALESCE(rs.failed_payments, '0') as failed_payments,
-		COALESCE(rs.canceled_payments, '0') as canceled_payments,
-		COALESCE(rs.remaining_payments, '0') as remaining_payments,
-		rs.received_amounts,
-		COALESCE(rw.registered_wallets, 0) as registered_wallets
-	FROM receivers_cte rc
-	LEFT JOIN receiver_stats_aggregate rs ON rs.receiver_id = rc.id
-	LEFT JOIN receiver_wallets_cte rw ON rw.receiver_id = rc.id
-	`
-
-	err := sqlExec.GetContext(ctx, &receiver, query, id)
+	receivers, err := r.GetAll(ctx, sqlExec, &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyID: id,
+		},
+	}, QueryTypeSingle)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
-		} else {
-			return nil, fmt.Errorf("querying receiver ID: %w", err)
-		}
+		return nil, fmt.Errorf("getting receiver by id: %w", err)
 	}
 
-	return &receiver, nil
+	if len(receivers) == 0 {
+		return nil, ErrRecordNotFound
+	}
+
+	return &receivers[0], nil
 }
 
 // Count returns the number of receivers matching the given query parameters.
@@ -255,14 +202,9 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 	receivers := []Receiver{}
 
 	query := `
-		WITH receivers_cte AS (
+		WITH receiver_stats AS (
 			SELECT
-				` + ReceiverColumnNames("r", "") + `
-			FROM
-				receivers r
-		), receiver_stats AS (
-			SELECT
-				rc.id as receiver_id,
+				r.id as receiver_id,
 				COUNT(p) as total_payments,
 				COUNT(p) FILTER(WHERE p.status = 'SUCCESS') as successful_payments,
 				COUNT(p) FILTER(WHERE p.status = 'FAILED') as failed_payments,
@@ -271,11 +213,11 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 				a.code as asset_code,
 				a.issuer as asset_issuer,
 				COALESCE(SUM(p.amount) FILTER(WHERE p.asset_id = a.id AND p.status = 'SUCCESS'), '0') as received_amount
-			FROM receivers_cte rc
-			JOIN payments p ON rc.id = p.receiver_id
+			FROM receivers r
+			JOIN payments p ON r.id = p.receiver_id
 			JOIN disbursements d ON p.disbursement_id = d.id
 			JOIN assets a ON a.id = p.asset_id
-			GROUP BY (rc.id, a.code, a.issuer)
+			GROUP BY (r.id, a.code, a.issuer)
 		), receiver_stats_aggregate AS (
 			SELECT
 				rs.receiver_id,
@@ -290,21 +232,21 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 		)
 		SELECT DISTINCT
 			` + ReceiverColumnNames("r", "") + `,
-			COALESCE(total_payments, 0) as total_payments,
-			COALESCE(successful_payments, 0) as successful_payments,
+			COALESCE(rs.total_payments, 0) as total_payments,
+			COALESCE(rs.successful_payments, 0) as successful_payments,
 			COALESCE(rs.failed_payments, '0') as failed_payments,
 			COALESCE(rs.canceled_payments, '0') as canceled_payments,
 			COALESCE(rs.remaining_payments, '0') as remaining_payments,
-			rs.received_amounts,
+			COALESCE(rs.received_amounts, '[]') as received_amounts,
 			COALESCE((
 				SELECT COUNT(*)
-				FROM receiver_wallets rw
-				WHERE rw.receiver_id = r.id
-				AND rw.status = 'REGISTERED'
+				FROM receiver_wallets rw2
+				WHERE rw2.receiver_id = r.id
+				AND rw2.status = 'REGISTERED'
 			), 0) as registered_wallets
-		FROM receivers_cte r
-		LEFT JOIN receiver_stats_aggregate rs ON rs.receiver_id = r.id
+		FROM receivers r
 		LEFT JOIN receiver_wallets rw ON rw.receiver_id = r.id
+		LEFT JOIN receiver_stats_aggregate rs ON rs.receiver_id = r.id
 		`
 
 	query, params := newReceiverQuery(query, queryParams, sqlExec, queryType)
@@ -320,6 +262,9 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 // newReceiverQuery generates the full query and parameters for a receiver search query
 func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
+	if queryParams.Filters[FilterKeyID] != nil {
+		qb.AddCondition("r.id = ?", queryParams.Filters[FilterKeyID])
+	}
 	if queryParams.Query != "" {
 		q := "%" + queryParams.Query + "%"
 		qb.AddCondition("(r.id ILIKE ? OR r.phone_number ILIKE ? OR r.email ILIKE ?)", q, q, q)

@@ -167,7 +167,7 @@ func Test_ReceiversModel_Get(t *testing.T) {
 				CanceledPayments:   "0",
 				RemainingPayments:  "0",
 				RegisteredWallets:  "0",
-				ReceivedAmounts:    nil,
+				ReceivedAmounts:    []Amount{},
 			},
 		}
 		assert.Equal(t, expected, *actual)
