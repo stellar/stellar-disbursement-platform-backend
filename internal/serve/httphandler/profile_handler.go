@@ -362,12 +362,13 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	resp := map[string]interface{}{
-		"name":                            org.Name,
-		"logo_url":                        lu.String(),
-		"distribution_account":            distributionAccount,
-		"distribution_account_public_key": distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
-		"timezone_utc_offset":             org.TimezoneUTCOffset,
-		"is_approval_required":            org.IsApprovalRequired,
+		"name":                                     org.Name,
+		"logo_url":                                 lu.String(),
+		"distribution_account":                     distributionAccount,
+		"distribution_account_public_key":          distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
+		"timezone_utc_offset":                      org.TimezoneUTCOffset,
+		"is_approval_required":                     org.IsApprovalRequired,
+		"is_link_shortener_enabled":                org.IsLinkShortenerEnabled,
 		"receiver_invitation_resend_interval_days": 0,
 		"payment_cancellation_period_days":         0,
 		"privacy_policy_link":                      org.PrivacyPolicyLink,

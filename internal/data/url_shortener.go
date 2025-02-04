@@ -28,6 +28,14 @@ type ShortURL struct {
 
 type URLShortenerModel struct {
 	dbConnectionPool db.DBConnectionPool
+	codeGenerator    CodeGenerator
+}
+
+func NewURLShortenerModel(db db.DBConnectionPool) *URLShortenerModel {
+	return &URLShortenerModel{
+		dbConnectionPool: db,
+		codeGenerator:    &RandomCodeGenerator{},
+	}
 }
 
 func (u *URLShortenerModel) GetOriginalURL(ctx context.Context, shortCode string) (string, error) {
@@ -48,7 +56,7 @@ func (u *URLShortenerModel) CreateShortURL(ctx context.Context, url string) (str
 	var attempts int
 
 	for attempts < maxCodeGenerationAttempts {
-		code = generateShortCode(shortCodeLength)
+		code = u.codeGenerator.Generate(shortCodeLength)
 		err := u.insertURL(ctx, code, url)
 
 		if err == nil {
@@ -65,33 +73,38 @@ func (u *URLShortenerModel) CreateShortURL(ctx context.Context, url string) (str
 	return "", fmt.Errorf("generating unique code after %d attempts", maxCodeGenerationAttempts)
 }
 
-func (u *URLShortenerModel) insertURL(ctx context.Context, code, url string) error {
-	query := `
-		INSERT INTO short_urls (id, original_url)
-		VALUES ($1, $2)
-		ON CONFLICT (id) DO NOTHING
-	`
-	_, err := u.dbConnectionPool.ExecContext(ctx, query, code, url)
-	return err
-}
-
 func (u *URLShortenerModel) IncrementHits(ctx context.Context, code string) error {
 	query := `UPDATE short_urls SET hits = hits + 1 WHERE id = $1`
 	_, err := u.dbConnectionPool.ExecContext(ctx, query, code)
 	return err
 }
 
-// generateShortCode generates a URL-safe base64 encoded random string
-func generateShortCode(length int) string {
-	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
-		panic("failed to generate random bytes: " + err.Error())
-	}
-	return base64.RawURLEncoding.EncodeToString(b)[:length]
+func (u *URLShortenerModel) insertURL(ctx context.Context, code, url string) error {
+	query := `
+		INSERT INTO short_urls (id, original_url)
+		VALUES ($1, $2)
+	`
+	_, err := u.dbConnectionPool.ExecContext(ctx, query, code, url)
+	return err
 }
 
 // isDuplicateError checks if the error is a PostgreSQL unique violation
 func isDuplicateError(err error) bool {
 	var pqErr *pq.Error
 	return err != nil && errors.As(err, &pqErr) && pqErr.Code == "23505"
+}
+
+//go:generate mockery --name CodeGenerator  --case=underscore --structname=CodeGeneratorMock --filename=code_generator.go
+type CodeGenerator interface {
+	Generate(length int) string
+}
+
+type RandomCodeGenerator struct{}
+
+func (g *RandomCodeGenerator) Generate(length int) string {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		panic("failed to generate random bytes: " + err.Error())
+	}
+	return base64.RawURLEncoding.EncodeToString(b)[:length]
 }

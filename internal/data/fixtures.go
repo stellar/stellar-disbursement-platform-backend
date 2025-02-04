@@ -817,6 +817,15 @@ func CreateMockImage(t *testing.T, width, height int, size ImageSize) image.Imag
 	return img
 }
 
+func CreateShortURLFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, shortCode, url string) {
+	const query = `
+		INSERT INTO short_urls (id, original_url)
+		VALUES ($1, $2)
+	`
+	_, err := sqlExec.ExecContext(ctx, query, shortCode, url)
+	require.NoError(t, err)
+}
+
 func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	DeleteAllMessagesFixtures(t, ctx, sqlExec)
 	DeleteAllPaymentsFixtures(t, ctx, sqlExec)
