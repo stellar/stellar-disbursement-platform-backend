@@ -1148,7 +1148,6 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	hostDistAccPublicKey := keypair.MustRandom().Address()
-	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
 	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
 		AdminDBConnectionPool:            dbConnectionPool,
 		HostDistributionAccountPublicKey: hostDistAccPublicKey,
@@ -1164,7 +1163,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		return string(bytes)
 	}
 
-	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	currentTenant, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 
 	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -1252,6 +1251,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
@@ -1263,7 +1263,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 0,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1291,6 +1291,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
@@ -1303,7 +1304,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1327,6 +1328,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody = fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
@@ -1340,7 +1342,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1370,6 +1372,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
@@ -1381,7 +1384,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1411,6 +1414,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
@@ -1422,7 +1426,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1452,6 +1456,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
@@ -1463,7 +1468,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": "https://example.com/privacy-policy",
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
