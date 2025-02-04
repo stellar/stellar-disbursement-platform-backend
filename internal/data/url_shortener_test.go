@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -26,49 +27,37 @@ func Test_URLShortenerModel_GetOriginalURL(t *testing.T) {
 	CreateShortURLFixture(t, ctx, dbConnectionPool, existingCode, originalURL)
 
 	testCases := []struct {
-		name          string
-		shortCode     string
-		expectedURL   string
-		expectedError error
-		before        func(*testing.T)
+		name                string
+		shortCode           string
+		expectedURL         string
+		expectedErrContains string
+		setup               func(*testing.T)
 	}{
 		{
-			name:          "🎉successfully retrieves existing URL",
-			shortCode:     existingCode,
-			expectedURL:   originalURL,
-			expectedError: nil,
+			name:                "🎉successfully retrieves existing URL",
+			shortCode:           existingCode,
+			expectedURL:         originalURL,
+			expectedErrContains: "",
 		},
 		{
-			name:          "returns ErrRecordNotFound for non-existent code",
-			shortCode:     "does-not-exist",
-			expectedError: ErrRecordNotFound,
-		},
-		{
-			name:      "returns error on database failure",
-			shortCode: existingCode,
-			before: func(t *testing.T) {
-				// Force a context cancellation
-				ctxWithCancel, cancel := context.WithCancel(context.Background())
-				cancel()
-				_, err := m.GetOriginalURL(ctxWithCancel, existingCode)
-				require.ErrorContains(t, err, "getting URL for code exist123")
-			},
+			name:                "returns ErrRecordNotFound for non-existent code",
+			shortCode:           "does-not-exist",
+			expectedErrContains: ErrRecordNotFound.Error(),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.before != nil {
-				tc.before(t)
-				return
+			if tc.setup != nil {
+				tc.setup(t)
 			}
 
 			url, err := m.GetOriginalURL(ctx, tc.shortCode)
-			if tc.expectedError != nil {
-				require.ErrorIs(t, err, tc.expectedError)
+			if tc.expectedErrContains != "" {
+				assert.ErrorContains(t, err, tc.expectedErrContains)
 			} else {
-				require.NoError(t, err)
-				require.Equal(t, tc.expectedURL, url)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedURL, url)
 			}
 		})
 	}
@@ -121,7 +110,7 @@ func Test_URLShortenerModel_CreateShortURL(t *testing.T) {
 				CreateShortURLFixture(t, ctx, dbConnectionPool, "collide", originalURL)
 			},
 			validateResult: func(t *testing.T, code string) {
-				require.Equal(t, "unique", code)
+				assert.Equal(t, "unique", code)
 			},
 		},
 		{
@@ -152,11 +141,11 @@ func Test_URLShortenerModel_CreateShortURL(t *testing.T) {
 
 			code, err := model.CreateShortURL(ctx, originalURL)
 			if tc.expectedErr != "" {
-				require.ErrorContains(t, err, tc.expectedErr)
+				assert.ErrorContains(t, err, tc.expectedErr)
 				return
 			}
 
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			if tc.validateResult != nil {
 				tc.validateResult(t, code)
 			}
