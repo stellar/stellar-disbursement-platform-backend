@@ -31,27 +31,47 @@ jobs:
       - name: Create Issue
         run: gh issue create --title "Release ${{ inputs.version }}" --body "Automating release process for ${{ inputs.version }}" --label "release" --assignee "${{ github.actor }}"
 
-      - name: Create Branches
+      - name: Configure Git User
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global credential.helper store
           echo "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
-          gh repo clone ${{ env.REPO_NAME }}
-          cd stellar-disbursement-platform-backend
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
+          gh repo clone ${{ env.REPO_NAME }}
+          cd stellar-disbursement-platform-backend
+
+      - name: Create release/${{ inputs.version }} branch
+        working-directory: stellar-disbursement-platform-backend
+        run: |
           git checkout -b release/${{ inputs.version }} origin/develop
-          git commit --allow-empty -m "chore: empty commit for release ${{ inputs.version }}"
+          git commit --allow-empty -m "chore: prepare release ${{ inputs.version }}"
           git push origin release/${{ inputs.version }}
 
+      - name: Create main PR
+        working-directory: stellar-disbursement-platform-backend
+        run: |
+          gh pr create --repo ${{ env.REPO_NAME }} \
+            --base main \
+            --head release/${{ inputs.version }} \
+            --title "Release ${{ inputs.version }} to main" \
+            --body "Release ${{ inputs.version }} to main"
+
+      - name: Create release/${{ inputs.version }}-dev branch
+        working-directory: stellar-disbursement-platform-backend
+        run: |
           git checkout -b release/${{ inputs.version }}-dev release/${{ inputs.version }}
           git push origin release/${{ inputs.version }}-dev
 
-      - name: Open Pull-Requests
+      - name: Create develop PR
+        working-directory: stellar-disbursement-platform-backend
         run: |
-          gh pr create --repo ${{ env.REPO_NAME }} --base main --head release/${{ inputs.version }} --title "Release ${{ inputs.version }} to main" --body "Release ${{inputs.version}} to main"
-          gh pr create --repo ${{ env.REPO_NAME }} --base develop --head release/${{ inputs.version }}-dev --title "Release ${{ inputs.version }}-dev to develop" --body "Release ${{inputs.version}} to develop"
+          gh pr create --repo ${{ env.REPO_NAME }} \
+            --base develop \
+            --head release/${{ inputs.version }}-dev \
+            --title "Release ${{ inputs.version }} to dev" \
+            --body "Release ${{ inputs.version }} to dev"
 
       - name: Create Draft Release
-        run: gh release create ${{ inputs.version }} --draft --notes "Initial draft for release ${{ inputs.version }}"
+        run: gh release create ${{ inputs.version }} --title "${{ inputs.version }}" --draft --notes "Initial draft for release ${{ inputs.version }}"
