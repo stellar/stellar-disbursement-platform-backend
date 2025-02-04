@@ -32,7 +32,12 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Create Issue
-        run: gh issue create --title "Release \`${{ inputs.version }}\`" --body "Automating release process for \`${{ inputs.version }}\`" --label "release" --assignee "${{ github.actor }}"
+        run: |
+          gh issue create \
+            --title "Release \`${{ inputs.version }}\`" \
+            --body-file .github/ISSUE_TEMPLATE/release_a_new_version.md \
+            --label "release" \
+            --assignee "${{ github.actor }}"
 
       - name: Configure Git User
         env:
