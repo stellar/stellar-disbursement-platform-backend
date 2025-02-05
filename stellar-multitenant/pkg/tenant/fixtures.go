@@ -95,31 +95,33 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	const query = `
 		WITH create_tenant AS (
 			INSERT INTO tenants
-				(name, distribution_account_address)
+				(name, distribution_account_address, base_url)
 			VALUES
-				($1, $2)
+				($1, $2, $3)
 			ON CONFLICT DO NOTHING
 			RETURNING *
 		)
 		SELECT * FROM create_tenant ct
 	`
 
+	baseURL := fmt.Sprintf("http://%s.stellar.local:8000", tenantName)
 	tnt := &Tenant{
 		Name:                       tenantName,
 		DistributionAccountAddress: &distributionPubKey,
+		BaseURL:                    &baseURL,
 	}
 
-	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccountAddress)
+	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccountAddress, tnt.BaseURL)
 	require.Nil(t, err)
 
 	return tnt
 }
 
-func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) context.Context {
+func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) (*Tenant, context.Context) {
 	ctx := context.Background()
 	const publicKey = "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
 	tnt := CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant", publicKey)
-	return SaveTenantInContext(ctx, tnt)
+	return tnt, SaveTenantInContext(ctx, tnt)
 }
 
 func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string) bool {
