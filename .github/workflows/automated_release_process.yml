@@ -67,7 +67,7 @@ jobs:
         id: create_main_pr
         working-directory: stellar-disbursement-platform-backend
         run: |
-          MAIN_PR_URL=$(sed "s/{{ version }}/${{ inputs.version }}/g" ../.github/workflows/templates/main-release-pr.md | \
+          MAIN_PR_URL=$(sed "s/{{ version }}/${{ inputs.version }}/g" ../.github/workflows/templates/release-pr-main.md | \
           gh pr create --repo ${{ env.REPO_NAME }} \
             --base main \
             --head release/${{ inputs.version }} \
@@ -89,7 +89,7 @@ jobs:
         run: |
           DEV_PR_URL=$(sed -e "s/{{ version }}/${{ inputs.version }}/g" \
               -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
-              ../.github/workflows/templates/dev-release-pr.md | \
+              ../.github/workflows/templates/release-pr-dev.md | \
           gh pr create --repo ${{ env.REPO_NAME }} \
             --base develop \
             --head release/${{ inputs.version }}-dev \
