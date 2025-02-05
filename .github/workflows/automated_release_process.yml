@@ -56,17 +56,20 @@ jobs:
         working-directory: stellar-disbursement-platform-backend
         run: |
           git checkout -b release/${{ inputs.version }} origin/develop
-          git commit --allow-empty -m "chore: prepare release ${{ inputs.version }}"
+          sed -i 's/const Version = ".*"/const Version = "${{ inputs.version }}"/' main.go
+          git add main.go
+          git commit -m "chore: bump version to ${{ inputs.version }}"
           git push origin release/${{ inputs.version }}
 
       - name: Create main PR
         working-directory: stellar-disbursement-platform-backend
         run: |
+          sed "s/{{ version }}/${{ inputs.version }}/g" ../.github/workflows/templates/main-release-pr.md | \
           gh pr create --repo ${{ env.REPO_NAME }} \
             --base main \
             --head release/${{ inputs.version }} \
             --title "Release \`${{ inputs.version }}\` to \`main\`" \
-            --body "Release \`${{ inputs.version }}\` to \`main\`" \
+            --body-file - \
             --assignee "${{ github.actor }}" \
             --reviewer "${{ env.REVIEWER }}"
 
