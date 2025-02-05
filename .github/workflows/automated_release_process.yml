@@ -9,8 +9,8 @@ on:
         type: string
 
 env:
-  REPO_NAME: marcelosalloum/stellar-disbursement-platform-backend
-  REVIEWER: marcelosalloum
+  REPO_NAME: stellar/stellar-disbursement-platform-backend
+  REVIEWER: stellar/sdp-backend
 
 jobs:
   create-release:
