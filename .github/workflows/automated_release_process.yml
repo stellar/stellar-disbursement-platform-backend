@@ -101,7 +101,7 @@ jobs:
       - name: Create Issue
         id: create_issue
         run: |
-          sed -e "s/{{version}}/${{ inputs.version }}/g" \
+          ISSUE_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
               -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
               -e "s|{{ dev_pr_url }}|${{ steps.create_dev_pr.outputs.dev_pr_url }}|g" \
               -e "s|{{ release_url }}|${{ steps.create_release.outputs.release_url }}|g" \
@@ -110,7 +110,8 @@ jobs:
             --title "Release \`${{ inputs.version }}\`" \
             --body-file - \
             --label "release" \
-            --assignee "${{ github.actor }}"
+            --assignee "${{ github.actor }}")
+          echo "issue_url=${ISSUE_URL}" >> $GITHUB_OUTPUT
 
       - name: Print Summary
         run: |
