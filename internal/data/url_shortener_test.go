@@ -63,7 +63,7 @@ func Test_URLShortenerModel_GetOriginalURL(t *testing.T) {
 	}
 }
 
-func Test_URLShortenerModel_CreateShortURL(t *testing.T) {
+func Test_URLShortenerModel_GetOrCreateShortCode(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -71,56 +71,72 @@ func Test_URLShortenerModel_CreateShortURL(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	originalURL := "https://stellar.org/example"
 
 	testCases := []struct {
 		name           string
-		setup          func(*testing.T, *mocks.CodeGeneratorMock)
+		setup          func(*testing.T, *mocks.CodeGeneratorMock, string)
 		expectedErr    string
-		validateResult func(*testing.T, string)
+		validateResult func(*testing.T, string, string)
 	}{
 		{
-			name: "🎉 successful short url creation",
-			setup: func(t *testing.T, m *mocks.CodeGeneratorMock) {
+			name: "🎉 creates new code for new URL",
+			setup: func(t *testing.T, m *mocks.CodeGeneratorMock, originalURL string) {
 				m.On("Generate", shortCodeLength).
 					Return("abc123").
 					Once()
 			},
-			validateResult: func(t *testing.T, code string) {
-				var storedURL string
+			validateResult: func(t *testing.T, originalURL, code string) {
+				var actualURL string
 				err := dbConnectionPool.GetContext(
 					ctx,
-					&storedURL,
+					&actualURL,
 					"SELECT original_url FROM short_urls WHERE id = $1",
 					"abc123",
 				)
 				require.NoError(t, err)
-				require.Equal(t, originalURL, storedURL)
+				require.Equal(t, originalURL, actualURL)
 			},
 		},
 		{
-			name: "handle collisions",
-			setup: func(t *testing.T, m *mocks.CodeGeneratorMock) {
+			name: "🎉 returns existing code for duplicate URL",
+			setup: func(t *testing.T, m *mocks.CodeGeneratorMock, originalURL string) {
+				CreateShortURLFixture(t, ctx, dbConnectionPool, "existing", originalURL)
+			},
+			validateResult: func(t *testing.T, originalURL, code string) {
+				assert.Equal(t, "existing", code)
+			},
+		},
+		{
+			name: "handle collisions for new URL",
+			setup: func(t *testing.T, m *mocks.CodeGeneratorMock, originalURL string) {
 				m.On("Generate", shortCodeLength).
 					Return("collide").
 					Return("collide").
 					Return("unique").
 					Once()
-
-				CreateShortURLFixture(t, ctx, dbConnectionPool, "collide", originalURL)
 			},
-			validateResult: func(t *testing.T, code string) {
+			validateResult: func(t *testing.T, originalURL, code string) {
 				assert.Equal(t, "unique", code)
+
+				var actualURL string
+				err := dbConnectionPool.GetContext(
+					ctx,
+					&actualURL,
+					"SELECT original_url FROM short_urls WHERE id = $1",
+					"unique",
+				)
+				require.NoError(t, err)
+				assert.Equal(t, originalURL, actualURL)
 			},
 		},
 		{
 			name: "max attempts exceeded",
-			setup: func(t *testing.T, m *mocks.CodeGeneratorMock) {
+			setup: func(t *testing.T, m *mocks.CodeGeneratorMock, originalURL string) {
 				m.On("Generate", shortCodeLength).
 					Return("exceed").
 					Times(maxCodeGenerationAttempts)
 
-				CreateShortURLFixture(t, ctx, dbConnectionPool, "exceed", originalURL)
+				CreateShortURLFixture(t, ctx, dbConnectionPool, "exceed", "https://stellar.org/other")
 			},
 			expectedErr: "generating unique code after 5 attempts",
 		},
@@ -135,11 +151,12 @@ func Test_URLShortenerModel_CreateShortURL(t *testing.T) {
 				codeGenerator:    generatorMock,
 			}
 
+			originalURL := "https://stellar.org/" + t.Name()
 			if tc.setup != nil {
-				tc.setup(t, generatorMock)
+				tc.setup(t, generatorMock, originalURL)
 			}
 
-			code, err := model.CreateShortURL(ctx, originalURL)
+			code, err := model.GetOrCreateShortCode(ctx, originalURL)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
 				return
@@ -147,77 +164,7 @@ func Test_URLShortenerModel_CreateShortURL(t *testing.T) {
 
 			assert.NoError(t, err)
 			if tc.validateResult != nil {
-				tc.validateResult(t, code)
-			}
-		})
-	}
-}
-
-func Test_URLShortenerModel_IncrementHits(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-	m := URLShortenerModel{dbConnectionPool: dbConnectionPool}
-
-	testCases := []struct {
-		name          string
-		shortCode     string
-		setup         func(*testing.T)
-		expectedHits  int64
-		expectedError string
-		before        func(*testing.T)
-	}{
-		{
-			name:      "🎉 successfully increments hits for existing code",
-			shortCode: "valid123",
-			setup: func(t *testing.T) {
-				CreateShortURLFixture(t, ctx, dbConnectionPool, "valid123", "https://stellar.org")
-				for i := 0; i < 5; i++ {
-					require.NoError(t, m.IncrementHits(ctx, "valid123"))
-				}
-			},
-			expectedHits: 6,
-		},
-		{
-			name:          "no error for non-existent code",
-			shortCode:     "does-not-exist",
-			expectedHits:  0,
-			expectedError: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if tc.setup != nil {
-				tc.setup(t)
-			}
-
-			if tc.before != nil {
-				tc.before(t)
-				return
-			}
-
-			err := m.IncrementHits(ctx, tc.shortCode)
-			if tc.expectedError != "" {
-				require.ErrorContains(t, err, tc.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
-
-			if tc.expectedHits > 0 {
-				var hits int64
-				err := dbConnectionPool.GetContext(
-					ctx,
-					&hits,
-					"SELECT hits FROM short_urls WHERE id = $1",
-					tc.shortCode,
-				)
-				require.NoError(t, err)
-				require.Equal(t, tc.expectedHits, hits)
+				tc.validateResult(t, originalURL, code)
 			}
 		})
 	}

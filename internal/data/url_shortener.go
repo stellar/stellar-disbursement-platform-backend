@@ -2,13 +2,13 @@ package data
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -23,7 +23,6 @@ type ShortURL struct {
 	ID          string    `json:"id"`
 	OriginalURL string    `json:"original_url"`
 	CreatedAt   time.Time `json:"created_at"`
-	Hits        int64     `json:"hits"`
 }
 
 type URLShortenerModel struct {
@@ -39,53 +38,57 @@ func NewURLShortenerModel(db db.DBConnectionPool) *URLShortenerModel {
 }
 
 func (u *URLShortenerModel) GetOriginalURL(ctx context.Context, shortCode string) (string, error) {
-	var url string
+	var originalURL string
 	query := `SELECT original_url FROM short_urls WHERE id = $1`
-	err := u.dbConnectionPool.GetContext(ctx, &url, query, shortCode)
+	err := u.dbConnectionPool.GetContext(ctx, &originalURL, query, shortCode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrRecordNotFound
 		}
 		return "", fmt.Errorf("getting URL for code %s: %w", shortCode, err)
 	}
-	return url, nil
+	return originalURL, nil
 }
 
-func (u *URLShortenerModel) CreateShortURL(ctx context.Context, url string) (string, error) {
-	var code string
-	var attempts int
+func (u *URLShortenerModel) GetOrCreateShortCode(ctx context.Context, originalURL string) (string, error) {
+	// Attempt to generate a unique short code.
+	for attempts := 0; attempts < maxCodeGenerationAttempts; attempts++ {
+		result, err := db.RunInTransactionWithResult(ctx, u.dbConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
+			// Check if there is already a short code for this original URL.
+			var code string
+			query := `SELECT id FROM short_urls WHERE original_url = $1`
+			err := dbTx.GetContext(ctx, &code, query, originalURL)
+			if err == nil {
+				return code, nil
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return "", fmt.Errorf("checking for existing URL: %w", err)
+			}
 
-	for attempts < maxCodeGenerationAttempts {
-		code = u.codeGenerator.Generate(shortCodeLength)
-		err := u.insertURL(ctx, code, url)
+			// Generate a new short code.
+			code = u.codeGenerator.Generate(shortCodeLength)
 
-		if err == nil {
+			// Insert the new short code.
+			query = `
+				INSERT INTO short_urls (id, original_url)
+				VALUES ($1, $2)
+			`
+			if _, err = dbTx.ExecContext(ctx, query, code, originalURL); err != nil {
+				return "", fmt.Errorf("inserting new URL: %w", err)
+			}
 			return code, nil
-		}
+		})
 
-		if !isDuplicateError(err) {
-			return "", fmt.Errorf("creating short URL: %w", err)
+		switch {
+		case err == nil:
+			return result, nil
+		case isDuplicateError(err): // Retry if the short code already exists.
+			continue
+		default:
+			return "", fmt.Errorf("getting or creating short code: %w", err)
 		}
-
-		attempts++
 	}
-
 	return "", fmt.Errorf("generating unique code after %d attempts", maxCodeGenerationAttempts)
-}
-
-func (u *URLShortenerModel) IncrementHits(ctx context.Context, code string) error {
-	query := `UPDATE short_urls SET hits = hits + 1 WHERE id = $1`
-	_, err := u.dbConnectionPool.ExecContext(ctx, query, code)
-	return err
-}
-
-func (u *URLShortenerModel) insertURL(ctx context.Context, code, url string) error {
-	query := `
-		INSERT INTO short_urls (id, original_url)
-		VALUES ($1, $2)
-	`
-	_, err := u.dbConnectionPool.ExecContext(ctx, query, code, url)
-	return err
 }
 
 // isDuplicateError checks if the error is a PostgreSQL unique violation
@@ -102,9 +105,6 @@ type CodeGenerator interface {
 type RandomCodeGenerator struct{}
 
 func (g *RandomCodeGenerator) Generate(length int) string {
-	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
-		panic("failed to generate random bytes: " + err.Error())
-	}
-	return base64.RawURLEncoding.EncodeToString(b)[:length]
+	genUUID := uuid.New().String()
+	return strings.ReplaceAll(genUUID[:length], "-", "")
 }

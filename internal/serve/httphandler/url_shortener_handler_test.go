@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +38,9 @@ func Test_URLShortenerHandler_HandleRedirect(t *testing.T) {
 	existingCode := "exist123"
 	originalURL := "https://stellar.org/original"
 	data.CreateShortURLFixture(t, ctx, dbConnectionPool, existingCode, originalURL)
-	data.CreateShortURLFixture(t, ctx, dbConnectionPool, "moreCode", originalURL)
+	moreCode := "moreCode"
+	moreURL := "https://stellar.org/more"
+	data.CreateShortURLFixture(t, ctx, dbConnectionPool, moreCode, moreURL)
 
 	testCases := []struct {
 		name                string
@@ -50,13 +51,13 @@ func Test_URLShortenerHandler_HandleRedirect(t *testing.T) {
 		{
 			name:                "🎉successfully redirects to original URL",
 			code:                existingCode,
-			expectedStatus:      301,
+			expectedStatus:      http.StatusMovedPermanently,
 			expectedErrContains: "",
 		},
 		{
 			name:                "returns 404 for non-existent code",
 			code:                "does-not-exist",
-			expectedStatus:      404,
+			expectedStatus:      http.StatusNotFound,
 			expectedErrContains: "Short URL not found",
 		},
 	}
@@ -73,16 +74,6 @@ func Test_URLShortenerHandler_HandleRedirect(t *testing.T) {
 				body, readErr := io.ReadAll(rr.Body)
 				require.NoError(t, readErr)
 				assert.Contains(t, string(body), tc.expectedErrContains)
-			}
-
-			// 🧪 Check if hits are incremented
-			if tc.expectedStatus == 301 {
-				assert.Eventually(t, func() bool {
-					var actualHits int64
-					query := `SELECT hits FROM short_urls WHERE id = $1`
-					hitErr := dbConnectionPool.GetContext(ctx, &actualHits, query, existingCode)
-					return hitErr == nil && actualHits == 1
-				}, 2*time.Second, 100*time.Millisecond, "Hits were not incremented")
 			}
 		})
 	}

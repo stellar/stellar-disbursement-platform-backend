@@ -1,18 +1,14 @@
 package httphandler
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type URLShortenerHandler struct {
@@ -37,25 +33,5 @@ func (u URLShortenerHandler) HandleRedirect(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Increment hits in a separate go routine to avoid blocking the request.
-	go u.incrementHits(ctx, shortCode)
-
 	http.Redirect(w, r, originalURL, http.StatusMovedPermanently)
-}
-
-func (u URLShortenerHandler) incrementHits(mainCtx context.Context, shortCode string) {
-	currentTenant, err := tenant.GetTenantFromContext(mainCtx)
-	if err != nil {
-		log.Ctx(mainCtx).Errorf("Failed to get tenant from context: %v", err)
-		return
-	}
-
-	incrementCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	ctx := tenant.SaveTenantInContext(incrementCtx, currentTenant)
-
-	if err = u.Models.URLShortener.IncrementHits(ctx, shortCode); err != nil {
-		log.Ctx(ctx).Errorf("Failed to increment hits for %s: %v", shortCode, err)
-	}
 }

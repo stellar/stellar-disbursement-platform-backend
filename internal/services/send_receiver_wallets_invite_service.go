@@ -217,7 +217,7 @@ func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context
 		return registrationLink, nil
 	}
 
-	shortCode, err := s.Models.URLShortener.CreateShortURL(ctx, registrationLink)
+	shortCode, err := s.Models.URLShortener.GetOrCreateShortCode(ctx, registrationLink)
 	if err != nil {
 		return "", fmt.Errorf("creating short URL for registration link: %w", err)
 	}
