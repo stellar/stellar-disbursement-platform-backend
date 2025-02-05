@@ -87,11 +87,14 @@ jobs:
         id: create_dev_pr
         working-directory: stellar-disbursement-platform-backend
         run: |
-          DEV_PR_URL=$(gh pr create --repo ${{ env.REPO_NAME }} \
+          DEV_PR_URL=$(sed -e "s/{{ version }}/${{ inputs.version }}/g" \
+              -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
+              ../.github/workflows/templates/dev-release-pr.md | \
+          gh pr create --repo ${{ env.REPO_NAME }} \
             --base develop \
             --head release/${{ inputs.version }}-dev \
             --title "Release \`${{ inputs.version }}\` to \`dev\`" \
-            --body "Release \`${{ inputs.version }}\` to \`dev\`" \
+            --body-file - \
             --assignee "${{ github.actor }}" \
             --reviewer "${{ env.REVIEWER }}")
           echo "dev_pr_url=${DEV_PR_URL}" >> $GITHUB_OUTPUT
