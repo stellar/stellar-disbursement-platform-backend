@@ -181,13 +181,13 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 // Count returns the number of receivers matching the given query parameters.
 func (r *ReceiverModel) Count(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams) (int, error) {
 	var count int
-	baseQuery := `
+	const q = `
 		SELECT
 			COUNT(DISTINCT r.id)
 		FROM receivers r
 		LEFT JOIN receiver_wallets rw ON rw.receiver_id = r.id
 	`
-	query, params := newReceiverQuery(baseQuery, queryParams, sqlExec, QueryTypeSingle)
+	query, params := newReceiverQuery(q, queryParams, sqlExec, QueryTypeSingle)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
