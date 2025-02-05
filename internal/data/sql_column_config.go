@@ -41,8 +41,6 @@ func GenerateColumnNames(config SQLColumnConfig) []string {
 		// Apply alias if needed
 		var columnAlias string
 		if config.ResultAlias != "" || config.CoalesceToEmptyString || len(columnNameAndAlias) > 1 || len(columnNameAndParser) > 1 {
-			// verification_field::text
-			// receiver_id AS "receiver.id"
 			if len(columnNameAndAlias) > 1 {
 				column = strings.Trim(columnNameAndAlias[1], `"`)
 			} else if len(columnNameAndParser) > 1 {

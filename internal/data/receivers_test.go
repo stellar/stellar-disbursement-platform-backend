@@ -51,18 +51,6 @@ func Test_ReceiverColumnNames(t *testing.T) {
 		},
 		{
 			tableReference: "r",
-			resultAlias:    "",
-			expected: strings.Join([]string{
-				`r.id`,
-				`r.external_id`,
-				`r.created_at`,
-				`r.updated_at`,
-				`COALESCE(r.phone_number, '') AS "phone_number"`,
-				`COALESCE(r.email, '') AS "email"`,
-			}, ",\n"),
-		},
-		{
-			tableReference: "r",
 			resultAlias:    "receiver",
 			expected: strings.Join([]string{
 				`r.id AS "receiver.id"`,

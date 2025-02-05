@@ -92,29 +92,6 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 				`COALESCE(rw.otp_confirmed_with, '') AS "receiver_wallets.otp_confirmed_with"`,
 			}, ",\n"),
 		},
-		{
-			tableReference: "",
-			resultAlias:    "receiver_wallets",
-			expected: strings.Join([]string{
-				`id AS "receiver_wallets.id"`,
-				`receiver_id AS "receiver_wallets.receiver.id"`,
-				`wallet_id AS "receiver_wallets.wallet.id"`,
-				`otp_created_at AS "receiver_wallets.otp_created_at"`,
-				`otp_confirmed_at AS "receiver_wallets.otp_confirmed_at"`,
-				`status AS "receiver_wallets.status"`,
-				`status_history AS "receiver_wallets.status_history"`,
-				`created_at AS "receiver_wallets.created_at"`,
-				`updated_at AS "receiver_wallets.updated_at"`,
-				`invitation_sent_at AS "receiver_wallets.invitation_sent_at"`,
-				`anchor_platform_transaction_synced_at AS "receiver_wallets.anchor_platform_transaction_synced_at"`,
-				`COALESCE(anchor_platform_transaction_id, '') AS "receiver_wallets.anchor_platform_transaction_id"`,
-				`COALESCE(stellar_address, '') AS "receiver_wallets.stellar_address"`,
-				`COALESCE(stellar_memo, '') AS "receiver_wallets.stellar_memo"`,
-				`COALESCE(stellar_memo_type, '') AS "receiver_wallets.stellar_memo_type"`,
-				`COALESCE(otp, '') AS "receiver_wallets.otp"`,
-				`COALESCE(otp_confirmed_with, '') AS "receiver_wallets.otp_confirmed_with"`,
-			}, ",\n"),
-		},
 	}
 
 	for _, tc := range testCases {

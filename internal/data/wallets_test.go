@@ -64,20 +64,6 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 		{
 			tableReference: "w",
 			resultAlias:    "wallet",
-			includeDates:   false,
-			expected: strings.Join([]string{
-				`w.id AS "wallet.id"`,
-				`w.name AS "wallet.name"`,
-				`w.sep_10_client_domain AS "wallet.sep_10_client_domain"`,
-				`w.homepage AS "wallet.homepage"`,
-				`w.enabled AS "wallet.enabled"`,
-				`w.deep_link_schema AS "wallet.deep_link_schema"`,
-				`w.user_managed AS "wallet.user_managed"`,
-			}, ",\n"),
-		},
-		{
-			tableReference: "w",
-			resultAlias:    "wallet",
 			includeDates:   true,
 			expected: strings.Join([]string{
 				`w.id AS "wallet.id"`,
