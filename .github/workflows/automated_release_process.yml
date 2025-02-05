@@ -32,17 +32,6 @@ jobs:
       - name: Setup GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-      - name: Create Issue
-        id: create_issue
-        run: |
-          ISSUE_URL=$(sed '/^---$/,/^---$/d' .github/ISSUE_TEMPLATE/release_a_new_version.md | \
-          gh issue create \
-            --title "Release \`${{ inputs.version }}\`" \
-            --body-file - \
-            --label "release" \
-            --assignee "${{ github.actor }}")
-          echo "issue_url=${ISSUE_URL}" >> $GITHUB_OUTPUT
-
       - name: Configure Git User
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,6 +96,20 @@ jobs:
             --draft \
             --notes "Initial draft for release \`${{ inputs.version }}\`")
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
+
+      - name: Create Issue
+        id: create_issue
+        run: |
+          sed -e "s/{{version}}/${{ inputs.version }}/g" \
+              -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
+              -e "s|{{ dev_pr_url }}|${{ steps.create_dev_pr.outputs.dev_pr_url }}|g" \
+              -e "s|{{ release_url }}|${{ steps.create_release.outputs.release_url }}|g" \
+              .github/workflows/templates/release-issue.md | \
+          gh issue create \
+            --title "Release \`${{ inputs.version }}\`" \
+            --body-file - \
+            --label "release" \
+            --assignee "${{ github.actor }}"
 
       - name: Print Summary
         run: |
