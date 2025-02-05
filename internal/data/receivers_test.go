@@ -76,7 +76,7 @@ func Test_ReceiverColumnNames(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("tableReference=%s, resultAlias=%s", tc.tableReference, tc.resultAlias), func(t *testing.T) {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
 			actual := ReceiverColumnNames(tc.tableReference, tc.resultAlias)
 			assert.Equal(t, tc.expected, actual)
 		})

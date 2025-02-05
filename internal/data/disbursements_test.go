@@ -837,18 +837,24 @@ func Test_DisbursementColumnNames(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		originalColName := "{column_name}"
-		scanText := originalColName
-		if tc.tableReference != "" {
-			scanText = fmt.Sprintf("%s.%s", tc.tableReference, scanText)
-		}
-		if tc.resultAlias != "" {
-			scanText = fmt.Sprintf("%s AS %s.%s", scanText, tc.resultAlias, originalColName)
-		}
-
-		t.Run(scanText, func(t *testing.T) {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
 			actual := DisbursementColumnNames(tc.tableReference, tc.resultAlias)
 			assert.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+// testCaseNameForScanText returns a string that can be used as the name of a test case.
+// It is used to create a test case name for a given table reference and result alias.
+func testCaseNameForScanText(t *testing.T, tableReference, resultAlias string) string {
+	t.Helper()
+	originalColName := "{column_name}"
+	scanText := originalColName
+	if tableReference != "" {
+		scanText = fmt.Sprintf("%s.%s", tableReference, scanText)
+	}
+	if resultAlias != "" {
+		scanText = fmt.Sprintf("%s AS %s.%s", scanText, resultAlias, originalColName)
+	}
+	return scanText
 }

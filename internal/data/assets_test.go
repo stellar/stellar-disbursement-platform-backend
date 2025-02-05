@@ -75,7 +75,7 @@ func Test_AssetColumnNames(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("tableReference=%s,resultAlias=%s,includeDates=%t", tc.tableReference, tc.resultAlias, tc.includeDates), func(t *testing.T) {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
 			got := AssetColumnNames(tc.tableReference, tc.resultAlias, tc.includeDates)
 			assert.Equal(t, tc.expectedResult, got)
 		})

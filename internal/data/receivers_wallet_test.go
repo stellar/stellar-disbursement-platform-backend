@@ -118,7 +118,7 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("tableReference=%s", tc.tableReference), func(t *testing.T) {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
 			actual := ReceiverWalletColumnNames(tc.tableReference, tc.resultAlias)
 			assert.Equal(t, tc.expected, actual)
 		})
