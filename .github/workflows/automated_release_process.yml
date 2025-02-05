@@ -33,13 +33,15 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Create Issue
+        id: create_issue
         run: |
-          sed '/^---$/,/^---$/d' .github/ISSUE_TEMPLATE/release_a_new_version.md | \
+          ISSUE_URL=$(sed '/^---$/,/^---$/d' .github/ISSUE_TEMPLATE/release_a_new_version.md | \
           gh issue create \
             --title "Release \`${{ inputs.version }}\`" \
             --body-file - \
             --label "release" \
-            --assignee "${{ github.actor }}"
+            --assignee "${{ github.actor }}")
+          echo "issue_url=${ISSUE_URL}" >> $GITHUB_OUTPUT
 
       - name: Configure Git User
         env:
@@ -62,16 +64,18 @@ jobs:
           git push origin release/${{ inputs.version }}
 
       - name: Create main PR
+        id: create_main_pr
         working-directory: stellar-disbursement-platform-backend
         run: |
-          sed "s/{{ version }}/${{ inputs.version }}/g" ../.github/workflows/templates/main-release-pr.md | \
+          MAIN_PR_URL=$(sed "s/{{ version }}/${{ inputs.version }}/g" ../.github/workflows/templates/main-release-pr.md | \
           gh pr create --repo ${{ env.REPO_NAME }} \
             --base main \
             --head release/${{ inputs.version }} \
             --title "Release \`${{ inputs.version }}\` to \`main\`" \
             --body-file - \
             --assignee "${{ github.actor }}" \
-            --reviewer "${{ env.REVIEWER }}"
+            --reviewer "${{ env.REVIEWER }}")
+          echo "main_pr_url=${MAIN_PR_URL}" >> $GITHUB_OUTPUT
 
       - name: Create release/${{ inputs.version }}-dev branch
         working-directory: stellar-disbursement-platform-backend
@@ -80,15 +84,32 @@ jobs:
           git push origin release/${{ inputs.version }}-dev
 
       - name: Create develop PR
+        id: create_dev_pr
         working-directory: stellar-disbursement-platform-backend
         run: |
-          gh pr create --repo ${{ env.REPO_NAME }} \
+          DEV_PR_URL=$(gh pr create --repo ${{ env.REPO_NAME }} \
             --base develop \
             --head release/${{ inputs.version }}-dev \
             --title "Release \`${{ inputs.version }}\` to \`dev\`" \
             --body "Release \`${{ inputs.version }}\` to \`dev\`" \
             --assignee "${{ github.actor }}" \
-            --reviewer "${{ env.REVIEWER }}"
+            --reviewer "${{ env.REVIEWER }}")
+          echo "dev_pr_url=${DEV_PR_URL}" >> $GITHUB_OUTPUT
 
       - name: Create Draft Release
-        run: gh release create ${{ inputs.version }} --title "${{ inputs.version }}" --draft --notes "Initial draft for release \`${{ inputs.version }}\`"
+        id: create_release
+        run: |
+          RELEASE_URL=$(gh release create ${{ inputs.version }} \
+            --title "${{ inputs.version }}" \
+            --draft \
+            --notes "Initial draft for release \`${{ inputs.version }}\`")
+          echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
+
+      - name: Print Summary
+        run: |
+          echo "Release Process Summary for ${{ inputs.version }}"
+          echo "----------------------------------------"
+          echo "Issue: ${{ steps.create_issue.outputs.issue_url }}"
+          echo "Main PR: ${{ steps.create_main_pr.outputs.main_pr_url }}"
+          echo "Dev PR: ${{ steps.create_dev_pr.outputs.dev_pr_url }}"
+          echo "Draft Release: ${{ steps.create_release.outputs.release_url }}"
