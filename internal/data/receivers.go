@@ -263,15 +263,11 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyID] != nil {
-		qb.AddCondition("r.id = ?", queryParams.Filters[FilterKeyID])
+		addArrayOrSingleCondition[string](qb, "r.id", queryParams.Filters[FilterKeyID])
 	}
 	if queryParams.Query != "" {
 		q := "%" + queryParams.Query + "%"
 		qb.AddCondition("(r.id ILIKE ? OR r.phone_number ILIKE ? OR r.email ILIKE ?)", q, q, q)
-	}
-	if queryParams.Filters[FilterKeyIDs] != nil {
-		ids := queryParams.Filters[FilterKeyIDs].([]string)
-		qb.AddCondition("r.id = ANY(?)", pq.Array(ids))
 	}
 	if queryParams.Filters[FilterKeyStatus] != nil {
 		status := queryParams.Filters[FilterKeyStatus].(ReceiversWalletStatus)

@@ -721,7 +721,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 	t.Run("returns receivers successfully with IDs filter", func(t *testing.T) {
 		actualReceivers, err := receiverModel.GetAll(ctx, dbConnectionPool, &QueryParams{
 			Filters: map[FilterKey]interface{}{
-				FilterKeyIDs: []string{receiver1.ID, receiver2.ID},
+				FilterKeyID: []string{receiver1.ID, receiver2.ID},
 			},
 		}, QueryTypeSelectAll)
 		require.NoError(t, err)
