@@ -16,7 +16,7 @@ on:
 env:
   REPO_ORG: stellar
   REPO_NAME: stellar-disbursement-platform-backend
-  REVIEWER: stellar/sdp-backend
+  REVIEWER: marcelosalloum,marwen-abid
 
 jobs:
   create-release:
