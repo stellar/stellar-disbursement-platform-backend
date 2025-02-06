@@ -1,5 +1,10 @@
 name: Automated Release Process
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -29,23 +34,18 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup GitHub CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Configure Git User
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global credential.helper store
-          echo "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          gh repo clone ${{ env.REPO_ORG }}/${{ env.REPO_NAME }}
-          cd ${{ env.REPO_NAME }}
 
       - name: Create release/${{ inputs.version }} branch
-        working-directory: ${{ env.REPO_NAME }}
         run: |
           git checkout -b release/${{ inputs.version }} origin/develop
           sed -i 's/const Version = ".*"/const Version = "${{ inputs.version }}"/' main.go
@@ -55,9 +55,8 @@ jobs:
 
       - name: Create main PR
         id: create_main_pr
-        working-directory: ${{ env.REPO_NAME }}
         run: |
-          MAIN_PR_URL=$(sed "s/{{version}}/${{ inputs.version }}/g" ../.github/workflows/templates/release-pr-main.md | \
+          MAIN_PR_URL=$(sed "s/{{version}}/${{ inputs.version }}/g" .github/workflows/templates/release-pr-main.md | \
           gh pr create --repo ${{ env.REPO_ORG }}/${{ env.REPO_NAME }} \
             --base main \
             --head release/${{ inputs.version }} \
@@ -68,18 +67,16 @@ jobs:
           echo "main_pr_url=${MAIN_PR_URL}" >> $GITHUB_OUTPUT
 
       - name: Create release/${{ inputs.version }}-dev branch
-        working-directory: ${{ env.REPO_NAME }}
         run: |
           git checkout -b release/${{ inputs.version }}-dev release/${{ inputs.version }}
           git push origin release/${{ inputs.version }}-dev
 
       - name: Create develop PR
         id: create_dev_pr
-        working-directory: ${{ env.REPO_NAME }}
         run: |
           DEV_PR_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
               -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
-              ../.github/workflows/templates/release-pr-dev.md | \
+              .github/workflows/templates/release-pr-dev.md | \
           gh pr create --repo ${{ env.REPO_ORG }}/${{ env.REPO_NAME }} \
             --base develop \
             --head release/${{ inputs.version }}-dev \
