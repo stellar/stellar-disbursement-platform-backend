@@ -288,7 +288,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 
 	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
