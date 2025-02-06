@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -376,6 +377,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
+	data.CreateShortURLFixture(t, context.Background(), dbConnectionPool, "123", "https://stellar.org")
 
 	handlerMux := handleHTTP(serveOptions)
 
@@ -390,6 +392,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/mfa"},
 		{http.MethodPost, "/forgot-password"},
 		{http.MethodPost, "/reset-password"},
+		{http.MethodGet, "/r/123"},
 	}
 	for _, endpoint := range unauthenticatedEndpoints {
 		t.Run(fmt.Sprintf("%s %s", endpoint.method, endpoint.path), func(t *testing.T) {
@@ -400,7 +403,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 			handlerMux.ServeHTTP(w, req)
 
 			resp := w.Result()
-			assert.Contains(t, []int{http.StatusOK, http.StatusBadRequest}, resp.StatusCode)
+			assert.Contains(t, []int{http.StatusOK, http.StatusBadRequest, http.StatusMovedPermanently}, resp.StatusCode)
 		})
 	}
 }

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.5.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.4.0...3.5.0))
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.5.0`.
+
+### Added
+
+- Added short linking for Wallet Registration Links. 
+  [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
+- Added a new `is_link_shortener_enabled` property to `GET` and `PATCH` organizations endpoints to enable/disable the short link feature. 
+  [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
+- Added receiver contact info for Payments export. 
+  [#538](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/538)
+
+
 ## [3.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.3.0...3.4.0))
 
 Release of the Stellar Disbursement Platform `v3.4.0`. This release adds support for `q={term}` query searches in the

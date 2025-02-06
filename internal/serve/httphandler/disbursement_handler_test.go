@@ -1492,7 +1492,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	token := "token"
-	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 	userID := "valid-user-id"
 	user := &auth.User{

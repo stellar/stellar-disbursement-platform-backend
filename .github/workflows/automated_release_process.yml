@@ -1,0 +1,120 @@
+name: Automated Release Process
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (x.y.z or x.y.z-rc.1)"
+        required: true
+        type: string
+
+env:
+  REPO_ORG: stellar
+  REPO_NAME: stellar-disbursement-platform-backend
+  REVIEWER: marcelosalloum,marwen-abid
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate version format
+        run: |
+          if ! [[ ${{ inputs.version }} =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha|beta)\.[0-9]+)?$ ]]; then
+            echo "Error: Version must be in format x.y.z or x.y.z-rc.n"
+            echo "Examples:"
+            echo "  1.2.3"
+            echo "  1.2.3-rc.1"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Configure Git User
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Create release/${{ inputs.version }} branch
+        run: |
+          git checkout -b release/${{ inputs.version }} origin/${{ github.ref_name }}
+          sed -i 's/const Version = ".*"/const Version = "${{ inputs.version }}"/' main.go
+          git add main.go
+          git commit -m "chore: bump version to ${{ inputs.version }}"
+          git push origin release/${{ inputs.version }}
+
+      - name: Create main PR
+        id: create_main_pr
+        run: |
+          MAIN_PR_URL=$(sed "s/{{version}}/${{ inputs.version }}/g" .github/workflows/templates/release-pr-main.md | \
+          gh pr create --repo ${{ env.REPO_ORG }}/${{ env.REPO_NAME }} \
+            --base main \
+            --head release/${{ inputs.version }} \
+            --title "Release \`${{ inputs.version }}\` to \`main\`" \
+            --body-file - \
+            --assignee "${{ github.actor }}" \
+            --reviewer "${{ env.REVIEWER }}")
+          echo "main_pr_url=${MAIN_PR_URL}" >> $GITHUB_OUTPUT
+
+      - name: Create release/${{ inputs.version }}-dev branch
+        run: |
+          git checkout -b release/${{ inputs.version }}-dev release/${{ inputs.version }}
+          git push origin release/${{ inputs.version }}-dev
+
+      - name: Create develop PR
+        id: create_dev_pr
+        run: |
+          DEV_PR_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
+              -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
+              .github/workflows/templates/release-pr-dev.md | \
+          gh pr create --repo ${{ env.REPO_ORG }}/${{ env.REPO_NAME }} \
+            --base develop \
+            --head release/${{ inputs.version }}-dev \
+            --title "Release \`${{ inputs.version }}\` to \`dev\`" \
+            --body-file - \
+            --assignee "${{ github.actor }}" \
+            --reviewer "${{ env.REVIEWER }}")
+          echo "dev_pr_url=${DEV_PR_URL}" >> $GITHUB_OUTPUT
+
+      - name: Create Draft Release
+        id: create_release
+        run: |
+          RELEASE_URL=$(gh release create ${{ inputs.version }} \
+            --title "${{ inputs.version }}" \
+            --draft \
+            --notes "Initial draft for release \`${{ inputs.version }}\`")
+          echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
+
+      - name: Create Issue
+        id: create_issue
+        run: |
+          ISSUE_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
+              -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
+              -e "s|{{ dev_pr_url }}|${{ steps.create_dev_pr.outputs.dev_pr_url }}|g" \
+              -e "s|{{ release_url }}|${{ steps.create_release.outputs.release_url }}|g" \
+              .github/workflows/templates/release-issue.md | \
+          gh issue create \
+            --title "Release \`${{ inputs.version }}\`" \
+            --body-file - \
+            --label "release" \
+            --assignee "${{ github.actor }}")
+          echo "issue_url=${ISSUE_URL}" >> $GITHUB_OUTPUT
+
+      - name: Print Summary
+        run: |
+          echo "Release Process Summary for ${{ inputs.version }}"
+          echo "----------------------------------------"
+          echo "Issue: ${{ steps.create_issue.outputs.issue_url }}"
+          echo "Main PR: ${{ steps.create_main_pr.outputs.main_pr_url }}"
+          echo "Dev PR: ${{ steps.create_dev_pr.outputs.dev_pr_url }}"
+          echo "Draft Release: ${{ steps.create_release.outputs.release_url }}"

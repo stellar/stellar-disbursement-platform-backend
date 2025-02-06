@@ -459,6 +459,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			AuthManager:       authManager,
 			PasswordValidator: o.PasswordValidator,
 		}.ServeHTTP)
+
+		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 	})
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
