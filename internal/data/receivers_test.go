@@ -723,6 +723,8 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			Filters: map[FilterKey]interface{}{
 				FilterKeyID: []string{receiver1.ID, receiver2.ID},
 			},
+			SortBy:    SortFieldCreatedAt,
+			SortOrder: SortOrderASC,
 		}, QueryTypeSelectAll)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualReceivers))
