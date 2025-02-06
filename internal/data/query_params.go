@@ -40,6 +40,7 @@ const (
 type FilterKey string
 
 const (
+	FilterKeyIDs              FilterKey = "ids"
 	FilterKeyStatus           FilterKey = "status"
 	FilterKeyReceiverID       FilterKey = "receiver_id"
 	FilterKeyPaymentID        FilterKey = "payment_id"
