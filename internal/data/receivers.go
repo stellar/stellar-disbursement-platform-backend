@@ -326,6 +326,10 @@ func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQL
 		q := "%" + queryParams.Query + "%"
 		qb.AddCondition("(r.id ILIKE ? OR r.phone_number ILIKE ? OR r.email ILIKE ?)", q, q, q)
 	}
+	if queryParams.Filters[FilterKeyIDs] != nil {
+		ids := queryParams.Filters[FilterKeyIDs].([]string)
+		qb.AddCondition("r.id = ANY(?)", pq.Array(ids))
+	}
 	if queryParams.Filters[FilterKeyStatus] != nil {
 		status := queryParams.Filters[FilterKeyStatus].(ReceiversWalletStatus)
 		qb.AddCondition("rw.status = ?", status)
