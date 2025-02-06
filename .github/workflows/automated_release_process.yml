@@ -47,7 +47,7 @@ jobs:
 
       - name: Create release/${{ inputs.version }} branch
         run: |
-          git checkout -b release/${{ inputs.version }} origin/develop
+          git checkout -b release/${{ inputs.version }} origin/${{ github.ref_name }}
           sed -i 's/const Version = ".*"/const Version = "${{ inputs.version }}"/' main.go
           git add main.go
           git commit -m "chore: bump version to ${{ inputs.version }}"
