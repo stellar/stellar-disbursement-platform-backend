@@ -21,8 +21,16 @@ ALTER TABLE receiver_wallets
         ELSE 'text'::memo_type
     END;
 
+ALTER TABLE circle_recipients
+    ADD COLUMN stellar_address TEXT,
+    ADD COLUMN stellar_memo TEXT;
+
 
 -- +migrate Down
+
+ALTER TABLE circle_recipients
+    DROP COLUMN stellar_address,
+    DROP COLUMN stellar_memo;
 
 ALTER TABLE receiver_wallets
     ALTER COLUMN stellar_memo_type TYPE TEXT USING stellar_memo_type::text;
