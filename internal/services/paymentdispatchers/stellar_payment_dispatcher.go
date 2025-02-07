@@ -62,15 +62,17 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
 		}
 
+		stellarMemo, stellarMemoType := GetMemoAndType(*payment.ReceiverWallet)
+
 		transaction := txSubStore.Transaction{
 			ExternalID:  payment.ID,
 			AssetCode:   payment.Asset.Code,
 			AssetIssuer: payment.Asset.Issuer,
 			Amount:      amount,
 			Destination: payment.ReceiverWallet.StellarAddress,
-			// Memo:        "?", // TODO: inject a memo here
-			// MemoType:    "?", // TODO: inject a memo type here
-			TenantID: tenantID,
+			Memo:        stellarMemo,
+			MemoType:    stellarMemoType,
+			TenantID:    tenantID,
 		}
 		transactions = append(transactions, transaction)
 	}
