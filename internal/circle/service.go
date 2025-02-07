@@ -112,9 +112,10 @@ func (s *Service) SendTransfer(ctx context.Context, paymentRequest PaymentReques
 			ID:   paymentRequest.SourceWalletID,
 		},
 		Destination: TransferAccount{
-			Type:    TransferAccountTypeBlockchain,
-			Chain:   StellarChainCode,
-			Address: paymentRequest.DestinationStellarAddress,
+			Type:       TransferAccountTypeBlockchain,
+			Chain:      StellarChainCode,
+			Address:    paymentRequest.DestinationStellarAddress,
+			AddressTag: paymentRequest.DestinationStellarMemo,
 		},
 	})
 }

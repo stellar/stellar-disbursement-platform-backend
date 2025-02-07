@@ -62,11 +62,14 @@ func (c *CirclePaymentTransferDispatcher) sendPaymentsToCircle(ctx context.Conte
 			return fmt.Errorf("inserting circle transfer request: %w", err)
 		}
 
+		stellarMemo, _ := GetMemoAndType(*payment.ReceiverWallet)
+
 		// 2. Submit the payment to Circle
 		transfer, err := c.circleService.SendTransfer(ctx, circle.PaymentRequest{
 			APIType:                   circle.APITypeTransfers,
 			SourceWalletID:            circleWalletID,
 			DestinationStellarAddress: payment.ReceiverWallet.StellarAddress,
+			DestinationStellarMemo:    stellarMemo,
 			Amount:                    payment.Amount,
 			StellarAssetCode:          payment.Asset.Code,
 			IdempotencyKey:            transferRequest.IdempotencyKey,
