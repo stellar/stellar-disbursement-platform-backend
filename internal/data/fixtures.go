@@ -392,7 +392,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
 		require.NoError(t, err)
 
-		stellarMemo = fmt.Sprint(randNumber.Int64() + 10000)
+		stellarMemo = fmt.Sprint(randNumber.Uint64() + 10000)
 		stellarMemoType = "id"
 
 		anchorPlatformTransactionID, err = utils.RandomString(10)
@@ -419,7 +419,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, utils.SQLNullString(stellarMemo), utils.SQLNullString(stellarMemoType), status, anchorPlatformTransactionID)
 	require.NoError(t, err)
 
 	return &receiverWallet
