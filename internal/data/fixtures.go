@@ -434,9 +434,9 @@ func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec
 func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, insert CircleRecipient) *CircleRecipient {
 	const query = `
 		INSERT INTO circle_recipients
-			(receiver_wallet_id, idempotency_key, circle_recipient_id, status, created_at, updated_at, sync_attempts, last_sync_attempt_at)
+			(receiver_wallet_id, idempotency_key, circle_recipient_id, status, created_at, updated_at, sync_attempts, last_sync_attempt_at, stellar_address, stellar_memo)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING
 	` + circleRecipientFields
 
@@ -450,6 +450,8 @@ func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.
 		insert.UpdatedAt,
 		insert.SyncAttempts,
 		utils.SQLNullTime(insert.LastSyncAttemptAt),
+		utils.SQLNullString(insert.StellarAddress),
+		utils.SQLNullString(insert.StellarMemo),
 	)
 	require.NoError(t, err)
 

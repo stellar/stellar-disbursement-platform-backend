@@ -236,11 +236,14 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 	if receiverWallet.Receiver.PhoneNumber != "" {
 		nickname = receiverWallet.Receiver.PhoneNumber
 	}
+
+	stellarMemo, _ := GetMemoAndType(receiverWallet)
+
 	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
 		IdempotencyKey: dataRecipient.IdempotencyKey,
 		Address:        receiverWallet.StellarAddress,
-		// AddressTag:     receiverWallet.StellarMemo, // TODO: inject a memo here
-		Chain: circle.StellarChainCode,
+		AddressTag:     stellarMemo,
+		Chain:          circle.StellarChainCode,
 		Metadata: circle.RecipientMetadata{
 			Nickname: nickname,
 			Email:    receiverWallet.Receiver.Email,
@@ -273,6 +276,8 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 		IdempotencyKey:    dataRecipient.IdempotencyKey,
 		CircleRecipientID: recipient.ID,
+		StellarAddress:    receiverWallet.StellarAddress,
+		StellarMemo:       stellarMemo,
 		Status:            dataRecipientStatus,
 		ResponseBody:      recipientJson,
 		SyncAttempts:      dataRecipient.SyncAttempts + 1,
@@ -293,9 +298,21 @@ func (c *CirclePaymentPayoutDispatcher) ensureRecipientIsReady(ctx context.Conte
 		return nil, fmt.Errorf("getting or creating Circle recipient: %w", err)
 	}
 
-	// SUCCESS
 	if dataRecipient.Status == data.CircleRecipientStatusActive {
-		return dataRecipient, nil
+		// SUCCESS
+		stellarMemo, _ := GetMemoAndType(receiverWallet)
+		if stellarMemo == dataRecipient.StellarMemo && receiverWallet.StellarAddress == dataRecipient.StellarAddress {
+			return dataRecipient, nil
+		}
+
+		// Memo or Address changed -> Invalidate the recipient
+		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
+			Status:         data.CircleRecipientStatusInactive,
+			IdempotencyKey: uuid.NewString(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("invalidating Circle recipient: %w", err)
+		}
 	}
 
 	// FAILED or INACTIVE
