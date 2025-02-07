@@ -122,6 +122,11 @@ func (tw *TransactionWorker) updateContextLogger(ctx context.Context, job *TxJob
 		"updated_at":          tx.UpdatedAt.String(),
 	}
 
+	if tx.Memo != "" {
+		labels["memo"] = tx.Memo
+		labels["memo_type"] = tx.MemoType
+	}
+
 	if tx.XDRSent.Valid {
 		labels["xdr_sent"] = tx.XDRSent.String
 	}
