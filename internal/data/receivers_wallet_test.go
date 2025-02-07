@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_ReceiversWalletColumnNames(t *testing.T) {
@@ -41,7 +42,7 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 				`COALESCE(anchor_platform_transaction_id, '') AS "anchor_platform_transaction_id"`,
 				`COALESCE(stellar_address, '') AS "stellar_address"`,
 				`COALESCE(stellar_memo, '') AS "stellar_memo"`,
-				`COALESCE(stellar_memo_type, '') AS "stellar_memo_type"`,
+				`COALESCE(stellar_memo_type::text, '') AS "stellar_memo_type"`,
 				`COALESCE(otp, '') AS "otp"`,
 				`COALESCE(otp_confirmed_with, '') AS "otp_confirmed_with"`,
 			}, ",\n"),
@@ -64,7 +65,7 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 				`COALESCE(rw.anchor_platform_transaction_id, '') AS "anchor_platform_transaction_id"`,
 				`COALESCE(rw.stellar_address, '') AS "stellar_address"`,
 				`COALESCE(rw.stellar_memo, '') AS "stellar_memo"`,
-				`COALESCE(rw.stellar_memo_type, '') AS "stellar_memo_type"`,
+				`COALESCE(rw.stellar_memo_type::text, '') AS "stellar_memo_type"`,
 				`COALESCE(rw.otp, '') AS "otp"`,
 				`COALESCE(rw.otp_confirmed_with, '') AS "otp_confirmed_with"`,
 			}, ",\n"),
@@ -87,7 +88,7 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 				`COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallets.anchor_platform_transaction_id"`,
 				`COALESCE(rw.stellar_address, '') AS "receiver_wallets.stellar_address"`,
 				`COALESCE(rw.stellar_memo, '') AS "receiver_wallets.stellar_memo"`,
-				`COALESCE(rw.stellar_memo_type, '') AS "receiver_wallets.stellar_memo_type"`,
+				`COALESCE(rw.stellar_memo_type::text, '') AS "receiver_wallets.stellar_memo_type"`,
 				`COALESCE(rw.otp, '') AS "receiver_wallets.otp"`,
 				`COALESCE(rw.otp_confirmed_with, '') AS "receiver_wallets.otp_confirmed_with"`,
 			}, ",\n"),
@@ -1759,7 +1760,7 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 		assert.Equal(t, "test-tx-id", updated.AnchorPlatformTransactionID)
 		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", updated.StellarAddress)
 		assert.Equal(t, "123456", updated.StellarMemo)
-		assert.Equal(t, "id", updated.StellarMemoType)
+		assert.Equal(t, schema.MemoTypeID, updated.StellarMemoType)
 		assert.WithinDuration(t, now.UTC(), updated.OTPConfirmedAt.UTC(), time.Microsecond)
 		assert.Equal(t, "test@stellar.org", updated.OTPConfirmedWith)
 

@@ -1140,7 +1140,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 						rw.status,
 						rw.stellar_address,
 						COALESCE(rw.stellar_memo, '') as "stellar_memo",
-						COALESCE(rw.stellar_memo_type, '') as "stellar_memo_type",
+						COALESCE(rw.stellar_memo_type::text, '') as "stellar_memo_type",
 						otp_confirmed_at
 					FROM
 						receiver_wallets rw
@@ -1159,7 +1159,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					assert.Empty(t, receiverWalletUpdated.StellarMemoType)
 				} else {
 					assert.Equal(t, tc.inputMemo, receiverWalletUpdated.StellarMemo)
-					assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
+					assert.Equal(t, schema.MemoTypeID, receiverWalletUpdated.StellarMemoType)
 				}
 			})
 		}
@@ -1245,7 +1245,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 						rw.status,
 						rw.stellar_address,
 						COALESCE(rw.stellar_memo, '') as "stellar_memo",
-						COALESCE(rw.stellar_memo_type, '') as "stellar_memo_type",
+						COALESCE(rw.stellar_memo_type::text, '') as "stellar_memo_type",
 						otp_confirmed_at
 					FROM
 						receiver_wallets rw
@@ -1264,7 +1264,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					assert.Empty(t, receiverWalletUpdated.StellarMemoType)
 				} else {
 					assert.Equal(t, tc.inputMemo, receiverWalletUpdated.StellarMemo)
-					assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
+					assert.Equal(t, schema.MemoTypeID, receiverWalletUpdated.StellarMemoType)
 				}
 
 				// registering Second Wallet
@@ -1296,7 +1296,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					assert.Empty(t, receiverWalletUpdated.StellarMemoType)
 				} else {
 					assert.Equal(t, tc.inputMemo, receiverWalletUpdated.StellarMemo)
-					assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
+					assert.Equal(t, schema.MemoTypeID, receiverWalletUpdated.StellarMemoType)
 				}
 			})
 		}
@@ -1440,7 +1440,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					rw.status,
 					rw.stellar_address,
 					COALESCE(rw.stellar_memo, '') as "stellar_memo",
-					COALESCE(rw.stellar_memo_type, '') as "stellar_memo_type",
+					COALESCE(rw.stellar_memo_type::text, '') as "stellar_memo_type",
 					otp_confirmed_at
 				FROM
 					receiver_wallets rw
