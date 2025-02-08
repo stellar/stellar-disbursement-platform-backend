@@ -65,9 +65,6 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		}
 
 		log.Ctx(ctx).Debugf("Found %d pending Circle transfer requests in tenant %q", len(circleRequests), tnt.Name)
-		if len(circleRequests) == 0 {
-			return nil
-		}
 
 		// Step 4: Reconcile the pending Circle transfer requests.
 		reconciliationCount = len(circleRequests)
@@ -77,6 +74,17 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 				err = fmt.Errorf("reconciling Circle transfer request: %w", err)
 				reconciliationErrors = append(reconciliationErrors, err)
 			}
+		}
+
+		// Step 5: Complete Disbursements If all payments reached a final state.
+		disbursementIDs, err := s.Models.Disbursements.CompleteIfNecessary(ctx, dbTx)
+		if err != nil {
+			return fmt.Errorf("completing disbursements: %w", err)
+		}
+		if len(disbursementIDs) > 0 {
+			log.Ctx(ctx).Infof("completed circle disbursements: %v", disbursementIDs)
+		} else {
+			log.Ctx(ctx).Debugf("no circle disbursements to complete")
 		}
 
 		return nil

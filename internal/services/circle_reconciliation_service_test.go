@@ -152,6 +152,169 @@ func Test_NewCircleReconciliationService_Reconcile_failure(t *testing.T) {
 	}
 }
 
+func Test_NewCircleReconciliationService_Reconcile_completeDisbursement(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
+
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	// Create distribution account
+	circleDistAccountDBVault := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
+
+	// Create mocks
+	mDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(circleDistAccountDBVault, nil).
+		Maybe()
+	mCircleService := circle.NewMockService(t)
+	svc := CircleReconciliationService{
+		Models:              models,
+		CircleService:       mCircleService,
+		DistAccountResolver: mDistAccountResolver,
+	}
+
+	t.Run("does not complete not started disbursement", func(t *testing.T) {
+		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:              "disbursement ready",
+			Status:            data.ReadyDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: data.VerificationTypeDateOfBirth,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         readyDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		err := svc.Reconcile(ctx)
+		assert.NoError(t, err)
+
+		readyDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, readyDisbursement.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.ReadyDisbursementStatus, readyDisbursement.Status)
+	})
+
+	t.Run("does not complete started disbursement if not all payments are not completed", func(t *testing.T) {
+		startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:              "disbursement started",
+			Status:            data.StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: data.VerificationTypeDateOfBirth,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         startedDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         startedDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		err := svc.Reconcile(ctx)
+		assert.NoError(t, err)
+
+		startedDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, startedDisbursement.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.StartedDisbursementStatus, startedDisbursement.Status)
+	})
+
+	t.Run("completes all started disbursements after payments are successful / canceled", func(t *testing.T) {
+		disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:              "disbursement 1",
+			Status:            data.StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: data.VerificationTypeDateOfBirth,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         disbursement1,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:              "disbursement 2",
+			Status:            data.StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: data.VerificationTypeDateOfBirth,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         disbursement2,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               data.CanceledPaymentStatus,
+			Disbursement:         disbursement2,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		err := svc.Reconcile(ctx)
+		assert.NoError(t, err)
+
+		disbursement1, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement1.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.CompletedDisbursementStatus, disbursement1.Status)
+
+		disbursement2, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement2.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.CompletedDisbursementStatus, disbursement2.Status)
+	})
+}
+
 func Test_NewCircleReconciliationService_Reconcile_partialSuccess(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

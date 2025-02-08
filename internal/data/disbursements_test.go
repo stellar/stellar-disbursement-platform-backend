@@ -772,3 +772,149 @@ func Test_DisbursementModel_Delete(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func Test_DisbursementModel_CompleteIfNecessary(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	t.Run("does not complete not started disbursement", func(t *testing.T) {
+		readyDisbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement ready",
+			Status:            ReadyDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         readyDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursementIDs, err := models.Disbursements.CompleteIfNecessary(ctx, dbConnectionPool)
+		assert.NoError(t, err)
+		assert.Empty(t, disbursementIDs)
+
+		readyDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, readyDisbursement.ID)
+		require.NoError(t, err)
+		assert.Equal(t, ReadyDisbursementStatus, readyDisbursement.Status)
+	})
+
+	t.Run("does not complete started disbursement if not all payments are not completed", func(t *testing.T) {
+		startedDisbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement started",
+			Status:            StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         startedDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               FailedPaymentStatus,
+			Disbursement:         startedDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursementIDs, err := models.Disbursements.CompleteIfNecessary(ctx, dbConnectionPool)
+		assert.NoError(t, err)
+		assert.Empty(t, disbursementIDs)
+
+		startedDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, startedDisbursement.ID)
+		require.NoError(t, err)
+		assert.Equal(t, StartedDisbursementStatus, startedDisbursement.Status)
+	})
+
+	t.Run("completes all started disbursements after payments are successful / canceled", func(t *testing.T) {
+		disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement 1",
+			Status:            StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement1,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement 2",
+			Status:            StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement2,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               CanceledPaymentStatus,
+			Disbursement:         disbursement2,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursementIDs, err := models.Disbursements.CompleteIfNecessary(ctx, dbConnectionPool)
+		assert.NoError(t, err)
+		assert.Len(t, disbursementIDs, 2)
+		assert.Equal(t, []string{disbursement1.ID, disbursement2.ID}, disbursementIDs)
+
+		disbursement1, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement1.ID)
+		require.NoError(t, err)
+		assert.Equal(t, CompletedDisbursementStatus, disbursement1.Status)
+
+		disbursement2, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement2.ID)
+		require.NoError(t, err)
+		assert.Equal(t, CompletedDisbursementStatus, disbursement2.Status)
+	})
+}
