@@ -305,7 +305,7 @@ func (c *CirclePaymentPayoutDispatcher) ensureRecipientIsReady(ctx context.Conte
 
 	if dataRecipient.Status == data.CircleRecipientStatusActive {
 		// SUCCESS
-		var memo *schema.Memo
+		var memo schema.Memo
 		memo, err = c.memoResolver.GetMemo(ctx, receiverWallet)
 		if err != nil {
 			return nil, fmt.Errorf("getting memo: %w", err)

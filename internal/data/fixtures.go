@@ -519,6 +519,12 @@ func DeleteAllPaymentsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQL
 	require.NoError(t, err)
 }
 
+func DeleteAllTransactionsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	const query = "DELETE FROM submitter_transactions"
+	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
 func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, model *DisbursementModel, d *Disbursement) *Disbursement {
 	if d == nil {
 		d = &Disbursement{}
