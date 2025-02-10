@@ -40,6 +40,8 @@ func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReady_success(t *testin
 	initialTime := time.Now().Add(-time.Hour)
 	recipientInsertTemplate := data.CircleRecipient{
 		ReceiverWalletID:  receiverWallet.ID,
+		StellarAddress:    receiverWallet.StellarAddress,
+		StellarMemo:       receiverWallet.StellarMemo,
 		CircleRecipientID: "circle-recipient-id",
 		IdempotencyKey:    "idepotency-key",
 		CreatedAt:         initialTime,
@@ -649,6 +651,8 @@ func Test_CirclePaymentPayoutDispatcher_DispatchPayments(t *testing.T) {
 			circleRecipient := data.CreateCircleRecipientFixture(t, ctx, dbConnectionPool, data.CircleRecipient{
 				ReceiverWalletID:  rwRegistered.ID,
 				Status:            data.CircleRecipientStatusActive,
+				StellarAddress:    rwRegistered.StellarAddress,
+				StellarMemo:       rwRegistered.StellarMemo,
 				CircleRecipientID: uuid.NewString(),
 			})
 			payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
