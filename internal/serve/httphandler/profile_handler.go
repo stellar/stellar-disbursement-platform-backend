@@ -56,6 +56,7 @@ type PatchOrganizationProfileRequest struct {
 	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
 	IsApprovalRequired                  *bool   `json:"is_approval_required"`
 	IsLinkShortenerEnabled              *bool   `json:"is_link_shortener_enabled"`
+	IsTenantMemoEnabled                 *bool   `json:"is_tenant_memo_enabled"`
 	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
 	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
 	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
@@ -177,6 +178,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
 		IsApprovalRequired:                   reqBody.IsApprovalRequired,
 		IsLinkShortenerEnabled:               reqBody.IsLinkShortenerEnabled,
+		IsTenantMemoEnabled:                  reqBody.IsTenantMemoEnabled,
 		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
 		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
 		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
@@ -369,14 +371,15 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	resp := map[string]interface{}{
-		"name":                            org.Name,
-		"logo_url":                        lu.String(),
-		"base_url":                        currentTenant.BaseURL,
-		"distribution_account":            distributionAccount,
-		"distribution_account_public_key": distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
-		"timezone_utc_offset":             org.TimezoneUTCOffset,
-		"is_approval_required":            org.IsApprovalRequired,
-		"is_link_shortener_enabled":       org.IsLinkShortenerEnabled,
+		"name":                                     org.Name,
+		"logo_url":                                 lu.String(),
+		"base_url":                                 currentTenant.BaseURL,
+		"distribution_account":                     distributionAccount,
+		"distribution_account_public_key":          distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
+		"timezone_utc_offset":                      org.TimezoneUTCOffset,
+		"is_approval_required":                     org.IsApprovalRequired,
+		"is_link_shortener_enabled":                org.IsLinkShortenerEnabled,
+		"is_tenant_memo_enabled":                   org.IsTenantMemoEnabled,
 		"receiver_invitation_resend_interval_days": 0,
 		"payment_cancellation_period_days":         0,
 		"privacy_policy_link":                      org.PrivacyPolicyLink,
