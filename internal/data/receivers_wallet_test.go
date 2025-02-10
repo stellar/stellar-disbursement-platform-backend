@@ -1728,8 +1728,8 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 			Status:                      RegisteredReceiversWalletStatus,
 			AnchorPlatformTransactionID: "test-tx-id",
 			StellarAddress:              "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-			StellarMemo:                 "123456",
-			StellarMemoType:             "id",
+			StellarMemo:                 utils.Ptr("123456"),
+			StellarMemoType:             utils.Ptr(schema.MemoTypeID),
 			OTPConfirmedAt:              now,
 			OTPConfirmedWith:            "test@stellar.org",
 		}

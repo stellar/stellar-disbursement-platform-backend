@@ -597,8 +597,8 @@ type ReceiverWalletUpdate struct {
 	Status                      ReceiversWalletStatus `db:"status"`
 	AnchorPlatformTransactionID string                `db:"anchor_platform_transaction_id"`
 	StellarAddress              string                `db:"stellar_address"`
-	StellarMemo                 string                `db:"stellar_memo"`
-	StellarMemoType             schema.MemoType       `db:"stellar_memo_type"`
+	StellarMemo                 *string               `db:"stellar_memo"`
+	StellarMemoType             *schema.MemoType      `db:"stellar_memo_type"`
 	OTPConfirmedAt              time.Time             `db:"otp_confirmed_at"`
 	OTPConfirmedWith            string                `db:"otp_confirmed_with"`
 }
@@ -653,13 +653,13 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 		fields = append(fields, "stellar_address = ?")
 		args = append(args, update.StellarAddress)
 	}
-	if update.StellarMemo != "" {
+	if update.StellarMemo != nil {
 		fields = append(fields, "stellar_memo = ?")
-		args = append(args, update.StellarMemo)
+		args = append(args, utils.SQLNullString(*update.StellarMemo))
 	}
-	if update.StellarMemoType != "" {
+	if update.StellarMemoType != nil {
 		fields = append(fields, "stellar_memo_type = ?")
-		args = append(args, update.StellarMemoType)
+		args = append(args, utils.SQLNullString(string(*update.StellarMemoType)))
 	}
 	if !time.Time.IsZero(update.OTPConfirmedAt) {
 		fields = append(fields, "otp_confirmed_at = ?")
