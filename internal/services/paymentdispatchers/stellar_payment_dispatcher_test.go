@@ -156,7 +156,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments(t *testing.T) {
 				},
 			},
 			{
-				name:              "success posting transfer to Stellar without ReceiverWallet memo",
+				name:              "success posting transfer to Stellar without ReceiverWallet nor Organization memo",
 				paymentToDispatch: paymentWithoutMemo,
 				fnSetup: func(t *testing.T, mDistAccountResolver *mocks.MockDistributionAccountResolver) {
 					err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: utils.Ptr(false)})
@@ -174,7 +174,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments(t *testing.T) {
 				},
 			},
 			{
-				name:              "success posting transfer to Stellar with tenant memo enabled",
+				name:              "success posting transfer to Stellar with Organization memo enabled",
 				paymentToDispatch: paymentWithoutMemo,
 				fnSetup: func(t *testing.T, mDistAccountResolver *mocks.MockDistributionAccountResolver) {
 					err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: utils.Ptr(true)})
