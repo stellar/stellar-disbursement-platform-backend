@@ -8,6 +8,11 @@ import (
 	"github.com/stellar/go/txnbuild"
 )
 
+type Memo struct {
+	Value string
+	Type  MemoType
+}
+
 type MemoType string
 
 const (
