@@ -235,8 +235,8 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	err = v.Models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{
 		Status:           rw.Status,
 		StellarAddress:   rw.StellarAddress,
-		StellarMemo:      rw.StellarMemo,
-		StellarMemoType:  rw.StellarMemoType,
+		StellarMemo:      &rw.StellarMemo,
+		StellarMemoType:  &rw.StellarMemoType,
 		OTPConfirmedAt:   now,
 		OTPConfirmedWith: rw.OTPConfirmedWith,
 	}, dbTx)

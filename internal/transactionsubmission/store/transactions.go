@@ -212,8 +212,8 @@ func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []
 	q := `
 		SELECT
 			` + TransactionColumns + `
-		FROM 
-			submitter_transactions t 
+		FROM
+			submitter_transactions t
 		WHERE
 			t.external_id = ANY($1)
 		`
