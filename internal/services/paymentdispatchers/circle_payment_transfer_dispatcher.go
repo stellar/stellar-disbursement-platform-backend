@@ -20,6 +20,7 @@ type CirclePaymentTransferDispatcher struct {
 	sdpModels           *data.Models
 	circleService       circle.ServiceInterface
 	distAccountResolver signing.DistributionAccountResolver
+	memoResolver        MemoResolverInterface
 }
 
 func NewCirclePaymentTransferDispatcher(sdpModels *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) *CirclePaymentTransferDispatcher {
@@ -27,6 +28,7 @@ func NewCirclePaymentTransferDispatcher(sdpModels *data.Models, circleService ci
 		sdpModels:           sdpModels,
 		circleService:       circleService,
 		distAccountResolver: distAccountResolver,
+		memoResolver:        &MemoResolver{Organizations: sdpModels.Organizations},
 	}
 }
 
@@ -62,14 +64,17 @@ func (c *CirclePaymentTransferDispatcher) sendPaymentsToCircle(ctx context.Conte
 			return fmt.Errorf("inserting circle transfer request: %w", err)
 		}
 
-		stellarMemo, _ := GetMemoAndType(*payment.ReceiverWallet)
+		memo, err := c.memoResolver.GetMemo(ctx, *payment.ReceiverWallet)
+		if err != nil {
+			return fmt.Errorf("getting memo: %w", err)
+		}
 
 		// 2. Submit the payment to Circle
 		transfer, err := c.circleService.SendTransfer(ctx, circle.PaymentRequest{
 			APIType:                   circle.APITypeTransfers,
 			SourceWalletID:            circleWalletID,
 			DestinationStellarAddress: payment.ReceiverWallet.StellarAddress,
-			DestinationStellarMemo:    stellarMemo,
+			DestinationStellarMemo:    memo.Value,
 			Amount:                    payment.Amount,
 			StellarAssetCode:          payment.Asset.Code,
 			IdempotencyKey:            transferRequest.IdempotencyKey,

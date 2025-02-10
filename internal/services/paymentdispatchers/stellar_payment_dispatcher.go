@@ -18,6 +18,7 @@ type StellarPaymentDispatcher struct {
 	sdpModels           *data.Models
 	tssModel            *txSubStore.TransactionModel
 	distAccountResolver signing.DistributionAccountResolver
+	memoResolver        MemoResolverInterface
 }
 
 func NewStellarPaymentDispatcher(sdpModels *data.Models, tssModel *txSubStore.TransactionModel, distAccountResolver signing.DistributionAccountResolver) *StellarPaymentDispatcher {
@@ -25,6 +26,7 @@ func NewStellarPaymentDispatcher(sdpModels *data.Models, tssModel *txSubStore.Tr
 		sdpModels:           sdpModels,
 		tssModel:            tssModel,
 		distAccountResolver: distAccountResolver,
+		memoResolver:        &MemoResolver{Organizations: sdpModels.Organizations},
 	}
 }
 
@@ -62,7 +64,10 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
 		}
 
-		stellarMemo, stellarMemoType := GetMemoAndType(*payment.ReceiverWallet)
+		memo, err := s.memoResolver.GetMemo(ctx, *payment.ReceiverWallet)
+		if err != nil {
+			return fmt.Errorf("getting memo: %w", err)
+		}
 
 		transaction := txSubStore.Transaction{
 			ExternalID:  payment.ID,
@@ -70,8 +75,8 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			AssetIssuer: payment.Asset.Issuer,
 			Amount:      amount,
 			Destination: payment.ReceiverWallet.StellarAddress,
-			Memo:        stellarMemo,
-			MemoType:    stellarMemoType,
+			Memo:        memo.Value,
+			MemoType:    memo.Type,
 			TenantID:    tenantID,
 		}
 		transactions = append(transactions, transaction)
