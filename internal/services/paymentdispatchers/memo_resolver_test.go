@@ -32,7 +32,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 		getCtxFn        func(t *testing.T) context.Context
 		receiverWallet  data.ReceiverWallet
 		orgMemoEnabled  bool
-		expectedMemo    *schema.Memo
+		expectedMemo    schema.Memo
 		wantErrContains string
 	}{
 		{
@@ -41,7 +41,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 				return context.Background()
 			},
 			receiverWallet: data.ReceiverWallet{StellarMemo: "1234567890"},
-			expectedMemo: &schema.Memo{
+			expectedMemo: schema.Memo{
 				Value: "1234567890",
 				Type:  schema.MemoTypeID,
 			},
@@ -54,7 +54,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			},
 			receiverWallet:  data.ReceiverWallet{},
 			orgMemoEnabled:  false,
-			expectedMemo:    nil,
+			expectedMemo:    schema.Memo{},
 			wantErrContains: "",
 		},
 		{
@@ -64,7 +64,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			},
 			receiverWallet:  data.ReceiverWallet{},
 			orgMemoEnabled:  true,
-			expectedMemo:    nil,
+			expectedMemo:    schema.Memo{},
 			wantErrContains: "getting tenant: tenant not found in context",
 		},
 		{
@@ -75,7 +75,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			},
 			receiverWallet: data.ReceiverWallet{},
 			orgMemoEnabled: true,
-			expectedMemo: &schema.Memo{
+			expectedMemo: schema.Memo{
 				Value: "sdp-100680ad546c",
 				Type:  schema.MemoTypeText,
 			},
@@ -97,7 +97,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 
 			if tc.wantErrContains != "" {
 				assert.ErrorContains(t, err, tc.wantErrContains)
-				assert.Nil(t, memo)
+				assert.Empty(t, memo)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedMemo, memo)
@@ -139,7 +139,7 @@ func Test_generateHashFromBaseURL(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.baseURL, func(t *testing.T) {
-			hash := generateHashFromBaseURL(tc.baseURL)
+			hash := GenerateHashFromBaseURL(tc.baseURL)
 			assert.Equal(t, tc.expectedHash, hash)
 		})
 	}
