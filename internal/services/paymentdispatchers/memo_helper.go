@@ -10,5 +10,6 @@ func GetMemoAndType(receiverWallet data.ReceiverWallet) (string, schema.MemoType
 		return receiverWallet.StellarMemo, schema.MemoTypeID
 	}
 
-	return "foo-bar", schema.MemoTypeText
+	return "", ""
+	// return "foo-bar", schema.MemoTypeText
 }

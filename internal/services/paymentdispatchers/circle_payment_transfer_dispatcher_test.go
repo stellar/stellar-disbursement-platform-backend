@@ -79,6 +79,7 @@ func Test_CirclePaymentTransferDispatcher_DispatchPayments(t *testing.T) {
 					APIType:                   circle.APITypeTransfers,
 					SourceWalletID:            circleWalletID,
 					DestinationStellarAddress: payment1.ReceiverWallet.StellarAddress,
+					DestinationStellarMemo:    payment1.ReceiverWallet.StellarMemo,
 					Amount:                    payment1.Amount,
 					StellarAssetCode:          payment1.Asset.Code,
 					IdempotencyKey:            transferRequest.IdempotencyKey,

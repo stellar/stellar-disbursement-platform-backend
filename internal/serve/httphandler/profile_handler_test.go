@@ -497,7 +497,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"TimezoneUTCOffset":                    "-03:00",
 				"PrivacyPolicyLink":                    "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsTenantMemoEnabled='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
