@@ -13,15 +13,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func GetMemoAndType(receiverWallet data.ReceiverWallet) (string, schema.MemoType) {
-	if receiverWallet.StellarMemo != "" {
-		return receiverWallet.StellarMemo, schema.MemoTypeID
-	}
-
-	return "", ""
-	// return "foo-bar", schema.MemoTypeText
-}
-
 //go:generate mockery --name=MemoResolverInterface --case=underscore --structname=MockMemoResolver --filename=memo_resolver_mock.go --inpackage
 type MemoResolverInterface interface {
 	GetMemo(ctx context.Context, receiverWallet data.ReceiverWallet) (*schema.Memo, error)

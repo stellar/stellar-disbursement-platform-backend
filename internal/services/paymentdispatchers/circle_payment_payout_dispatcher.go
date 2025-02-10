@@ -34,6 +34,7 @@ type CirclePaymentPayoutDispatcher struct {
 	sdpModels           *data.Models
 	circleService       circle.ServiceInterface
 	distAccountResolver signing.DistributionAccountResolver
+	memoResolver        MemoResolverInterface
 }
 
 func NewCirclePaymentPayoutDispatcher(sdpModels *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) *CirclePaymentPayoutDispatcher {
@@ -41,6 +42,7 @@ func NewCirclePaymentPayoutDispatcher(sdpModels *data.Models, circleService circ
 		sdpModels:           sdpModels,
 		circleService:       circleService,
 		distAccountResolver: distAccountResolver,
+		memoResolver:        &MemoResolver{Organizations: sdpModels.Organizations},
 	}
 }
 
@@ -237,12 +239,15 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 		nickname = receiverWallet.Receiver.PhoneNumber
 	}
 
-	stellarMemo, _ := GetMemoAndType(receiverWallet)
+	memo, err := c.memoResolver.GetMemo(ctx, receiverWallet)
+	if err != nil {
+		return nil, fmt.Errorf("getting memo: %w", err)
+	}
 
 	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
 		IdempotencyKey: dataRecipient.IdempotencyKey,
 		Address:        receiverWallet.StellarAddress,
-		AddressTag:     stellarMemo,
+		AddressTag:     memo.Value,
 		Chain:          circle.StellarChainCode,
 		Metadata: circle.RecipientMetadata{
 			Nickname: nickname,
@@ -277,7 +282,7 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 		IdempotencyKey:    dataRecipient.IdempotencyKey,
 		CircleRecipientID: recipient.ID,
 		StellarAddress:    receiverWallet.StellarAddress,
-		StellarMemo:       stellarMemo,
+		StellarMemo:       memo.Value,
 		Status:            dataRecipientStatus,
 		ResponseBody:      recipientJson,
 		SyncAttempts:      dataRecipient.SyncAttempts + 1,
@@ -300,8 +305,13 @@ func (c *CirclePaymentPayoutDispatcher) ensureRecipientIsReady(ctx context.Conte
 
 	if dataRecipient.Status == data.CircleRecipientStatusActive {
 		// SUCCESS
-		stellarMemo, _ := GetMemoAndType(receiverWallet)
-		if stellarMemo == dataRecipient.StellarMemo && receiverWallet.StellarAddress == dataRecipient.StellarAddress {
+		var memo *schema.Memo
+		memo, err = c.memoResolver.GetMemo(ctx, receiverWallet)
+		if err != nil {
+			return nil, fmt.Errorf("getting memo: %w", err)
+		}
+
+		if memo.Value == dataRecipient.StellarMemo && receiverWallet.StellarAddress == dataRecipient.StellarAddress {
 			return dataRecipient, nil
 		}
 
