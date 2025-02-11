@@ -90,7 +90,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			memoResolver := MemoResolver{Organizations: models.Organizations}
 
 			ctx := tc.getCtxFn(t)
-			err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: &tc.orgMemoEnabled})
+			err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsMemoTracingEnabled: &tc.orgMemoEnabled})
 			require.NoError(t, err)
 
 			memo, err := memoResolver.GetMemo(ctx, tc.receiverWallet)

@@ -204,31 +204,31 @@ func Test_CirclePaymentTransferDispatcher_DispatchPayments_success(t *testing.T)
 	})
 
 	testCases := []struct {
-		name                string
-		IsTenantMemoEnabled bool
-		paymentToDispatch   *data.Payment
-		fnAssertMemo        func(t *testing.T, p data.Payment, pReq circle.PaymentRequest)
+		name                 string
+		IsMemoTracingEnabled bool
+		paymentToDispatch    *data.Payment
+		fnAssertMemo         func(t *testing.T, p data.Payment, pReq circle.PaymentRequest)
 	}{
 		{
-			name:                "posting a Circle Transfer with ReceiverWallet memo",
-			IsTenantMemoEnabled: false,
-			paymentToDispatch:   paymentWithMemo,
+			name:                 "posting a Circle Transfer with ReceiverWallet memo",
+			IsMemoTracingEnabled: false,
+			paymentToDispatch:    paymentWithMemo,
 			fnAssertMemo: func(t *testing.T, p data.Payment, pReq circle.PaymentRequest) {
 				assert.Equal(t, p.ReceiverWallet.StellarMemo, pReq.DestinationStellarMemo)
 			},
 		},
 		{
-			name:                "posting a Circle Transfer without ReceiverWallet nor Organization memo",
-			IsTenantMemoEnabled: false,
-			paymentToDispatch:   paymentWithoutMemo,
+			name:                 "posting a Circle Transfer without ReceiverWallet nor Organization memo",
+			IsMemoTracingEnabled: false,
+			paymentToDispatch:    paymentWithoutMemo,
 			fnAssertMemo: func(t *testing.T, p data.Payment, pReq circle.PaymentRequest) {
 				assert.Empty(t, pReq.DestinationStellarMemo)
 			},
 		},
 		{
-			name:                "posting a Circle Transfer with Organization memo enabled",
-			IsTenantMemoEnabled: true,
-			paymentToDispatch:   paymentWithoutMemo,
+			name:                 "posting a Circle Transfer with Organization memo enabled",
+			IsMemoTracingEnabled: true,
+			paymentToDispatch:    paymentWithoutMemo,
 			fnAssertMemo: func(t *testing.T, p data.Payment, pReq circle.PaymentRequest) {
 				assert.Equal(t, GenerateHashFromBaseURL(*tnt.BaseURL), pReq.DestinationStellarMemo)
 			},
@@ -237,7 +237,7 @@ func Test_CirclePaymentTransferDispatcher_DispatchPayments_success(t *testing.T)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: utils.Ptr(tc.IsTenantMemoEnabled)})
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsMemoTracingEnabled: utils.Ptr(tc.IsMemoTracingEnabled)})
 			require.NoError(t, err)
 
 			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)

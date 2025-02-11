@@ -56,7 +56,7 @@ type PatchOrganizationProfileRequest struct {
 	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
 	IsApprovalRequired                  *bool   `json:"is_approval_required"`
 	IsLinkShortenerEnabled              *bool   `json:"is_link_shortener_enabled"`
-	IsTenantMemoEnabled                 *bool   `json:"is_tenant_memo_enabled"`
+	IsMemoTracingEnabled                *bool   `json:"is_memo_tracing_enabled"`
 	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
 	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
 	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
@@ -178,7 +178,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
 		IsApprovalRequired:                   reqBody.IsApprovalRequired,
 		IsLinkShortenerEnabled:               reqBody.IsLinkShortenerEnabled,
-		IsTenantMemoEnabled:                  reqBody.IsTenantMemoEnabled,
+		IsMemoTracingEnabled:                 reqBody.IsMemoTracingEnabled,
 		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
 		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
 		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
@@ -379,7 +379,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"timezone_utc_offset":                      org.TimezoneUTCOffset,
 		"is_approval_required":                     org.IsApprovalRequired,
 		"is_link_shortener_enabled":                org.IsLinkShortenerEnabled,
-		"is_tenant_memo_enabled":                   org.IsTenantMemoEnabled,
+		"is_memo_tracing_enabled":                  org.IsMemoTracingEnabled,
 		"receiver_invitation_resend_interval_days": 0,
 		"payment_cancellation_period_days":         0,
 		"privacy_policy_link":                      org.PrivacyPolicyLink,

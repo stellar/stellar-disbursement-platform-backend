@@ -165,7 +165,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 			name:              "posting transfer to Stellar with ReceiverWallet memo",
 			paymentToDispatch: paymentWithMemo,
 			fnSetup: func(t *testing.T, mDistAccountResolver *mocks.MockDistributionAccountResolver) {
-				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: utils.Ptr(false)})
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsMemoTracingEnabled: utils.Ptr(false)})
 				require.NoError(t, err)
 			},
 			fnAssertMemo: func(t *testing.T, p *data.Payment, tx *txSubStore.Transaction) {
@@ -179,7 +179,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 			name:              "posting transfer to Stellar without ReceiverWallet nor Organization memo",
 			paymentToDispatch: paymentWithoutMemo,
 			fnSetup: func(t *testing.T, mDistAccountResolver *mocks.MockDistributionAccountResolver) {
-				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: utils.Ptr(false)})
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsMemoTracingEnabled: utils.Ptr(false)})
 				require.NoError(t, err)
 			},
 			fnAssertMemo: func(t *testing.T, p *data.Payment, tx *txSubStore.Transaction) {
@@ -193,7 +193,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 			name:              "posting transfer to Stellar with Organization memo enabled",
 			paymentToDispatch: paymentWithoutMemo,
 			fnSetup: func(t *testing.T, mDistAccountResolver *mocks.MockDistributionAccountResolver) {
-				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: utils.Ptr(true)})
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{IsMemoTracingEnabled: utils.Ptr(true)})
 				require.NoError(t, err)
 			},
 			fnAssertMemo: func(t *testing.T, p *data.Payment, tx *txSubStore.Transaction) {

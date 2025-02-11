@@ -34,7 +34,7 @@ func (m *MemoResolver) GetMemo(ctx context.Context, receiverWallet data.Receiver
 		return schema.Memo{}, fmt.Errorf("getting organization: %w", err)
 	}
 
-	if !org.IsTenantMemoEnabled {
+	if !org.IsMemoTracingEnabled {
 		return schema.Memo{}, nil
 	}
 
