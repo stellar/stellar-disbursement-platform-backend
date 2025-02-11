@@ -26,13 +26,13 @@ ALTER TABLE circle_recipients
     ADD COLUMN stellar_memo TEXT;
 
 ALTER TABLE organizations
-    ADD COLUMN is_tenant_memo_enabled BOOLEAN DEFAULT TRUE;
+    ADD COLUMN is_memo_tracing_enabled BOOLEAN DEFAULT TRUE;
 
 
 -- +migrate Down
 
 ALTER TABLE organizations
-    DROP COLUMN is_tenant_memo_enabled;
+    DROP COLUMN is_memo_tracing_enabled;
 
 ALTER TABLE circle_recipients
     DROP COLUMN stellar_address,

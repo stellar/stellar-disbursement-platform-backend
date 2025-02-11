@@ -229,10 +229,10 @@ func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReady_success_assertMem
 
 	// Successful test cases
 	testCases := []struct {
-		name                string
-		isTenantMemoEnabled bool
-		receiverWallet      *data.ReceiverWallet
-		assertMemo          func(t *testing.T, rw *data.ReceiverWallet, recipientRequest circle.RecipientRequest)
+		name                 string
+		isMemoTracingEnabled bool
+		receiverWallet       *data.ReceiverWallet
+		assertMemo           func(t *testing.T, rw *data.ReceiverWallet, recipientRequest circle.RecipientRequest)
 	}{
 		{
 			name:           "recipient created with ReceiverWallet memo",
@@ -243,17 +243,17 @@ func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReady_success_assertMem
 			},
 		},
 		{
-			name:                "recipient created with no memo",
-			isTenantMemoEnabled: false,
-			receiverWallet:      rwWithoutMemo,
+			name:                 "recipient created with no memo",
+			isMemoTracingEnabled: false,
+			receiverWallet:       rwWithoutMemo,
 			assertMemo: func(t *testing.T, rw *data.ReceiverWallet, recipientRequest circle.RecipientRequest) {
 				assert.Empty(t, recipientRequest.AddressTag)
 			},
 		},
 		{
-			name:                "recipient created with Organization memo",
-			isTenantMemoEnabled: true,
-			receiverWallet:      rwWithoutMemo,
+			name:                 "recipient created with Organization memo",
+			isMemoTracingEnabled: true,
+			receiverWallet:       rwWithoutMemo,
 			assertMemo: func(t *testing.T, rw *data.ReceiverWallet, recipientRequest circle.RecipientRequest) {
 				assert.Equal(t, GenerateHashFromBaseURL(*tnt.BaseURL), recipientRequest.AddressTag)
 				assert.NotEmpty(t, recipientRequest.AddressTag)
@@ -263,7 +263,7 @@ func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReady_success_assertMem
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsTenantMemoEnabled: utils.Ptr(tc.isTenantMemoEnabled)})
+			err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsMemoTracingEnabled: utils.Ptr(tc.isMemoTracingEnabled)})
 			require.NoError(t, err)
 			rw := tc.receiverWallet
 

@@ -49,7 +49,7 @@ type Organization struct {
 	Logo                   []byte                 `db:"logo"`
 	IsApprovalRequired     bool                   `json:"is_approval_required" db:"is_approval_required"`
 	IsLinkShortenerEnabled bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
-	IsTenantMemoEnabled    bool                   `json:"is_tenant_memo_enabled" db:"is_tenant_memo_enabled"`
+	IsMemoTracingEnabled   bool                   `json:"is_memo_tracing_enabled" db:"is_memo_tracing_enabled"`
 	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
 	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
@@ -61,7 +61,7 @@ type OrganizationUpdate struct {
 	TimezoneUTCOffset                    string `json:",omitempty"`
 	IsApprovalRequired                   *bool  `json:",omitempty"`
 	IsLinkShortenerEnabled               *bool  `json:",omitempty"`
-	IsTenantMemoEnabled                  *bool  `json:",omitempty"`
+	IsMemoTracingEnabled                 *bool  `json:",omitempty"`
 	ReceiverInvitationResendIntervalDays *int64 `json:",omitempty"`
 	PaymentCancellationPeriodDays        *int64 `json:",omitempty"`
 
@@ -136,7 +136,7 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.ReceiverInvitationResendIntervalDays == nil &&
 		ou.PaymentCancellationPeriodDays == nil &&
 		ou.PrivacyPolicyLink == nil &&
-		ou.IsTenantMemoEnabled == nil
+		ou.IsMemoTracingEnabled == nil
 }
 
 type OrganizationModel struct {
@@ -208,9 +208,9 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		args = append(args, *ou.IsLinkShortenerEnabled)
 	}
 
-	if ou.IsTenantMemoEnabled != nil {
-		fields = append(fields, "is_tenant_memo_enabled = ?")
-		args = append(args, *ou.IsTenantMemoEnabled)
+	if ou.IsMemoTracingEnabled != nil {
+		fields = append(fields, "is_memo_tracing_enabled = ?")
+		args = append(args, *ou.IsMemoTracingEnabled)
 	}
 
 	if ou.ReceiverRegistrationMessageTemplate != nil {
