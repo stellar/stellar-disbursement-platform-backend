@@ -26,7 +26,7 @@ ALTER TABLE circle_recipients
     ADD COLUMN stellar_memo TEXT;
 
 ALTER TABLE organizations
-    ADD COLUMN is_tenant_memo_enabled BOOLEAN DEFAULT FALSE;
+    ADD COLUMN is_tenant_memo_enabled BOOLEAN DEFAULT TRUE;
 
 
 -- +migrate Down
