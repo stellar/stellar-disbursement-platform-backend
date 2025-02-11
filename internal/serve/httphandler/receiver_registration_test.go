@@ -17,7 +17,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
@@ -115,7 +114,6 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
 	err = receiverWalletModel.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
 		StellarAddress: "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-		StellarMemo:    utils.Ptr(""),
 	}, dbConnectionPool)
 	require.NoError(t, err)
 

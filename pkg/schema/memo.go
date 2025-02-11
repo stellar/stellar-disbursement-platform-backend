@@ -22,6 +22,7 @@ const (
 	MemoTypeReturn MemoType = "return"
 )
 
+// NewMemo creates a new Memo from a MemoType and a string value.
 func NewMemo(memoType MemoType, memoValue string) (txnbuild.Memo, error) {
 	switch memoType {
 	case "":
@@ -69,7 +70,7 @@ func NewMemo(memoType MemoType, memoValue string) (txnbuild.Memo, error) {
 	}
 }
 
-// Utility function to convert a hex string to a byte slice
+// hexStringToBytes is a utility function to convert a hex string to a byte slice.
 func hexStringToBytes(hexStr string) ([]byte, error) {
 	bytes, err := hex.DecodeString(hexStr)
 	if err != nil {

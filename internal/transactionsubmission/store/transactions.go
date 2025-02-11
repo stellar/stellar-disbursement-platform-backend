@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
@@ -109,32 +110,49 @@ func NewTransactionModel(dbConnectionPool db.DBConnectionPool) *TransactionModel
 	return &TransactionModel{DBConnectionPool: dbConnectionPool}
 }
 
-const TransactionColumns = `
-    id,
-    external_id,
-    tenant_id,
-    distribution_account,
-    asset_code,
-    asset_issuer,
-    amount,
-    destination,
-    COALESCE(memo, '') AS memo,
-    COALESCE(memo_type::text, '') AS memo_type,
-    status,
-    status_message,
-    status_history,
-    attempts_count,
-    stellar_transaction_hash,
-    xdr_sent,
-    xdr_received,
-    created_at,
-    updated_at,
-    started_at,
-    sent_at,
-    completed_at,
-    synced_at,
-    locked_at,
-    locked_until_ledger_number`
+func TransactionColumnNames(tableReference, resultAlias string) string {
+	columns := data.GenerateColumnNames(data.SQLColumnConfig{
+		TableReference: tableReference,
+		ResultAlias:    resultAlias,
+		Columns: []string{
+			"id",
+			"external_id",
+			"tenant_id",
+			"distribution_account",
+			"asset_code",
+			"asset_issuer",
+			"amount",
+			"destination",
+			"status",
+			"status_message",
+			"status_history",
+			"attempts_count",
+			"stellar_transaction_hash",
+			"xdr_sent",
+			"xdr_received",
+			"created_at",
+			"updated_at",
+			"started_at",
+			"sent_at",
+			"completed_at",
+			"synced_at",
+			"locked_at",
+			"locked_until_ledger_number",
+		},
+	})
+
+	columns = append(columns, data.GenerateColumnNames(data.SQLColumnConfig{
+		TableReference:        tableReference,
+		CoalesceToEmptyString: true,
+		ResultAlias:           resultAlias,
+		Columns: []string{
+			"memo",
+			"memo_type::text",
+		},
+	})...)
+
+	return strings.Join(columns, ",\n")
+}
 
 // Insert adds a new Transaction to the database.
 func (t *TransactionModel) Insert(ctx context.Context, tx Transaction) (*Transaction, error) {
@@ -176,7 +194,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 
 	var insertedTransctions []Transaction
 	queryBuilder.WriteString(strings.Join(valueStrings, ", "))
-	queryBuilder.WriteString(" RETURNING " + TransactionColumns)
+	queryBuilder.WriteString(" RETURNING " + TransactionColumnNames("", ""))
 	query := sqlExec.Rebind(queryBuilder.String())
 	err := sqlExec.SelectContext(ctx, &insertedTransctions, query, valueArgs...)
 	if err != nil {
@@ -191,7 +209,7 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 	var transaction Transaction
 	q := `
 		SELECT
-			` + TransactionColumns + `
+			` + TransactionColumnNames("", "") + `
 		FROM 
 			submitter_transactions t 
 		WHERE
@@ -211,7 +229,7 @@ func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []
 	var transactions []*Transaction
 	q := `
 		SELECT
-			` + TransactionColumns + `
+			` + TransactionColumnNames("", "") + `
 		FROM
 			submitter_transactions t
 		WHERE
@@ -243,7 +261,7 @@ func (t *TransactionModel) UpdateStatusToSuccess(ctx context.Context, tx Transac
 			WHERE
 				id = $2
 			RETURNING
-				` + TransactionColumns
+				` + TransactionColumnNames("", "")
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusSuccess, tx.ID)
 	if err != nil {
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusSuccess: %w", err)
@@ -272,7 +290,7 @@ func (t *TransactionModel) UpdateStatusToError(ctx context.Context, tx Transacti
 			WHERE
 				id = $3
 			RETURNING
-				` + TransactionColumns
+				` + TransactionColumnNames("", "")
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusError, message, tx.ID)
 	if err != nil {
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusError: %w", err)
@@ -304,7 +322,7 @@ func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Co
 		WHERE 
 			id = $3
 		RETURNING
-			` + TransactionColumns
+			` + TransactionColumnNames("", "")
 	var tx Transaction
 	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, txID)
 	if err != nil {
@@ -334,7 +352,7 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 		WHERE 
 			id = $2
 		RETURNING
-			` + TransactionColumns
+			` + TransactionColumnNames("", "")
 	var updatedTx Transaction
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, xdrReceived, txID)
 	if err != nil {
@@ -360,7 +378,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 
 	query := `
 		SELECT 
-		    ` + TransactionColumns + `
+		    ` + TransactionColumnNames("", "") + `
 		FROM 
 		    submitter_transactions
 		WHERE 
@@ -385,7 +403,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
 	query := `
 		SELECT 
-			` + TransactionColumns + `
+			` + TransactionColumnNames("", "") + `
 		FROM 
 			submitter_transactions
 		WHERE
@@ -467,7 +485,7 @@ func (ca *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, tr
 			AND synced_at IS NULL
 			AND status = ANY($4)
 		RETURNING
-			`+TransactionColumns,
+			`+TransactionColumnNames("", ""),
 		ca.queryFilterForLockedState(false, currentLedger),
 	)
 	var transaction Transaction
@@ -494,7 +512,7 @@ func (ca *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, 
 		WHERE
 			id = $1
 		RETURNING
-			` + TransactionColumns
+			` + TransactionColumnNames("", "")
 	var transaction Transaction
 	err := sqlExec.GetContext(ctx, &transaction, q, publicKey)
 	if err != nil {
@@ -523,7 +541,7 @@ func (ca *TransactionModel) PrepareTransactionForReprocessing(ctx context.Contex
 			AND synced_at IS NULL
 			AND status = ANY($2)
 		RETURNING
-			` + TransactionColumns
+			` + TransactionColumnNames("", "")
 	var transaction Transaction
 	allowedTxStatuses := []TransactionStatus{TransactionStatusPending, TransactionStatusProcessing}
 	err := sqlExec.GetContext(ctx, &transaction, q, transactionID, pq.Array(allowedTxStatuses))
