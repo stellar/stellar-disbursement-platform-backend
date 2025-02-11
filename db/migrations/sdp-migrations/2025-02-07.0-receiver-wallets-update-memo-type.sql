@@ -1,4 +1,4 @@
--- This migration updates the stellar_memo_type column to use the memo_type enum (new type).
+-- This migration updates the receiver_wallets, circle_recipients and organizations tables to support the memo use cases.
 -- +migrate Up
 
 -- +migrate StatementBegin

@@ -67,13 +67,13 @@ func CreateTransactionFixtureNew(
 		completedAt = pq.NullTime{Time: randomCompletedAt, Valid: true}
 	}
 
-	const query = `
+	query := `
 		INSERT INTO submitter_transactions
 			(external_id, status, asset_code, asset_issuer, amount, destination, tenant_id, completed_at, started_at)
 		VALUES
 			($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 		RETURNING
-			` + TransactionColumns
+			` + TransactionColumnNames("", "")
 
 	tx := Transaction{}
 	err := sqlExec.GetContext(ctx, &tx, query,

@@ -230,7 +230,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update transactions states PENDING->PROCESSING:
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'dummy_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumns
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'dummy_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, tx, q, txSubStore.TransactionStatusProcessing, tx.ID)
 		require.NoError(t, err)
 
@@ -434,7 +434,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update transactions states PENDING->PROCESSING:
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'dummy_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumns
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'dummy_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, tx, q, txSubStore.TransactionStatusProcessing, tx.ID)
 		require.NoError(t, err)
 
@@ -556,23 +556,16 @@ func updateTSSTransactionsToError(t *testing.T, testCtx *testContext, txDataSlic
 
 	updatedTransactions := []txSubStore.Transaction{}
 	// First update and get IDs
-	updateQuery := `
-		UPDATE submitter_transactions
-		SET status = $1, status_message = u.status_message, completed_at = NOW()
+	q := `
+		UPDATE submitter_transactions t
+		SET
+			status = $1,
+			status_message = u.status_message,
+			completed_at = NOW()
 		FROM (SELECT UNNEST($2::text[]) as id, UNNEST($3::text[]) as status_message) as u
-		WHERE submitter_transactions.id = u.id
-		RETURNING submitter_transactions.id`
-
-	var updatedIDs []string
-	err := testCtx.sdpModel.DBConnectionPool.SelectContext(testCtx.ctx, &updatedIDs, updateQuery, txSubStore.TransactionStatusError, pq.Array(transactionIDs), pq.Array(statusMessages))
-	require.NoError(t, err)
-
-	// Then select using TransactionColumns
-	selectQuery := `
-		SELECT ` + txSubStore.TransactionColumns + `
-		FROM submitter_transactions
-		WHERE id = ANY($1)`
-	err = testCtx.sdpModel.DBConnectionPool.SelectContext(testCtx.ctx, &updatedTransactions, selectQuery, pq.Array(updatedIDs))
+		WHERE t.id = u.id
+		RETURNING ` + txSubStore.TransactionColumnNames("t", "")
+	err := testCtx.sdpModel.DBConnectionPool.SelectContext(testCtx.ctx, &updatedTransactions, q, txSubStore.TransactionStatusError, pq.Array(transactionIDs), pq.Array(statusMessages))
 	require.NoError(t, err)
 
 	return updatedTransactions

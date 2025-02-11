@@ -1599,7 +1599,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 
 			// Update status for txJob.Transaction
 			var updatedTx store.Transaction
-			q := `UPDATE submitter_transactions SET status = $1 WHERE id = $2 RETURNING ` + store.TransactionColumns
+			q := `UPDATE submitter_transactions SET status = $1 WHERE id = $2 RETURNING ` + store.TransactionColumnNames("", "")
 			err = dbConnectionPool.GetContext(ctx, &updatedTx, q, tc.initialTransactionStatus, txJob.Transaction.ID)
 			require.NoError(t, err)
 			txJob.Transaction = updatedTx
