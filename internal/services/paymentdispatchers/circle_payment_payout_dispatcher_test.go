@@ -603,7 +603,7 @@ func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReadyWithRetry(t *testi
 						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
 					}).
 					Return(nil, errors.New("got 400 from vendor's API")).
-					Times(5)
+					Times(maxCircleRecipientCreationAttempts)
 			},
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient data.CircleRecipient) {
 				assert.Equal(t, initialRecipient.SyncAttempts+maxCircleRecipientCreationAttempts, finalRecipient.SyncAttempts)
@@ -649,7 +649,7 @@ func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReadyWithRetry(t *testi
 						assert.Equal(t, receiverWallet.Receiver.Email, recipientRequest.Metadata.Email)
 					}).
 					Return(&circle.Recipient{ID: "recipient-id", Status: string(nonSuccessfulState)}, nil).
-					Times(5)
+					Times(maxCircleRecipientCreationAttempts)
 			},
 			assertRecipients: func(t *testing.T, initialRecipient, finalRecipient data.CircleRecipient) {
 				assert.Equal(t, nonSuccessfulState, finalRecipient.Status)

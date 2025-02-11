@@ -147,7 +147,9 @@ func (m CircleRecipientModel) ResetRecipientsForRetryIfNeeded(ctx context.Contex
 			status = NULL,
 			sync_attempts = 0,
 			last_sync_attempt_at = NULL,
-			response_body = NULL
+			response_body = NULL,
+			stellar_memo = NULL,
+			stellar_address = NULL
 		WHERE
 			receiver_wallet_id IN (
 				SELECT DISTINCT receiver_wallet_id

@@ -316,12 +316,10 @@ func (c *CirclePaymentPayoutDispatcher) ensureRecipientIsReady(ctx context.Conte
 		}
 
 		// Memo or Address changed -> Invalidate the recipient
-		dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
-			Status:         data.CircleRecipientStatusInactive,
-			IdempotencyKey: uuid.NewString(),
-		})
+		log.Ctx(ctx).Warnf("Memo or Address changed for circle_recipient with receiver_wallet_id %q, resetting recipient...", dataRecipient.ReceiverWalletID)
+		_, err = c.sdpModels.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, c.sdpModels.DBConnectionPool, dataRecipient.ReceiverWalletID)
 		if err != nil {
-			return nil, fmt.Errorf("invalidating Circle recipient: %w", err)
+			return nil, fmt.Errorf("resetting Circle recipient due to a memo or address change: %w", err)
 		}
 	}
 
