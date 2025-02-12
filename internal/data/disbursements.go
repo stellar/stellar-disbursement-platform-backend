@@ -490,3 +490,27 @@ func (d *DisbursementModel) Delete(ctx context.Context, sqlExec db.SQLExecuter, 
 
 	return nil
 }
+
+// CompleteIfNecessary completes the disbursement if all payments are in the final state.
+func (d *DisbursementModel) CompleteIfNecessary(ctx context.Context, sqlExec db.SQLExecuter) ([]string, error) {
+	query := `
+		UPDATE
+			disbursements d
+		SET status         = $1,
+			status_history = array_append(status_history, create_disbursement_status_history(NOW(), $1, ''))
+		WHERE d.status = $2
+		-- disbursement has no payments that are not in a final state. 
+		  AND NOT EXISTS (SELECT 1
+						  FROM payments p
+						  WHERE p.disbursement_id = d.id
+							AND NOT p.status = ANY ($3))
+		RETURNING d.id
+	`
+	var disbursementIDs []string
+	err := sqlExec.SelectContext(ctx, &disbursementIDs, query, CompletedDisbursementStatus, StartedDisbursementStatus, pq.Array(PaymentCompletedStatuses()))
+	if err != nil {
+		return nil, fmt.Errorf("completing disbursements: %w", err)
+	}
+
+	return disbursementIDs, nil
+}

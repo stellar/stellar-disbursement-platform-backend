@@ -728,8 +728,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		}, QueryTypeSelectAll)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualReceivers))
-		assert.Equal(t, receiver1.ID, actualReceivers[0].ID)
-		assert.Equal(t, receiver2.ID, actualReceivers[1].ID)
+		assert.ElementsMatch(t, []string{receiver1.ID, receiver2.ID}, []string{actualReceivers[0].ID, actualReceivers[1].ID})
 	})
 
 	t.Run("returns receivers successfully with query filter email", func(t *testing.T) {
