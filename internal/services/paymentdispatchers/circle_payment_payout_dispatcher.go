@@ -34,6 +34,7 @@ type CirclePaymentPayoutDispatcher struct {
 	sdpModels           *data.Models
 	circleService       circle.ServiceInterface
 	distAccountResolver signing.DistributionAccountResolver
+	memoResolver        MemoResolverInterface
 }
 
 func NewCirclePaymentPayoutDispatcher(sdpModels *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) *CirclePaymentPayoutDispatcher {
@@ -41,6 +42,7 @@ func NewCirclePaymentPayoutDispatcher(sdpModels *data.Models, circleService circ
 		sdpModels:           sdpModels,
 		circleService:       circleService,
 		distAccountResolver: distAccountResolver,
+		memoResolver:        &MemoResolver{Organizations: sdpModels.Organizations},
 	}
 }
 
@@ -236,9 +238,16 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 	if receiverWallet.Receiver.PhoneNumber != "" {
 		nickname = receiverWallet.Receiver.PhoneNumber
 	}
+
+	memo, err := c.memoResolver.GetMemo(ctx, receiverWallet)
+	if err != nil {
+		return nil, fmt.Errorf("getting memo: %w", err)
+	}
+
 	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
 		IdempotencyKey: dataRecipient.IdempotencyKey,
 		Address:        receiverWallet.StellarAddress,
+		AddressTag:     memo.Value,
 		Chain:          circle.StellarChainCode,
 		Metadata: circle.RecipientMetadata{
 			Nickname: nickname,
@@ -272,6 +281,8 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 		IdempotencyKey:    dataRecipient.IdempotencyKey,
 		CircleRecipientID: recipient.ID,
+		StellarAddress:    receiverWallet.StellarAddress,
+		StellarMemo:       memo.Value,
 		Status:            dataRecipientStatus,
 		ResponseBody:      recipientJson,
 		SyncAttempts:      dataRecipient.SyncAttempts + 1,
@@ -292,9 +303,24 @@ func (c *CirclePaymentPayoutDispatcher) ensureRecipientIsReady(ctx context.Conte
 		return nil, fmt.Errorf("getting or creating Circle recipient: %w", err)
 	}
 
-	// SUCCESS
 	if dataRecipient.Status == data.CircleRecipientStatusActive {
-		return dataRecipient, nil
+		// SUCCESS
+		var memo schema.Memo
+		memo, err = c.memoResolver.GetMemo(ctx, receiverWallet)
+		if err != nil {
+			return nil, fmt.Errorf("getting memo: %w", err)
+		}
+
+		if memo.Value == dataRecipient.StellarMemo && receiverWallet.StellarAddress == dataRecipient.StellarAddress {
+			return dataRecipient, nil
+		}
+
+		// Memo or Address changed -> Invalidate the recipient
+		log.Ctx(ctx).Warnf("Memo or Address changed for circle_recipient with receiver_wallet_id %q, resetting recipient...", dataRecipient.ReceiverWalletID)
+		_, err = c.sdpModels.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, c.sdpModels.DBConnectionPool, dataRecipient.ReceiverWalletID)
+		if err != nil {
+			return nil, fmt.Errorf("resetting Circle recipient due to a memo or address change: %w", err)
+		}
 	}
 
 	// FAILED or INACTIVE

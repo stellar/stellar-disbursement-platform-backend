@@ -18,6 +18,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 const OTPExpirationTimeMinutes = 30
@@ -72,7 +73,7 @@ type ReceiverWallet struct {
 	Wallet           Wallet                       `json:"wallet" db:"wallet"`
 	StellarAddress   string                       `json:"stellar_address,omitempty" db:"stellar_address"`
 	StellarMemo      string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
-	StellarMemoType  string                       `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
+	StellarMemoType  schema.MemoType              `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
 	Status           ReceiversWalletStatus        `json:"status" db:"status"`
 	StatusHistory    ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
 	CreatedAt        time.Time                    `json:"created_at" db:"created_at"`
@@ -176,7 +177,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 		COALESCE(rwc.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
 		COALESCE(rwc.stellar_address, '') as stellar_address,
 		COALESCE(rwc.stellar_memo, '') as stellar_memo,
-		COALESCE(rwc.stellar_memo_type, '') as stellar_memo_type,
+		COALESCE(rwc.stellar_memo_type::text, '') as stellar_memo_type,
 		rwc.status,
 		rwc.created_at,
 		rwc.updated_at,
@@ -228,7 +229,7 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"anchor_platform_transaction_id",
 			"stellar_address",
 			"stellar_memo",
-			"stellar_memo_type",
+			"stellar_memo_type::text AS stellar_memo_type",
 			"otp",
 			"otp_confirmed_with",
 		},
@@ -596,8 +597,8 @@ type ReceiverWalletUpdate struct {
 	Status                      ReceiversWalletStatus `db:"status"`
 	AnchorPlatformTransactionID string                `db:"anchor_platform_transaction_id"`
 	StellarAddress              string                `db:"stellar_address"`
-	StellarMemo                 string                `db:"stellar_memo"`
-	StellarMemoType             string                `db:"stellar_memo_type"`
+	StellarMemo                 *string               `db:"stellar_memo"`
+	StellarMemoType             *schema.MemoType      `db:"stellar_memo_type"`
 	OTPConfirmedAt              time.Time             `db:"otp_confirmed_at"`
 	OTPConfirmedWith            string                `db:"otp_confirmed_with"`
 }
@@ -652,13 +653,13 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 		fields = append(fields, "stellar_address = ?")
 		args = append(args, update.StellarAddress)
 	}
-	if update.StellarMemo != "" {
+	if update.StellarMemo != nil {
 		fields = append(fields, "stellar_memo = ?")
-		args = append(args, update.StellarMemo)
+		args = append(args, utils.SQLNullString(*update.StellarMemo))
 	}
-	if update.StellarMemoType != "" {
+	if update.StellarMemoType != nil {
 		fields = append(fields, "stellar_memo_type = ?")
-		args = append(args, update.StellarMemoType)
+		args = append(args, utils.SQLNullString(string(*update.StellarMemoType)))
 	}
 	if !time.Time.IsZero(update.OTPConfirmedAt) {
 		fields = append(fields, "otp_confirmed_at = ?")
