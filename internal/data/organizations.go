@@ -22,6 +22,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -126,17 +127,7 @@ func (ou *OrganizationUpdate) validate() error {
 }
 
 func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
-	return ou.Name == "" &&
-		len(ou.Logo) == 0 &&
-		ou.TimezoneUTCOffset == "" &&
-		ou.IsApprovalRequired == nil &&
-		ou.IsLinkShortenerEnabled == nil &&
-		ou.ReceiverRegistrationMessageTemplate == nil &&
-		ou.OTPMessageTemplate == nil &&
-		ou.ReceiverInvitationResendIntervalDays == nil &&
-		ou.PaymentCancellationPeriodDays == nil &&
-		ou.PrivacyPolicyLink == nil &&
-		ou.IsMemoTracingEnabled == nil
+	return ou == nil || utils.IsEmpty(*ou)
 }
 
 type OrganizationModel struct {
