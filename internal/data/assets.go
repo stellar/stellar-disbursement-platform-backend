@@ -29,18 +29,13 @@ func AssetColumnNames(tableReference, resultAlias string, includeDates bool) str
 	if includeDates {
 		cols = append(cols, "created_at", "updated_at", "deleted_at")
 	}
-	columns := GenerateColumnNames(SQLColumnConfig{
-		TableReference: tableReference,
-		ResultAlias:    resultAlias,
-		Columns:        cols,
-	})
 
-	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
-		TableReference:        tableReference,
-		ResultAlias:           resultAlias,
-		CoalesceToEmptyString: true,
-		Columns:               []string{"issuer"},
-	})...)
+	columns := SQLColumnConfig{
+		TableReference:  tableReference,
+		ResultAlias:     resultAlias,
+		RawColumns:      cols,
+		CoalesceColumns: []string{"issuer"},
+	}.Build()
 
 	return strings.Join(columns, ",\n")
 }

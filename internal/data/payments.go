@@ -140,10 +140,10 @@ func (p *PaymentUpdate) Validate() error {
 }
 
 func PaymentColumnNames(tableReference, resultAlias string) string {
-	columns := GenerateColumnNames(SQLColumnConfig{
+	columns := SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
-		Columns: []string{
+		RawColumns: []string{
 			"id",
 			"amount",
 			"status",
@@ -151,18 +151,12 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 		},
-	})
-
-	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
-		TableReference:        tableReference,
-		ResultAlias:           resultAlias,
-		CoalesceToEmptyString: true,
-		Columns: []string{
+		CoalesceColumns: []string{
 			"stellar_transaction_id",
 			"stellar_operation_id",
 			"external_payment_id",
 		},
-	})...)
+	}.Build()
 
 	return strings.Join(columns, ",\n")
 }

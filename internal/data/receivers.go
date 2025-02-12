@@ -57,26 +57,20 @@ type ReceiverRegistrationRequest struct {
 }
 
 func ReceiverColumnNames(tableReference, resultAlias string) string {
-	columns := GenerateColumnNames(SQLColumnConfig{
+	columns := SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
-		Columns: []string{
+		RawColumns: []string{
 			"id",
 			"external_id",
 			"created_at",
 			"updated_at",
 		},
-	})
-
-	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
-		TableReference:        tableReference,
-		ResultAlias:           resultAlias,
-		CoalesceToEmptyString: true,
-		Columns: []string{
+		CoalesceColumns: []string{
 			"phone_number",
 			"email",
 		},
-	})...)
+	}.Build()
 
 	return strings.Join(columns, ",\n")
 }

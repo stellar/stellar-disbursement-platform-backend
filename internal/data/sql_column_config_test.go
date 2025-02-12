@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_GenerateColumnNames(t *testing.T) {
+func Test_SQLColumnConfig_Build(t *testing.T) {
 	testCases := []struct {
 		name     string
 		config   SQLColumnConfig
@@ -15,7 +15,7 @@ func Test_GenerateColumnNames(t *testing.T) {
 		{
 			name: "basic columns without alias nor special characters",
 			config: SQLColumnConfig{
-				Columns: []string{"id", "name", "status"},
+				RawColumns: []string{"id", "name", "status"},
 			},
 			expected: []string{"id", "name", "status"},
 		},
@@ -23,7 +23,7 @@ func Test_GenerateColumnNames(t *testing.T) {
 			name: "columns with table reference",
 			config: SQLColumnConfig{
 				TableReference: "t",
-				Columns:        []string{"id", "name", "status"},
+				RawColumns:     []string{"id", "name", "status"},
 			},
 			expected: []string{"t.id", "t.name", "t.status"},
 		},
@@ -31,7 +31,7 @@ func Test_GenerateColumnNames(t *testing.T) {
 			name: "columns with result alias",
 			config: SQLColumnConfig{
 				ResultAlias: "user",
-				Columns:     []string{"id", "name", "status"},
+				RawColumns:  []string{"id", "name", "status"},
 			},
 			expected: []string{
 				`id AS "user.id"`,
@@ -44,7 +44,7 @@ func Test_GenerateColumnNames(t *testing.T) {
 			config: SQLColumnConfig{
 				TableReference: "t",
 				ResultAlias:    "user",
-				Columns:        []string{"id", "name", "status"},
+				RawColumns:     []string{"id", "name", "status"},
 			},
 			expected: []string{
 				`t.id AS "user.id"`,
@@ -55,8 +55,7 @@ func Test_GenerateColumnNames(t *testing.T) {
 		{
 			name: "columns with coalesce",
 			config: SQLColumnConfig{
-				CoalesceToEmptyString: true,
-				Columns:               []string{"id", "name"},
+				CoalesceColumns: []string{"id", "name"},
 			},
 			expected: []string{
 				`COALESCE(id, '') AS "id"`,
@@ -66,39 +65,37 @@ func Test_GenerateColumnNames(t *testing.T) {
 		{
 			name: "columns with type cast",
 			config: SQLColumnConfig{
-				Columns: []string{"verification_field::text"},
+				RawColumns: []string{"verification_field::text"},
 			},
 			expected: []string{`verification_field::text AS "verification_field"`},
 		},
 		{
 			name: "columns with COALESCE and type cast",
 			config: SQLColumnConfig{
-				CoalesceToEmptyString: true,
-				Columns:               []string{"verification_field::text"},
+				CoalesceColumns: []string{"verification_field::text"},
 			},
 			expected: []string{`COALESCE(verification_field::text, '') AS "verification_field"`},
 		},
 		{
 			name: "columns with explicit alias",
 			config: SQLColumnConfig{
-				Columns: []string{`receiver_id AS "receiver.id"`},
+				RawColumns: []string{`receiver_id AS "receiver.id"`},
 			},
 			expected: []string{`receiver_id AS "receiver.id"`},
 		},
 		{
 			name: "columns with explicit alias and type cast",
 			config: SQLColumnConfig{
-				Columns: []string{`receiver_id::text AS "receiver.id"`},
+				RawColumns: []string{`receiver_id::text AS "receiver.id"`},
 			},
 			expected: []string{`receiver_id::text AS "receiver.id"`},
 		},
 		{
 			name: "all features",
 			config: SQLColumnConfig{
-				TableReference:        "rw",
-				CoalesceToEmptyString: true,
-				ResultAlias:           "receiver_wallet",
-				Columns:               []string{`receiver_id::text AS "receiver.id"`},
+				TableReference:  "rw",
+				ResultAlias:     "receiver_wallet",
+				CoalesceColumns: []string{`receiver_id::text AS "receiver.id"`},
 			},
 			expected: []string{`COALESCE(rw.receiver_id::text, '') AS "receiver_wallet.receiver.id"`},
 		},
@@ -106,7 +103,7 @@ func Test_GenerateColumnNames(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := GenerateColumnNames(tc.config)
+			actual := tc.config.Build()
 			assert.Equal(t, tc.expected, actual)
 		})
 	}

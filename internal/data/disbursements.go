@@ -114,10 +114,10 @@ func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*
 }
 
 func DisbursementColumnNames(tableReference, resultAlias string) string {
-	columns := GenerateColumnNames(SQLColumnConfig{
+	columns := SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
-		Columns: []string{
+		RawColumns: []string{
 			"id",
 			"name",
 			"status",
@@ -128,18 +128,12 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 			"registration_contact_type",
 			"receiver_registration_message_template",
 		},
-	})
-
-	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
-		TableReference:        tableReference,
-		CoalesceToEmptyString: true,
-		ResultAlias:           resultAlias,
-		Columns: []string{
+		CoalesceColumns: []string{
 			"verification_field::text",
 			"file_name",
 			"receiver_registration_message_template",
 		},
-	})...)
+	}.Build()
 
 	return strings.Join(columns, ",\n")
 }

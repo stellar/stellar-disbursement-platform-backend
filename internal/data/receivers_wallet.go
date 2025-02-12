@@ -208,10 +208,10 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 }
 
 func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
-	columns := GenerateColumnNames(SQLColumnConfig{
+	columns := SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
-		Columns: []string{
+		RawColumns: []string{
 			"id",
 			`receiver_id AS "receiver.id"`,
 			`wallet_id AS "wallet.id"`,
@@ -224,13 +224,7 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"invitation_sent_at",
 			"anchor_platform_transaction_synced_at",
 		},
-	})
-
-	columns = append(columns, GenerateColumnNames(SQLColumnConfig{
-		TableReference:        tableReference,
-		ResultAlias:           resultAlias,
-		CoalesceToEmptyString: true,
-		Columns: []string{
+		CoalesceColumns: []string{
 			"anchor_platform_transaction_id",
 			"stellar_address",
 			"stellar_memo",
@@ -238,7 +232,7 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"otp",
 			"otp_confirmed_with",
 		},
-	})...)
+	}.Build()
 
 	return strings.Join(columns, ",\n")
 }

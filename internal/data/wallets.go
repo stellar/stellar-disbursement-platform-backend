@@ -80,11 +80,11 @@ func WalletColumnNames(tableReference, resultAlias string, includeDates bool) st
 		colNames = append(colNames, "created_at", "updated_at", "deleted_at")
 	}
 
-	columns := GenerateColumnNames(SQLColumnConfig{
+	columns := SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
-		Columns:        colNames,
-	})
+		RawColumns:     colNames,
+	}.Build()
 
 	return strings.Join(columns, ",\n")
 }
