@@ -39,6 +39,7 @@ type PaymentRequest struct {
 	SourceWalletID            string
 	RecipientID               string
 	DestinationStellarAddress string
+	DestinationStellarMemo    string
 	APIType                   APIType
 	Amount                    string
 	StellarAssetCode          string

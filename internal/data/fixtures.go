@@ -392,7 +392,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
 		require.NoError(t, err)
 
-		stellarMemo = fmt.Sprint(randNumber.Int64() + 10000)
+		stellarMemo = fmt.Sprint(randNumber.Uint64() + 10000)
 		stellarMemoType = "id"
 
 		anchorPlatformTransactionID, err = utils.RandomString(10)
@@ -419,7 +419,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, utils.SQLNullString(stellarMemo), utils.SQLNullString(stellarMemoType), status, anchorPlatformTransactionID)
 	require.NoError(t, err)
 
 	return &receiverWallet
@@ -434,9 +434,9 @@ func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec
 func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, insert CircleRecipient) *CircleRecipient {
 	const query = `
 		INSERT INTO circle_recipients
-			(receiver_wallet_id, idempotency_key, circle_recipient_id, status, created_at, updated_at, sync_attempts, last_sync_attempt_at)
+			(receiver_wallet_id, idempotency_key, circle_recipient_id, status, created_at, updated_at, sync_attempts, last_sync_attempt_at, stellar_address, stellar_memo)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING
 	` + circleRecipientFields
 
@@ -450,6 +450,8 @@ func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.
 		insert.UpdatedAt,
 		insert.SyncAttempts,
 		utils.SQLNullTime(insert.LastSyncAttemptAt),
+		utils.SQLNullString(insert.StellarAddress),
+		utils.SQLNullString(insert.StellarMemo),
 	)
 	require.NoError(t, err)
 
@@ -513,6 +515,12 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 
 func DeleteAllPaymentsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	const query = "DELETE FROM payments"
+	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
+func DeleteAllTransactionsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	const query = "DELETE FROM submitter_transactions"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
