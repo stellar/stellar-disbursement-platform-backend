@@ -111,10 +111,10 @@ func NewTransactionModel(dbConnectionPool db.DBConnectionPool) *TransactionModel
 }
 
 func TransactionColumnNames(tableReference, resultAlias string) string {
-	columns := data.GenerateColumnNames(data.SQLColumnConfig{
+	columns := data.SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
-		Columns: []string{
+		RawColumns: []string{
 			"id",
 			"external_id",
 			"tenant_id",
@@ -139,17 +139,11 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"locked_at",
 			"locked_until_ledger_number",
 		},
-	})
-
-	columns = append(columns, data.GenerateColumnNames(data.SQLColumnConfig{
-		TableReference:        tableReference,
-		CoalesceToEmptyString: true,
-		ResultAlias:           resultAlias,
-		Columns: []string{
+		CoalesceColumns: []string{
 			"memo",
 			"memo_type::text",
 		},
-	})...)
+	}.Build()
 
 	return strings.Join(columns, ",\n")
 }
