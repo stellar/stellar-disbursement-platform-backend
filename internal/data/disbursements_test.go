@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -771,6 +772,91 @@ func Test_DisbursementModel_Delete(t *testing.T) {
 		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
 		require.NoError(t, err)
 	})
+}
+
+func Test_DisbursementColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableReference string
+		resultAlias    string
+		expected       string
+	}{
+		{
+			tableReference: "",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"id",
+				"name",
+				"status",
+				"status_history",
+				"file_content",
+				"created_at",
+				"updated_at",
+				"registration_contact_type",
+				"receiver_registration_message_template",
+				`COALESCE(verification_field::text, '') AS "verification_field"`,
+				`COALESCE(file_name, '') AS "file_name"`,
+				`COALESCE(receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "d",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"d.id",
+				"d.name",
+				"d.status",
+				"d.status_history",
+				"d.file_content",
+				"d.created_at",
+				"d.updated_at",
+				"d.registration_contact_type",
+				"d.receiver_registration_message_template",
+				`COALESCE(d.verification_field::text, '') AS "verification_field"`,
+				`COALESCE(d.file_name, '') AS "file_name"`,
+				`COALESCE(d.receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "d",
+			resultAlias:    "disbursement",
+			expected: strings.Join([]string{
+				`d.id AS "disbursement.id"`,
+				`d.name AS "disbursement.name"`,
+				`d.status AS "disbursement.status"`,
+				`d.status_history AS "disbursement.status_history"`,
+				`d.file_content AS "disbursement.file_content"`,
+				`d.created_at AS "disbursement.created_at"`,
+				`d.updated_at AS "disbursement.updated_at"`,
+				`d.registration_contact_type AS "disbursement.registration_contact_type"`,
+				`d.receiver_registration_message_template AS "disbursement.receiver_registration_message_template"`,
+				`COALESCE(d.verification_field::text, '') AS "disbursement.verification_field"`,
+				`COALESCE(d.file_name, '') AS "disbursement.file_name"`,
+				`COALESCE(d.receiver_registration_message_template, '') AS "disbursement.receiver_registration_message_template"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
+			actual := DisbursementColumnNames(tc.tableReference, tc.resultAlias)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+// testCaseNameForScanText returns a string that can be used as the name of a test case.
+// It is used to create a test case name for a given table reference and result alias.
+func testCaseNameForScanText(t *testing.T, tableReference, resultAlias string) string {
+	t.Helper()
+	originalColName := "{column_name}"
+	scanText := originalColName
+	if tableReference != "" {
+		scanText = fmt.Sprintf("%s.%s", tableReference, scanText)
+	}
+	if resultAlias != "" {
+		scanText = fmt.Sprintf("%s AS %s.%s", scanText, resultAlias, originalColName)
+	}
+	return scanText
 }
 
 func Test_DisbursementModel_CompleteIfNecessary(t *testing.T) {

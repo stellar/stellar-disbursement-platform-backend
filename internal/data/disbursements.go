@@ -113,32 +113,36 @@ func (d *DisbursementModel) GetWithStatistics(ctx context.Context, id string) (*
 	return disbursement, nil
 }
 
-const selectDisbursementQuery = `
+func DisbursementColumnNames(tableReference, resultAlias string) string {
+	columns := SQLColumnConfig{
+		TableReference: tableReference,
+		ResultAlias:    resultAlias,
+		RawColumns: []string{
+			"id",
+			"name",
+			"status",
+			"status_history",
+			"file_content",
+			"created_at",
+			"updated_at",
+			"registration_contact_type",
+			"receiver_registration_message_template",
+		},
+		CoalesceColumns: []string{
+			"verification_field::text",
+			"file_name",
+			"receiver_registration_message_template",
+		},
+	}.Build()
+
+	return strings.Join(columns, ",\n")
+}
+
+var selectDisbursementQuery = `
 		SELECT
-			d.id,
-			d.name,
-			d.status,
-			d.status_history,
-			COALESCE(d.verification_field::text, '') as verification_field,
-			COALESCE(d.file_name, '') as file_name,
-			d.file_content,
-			d.created_at,
-			d.updated_at,
-			d.registration_contact_type,
-			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
-			w.id as "wallet.id",
-			w.name as "wallet.name",
-			w.homepage as "wallet.homepage",
-			w.sep_10_client_domain as "wallet.sep_10_client_domain",
-			w.deep_link_schema as "wallet.deep_link_schema",
-			w.enabled as "wallet.enabled",
-			w.created_at as "wallet.created_at",
-			w.updated_at as "wallet.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			a.created_at as "asset.created_at",
-			a.updated_at as "asset.updated_at"
+			` + DisbursementColumnNames("d", "") + `,
+			` + WalletColumnNames("w", "wallet", true) + `,
+			` + AssetColumnNames("a", "asset", true) + `
 		FROM
 			disbursements d
 		JOIN wallets w on d.wallet_id = w.id
@@ -255,7 +259,7 @@ func (d *DisbursementModel) Count(ctx context.Context, sqlExec db.SQLExecuter, q
 		JOIN assets a on d.asset_id = a.id
 		`
 
-	query, params := d.newDisbursementQuery(baseQuery, queryParams, QueryTypeCount)
+	query, params := d.newDisbursementQuery(baseQuery, queryParams, QueryTypeSingle)
 
 	err := sqlExec.GetContext(ctx, &count, query, params...)
 	if err != nil {
@@ -342,7 +346,7 @@ func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
 	case QueryTypeSelectAll:
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "d")
-	case QueryTypeCount:
+	case QueryTypeSingle:
 		// no need to sort or paginate.
 	}
 

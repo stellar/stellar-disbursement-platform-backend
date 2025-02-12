@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,91 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+func Test_ReceiversWalletColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableReference string
+		resultAlias    string
+		expected       string
+	}{
+		{
+			tableReference: "",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"id",
+				`receiver_id AS "receiver.id"`,
+				`wallet_id AS "wallet.id"`,
+				"otp_created_at",
+				"otp_confirmed_at",
+				"status",
+				"status_history",
+				"created_at",
+				"updated_at",
+				"invitation_sent_at",
+				"anchor_platform_transaction_synced_at",
+				`COALESCE(anchor_platform_transaction_id, '') AS "anchor_platform_transaction_id"`,
+				`COALESCE(stellar_address, '') AS "stellar_address"`,
+				`COALESCE(stellar_memo, '') AS "stellar_memo"`,
+				`COALESCE(stellar_memo_type, '') AS "stellar_memo_type"`,
+				`COALESCE(otp, '') AS "otp"`,
+				`COALESCE(otp_confirmed_with, '') AS "otp_confirmed_with"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "rw",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"rw.id",
+				`rw.receiver_id AS "receiver.id"`,
+				`rw.wallet_id AS "wallet.id"`,
+				"rw.otp_created_at",
+				"rw.otp_confirmed_at",
+				"rw.status",
+				"rw.status_history",
+				"rw.created_at",
+				"rw.updated_at",
+				"rw.invitation_sent_at",
+				"rw.anchor_platform_transaction_synced_at",
+				`COALESCE(rw.anchor_platform_transaction_id, '') AS "anchor_platform_transaction_id"`,
+				`COALESCE(rw.stellar_address, '') AS "stellar_address"`,
+				`COALESCE(rw.stellar_memo, '') AS "stellar_memo"`,
+				`COALESCE(rw.stellar_memo_type, '') AS "stellar_memo_type"`,
+				`COALESCE(rw.otp, '') AS "otp"`,
+				`COALESCE(rw.otp_confirmed_with, '') AS "otp_confirmed_with"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "rw",
+			resultAlias:    "receiver_wallets",
+			expected: strings.Join([]string{
+				`rw.id AS "receiver_wallets.id"`,
+				`rw.receiver_id AS "receiver_wallets.receiver.id"`,
+				`rw.wallet_id AS "receiver_wallets.wallet.id"`,
+				`rw.otp_created_at AS "receiver_wallets.otp_created_at"`,
+				`rw.otp_confirmed_at AS "receiver_wallets.otp_confirmed_at"`,
+				`rw.status AS "receiver_wallets.status"`,
+				`rw.status_history AS "receiver_wallets.status_history"`,
+				`rw.created_at AS "receiver_wallets.created_at"`,
+				`rw.updated_at AS "receiver_wallets.updated_at"`,
+				`rw.invitation_sent_at AS "receiver_wallets.invitation_sent_at"`,
+				`rw.anchor_platform_transaction_synced_at AS "receiver_wallets.anchor_platform_transaction_synced_at"`,
+				`COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallets.anchor_platform_transaction_id"`,
+				`COALESCE(rw.stellar_address, '') AS "receiver_wallets.stellar_address"`,
+				`COALESCE(rw.stellar_memo, '') AS "receiver_wallets.stellar_memo"`,
+				`COALESCE(rw.stellar_memo_type, '') AS "receiver_wallets.stellar_memo_type"`,
+				`COALESCE(rw.otp, '') AS "receiver_wallets.otp"`,
+				`COALESCE(rw.otp_confirmed_with, '') AS "receiver_wallets.otp_confirmed_with"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
+			actual := ReceiverWalletColumnNames(tc.tableReference, tc.resultAlias)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
 
 func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -39,7 +125,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, errReceiver := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{"invalid_id"})
+		actual, errReceiver := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{"invalid_id"})
 		require.NoError(t, errReceiver)
 		require.Empty(t, actual)
 
@@ -56,7 +142,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, errReceiver := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, errReceiver := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, errReceiver)
 		require.Empty(t, actual)
 
@@ -117,7 +203,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
@@ -182,7 +268,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
@@ -288,7 +374,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
@@ -403,7 +489,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 			require.Error(t, err, "not in transaction")
 		}()
 
-		actual, err := receiverWalletModel.GetWithReceiverIds(ctx, dbTx, ReceiverIDs{receiver.ID})
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
 		require.NoError(t, err)
 		expected := []ReceiverWallet{
 			{
@@ -504,13 +590,18 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 				Name:              wallet.Name,
 				Homepage:          wallet.Homepage,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
+				DeepLinkSchema:    wallet.DeepLinkSchema,
+				Enabled:           true,
 			},
 			Status:                      receiverWallet.Status,
 			StellarAddress:              receiverWallet.StellarAddress,
 			StellarMemo:                 receiverWallet.StellarMemo,
 			StellarMemoType:             receiverWallet.StellarMemoType,
-			OTP:                         "123456",
+			StatusHistory:               receiverWallet.StatusHistory,
 			OTPCreatedAt:                receiverWallet.OTPCreatedAt,
+			CreatedAt:                   receiverWallet.CreatedAt,
+			UpdatedAt:                   actual.UpdatedAt,
+			OTP:                         "123456",
 			OTPConfirmedAt:              nil,
 			AnchorPlatformTransactionID: receiverWallet.AnchorPlatformTransactionID,
 		}
@@ -1278,10 +1369,15 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				Name:              wallet.Name,
 				Homepage:          wallet.Homepage,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
+				DeepLinkSchema:    wallet.DeepLinkSchema,
+				Enabled:           true,
 			},
-			Status:                      receiverWallet.Status,
 			OTP:                         "123456",
+			Status:                      receiverWallet.Status,
+			StatusHistory:               actual.StatusHistory,
 			OTPCreatedAt:                actual.OTPCreatedAt,
+			CreatedAt:                   actual.CreatedAt,
+			UpdatedAt:                   actual.UpdatedAt,
 			StellarAddress:              receiverWallet.StellarAddress,
 			StellarMemo:                 receiverWallet.StellarMemo,
 			StellarMemoType:             receiverWallet.StellarMemoType,
@@ -1307,10 +1403,15 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				Name:              wallet.Name,
 				Homepage:          wallet.Homepage,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
+				DeepLinkSchema:    wallet.DeepLinkSchema,
+				Enabled:           true,
 			},
 			Status:                      receiverWallet.Status,
 			OTP:                         "123456",
+			StatusHistory:               actual.StatusHistory,
 			OTPCreatedAt:                actual.OTPCreatedAt,
+			CreatedAt:                   actual.CreatedAt,
+			UpdatedAt:                   actual.UpdatedAt,
 			StellarAddress:              receiverWallet.StellarAddress,
 			StellarMemo:                 "",
 			StellarMemoType:             "",

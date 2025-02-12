@@ -7,7 +7,7 @@ type QueryType string
 const (
 	QueryTypeSelectPaginated QueryType = "SELECT_PAGINATED"
 	QueryTypeSelectAll       QueryType = "SELECT_ALL"
-	QueryTypeCount           QueryType = "COUNT"
+	QueryTypeSingle          QueryType = "SINGLE"
 )
 
 type QueryParams struct {
@@ -40,7 +40,7 @@ const (
 type FilterKey string
 
 const (
-	FilterKeyIDs              FilterKey = "ids"
+	FilterKeyID               FilterKey = "id"
 	FilterKeyStatus           FilterKey = "status"
 	FilterKeyReceiverID       FilterKey = "receiver_id"
 	FilterKeyPaymentID        FilterKey = "payment_id"

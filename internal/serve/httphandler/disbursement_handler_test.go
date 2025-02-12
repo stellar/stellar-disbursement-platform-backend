@@ -366,6 +366,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 				if !registrationContactType.IncludesWalletAddress {
 					respMap["verification_field"] = data.VerificationTypeDateOfBirth
+				} else {
+					respMap["wallet"].(map[string]interface{})["user_managed"] = true
 				}
 
 				resp, err := json.Marshal(respMap)

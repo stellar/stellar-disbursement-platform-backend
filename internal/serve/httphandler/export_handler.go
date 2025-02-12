@@ -124,7 +124,7 @@ func (e ExportHandler) getPaymentReceiversMap(ctx context.Context, payments []da
 
 	receivers, err := e.Models.Receiver.GetAll(ctx, e.Models.DBConnectionPool, &data.QueryParams{
 		Filters: map[data.FilterKey]interface{}{
-			data.FilterKeyIDs: receiverIDs,
+			data.FilterKeyID: receiverIDs,
 		},
 	}, data.QueryTypeSelectAll)
 	if err != nil {

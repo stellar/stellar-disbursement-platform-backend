@@ -1471,7 +1471,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 		data.QueryTypeSelectPaginated)
 	require.NoError(t, err)
 	receiversId := handler.Models.Receiver.ParseReceiverIDs(receivers)
-	receiversWallets, err := handler.Models.ReceiverWallet.GetWithReceiverIds(ctx, dbTx, receiversId)
+	receiversWallets, err := handler.Models.ReceiverWallet.GetWithReceiverIDs(ctx, dbTx, receiversId)
 	require.NoError(t, err)
 
 	actualResponse := handler.buildReceiversResponse(receivers, receiversWallets)

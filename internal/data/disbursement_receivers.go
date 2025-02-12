@@ -45,32 +45,11 @@ func (m DisbursementReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExe
 	var receivers []*DisbursementReceiver
 	baseQuery := `
 		SELECT
-			r.id,
-			r.external_id,
-			COALESCE(r.phone_number, '') as phone_number,
-			COALESCE(r.email, '') as email,
-			r.created_at,
-			r.updated_at,
-			rw.id as "receiver_wallet.id",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status",
-			rw.created_at as "receiver_wallet.created_at",
-			rw.updated_at as "receiver_wallet.updated_at",
-			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name",
-			p.id as "payment.id",
-			p.amount as "payment.amount",
-			p.status as "payment.status",
-			COALESCE(p.stellar_transaction_id, '') as "payment.stellar_transaction_id",
-			COALESCE(p.stellar_operation_id, '') as "payment.stellar_operation_id",
-			p.created_at as "payment.created_at",
-			p.updated_at as "payment.updated_at",
-			a.id as "payment.asset.id",
-			a.code as "payment.asset.code",
-			a.issuer as "payment.asset.issuer"
+			` + ReceiverColumnNames("r", "") + `,
+			` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+			` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `,
+			` + PaymentColumnNames("p", "payment") + `,
+			` + AssetColumnNames("a", "payment.asset", false) + `
 		FROM
 			receivers r
 		JOIN payments p ON r.id = p.receiver_id

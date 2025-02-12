@@ -55,7 +55,7 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("getting receiver by ID: %w", innerErr)
 		}
 
-		receiverWallets, innerErr := rh.Models.ReceiverWallet.GetWithReceiverIds(ctx, dbTx, data.ReceiverIDs{receiver.ID})
+		receiverWallets, innerErr := rh.Models.ReceiverWallet.GetWithReceiverIDs(ctx, dbTx, data.ReceiverIDs{receiver.ID})
 		if innerErr != nil {
 			return nil, fmt.Errorf("getting receiver wallets with receiver IDs: %w", innerErr)
 		}
@@ -114,7 +114,7 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		receiverIDs := rh.Models.Receiver.ParseReceiverIDs(receivers)
-		receiversWallets, err := rh.Models.ReceiverWallet.GetWithReceiverIds(ctx, dbTx, receiverIDs)
+		receiversWallets, err := rh.Models.ReceiverWallet.GetWithReceiverIDs(ctx, dbTx, receiverIDs)
 		if err != nil {
 			return nil, fmt.Errorf("error retrieving receiver wallets: %w", err)
 		}
