@@ -273,51 +273,12 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 
 func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter, r *http.Request) {
 	disbursementID := chi.URLParam(r, "id")
-
-	// check if disbursement exists
 	ctx := r.Context()
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
-	if err != nil {
-		httperror.BadRequest("disbursement ID is invalid", err, nil).Render(w)
-		return
-	}
-
-	// check if disbursement is in draft, ready status
-	if !slices.Contains([]data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus}, disbursement.Status) {
-		httperror.BadRequest("disbursement is not in draft or ready status", nil, nil).Render(w)
-		return
-	}
-
-	buf, header, httpErr := parseCsvFromMultipartRequest(r)
-	if httpErr != nil {
-		httpErr.Render(w)
-		return
-	}
-
-	if err = validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
-		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
-			disbursement.RegistrationContactType,
-			err)
-		httperror.BadRequest(errMsg, err, nil).Render(w)
-		return
-	}
-
-	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, disbursement.VerificationField)
-	if v != nil && v.HasErrors() {
-		httperror.BadRequest("could not parse csv file", err, v.Errors).Render(w)
-		return
-	}
-
-	disbursementUpdate := &data.DisbursementUpdate{
-		ID:          disbursementID,
-		FileName:    header.Filename,
-		FileContent: buf.Bytes(),
-	}
 
 	token, ok := ctx.Value(middleware.TokenContextKey).(string)
 	if !ok {
 		msg := fmt.Sprintf("Cannot get token from context when processing instructions for disbursement with ID %s", disbursementID)
-		httperror.InternalError(ctx, msg, err, nil).Render(w)
+		httperror.InternalError(ctx, msg, nil, nil).Render(w)
 		return
 	}
 	user, err := d.AuthManager.GetUser(ctx, token)
@@ -327,23 +288,23 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, data.DisbursementInstructionsOpts{
-		UserID:                  user.ID,
-		Instructions:            instructions,
-		Disbursement:            disbursement,
-		DisbursementUpdate:      disbursementUpdate,
-		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
-	}); err != nil {
-		switch {
-		case errors.Is(err, data.ErrMaxInstructionsExceeded):
-			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
-		case errors.Is(err, data.ErrReceiverVerificationMismatch):
-			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
-		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
-			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
-		default:
-			httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursementID), err, nil).Render(w)
+	httpErr, _ := db.RunInTransactionWithResult(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*httperror.HTTPError, error) {
+		// check if disbursement exists
+		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
+		if getErr != nil {
+			return httperror.BadRequest("disbursement ID is invalid", getErr, nil), nil
 		}
+
+		// check if disbursement is in draft, ready status
+		if !slices.Contains([]data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus}, disbursement.Status) {
+			return httperror.BadRequest("disbursement is not in draft or ready status", nil, nil), nil
+		}
+
+		return d.ValidateAndProcessInstructions(ctx, r, dbTx, user, disbursement), nil
+	})
+
+	if httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
@@ -352,6 +313,54 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 
 	httpjson.Render(w, response, httpjson.JSON)
+}
+
+func (d DisbursementHandler) ValidateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) *httperror.HTTPError {
+	buf, header, parseHttpErr := parseCsvFromMultipartRequest(r)
+	if parseHttpErr != nil {
+		return parseHttpErr
+	}
+
+	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
+		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
+			disbursement.RegistrationContactType,
+			err)
+		return httperror.BadRequest(errMsg, err, nil)
+	}
+
+	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, disbursement.VerificationField)
+	if v != nil && v.HasErrors() {
+		return httperror.BadRequest("could not parse csv file", nil, v.Errors)
+	}
+
+	disbursementUpdate := &data.DisbursementUpdate{
+		ID:          disbursement.ID,
+		FileName:    header.Filename,
+		FileContent: buf.Bytes(),
+	}
+
+	if err := d.Models.DisbursementInstructions.ProcessAll(ctx, dbTx, data.DisbursementInstructionsOpts{
+		UserID:                  authUser.ID,
+		Instructions:            instructions,
+		Disbursement:            disbursement,
+		DisbursementUpdate:      disbursementUpdate,
+		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
+	}); err != nil {
+		var httpErr *httperror.HTTPError
+		switch {
+		case errors.Is(err, data.ErrMaxInstructionsExceeded):
+			httpErr = httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil)
+		case errors.Is(err, data.ErrReceiverVerificationMismatch):
+			httpErr = httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
+			httpErr = httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+		default:
+			httpErr = httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursement.ID), err, nil)
+		}
+		return httpErr
+	}
+
+	return nil
 }
 
 // parseCsvFromMultipartRequest parses the CSV file from a multipart request and returns the file content and header,

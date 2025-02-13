@@ -1896,7 +1896,7 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 		{
 			name: "200-disbursement has instructions",
 			updateDisbursementFn: func(d *data.Disbursement) error {
-				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+				return models.Disbursements.Update(ctx, dbConnectionPool, &data.DisbursementUpdate{
 					ID:          d.ID,
 					FileContent: disbursementFileContent,
 					FileName:    "instructions.csv",
@@ -1909,7 +1909,7 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 		{
 			name: "200-disbursement has instructions but filename is missing .csv",
 			updateDisbursementFn: func(d *data.Disbursement) error {
-				return models.Disbursements.Update(ctx, &data.DisbursementUpdate{
+				return models.Disbursements.Update(ctx, dbConnectionPool, &data.DisbursementUpdate{
 					ID:          d.ID,
 					FileContent: disbursementFileContent,
 					FileName:    "instructions.bat",

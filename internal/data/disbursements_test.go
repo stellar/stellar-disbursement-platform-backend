@@ -472,7 +472,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("update instructions", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			ID:          disbursement.ID,
 			FileContent: disbursementFileContent,
 			FileName:    "instructions.csv",
@@ -486,7 +486,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("no disbursement ID in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileContent: disbursementFileContent,
 			FileName:    "instructions.csv",
 		})
@@ -494,7 +494,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("no file name in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileContent: disbursementFileContent,
 			ID:          disbursement.ID,
 		})
@@ -502,7 +502,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("no file content in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileName: "instructions.csv",
 			ID:       disbursement.ID,
 		})
@@ -510,7 +510,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("empty file content in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileName:    "instructions.csv",
 			ID:          disbursement.ID,
 			FileContent: []byte{},
@@ -519,7 +519,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("wrong disbursement ID", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileName:    "instructions.csv",
 			ID:          "9e0ff65f-f6e9-46e9-bf03-dc46723e3bfb",
 			FileContent: disbursementFileContent,
