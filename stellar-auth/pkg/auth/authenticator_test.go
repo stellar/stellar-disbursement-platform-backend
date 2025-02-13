@@ -718,43 +718,48 @@ func Test_DefaultAuthenticator_GetAllUsers(t *testing.T) {
 func Test_DefaultAuthenticator_GetUsers(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
+	ctx := context.Background()
 	passwordEncrypterMock := &PasswordEncrypterMock{}
+	passwordEncrypterMock.
+		On("Encrypt", ctx, mock.AnythingOfType("string")).
+		Return("encryptedPassword", nil).
+		Maybe()
+
 	authenticator := newDefaultAuthenticator(withAuthenticatorDatabaseConnectionPool(dbConnectionPool))
 
-	ctx := context.Background()
+	// create test data
+	randUser1 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role1", "role2")
+	randUser2 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, true, "role1", "role2")
+	randUser3 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role3")
+	deactivatedUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role3")
+	outerErr = authenticator.updateIsActive(ctx, deactivatedUser.ID, false)
+	require.NoError(t, outerErr)
 
-	t.Run("returns an error if users for user IDs cannot be found", func(t *testing.T) {
+	t.Run("returns empty array when user ID not found", func(t *testing.T) {
 		userIDs := []string{"invalid-id"}
-		_, err := authenticator.GetUsers(ctx, userIDs)
-		require.EqualError(t, err, "error querying user IDs: searching for 1 users, found 0 users")
+		users, err := authenticator.GetUsers(ctx, userIDs, true)
+		assert.NoError(t, err)
+		assert.Empty(t, users)
 	})
 
 	t.Run("returns nil if called with an empty or nil slice", func(t *testing.T) {
 		userIDs := []string{}
-		users, err := authenticator.GetUsers(ctx, userIDs)
+		users, err := authenticator.GetUsers(ctx, userIDs, true)
 		require.NoError(t, err)
 		assert.Empty(t, users)
 
-		users, err = authenticator.GetUsers(ctx, nil)
+		users, err = authenticator.GetUsers(ctx, nil, true)
 		require.NoError(t, err)
 		assert.Empty(t, users)
 	})
 
-	t.Run("gets users for provided IDs successfully", func(t *testing.T) {
-		passwordEncrypterMock.
-			On("Encrypt", ctx, mock.AnythingOfType("string")).
-			Return("encryptedPassword", nil)
-
-		randUser1 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role1", "role2")
-		randUser2 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, true, "role1", "role2")
-		randUser3 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role3")
-
+	t.Run("gets active users for provided IDs successfully", func(t *testing.T) {
 		users, err := authenticator.GetUsers(
-			ctx, []string{randUser1.ID, randUser2.ID, randUser3.ID},
+			ctx, []string{randUser1.ID, randUser2.ID, randUser3.ID, deactivatedUser.ID}, true,
 		)
 		require.NoError(t, err)
 
@@ -773,6 +778,38 @@ func Test_DefaultAuthenticator_GetUsers(t *testing.T) {
 				ID:        randUser3.ID,
 				FirstName: randUser3.FirstName,
 				LastName:  randUser3.LastName,
+			},
+		}
+
+		assert.Equal(t, expectedUsers, users)
+	})
+
+	t.Run("gets all users for provided IDs successfully", func(t *testing.T) {
+		users, err := authenticator.GetUsers(
+			ctx, []string{randUser1.ID, randUser2.ID, randUser3.ID, deactivatedUser.ID}, false,
+		)
+		require.NoError(t, err)
+
+		expectedUsers := []*User{
+			{
+				ID:        randUser1.ID,
+				FirstName: randUser1.FirstName,
+				LastName:  randUser1.LastName,
+			},
+			{
+				ID:        randUser2.ID,
+				FirstName: randUser2.FirstName,
+				LastName:  randUser2.LastName,
+			},
+			{
+				ID:        randUser3.ID,
+				FirstName: randUser3.FirstName,
+				LastName:  randUser3.LastName,
+			},
+			{
+				ID:        deactivatedUser.ID,
+				FirstName: deactivatedUser.FirstName,
+				LastName:  deactivatedUser.LastName,
 			},
 		}
 

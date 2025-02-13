@@ -92,7 +92,7 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 		}
 	}
 
-	usersList, err := s.AuthManager.GetUsersByID(ctx, maps.Keys(users))
+	usersList, err := s.AuthManager.GetUsersByID(ctx, maps.Keys(users), false)
 	if err != nil {
 		return nil, fmt.Errorf("error getting user for IDs: %w", err)
 	}
