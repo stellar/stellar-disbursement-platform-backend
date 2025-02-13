@@ -51,9 +51,9 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	t.Run("🔴 fails to insert disbursements with non-unique name", func(t *testing.T) {
 		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
-		_, err := disbursementModel.Insert(ctx, &disbursement)
+		_, err := disbursementModel.Insert(ctx, dbConnectionPool, &disbursement)
 		require.NoError(t, err)
-		_, err = disbursementModel.Insert(ctx, &disbursement)
+		_, err = disbursementModel.Insert(ctx, dbConnectionPool, &disbursement)
 		require.Error(t, err)
 		require.Equal(t, ErrRecordAlreadyExists, err)
 	})
@@ -61,7 +61,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	t.Run("🟢 successfully insert disbursement", func(t *testing.T) {
 		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
-		id, err := disbursementModel.Insert(ctx, &disbursement)
+		id, err := disbursementModel.Insert(ctx, dbConnectionPool, &disbursement)
 		require.NoError(t, err)
 		require.NotNil(t, id)
 
@@ -86,7 +86,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		d.ReceiverRegistrationMessageTemplate = ""
 		d.VerificationField = ""
 
-		id, err := disbursementModel.Insert(ctx, &d)
+		id, err := disbursementModel.Insert(ctx, dbConnectionPool, &d)
 		require.NoError(t, err)
 		require.NotNil(t, id)
 

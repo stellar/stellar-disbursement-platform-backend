@@ -69,7 +69,7 @@ var (
 	AllowedDisbursementSorts     = []SortField{SortFieldName, SortFieldCreatedAt}
 )
 
-func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
+func (d *DisbursementModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
 		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type)
@@ -78,7 +78,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		RETURNING id
 	`
 	var newID string
-	err := d.dbConnectionPool.GetContext(ctx, &newID, q,
+	err := sqlExec.GetContext(ctx, &newID, q,
 		disbursement.Name,
 		disbursement.Status,
 		disbursement.StatusHistory,

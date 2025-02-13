@@ -34,6 +34,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
+var (
+	ErrNoUserManagedWallet   = errors.New("no user-managed wallet available")
+	ErrWalletNotFound        = errors.New("wallet not found")
+	ErrWalletNotEnabled      = errors.New("wallet not enabled")
+	ErrAssetNotFound         = errors.New("asset not found")
+	ErrDuplicateDisbursement = errors.New("disbursement with name already exists")
+)
+
 type DisbursementHandler struct {
 	Models                        *data.Models
 	MonitorService                monitor.MonitorServiceInterface
@@ -109,39 +117,47 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	newDisbursement, httpErr := d.createNewDisbursement(ctx, d.Models.DBConnectionPool, user.ID, req)
+	if httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusCreated, newDisbursement, httpjson.JSON)
+}
+
+func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
 	var wallet *data.Wallet
+	var err error
+
 	if req.RegistrationContactType.IncludesWalletAddress {
 		wallets, findWalletErr := d.Models.Wallets.FindWallets(ctx,
 			data.NewFilter(data.FilterUserManaged, true),
 			data.NewFilter(data.FilterEnabledWallets, true))
 
 		if findWalletErr != nil {
-			httperror.InternalError(ctx, "Cannot get wallets", findWalletErr, nil).Render(w)
-			return
+			return nil, httperror.InternalError(ctx, "Cannot get wallets", findWalletErr, nil)
 		}
 		if len(wallets) == 0 {
-			httperror.BadRequest("No User Managed Wallets found", nil, nil).Render(w)
-			return
+			return nil, httperror.BadRequest("No User Managed Wallets found", nil, nil)
 		}
 		wallet = &wallets[0]
 	} else {
 		// Get Wallet
 		wallet, err = d.Models.Wallets.Get(ctx, req.WalletID)
 		if err != nil {
-			httperror.BadRequest("Wallet ID could not be retrieved", err, nil).Render(w)
-			return
+			return nil, httperror.BadRequest("Wallet ID could not be retrieved", err, nil)
 		}
 	}
+
 	if !wallet.Enabled {
-		httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
-		return
+		return nil, httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil)
 	}
 
 	// Get Asset
 	asset, err := d.Models.Assets.Get(ctx, req.AssetID)
 	if err != nil {
-		httperror.BadRequest("asset ID could not be retrieved", err, nil).Render(w)
-		return
+		return nil, httperror.BadRequest("asset ID could not be retrieved", err, nil)
 	}
 
 	// Insert disbursement
@@ -156,23 +172,21 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		StatusHistory: []data.DisbursementStatusHistoryEntry{{
 			Timestamp: time.Now(),
 			Status:    data.DraftDisbursementStatus,
-			UserID:    user.ID,
+			UserID:    userID,
 		}},
 	}
-	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
+	newId, err := d.Models.Disbursements.Insert(ctx, sqlExec, &disbursement)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordAlreadyExists) {
-			httperror.Conflict("disbursement already exists", err, nil).Render(w)
+			return nil, httperror.Conflict("disbursement already exists", err, nil)
 		} else {
-			httperror.BadRequest("could not create disbursement", err, nil).Render(w)
+			return nil, httperror.BadRequest("could not create disbursement", err, nil)
 		}
-		return
 	}
-	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, newId)
+	newDisbursement, err := d.Models.Disbursements.Get(ctx, sqlExec, newId)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newId)
-		httperror.InternalError(ctx, msg, err, nil).Render(w)
-		return
+		return nil, httperror.InternalError(ctx, msg, err, nil)
 	}
 
 	// Monitor disbursement creation
@@ -185,7 +199,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
 	}
 
-	httpjson.RenderStatus(w, http.StatusCreated, newDisbursement, httpjson.JSON)
+	return newDisbursement, nil
 }
 
 // DeleteDisbursement deletes a draft or ready disbursement and its associated payments
