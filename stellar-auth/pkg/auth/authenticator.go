@@ -41,7 +41,7 @@ type Authenticator interface {
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
-	GetUsers(ctx context.Context, userIDs []string) ([]*User, error)
+	GetUsers(ctx context.Context, userIDs []string, activeOnly bool) ([]*User, error)
 }
 
 type defaultAuthenticator struct {
@@ -488,12 +488,12 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 }
 
 // GetUsers retrieves the respective users from a list of user IDs.
-func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string) ([]*User, error) {
+func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string, activeOnly bool) ([]*User, error) {
 	if len(userIDs) == 0 {
 		return nil, nil
 	}
 
-	const query = `
+	query := `
 		SELECT
 			id,
 			first_name,
@@ -501,21 +501,16 @@ func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string) (
 		FROM
 			auth_users
 		WHERE
-			id = ANY($1::text[]) AND is_active = true
-	`
+			id = ANY($1::text[])`
+
+	if activeOnly {
+		query += " AND is_active = true"
+	}
 
 	var dbUsers []authUser
 	err := a.dbConnectionPool.SelectContext(ctx, &dbUsers, query, pq.Array(userIDs))
 	if err != nil {
-		return nil, fmt.Errorf("error querying user IDs: %w", err)
-	}
-	if len(dbUsers) != len(userIDs) {
-		return nil,
-			fmt.Errorf(
-				"error querying user IDs: searching for %d users, found %d users",
-				len(userIDs),
-				len(dbUsers),
-			)
+		return nil, fmt.Errorf("querying user IDs: %w", err)
 	}
 
 	users := make([]*User, len(dbUsers))
