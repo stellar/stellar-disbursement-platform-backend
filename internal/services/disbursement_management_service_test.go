@@ -72,10 +72,10 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUsersByID", mock.Anything, []string{users[0].ID, users[1].ID}).
+		On("GetUsersByID", mock.Anything, []string{users[0].ID, users[1].ID}, false).
 		Return(users, nil)
 	authManagerMock.
-		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}).
+		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}, false).
 		Return(users, nil)
 
 	service := &DisbursementManagementService{
