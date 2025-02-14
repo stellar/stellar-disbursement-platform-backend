@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.5.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.0...3.5.1))
+
+### Fixed
+
+- GET `/disbursements` breaks when one of the users is deactivated. [#550](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/550)
+
 ## [3.5.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.4.0...3.5.0))
 
 > [!WARNING]
