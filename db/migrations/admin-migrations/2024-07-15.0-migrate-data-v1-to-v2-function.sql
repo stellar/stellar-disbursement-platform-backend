@@ -36,7 +36,9 @@ BEGIN
         ALTER TABLE public.receiver_wallets
             ALTER COLUMN status DROP DEFAULT,
             ALTER COLUMN status TYPE %I.receiver_wallet_status
-                USING status::text::%I.receiver_wallet_status;
+                USING status::text::%I.receiver_wallet_status,
+            ALTER COLUMN stellar_memo_type TYPE %I.memo_type
+                USING stellar_memo_type::text::%I.memo_type;
         INSERT INTO %I.receiver_wallets SELECT * FROM public.receiver_wallets;
 
         ALTER TABLE public.receiver_verifications
@@ -72,7 +74,7 @@ BEGIN
                    schema_name, schema_name, schema_name, schema_name, schema_name, schema_name,
                    schema_name, schema_name, schema_name, schema_name, schema_name, schema_name,
                    schema_name, schema_name, schema_name, schema_name, schema_name, schema_name,
-                   schema_name, schema_name);
+                   schema_name, schema_name, schema_name, schema_name);
 
 
     -- Step 3: Import TSS data

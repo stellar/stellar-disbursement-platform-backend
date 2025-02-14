@@ -169,6 +169,8 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 				ReceiverWalletID:  rwRegistered.ID,
 				Status:            data.CircleRecipientStatusActive,
 				CircleRecipientID: circleRecipientID,
+				StellarAddress:    rwRegistered.StellarAddress,
+				StellarMemo:       rwRegistered.StellarMemo,
 			})
 			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwRegistered,

@@ -1,0 +1,94 @@
+package schema
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stellar/go/txnbuild"
+	"github.com/stretchr/testify/require"
+)
+
+func Test_hexStringToBytes(t *testing.T) {
+	hexStr := "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577"
+	wantBytes := []byte{0x12, 0xf3, 0x7f, 0x82, 0xeb, 0x67, 0x08, 0xda, 0xa0, 0xac, 0x37, 0x2a, 0x1a, 0x67, 0xa0, 0xf3, 0x3e, 0xfa, 0x6a, 0x9c, 0xd2, 0x13, 0xed, 0x43, 0x05, 0x17, 0xe4, 0x5f, 0xef, 0xb5, 0x15, 0x77}
+
+	got, err := hexStringToBytes(hexStr)
+	require.NoError(t, err)
+	require.Equal(t, wantBytes, got)
+}
+
+func Test_NewMemo(t *testing.T) {
+	testCases := []struct {
+		memoType        MemoType
+		memoValue       string
+		wantMemo        txnbuild.Memo
+		wantErrContains string
+	}{
+		{
+			memoType:  "",
+			memoValue: "",
+			wantMemo:  nil,
+		},
+		{
+			memoType:        MemoTypeText,
+			memoValue:       "This is a very long text that should exceed the 28-byte limit",
+			wantErrContains: "text memo must be 28 bytes or less",
+		},
+		{
+			memoType:        MemoTypeText,
+			memoValue:       "HelloWorld!",
+			wantMemo:        txnbuild.MemoText("HelloWorld!"),
+			wantErrContains: "",
+		},
+		{
+			memoType:        MemoTypeID,
+			memoValue:       "not-a-valid-uint64",
+			wantErrContains: "invalid Memo ID value, must be a uint64",
+		},
+		{
+			memoType:        MemoTypeID,
+			memoValue:       "1234567890",
+			wantMemo:        txnbuild.MemoID(1234567890),
+			wantErrContains: "",
+		},
+		{
+			memoType:        MemoTypeHash,
+			memoValue:       "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb5157712f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+			wantErrContains: "hash memo must be 64 hex characters (32 bytes)",
+		},
+		{
+			memoType:        MemoTypeHash,
+			memoValue:       "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+			wantMemo:        txnbuild.MemoHash([]byte{0x12, 0xf3, 0x7f, 0x82, 0xeb, 0x67, 0x08, 0xda, 0xa0, 0xac, 0x37, 0x2a, 0x1a, 0x67, 0xa0, 0xf3, 0x3e, 0xfa, 0x6a, 0x9c, 0xd2, 0x13, 0xed, 0x43, 0x05, 0x17, 0xe4, 0x5f, 0xef, 0xb5, 0x15, 0x77}),
+			wantErrContains: "",
+		},
+		{
+			memoType:        MemoTypeReturn,
+			memoValue:       "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb5157712f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+			wantErrContains: "return memo must be 64 hex characters (32 bytes)",
+		},
+		{
+			memoType:        MemoTypeReturn,
+			memoValue:       "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+			wantMemo:        txnbuild.MemoReturn([]byte{0x12, 0xf3, 0x7f, 0x82, 0xeb, 0x67, 0x08, 0xda, 0xa0, 0xac, 0x37, 0x2a, 0x1a, 0x67, 0xa0, 0xf3, 0x3e, 0xfa, 0x6a, 0x9c, 0xd2, 0x13, 0xed, 0x43, 0x05, 0x17, 0xe4, 0x5f, 0xef, 0xb5, 0x15, 0x77}),
+			wantErrContains: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		emojiPrefix := "🟢"
+		if tc.wantErrContains != "" {
+			emojiPrefix = "🔴"
+		}
+		t.Run(fmt.Sprintf("%s%s(%s)", emojiPrefix, tc.memoType, tc.memoValue), func(t *testing.T) {
+			gotMemo, err := NewMemo(tc.memoType, tc.memoValue)
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantMemo, gotMemo)
+			} else {
+				require.ErrorContains(t, err, tc.wantErrContains)
+				require.Nil(t, gotMemo)
+			}
+		})
+	}
+}

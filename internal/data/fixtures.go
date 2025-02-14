@@ -302,14 +302,13 @@ func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		r.ExternalId = &randString
 	}
 
-	const query = `
+	query := `
 		INSERT INTO receivers
 			(email, phone_number, external_id)
 		VALUES
 			($1, $2, $3)
 		RETURNING
-			id, COALESCE(phone_number, '') as phone_number, COALESCE(email, '') as email, external_id, created_at, updated_at
-	`
+			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
 	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalId)
@@ -393,14 +392,14 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
 		require.NoError(t, err)
 
-		stellarMemo = fmt.Sprint(randNumber.Int64() + 10000)
+		stellarMemo = fmt.Sprint(randNumber.Uint64() + 10000)
 		stellarMemoType = "id"
 
 		anchorPlatformTransactionID, err = utils.RandomString(10)
 		require.NoError(t, err)
 	}
 
-	const query = `
+	query := `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
 				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, anchor_platform_transaction_id)
@@ -410,10 +409,9 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 				*
 		)
 		SELECT
-			rw.id, rw.stellar_address, rw.stellar_memo, rw.stellar_memo_type, rw.status, rw.status_history, rw.created_at, rw.updated_at,
-			rw.anchor_platform_transaction_id, rw.anchor_platform_transaction_synced_at,
-			r.id, COALESCE(r.phone_number, '') as phone_number, COALESCE(r.email, '') as email, r.external_id, r.created_at, r.updated_at,
-			w.id, w.name, w.homepage, w.deep_link_schema, w.created_at, w.updated_at
+			` + ReceiverWalletColumnNames("rw", "") + `,
+			` + ReceiverColumnNames("r", "receiver") + `,
+			` + WalletColumnNames("w", "wallet", true) + `
 		FROM
 			inserted_receiver_wallet AS rw
 			JOIN receivers AS r ON rw.receiver_id = r.id
@@ -421,30 +419,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err := sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
-		&receiverWallet.ID,
-		&receiverWallet.StellarAddress,
-		&receiverWallet.StellarMemo,
-		&receiverWallet.StellarMemoType,
-		&receiverWallet.Status,
-		&receiverWallet.StatusHistory,
-		&receiverWallet.CreatedAt,
-		&receiverWallet.UpdatedAt,
-		&receiverWallet.AnchorPlatformTransactionID,
-		&receiverWallet.AnchorPlatformTransactionSyncedAt,
-		&receiverWallet.Receiver.ID,
-		&receiverWallet.Receiver.Email,
-		&receiverWallet.Receiver.PhoneNumber,
-		&receiverWallet.Receiver.ExternalID,
-		&receiverWallet.Receiver.CreatedAt,
-		&receiverWallet.Receiver.UpdatedAt,
-		&receiverWallet.Wallet.ID,
-		&receiverWallet.Wallet.Name,
-		&receiverWallet.Wallet.Homepage,
-		&receiverWallet.Wallet.DeepLinkSchema,
-		&receiverWallet.Wallet.CreatedAt,
-		&receiverWallet.Wallet.UpdatedAt,
-	)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, utils.SQLNullString(stellarMemo), utils.SQLNullString(stellarMemoType), status, anchorPlatformTransactionID)
 	require.NoError(t, err)
 
 	return &receiverWallet
@@ -459,9 +434,9 @@ func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec
 func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, insert CircleRecipient) *CircleRecipient {
 	const query = `
 		INSERT INTO circle_recipients
-			(receiver_wallet_id, idempotency_key, circle_recipient_id, status, created_at, updated_at, sync_attempts, last_sync_attempt_at)
+			(receiver_wallet_id, idempotency_key, circle_recipient_id, status, created_at, updated_at, sync_attempts, last_sync_attempt_at, stellar_address, stellar_memo)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING
 	` + circleRecipientFields
 
@@ -475,6 +450,8 @@ func CreateCircleRecipientFixture(t *testing.T, ctx context.Context, sqlExec db.
 		insert.UpdatedAt,
 		insert.SyncAttempts,
 		utils.SQLNullTime(insert.LastSyncAttemptAt),
+		utils.SQLNullString(insert.StellarAddress),
+		utils.SQLNullString(insert.StellarMemo),
 	)
 	require.NoError(t, err)
 
@@ -538,6 +515,12 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 
 func DeleteAllPaymentsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	const query = "DELETE FROM payments"
+	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
+func DeleteAllTransactionsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	const query = "DELETE FROM submitter_transactions"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
