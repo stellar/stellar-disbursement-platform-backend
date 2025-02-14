@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/dimchansky/utfbom"
@@ -32,14 +33,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-)
-
-var (
-	ErrNoUserManagedWallet   = errors.New("no user-managed wallet available")
-	ErrWalletNotFound        = errors.New("wallet not found")
-	ErrWalletNotEnabled      = errors.New("wallet not enabled")
-	ErrAssetNotFound         = errors.New("asset not found")
-	ErrDuplicateDisbursement = errors.New("disbursement with name already exists")
 )
 
 type DisbursementHandler struct {
@@ -104,26 +97,27 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Decode and validate body
-	var req PostDisbursementRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		httperror.BadRequest(err.Error(), err, nil).Render(w)
-		return
-	}
-	v := d.validateRequest(req)
-	if v.HasErrors() {
-		httperror.BadRequest("", err, v.Errors).Render(w)
-		return
+	// Handle request based on content type.
+	var disbursement *data.Disbursement
+	var httpErr *httperror.HTTPError
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		disbursement, httpErr = d.postDisbursementWithInstructions(ctx, r, user)
+	} else {
+		var req PostDisbursementRequest
+		if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
+			httperror.BadRequest(err.Error(), err, nil).Render(w)
+			return
+		}
+		disbursement, httpErr = d.postDisbursementOnly(ctx, req, user)
 	}
 
-	newDisbursement, httpErr := d.createNewDisbursement(ctx, d.Models.DBConnectionPool, user.ID, req)
 	if httpErr != nil {
 		httpErr.Render(w)
 		return
 	}
 
-	httpjson.RenderStatus(w, http.StatusCreated, newDisbursement, httpjson.JSON)
+	httpjson.RenderStatus(w, http.StatusCreated, disbursement, httpjson.JSON)
 }
 
 func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
@@ -314,7 +308,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 			return httperror.BadRequest("disbursement is not in draft or ready status", nil, nil), nil
 		}
 
-		return d.ValidateAndProcessInstructions(ctx, r, dbTx, user, disbursement), nil
+		return d.validateAndProcessInstructions(ctx, r, dbTx, user, disbursement), nil
 	})
 
 	if httpErr != nil {
@@ -329,7 +323,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	httpjson.Render(w, response, httpjson.JSON)
 }
 
-func (d DisbursementHandler) ValidateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) *httperror.HTTPError {
+func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) *httperror.HTTPError {
 	buf, header, parseHttpErr := parseCsvFromMultipartRequest(r)
 	if parseHttpErr != nil {
 		return parseHttpErr
@@ -578,6 +572,49 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot write disbursement instructions to response", err, nil).Render(w)
 	}
+}
+
+func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Context, r *http.Request, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
+	var req PostDisbursementRequest
+	dd := r.FormValue("data")
+	if err := json.Unmarshal([]byte(dd), &req); err != nil {
+		return nil, httperror.BadRequest(err.Error(), err, nil)
+	}
+
+	disbursement, err := db.RunInTransactionWithResult(ctx, d.Models.DBConnectionPool, nil, func(tx db.DBTransaction) (*data.Disbursement, error) {
+		// 1. Create the Disbursement
+		disbursement, httpErr := d.createNewDisbursement(ctx, tx, user.ID, req)
+		if httpErr != nil {
+			return nil, httpErr
+		}
+
+		// 2. Process the instructions
+		httpErr = d.validateAndProcessInstructions(ctx, r, tx, user, disbursement)
+		if httpErr != nil {
+			return nil, httpErr
+		}
+
+		// 3. Set the Disbursement status to Started
+		return disbursement, nil
+	})
+	if err != nil {
+		var httpErr *httperror.HTTPError
+		if errors.As(err, &httpErr) {
+			return nil, httpErr
+		} else {
+			return nil, httperror.InternalError(ctx, "Cannot create disbursement", err, nil)
+		}
+	}
+	return disbursement, nil
+}
+
+func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
+	v := d.validateRequest(req)
+	if v.HasErrors() {
+		return nil, httperror.BadRequest("", nil, v.Errors)
+	}
+
+	return d.createNewDisbursement(ctx, d.Models.DBConnectionPool, user.ID, req)
 }
 
 // parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
