@@ -292,7 +292,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		// The problem was that in the DefaultWalletsNetworkMap, in the `testnet` key, we used the name `Boss Money` and not `BOSS Money`
 		// to refer to the BOSS Money wallet. So the query tried to insert the `Boss Money` wallet, but since the `homepage` and `deep_link_schema`
 		// were the same as the already inserted then, the insert statement resulted in a duplicated constraint error.
-		assert.EqualError(t, err, `upserting wallets for the proper network: running atomic function in RunInTransactionWithResult: error upserting wallets: pq: duplicate key value violates unique constraint "wallets_homepage_key"`)
+		assert.EqualError(t, err, `upserting wallets for the proper network: error upserting wallets: pq: duplicate key value violates unique constraint "wallets_homepage_key"`)
 
 		// DefaultNetworkMap test - should NOT error
 		data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
