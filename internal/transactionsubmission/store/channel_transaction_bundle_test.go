@@ -112,7 +112,7 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 			limit:                        100,
 			lockToLedgerNumber:           currentLedgerNumber + 1,
 			numberOfTransactionsUnlocked: 10,
-			expectedError:                fmt.Errorf("running atomic function in RunInTransactionWithResult: %w", ErrInsuficientChannelAccounts),
+			expectedError:                db.NewTransactionExecutionError(ErrInsuficientChannelAccounts),
 		},
 		{
 			name:                            "🎉 successfully returns chTxBundles if limit == len(unlockedTransactions) == len(unlockedChannelAccounts) > 0",

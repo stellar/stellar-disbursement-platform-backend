@@ -1566,7 +1566,7 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 				data.FilterKeyStatus: "INVALID",
 			},
 		})
-		require.EqualError(t, err, `running atomic function in RunInTransactionWithResult: error counting payments: error counting payments: pq: invalid input value for enum payment_status: "INVALID"`)
+		require.EqualError(t, err, `error counting payments: error counting payments: pq: invalid input value for enum payment_status: "INVALID"`)
 	})
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
