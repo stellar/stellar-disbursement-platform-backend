@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -132,14 +133,15 @@ func (h ForgotPasswordHandler) SendForgotPasswordMessage(ctx context.Context, ui
 		return fmt.Errorf("getting organization data: %w", err)
 	}
 
-	resetPasswordLink, err := url.JoinPath(uiBaseURL, "reset-password")
+	resetPasswordURL, err := url.Parse(uiBaseURL)
 	if err != nil {
-		return fmt.Errorf("getting reset password link: %w", err)
+		return fmt.Errorf("parsing reset password link: %w", err)
 	}
+	resetPasswordURL.Path = path.Join(resetPasswordURL.Path, "reset-password")
+	resetPasswordURL.RawQuery = url.Values{"token": {resetToken}}.Encode()
 
 	forgotPasswordData := htmltemplate.StaffForgotPasswordEmailMessageTemplate{
-		ResetToken:        resetToken,
-		ResetPasswordLink: resetPasswordLink,
+		ResetPasswordLink: resetPasswordURL.String(),
 		OrganizationName:  organization.Name,
 	}
 	messageContent, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(forgotPasswordData)
