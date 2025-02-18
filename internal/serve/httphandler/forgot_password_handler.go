@@ -122,7 +122,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 
 	responseBody := map[string]string{
-		"message": "Password reset requested. If the email is registered, you'll receive a reset link shortly. Check your inbox and spam folders.",
+		"message": "If the email you provided is associated with an account, you'll receive a password reset link shortly. Check your inbox and spam folders.",
 	}
 	httpjson.RenderStatus(w, http.StatusOK, responseBody, httpjson.JSON)
 }
