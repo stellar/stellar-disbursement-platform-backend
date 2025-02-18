@@ -91,7 +91,7 @@ const emailStyle = template.HTML(`
 			display: inline-block;
 			padding: 12px 24px;
 			background-color: #2c2c2c;
-			color: #ffffff;
+			color: #ffffff !important;
 			text-decoration: none;
 			border-radius: 6px;
 			font-weight: 500;
