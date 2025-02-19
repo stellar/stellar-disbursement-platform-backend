@@ -641,7 +641,7 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 		insert.RegistrationContactType = RegistrationContactTypePhone
 	}
 
-	id, err := model.Insert(ctx, &insert)
+	id, err := model.Insert(ctx, sqlExec, &insert)
 	require.NoError(t, err)
 
 	// get disbursement

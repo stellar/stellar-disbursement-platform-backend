@@ -115,7 +115,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
 			log.Ctx(ctx).Errorf("in forgot password handler, user has a valid token")
 		} else {
-			httperror.InternalError(ctx, err.Error(), err, nil).Render(w)
+			httperror.InternalError(ctx, "Failed to reset password", err, nil).Render(w)
 			return
 		}
 	}

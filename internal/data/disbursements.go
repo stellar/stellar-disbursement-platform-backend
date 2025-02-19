@@ -69,7 +69,7 @@ var (
 	AllowedDisbursementSorts     = []SortField{SortFieldName, SortFieldCreatedAt}
 )
 
-func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
+func (d *DisbursementModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
 		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type)
@@ -78,7 +78,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		RETURNING id
 	`
 	var newID string
-	err := d.dbConnectionPool.GetContext(ctx, &newID, q,
+	err := sqlExec.GetContext(ctx, &newID, q,
 		disbursement.Name,
 		disbursement.Status,
 		disbursement.StatusHistory,
@@ -367,7 +367,7 @@ func (du *DisbursementUpdate) Validate() error {
 	return nil
 }
 
-func (d *DisbursementModel) Update(ctx context.Context, du *DisbursementUpdate) error {
+func (d *DisbursementModel) Update(ctx context.Context, sqlExec db.SQLExecuter, du *DisbursementUpdate) error {
 	if err := du.Validate(); err != nil {
 		return fmt.Errorf("error validating disbursement update: %w", err)
 	}
@@ -381,7 +381,7 @@ func (d *DisbursementModel) Update(ctx context.Context, du *DisbursementUpdate) 
 		WHERE
 			id = $3
 		`
-	result, err := d.dbConnectionPool.ExecContext(ctx, query, du.FileName, du.FileContent, du.ID)
+	result, err := sqlExec.ExecContext(ctx, query, du.FileName, du.FileContent, du.ID)
 	if err != nil {
 		return fmt.Errorf("error updating disbursement: %w", err)
 	}

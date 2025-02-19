@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -87,7 +88,7 @@ func RunInTransactionWithResult[T any](ctx context.Context, dbConnectionPool DBC
 
 	result, err = atomicFunction(dbTx)
 	if err != nil {
-		return *new(T), fmt.Errorf("running atomic function in RunInTransactionWithResult: %w", err)
+		return *new(T), NewTransactionExecutionError(err)
 	}
 
 	err = dbTx.Commit()
@@ -116,7 +117,7 @@ func RunInTransactionWithPostCommit(ctx context.Context, opts *TransactionOption
 
 	postCommit, err := atomicFunction(dbTx)
 	if err != nil {
-		return fmt.Errorf("running atomic function in RunInTransactionWithPostCommit: %w", err)
+		return NewTransactionExecutionError(err)
 	}
 
 	err = dbTx.Commit()
@@ -185,7 +186,11 @@ var _ SQLExecuter = (DBTransaction)(nil)
 // DBTxRollback rolls back the transaction if there is an error.
 func DBTxRollback(ctx context.Context, dbTx DBTransaction, err error, logMessage string) {
 	if err != nil {
-		log.Ctx(ctx).Errorf("%s: %s", logMessage, err.Error())
+		if IsTransactionExecutionError(err) {
+			log.Ctx(ctx).Debugf("%s: %s", logMessage, err.Error())
+		} else {
+			log.Ctx(ctx).Errorf("%s: %s", logMessage, err.Error())
+		}
 		errRollBack := dbTx.Rollback()
 		if errRollBack != nil {
 			log.Ctx(ctx).Errorf("error in database transaction rollback: %s", errRollBack.Error())
@@ -240,4 +245,28 @@ func CloseConnectionPoolIfNeeded(ctx context.Context, dbConnectionPool DBConnect
 	}
 
 	return dbConnectionPool.Close()
+}
+
+// TransactionExecutionError represents an error that occurred during the execution of transaction,
+// as opposed to errors from transaction handling itself.
+type TransactionExecutionError struct {
+	err error
+}
+
+func NewTransactionExecutionError(err error) *TransactionExecutionError {
+	return &TransactionExecutionError{err: err}
+}
+
+func (t *TransactionExecutionError) Error() string {
+	return fmt.Sprintf("transaction execution error: %s", t.err.Error())
+}
+
+func (t *TransactionExecutionError) Unwrap() error {
+	return t.err
+}
+
+// IsTransactionExecutionError checks if the given error originated from the atomic function execution.
+func IsTransactionExecutionError(err error) bool {
+	var eErr *TransactionExecutionError
+	return errors.As(err, &eErr)
 }
