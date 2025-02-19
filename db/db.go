@@ -248,7 +248,7 @@ func CloseConnectionPoolIfNeeded(ctx context.Context, dbConnectionPool DBConnect
 }
 
 // TransactionExecutionError represents an error that occurred during the execution of transaction,
-// as opposed to errors from transaction handling itself
+// as opposed to errors from transaction handling itself.
 type TransactionExecutionError struct {
 	err error
 }
@@ -265,7 +265,7 @@ func (t *TransactionExecutionError) Unwrap() error {
 	return t.err
 }
 
-// IsTransactionExecutionError checks if the given error originated from the atomic function execution
+// IsTransactionExecutionError checks if the given error originated from the atomic function execution.
 func IsTransactionExecutionError(err error) bool {
 	var eErr *TransactionExecutionError
 	return errors.As(err, &eErr)

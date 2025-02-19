@@ -169,7 +169,7 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 			UserID:    userID,
 		}},
 	}
-	newId, err := d.Models.Disbursements.Insert(ctx, sqlExec, &disbursement)
+	newID, err := d.Models.Disbursements.Insert(ctx, sqlExec, &disbursement)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordAlreadyExists) {
 			return nil, httperror.Conflict("disbursement already exists", err, nil)
@@ -177,9 +177,9 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 			return nil, httperror.BadRequest("could not create disbursement", err, nil)
 		}
 	}
-	newDisbursement, err := d.Models.Disbursements.Get(ctx, sqlExec, newId)
+	newDisbursement, err := d.Models.Disbursements.Get(ctx, sqlExec, newID)
 	if err != nil {
-		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newId)
+		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newID)
 		return nil, httperror.InternalError(ctx, msg, err, nil)
 	}
 
@@ -291,29 +291,32 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 	user, err := d.AuthManager.GetUser(ctx, token)
 	if err != nil {
-		msg := fmt.Sprintf("Cannot get token from context when processing instructions for disbursement with ID %s", disbursementID)
+		msg := fmt.Sprintf("Cannot get user from context token when processing instructions for disbursement with ID %s", disbursementID)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
 	}
 
-	httpErr, _ := db.RunInTransactionWithResult(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*httperror.HTTPError, error) {
+	err = db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// check if disbursement exists
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if getErr != nil {
-			return httperror.BadRequest("disbursement ID is invalid", getErr, nil), nil
+			return httperror.BadRequest("disbursement ID is invalid", getErr, nil)
 		}
 
 		// check if disbursement is in draft, ready status
 		if !slices.Contains([]data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus}, disbursement.Status) {
-			return httperror.BadRequest("disbursement is not in draft or ready status", nil, nil), nil
+			return httperror.BadRequest("disbursement is not in draft or ready status", nil, nil)
 		}
 
-		return d.validateAndProcessInstructions(ctx, r, dbTx, user, disbursement), nil
+		return d.validateAndProcessInstructions(ctx, r, dbTx, user, disbursement)
 	})
-
-	if httpErr != nil {
-		httpErr.Render(w)
-		return
+	if err != nil {
+		var httpErr *httperror.HTTPError
+		if errors.As(err, &httpErr) {
+			httpErr.Render(w)
+		} else {
+			httperror.InternalError(ctx, "Cannot process instructions for disbursement", err, nil).Render(w)
+		}
 	}
 
 	response := map[string]string{
@@ -323,10 +326,10 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	httpjson.Render(w, response, httpjson.JSON)
 }
 
-func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) *httperror.HTTPError {
+func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) error {
 	buf, header, parseHttpErr := parseCsvFromMultipartRequest(r)
 	if parseHttpErr != nil {
-		return parseHttpErr
+		return fmt.Errorf("could not parse csv file: %w", parseHttpErr)
 	}
 
 	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
@@ -354,18 +357,16 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 		DisbursementUpdate:      disbursementUpdate,
 		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
 	}); err != nil {
-		var httpErr *httperror.HTTPError
 		switch {
 		case errors.Is(err, data.ErrMaxInstructionsExceeded):
-			httpErr = httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil)
+			return httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil)
 		case errors.Is(err, data.ErrReceiverVerificationMismatch):
-			httpErr = httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
-			httpErr = httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		default:
-			httpErr = httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursement.ID), err, nil)
+			return httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursement.ID), err, nil)
 		}
-		return httpErr
 	}
 
 	return nil
@@ -589,12 +590,10 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 		}
 
 		// 2. Process the instructions
-		httpErr = d.validateAndProcessInstructions(ctx, r, tx, user, disbursement)
-		if httpErr != nil {
-			return nil, httpErr
+		if err := d.validateAndProcessInstructions(ctx, r, tx, user, disbursement); err != nil {
+			return nil, fmt.Errorf("could not process instructions: %w", err)
 		}
 
-		// 3. Set the Disbursement status to Started
 		return disbursement, nil
 	})
 	if err != nil {
