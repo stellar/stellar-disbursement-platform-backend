@@ -483,7 +483,7 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now())
 
 		err := authenticator.ResetPassword(ctx, token, newPassword)
-		assert.EqualError(t, err, "error trying to encrypt user password: unexpected error")
+		assert.ErrorContains(t, err, "error trying to encrypt user password: unexpected error")
 	})
 
 	t.Run("Should treat a not found token error", func(t *testing.T) {

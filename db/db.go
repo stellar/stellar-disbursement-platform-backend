@@ -258,7 +258,7 @@ func NewTransactionExecutionError(err error) *TransactionExecutionError {
 }
 
 func (t *TransactionExecutionError) Error() string {
-	return t.err.Error()
+	return fmt.Sprintf("transaction execution error: %s", t.err.Error())
 }
 
 func (t *TransactionExecutionError) Unwrap() error {

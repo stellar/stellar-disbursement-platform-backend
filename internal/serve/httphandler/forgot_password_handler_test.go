@@ -227,7 +227,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Once()
 			},
 			wantStatusCode:   http.StatusInternalServerError,
-			wantResponseBody: `{"error": "sending forgot password message: sending forgot password email for foo...com: unexpected error"}`,
+			wantResponseBody: `{"error": "Failed to reset password"}`,
 		},
 		{
 			name:              "🟢[200](ReCAPTCHADisabled=false) successfully handle forgot password",
