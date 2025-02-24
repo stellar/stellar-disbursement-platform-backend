@@ -19,7 +19,7 @@ type HTTPError struct {
 	Err error `json:"-"`
 }
 
-// ReportFunc is a function type used to report unexpected errors.
+// ReportErrorFunc is a function type used to report unexpected errors.
 type ReportErrorFunc func(ctx context.Context, err error, msg string)
 
 // ReportError is a struct type used to report unexpected errors.

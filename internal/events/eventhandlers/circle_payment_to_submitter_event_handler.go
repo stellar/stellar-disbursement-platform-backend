@@ -23,6 +23,7 @@ type CirclePaymentToSubmitterEventHandlerOptions struct {
 	MtnDBConnectionPool   db.DBConnectionPool
 	DistAccountResolver   signing.DistributionAccountResolver
 	CircleService         circle.ServiceInterface
+	CircleAPIType         circle.APIType
 }
 
 type CirclePaymentToSubmitterEventHandler struct {
@@ -41,7 +42,12 @@ func NewCirclePaymentToSubmitterEventHandler(opts CirclePaymentToSubmitterEventH
 		log.Fatalf("error getting models: %s", err.Error())
 	}
 
-	circlePaymentDispatcher := paymentdispatchers.NewCirclePaymentDispatcher(models, opts.CircleService, opts.DistAccountResolver)
+	var circlePaymentDispatcher paymentdispatchers.PaymentDispatcherInterface
+	if opts.CircleAPIType == circle.APITypePayouts {
+		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentPayoutDispatcher(models, opts.CircleService, opts.DistAccountResolver)
+	} else {
+		circlePaymentDispatcher = paymentdispatchers.NewCirclePaymentTransferDispatcher(models, opts.CircleService, opts.DistAccountResolver)
+	}
 
 	s := services.NewPaymentToSubmitterService(services.PaymentToSubmitterServiceOptions{
 		Models:              models,

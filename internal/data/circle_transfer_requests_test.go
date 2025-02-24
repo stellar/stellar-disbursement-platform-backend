@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -679,4 +680,76 @@ func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing
 			}
 		})
 	}
+}
+
+func Test_CircleTransferRequestModel_GetPendingReconciliation(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("returns empty slice when no pending transfers exist", func(t *testing.T) {
+		transfers, err := m.GetPendingReconciliation(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Empty(t, transfers)
+	})
+
+	t.Run("returns only pending transfers with sync_attempts < maxSyncAttempts", func(t *testing.T) {
+		// Create test data with different statuses and sync attempts
+		transferTypes := []struct {
+			count        int
+			status       CircleTransferStatus
+			syncAttempts int
+		}{
+			{batchSize, CircleTransferStatusPending, 0},       // Group 1: pending, no attempts
+			{5, CircleTransferStatusPending, 1},               // Group 2: pending, one attempt
+			{5, CircleTransferStatusPending, maxSyncAttempts}, // Group 3: pending, max attempts
+			{5, CircleTransferStatusSuccess, 0},               // Group 4: success
+			{5, CircleTransferStatusFailed, 0},                // Group 5: failed
+		}
+
+		for groupIdx, tt := range transferTypes {
+			for i := 0; i < tt.count; i++ {
+				transfer, err := m.Insert(ctx, fmt.Sprintf("payment-id-g%d-%d", groupIdx, i))
+				require.NoError(t, err)
+
+				_, err = m.Update(ctx, dbConnectionPool, transfer.IdempotencyKey, CircleTransferRequestUpdate{
+					Status:           tt.status,
+					CircleTransferID: fmt.Sprintf("transfer-id-%d-%d", groupIdx, i),
+					ResponseBody:     []byte(`{"foo":"bar"}`),
+					SourceWalletID:   "wallet-123",
+					SyncAttempts:     tt.syncAttempts,
+				})
+				require.NoError(t, err)
+			}
+		}
+
+		// Verify initial state
+		transfers, err := m.GetPendingReconciliation(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Len(t, transfers, batchSize)
+		for _, transfer := range transfers {
+			assert.Equal(t, CircleTransferStatusPending, *transfer.Status)
+			assert.LessOrEqual(t, transfer.SyncAttempts, maxSyncAttempts)
+		}
+
+		// Update sync attempts and verify ordering
+		now := time.Now()
+		for i, transfer := range transfers {
+			lastSyncAttemptAt := now.Add(-time.Duration(i) * time.Second)
+			_, err = m.Update(ctx, dbConnectionPool, transfer.IdempotencyKey, CircleTransferRequestUpdate{
+				SyncAttempts:      maxSyncAttempts,
+				LastSyncAttemptAt: &lastSyncAttemptAt,
+			})
+			require.NoError(t, err)
+		}
+
+		transfers, err = m.GetPendingReconciliation(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Len(t, transfers, 5) // Only one transfer should remain under maxSyncAttempts
+	})
 }

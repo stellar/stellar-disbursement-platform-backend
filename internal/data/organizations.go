@@ -22,6 +22,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -48,6 +49,8 @@ type Organization struct {
 	PrivacyPolicyLink      *string                `json:"privacy_policy_link" db:"privacy_policy_link"`
 	Logo                   []byte                 `db:"logo"`
 	IsApprovalRequired     bool                   `json:"is_approval_required" db:"is_approval_required"`
+	IsLinkShortenerEnabled bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
+	IsMemoTracingEnabled   bool                   `json:"is_memo_tracing_enabled" db:"is_memo_tracing_enabled"`
 	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
 	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
@@ -58,6 +61,8 @@ type OrganizationUpdate struct {
 	Logo                                 []byte `json:",omitempty"`
 	TimezoneUTCOffset                    string `json:",omitempty"`
 	IsApprovalRequired                   *bool  `json:",omitempty"`
+	IsLinkShortenerEnabled               *bool  `json:",omitempty"`
+	IsMemoTracingEnabled                 *bool  `json:",omitempty"`
 	ReceiverInvitationResendIntervalDays *int64 `json:",omitempty"`
 	PaymentCancellationPeriodDays        *int64 `json:",omitempty"`
 
@@ -122,15 +127,7 @@ func (ou *OrganizationUpdate) validate() error {
 }
 
 func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
-	return ou.Name == "" &&
-		len(ou.Logo) == 0 &&
-		ou.TimezoneUTCOffset == "" &&
-		ou.IsApprovalRequired == nil &&
-		ou.ReceiverRegistrationMessageTemplate == nil &&
-		ou.OTPMessageTemplate == nil &&
-		ou.ReceiverInvitationResendIntervalDays == nil &&
-		ou.PaymentCancellationPeriodDays == nil &&
-		ou.PrivacyPolicyLink == nil
+	return ou == nil || utils.IsEmpty(*ou)
 }
 
 type OrganizationModel struct {
@@ -195,6 +192,16 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.IsApprovalRequired != nil {
 		fields = append(fields, "is_approval_required = ?")
 		args = append(args, *ou.IsApprovalRequired)
+	}
+
+	if ou.IsLinkShortenerEnabled != nil {
+		fields = append(fields, "is_link_shortener_enabled = ?")
+		args = append(args, *ou.IsLinkShortenerEnabled)
+	}
+
+	if ou.IsMemoTracingEnabled != nil {
+		fields = append(fields, "is_memo_tracing_enabled = ?")
+		args = append(args, *ou.IsMemoTracingEnabled)
 	}
 
 	if ou.ReceiverRegistrationMessageTemplate != nil {

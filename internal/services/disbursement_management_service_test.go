@@ -72,10 +72,10 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUsersByID", mock.Anything, []string{users[0].ID, users[1].ID}).
+		On("GetUsersByID", mock.Anything, []string{users[0].ID, users[1].ID}, false).
 		Return(users, nil)
 	authManagerMock.
-		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}).
+		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}, false).
 		Return(users, nil)
 
 	service := &DisbursementManagementService{
@@ -692,7 +692,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			TotalPendingAmount:  1100.0,
 		}
 
-		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithPostCommit: validating balance for disbursement: %v", expectedErr))
+		require.ErrorContains(t, err, fmt.Sprintf("validating balance for disbursement: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
 		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account (stellar:GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA) needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)

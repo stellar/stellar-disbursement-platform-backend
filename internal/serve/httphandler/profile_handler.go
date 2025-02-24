@@ -33,6 +33,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // DefaultMaxMemoryAllocation limits the max of memory allocation up to 2MB
@@ -54,6 +55,8 @@ type PatchOrganizationProfileRequest struct {
 	OrganizationName                    string  `json:"organization_name"`
 	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
 	IsApprovalRequired                  *bool   `json:"is_approval_required"`
+	IsLinkShortenerEnabled              *bool   `json:"is_link_shortener_enabled"`
+	IsMemoTracingEnabled                *bool   `json:"is_memo_tracing_enabled"`
 	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
 	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
 	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
@@ -174,6 +177,8 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		Logo:                                 fileContentBytes,
 		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
 		IsApprovalRequired:                   reqBody.IsApprovalRequired,
+		IsLinkShortenerEnabled:               reqBody.IsLinkShortenerEnabled,
+		IsMemoTracingEnabled:                 reqBody.IsMemoTracingEnabled,
 		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
 		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
 		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
@@ -275,17 +280,9 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 
 	// validate if the password format attends the requirements
 	badRequestExtras := map[string]interface{}{}
-	err := h.PasswordValidator.ValidatePassword(reqBody.NewPassword)
-	if err != nil {
-		var validatePasswordError *authUtils.ValidatePasswordError
-		if errors.As(err, &validatePasswordError) {
-			for k, v := range validatePasswordError.FailedValidations() {
-				badRequestExtras[k] = v
-			}
-			log.Ctx(ctx).Errorf("validating password in PatchUserPassword: %v", err)
-		} else {
-			httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
-			return
+	if validatePasswordError := h.PasswordValidator.ValidatePassword(reqBody.NewPassword); validatePasswordError != nil {
+		for k, v := range validatePasswordError.FailedValidations() {
+			badRequestExtras[k] = v
 		}
 	}
 	if len(badRequestExtras) > 0 {
@@ -294,7 +291,7 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 	}
 
 	log.Ctx(ctx).Warnf("[PatchUserPassword] - Will update password for user account ID %s", user.ID)
-	err = h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
+	err := h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
 		return
@@ -367,13 +364,22 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
+		return
+	}
+
 	resp := map[string]interface{}{
-		"name":                            org.Name,
-		"logo_url":                        lu.String(),
-		"distribution_account":            distributionAccount,
-		"distribution_account_public_key": distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
-		"timezone_utc_offset":             org.TimezoneUTCOffset,
-		"is_approval_required":            org.IsApprovalRequired,
+		"name":                                     org.Name,
+		"logo_url":                                 lu.String(),
+		"base_url":                                 currentTenant.BaseURL,
+		"distribution_account":                     distributionAccount,
+		"distribution_account_public_key":          distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
+		"timezone_utc_offset":                      org.TimezoneUTCOffset,
+		"is_approval_required":                     org.IsApprovalRequired,
+		"is_link_shortener_enabled":                org.IsLinkShortenerEnabled,
+		"is_memo_tracing_enabled":                  org.IsMemoTracingEnabled,
 		"receiver_invitation_resend_interval_days": 0,
 		"payment_cancellation_period_days":         0,
 		"privacy_policy_link":                      org.PrivacyPolicyLink,

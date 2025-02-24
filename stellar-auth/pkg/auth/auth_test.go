@@ -937,7 +937,7 @@ func Test_AuthManager_ForgotPassword(t *testing.T) {
 			Once()
 
 		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "wrongemail@email.com")
-		assert.EqualError(t, err, "error on forgot password: unexpected error")
+		assert.EqualError(t, err, "calling authenticator's ForgotPassword: unexpected error")
 		assert.Empty(t, resetToken)
 	})
 
@@ -1379,11 +1379,11 @@ func Test_AuthManager_GetUsersByID(t *testing.T) {
 	t.Run("returns error when aunthenticator fails", func(t *testing.T) {
 		userIDs := []string{"invalid-id"}
 		authenticatorMock.
-			On("GetUsers", ctx, userIDs).
+			On("GetUsers", ctx, userIDs, true).
 			Return(nil, errUnexpectedError).
 			Once()
 
-		_, err := authManager.GetUsersByID(ctx, userIDs)
+		_, err := authManager.GetUsersByID(ctx, userIDs, true)
 		require.Error(t, err)
 	})
 
@@ -1403,11 +1403,11 @@ func Test_AuthManager_GetUsersByID(t *testing.T) {
 
 		userIDs := []string{expectedUsers[0].ID, expectedUsers[1].ID}
 		authenticatorMock.
-			On("GetUsers", ctx, userIDs).
+			On("GetUsers", ctx, userIDs, true).
 			Return(expectedUsers, nil).
 			Once()
 
-		users, err := authManager.GetUsersByID(ctx, userIDs)
+		users, err := authManager.GetUsersByID(ctx, userIDs, true)
 		require.NoError(t, err)
 		assert.Equal(t, expectedUsers, users)
 	})

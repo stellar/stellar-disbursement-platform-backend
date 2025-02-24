@@ -53,8 +53,7 @@ QFFRUKfvJXdejeCNXZKvkP8XPSzcu0FjOw==
 MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAETM39j3wuLdKA/FjWvbep5HaRKNI25YZb
 AcXGJuvULcaEhM1heR1C8dqEKFiaqJBBwNH0TIiEAEulMhDg/xj8RGwc8OZC5laQ
 daNkmorQXHrMkFKIrLX2XaVUsoGazfUB
------END PUBLIC KEY-----
-`,
+-----END PUBLIC KEY-----`,
 		privateKeyStr: `-----BEGIN EC PRIVATE KEY-----
 MIGkAgEBBDArMin+1alz7nicQ9LGUJgTU/+2v1OQE0G24h+0/V8Sk45sPvRwaxyI
 fzZ2qk5WVDagBwYFK4EEACKhZANiAARMzf2PfC4t0oD8WNa9t6nkdpEo0jblhlsB
@@ -184,67 +183,50 @@ func Test_ParseStrongECPrivateKey(t *testing.T) {
 	}
 }
 
-func Test_ValidateStrongECKeyPair(t *testing.T) {
+func Test_GetEC256PublicKeyFromPrivateKey(t *testing.T) {
 	testCases := []struct {
 		name            string
-		publicKeyStr    string
 		privateKeyStr   string
+		wantPublicKey   string
 		wantErrContains string
 	}{
 		{
-			name:            "returns an error if the public key is invalid",
-			publicKeyStr:    "not-a-pem-string",
-			privateKeyStr:   ecdsaKeypair1.privateKeyStr,
-			wantErrContains: fmt.Sprintf("validating EC public key: failed to decode PEM block containing public key: %v", ErrInvalidECPublicKey),
-		},
-		{
 			name:            "returns an error if the private key is invalid",
-			publicKeyStr:    ecdsaKeypair1.publicKeyStr,
 			privateKeyStr:   "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----",
 			wantErrContains: fmt.Sprintf("validating EC private key: failed to parse EC private key: %v", ErrInvalidECPrivateKey),
 		},
 		{
-			name:            "returns an error if the keys are not a pair (1 & 2)",
-			publicKeyStr:    ecdsaKeypair1.publicKeyStr,
-			privateKeyStr:   ecdsaKeypair2.privateKeyStr,
-			wantErrContains: "signature verification failed for the provided pair of keys",
-		},
-		{
-			name:            "returns an error if the keys are not a pair (2 & 1)",
-			publicKeyStr:    ecdsaKeypair2.publicKeyStr,
-			privateKeyStr:   ecdsaKeypair1.privateKeyStr,
-			wantErrContains: "signature verification failed for the provided pair of keys",
-		},
-		{
-			name:          "🎉 Successfully validates a valid ECDSA key pair (1)",
-			publicKeyStr:  ecdsaKeypair1.publicKeyStr,
+			name:          "🎉 Successfully returns a valid EC256 public key from a valid ECDSA private key (1)",
 			privateKeyStr: ecdsaKeypair1.privateKeyStr,
+			wantPublicKey: ecdsaKeypair1.publicKeyStr,
 		},
 		{
-			name:          "🎉 Successfully validates a valid ECDSA key pair (2)",
-			publicKeyStr:  ecdsaKeypair2.publicKeyStr,
+			name:          "🎉 Successfully returns a valid EC256 public key from a valid ECDSA private key (2)",
 			privateKeyStr: ecdsaKeypair2.privateKeyStr,
+			wantPublicKey: ecdsaKeypair2.publicKeyStr,
 		},
 		{
-			name:          "🎉 Successfully validates a valid EC256 key pair",
-			publicKeyStr:  ec256Keypair.publicKeyStr,
+			name:          "🎉 Successfully returns a valid EC256 public key from a valid EC256 private key",
 			privateKeyStr: ec256Keypair.privateKeyStr,
+			wantPublicKey: ec256Keypair.publicKeyStr,
 		},
 		{
-			name:          "🎉 Successfully validates a valid EC386 key pair",
-			publicKeyStr:  ec386Keypair.publicKeyStr,
+			name:          "🎉 Successfully returns a valid EC384 public key from a valid EC384 private key",
 			privateKeyStr: ec386Keypair.privateKeyStr,
+			wantPublicKey: ec386Keypair.publicKeyStr,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidateStrongECKeyPair(tc.publicKeyStr, tc.privateKeyStr)
+			gotPublicKey, err := GetEC256PublicKeyFromPrivateKey(tc.privateKeyStr)
 			if tc.wantErrContains == "" {
-				require.NoError(t, err)
+				assert.NoError(t, err)
+				assert.NotNil(t, gotPublicKey)
+				assert.Equal(t, tc.wantPublicKey, gotPublicKey)
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.wantErrContains)
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErrContains)
 			}
 		})
 	}

@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -58,6 +59,8 @@ type PaymentCSV struct {
 	Asset                   data.Asset
 	Wallet                  data.Wallet
 	ReceiverID              string                     `csv:"Receiver.ID"`
+	ReceiverPhoneNumber     string                     `csv:"Receiver.PhoneNumber"`
+	ReceiverEmail           string                     `csv:"Receiver.Email"`
 	ReceiverWalletAddress   string                     `csv:"ReceiverWallet.Address"`
 	ReceiverWalletStatus    data.ReceiversWalletStatus `csv:"ReceiverWallet.Status"`
 	CreatedAt               time.Time
@@ -89,7 +92,54 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert payments to PaymentCSV
+	receiversMap, err := e.getPaymentReceiversMap(ctx, payments)
+	if err != nil {
+		httperror.InternalError(ctx, "Failed to get receivers", err, nil).Render(rw)
+		return
+	}
+
+	paymentCSVs := e.convertPaymentsToCSV(payments, receiversMap)
+
+	fileName := fmt.Sprintf("payments_%s.csv", time.Now().Format("2006-01-02-15-04-05"))
+	rw.Header().Set("Content-Type", "text/csv")
+	rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+
+	if err := gocsv.Marshal(paymentCSVs, rw); err != nil {
+		httperror.InternalError(ctx, "Failed to write CSV", err, nil).Render(rw)
+		return
+	}
+}
+
+// getPaymentReceiversMap returns a map of receivers by receiverID for the given payments.
+func (e ExportHandler) getPaymentReceiversMap(ctx context.Context, payments []data.Payment) (map[string]data.Receiver, error) {
+	receiverIDs := make([]string, 0, len(payments))
+
+	if len(payments) == 0 {
+		return map[string]data.Receiver{}, nil
+	}
+
+	for _, payment := range payments {
+		receiverIDs = append(receiverIDs, payment.ReceiverWallet.Receiver.ID)
+	}
+
+	receivers, err := e.Models.Receiver.GetAll(ctx, e.Models.DBConnectionPool, &data.QueryParams{
+		Filters: map[data.FilterKey]interface{}{
+			data.FilterKeyID: receiverIDs,
+		},
+	}, data.QueryTypeSelectAll)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get receivers: %w", err)
+	}
+
+	receiversMap := make(map[string]data.Receiver, len(receivers))
+	for _, receiver := range receivers {
+		receiversMap[receiver.ID] = receiver
+	}
+	return receiversMap, nil
+}
+
+// convertPaymentsToCSV converts the given payments and receivers to a slice of PaymentCSV.
+func (e ExportHandler) convertPaymentsToCSV(payments []data.Payment, receiversMap map[string]data.Receiver) []*PaymentCSV {
 	paymentCSVs := make([]*PaymentCSV, 0, len(payments))
 	for _, payment := range payments {
 		paymentCSV := &PaymentCSV{
@@ -101,6 +151,8 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 			Asset:                   payment.Asset,
 			Wallet:                  payment.ReceiverWallet.Wallet,
 			ReceiverID:              payment.ReceiverWallet.Receiver.ID,
+			ReceiverPhoneNumber:     receiversMap[payment.ReceiverWallet.Receiver.ID].PhoneNumber,
+			ReceiverEmail:           receiversMap[payment.ReceiverWallet.Receiver.ID].Email,
 			ReceiverWalletAddress:   payment.ReceiverWallet.StellarAddress,
 			ReceiverWalletStatus:    payment.ReceiverWallet.Status,
 			CreatedAt:               payment.CreatedAt,
@@ -110,15 +162,7 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 		}
 		paymentCSVs = append(paymentCSVs, paymentCSV)
 	}
-
-	fileName := fmt.Sprintf("payments_%s.csv", time.Now().Format("2006-01-02-15-04-05"))
-	rw.Header().Set("Content-Type", "text/csv")
-	rw.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
-
-	if err := gocsv.Marshal(paymentCSVs, rw); err != nil {
-		httperror.InternalError(ctx, "Failed to write CSV", err, nil).Render(rw)
-		return
-	}
+	return paymentCSVs
 }
 
 func (e ExportHandler) ExportReceivers(rw http.ResponseWriter, r *http.Request) {

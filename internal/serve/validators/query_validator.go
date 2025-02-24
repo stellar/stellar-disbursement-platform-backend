@@ -28,14 +28,14 @@ func (qv *QueryValidator) ParseParametersFromRequest(r *http.Request) *data.Quer
 	if sortBy == "" {
 		sortBy = qv.DefaultSortField
 	} else if !slices.Contains(qv.AllowedSortFields, sortBy) {
-		qv.addError("sort", "invalid sort field name")
+		qv.AddError("sort", "invalid sort field name")
 	}
 
 	sortOrder := data.SortOrder(strings.ToUpper(query.Get("direction")))
 	if sortOrder == "" {
 		sortOrder = qv.DefaultSortOrder
 	} else if sortOrder != data.SortOrderASC && sortOrder != data.SortOrderDESC {
-		qv.addError("direction", "invalid sort order. valid values are 'asc' and 'desc'")
+		qv.AddError("direction", "invalid sort order. valid values are 'asc' and 'desc'")
 	}
 
 	filters := make(map[data.FilterKey]interface{})

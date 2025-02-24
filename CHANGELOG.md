@@ -4,7 +4,91 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## [3.6.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.1...3.6.0))
+
+### Changed
+
+- Improve UX on the reset-password flow by embedding the reset token in the URL so it can be parsed by the FE without human intervention. [#557](https://github.com/stellar/stellar-disbursement-platform-backend/pull/557)
+
+## [3.5.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.0...3.5.1))
+
+### Fixed
+
+- GET `/disbursements` breaks when one of the users is deactivated. [#550](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/550)
+
+## [3.5.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.4.0...3.5.0))
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.5.0`.
+
+### Added
+
+- Added short linking for Wallet Registration Links. 
+  [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
+- Added a new `is_link_shortener_enabled` property to `GET` and `PATCH` organizations endpoints to enable/disable the short link feature. 
+  [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
+- Added receiver contact info for Payments export. 
+  [#538](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/538)
+
+
+## [3.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.3.0...3.4.0))
+
+Release of the Stellar Disbursement Platform `v3.4.0`. This release adds support for `q={term}` query searches in the
+`GET /payments` endpoint, and updates the CSV parser to ignore BOM (Byte Order Mark) characters.
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.4.0`.
+
+### Changed
+
+- Update the `GET /payments` endpoint to accept `q={term}` query searches. [#530](https://github.com/stellar/stellar-disbursement-platform-backend/pull/530)
+- Update the CSV parser to ignore BOM (Byte Order Mark) characters. [#531](https://github.com/stellar/stellar-disbursement-platform-backend/pull/531)
+
+### Security and Dependencies
+
+- Bump golang in the all-docker group. [#507](https://github.com/stellar/stellar-disbursement-platform-backend/pull/507)
+- Bump the all-actions group. [#514](https://github.com/stellar/stellar-disbursement-platform-backend/pull/514)
+- Bump the minor-and-patch group. [#529](https://github.com/stellar/stellar-disbursement-platform-backend/pull/529)
+
+## [3.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.2.0...3.3.0))
+
+Release of the Stellar Disbursement Platform `v3.3.0`. This release adds support to Circle's Transfers API, as an
+alternative to the Payouts API. It also adds audit functionality for the `receivers` table to track changes.
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.3.0`.
+
+### Added
+
+- Audit functionality for the `receivers` table to track changes. [#520](https://github.com/stellar/stellar-disbursement-platform-backend/pull/520)
+- Support for Circle API type `TRANSFERS`, and allow users to choose between `TRANSFERS` and `PAYOUTS` through the `CIRCLE_API_TYPE` environment variable. It defaults to `TRANSFERS`. [#522](https://github.com/stellar/stellar-disbursement-platform-backend/pull/522)
+
+### Changed
+
+- Refactor MFA and reCAPTCHA handling for better modularity in preparation for API-only usage. [#499](https://github.com/stellar/stellar-disbursement-platform-backend/pull/499)
+
+### Removed
+
+- Removed `EC256_PUBLIC_KEY` environment variable as it can be derived from the `EC256_PRIVATE_KEY` [#511](https://github.com/stellar/stellar-disbursement-platform-backend/pull/511)
+- Removed `nginx.ingress.kubernetes.io/server-snippet` annotation from SDP and AP ingress resources. [#510](https://github.com/stellar/stellar-disbursement-platform-backend/pull/510)
+
+## [3.2.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.2.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.1.0...3.2.0))
+
+Release of the Stellar Disbursement Platform `v3.2.0`. This release focuses on enhancing the platform’s reliability and
+data tracking capabilities. Users can now patch already confirmed verification fields for receivers, providing greater
+flexibility in managing locked-out accounts. Additionally, audit logging has been introduced to track changes made to
+critical verification data, ensuring improved accountability and transparency.
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.2.0`.
+
+### Added
+
+- Dynamic Audit Table Creation through the `create_audit_table` Postgres function. This is initially applied to the receiver_verifications table to track changes. [#513](https://github.com/stellar/stellar-disbursement-platform-backend/pull/513)
+
+### Changed
+
+- Enabled patching of already confirmed verification fields for receivers, addressing scenarios where users might get locked out of a partner’s system. [#512](https://github.com/stellar/stellar-disbursement-platform-backend/pull/512)
 
 ## [3.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.0.0...3.1.0))
 
@@ -14,8 +98,8 @@ data export through dedicated endpoints, allowing users to export disbursements,
 Additionally, users now have the ability to delete disbursements in `DRAFT` or `READY` status, streamlining data
 management workflows.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `3.1.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.1.0`.
 
 ### Added
 
@@ -61,8 +145,8 @@ exclusively through SMS as it now supports new types. The options are `PHONE_NUM
 `EMAIL_AND_WALLET_ADDRESS`, and `PHONE_NUMBER_AND_WALLET_ADDRESS`. If a receiver is registered with a wallet address,
 they can receive the payment right away without having to go through the SEP-24 registration flow.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `3.0.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.0.0`.
 
 ### Breaking Changes
 
@@ -136,8 +220,8 @@ the option to set different distribution account signers per tenant, as well
 as Circle support, so the tenant can choose to run their payments through the
 Circle API rather than directly on the Stellar network.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `2.1.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.1.0`.
 
 ### Changed
 
@@ -198,8 +282,8 @@ release introduces multi-tenancy support, allowing multiple tenants
 
 Each organization has its own set of users, receivers, disbursements, etc.
 
-> [!WARNING]  
-> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend](https://github.com/stellar/stellar-disbursement-platform-frontend) version `2.0.0`.
+> [!WARNING]
+> This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.0.0`.
 
 ### Changed
 

@@ -21,7 +21,6 @@ sdp:
     mtnDomain: #required
 
   ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs are enabled in this instance ("true" or "false"). Setting to "true" because broker type is `NONE`.
-  ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes.
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
   ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
   ## @param sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
@@ -30,7 +29,6 @@ sdp:
     annotations:
     data:
       ENABLE_SCHEDULER: "true"
-      EC256_PUBLIC_KEY: #required
       SEP10_SIGNING_PUBLIC_KEY: #required
       DISTRIBUTION_PUBLIC_KEY: #required
       RECAPTCHA_SITE_KEY: #required

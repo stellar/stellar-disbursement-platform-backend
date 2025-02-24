@@ -461,9 +461,12 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"organizations",
 		"payments",
 		"receiver_verifications",
+		"receiver_verifications_audit",
 		"receiver_wallets",
 		"receivers",
+		"receivers_audit",
 		"sdp_migrations",
+		"short_urls",
 		"wallets",
 		"wallets_assets",
 	}

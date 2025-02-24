@@ -27,7 +27,7 @@ github.com/armon/go-metrics v0.4.1
 github.com/armon/go-radix v1.0.0
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 github.com/avast/retry-go/v4 v4.6.0
-github.com/aws/aws-sdk-go v1.55.5
+github.com/aws/aws-sdk-go v1.55.6
 github.com/beevik/etree v1.1.0
 github.com/beorn7/perks v1.0.1
 github.com/bgentry/speakeasy v0.1.0
@@ -47,6 +47,7 @@ github.com/creachadair/mds v0.0.1
 github.com/creack/pty v1.1.9
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/denisenkom/go-mssqldb v0.9.0
+github.com/dimchansky/utfbom v1.1.1
 github.com/distribution/reference v0.6.0
 github.com/djherbis/fscache v0.10.1
 github.com/docker/docker v27.3.1+incompatible
@@ -159,7 +160,7 @@ github.com/nats-io/nuid v1.0.1
 github.com/nelsam/hel/v2 v2.3.3
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e
 github.com/nxadm/tail v1.4.8
-github.com/nyaruka/phonenumbers v1.4.4
+github.com/nyaruka/phonenumbers v1.5.0
 github.com/olekukonko/tablewriter v0.0.5
 github.com/onsi/ginkgo v1.16.5
 github.com/onsi/gomega v1.27.10
@@ -207,7 +208,7 @@ github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 github.com/stretchr/objx v0.5.2
 github.com/stretchr/testify v1.10.0
 github.com/subosito/gotenv v1.6.0
-github.com/twilio/twilio-go v1.23.9
+github.com/twilio/twilio-go v1.23.11
 github.com/tyler-smith/go-bip39 v0.0.0-20180618194314-52158e4697b8
 github.com/valyala/bytebufferpool v1.0.0
 github.com/valyala/fasthttp v1.34.0

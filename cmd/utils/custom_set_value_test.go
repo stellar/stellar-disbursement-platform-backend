@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -274,62 +275,6 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.crashTrackerType = ""
 			customSetterTester[crashtracker.CrashTrackerType](t, tc, co)
-		})
-	}
-}
-
-func Test_SetConfigOptionEC256PublicKey(t *testing.T) {
-	opts := struct{ ec256PublicKey string }{}
-
-	co := config.ConfigOption{
-		Name:           "ec256-public-key",
-		OptType:        types.String,
-		CustomSetValue: SetConfigOptionEC256PublicKey,
-		ConfigKey:      &opts.ec256PublicKey,
-	}
-
-	expectedPublicKey := `-----BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS
-cvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==
------END PUBLIC KEY-----`
-
-	testCases := []customSetterTestCase[string]{
-		{
-			name:            "returns an error if the value is not a PEM string",
-			args:            []string{"--ec256-public-key", "not-a-pem-string"},
-			wantErrContains: "parsing EC256PublicKey in ec256-public-key: failed to decode PEM block containing public key",
-		},
-		{
-			name:            "returns an error if the value is not a x509 string",
-			args:            []string{"--ec256-public-key", "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----"},
-			wantErrContains: "parsing EC256PublicKey in ec256-public-key: failed to parse EC public key",
-		},
-		{
-			name:            "returns an error if the value is not a ECDSA public key",
-			args:            []string{"--ec256-public-key", "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyNPqmozv8a2PnXHIkV+F\nmWMFy2YhOFzX12yzjjWkJ3rI9QSEomz4Unkwc6oYrnKEDYlnAgCiCqL2zPr5qNkX\nk5MPU87/wLgEqp7uAk0GkJZfrhJIYZ5AuG9+o69BNeQDEi7F3YdMJj9bvs2Ou1FN\n1zG/8HV969rJ/63fzWsqlNon1j4H5mJ0YbmVh/QLcYPmv7feFZGEj4OSZ4u+eJsw\nat5NPyhMgo6uB/goNS3fEY29UNvXoSIN3hnK3WSxQ79Rjn4V4so7ehxzCVPjnm/G\nFFTgY0hGBobmnxbjI08hEZmYKosjan4YqydGETjKR3UlhBx9y/eqqgL+opNJ8vJs\n2QIDAQAB\n-----END PUBLIC KEY-----"},
-			wantErrContains: "parsing EC256PublicKey in ec256-public-key: not a valid elliptic curve public key",
-		},
-		{
-			name:       "🎉 handles EC256 public key through the CLI flag",
-			args:       []string{"--ec256-public-key", expectedPublicKey},
-			wantResult: expectedPublicKey,
-		},
-		{
-			name:       "🎉 handles EC256 public key through the ENV vars",
-			envValue:   expectedPublicKey,
-			wantResult: expectedPublicKey,
-		},
-		{
-			name:       "🎉 handles EC256 public key through the ENV vars & inline line-breaks",
-			envValue:   "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
-			wantResult: expectedPublicKey,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			opts.ec256PublicKey = ""
-			customSetterTester[string](t, tc, co)
 		})
 	}
 }
@@ -764,6 +709,57 @@ func Test_SetRegistrationContactType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.RegistrationContactType = data.RegistrationContactType{}
 			customSetterTester[data.RegistrationContactType](t, tc, co)
+		})
+	}
+}
+
+func Test_SetConfigOptionCircleAPIType(t *testing.T) {
+	opts := struct{ circleAPIType circle.APIType }{}
+
+	co := config.ConfigOption{
+		Name:           "circle-api-type",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionCircleAPIType,
+		ConfigKey:      &opts.circleAPIType,
+	}
+
+	testCases := []customSetterTestCase[circle.APIType]{
+		{
+			name:            "returns an error if the API type is empty",
+			args:            []string{},
+			wantErrContains: `couldn't parse circle API type in circle-api-type: invalid Circle API type "", must be one of [PAYOUTS TRANSFERS]`,
+		},
+		{
+			name:            "returns an error if the API type is invalid",
+			args:            []string{"--circle-api-type", "test"},
+			wantErrContains: `couldn't parse circle API type in circle-api-type: invalid Circle API type "TEST", must be one of [PAYOUTS TRANSFERS]`,
+		},
+		{
+			name:       "🎉 handles API type PAYOUTS (through CLI args)",
+			args:       []string{"--circle-api-type", "PaYoUtS"},
+			wantResult: circle.APITypePayouts,
+		},
+		{
+			name:       "🎉 handles API type PAYOUTS (through ENV vars)",
+			envValue:   "PAYOUTS",
+			wantResult: circle.APITypePayouts,
+		},
+		{
+			name:       "🎉 handles API type TRANSFERS (through CLI args)",
+			args:       []string{"--circle-api-type", "TrAnSfErS"},
+			wantResult: circle.APITypeTransfers,
+		},
+		{
+			name:       "🎉 handles API type TRANSFERS (through ENV vars)",
+			envValue:   "TRANSFERS",
+			wantResult: circle.APITypeTransfers,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.circleAPIType = ""
+			customSetterTester[circle.APIType](t, tc, co)
 		})
 	}
 }

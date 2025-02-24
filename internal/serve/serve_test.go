@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -75,7 +76,6 @@ func Test_Serve(t *testing.T) {
 		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
-		EC256PublicKey:                  publicKeyStr,
 		Environment:                     "test",
 		GitCommit:                       "1234567890abcdef",
 		Models:                          models,
@@ -223,7 +223,6 @@ func Test_handleHTTP_Health(t *testing.T) {
 
 	handlerMux := handleHTTP(ServeOptions{
 		EC256PrivateKey:       privateKeyStr,
-		EC256PublicKey:        publicKeyStr,
 		Environment:           "test",
 		GitCommit:             "1234567890abcdef",
 		Models:                models,
@@ -348,7 +347,6 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
-		EC256PublicKey:                  publicKeyStr,
 		EmailMessengerClient:            &messengerClientMock,
 		Environment:                     "test",
 		GitCommit:                       "1234567890abcdef",
@@ -379,6 +377,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
+	data.CreateShortURLFixture(t, context.Background(), dbConnectionPool, "123", "https://stellar.org")
 
 	handlerMux := handleHTTP(serveOptions)
 
@@ -393,6 +392,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/mfa"},
 		{http.MethodPost, "/forgot-password"},
 		{http.MethodPost, "/reset-password"},
+		{http.MethodGet, "/r/123"},
 	}
 	for _, endpoint := range unauthenticatedEndpoints {
 		t.Run(fmt.Sprintf("%s %s", endpoint.method, endpoint.path), func(t *testing.T) {
@@ -403,7 +403,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 			handlerMux.ServeHTTP(w, req)
 
 			resp := w.Result()
-			assert.Contains(t, []int{http.StatusOK, http.StatusBadRequest}, resp.StatusCode)
+			assert.Contains(t, []int{http.StatusOK, http.StatusBadRequest, http.StatusMovedPermanently}, resp.StatusCode)
 		})
 	}
 }
@@ -555,7 +555,6 @@ func Test_createAuthManager(t *testing.T) {
 	testCases := []struct {
 		name                      string
 		dbConnectionPool          db.DBConnectionPool
-		ec256PublicKey            string
 		ec256PrivateKey           string
 		resetTokenExpirationHours int
 		wantErrContains           string
@@ -566,21 +565,14 @@ func Test_createAuthManager(t *testing.T) {
 			wantErrContains: "db connection pool cannot be nil",
 		},
 		{
-			name:             "returns error if dbConnectionPool is valid but the keypair is not",
-			dbConnectionPool: dbConnectionPool,
-			wantErrContains:  "validating auth manager keys: validating EC public key: failed to decode PEM block containing public key",
-		},
-		{
 			name:             "returns error if dbConnectionPool and keypair is valid but the resetTokenExpirationHours is not",
 			dbConnectionPool: dbConnectionPool,
-			ec256PublicKey:   publicKeyStr,
 			ec256PrivateKey:  privateKeyStr,
 			wantErrContains:  "reset token expiration hours must be greater than 0",
 		},
 		{
 			name:                      "🎉 successfully create the auth manager",
 			dbConnectionPool:          dbConnectionPool,
-			ec256PublicKey:            publicKeyStr,
 			ec256PrivateKey:           privateKeyStr,
 			resetTokenExpirationHours: 1,
 			wantAuthManager:           wantAuthManager,
@@ -590,7 +582,7 @@ func Test_createAuthManager(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			gotAuthManager, err := createAuthManager(
-				tc.dbConnectionPool, tc.ec256PublicKey, tc.ec256PrivateKey, tc.resetTokenExpirationHours,
+				tc.dbConnectionPool, tc.ec256PrivateKey, tc.resetTokenExpirationHours,
 			)
 			if tc.wantErrContains != "" {
 				assert.ErrorContains(t, err, tc.wantErrContains)

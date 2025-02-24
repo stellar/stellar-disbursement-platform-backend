@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -38,7 +39,6 @@ import (
 func Test_PaymentsHandlerGet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -111,57 +111,70 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := fmt.Sprintf(`{
-			"id": %q,
+		wantJson := `{
+			"id": "` + payment.ID + `",
 			"amount": "50.0000000",
-			"stellar_transaction_id": %q,
-			"stellar_operation_id": %q,
+			"stellar_transaction_id": "` + payment.StellarTransactionID + `",
+			"stellar_operation_id": "` + payment.StellarOperationID + `",
 			"status": "DRAFT",
 			"status_history": [
 				{
 					"status": "DRAFT",
 					"status_message": "",
-					"timestamp": %q
+					"timestamp": "` + payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano) + `"
 				}
 			],
 			"disbursement": {
-				"id": %q,
+				"id": "` + disbursement.ID + `",
 				"name": "disbursement 1",
 				"status": "DRAFT",
-				"created_at": %q,
-				"updated_at": %q,
-				"registration_contact_type": %q,
+				"status_history": [
+					{
+						"status": "DRAFT",
+						"user_id": "",
+						"timestamp": "` + disbursement.StatusHistory[0].Timestamp.Format(time.RFC3339Nano) + `"
+					}
+				],
+				"created_at": "` + disbursement.CreatedAt.Format(time.RFC3339Nano) + `",
+				"updated_at": "` + disbursement.UpdatedAt.Format(time.RFC3339Nano) + `",
+				"registration_contact_type": "` + disbursement.RegistrationContactType.String() + `",
+				"verification_field": "` + string(disbursement.VerificationField) + `",
 				"receiver_registration_message_template":""
 			},
 			"asset": {
-				"id": %q,
+				"id": "` + asset.ID + `",
 				"code": "USDC",
 				"issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 				"deleted_at": null
 			},
 			"receiver_wallet": {
-				"id": %q,
+				"id": "` + receiverWallet.ID + `",
 				"receiver": {
-					"id": %q
+					"id": "` + receiver.ID + `"
 				},
 				"wallet": {
-					"id": %q,
+					"id": "` + wallet.ID + `",
 					"name": "wallet1",
+					"deep_link_schema": "` + wallet.DeepLinkSchema + `",
+					"homepage": "` + wallet.Homepage + `",
+					"sep_10_client_domain": "` + wallet.SEP10ClientDomain + `",
 					"enabled": true
 				},
 				"status": "DRAFT",
-				"created_at": %q,
-				"updated_at": %q,
+				"status_history": [
+					{
+						"status": "DRAFT",
+						"timestamp": "` + receiverWallet.StatusHistory[0].Timestamp.Format(time.RFC3339Nano) + `"
+					}
+				],
+				"created_at": "` + receiverWallet.CreatedAt.Format(time.RFC3339Nano) + `",
+				"updated_at": "` + receiverWallet.UpdatedAt.Format(time.RFC3339Nano) + `",
 				"invitation_sent_at": null
 			},
-			"created_at": %q,
-			"updated_at": %q,
-			"external_payment_id": %q
-		}`, payment.ID, payment.StellarTransactionID, payment.StellarOperationID, payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano),
-			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano), disbursement.RegistrationContactType.String(),
-			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.CreatedAt.Format(time.RFC3339Nano), receiverWallet.UpdatedAt.Format(time.RFC3339Nano),
-			payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano),
-			payment.ExternalPaymentID)
+			"created_at": "` + payment.CreatedAt.Format(time.RFC3339Nano) + `",
+			"updated_at": "` + payment.UpdatedAt.Format(time.RFC3339Nano) + `",
+			"external_payment_id": "` + payment.ExternalPaymentID + `"
+		}`
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
@@ -469,10 +482,10 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 
 	// create receivers
 	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiverWallet1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, data.DraftReceiversWalletStatus)
+	receiverWallet1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiverWallet2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.DraftReceiversWalletStatus)
+	receiverWallet2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	// create disbursements
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -495,11 +508,12 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// create payments
-	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+	paymentDraft := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "50",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
-		Status:               data.PendingPaymentStatus,
+		Status:               data.DraftPaymentStatus,
 		Disbursement:         disbursement1,
 		Asset:                *asset,
 		ReceiverWallet:       receiverWallet1,
@@ -512,11 +526,12 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	stellarOperationID, err = utils.RandomString(32)
 	require.NoError(t, err)
 
-	payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+	paymentReady := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "150",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
-		Status:               data.DraftPaymentStatus,
+		Status:               data.ReadyPaymentStatus,
 		Disbursement:         disbursement1,
 		Asset:                *asset,
 		ReceiverWallet:       receiverWallet2,
@@ -529,11 +544,12 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	stellarOperationID, err = utils.RandomString(32)
 	require.NoError(t, err)
 
-	payment3 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+	paymentPending := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "200.50",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
-		Status:               data.DraftPaymentStatus,
+		Status:               data.PendingPaymentStatus,
 		Disbursement:         disbursement2,
 		Asset:                *asset,
 		ReceiverWallet:       receiverWallet1,
@@ -546,11 +562,12 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	stellarOperationID, err = utils.RandomString(32)
 	require.NoError(t, err)
 
-	payment4 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+	paymentPaused := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		Amount:               "20",
+		ExternalPaymentID:    uuid.NewString(),
 		StellarTransactionID: stellarTransactionID,
 		StellarOperationID:   stellarOperationID,
-		Status:               data.PendingPaymentStatus,
+		Status:               data.PausedPaymentStatus,
 		Disbursement:         disbursement2,
 		Asset:                *asset,
 		ReceiverWallet:       receiverWallet2,
@@ -558,24 +575,56 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 		UpdatedAt:            time.Date(2023, 4, 10, 23, 40, 20, 1431, time.UTC),
 	})
 
-	tests := []struct {
+	var paymentSuccess *data.Payment
+	var paymentFailed *data.Payment
+	var paymentCanceled *data.Payment
+
+	for i, paymentStatus := range []data.PaymentStatus{data.SuccessPaymentStatus, data.FailedPaymentStatus, data.CanceledPaymentStatus} {
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "50",
+			ExternalPaymentID:    uuid.NewString(),
+			StellarTransactionID: stellarTransactionID,
+			StellarOperationID:   stellarOperationID,
+			Status:               paymentStatus,
+			Disbursement:         disbursement1,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet1,
+			CreatedAt:            time.Date(2024, time.Month(i+1), 10, 23, 40, 20, 1431, time.UTC),
+			UpdatedAt:            time.Date(2024, time.Month(i+1), 10, 23, 40, 20, 1431, time.UTC),
+		})
+
+		switch paymentStatus {
+		case data.SuccessPaymentStatus:
+			paymentSuccess = payment
+		case data.FailedPaymentStatus:
+			paymentFailed = payment
+		case data.CanceledPaymentStatus:
+			paymentCanceled = payment
+		default:
+			panic(fmt.Sprintf("invalid payment status: %s", paymentStatus))
+		}
+	}
+
+	type TestCase struct {
 		name               string
 		queryParams        map[string]string
 		expectedStatusCode int
 		expectedPagination httpresponse.PaginationInfo
 		expectedPayments   []data.Payment
-	}{
+	}
+
+	tests := []TestCase{
 		{
-			name:               "fetch all payments without filters",
+			name:               "fetch all payments without filters will use the default sorter (updated_at DESC)",
 			queryParams:        map[string]string{},
 			expectedStatusCode: http.StatusOK,
 			expectedPagination: httpresponse.PaginationInfo{
 				Next:  "",
 				Prev:  "",
 				Pages: 1,
-				Total: 4,
+				Total: 7,
 			},
-			expectedPayments: []data.Payment{*payment4, *payment1, *payment3, *payment2},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentPaused, *paymentDraft, *paymentPending, *paymentReady}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "fetch first page of payments with limit 1 and sort by created_at",
@@ -589,10 +638,10 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			expectedPagination: httpresponse.PaginationInfo{
 				Next:  "/payments?direction=asc&page=2&page_limit=1&sort=created_at",
 				Prev:  "",
-				Pages: 4,
-				Total: 4,
+				Pages: 7,
+				Total: 7,
 			},
-			expectedPayments: []data.Payment{*payment1},
+			expectedPayments: []data.Payment{*paymentDraft},
 		},
 		{
 			name: "fetch second page of payments with limit 1 and sort by created_at",
@@ -606,15 +655,15 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			expectedPagination: httpresponse.PaginationInfo{
 				Next:  "/payments?direction=asc&page=3&page_limit=1&sort=created_at",
 				Prev:  "/payments?direction=asc&page=1&page_limit=1&sort=created_at",
-				Pages: 4,
-				Total: 4,
+				Pages: 7,
+				Total: 7,
 			},
-			expectedPayments: []data.Payment{*payment2},
+			expectedPayments: []data.Payment{*paymentReady},
 		},
 		{
 			name: "fetch last page of payments with limit 1 and sort by created_at",
 			queryParams: map[string]string{
-				"page":       "4",
+				"page":       "7",
 				"page_limit": "1",
 				"sort":       "created_at",
 				"direction":  "asc",
@@ -622,28 +671,14 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 			expectedPagination: httpresponse.PaginationInfo{
 				Next:  "",
-				Prev:  "/payments?direction=asc&page=3&page_limit=1&sort=created_at",
-				Pages: 4,
-				Total: 4,
+				Prev:  "/payments?direction=asc&page=6&page_limit=1&sort=created_at",
+				Pages: 7,
+				Total: 7,
 			},
-			expectedPayments: []data.Payment{*payment4},
+			expectedPayments: []data.Payment{*paymentCanceled},
 		},
 		{
-			name: "fetch payments with status draft",
-			queryParams: map[string]string{
-				"status": "dRaFt",
-			},
-			expectedStatusCode: http.StatusOK,
-			expectedPagination: httpresponse.PaginationInfo{
-				Next:  "",
-				Prev:  "",
-				Pages: 1,
-				Total: 2,
-			},
-			expectedPayments: []data.Payment{*payment3, *payment2},
-		},
-		{
-			name: "fetch payments for receiver1",
+			name: "fetch payments for receiver1 with default sorter (updated_at DESC)",
 			queryParams: map[string]string{
 				"receiver_id": receiver1.ID,
 			},
@@ -652,12 +687,12 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next:  "",
 				Prev:  "",
 				Pages: 1,
-				Total: 2,
+				Total: 5,
 			},
-			expectedPayments: []data.Payment{*payment1, *payment3},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentDraft, *paymentPending}, // default sorter: (updated_at DESC)
 		},
 		{
-			name: "fetch payments for receiver2",
+			name: "fetch payments for receiver2 with default sorter (updated_at DESC)",
 			queryParams: map[string]string{
 				"receiver_id": receiver2.ID,
 			},
@@ -668,12 +703,12 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 2,
 			},
-			expectedPayments: []data.Payment{*payment4, *payment2},
+			expectedPayments: []data.Payment{*paymentPaused, *paymentReady}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "returns empty list when receiver_id is not found",
 			queryParams: map[string]string{
-				"receiver_id": "invalid_id",
+				"receiver_id": "non_existing_id",
 			},
 			expectedStatusCode: http.StatusOK,
 			expectedPagination: httpresponse.PaginationInfo{
@@ -696,7 +731,7 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 1,
 			},
-			expectedPayments: []data.Payment{*payment1},
+			expectedPayments: []data.Payment{*paymentDraft},
 		},
 		{
 			name: "fetch payments after 2023-03-01",
@@ -708,9 +743,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next:  "",
 				Prev:  "",
 				Pages: 1,
-				Total: 1,
+				Total: 4,
 			},
-			expectedPayments: []data.Payment{*payment4},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentPaused}, // default sorter: (updated_at DESC)
 		},
 		{
 			name: "fetch payment created at after 2023-01-01 and before 2023-03-01",
@@ -725,8 +760,73 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Pages: 1,
 				Total: 2,
 			},
-			expectedPayments: []data.Payment{*payment3, *payment2},
+			expectedPayments: []data.Payment{*paymentPending, *paymentReady}, // default sorter: (updated_at DESC)
 		},
+		{
+			name: "query[p.id]",
+			queryParams: map[string]string{
+				"q": paymentDraft.ID[:5],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 1,
+			},
+			expectedPayments: []data.Payment{*paymentDraft},
+		},
+		{
+			name: "query[p.external_payment_id]",
+			queryParams: map[string]string{
+				"q": paymentReady.ExternalPaymentID[:5],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 1,
+			},
+			expectedPayments: []data.Payment{*paymentReady},
+		},
+		{
+			name: "query[rw.stellar_address]",
+			queryParams: map[string]string{
+				"q": receiverWallet1.StellarAddress[:5],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 5,
+			},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentDraft, *paymentPending}, // default sorter: (updated_at DESC)
+		},
+		{
+			name: "query[d.name]",
+			queryParams: map[string]string{
+				"q": disbursement2.Name[5:],
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next: "", Prev: "",
+				Pages: 1, Total: 2,
+			},
+			expectedPayments: []data.Payment{*paymentPaused, *paymentPending}, // default sorter: (updated_at DESC)
+		},
+	}
+
+	for _, payment := range []data.Payment{*paymentDraft, *paymentPending, *paymentReady, *paymentPaused, *paymentSuccess, *paymentFailed, *paymentCanceled} {
+		tests = append(tests, TestCase{
+			name: "fetch payments with status=" + string(payment.Status),
+			queryParams: map[string]string{
+				"status": string(payment.Status),
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next:  "",
+				Prev:  "",
+				Pages: 1,
+				Total: 1,
+			},
+			expectedPayments: []data.Payment{payment},
+		})
 	}
 
 	for _, tc := range tests {
@@ -746,12 +846,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			assert.Equal(t, tc.expectedPagination, actualResponse.Pagination)
 
 			// Parse the response data
-			var actualPayments []data.Payment
-			err = json.Unmarshal(actualResponse.Data, &actualPayments)
+			expectedJson, err := json.Marshal(tc.expectedPayments)
 			require.NoError(t, err)
-
-			// Assert on the payments data
-			assert.Equal(t, tc.expectedPayments, actualPayments)
+			assert.JSONEq(t, string(expectedJson), string(actualResponse.Data))
 		})
 	}
 }
@@ -1469,7 +1566,7 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 				data.FilterKeyStatus: "INVALID",
 			},
 		})
-		require.EqualError(t, err, `running atomic function in RunInTransactionWithResult: error counting payments: error counting payments: pq: invalid input value for enum payment_status: "INVALID"`)
+		require.ErrorContains(t, err, `error counting payments: error counting payments: pq: invalid input value for enum payment_status: "INVALID"`)
 	})
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")

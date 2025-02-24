@@ -58,12 +58,15 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 	type methodOption string
 	const (
+		// SendPaymentsReadyToPay is triggered by brokers (such as Kafka).
 		SendPaymentsReadyToPay methodOption = "SendPaymentsReadyToPay"
-		SendBatchPayments      methodOption = "SendBatchPayments"
+		// SendBatchPayments is triggered by the scheduler.
+		SendBatchPayments methodOption = "SendBatchPayments"
 	)
 
 	testCases := []struct {
 		distributionAccount schema.TransactionAccount
+		circleAPIType       circle.APIType
 		asset               *data.Asset
 		methodOption        methodOption
 	}{
@@ -89,6 +92,13 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 		},
 		{
 			distributionAccount: circleDistAccountDBVault,
+			circleAPIType:       circle.APITypePayouts,
+			asset:               eurcAsset,
+			methodOption:        SendBatchPayments,
+		},
+		{
+			distributionAccount: circleDistAccountDBVault,
+			circleAPIType:       circle.APITypeTransfers,
 			asset:               eurcAsset,
 			methodOption:        SendBatchPayments,
 		},
@@ -114,6 +124,13 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 		},
 		{
 			distributionAccount: circleDistAccountDBVault,
+			circleAPIType:       circle.APITypePayouts,
+			asset:               eurcAsset,
+			methodOption:        SendPaymentsReadyToPay,
+		},
+		{
+			distributionAccount: circleDistAccountDBVault,
+			circleAPIType:       circle.APITypeTransfers,
 			asset:               eurcAsset,
 			methodOption:        SendPaymentsReadyToPay,
 		},
@@ -152,6 +169,8 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 				ReceiverWalletID:  rwRegistered.ID,
 				Status:            data.CircleRecipientStatusActive,
 				CircleRecipientID: circleRecipientID,
+				StellarAddress:    rwRegistered.StellarAddress,
+				StellarMemo:       rwRegistered.StellarMemo,
 			})
 			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwRegistered,
@@ -171,55 +190,111 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			if tc.distributionAccount.IsCircle() {
 				wantPaymentReques := circle.PaymentRequest{
 					SourceWalletID:   tc.distributionAccount.CircleWalletID,
-					RecipientID:      cRecipient.CircleRecipientID,
 					Amount:           paymentRegistered.Amount,
 					StellarAssetCode: paymentRegistered.Asset.Code,
 				}
+
+				switch tc.circleAPIType {
+				case circle.APITypePayouts:
+					wantPaymentReques.APIType = circle.APITypePayouts
+					wantPaymentReques.RecipientID = cRecipient.CircleRecipientID
+				case circle.APITypeTransfers:
+					wantPaymentReques.APIType = circle.APITypeTransfers
+					wantPaymentReques.DestinationStellarAddress = rwRegistered.StellarAddress
+				default:
+					t.Fatalf("unknown circle API type: %s", tc.circleAPIType)
+				}
+
 				var circleAssetCode string
 				circleAssetCode, err = wantPaymentReques.GetCircleAssetCode()
 				require.NoError(t, err)
 				createDate := time.Now()
 
-				mCircleService.
-					On("SendPayment", ctx, mock.Anything).
-					Run(func(args mock.Arguments) {
-						gotPayment, ok := args.Get(1).(circle.PaymentRequest)
-						require.True(t, ok)
+				if tc.circleAPIType == circle.APITypePayouts {
+					mCircleService.
+						On("SendPayout", ctx, mock.Anything).
+						Run(func(args mock.Arguments) {
+							gotPayment, ok := args.Get(1).(circle.PaymentRequest)
+							require.True(t, ok)
 
-						// Validate payment
-						assert.Equal(t, wantPaymentReques.SourceWalletID, gotPayment.SourceWalletID)
-						assert.Equal(t, wantPaymentReques.RecipientID, gotPayment.RecipientID)
-						assert.Equal(t, wantPaymentReques.Amount, gotPayment.Amount)
-						assert.Equal(t, wantPaymentReques.StellarAssetCode, gotPayment.StellarAssetCode)
-						assert.NoError(t, uuid.Validate(gotPayment.IdempotencyKey), "Idempotency key should be a valid UUID")
-						wantPaymentReques.IdempotencyKey = gotPayment.IdempotencyKey
-					}).
-					Return(&circle.Payout{
-						ID:             "62955621-2cf7-4b1f-9f8b-34294ae52938",
-						SourceWalletID: tc.distributionAccount.CircleWalletID,
-						Destination: circle.TransferAccount{
-							ID:    circleRecipientID,
-							Type:  circle.TransferAccountTypeAddressBook,
-							Chain: circle.StellarChainCode,
-						},
-						Amount: circle.Balance{
-							Amount:   paymentRegistered.Amount,
-							Currency: circleAssetCode,
-						},
-						ToAmount:        circle.Balance{Currency: circleAssetCode},
-						TransactionHash: "f7397c3b61f224401952219061fd3b1ac8c7c7d7e472d14926da7fc35fa9246e",
-						Status:          circle.TransferStatusPending,
-						CreateDate:      createDate,
-						UpdateDate:      createDate,
-					}, nil).
-					Once()
+							// Validate payment
+							assert.Equal(t, wantPaymentReques.APIType, circle.APITypePayouts)
+							assert.Equal(t, wantPaymentReques.SourceWalletID, gotPayment.SourceWalletID)
+							assert.Equal(t, wantPaymentReques.RecipientID, gotPayment.RecipientID)
+							assert.Empty(t, gotPayment.DestinationStellarAddress)
+							assert.Equal(t, wantPaymentReques.Amount, gotPayment.Amount)
+							assert.Equal(t, wantPaymentReques.StellarAssetCode, gotPayment.StellarAssetCode)
+							assert.NoError(t, uuid.Validate(gotPayment.IdempotencyKey), "Idempotency key should be a valid UUID")
+							wantPaymentReques.IdempotencyKey = gotPayment.IdempotencyKey
+						}).
+						Return(&circle.Payout{
+							ID:             "62955621-2cf7-4b1f-9f8b-34294ae52938",
+							SourceWalletID: tc.distributionAccount.CircleWalletID,
+							Destination: circle.TransferAccount{
+								ID:    circleRecipientID,
+								Type:  circle.TransferAccountTypeAddressBook,
+								Chain: circle.StellarChainCode,
+							},
+							Amount: circle.Balance{
+								Amount:   paymentRegistered.Amount,
+								Currency: circleAssetCode,
+							},
+							ToAmount:        circle.Balance{Currency: circleAssetCode},
+							TransactionHash: "f7397c3b61f224401952219061fd3b1ac8c7c7d7e472d14926da7fc35fa9246e",
+							Status:          circle.TransferStatusPending,
+							CreateDate:      createDate,
+							UpdateDate:      createDate,
+						}, nil).
+						Once()
+				} else {
+					mCircleService.
+						On("SendTransfer", ctx, mock.Anything).
+						Run(func(args mock.Arguments) {
+							gotPayment, ok := args.Get(1).(circle.PaymentRequest)
+							require.True(t, ok)
+
+							// Validate payment
+							assert.Equal(t, wantPaymentReques.APIType, circle.APITypeTransfers)
+							assert.Equal(t, wantPaymentReques.SourceWalletID, gotPayment.SourceWalletID)
+							assert.Equal(t, wantPaymentReques.DestinationStellarAddress, gotPayment.DestinationStellarAddress)
+							assert.Empty(t, gotPayment.RecipientID)
+							assert.Equal(t, wantPaymentReques.Amount, gotPayment.Amount)
+							assert.Equal(t, wantPaymentReques.StellarAssetCode, gotPayment.StellarAssetCode)
+							assert.NoError(t, uuid.Validate(gotPayment.IdempotencyKey), "Idempotency key should be a valid UUID")
+							wantPaymentReques.IdempotencyKey = gotPayment.IdempotencyKey
+						}).
+						Return(&circle.Transfer{
+							ID: "714214A3-8052-4349-8A3F-D8D6153081E7",
+							Source: circle.TransferAccount{
+								ID:   tc.distributionAccount.CircleWalletID,
+								Type: circle.TransferAccountTypeWallet,
+							},
+							Destination: circle.TransferAccount{
+								Address: rwRegistered.StellarAddress,
+								Type:    circle.TransferAccountTypeBlockchain,
+								Chain:   circle.StellarChainCode,
+							},
+							Amount: circle.Balance{
+								Amount:   paymentRegistered.Amount,
+								Currency: circleAssetCode,
+							},
+							TransactionHash: "f7397c3b61f224401952219061fd3b1ac8c7c7d7e472d14926da7fc35fa9246e",
+							Status:          circle.TransferStatusPending,
+							CreateDate:      createDate,
+						}, nil).
+						Once()
+				}
 			}
 
 			var paymentDispatcher paymentdispatchers.PaymentDispatcherInterface
 			if tc.distributionAccount.IsStellar() {
 				paymentDispatcher = paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccResolver)
 			} else if tc.distributionAccount.IsCircle() {
-				paymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(models, mCircleService, mDistAccResolver)
+				if tc.circleAPIType == circle.APITypePayouts {
+					paymentDispatcher = paymentdispatchers.NewCirclePaymentPayoutDispatcher(models, mCircleService, mDistAccResolver)
+				} else {
+					paymentDispatcher = paymentdispatchers.NewCirclePaymentTransferDispatcher(models, mCircleService, mDistAccResolver)
+				}
 			} else {
 				t.Fatalf("unknown distribution account type: %s", tc.distributionAccount.Type)
 			}
@@ -284,9 +359,14 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 				assert.Equal(t, paymentRegistered.ID, circleTransferRequest.PaymentID)
 				assert.Equal(t, data.CircleTransferStatusPending, *circleTransferRequest.Status)
-				assert.Nil(t, circleTransferRequest.CircleTransferID)
-				assert.Equal(t, "62955621-2cf7-4b1f-9f8b-34294ae52938", *circleTransferRequest.CirclePayoutID)
 				assert.Equal(t, tc.distributionAccount.CircleWalletID, *circleTransferRequest.SourceWalletID)
+				if tc.circleAPIType == circle.APITypePayouts {
+					assert.Nil(t, circleTransferRequest.CircleTransferID)
+					assert.Equal(t, "62955621-2cf7-4b1f-9f8b-34294ae52938", *circleTransferRequest.CirclePayoutID)
+				} else {
+					assert.Equal(t, "714214A3-8052-4349-8A3F-D8D6153081E7", *circleTransferRequest.CircleTransferID)
+					assert.Nil(t, circleTransferRequest.CirclePayoutID)
+				}
 			}
 		})
 	}

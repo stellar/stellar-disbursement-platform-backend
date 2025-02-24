@@ -482,6 +482,8 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 					"receiver_invitation_resend_interval_days": 2,
 					"timezone_utc_offset": "-03:00",
+					"is_memo_tracing_enabled": false,
+					"is_link_shortener_enabled": true,
 					"privacy_policy_link": "https://example.com/privacy-policy"
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", reqBody, newPNGImgBuf())
@@ -495,9 +497,11 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"ReceiverRegistrationMessageTemplate":  "My custom receiver wallet registration invite. MyOrg 👋",
 				"ReceiverInvitationResendIntervalDays": int64(2),
 				"TimezoneUTCOffset":                    "-03:00",
+				"IsMemoTracingEnabled":                 false,
+				"IsLinkShortenerEnabled":               true,
 				"PrivacyPolicyLink":                    "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsMemoTracingEnabled='false', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
@@ -529,7 +533,9 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"otp_message_template": "",
 					"receiver_invitation_resend_interval_days": 0,
 					"payment_cancellation_period_days": 0,
-					"privacy_policy_link": ""
+					"privacy_policy_link": "",
+					"is_memo_tracing_enabled": true,
+					"is_link_shortener_enabled": false
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
 			},
@@ -539,8 +545,10 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"ReceiverInvitationResendIntervalDays": nilInt64,
 				"PaymentCancellationPeriodDays":        nilInt64,
 				"PrivacyPolicyLink":                    nilString,
+				"IsMemoTracingEnabled":                 true,
+				"IsLinkShortenerEnabled":               false,
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', ReceiverInvitationResendIntervalDays='0', ReceiverRegistrationMessageTemplate='']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsLinkShortenerEnabled='false', IsMemoTracingEnabled='true', OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', ReceiverInvitationResendIntervalDays='0', ReceiverRegistrationMessageTemplate='']"},
 		},
 	}
 
@@ -1148,7 +1156,6 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	hostDistAccPublicKey := keypair.MustRandom().Address()
-	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
 	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
 		AdminDBConnectionPool:            dbConnectionPool,
 		HostDistributionAccountPublicKey: hostDistAccPublicKey,
@@ -1164,7 +1171,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		return string(bytes)
 	}
 
-	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	currentTenant, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 
 	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -1252,17 +1259,20 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required": false,
+				"is_link_shortener_enabled": false,
+				"is_memo_tracing_enabled": true,
 				"privacy_policy_link": null,
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1290,18 +1300,21 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
+				"is_link_shortener_enabled": false,
+				"is_memo_tracing_enabled": true,
 				"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1325,11 +1338,14 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody = fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
+				"is_link_shortener_enabled": false,
+				"is_memo_tracing_enabled": true,
 				"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
 				"receiver_invitation_resend_interval_days": 0,
@@ -1337,7 +1353,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1367,17 +1383,20 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
+				"is_link_shortener_enabled": false,
+				"is_memo_tracing_enabled": true,
 				"receiver_invitation_resend_interval_days": 2,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1407,17 +1426,20 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
+				"is_link_shortener_enabled": false,
+				"is_memo_tracing_enabled": true,
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 5,
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1447,17 +1469,20 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		wantsBody := fmt.Sprintf(`
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
+				"is_link_shortener_enabled": false,
+				"is_memo_tracing_enabled": true,
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": "https://example.com/privacy-policy",
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
+		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))

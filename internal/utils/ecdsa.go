@@ -3,11 +3,10 @@ package utils
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -79,32 +78,22 @@ func ParseStrongECPrivateKey(privateKeyStr string) (*ecdsa.PrivateKey, error) {
 	return privateKey, nil
 }
 
-// ValidateStrongECKeyPair validates if the given public and private keys are a valid EC keypair
-// using a curve that's at least as strong as prime256v1 (P-256).
-func ValidateStrongECKeyPair(publicKeyStr, privateKeyStr string) error {
-	publicKey, err := ParseStrongECPublicKey(publicKeyStr)
+// GetEC256PublicKeyFromPrivateKey returns the public key of the given EC private key.
+func GetEC256PublicKeyFromPrivateKey(key string) (string, error) {
+	privateKey, err := ParseStrongECPrivateKey(key)
 	if err != nil {
-		return fmt.Errorf("validating EC public key: %w", err)
+		return "", fmt.Errorf("validating EC private key: %w", err)
 	}
 
-	privateKey, err := ParseStrongECPrivateKey(privateKeyStr)
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		return fmt.Errorf("validating EC private key: %w", err)
+		return "", fmt.Errorf("marshaling public key: %w", err)
 	}
 
-	// Sign a test message using the private key
-	msg := "test message"
-	hash := sha256.Sum256([]byte(msg))
-	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
-	if err != nil {
-		return fmt.Errorf("signing message for validation: %w", err)
-	}
+	publicKeyPEMEncoded := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: publicKeyBytes,
+	})
 
-	// Verify the signature using the public key
-	valid := ecdsa.Verify(publicKey, hash[:], r, s)
-	if !valid {
-		return fmt.Errorf("signature verification failed for the provided pair of keys")
-	}
-
-	return nil
+	return strings.TrimSpace(string(publicKeyPEMEncoded)), nil
 }

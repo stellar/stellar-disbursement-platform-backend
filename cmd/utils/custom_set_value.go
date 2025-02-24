@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -19,6 +20,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+func SetConfigOptionCircleAPIType(co *config.ConfigOption) error {
+	apiType := viper.GetString(co.Name)
+
+	circleAPIType, err := circle.ParseAPIType(apiType)
+	if err != nil {
+		return fmt.Errorf("couldn't parse circle API type in %s: %w", co.Name, err)
+	}
+
+	*(co.ConfigKey.(*circle.APIType)) = circleAPIType
+	return nil
+}
 
 func SetConfigOptionMessengerType(co *config.ConfigOption) error {
 	senderType := viper.GetString(co.Name)
@@ -78,27 +91,6 @@ func SetConfigOptionLogLevel(co *config.ConfigOption) error {
 	} else {
 		log.Debugf("Using default log level: %q", logLevel)
 	}
-	return nil
-}
-
-// SetConfigOptionEC256PublicKey parses the config option incoming value and validates if it is a valid EC256PublicKey.
-func SetConfigOptionEC256PublicKey(co *config.ConfigOption) error {
-	key, ok := co.ConfigKey.(*string)
-	if !ok {
-		return fmt.Errorf("not a valid EC256PublicKey in %s: the expected type for this config key is a string, but got a %T instead", co.Name, co.ConfigKey)
-	}
-
-	publicKey := viper.GetString(co.Name)
-
-	// We must remove the literal \n in case of the config options being set this way
-	publicKey = strings.Replace(publicKey, `\n`, "\n", -1)
-
-	_, err := utils.ParseStrongECPublicKey(publicKey)
-	if err != nil {
-		return fmt.Errorf("parsing EC256PublicKey in %s: %w", co.Name, err)
-	}
-
-	*key = publicKey
 	return nil
 }
 

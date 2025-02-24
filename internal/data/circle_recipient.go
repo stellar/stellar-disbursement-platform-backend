@@ -18,6 +18,8 @@ type CircleRecipient struct {
 	ReceiverWalletID  string                `db:"receiver_wallet_id"`
 	IdempotencyKey    string                `db:"idempotency_key"`
 	CircleRecipientID string                `db:"circle_recipient_id"`
+	StellarAddress    string                `db:"stellar_address"`
+	StellarMemo       string                `db:"stellar_memo"`
 	Status            CircleRecipientStatus `db:"status"`
 	CreatedAt         time.Time             `db:"created_at"`
 	UpdatedAt         time.Time             `db:"updated_at"`
@@ -84,6 +86,8 @@ func ParseRecipientStatus(statusStr string) (CircleRecipientStatus, error) {
 type CircleRecipientUpdate struct {
 	IdempotencyKey    string                `db:"idempotency_key"`
 	CircleRecipientID string                `db:"circle_recipient_id"`
+	StellarAddress    string                `db:"stellar_address"`
+	StellarMemo       string                `db:"stellar_memo"`
 	Status            CircleRecipientStatus `db:"status"`
 	SyncAttempts      int                   `db:"sync_attempts"`
 	LastSyncAttemptAt time.Time             `db:"last_sync_attempt_at"`
@@ -98,6 +102,8 @@ const circleRecipientFields = `
 	receiver_wallet_id,
 	idempotency_key,
 	COALESCE(circle_recipient_id, '') AS circle_recipient_id,
+	COALESCE(stellar_address, '') AS stellar_address,
+	COALESCE(stellar_memo, '') AS stellar_memo,
 	status,
 	created_at,
 	updated_at,
@@ -111,7 +117,7 @@ func (m CircleRecipientModel) Insert(ctx context.Context, receiverWalletID strin
 		return nil, fmt.Errorf("receiverWalletID is required")
 	}
 
-	query := `
+	const query = `
 		INSERT INTO circle_recipients
 			(receiver_wallet_id)
 		VALUES
@@ -141,8 +147,10 @@ func (m CircleRecipientModel) ResetRecipientsForRetryIfNeeded(ctx context.Contex
 			status = NULL,
 			sync_attempts = 0,
 			last_sync_attempt_at = NULL,
-			response_body = NULL
-		WHERE 
+			response_body = NULL,
+			stellar_memo = NULL,
+			stellar_address = NULL
+		WHERE
 			receiver_wallet_id IN (
 				SELECT DISTINCT receiver_wallet_id
 				FROM payments
@@ -200,14 +208,14 @@ func (m CircleRecipientModel) GetByReceiverWalletID(ctx context.Context, receive
 		return nil, fmt.Errorf("receiverWalletID is required")
 	}
 
-	query := fmt.Sprintf(`
+	const query = `
 		SELECT
-			%s
+			` + circleRecipientFields + `
 		FROM
 			circle_recipients c
 		WHERE
 			c.receiver_wallet_id = $1
-	`, circleRecipientFields)
+	`
 
 	var circleRecipient CircleRecipient
 	err := m.dbConnectionPool.GetContext(ctx, &circleRecipient, query, receiverWalletID)

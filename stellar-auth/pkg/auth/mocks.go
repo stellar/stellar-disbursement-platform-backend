@@ -128,8 +128,8 @@ func (am *AuthenticatorMock) GetUser(ctx context.Context, userID string) (*User,
 	return args.Get(0).(*User), args.Error(1)
 }
 
-func (am *AuthenticatorMock) GetUsers(ctx context.Context, userIDs []string) ([]*User, error) {
-	args := am.Called(ctx, userIDs)
+func (am *AuthenticatorMock) GetUsers(ctx context.Context, userIDs []string, activeOnly bool) ([]*User, error) {
+	args := am.Called(ctx, userIDs, activeOnly)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -171,33 +171,6 @@ func (rm *RoleManagerMock) UpdateRoles(ctx context.Context, user *User, roleName
 }
 
 var _ RoleManager = (*RoleManagerMock)(nil)
-
-// MFAManager
-type MFAManagerMock struct {
-	mock.Mock
-}
-
-func (m *MFAManagerMock) MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error) {
-	args := m.Called(ctx, deviceID, userID)
-	return args.Get(0).(bool), args.Error(1)
-}
-
-func (m *MFAManagerMock) GenerateMFACode(ctx context.Context, deviceID, userID string) (string, error) {
-	args := m.Called(ctx, deviceID, userID)
-	return args.Get(0).(string), args.Error(1)
-}
-
-func (m *MFAManagerMock) ValidateMFACode(ctx context.Context, deviceID, code string) (string, error) {
-	args := m.Called(ctx, deviceID, code)
-	return args.Get(0).(string), args.Error(1)
-}
-
-func (m *MFAManagerMock) RememberDevice(ctx context.Context, deviceID, code string) error {
-	args := m.Called(ctx, deviceID, code)
-	return args.Error(0)
-}
-
-var _ MFAManager = (*MFAManagerMock)(nil)
 
 // AuthManager
 type AuthManagerMock struct {
@@ -265,8 +238,8 @@ func (am *AuthManagerMock) GetUser(ctx context.Context, tokenString string) (*Us
 	return args.Get(0).(*User), args.Error(1)
 }
 
-func (am *AuthManagerMock) GetUsersByID(ctx context.Context, tokenString []string) ([]*User, error) {
-	args := am.Called(ctx, tokenString)
+func (am *AuthManagerMock) GetUsersByID(ctx context.Context, userIDs []string, activeOnly bool) ([]*User, error) {
+	args := am.Called(ctx, userIDs, activeOnly)
 	return args.Get(0).([]*User), args.Error(1)
 }
 

@@ -33,7 +33,6 @@ services:
       SMS_SENDER_TYPE: DRY_RUN
       NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
       HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
-      EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
       ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
       ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085

@@ -30,21 +30,23 @@ const (
 	initialBackoffDelay = 100 * time.Millisecond
 )
 
-type CirclePaymentDispatcher struct {
+type CirclePaymentPayoutDispatcher struct {
 	sdpModels           *data.Models
 	circleService       circle.ServiceInterface
 	distAccountResolver signing.DistributionAccountResolver
+	memoResolver        MemoResolverInterface
 }
 
-func NewCirclePaymentDispatcher(sdpModels *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) *CirclePaymentDispatcher {
-	return &CirclePaymentDispatcher{
+func NewCirclePaymentPayoutDispatcher(sdpModels *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) *CirclePaymentPayoutDispatcher {
+	return &CirclePaymentPayoutDispatcher{
 		sdpModels:           sdpModels,
 		circleService:       circleService,
 		distAccountResolver: distAccountResolver,
+		memoResolver:        &MemoResolver{Organizations: sdpModels.Organizations},
 	}
 }
 
-func (c *CirclePaymentDispatcher) DispatchPayments(ctx context.Context, sdpDBTx db.DBTransaction, tenantID string, paymentsToDispatch []*data.Payment) error {
+func (c *CirclePaymentPayoutDispatcher) DispatchPayments(ctx context.Context, sdpDBTx db.DBTransaction, tenantID string, paymentsToDispatch []*data.Payment) error {
 	if len(paymentsToDispatch) == 0 {
 		return nil
 	}
@@ -62,13 +64,13 @@ func (c *CirclePaymentDispatcher) DispatchPayments(ctx context.Context, sdpDBTx 
 	return c.sendPaymentsToCircle(ctx, sdpDBTx, circleWalletID, paymentsToDispatch)
 }
 
-func (c *CirclePaymentDispatcher) SupportedPlatform() schema.Platform {
+func (c *CirclePaymentPayoutDispatcher) SupportedPlatform() schema.Platform {
 	return schema.CirclePlatform
 }
 
-var _ PaymentDispatcherInterface = (*CirclePaymentDispatcher)(nil)
+var _ PaymentDispatcherInterface = (*CirclePaymentPayoutDispatcher)(nil)
 
-func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
+func (c *CirclePaymentPayoutDispatcher) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
 	for _, payment := range paymentsToSubmit {
 		// 1. Ensure the recipient is ready
 		recipient, err := c.ensureRecipientIsReadyWithRetry(ctx, *payment.ReceiverWallet, initialBackoffDelay)
@@ -90,7 +92,8 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 		}
 
 		// 4. Submit the payment to Circle
-		payout, err := c.circleService.SendPayment(ctx, circle.PaymentRequest{
+		payout, err := c.circleService.SendPayout(ctx, circle.PaymentRequest{
+			APIType:          circle.APITypePayouts,
 			SourceWalletID:   circleWalletID,
 			RecipientID:      recipient.CircleRecipientID,
 			Amount:           payment.Amount,
@@ -134,7 +137,7 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 }
 
 // updateCircleTransferRequest updates the circle_transfer_request table with the response from Circle POST /payouts.
-func (c *CirclePaymentDispatcher) updateCircleTransferRequest(
+func (c *CirclePaymentPayoutDispatcher) updateCircleTransferRequest(
 	ctx context.Context,
 	sdpDBTx db.DBTransaction,
 	circleWalletID string,
@@ -171,7 +174,7 @@ func (c *CirclePaymentDispatcher) updateCircleTransferRequest(
 }
 
 // updatePaymentStatusForCirclePayout updates the payment status based on the status coming from Circle.
-func (c *CirclePaymentDispatcher) updatePaymentStatusForCirclePayout(ctx context.Context, sdpDBTx db.DBTransaction, payout *circle.Payout, payment *data.Payment) error {
+func (c *CirclePaymentPayoutDispatcher) updatePaymentStatusForCirclePayout(ctx context.Context, sdpDBTx db.DBTransaction, payout *circle.Payout, payment *data.Payment) error {
 	paymentStatus, err := payout.Status.ToPaymentStatus()
 	if err != nil {
 		return fmt.Errorf("converting CIRCLE payout status to SDP Payment status: %w", err)
@@ -187,7 +190,7 @@ func (c *CirclePaymentDispatcher) updatePaymentStatusForCirclePayout(ctx context
 }
 
 // getOrCreateRecipient gets or creates a circle_recipient entry from the database for the given receiver_wallet_id.
-func (c *CirclePaymentDispatcher) getOrCreateRecipient(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
+func (c *CirclePaymentPayoutDispatcher) getOrCreateRecipient(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
 	dataRecipient, err := c.sdpModels.CircleRecipient.GetByReceiverWalletID(ctx, receiverWallet.ID)
 
 	if errors.Is(err, data.ErrRecordNotFound) {
@@ -210,7 +213,7 @@ func (c *CirclePaymentDispatcher) getOrCreateRecipient(ctx context.Context, rece
 }
 
 // handleFailedRecipientIfNeeded handles the case when the recipient is in a FAILED or INACTIVE state.
-func (c *CirclePaymentDispatcher) handleFailedRecipientIfNeeded(ctx context.Context, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
+func (c *CirclePaymentPayoutDispatcher) handleFailedRecipientIfNeeded(ctx context.Context, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
 	if !dataRecipient.Status.IsCompleted() {
 		return dataRecipient, nil
 	}
@@ -229,15 +232,22 @@ func (c *CirclePaymentDispatcher) handleFailedRecipientIfNeeded(ctx context.Cont
 }
 
 // submitRecipientToCircle submits the recipient creation request to Circle.
-func (c *CirclePaymentDispatcher) submitRecipientToCircle(ctx context.Context, receiverWallet data.ReceiverWallet, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
+func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Context, receiverWallet data.ReceiverWallet, dataRecipient *data.CircleRecipient) (*data.CircleRecipient, error) {
 	// NULL, PENDING, INACTIVE (with renovated idempotency_key) or FAILED (with renovated idempotency_key) -> (re)submit the recipient creation request
 	nickname := receiverWallet.ID
 	if receiverWallet.Receiver.PhoneNumber != "" {
 		nickname = receiverWallet.Receiver.PhoneNumber
 	}
+
+	memo, err := c.memoResolver.GetMemo(ctx, receiverWallet)
+	if err != nil {
+		return nil, fmt.Errorf("getting memo: %w", err)
+	}
+
 	recipient, err := c.circleService.PostRecipient(ctx, circle.RecipientRequest{
 		IdempotencyKey: dataRecipient.IdempotencyKey,
 		Address:        receiverWallet.StellarAddress,
+		AddressTag:     memo.Value,
 		Chain:          circle.StellarChainCode,
 		Metadata: circle.RecipientMetadata{
 			Nickname: nickname,
@@ -271,6 +281,8 @@ func (c *CirclePaymentDispatcher) submitRecipientToCircle(ctx context.Context, r
 	dataRecipient, err = c.sdpModels.CircleRecipient.Update(ctx, dataRecipient.ReceiverWalletID, data.CircleRecipientUpdate{
 		IdempotencyKey:    dataRecipient.IdempotencyKey,
 		CircleRecipientID: recipient.ID,
+		StellarAddress:    receiverWallet.StellarAddress,
+		StellarMemo:       memo.Value,
 		Status:            dataRecipientStatus,
 		ResponseBody:      recipientJson,
 		SyncAttempts:      dataRecipient.SyncAttempts + 1,
@@ -285,15 +297,30 @@ func (c *CirclePaymentDispatcher) submitRecipientToCircle(ctx context.Context, r
 
 // ensureRecipientIsReady ensures that the recipient is ready to receive payments, creating it in the database and in
 // the Circle API if needed.
-func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
+func (c *CirclePaymentPayoutDispatcher) ensureRecipientIsReady(ctx context.Context, receiverWallet data.ReceiverWallet) (*data.CircleRecipient, error) {
 	dataRecipient, err := c.getOrCreateRecipient(ctx, receiverWallet)
 	if err != nil {
 		return nil, fmt.Errorf("getting or creating Circle recipient: %w", err)
 	}
 
-	// SUCCESS
 	if dataRecipient.Status == data.CircleRecipientStatusActive {
-		return dataRecipient, nil
+		// SUCCESS
+		var memo schema.Memo
+		memo, err = c.memoResolver.GetMemo(ctx, receiverWallet)
+		if err != nil {
+			return nil, fmt.Errorf("getting memo: %w", err)
+		}
+
+		if memo.Value == dataRecipient.StellarMemo && receiverWallet.StellarAddress == dataRecipient.StellarAddress {
+			return dataRecipient, nil
+		}
+
+		// Memo or Address changed -> Invalidate the recipient
+		log.Ctx(ctx).Warnf("Memo or Address changed for circle_recipient with receiver_wallet_id %q, resetting recipient...", dataRecipient.ReceiverWalletID)
+		_, err = c.sdpModels.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, c.sdpModels.DBConnectionPool, dataRecipient.ReceiverWalletID)
+		if err != nil {
+			return nil, fmt.Errorf("resetting Circle recipient due to a memo or address change: %w", err)
+		}
 	}
 
 	// FAILED or INACTIVE
@@ -312,7 +339,7 @@ func (c *CirclePaymentDispatcher) ensureRecipientIsReady(ctx context.Context, re
 }
 
 // calls ensureRecipientIsReadyWithRetry with a retry policy.
-func (c *CirclePaymentDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Context, receiverWallet data.ReceiverWallet, initialDelay time.Duration) (*data.CircleRecipient, error) {
+func (c *CirclePaymentPayoutDispatcher) ensureRecipientIsReadyWithRetry(ctx context.Context, receiverWallet data.ReceiverWallet, initialDelay time.Duration) (*data.CircleRecipient, error) {
 	if initialDelay <= 0 || initialDelay > time.Second {
 		initialDelay = initialBackoffDelay
 	}
