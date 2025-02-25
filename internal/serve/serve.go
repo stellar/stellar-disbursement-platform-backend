@@ -28,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/sep24frontend"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -482,6 +483,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
 			InstanceName:                o.InstanceName,
 		}.ServeHTTP)
+
+		// TODO: [SDP-1554] Change to `/wallet-registration/*` after the endpoints are migrated.
+		r.Get("/wallet-registration-fe/*", httphandler.SEP24InteractiveDepositHandler{
+			App:      sep24frontend.App,
+			BasePath: "app/dist",
+		}.ServeApp)
 
 		r.Route("/wallet-registration", func(r chi.Router) {
 			sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
