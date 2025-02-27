@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
@@ -32,10 +33,14 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	reCAPTCHASiteKey := "reCAPTCHASiteKey"
 
 	r := chi.NewRouter()
-	r.Get("/receiver-registration/start", ReceiverRegistrationHandler{Models: models, ReceiverWalletModel: receiverWalletModel, ReCAPTCHASiteKey: reCAPTCHASiteKey}.ServeHTTP)
+	r.Get("/sep24-interactive-deposit/init", ReceiverRegistrationHandler{
+		Models:              models,
+		ReceiverWalletModel: receiverWalletModel,
+		ReCAPTCHASiteKey:    reCAPTCHASiteKey,
+	}.ServeHTTP)
 
 	t.Run("returns 401 - Unauthorized if the token is not in the request context", func(t *testing.T) {
-		req, reqErr := http.NewRequest("GET", "/receiver-registration/start", nil)
+		req, reqErr := http.NewRequest("GET", "/sep24-interactive-deposit/init", nil)
 		require.NoError(t, reqErr)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -49,7 +54,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	})
 
 	t.Run("returns 401 - Unauthorized if the token is in the request context but it's not valid", func(t *testing.T) {
-		req, reqErr := http.NewRequest("GET", "/receiver-registration/start", nil)
+		req, reqErr := http.NewRequest("GET", "/sep24-interactive-deposit/init", nil)
 		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
@@ -66,7 +71,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	link := "http://www.test.com/privacy-policy"
+	link := "http://www.stellar.org/privacy-policy"
 	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
 		PrivacyPolicyLink: &link,
 	})
@@ -75,19 +80,19 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	_, err = models.Organizations.Get(ctx)
 	require.NoError(t, err)
 
-	t.Run("returns 200 - Ok (And show the Wallet Registration page) if the token is in the request context and it's valid 🎉", func(t *testing.T) {
-		req, reqErr := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
-		require.NoError(t, reqErr)
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: "stellar.org",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+	ctxWithClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
 
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: "test.com",
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+	t.Run("returns 200 - Ok with JSON response for unregistered user", func(t *testing.T) {
+		req, reqErr := http.NewRequestWithContext(ctxWithClaims, "GET", "/sep24-interactive-deposit/init", nil)
+		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -97,39 +102,37 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
-		assert.Contains(t, string(respBody), "<title>Wallet Registration</title>")
-		assert.Contains(t, string(respBody), `<span id="recaptcha-site-key" data-sitekey="reCAPTCHASiteKey" style="display: none"/>`)
-		assert.Contains(t, string(respBody), `<link rel="preload" href="https://www.google.com/recaptcha/api.js" as="script" />`)
-		assert.Contains(t, string(respBody), `<p>Your data is processed by MyCustomAid in accordance with their <a href="http://www.test.com/privacy-policy"><b>Privacy Policy</b></a></p>`)
+		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+
+		expectedJSON := `{
+			"privacy_policy_link": "http://www.stellar.org/privacy-policy",
+			"organization_name": "MyCustomAid",
+			"is_registered": false
+		}`
+		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 
 	// Create a receiver wallet
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
 		"My Wallet",
 		"https://mywallet.com",
-		"mywallet.com",
+		validClaims.ClientDomain(),
 		"mywallet://")
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	// Set OTPConfirmedWith field
+	otpConfirmedWith := "user@example.com"
 	err = receiverWalletModel.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
-		StellarAddress: "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+		StellarAddress:   validClaims.SEP10StellarAccount(),
+		OTPConfirmedWith: otpConfirmedWith,
+		OTPConfirmedAt:   time.Now(),
 	}, dbConnectionPool)
 	require.NoError(t, err)
 
-	t.Run("returns 200 - Ok (And show the Registration Success page) if the token is in the request context and it's valid and the user was already registered 🎉", func(t *testing.T) {
-		req, reqErr := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
+	t.Run("returns 200 - Ok with JSON response for registered user", func(t *testing.T) {
+		req, reqErr := http.NewRequestWithContext(ctxWithClaims, "GET", "/sep24-interactive-deposit/init", nil)
 		require.NoError(t, reqErr)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: "mywallet.com",
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -139,24 +142,26 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
-		assert.Contains(t, string(respBody), "<title>Wallet Registration Confirmation</title>")
-		assert.Contains(t, string(respBody), `<p>Your data is processed by MyCustomAid in accordance with their <a href="http://www.test.com/privacy-policy"><b>Privacy Policy</b></a></p>`)
+		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+
+		truncatedContactInfo := utils.TruncateString(otpConfirmedWith, 3)
+		expectedJSON := `{
+			"privacy_policy_link": "http://www.stellar.org/privacy-policy",
+			"organization_name": "MyCustomAid",
+			"truncated_contact_info": "` + truncatedContactInfo + `",
+			"is_registered": true
+		}`
+		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 
-	t.Run("returns 200 - Ok (And show the Wallet Registration page) if the token is in the request context and wants to register second wallet in the same address", func(t *testing.T) {
-		req, reqErr := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
-		require.NoError(t, reqErr)
-
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: "newwallet.com",
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
+	t.Run("returns 200 - Ok with JSON response for unregistered user with same address but different wallet", func(t *testing.T) {
+		otherWalletClaims := &anchorplatform.SEP24JWTClaims{
+			ClientDomainClaim: "other.stellar.org",
+			RegisteredClaims:  validClaims.RegisteredClaims,
 		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		ctxWithOtherWalletClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, otherWalletClaims)
+		req, reqErr := http.NewRequestWithContext(ctxWithOtherWalletClaims, "GET", "/sep24-interactive-deposit/init", nil)
+		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -166,10 +171,13 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
-		assert.Contains(t, string(respBody), "<title>Wallet Registration</title>")
-		assert.Contains(t, string(respBody), `<span id="recaptcha-site-key" data-sitekey="reCAPTCHASiteKey" style="display: none"/>`)
-		assert.Contains(t, string(respBody), `<link rel="preload" href="https://www.google.com/recaptcha/api.js" as="script" />`)
-		assert.Contains(t, string(respBody), `<p>Your data is processed by MyCustomAid in accordance with their <a href="http://www.test.com/privacy-policy"><b>Privacy Policy</b></a></p>`)
+		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+
+		expectedJSON := `{
+			"privacy_policy_link": "http://www.stellar.org/privacy-policy",
+			"organization_name": "MyCustomAid",
+			"is_registered": false
+		}`
+		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 }

@@ -9,5 +9,5 @@ export default defineConfig({
     assetsDir: 'assets',
     cssCodeSplit: false,
   },
-  base: '/wallet-registration-fe',
+  base: '/wallet-registration',
 })

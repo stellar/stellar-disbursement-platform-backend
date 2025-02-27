@@ -18,7 +18,7 @@ yarn
 yarn dev
 ```
 
-This will start the Vite development server, typically on http://localhost:5173/wallet-registration-fe/
+This will start the Vite development server, typically on http://localhost:5173/wallet-registration/
 
 ### Building and running with the Go server
 
@@ -38,7 +38,7 @@ yarn build
 go run main.go serve
 ```
 
-The application will be available at the path configured in your Go server, usually at `/wallet-registration-fe/`.
+The application will be available at the path configured in your Go server, usually at `/wallet-registration/`.
 
 ## Important Note
 

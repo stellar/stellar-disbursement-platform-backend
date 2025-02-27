@@ -484,27 +484,26 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			InstanceName:                o.InstanceName,
 		}.ServeHTTP)
 
-		// TODO: [SDP-1554] Change to `/wallet-registration/*` after the endpoints are migrated.
-		r.Get("/wallet-registration-fe/*", httphandler.SEP24InteractiveDepositHandler{
+		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/wallet-registration/*", httphandler.SEP24InteractiveDepositHandler{
 			App:      sep24frontend.App,
 			BasePath: "app/dist",
 		}.ServeApp)
 
-		r.Route("/wallet-registration", func(r chi.Router) {
-			sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
-			r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
+		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		r.With(sep24HeaderTokenAuthenticationMiddleware).Route("/sep24-interactive-deposit", func(r chi.Router) {
+			r.Get("/init", httphandler.ReceiverRegistrationHandler{
 				Models:              o.Models,
 				ReceiverWalletModel: o.Models.ReceiverWallet,
 				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
-			}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
+			}.ServeHTTP)
 
-			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
-			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{
+			r.Post("/otp", httphandler.ReceiverSendOTPHandler{
 				Models:             o.Models,
 				MessageDispatcher:  o.MessageDispatcher,
 				ReCAPTCHAValidator: reCAPTCHAValidator,
 			}.ServeHTTP)
-			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
+			r.Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
 				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
 				Models:                      o.Models,
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
