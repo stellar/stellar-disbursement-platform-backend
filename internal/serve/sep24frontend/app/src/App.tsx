@@ -227,7 +227,7 @@ const PasscodeEntry: FC = () => {
 const App: FC = () => {
     return (
         <div className="sep24-registration">
-            <BrowserRouter basename="/wallet-registration-fe">
+            <BrowserRouter basename="/wallet-registration">
                 <Routes>
                     <Route path="/" element={<SelectVerificationMethod />} />
                     <Route path="/start" element={<SelectVerificationMethod />} />

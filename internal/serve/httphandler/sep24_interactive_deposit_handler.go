@@ -2,14 +2,17 @@ package httphandler
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
@@ -20,11 +23,12 @@ type SEP24InteractiveDepositHandler struct {
 
 // ServeApp services the SEP-24 interactive deposit app.
 func (h SEP24InteractiveDepositHandler) ServeApp(w http.ResponseWriter, r *http.Request) {
-	// Extract the path relative to the base path
-	// e.g. `/wallet-registration-fe/start` -> `/start`
 	ctx := r.Context()
-	rctx := chi.RouteContext(ctx)
-	pathPrefix := strings.TrimSuffix(rctx.RoutePattern(), "/*")
+	routeCtx := chi.RouteContext(ctx)
+
+	// Extract the path relative to the base path
+	// e.g. `/wallet-registration/start` -> `/start`
+	pathPrefix := strings.TrimSuffix(routeCtx.RoutePattern(), "/*")
 	path := strings.TrimPrefix(r.URL.Path, pathPrefix)
 
 	// Clean up path for processing
@@ -53,7 +57,7 @@ func (h SEP24InteractiveDepositHandler) ServeApp(w http.ResponseWriter, r *http.
 	}
 
 	// For all other paths, serve the SPA.
-	serveReactApp(ctx, w, subFS)
+	serveReactApp(ctx, r.URL, w, subFS)
 }
 
 // isStaticAsset determines if a path refers to a static asset.
@@ -73,7 +77,31 @@ func isStaticAsset(path string) bool {
 }
 
 // serveReactApp serves the React SPA by delivering the index.html file.
-func serveReactApp(ctx context.Context, w http.ResponseWriter, fileSystem fs.FS) {
+func serveReactApp(ctx context.Context, reqURL *url.URL, w http.ResponseWriter, fileSystem fs.FS) {
+	// Authentication and authorization
+	sep24Claims := anchorplatform.GetSEP24Claims(ctx)
+	if sep24Claims == nil {
+		err := fmt.Errorf("no SEP-24 claims found in the request context")
+		log.Ctx(ctx).Error(err)
+		httperror.Unauthorized("", err, nil).Render(w)
+		return
+	}
+
+	if token := reqURL.Query().Get("token"); token == "" {
+		err := fmt.Errorf("no token was provided in the request")
+		log.Ctx(ctx).Error(err)
+		httperror.Unauthorized("", err, nil).Render(w)
+		return
+	}
+
+	if err := sep24Claims.Valid(); err != nil {
+		err = fmt.Errorf("SEP-24 claims are invalid: %w", err)
+		log.Ctx(ctx).Error(err)
+		httperror.Unauthorized("", err, nil).Render(w)
+		return
+	}
+
+	// Render the index.html file
 	content, err := fs.ReadFile(fileSystem, "index.html")
 	if err != nil {
 		httperror.InternalError(ctx, "Could not render Registration Page", err, nil).Render(w)
