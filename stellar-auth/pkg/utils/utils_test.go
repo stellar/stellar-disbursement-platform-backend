@@ -25,7 +25,7 @@ func Test_ValidateEmail(t *testing.T) {
 		email   string
 		wantErr error
 	}{
-		{"", fmt.Errorf("email cannot be empty")},
+		{"", fmt.Errorf("email field is required")},
 		{"notvalidemail", fmt.Errorf(`the provided email "notvalidemail" is not valid`)},
 		{"valid@test.com", nil},
 		{"valid+email@test.com", nil},

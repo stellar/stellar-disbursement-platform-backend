@@ -74,7 +74,7 @@ func Test_ReceiverSendOTPRequest_validateContactInfo(t *testing.T) {
 				Email: "invalid",
 			},
 			wantValidationErrors: map[string]interface{}{
-				"email": "the provided email is not valid",
+				"email": "the email address provided is not valid",
 			},
 		},
 		{

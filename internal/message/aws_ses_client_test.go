@@ -46,7 +46,7 @@ func Test_NewAWSSESClient(t *testing.T) {
 	// [email] type needs a valid email as a sender ID:
 	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "invalid-email")
 	require.Nil(t, gotAWSSESClient)
-	require.EqualError(t, err, "aws SES (email) senderID is invalid: the provided email is not valid")
+	require.EqualError(t, err, "aws SES (email) senderID is invalid: the email address provided is not valid")
 
 	// [email] all fields are present 🎉
 	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "foo@test.com")
@@ -57,7 +57,7 @@ func Test_NewAWSSESClient(t *testing.T) {
 func Test_AWSSES_SendMessage_messageIsInvalid(t *testing.T) {
 	var mAWS MessengerClient = &awsSESClient{}
 	err := mAWS.SendMessage(Message{})
-	require.EqualError(t, err, "validating message to send an email through AWS: invalid e-mail: invalid email format: email cannot be empty")
+	require.EqualError(t, err, "validating message to send an email through AWS: invalid e-mail: invalid email format: email field is required")
 }
 
 func Test_AWSSES_SendMessage_errorIsHandledCorrectly(t *testing.T) {

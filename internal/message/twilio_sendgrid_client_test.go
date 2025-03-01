@@ -34,7 +34,7 @@ func Test_NewTwilioSendGridClient(t *testing.T) {
 			name:          "senderAddress needs to be a valid email",
 			apiKey:        "api-key",
 			senderAddress: "invalid-email",
-			wantErr:       fmt.Errorf("sendGrid senderAddress is invalid: the provided email is not valid"),
+			wantErr:       fmt.Errorf("sendGrid senderAddress is invalid: the email address provided is not valid"),
 		},
 		{
 			name:          "all fields are present",
@@ -58,7 +58,7 @@ func Test_NewTwilioSendGridClient(t *testing.T) {
 func Test_TwilioSendGridClient_SendMessage_messageIsInvalid(t *testing.T) {
 	var mSendGrid MessengerClient = &twilioSendGridClient{}
 	err := mSendGrid.SendMessage(Message{})
-	assert.EqualError(t, err, "validating message to send an email through SendGrid: invalid e-mail: invalid email format: email cannot be empty")
+	assert.EqualError(t, err, "validating message to send an email through SendGrid: invalid e-mail: invalid email format: email field is required")
 }
 
 func Test_TwilioSendGridClient_SendMessage_errorIsHandledCorrectly(t *testing.T) {
