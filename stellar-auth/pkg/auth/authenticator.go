@@ -261,7 +261,7 @@ func (a *defaultAuthenticator) DeactivateUser(ctx context.Context, userID string
 func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
-		return "", fmt.Errorf("generating user reset password token: email cannot be empty")
+		return "", fmt.Errorf("generating user reset password token: email field is required")
 	}
 
 	resetToken, err := utils.StringWithCharset(resetTokenLength, utils.DefaultCharset)

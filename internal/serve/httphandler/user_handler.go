@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
@@ -17,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -68,9 +70,10 @@ type CreateUserRequest struct {
 func (cur CreateUserRequest) validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
 
-	validator.Check(cur.FirstName != "", "fist_name", "fist_name is required")
-	validator.Check(cur.LastName != "", "last_name", "last_name is required")
-	validator.Check(cur.Email != "", "email", "email is required")
+	const namesMaxLength = 128
+	validator.CheckError(utils.ValidateStringLength(cur.FirstName, "first_name", namesMaxLength), "fist_name", "")
+	validator.CheckError(utils.ValidateStringLength(cur.LastName, "last_name", namesMaxLength), "last_name", "")
+	validator.CheckError(utils.ValidateEmail(utils.TrimAndLower(cur.Email)), "email", "")
 	validateRoles(validator, cur.Roles)
 
 	if validator.HasErrors() {
@@ -209,9 +212,9 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	newUser := auth.User{
-		FirstName: reqBody.FirstName,
-		LastName:  reqBody.LastName,
-		Email:     reqBody.Email,
+		FirstName: strings.TrimSpace(reqBody.FirstName),
+		LastName:  strings.TrimSpace(reqBody.LastName),
+		Email:     utils.TrimAndLower(reqBody.Email),
 		Roles:     data.FromUserRoleArrayToStringArray(reqBody.Roles),
 	}
 

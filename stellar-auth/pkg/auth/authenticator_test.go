@@ -558,7 +558,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 	t.Run("Should return an error if the email is empty", func(t *testing.T) {
 		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, "")
-		assert.EqualError(t, err, "generating user reset password token: email cannot be empty")
+		assert.EqualError(t, err, "generating user reset password token: email field is required")
 		assert.Empty(t, resetToken)
 	})
 

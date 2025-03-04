@@ -34,7 +34,7 @@ var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9
 
 func ValidateEmail(email string) error {
 	if email == "" {
-		return fmt.Errorf("email cannot be empty")
+		return fmt.Errorf("email field is required")
 	}
 
 	if !rxEmail.MatchString(email) {
