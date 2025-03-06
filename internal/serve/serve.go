@@ -371,10 +371,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:                      o.Models,
 			AuthManager:                 authManager,
 			MaxMemoryAllocation:         httphandler.DefaultMaxMemoryAllocation,
-			BaseURL:                     o.BaseURL,
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			PasswordValidator:           o.PasswordValidator,
-			PublicFilesFS:               publicfiles.PublicFiles,
 			NetworkType:                 o.NetworkType,
 		}
 		r.Route("/profile", func(r chi.Router) {
@@ -394,9 +392,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/", profileHandler.GetOrganizationInfo)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Get("/logo", profileHandler.GetOrganizationLogo)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
 				Patch("/circle-config", httphandler.CircleConfigHandler{
@@ -434,6 +429,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.EnsureTenantMiddleware)
+
+		r.Get("/organization/logo", httphandler.OrganizationLogoHandler{
+			Models:        o.Models,
+			PublicFilesFS: publicfiles.PublicFiles,
+		}.GetOrganizationLogo)
 
 		r.Post("/login", httphandler.LoginHandler{
 			AuthManager:        authManager,

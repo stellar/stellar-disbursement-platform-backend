@@ -44,8 +44,6 @@ type ProfileHandler struct {
 	Models                      *data.Models
 	AuthManager                 auth.AuthManager
 	MaxMemoryAllocation         int64
-	BaseURL                     string
-	PublicFilesFS               fs.FS
 	DistributionAccountResolver signing.DistributionAccountResolver
 	PasswordValidator           *authUtils.PasswordValidator
 	utils.NetworkType
@@ -329,44 +327,27 @@ func (h ProfileHandler) GetProfile(rw http.ResponseWriter, req *http.Request) {
 func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		httperror.Unauthorized("", nil, nil).Render(rw)
-		return
-	}
-
-	// We first build the logo URL so we don't hit the database if any error occurs.
-	logoURL, err := url.JoinPath(h.BaseURL, "organization", "logo")
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get logo URL", err, nil).Render(rw)
-		return
-	}
-
-	lu, err := url.Parse(logoURL)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot parse logo URL", err, nil).Render(rw)
-		return
-	}
-
-	q := lu.Query()
-	q.Add("token", token)
-	lu.RawQuery = q.Encode()
-
 	org, err := h.Models.Organizations.Get(ctx)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get organization", err, nil).Render(rw)
 		return
 	}
 
-	distributionAccount, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(rw)
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil || currentTenant == nil {
+		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
 		return
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	lu, err := getLogoURL(currentTenant.BaseURL)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
+		httperror.InternalError(ctx, "Cannot get logo URL", err, nil).Render(rw)
+		return
+	}
+
+	distributionAccount, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(rw)
 		return
 	}
 
@@ -409,9 +390,32 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
 }
 
+func getLogoURL(baseURL *string) (*url.URL, error) {
+	if baseURL == nil {
+		return nil, fmt.Errorf("baseURL is nil")
+	}
+
+	logoURL, err := url.JoinPath(*baseURL, "organization", "logo")
+	if err != nil {
+		return nil, fmt.Errorf("constructing logo URL from base URL: %w", err)
+	}
+
+	lu, err := url.Parse(logoURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing logo URL: %w", err)
+	}
+
+	return lu, nil
+}
+
+type OrganizationLogoHandler struct {
+	PublicFilesFS fs.FS
+	Models        *data.Models
+}
+
 // GetOrganizationLogo renders the stored organization logo. The image is rendered inline (not attached - the attached option downloads the content)
 // so the client can embed the image.
-func (h ProfileHandler) GetOrganizationLogo(rw http.ResponseWriter, req *http.Request) {
+func (h OrganizationLogoHandler) GetOrganizationLogo(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	org, err := h.Models.Organizations.Get(ctx)
