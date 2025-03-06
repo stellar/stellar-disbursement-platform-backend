@@ -27,20 +27,20 @@ func Test_NewAWSSNSClient(t *testing.T) {
 	var gotAWSSNSClient *awsSNSClient
 	var err error
 
-	// accessKeyID cannot be empty
+	// accessKeyID can be empty
 	gotAWSSNSClient, err = NewAWSSNSClient("", "", "", "")
-	require.Nil(t, gotAWSSNSClient)
-	require.EqualError(t, err, "aws accessKeyID is empty")
+	require.NoError(t, err)
+	require.NotNil(t, gotAWSSNSClient)
 
-	// secretAccessKey cannot be empty
+	// secretAccessKey can be empty
 	gotAWSSNSClient, err = NewAWSSNSClient("accessKeyID", "", "", "")
-	require.Nil(t, gotAWSSNSClient)
-	require.EqualError(t, err, "aws secretAccessKey is empty")
+	require.NoError(t, err)
+	require.NotNil(t, gotAWSSNSClient)
 
-	// region cannot be empty
+	// region can be empty
 	gotAWSSNSClient, err = NewAWSSNSClient("accessKeyID", "secretAccessKey", "", "")
-	require.Nil(t, gotAWSSNSClient)
-	require.EqualError(t, err, "aws region is empty")
+	require.NoError(t, err)
+	require.NotNil(t, gotAWSSNSClient)
 
 	// [sms] type doesn't need a sender ID:
 	gotAWSSNSClient, err = NewAWSSNSClient("accessKeyID", "secretAccessKey", "region", "  ")
