@@ -496,17 +496,20 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:              o.Models,
 				ReceiverWalletModel: o.Models.ReceiverWallet,
 				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
+				ReCAPTCHADisabled:   o.DisableReCAPTCHA,
 			}.ServeHTTP)
 
 			r.Post("/otp", httphandler.ReceiverSendOTPHandler{
 				Models:             o.Models,
 				MessageDispatcher:  o.MessageDispatcher,
 				ReCAPTCHAValidator: reCAPTCHAValidator,
+				ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 			}.ServeHTTP)
 			r.Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
 				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
 				Models:                      o.Models,
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
+				ReCAPTCHADisabled:           o.DisableReCAPTCHA,
 				NetworkPassphrase:           o.NetworkPassphrase,
 				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,

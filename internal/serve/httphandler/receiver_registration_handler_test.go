@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
@@ -37,6 +39,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		Models:              models,
 		ReceiverWalletModel: receiverWalletModel,
 		ReCAPTCHASiteKey:    reCAPTCHASiteKey,
+		ReCAPTCHADisabled:   true,
 	}.ServeHTTP)
 
 	t.Run("returns 401 - Unauthorized if the token is not in the request context", func(t *testing.T) {
@@ -88,6 +91,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
 	}
+	currentTenant, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	ctxWithClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
 
 	t.Run("returns 200 - Ok with JSON response for unregistered user", func(t *testing.T) {
@@ -104,11 +108,13 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
 
-		expectedJSON := `{
+		expectedJSON := fmt.Sprintf(`{
 			"privacy_policy_link": "http://www.stellar.org/privacy-policy",
 			"organization_name": "MyCustomAid",
-			"is_registered": false
-		}`
+			"organization_logo": "%s/organization/logo",
+			"is_registered": false,
+			"is_recaptcha_disabled": true
+		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 
@@ -145,12 +151,14 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
 
 		truncatedContactInfo := utils.TruncateString(otpConfirmedWith, 3)
-		expectedJSON := `{
+		expectedJSON := fmt.Sprintf(`{
 			"privacy_policy_link": "http://www.stellar.org/privacy-policy",
 			"organization_name": "MyCustomAid",
-			"truncated_contact_info": "` + truncatedContactInfo + `",
-			"is_registered": true
-		}`
+			"organization_logo": "%s/organization/logo",
+			"truncated_contact_info": "`+truncatedContactInfo+`",
+			"is_registered": true,
+			"is_recaptcha_disabled": true
+		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 
@@ -173,11 +181,13 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
 
-		expectedJSON := `{
+		expectedJSON := fmt.Sprintf(`{
 			"privacy_policy_link": "http://www.stellar.org/privacy-policy",
 			"organization_name": "MyCustomAid",
-			"is_registered": false
-		}`
+			"organization_logo": "%s/organization/logo",
+			"is_registered": false,
+			"is_recaptcha_disabled": true
+		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 }
