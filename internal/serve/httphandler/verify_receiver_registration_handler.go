@@ -51,6 +51,7 @@ type VerifyReceiverRegistrationHandler struct {
 	AnchorPlatformAPIService    anchorplatform.AnchorPlatformAPIServiceInterface
 	Models                      *data.Models
 	ReCAPTCHAValidator          validators.ReCAPTCHAValidator
+	ReCAPTCHADisabled           bool
 	NetworkPassphrase           string
 	EventProducer               events.Producer
 	CrashTrackerClient          crashtracker.CrashTrackerClient
@@ -82,16 +83,18 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 	}
 
 	// STEP 3: Validate reCAPTCHA Token
-	isValid, err := v.ReCAPTCHAValidator.IsTokenValid(ctx, receiverRegistrationRequest.ReCAPTCHAToken)
-	if err != nil {
-		err = fmt.Errorf("validating reCAPTCHA token: %w", err)
-		return reqObj, nil, httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil)
-	}
-	if !isValid {
-		truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
-		truncatedOTP := utils.TruncateString(receiverRegistrationRequest.OTP, 2)
-		err = fmt.Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s", truncatedOTP, truncatedPhoneNumber)
-		return reqObj, nil, httperror.BadRequest("", err, nil)
+	if !v.ReCAPTCHADisabled {
+		isValid, tokenErr := v.ReCAPTCHAValidator.IsTokenValid(ctx, receiverRegistrationRequest.ReCAPTCHAToken)
+		if tokenErr != nil {
+			tokenErr = fmt.Errorf("validating reCAPTCHA token: %w", tokenErr)
+			return reqObj, nil, httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", tokenErr, nil)
+		}
+		if !isValid {
+			truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
+			truncatedOTP := utils.TruncateString(receiverRegistrationRequest.OTP, 2)
+			err = fmt.Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s", truncatedOTP, truncatedPhoneNumber)
+			return reqObj, nil, httperror.BadRequest("", err, nil)
+		}
 	}
 
 	// STEP 4: Validate request body

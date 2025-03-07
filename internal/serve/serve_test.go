@@ -386,6 +386,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		method string
 		path   string
 	}{
+		{http.MethodGet, "/organization/logo"},
 		{http.MethodGet, "/health"},
 		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
@@ -474,7 +475,6 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// Organization
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
-		{http.MethodGet, "/organization/logo"},
 		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
