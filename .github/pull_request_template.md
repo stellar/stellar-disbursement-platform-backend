@@ -14,8 +14,8 @@
 
 - [ ] Title follows `SDP-1234: Add new feature` or `Chore: Refactor package xyz` format. The Jira ticket code was included if available.
 - [ ] PR has a focused scope and doesn't mix features with refactoring
-- [ ] Tests are included
-- [ ] CHANGELOG.md is updated (if applicable)
+- [ ] Tests are included (if applicable)
+- [ ] `CHANGELOG.md` is updated (if applicable)
 - [ ] CONFIG/SECRETS changes are updated in helmcharts and deployments (if applicable)
 - [ ] Preview deployment works as expected
 - [ ] Ready for production
