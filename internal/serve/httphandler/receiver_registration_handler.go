@@ -67,7 +67,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	lu, err := getLogoURL(currentTenant.BaseURL)
+	logoURL, err := getLogoURL(currentTenant.BaseURL)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get logo URL", err, nil).Render(w)
 		return
@@ -76,7 +76,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 	response := ReceiverRegistrationResponse{
 		PrivacyPolicyLink:   privacyPolicyLink,
 		OrganizationName:    organization.Name,
-		OrganizationLogo:    lu.String(),
+		OrganizationLogo:    logoURL,
 		IsRecaptchaDisabled: h.ReCAPTCHADisabled,
 	}
 

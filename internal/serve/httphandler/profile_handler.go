@@ -339,7 +339,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	lu, err := getLogoURL(currentTenant.BaseURL)
+	logoURL, err := getLogoURL(currentTenant.BaseURL)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get logo URL", err, nil).Render(rw)
 		return
@@ -353,7 +353,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 
 	resp := map[string]interface{}{
 		"name":                                     org.Name,
-		"logo_url":                                 lu.String(),
+		"logo_url":                                 logoURL,
 		"base_url":                                 currentTenant.BaseURL,
 		"distribution_account":                     distributionAccount,
 		"distribution_account_public_key":          distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
@@ -390,22 +390,22 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
 }
 
-func getLogoURL(baseURL *string) (*url.URL, error) {
+func getLogoURL(baseURL *string) (string, error) {
 	if baseURL == nil {
-		return nil, fmt.Errorf("baseURL is nil")
+		return "", fmt.Errorf("baseURL is nil")
 	}
 
 	logoURL, err := url.JoinPath(*baseURL, "organization", "logo")
 	if err != nil {
-		return nil, fmt.Errorf("constructing logo URL from base URL: %w", err)
+		return "", fmt.Errorf("constructing logo URL from base URL: %w", err)
 	}
 
 	lu, err := url.Parse(logoURL)
 	if err != nil {
-		return nil, fmt.Errorf("parsing logo URL: %w", err)
+		return "", fmt.Errorf("parsing logo URL: %w", err)
 	}
 
-	return lu, nil
+	return lu.String(), nil
 }
 
 type OrganizationLogoHandler struct {
