@@ -647,10 +647,11 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
 func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType) error {
 	const (
-		phoneHeader         = "phone"
-		emailHeader         = "email"
-		walletAddressHeader = "walletAddress"
-		verificationHeader  = "verification"
+		phoneHeader             = "phone"
+		emailHeader             = "email"
+		walletAddressHeader     = "walletAddress"
+		walletAddressMemoHeader = "walletAddressMemo"
+		verificationHeader      = "verification"
 	)
 
 	headers, err := csv.NewReader(utfbom.SkipOnly(file)).Read()
@@ -659,10 +660,11 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 	}
 
 	hasHeaders := map[string]bool{
-		phoneHeader:         false,
-		emailHeader:         false,
-		walletAddressHeader: false,
-		verificationHeader:  false,
+		phoneHeader:             false,
+		emailHeader:             false,
+		walletAddressHeader:     false,
+		walletAddressMemoHeader: false,
+		verificationHeader:      false,
 	}
 
 	// Populate header presence map
@@ -681,11 +683,11 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 	rules := map[data.RegistrationContactType]headerRules{
 		data.RegistrationContactTypePhone: {
 			required:   []string{phoneHeader, verificationHeader},
-			disallowed: []string{emailHeader, walletAddressHeader},
+			disallowed: []string{emailHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmail: {
 			required:   []string{emailHeader, verificationHeader},
-			disallowed: []string{phoneHeader, walletAddressHeader},
+			disallowed: []string{phoneHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmailAndWalletAddress: {
 			required:   []string{emailHeader, walletAddressHeader},
