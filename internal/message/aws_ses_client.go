@@ -96,6 +96,8 @@ func NewAWSSESClient(accessKeyID, secretAccessKey, region, senderID string) (*aw
 		log.Debug("Using SDP custom AWS static credential configuration")
 		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
 		awsConfig.Region = aws.String(region)
+	} else {
+		log.Debug("Loading AWS credentials from AWS Session")
 	}
 
 	awsSession, err := session.NewSession(&awsConfig)
