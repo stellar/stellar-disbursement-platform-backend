@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Improve UX on the reset-password flow by embedding the reset token in the URL so it can be parsed by the FE without human intervention. [#557](https://github.com/stellar/stellar-disbursement-platform-backend/pull/557)
+- Refactor the PR checklist to be more user-friendly and easier to follow. [#568](https://github.com/stellar/stellar-disbursement-platform-backend/pull/568)
+
+### Fixed
+
+- Preserve port numbers in SEP-24 invitation links [#567](https://github.com/stellar/stellar-disbursement-platform-backend/pull/567)
 
 ## [3.5.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.0...3.5.1))
 
