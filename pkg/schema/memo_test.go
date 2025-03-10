@@ -92,3 +92,50 @@ func Test_NewMemo(t *testing.T) {
 		})
 	}
 }
+
+func Test_ParseMemo(t *testing.T) {
+	testCases := []struct {
+		memoValue       string
+		wantMemo        txnbuild.Memo
+		wantType        MemoType
+		wantErrContains string
+	}{
+		{
+			memoValue: "0",
+			wantMemo:  txnbuild.MemoID(0),
+			wantType:  MemoTypeID,
+		},
+		{
+			memoValue: "HelloWorld!",
+			wantMemo:  txnbuild.MemoText("HelloWorld!"),
+			wantType:  MemoTypeText,
+		},
+		{
+			memoValue: "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+			wantMemo:  txnbuild.MemoHash([]byte{0x12, 0xf3, 0x7f, 0x82, 0xeb, 0x67, 0x08, 0xda, 0xa0, 0xac, 0x37, 0x2a, 0x1a, 0x67, 0xa0, 0xf3, 0x3e, 0xfa, 0x6a, 0x9c, 0xd2, 0x13, 0xed, 0x43, 0x05, 0x17, 0xe4, 0x5f, 0xef, 0xb5, 0x15, 0x77}),
+			wantType:  MemoTypeHash,
+		},
+		{
+			memoValue: "",
+		},
+		{
+			memoValue:       "this-string-is-not-a-valid-memo-because-it's-not-uint-and-too-long-for-a-text-and-not-a-valid-hex",
+			wantErrContains: `could not parse value "this-string-is-not-a-valid-memo-because-it's-not-uint-and-too-long-for-a-text-and-not-a-valid-hex" as any valid memo type`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("ParseMemo(%q)", tc.memoValue), func(t *testing.T) {
+			gotMemo, gotType, err := ParseMemo(tc.memoValue)
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantMemo, gotMemo)
+				require.Equal(t, tc.wantType, gotType)
+			} else {
+				require.ErrorContains(t, err, tc.wantErrContains)
+				require.Nil(t, gotMemo)
+				require.Equal(t, tc.wantType, gotType)
+			}
+		})
+	}
+}
