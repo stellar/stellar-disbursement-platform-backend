@@ -8,6 +8,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type DisbursementInstructionsValidator struct {
@@ -49,6 +50,10 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 		if instruction.WalletAddress != "" {
 			iv.Check(strkey.IsValidEd25519PublicKey(instruction.WalletAddress), fmt.Sprintf("line %d - wallet address", lineNumber), "invalid wallet address. Must be a valid Stellar public key")
 		}
+		if instruction.WalletAddressMemo != "" {
+			_, _, err := schema.ParseMemo(instruction.WalletAddressMemo)
+			iv.CheckError(err, fmt.Sprintf("line %d - wallet address memo", lineNumber), "invalid wallet address memo. For more information, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos")
+		}
 	} else {
 		// 4. Validate verification field
 		verification := instruction.VerificationValue
@@ -78,6 +83,7 @@ func (iv *DisbursementInstructionsValidator) SanitizeInstruction(instruction *da
 	if instruction.WalletAddress != "" {
 		sanitizedInstruction.WalletAddress = strings.ToUpper(strings.TrimSpace(instruction.WalletAddress))
 	}
+	sanitizedInstruction.WalletAddressMemo = strings.TrimSpace(instruction.WalletAddressMemo)
 
 	if instruction.ExternalPaymentId != "" {
 		sanitizedInstruction.ExternalPaymentId = strings.TrimSpace(instruction.ExternalPaymentId)
