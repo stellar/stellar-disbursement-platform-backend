@@ -1,15 +1,17 @@
 package validators
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing.T) {
-	tests := []struct {
+	type TestCase struct {
 		name              string
 		instruction       *data.DisbursementInstruction
 		lineNumber        int
@@ -17,9 +19,11 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		verificationField data.VerificationType
 		hasErrors         bool
 		expectedErrors    map[string]interface{}
-	}{
+	}
+
+	tests := []TestCase{
 		{
-			name: "error if phone number is empty for Phone contact type",
+			name: "🔴 phone number is empty for Phone contact type",
 			instruction: &data.DisbursementInstruction{
 				ID:                "123456789",
 				Amount:            "100.5",
@@ -34,7 +38,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if email is empty for Email contact type",
+			name: "🔴 email is empty for Email contact type",
 			instruction: &data.DisbursementInstruction{
 				ID:                "123456789",
 				Amount:            "100.5",
@@ -49,7 +53,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name:              "error with all fields empty (phone, id, amount, verification)",
+			name:              "🔴 all fields empty (phone, id, amount, verification)",
 			instruction:       &data.DisbursementInstruction{},
 			lineNumber:        2,
 			contactType:       data.RegistrationContactTypePhone,
@@ -63,7 +67,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if phone number format is invalid",
+			name: "🔴 phone number format is invalid",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+123-12-345-678",
 				ID:                "123456789",
@@ -79,7 +83,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if amount format is invalid",
+			name: "🔴 amount format is invalid",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -95,7 +99,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if email is not valid",
+			name: "🔴 email is not valid",
 			instruction: &data.DisbursementInstruction{
 				Email:             "invalidemail",
 				ID:                "123456789",
@@ -111,7 +115,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if amount is not positive",
+			name: "🔴 amount is not positive",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -127,7 +131,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if DoB format is invalid",
+			name: "🔴 DoB format is invalid",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -143,7 +147,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if DoB in the future",
+			name: "🔴 DoB in the future",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -159,7 +163,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if year month format is invalid",
+			name: "🔴 year month format is invalid",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -175,7 +179,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if year month in the future",
+			name: "🔴 year month in the future",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -191,7 +195,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if PIN is invalid - less than 4 characters",
+			name: "🔴 PIN is invalid - less than 4 characters",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -207,7 +211,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if PIN is invalid - more than 8 characters",
+			name: "🔴 PIN is invalid - more than 8 characters",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -223,7 +227,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if NATIONAL_ID_NUMBER is invalid - more than 50 characters",
+			name: "🔴 NATIONAL_ID_NUMBER is invalid - more than 50 characters",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -239,7 +243,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error when WalletAddress is empty for WalletAddress contact type",
+			name: "🔴 WalletAddress is empty for WalletAddress contact type",
 			instruction: &data.DisbursementInstruction{
 				WalletAddress: "",
 				Phone:         "+380445555555",
@@ -254,7 +258,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error when WalletAddress is not valid for WalletAddress contact type",
+			name: "🔴 WalletAddress is not valid for WalletAddress contact type",
 			instruction: &data.DisbursementInstruction{
 				WalletAddress: "invalidwalletaddress",
 				Phone:         "+380445555555",
@@ -268,10 +272,26 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				"line 3 - wallet address": "invalid wallet address. Must be a valid Stellar public key",
 			},
 		},
+		{
+			name: "🔴 WalletAddressMemo is not valid for WalletAddress contact type",
+			instruction: &data.DisbursementInstruction{
+				WalletAddress:     "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH",
+				WalletAddressMemo: "this-string-is-not-a-valid-memo-because-it's-not-uint-and-too-long-for-a-text-and-not-a-valid-hex",
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
+			},
+			lineNumber:  3,
+			contactType: data.RegistrationContactTypePhoneAndWalletAddress,
+			hasErrors:   true,
+			expectedErrors: map[string]interface{}{
+				"line 3 - wallet address memo": "invalid wallet address memo. For more information, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos",
+			},
+		},
 
 		// VALID CASES
 		{
-			name: "🎉 successfully validates instructions (DATE_OF_BIRTH)",
+			name: "🟢 successfully validates instructions (DATE_OF_BIRTH)",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -284,7 +304,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			hasErrors:         false,
 		},
 		{
-			name: "🎉 successfully validates instructions (YEAR_MONTH)",
+			name: "🟢 successfully validates instructions (YEAR_MONTH)",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -297,7 +317,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			hasErrors:         false,
 		},
 		{
-			name: "🎉 successfully validates instructions (NATIONAL_ID_NUMBER)",
+			name: "🟢 successfully validates instructions (NATIONAL_ID_NUMBER)",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -310,7 +330,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			hasErrors:         false,
 		},
 		{
-			name: "🎉 successfully validates instructions (PIN)",
+			name: "🟢 successfully validates instructions (PIN)",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -323,7 +343,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			hasErrors:         false,
 		},
 		{
-			name: "🎉 successfully validates instructions (Email)",
+			name: "🟢 successfully validates instructions (Email)",
 			instruction: &data.DisbursementInstruction{
 				Email:             "myemail@stellar.org",
 				ID:                "123456789",
@@ -336,7 +356,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			hasErrors:         false,
 		},
 		{
-			name: "🎉 successfully validates instructions (Phone)",
+			name: "🟢 successfully validates instructions (Phone)",
 			instruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -348,18 +368,29 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationTypePin,
 			hasErrors:         false,
 		},
-		{
-			name: "🎉 successfully validates instructions (WalletAddress)",
+	}
+
+	memos := []schema.Memo{
+		{},
+		{Value: "123456789", Type: schema.MemoTypeID},
+		{Value: "this is a valid memo text", Type: schema.MemoTypeText},
+		{Value: "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577", Type: schema.MemoTypeHash},
+	}
+
+	for _, memo := range memos {
+		tests = append(tests, TestCase{
+			name: fmt.Sprintf("🟢 successfully validates instructions (WalletAddress,%s)", memo.Type),
 			instruction: &data.DisbursementInstruction{
-				WalletAddress: "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH",
-				Phone:         "+380445555555",
-				ID:            "123456789",
-				Amount:        "100.5",
+				WalletAddress:     "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH",
+				WalletAddressMemo: memo.Value,
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
 			},
 			lineNumber:  3,
 			contactType: data.RegistrationContactTypePhoneAndWalletAddress,
 			hasErrors:   false,
-		},
+		})
 	}
 
 	for _, tt := range tests {
@@ -377,8 +408,6 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 }
 
 func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
-	externalPaymentID := "123456789"
-	externalPaymentIDWithSpaces := "  123456789  "
 	tests := []struct {
 		name                string
 		actual              *data.DisbursementInstruction
@@ -388,12 +417,16 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 			name: "Sanitized instruction",
 			actual: &data.DisbursementInstruction{
 				Phone:             "  +380445555555  ",
+				WalletAddress:     "  GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH  ",
+				WalletAddressMemo: "  123456789  ",
 				ID:                "  123456789  ",
 				Amount:            "  100.5  ",
 				VerificationValue: "  1990-01-01  ",
 			},
 			expectedInstruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
+				WalletAddress:     "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH",
+				WalletAddressMemo: "123456789",
 				ID:                "123456789",
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
@@ -407,14 +440,14 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 				ID:                "  123456789  ",
 				Amount:            "  100.5  ",
 				VerificationValue: "  1990-01-01  ",
-				ExternalPaymentId: externalPaymentIDWithSpaces,
+				ExternalPaymentId: "  123456789  ",
 			},
 			expectedInstruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
-				ExternalPaymentId: externalPaymentID,
+				ExternalPaymentId: "123456789",
 			},
 		},
 		{
