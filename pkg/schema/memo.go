@@ -22,15 +22,6 @@ const (
 	MemoTypeReturn MemoType = "return"
 )
 
-func AllMemoTypes() []MemoType {
-	return []MemoType{
-		MemoTypeID,
-		MemoTypeText,
-		MemoTypeHash,
-		MemoTypeReturn,
-	}
-}
-
 // NewMemo creates a new Memo from a MemoType and a string value.
 func NewMemo(memoType MemoType, memoValue string) (txnbuild.Memo, error) {
 	switch memoType {
@@ -95,7 +86,7 @@ func ParseMemo(memoValue string) (txnbuild.Memo, MemoType, error) {
 		return nil, "", nil
 	}
 
-	for _, memoType := range AllMemoTypes() {
+	for _, memoType := range []MemoType{MemoTypeID, MemoTypeText, MemoTypeHash} {
 		if memo, err := NewMemo(memoType, memoValue); err == nil {
 			return memo, memoType, nil
 		}
