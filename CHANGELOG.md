@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Improve UX on the reset-password flow by embedding the reset token in the URL so it can be parsed by the FE without human intervention. [#557](https://github.com/stellar/stellar-disbursement-platform-backend/pull/557)
 - Refactor the PR checklist to be more user-friendly and easier to follow. [#568](https://github.com/stellar/stellar-disbursement-platform-backend/pull/568)
+- Enabled scheduler instead of Kafka in the default environment variable template `.env.example`. [#573](https://github.com/stellar/stellar-disbursement-platform-backend/pull/573)
 
 ### Fixed
 
