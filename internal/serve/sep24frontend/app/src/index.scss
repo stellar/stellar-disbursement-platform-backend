@@ -1,0 +1,86 @@
+@use "./styles/utils.scss" as *;
+
+// =============================================================================
+// Generic
+// =============================================================================
+:root {
+  --sds-gap-xs: #{pxToRem(4px)};
+  --sds-gap-sm: #{pxToRem(8px)};
+  --sds-gap-md: #{pxToRem(12px)};
+  --sds-gap-lg: #{pxToRem(16px)};
+  --sds-gap-xl: #{pxToRem(24px)};
+  --sds-gap-xxl: #{pxToRem(32px)};
+}
+
+body {
+  background-color: var(--sds-clr-gray-01);
+  color: var(--sds-clr-gray-11);
+  font-family: var(--sds-ff-base);
+}
+
+#root {
+  height: 100vh;
+  position: relative;
+  margin: 0 auto;
+  width: 100%;
+  max-width: pxToRem(800px);
+
+  // Overrides
+  .RadioButton label {
+    font-weight: var(--sds-fw-regular);
+    color: var(--sds-clr-gray-11);
+    font-size: pxToRem(16px);
+  }
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--sds-clr-gray-12);
+}
+
+// =============================================================================
+// Layout
+// =============================================================================
+.Wallet {
+  &__header {
+    padding: pxToRem(10px) pxToRem(10px);
+    flex: 0;
+  }
+
+  &__content {
+    padding: pxToRem(10px) pxToRem(10px) 0;
+    flex: 1;
+    overflow-x: auto;
+
+    &__box {
+      min-height: 100%;
+    }
+
+    &__button {
+      flex: 1;
+    }
+  }
+
+  &__footer {
+    padding: pxToRem(16px) pxToRem(10px);
+    font-size: pxToRem(14px);
+    line-height: pxToRem(20px);
+    color: var(--sds-clr-gray-09);
+    text-align: center;
+    flex: 0;
+  }
+
+  &__language {
+    & > .Select {
+      width: pxToRem(120px);
+    }
+  }
+}
+
+.FullScreenLoader {
+  height: 100%;
+}

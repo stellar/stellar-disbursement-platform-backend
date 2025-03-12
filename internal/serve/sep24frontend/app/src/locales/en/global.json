@@ -1,0 +1,15 @@
+{
+  "selectVerification": {
+    "title": "Select Verification Method",
+    "message": "Please choose how you would like to receive your verification code.",
+    "warning": "Attention, it needs to match the form of contact where you received your invitation to receive this payment."
+  },
+  "footer": {
+    "privacyMessage": "Your data is processed by {{orgName}} in accordance with their <Link href=''>Privacy Policy</Link>"
+  },
+  "generic": {
+    "phoneNumber": "Phone Number",
+    "email": "Email",
+    "continue": "Continue"
+  }
+}
