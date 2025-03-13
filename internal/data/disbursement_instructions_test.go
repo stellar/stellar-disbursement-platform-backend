@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
@@ -184,74 +185,86 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.ErrorIs(t, err, ErrReceiverWalletAddressMismatch)
 	})
 
-	t.Run("success - known wallet address instructions", func(t *testing.T) {
-		defer cleanup()
-		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
+	memos := []schema.Memo{
+		{},
+		{Value: "123456789", Type: schema.MemoTypeID},
+		{Value: "this is a valid memo text", Type: schema.MemoTypeText},
+		{Value: "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577", Type: schema.MemoTypeHash},
+	}
 
-		instructions := []*DisbursementInstruction{
-			{
-				WalletAddress: "GCVL44LFV3BFI627ABY3YRITFBRJVXUQVPLXQ3LISMI5UVKS5LHWTPT7",
-				Amount:        "100.01",
-				ID:            "1",
-				Phone:         "+380-12-345-671",
-			},
-			{
-				WalletAddress: "GC524YE6Z6ISMNLHWFYXQZRR5DTF2A75DYE5TE6G7UMZJ6KZRNVHPOQS",
-				Amount:        "100.02",
-				ID:            "2",
-				Phone:         "+380-12-345-672",
-			},
-		}
+	for _, memo := range memos {
+		t.Run(fmt.Sprintf("success - known [WalletAddress,%s]", memo.Type), func(t *testing.T) {
+			defer cleanup()
+			dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
-		update := knownWalletDisbursementUpdate(instructions)
-		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            instructions,
-			Disbursement:            knownWalletDisbursement,
-			DisbursementUpdate:      update,
-			MaxNumberOfInstructions: 10,
+			instructions := []*DisbursementInstruction{
+				{
+					WalletAddress:     "GCVL44LFV3BFI627ABY3YRITFBRJVXUQVPLXQ3LISMI5UVKS5LHWTPT7",
+					WalletAddressMemo: memo.Value,
+					Amount:            "100.01",
+					ID:                "1",
+					Phone:             "+380-12-345-671",
+				},
+				{
+					WalletAddress:     "GC524YE6Z6ISMNLHWFYXQZRR5DTF2A75DYE5TE6G7UMZJ6KZRNVHPOQS",
+					WalletAddressMemo: memo.Value,
+					Amount:            "100.02",
+					ID:                "2",
+					Phone:             "+380-12-345-672",
+				},
+			}
+
+			update := knownWalletDisbursementUpdate(instructions)
+			err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
+				UserID:                  "user-id",
+				Instructions:            instructions,
+				Disbursement:            knownWalletDisbursement,
+				DisbursementUpdate:      update,
+				MaxNumberOfInstructions: 10,
+			})
+			require.NoError(t, err)
+
+			// Verify Receivers
+			receivers, err := di.receiverModel.GetByContacts(ctx, dbTx, instructions[0].Phone, instructions[1].Phone)
+			require.NoError(t, err)
+			assertEqualReceivers(t, []string{instructions[0].Phone, instructions[1].Phone}, []string{"1", "2"}, receivers)
+
+			// Verify Receiver Verifications
+			receiver1Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[0].ID)
+			require.NoError(t, err)
+			assert.Len(t, receiver1Verifications, 0)
+			receiver2Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[1].ID)
+			require.NoError(t, err)
+			assert.Len(t, receiver2Verifications, 0)
+
+			// Verify Receiver Wallets
+			receiverWallets, err := di.receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, []string{receivers[0].ID, receivers[1].ID})
+			require.NoError(t, err)
+			assert.Len(t, receiverWallets, 2)
+			for _, receiverWallet := range receiverWallets {
+				assert.Equal(t, wallet.ID, receiverWallet.Wallet.ID)
+				assert.Contains(t, []string{instructions[0].WalletAddress, instructions[1].WalletAddress}, receiverWallet.StellarAddress)
+				assert.Contains(t, []string{instructions[0].WalletAddressMemo, instructions[1].WalletAddressMemo}, receiverWallet.StellarMemo)
+				assert.Equal(t, RegisteredReceiversWalletStatus, receiverWallet.Status)
+			}
+
+			// Verify Payments
+			actualPayments := GetPaymentsByDisbursementID(t, ctx, dbTx, knownWalletDisbursement.ID)
+			assert.Len(t, actualPayments, 2)
+			assert.Contains(t, actualPayments, instructions[0].Amount)
+			assert.Contains(t, actualPayments, instructions[1].Amount)
+
+			actualExternalPaymentIDs := GetExternalPaymentIDsByDisbursementID(t, ctx, dbTx, knownWalletDisbursement.ID)
+			assert.Len(t, actualExternalPaymentIDs, 0)
+
+			// Verify Disbursement
+			actualDisbursement, err := di.disbursementModel.Get(ctx, dbTx, knownWalletDisbursement.ID)
+			require.NoError(t, err)
+			assert.Equal(t, ReadyDisbursementStatus, actualDisbursement.Status)
+			assert.Equal(t, update.FileContent, actualDisbursement.FileContent)
+			assert.Equal(t, update.FileName, actualDisbursement.FileName)
 		})
-		require.NoError(t, err)
-
-		// Verify Receivers
-		receivers, err := di.receiverModel.GetByContacts(ctx, dbTx, instructions[0].Phone, instructions[1].Phone)
-		require.NoError(t, err)
-		assertEqualReceivers(t, []string{instructions[0].Phone, instructions[1].Phone}, []string{"1", "2"}, receivers)
-
-		// Verify Receiver Verifications
-		receiver1Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[0].ID)
-		require.NoError(t, err)
-		assert.Len(t, receiver1Verifications, 0)
-		receiver2Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[1].ID)
-		require.NoError(t, err)
-		assert.Len(t, receiver2Verifications, 0)
-
-		// Verify Receiver Wallets
-		receiverWallets, err := di.receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, []string{receivers[0].ID, receivers[1].ID})
-		require.NoError(t, err)
-		assert.Len(t, receiverWallets, 2)
-		for _, receiverWallet := range receiverWallets {
-			assert.Equal(t, wallet.ID, receiverWallet.Wallet.ID)
-			assert.Contains(t, []string{instructions[0].WalletAddress, instructions[1].WalletAddress}, receiverWallet.StellarAddress)
-			assert.Equal(t, RegisteredReceiversWalletStatus, receiverWallet.Status)
-		}
-
-		// Verify Payments
-		actualPayments := GetPaymentsByDisbursementID(t, ctx, dbTx, knownWalletDisbursement.ID)
-		assert.Len(t, actualPayments, 2)
-		assert.Contains(t, actualPayments, instructions[0].Amount)
-		assert.Contains(t, actualPayments, instructions[1].Amount)
-
-		actualExternalPaymentIDs := GetExternalPaymentIDsByDisbursementID(t, ctx, dbTx, knownWalletDisbursement.ID)
-		assert.Len(t, actualExternalPaymentIDs, 0)
-
-		// Verify Disbursement
-		actualDisbursement, err := di.disbursementModel.Get(ctx, dbTx, knownWalletDisbursement.ID)
-		require.NoError(t, err)
-		assert.Equal(t, ReadyDisbursementStatus, actualDisbursement.Status)
-		assert.Equal(t, update.FileContent, actualDisbursement.FileContent)
-		assert.Equal(t, update.FileName, actualDisbursement.FileName)
-	})
+	}
 
 	t.Run("success - sms instructions", func(t *testing.T) {
 		defer cleanup()

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [3.6.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.1...3.6.0))
 
+### Added
+
+- Add support to memos when ingesting CSV files with known wallet addresses. [#572](https://github.com/stellar/stellar-disbursement-platform-backend/pull/572)
+
 ### Changed
 
 - Improve UX on the reset-password flow by embedding the reset token in the URL so it can be parsed by the FE without human intervention. [#557](https://github.com/stellar/stellar-disbursement-platform-backend/pull/557)

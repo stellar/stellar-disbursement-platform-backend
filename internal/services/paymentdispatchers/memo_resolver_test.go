@@ -36,7 +36,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 		wantErrContains string
 	}{
 		{
-			name: "🟢 return receiver wallet memo when present",
+			name: "🟢 return receiver wallet memo when present (missing memo type)",
 			getCtxFn: func(t *testing.T) context.Context {
 				return context.Background()
 			},
@@ -44,6 +44,54 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			expectedMemo: schema.Memo{
 				Value: "1234567890",
 				Type:  schema.MemoTypeID,
+			},
+			wantErrContains: "",
+		},
+		{
+			name: "🟢 return receiver wallet memo when present (MEMO_ID)",
+			getCtxFn: func(t *testing.T) context.Context {
+				return context.Background()
+			},
+			receiverWallet: data.ReceiverWallet{StellarMemo: "1234567890", StellarMemoType: schema.MemoTypeID},
+			expectedMemo: schema.Memo{
+				Value: "1234567890",
+				Type:  schema.MemoTypeID,
+			},
+			wantErrContains: "",
+		},
+		{
+			name: "🟢 return receiver wallet memo when present (MEMO_TEXT)",
+			getCtxFn: func(t *testing.T) context.Context {
+				return context.Background()
+			},
+			receiverWallet: data.ReceiverWallet{StellarMemo: "memo-text-1", StellarMemoType: schema.MemoTypeText},
+			expectedMemo: schema.Memo{
+				Value: "memo-text-1",
+				Type:  schema.MemoTypeText,
+			},
+			wantErrContains: "",
+		},
+		{
+			name: "🟢 return receiver wallet memo when present (MEMO_HASH)",
+			getCtxFn: func(t *testing.T) context.Context {
+				return context.Background()
+			},
+			receiverWallet: data.ReceiverWallet{StellarMemo: "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577", StellarMemoType: schema.MemoTypeHash},
+			expectedMemo: schema.Memo{
+				Value: "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+				Type:  schema.MemoTypeHash,
+			},
+			wantErrContains: "",
+		},
+		{
+			name: "🟢 return receiver wallet memo when present (MEMO_RETURN)",
+			getCtxFn: func(t *testing.T) context.Context {
+				return context.Background()
+			},
+			receiverWallet: data.ReceiverWallet{StellarMemo: "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577", StellarMemoType: schema.MemoTypeReturn},
+			expectedMemo: schema.Memo{
+				Value: "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+				Type:  schema.MemoTypeReturn,
 			},
 			wantErrContains: "",
 		},
