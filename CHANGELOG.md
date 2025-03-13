@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Preserve port numbers in SEP-24 invitation links [#567](https://github.com/stellar/stellar-disbursement-platform-backend/pull/567)
 
+### Security and Dependencies
+
+- Bump golang.org/x/net from 0.34.0 to 0.36.0. [#575](https://github.com/stellar/stellar-disbursement-platform-backend/pull/575)
+
 ## [3.5.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.0...3.5.1))
 
 ### Fixed
