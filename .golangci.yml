@@ -8,5 +8,3 @@ linters:
 linters-settings:
   gofmt:
     simplify: true
-  govet:
-    check-shadowing: true
