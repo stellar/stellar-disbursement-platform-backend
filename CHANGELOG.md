@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Security and Dependencies
 
 - Bump golang in the all-docker group. [#552](https://github.com/stellar/stellar-disbursement-platform-backend/pull/552), [#570](https://github.com/stellar/stellar-disbursement-platform-backend/pull/570)
-- Bump the all-actions group across 1 directory with 2 updates. [#569](https://github.com/stellar/stellar-disbursement-platform-backend/pull/569)
+- Bump the all-actions group. [#569](https://github.com/stellar/stellar-disbursement-platform-backend/pull/569), [#578](https://github.com/stellar/stellar-disbursement-platform-backend/pull/578)
 - Bump golang.org/x/net from 0.34.0 to 0.36.0. [#575](https://github.com/stellar/stellar-disbursement-platform-backend/pull/575)
 - Bump checks versions so they work with the latest Golang versions. [#576](https://github.com/stellar/stellar-disbursement-platform-backend/pull/576)
 - Bump the minor-and-patch group across 1 directory with 8 updates [#577](https://github.com/stellar/stellar-disbursement-platform-backend/pull/577)
