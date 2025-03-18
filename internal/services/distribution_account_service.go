@@ -84,6 +84,13 @@ type StellarDistributionAccountService struct {
 	horizonClient horizonclient.ClientInterface
 }
 
+func NewStellarDistributionAccountService(horizonClient horizonclient.ClientInterface) (DistributionAccountServiceInterface, error) {
+	if horizonClient == nil {
+		return nil, fmt.Errorf("horizon client cannot be nil")
+	}
+	return &StellarDistributionAccountService{horizonClient: horizonClient}, nil
+}
+
 var _ DistributionAccountServiceInterface = (*StellarDistributionAccountService)(nil)
 
 func (s *StellarDistributionAccountService) GetBalances(_ context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
