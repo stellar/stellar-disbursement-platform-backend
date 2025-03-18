@@ -6,23 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [3.6.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.1...3.6.0))
 
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.6.0`.
+
 ### Added
 
+- Add support to send payments with memos if the receiver wallet was registered with a memo, or when the flag `organizations.is_memo_tracing_enabled` is set to `true`. [#537](https://github.com/stellar/stellar-disbursement-platform-backend/pull/537)
 - Add support to memos when ingesting CSV files with known wallet addresses. [#572](https://github.com/stellar/stellar-disbursement-platform-backend/pull/572)
 
 ### Changed
 
+- Reuse column names in SQL queries (DRY principle). [#535](https://github.com/stellar/stellar-disbursement-platform-backend/pull/535)
 - Improve UX on the reset-password flow by embedding the reset token in the URL so it can be parsed by the FE without human intervention. [#557](https://github.com/stellar/stellar-disbursement-platform-backend/pull/557)
+- Make create disbursement atomic. [#554](https://github.com/stellar/stellar-disbursement-platform-backend/pull/554)
 - Refactor the PR checklist to be more user-friendly and easier to follow. [#568](https://github.com/stellar/stellar-disbursement-platform-backend/pull/568)
-- Bump checks versions so they work with the latest Golang versions. [#576](https://github.com/stellar/stellar-disbursement-platform-backend/pull/576)
 
 ### Fixed
 
 - Preserve port numbers in SEP-24 invitation links [#567](https://github.com/stellar/stellar-disbursement-platform-backend/pull/567)
+- `POST /users` fails with 500 during validation errors. [#562](https://github.com/stellar/stellar-disbursement-platform-backend/pull/562)
+- Preserve port numbers in SEP-24 invitation links [#567](https://github.com/stellar/stellar-disbursement-platform-backend/pull/567)
 
 ### Security and Dependencies
 
+- Bump golang in the all-docker group. [#552](https://github.com/stellar/stellar-disbursement-platform-backend/pull/552), [#570](https://github.com/stellar/stellar-disbursement-platform-backend/pull/570)
+- Bump the all-actions group across 1 directory with 2 updates. [#569](https://github.com/stellar/stellar-disbursement-platform-backend/pull/569)
 - Bump golang.org/x/net from 0.34.0 to 0.36.0. [#575](https://github.com/stellar/stellar-disbursement-platform-backend/pull/575)
+- Bump checks versions so they work with the latest Golang versions. [#576](https://github.com/stellar/stellar-disbursement-platform-backend/pull/576)
+- Bump the minor-and-patch group across 1 directory with 8 updates [#577](https://github.com/stellar/stellar-disbursement-platform-backend/pull/577)
 
 ## [3.5.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.0...3.5.1))
 
