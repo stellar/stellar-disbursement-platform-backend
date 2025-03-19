@@ -50,6 +50,7 @@ github.com/creachadair/mds v0.0.1
 github.com/creack/pty v1.1.9
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/denisenkom/go-mssqldb v0.9.0
+github.com/dgryski/go-farm v0.0.0-20240924180020-3414d57e47da
 github.com/dimchansky/utfbom v1.1.1
 github.com/distribution/reference v0.6.0
 github.com/djherbis/fscache v0.10.1
@@ -197,7 +198,7 @@ github.com/spf13/cast v1.7.1
 github.com/spf13/cobra v1.9.1
 github.com/spf13/pflag v1.0.6
 github.com/spf13/viper v1.20.0
-github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
+github.com/stellar/go v0.0.0-20250311234916-385ac5aca1a4
 github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2
 github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 github.com/stretchr/objx v0.5.2
@@ -257,7 +258,7 @@ gopkg.in/djherbis/atime.v1 v1.0.0
 gopkg.in/djherbis/stream.v1 v1.3.1
 gopkg.in/gavv/httpexpect.v1 v1.0.0-20170111145843-40724cf1e4a0
 gopkg.in/ini.v1 v1.67.0
-gopkg.in/square/go-jose.v2 v2.4.1 => gopkg.in/go-jose/go-jose.v2 v2.6.3
+gopkg.in/square/go-jose.v2 v2.6.0 => gopkg.in/go-jose/go-jose.v2 v2.6.3
 gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
 gopkg.in/tylerb/graceful.v1 v1.2.15
 gopkg.in/yaml.v2 v2.4.0
