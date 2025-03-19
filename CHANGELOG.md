@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Improve UX on the reset-password flow by embedding the reset token in the URL so it can be parsed by the FE without human intervention. [#557](https://github.com/stellar/stellar-disbursement-platform-backend/pull/557)
 - Make create disbursement atomic. [#554](https://github.com/stellar/stellar-disbursement-platform-backend/pull/554)
 - Refactor the PR checklist to be more user-friendly and easier to follow. [#568](https://github.com/stellar/stellar-disbursement-platform-backend/pull/568)
+- Enabled scheduler instead of Kafka in the default environment variable template `.env.example`. [#573](https://github.com/stellar/stellar-disbursement-platform-backend/pull/573)
 - Change `{CIRCLE_API}/ping` method to validate only the response status code and not the body. [#580](https://github.com/stellar/stellar-disbursement-platform-backend/pull/580)
 - Allow the AWS configuration to be handled by the AWS session if the static credentials and region are not all passed to the SDP function. [#565](https://github.com/stellar/stellar-disbursement-platform-backend/pull/565)
 
