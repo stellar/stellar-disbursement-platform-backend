@@ -1,8 +1,22 @@
 {
   "selectVerification": {
     "title": "Select Verification Method",
-    "message": "Please choose how you would like to receive your verification code.",
-    "warning": "Attention, it needs to match the form of contact where you received your invitation to receive this payment."
+    "message": "Select how you received your invitation to claim funds.",
+    "warning": "Attention, it needs to match the form of contact where you received your invitation to receive this payment.",
+    "phoneErrorMessage": "Entered phone number is not valid",
+    "emailErrorMessage": "Entered email is not valid",
+    "missingAuthToken": "Authentication token is missing. Please make sure your URL is correct."
+  },
+  "enterPasscode": {
+    "title": "Enter Passcode",
+    "message": "If you are pre-approved, you will receive a one-time passcode, enter it below to continue.",
+    "messageNoOtp": "If you did not receive an OTP, it is likely because you used a phone number or email not registered with your organization. Please check the value you entered.",
+    "warning": "Do not share your OTP or verification data with anyone. People who ask for this information could be trying to access your account.",
+    "passcode": "Passcode",
+    "verDateOfBirth": "Date of Birth",
+    "verYearMonth": "Date of Birth (Year & Month only)",
+    "verNationalIdNumber": "National ID Number",
+    "verPin": "PIN"
   },
   "footer": {
     "privacyMessage": "Your data is processed by {{orgName}} in accordance with their <Link href=''>Privacy Policy</Link>"
@@ -10,6 +24,9 @@
   "generic": {
     "phoneNumber": "Phone Number",
     "email": "Email",
-    "continue": "Continue"
+    "continue": "Continue",
+    "error": "Error",
+    "goBack": "Go Back",
+    "resendOtp": "Resend OTP"
   }
 }

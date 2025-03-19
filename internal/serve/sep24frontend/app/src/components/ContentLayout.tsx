@@ -1,9 +1,8 @@
-import { useContext } from "react";
 import { Link } from "@stellar/design-system";
 import { Trans } from "react-i18next";
 
 import { Box } from "@/components/Box";
-import { StoreContext } from "@/components/StoreContext";
+import { useStore } from "@/store/useStore";
 
 export const ContentLayout = ({
   children,
@@ -12,7 +11,7 @@ export const ContentLayout = ({
   children: React.ReactElement;
   footer?: React.ReactElement;
 }) => {
-  const { org } = useContext(StoreContext);
+  const { org } = useStore();
 
   return (
     <>

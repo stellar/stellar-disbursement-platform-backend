@@ -1,58 +1,282 @@
-import { FC, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
   Heading,
+  Input,
+  Notification,
   RadioButton,
   Text,
 } from "@stellar/design-system";
 
+import { useTranslation } from "react-i18next";
+import intlTelInput, { Iti } from "intl-tel-input";
+import { uk, en } from "intl-tel-input/i18n";
+
+import ReCaptcha from "react-google-recaptcha";
+
 import { ContentLayout } from "@/components/ContentLayout";
 import { Box } from "@/components/Box";
+import { ExpandBox } from "@/components/ExpandBox";
 
-import { Routes } from "@/config/settings";
+import { getSearchParams } from "@/helpers/getSearchParams";
+import { RECAPTCHA_SITE_KEY, Routes } from "@/config/settings";
+import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
+
+import { useStore } from "@/store/useStore";
 import { VerificationMethod } from "@/types/types";
 
-// TODO: handle verification method fields (show dynamically)
-// TODO: add ReCaptcha
+// TODO: persist entered values
 
 export const SelectVerificationMethod: FC = () => {
+  const { jwtToken, language, updateUser } = useStore();
   const { t } = useTranslation();
+
   const navigate = useNavigate();
+  const searchParams = getSearchParams().toString();
 
   const [selectedMethod, setSelectedMethod] =
     useState<VerificationMethod>(null);
+  const [inputEmail, setInputEmail] = useState("");
 
-  const handleContinue = () => {
-    if (selectedMethod === "email") {
-      navigate(Routes.VERIFY_EMAIL);
-    } else if (selectedMethod === "phone") {
-      navigate(Routes.VERIFY_PHONE);
+  const [inputPhoneError, setInputPhoneError] = useState<string | false>("");
+  const [inputEmailError, setInputEmailError] = useState<string | false>("");
+
+  const [iti, setIti] = useState<Iti | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const reCaptchaRef = useRef<ReCaptcha>(null);
+  const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
+
+  const {
+    data: otpData,
+    error: otpError,
+    isPending: isOtpPending,
+    mutate: otpSubmit,
+  } = useSep24DepositOtp();
+
+  // Initialize intlTelInput
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const intlTelInputDropdownLang: any = {
+      en,
+      uk,
+    };
+
+    if (inputRef?.current) {
+      const itiInit = intlTelInput(inputRef.current, {
+        loadUtils: () => import("intl-tel-input/utils"),
+        separateDialCode: true,
+        // Excluding Cuba, Iran, North Korea, and Syria
+        excludeCountries: ["cu", "ir", "kp", "sy"],
+        // Setting default country based on user's IP address
+        initialCountry: "auto",
+        // Get the country code from user’s location
+        geoIpLookup: (callback) => {
+          fetch("https://ipapi.co/json")
+            .then((res) => res.json())
+            .then((data) => callback(data.country_code))
+            .catch(() => callback(""));
+        },
+        i18n: intlTelInputDropdownLang[language] || en,
+        fixDropdownWidth: false,
+        containerClass: "Wallet__phoneInput",
+        useFullscreenPopup: true,
+      });
+
+      setIti(itiInit);
     }
+
+    return () => {
+      iti?.destroy();
+    };
+    // Trigger change when global app language changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  // Reset state when selected method changes
+  useEffect(() => {
+    setInputEmail("");
+    setInputEmailError("");
+
+    iti?.setNumber("");
+    setInputPhoneError("");
+  }, [iti, selectedMethod]);
+
+  // OTP response
+  useEffect(() => {
+    if (otpData) {
+      updateUser({
+        phone_number: iti?.getNumber(),
+        email: inputEmail,
+        verification_field: otpData.verification_field,
+      });
+      navigate({ pathname: Routes.ENTER_PASSCODE, search: searchParams });
+      reCaptchaRef?.current?.reset();
+    }
+    // Not including iti and inputEmail
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpData, navigate, searchParams, updateUser]);
+
+  const handleSubmit = () => {
+    if (!jwtToken || !reCaptchaToken) {
+      return;
+    }
+
+    const submitData = {
+      phone_number: iti?.getNumber() || undefined,
+      email: inputEmail || undefined,
+      recaptcha_token: reCaptchaToken,
+    };
+
+    otpSubmit({ token: jwtToken, ...submitData });
+  };
+
+  const validatePhoneNumber = () => {
+    if (!iti?.getNumber()) {
+      return;
+    }
+
+    const isValid = iti?.isValidNumber();
+    setInputPhoneError(
+      isValid ? false : t("selectVerification.phoneErrorMessage")
+    );
+  };
+
+  const validateEmail = () => {
+    if (!inputEmail) {
+      return;
+    }
+
+    const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputEmail);
+    setInputEmailError(
+      isValid ? false : t("selectVerification.emailErrorMessage")
+    );
+  };
+
+  const renderInputs = () => {
+    return (
+      <Box gap="md">
+        <div
+          className="Wallet__verificationMethodBox"
+          data-visible={selectedMethod === "email"}
+        >
+          <Input
+            id="input-email"
+            type="email"
+            value={inputEmail}
+            fieldSize="lg"
+            placeholder="email@email.com"
+            onChange={(e) => {
+              if (inputEmailError) {
+                setInputEmailError("");
+              }
+
+              setInputEmail(e.target.value.trim());
+            }}
+            onBlur={() => {
+              validateEmail();
+            }}
+            error={inputEmailError}
+          />
+        </div>
+
+        <div
+          className="Wallet__verificationMethodBox Wallet__phoneInput"
+          data-visible={selectedMethod === "phone"}
+        >
+          <input
+            ref={inputRef}
+            id="input-phone-number"
+            type="tel"
+            placeholder="(506) 234-5678"
+            onBlur={() => {
+              validatePhoneNumber();
+            }}
+            onChange={() => {
+              if (inputPhoneError) {
+                setInputPhoneError("");
+              }
+            }}
+            data-error={Boolean(inputPhoneError)}
+          />
+          {inputPhoneError ? (
+            <div className="FieldNote FieldNote--error FieldNote--lg">
+              {inputPhoneError}
+            </div>
+          ) : null}
+        </div>
+
+        {/* TODO: switch theme */}
+        <ReCaptcha
+          ref={reCaptchaRef}
+          size="normal"
+          sitekey={RECAPTCHA_SITE_KEY}
+          onChange={(token) => {
+            setReCaptchaToken(token);
+          }}
+        />
+      </Box>
+    );
+  };
+
+  const isSubmitDisabled = () => {
+    let isDisabled = false;
+
+    if (!selectedMethod) {
+      isDisabled = true;
+    }
+
+    if (selectedMethod === "email") {
+      isDisabled = inputEmailError !== false || !inputEmail;
+    } else if (selectedMethod === "phone") {
+      isDisabled = inputPhoneError !== false || !iti?.isValidNumber();
+    }
+
+    if (!reCaptchaToken) {
+      isDisabled = true;
+    }
+
+    if (!jwtToken) {
+      isDisabled = true;
+    }
+
+    return isDisabled;
   };
 
   return (
     <ContentLayout
       footer={
         <Button
-          size="md"
+          size="lg"
           variant="secondary"
-          onClick={handleContinue}
-          disabled={!selectedMethod}
+          onClick={handleSubmit}
+          disabled={isSubmitDisabled()}
+          isLoading={isOtpPending}
         >
           {t("generic.continue")}
         </Button>
       }
     >
       <Box gap="md">
+        {!jwtToken ? (
+          <Notification variant="error" title="Attention" isFilled>
+            {t("selectVerification.missingAuthToken")}
+          </Notification>
+        ) : null}
+
         <Heading as="h1" size="sm">
           {t("selectVerification.title")}
         </Heading>
+
         <Text as="div" size="md">
           {t("selectVerification.message")}
         </Text>
+
+        <Alert variant="warning" placement="inline">
+          {t("selectVerification.warning")}
+        </Alert>
 
         <Box gap="sm">
           <RadioButton
@@ -73,9 +297,22 @@ export const SelectVerificationMethod: FC = () => {
           />
         </Box>
 
-        <Alert variant="warning" placement="inline">
-          {t("selectVerification.warning")}
-        </Alert>
+        <ExpandBox offsetTop="sm" isExpanded={Boolean(selectedMethod)}>
+          {renderInputs()}
+        </ExpandBox>
+
+        {otpError ? (
+          <Alert variant="error" placement="inline" title={t("generic.error")}>
+            {otpError.error}
+            {otpError?.extras ? (
+              <ul>
+                {Object.entries(otpError.extras).map(([key, value]) => (
+                  <li key={`error-${key}`}>{value}</li>
+                ))}
+              </ul>
+            ) : null}
+          </Alert>
+        ) : null}
       </Box>
     </ContentLayout>
   );

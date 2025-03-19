@@ -10,5 +10,8 @@ export enum Routes {
   ENTER_PASSCODE = "/enter-passcode",
 }
 
-export const SDP_API_ENDPOINT = import.meta.env.VITE_SDP_API_ENDPOINT || "";
 export const SUPPORTED_LANGUAGES = ["en", "uk"];
+
+// Env
+export const SDP_API_ENDPOINT = import.meta.env.VITE_SDP_API_ENDPOINT || "";
+export const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";

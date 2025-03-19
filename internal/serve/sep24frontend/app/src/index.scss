@@ -42,6 +42,145 @@ h6 {
   color: var(--sds-clr-gray-12);
 }
 
+ul {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+// =============================================================================
+// Phone input with country flags
+// =============================================================================
+.Wallet__verificationMethodBox {
+  display: none;
+
+  &[data-visible="true"] {
+    display: block;
+  }
+}
+
+.Wallet__phoneInput,
+.iti {
+  --Wallet-input-color-background: var(--sds-clr-gray-01);
+  --Wallet-input-color-border: var(--sds-clr-gray-06);
+  --Wallet-input-color-border-hover: var(--sds-clr-gray-06);
+  --Wallet-input-color-border-focus: var(--sds-clr-gray-06);
+  --Wallet-input-color-text: var(--sds-clr-gray-12);
+
+  --Wallet-input-font-size: #{pxToRem(16px)};
+  --Wallet-input-line-height: #{pxToRem(24px)};
+  --Wallet-input-padding-vertical: #{pxToRem(8px)};
+  --Wallet-input-padding-horizontal: #{pxToRem(14px)};
+  --Wallet-input-border-radius: #{pxToRem(8px)};
+
+  --Wallet-input-box-shadow-size: 0;
+  --Wallet-input-box-shadow-color: var(--sds-input-box-shadow-color-default);
+
+  font-family: var(--sds-ff-base);
+  font-size: var(--Wallet-input-font-size);
+  line-height: var(--Wallet-input-line-height);
+  color: var(--Wallet-input-color-text);
+
+  input {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: currentColor;
+    background-color: var(--Wallet-input-color-background);
+    border: 1px solid var(--Wallet-input-color-border);
+    border-radius: var(--Wallet-input-border-radius);
+    box-shadow: 0 0 0 var(--Wallet-input-box-shadow-size)
+      var(--Wallet-input-box-shadow-color);
+    transition: border-color var(--sds-anim-transition-default),
+      box-shadow var(--sds-anim-transition-default);
+    width: 100%;
+    padding: var(--Wallet-input-padding-vertical)
+      var(--Wallet-input-padding-horizontal);
+    outline: none;
+
+    &:focus {
+      --Wallet-input-box-shadow-size: #{pxToRem(4px)};
+    }
+
+    @media (hover: hover) {
+      &:hover {
+        border-color: var(--Wallet-input-color-border-hover);
+      }
+    }
+
+    &[data-error="true"] {
+      --Wallet-input-color-background: var(--sds-input-color-background-error);
+      --Wallet-input-color-border: var(--sds-input-color-border-error);
+      --Wallet-input-color-text: var(--sds-input-color-text-default);
+
+      &:focus {
+        --Wallet-input-color-border-focus: var(
+          --sds-input-color-border-error-focus
+        );
+        --Wallet-input-box-shadow-color: var(
+          --sds-input-box-shadow-color-error
+        );
+      }
+
+      @media (hover: hover) {
+        &:hover {
+          --Wallet-input-color-border-hover: var(
+            --sds-input-color-border-error-hover
+          );
+        }
+      }
+    }
+  }
+
+  .FieldNote {
+    margin-top: pxToRem(8px);
+  }
+}
+
+.iti {
+  --iti-hover-color: var(--sds-overlay-01);
+  --iti-border-color: var(--Wallet-input-color-border);
+  --iti-dialcode-color: var(--sds-clr-gray-09);
+  --iti-dropdown-bg: var(--sds-clr-gray-02);
+  --iti-arrow-color: var(--Wallet-input-color-text);
+
+  display: block;
+
+  &__arrow--up {
+    border-bottom: none;
+    border-top: var(--iti-arrow-height) solid var(--iti-arrow-color);
+  }
+
+  &__selected-dial-code {
+    background-color: var(--Wallet-input-color-background);
+  }
+
+  &__country-container {
+    width: 100%;
+  }
+
+  &__dropdown-content {
+    width: 100%;
+  }
+
+  &__country {
+    font-family: var(--sds-ff-base);
+    font-size: var(--Wallet-input-font-size);
+    line-height: var(--Wallet-input-line-height);
+  }
+
+  &__search-input {
+    margin-bottom: pxToRem(3px);
+  }
+}
+
+.iti--fullscreen-popup.iti--container {
+  background: var(--sds-overlay-03);
+}
+
+.iti--flexible-dropdown-width .iti__country-list {
+  padding: 0;
+}
+
 // =============================================================================
 // Layout
 // =============================================================================
@@ -72,11 +211,27 @@ h6 {
     color: var(--sds-clr-gray-09);
     text-align: center;
     flex: 0;
+
+    &__inlineButtons {
+      & > * {
+        flex: 1;
+      }
+    }
   }
 
   &__language {
     & > .Select {
       width: pxToRem(120px);
+    }
+  }
+
+  &__passcodeEntry {
+    &__inputs {
+      margin-top: pxToRem(20px);
+    }
+
+    &__resendOtp {
+      margin: pxToRem(10px) 0;
     }
   }
 }

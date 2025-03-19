@@ -11,14 +11,7 @@ import i18next from "i18next";
 import { SelectVerificationMethod } from "@/pages/SelectVerificationMethod";
 import { PasscodeEntry } from "@/pages/PasscodeEntry";
 
-import { EmailVerification } from "@/components/EmailVerification";
-import { PhoneVerification } from "@/components/PhoneVerification";
 import { Box } from "@/components/Box";
-import {
-  initOrgState,
-  StoreContext,
-  StoreOrgType,
-} from "@/components/StoreContext";
 
 import {
   LOCAL_STORAGE_WALLET_THEME,
@@ -29,14 +22,18 @@ import { useSep24DepositInit } from "@/query/useSep24DepositInit";
 import { getSearchParams } from "@/helpers/getSearchParams";
 import { localStorageSavedLanguage } from "@/helpers/localStorageSavedLanguage";
 
+import { useStore } from "@/store/useStore";
+
 // TODO: handle API error translations
+// TODO: registered user?
+// TODO: success page
 
 const App: FC = () => {
   const searchParams = getSearchParams();
   const token = searchParams.get("token");
 
+  const { updateJwtToken, updateLanguage, updateOrg } = useStore();
   const [language, setLanguage] = useState<string>("");
-  const [org, setOrg] = useState<StoreOrgType>(initOrgState);
 
   const {
     data: orgData,
@@ -63,7 +60,12 @@ const App: FC = () => {
 
   useEffect(() => {
     i18next.changeLanguage(language);
-  }, [language]);
+    updateLanguage(language);
+  }, [language, updateLanguage]);
+
+  useEffect(() => {
+    updateJwtToken(token || "");
+  }, [token, updateJwtToken]);
 
   useEffect(() => {
     if (orgData) {
@@ -74,14 +76,14 @@ const App: FC = () => {
         is_recaptcha_disabled,
       } = orgData;
 
-      setOrg({
+      updateOrg({
         privacy_policy_link,
         organization_name,
         is_registered,
         is_recaptcha_disabled: Boolean(is_recaptcha_disabled),
       });
     }
-  }, [orgData]);
+  }, [orgData, updateOrg]);
 
   const renderContent = () => {
     // Loading
@@ -116,9 +118,6 @@ const App: FC = () => {
           <Route path={Routes.ROOT} element={<SelectVerificationMethod />} />
           <Route path={Routes.START} element={<SelectVerificationMethod />} />
           <Route path={Routes.ENTER_PASSCODE} element={<PasscodeEntry />} />
-          {/* TODO: these routes will go away */}
-          <Route path={Routes.VERIFY_EMAIL} element={<EmailVerification />} />
-          <Route path={Routes.VERIFY_PHONE} element={<PhoneVerification />} />
           {/* Add a catch-all route that redirects to the start page */}
           <Route path="*" element={<SelectVerificationMethod />} />
         </RouterRoutes>
@@ -127,8 +126,7 @@ const App: FC = () => {
   };
 
   return (
-    // Using React Context to manage global state
-    <StoreContext.Provider value={{ org }}>
+    <>
       {/* Header */}
       <Box
         gap="lg"
@@ -158,7 +156,7 @@ const App: FC = () => {
 
       {/* Content */}
       {renderContent()}
-    </StoreContext.Provider>
+    </>
   );
 };
 
