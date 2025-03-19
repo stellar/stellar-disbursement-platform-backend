@@ -1,7 +1,6 @@
 name: Integration Tests
 
 on:
-  pull_request:
   workflow_call: # allows this workflow to be called from another workflow, like `docker_image_public_release`
 
 env:
@@ -22,10 +21,10 @@ jobs:
       max-parallel: 1
       matrix:
         platform:
-          # - "Stellar-phone" # Stellar distribution account where receivers are registered with their phone number
-          # - "Stellar-phone-FUTURENET" # Stellar distribution account where receivers are registered with their phone number
-          # - "Stellar-phone-wallet" # Stellar distribution account where receivers are registered with their phone number and wallet address
-          # - "Stellar-email" # Stellar distribution account where receivers are registered with their email
+          - "Stellar-phone" # Stellar distribution account where receivers are registered with their phone number
+          - "Stellar-phone-FUTURENET" # Stellar distribution account where receivers are registered with their phone number
+          - "Stellar-phone-wallet" # Stellar distribution account where receivers are registered with their phone number and wallet address
+          - "Stellar-email" # Stellar distribution account where receivers are registered with their email
           - "Circle-phone" # Circle distribution account where receivers are registered with their email
         include:
           - platform: "Stellar-phone"
