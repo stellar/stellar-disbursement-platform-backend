@@ -103,18 +103,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var pingResp struct {
-		Message string `json:"message"`
-	}
-	if err = json.NewDecoder(resp.Body).Decode(&pingResp); err != nil {
-		return false, fmt.Errorf("decoding Ping response: %w", err)
-	}
-
-	if pingResp.Message == "pong" {
-		return true, nil
-	}
-
-	return false, fmt.Errorf("unexpected response message: %s", pingResp.Message)
+	return true, nil
 }
 
 // PostTransfer creates a new transfer.
