@@ -30,6 +30,7 @@ type ReceiverSendOTPHandler struct {
 	Models             *data.Models
 	MessageDispatcher  message.MessageDispatcherInterface
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
+	ReCAPTCHADisabled  bool
 }
 
 type ReceiverSendOTPData struct {
@@ -84,16 +85,18 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	receiverSendOTPRequest.PhoneNumber = utils.TrimAndLower(receiverSendOTPRequest.PhoneNumber)
 	receiverSendOTPRequest.Email = utils.TrimAndLower(receiverSendOTPRequest.Email)
 
-	// validating reCAPTCHA Token
-	isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, receiverSendOTPRequest.ReCAPTCHAToken)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil).Render(w)
-		return
-	}
-	if !isValid {
-		log.Ctx(ctx).Errorf("reCAPTCHA token is invalid")
-		httperror.BadRequest("reCAPTCHA token is invalid", nil, nil).Render(w)
-		return
+	// validating reCAPTCHA Token if it is enabled
+	if !h.ReCAPTCHADisabled {
+		isValid, tokenErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, receiverSendOTPRequest.ReCAPTCHAToken)
+		if tokenErr != nil {
+			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", tokenErr, nil).Render(w)
+			return
+		}
+		if !isValid {
+			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid")
+			httperror.BadRequest("reCAPTCHA token is invalid", nil, nil).Render(w)
+			return
+		}
 	}
 
 	// Validate SEP-24 JWT claims

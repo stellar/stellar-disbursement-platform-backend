@@ -62,6 +62,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 		contextSep24Claims         *anchorplatform.SEP24JWTClaims
 		requestBody                string
 		isRecaptchaValidFnResponse []interface{}
+		isReCAPTCHADisabled        bool
 		wantHTTPErr                *httperror.HTTPError
 		wantSep24Claims            *anchorplatform.SEP24JWTClaims
 		wantResult                 data.ReceiverRegistrationRequest
@@ -109,7 +110,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 			wantHTTPErr:                httperror.BadRequest("", nil, map[string]interface{}{"otp": "invalid otp format. Needs to be a 6 digit value"}),
 		},
 		{
-			name:               "🎉 successfully parses the body into an object if the SEP24 token, recaptcha token and reqquest body are all valid",
+			name:               "🎉 successfully parses the body into an object if the SEP24 token, recaptcha token and request body are all valid",
 			contextSep24Claims: sep24JWTClaims,
 			requestBody: `{
 				"phone_number": "+380445555555",
@@ -128,18 +129,39 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 				ReCAPTCHAToken:    "token",
 			},
 		},
+		{
+			name:               "🎉 successful when recaptcha is disabled",
+			contextSep24Claims: sep24JWTClaims,
+			requestBody: `{
+				"phone_number": "+380445555555",
+				"otp": "123456",
+				"verification": "1990-01-01",
+				"verification_field": "date_of_birth"
+			}`,
+			// isRecaptchaValidFnResponse: []interface{}{false, nil},
+			isReCAPTCHADisabled: true,
+			wantSep24Claims:     sep24JWTClaims,
+			wantResult: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "1990-01-01",
+				VerificationField: data.VerificationTypeDateOfBirth,
+			},
+		},
 	}
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
-	handler := &VerifyReceiverRegistrationHandler{
-		Models:                   models,
-		AnchorPlatformAPIService: &mockAnchorPlatformService,
-	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			handler := &VerifyReceiverRegistrationHandler{
+				Models:                   models,
+				AnchorPlatformAPIService: &mockAnchorPlatformService,
+				ReCAPTCHADisabled:        tc.isReCAPTCHADisabled,
+			}
+
 			var requestBody io.Reader
 			if tc.requestBody != "" {
 				requestBody = strings.NewReader(tc.requestBody)

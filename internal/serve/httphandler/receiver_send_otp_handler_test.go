@@ -275,6 +275,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 		receiverSendOTPRequest ReceiverSendOTPRequest
 		verificationField      data.VerificationType
 		contactType            data.ReceiverContactType
+		isReCAPTCHADisabled    bool
 		prepareMocksFn         func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher)
 		shouldCreateObjects    bool
 		assertLogsFn           func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry)
@@ -380,6 +381,30 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 					wantStatusCode: http.StatusOK,
 					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"%s"}`, utils.Humanize(string(contactType)), verificationField),
 				},
+				{
+					name:                   fmt.Sprintf("%s/%s/🟢 (200-Ok) OTP sent with no ReCAPTCHA", contactType, verificationField),
+					receiverSendOTPRequest: receiverSendOTPRequest,
+					verificationField:      verificationField,
+					contactType:            contactType,
+					isReCAPTCHADisabled:    true,
+					shouldCreateObjects:    true,
+					prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher) {
+						mockMessageDispatcher.
+							On("SendMessage",
+								mock.Anything,
+								mock.AnythingOfType("message.Message"),
+								[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+							Return(messengerType, nil).
+							Once().
+							Run(func(args mock.Arguments) {
+								msg := args.Get(1).(message.Message)
+								assert.Contains(t, msg.Body, "is your MyCustomAid verification code.")
+								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Body)
+							})
+					},
+					wantStatusCode: http.StatusOK,
+					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"%s"}`, utils.Humanize(string(contactType)), verificationField),
+				},
 			}...)
 		}
 	}
@@ -411,6 +436,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 				Models:             models,
 				MessageDispatcher:  mockMessageDispatcher,
 				ReCAPTCHAValidator: mockReCAPTCHAValidator,
+				ReCAPTCHADisabled:  tc.isReCAPTCHADisabled,
 			}.ServeHTTP)
 
 			reqBody, err := json.Marshal(tc.receiverSendOTPRequest)
