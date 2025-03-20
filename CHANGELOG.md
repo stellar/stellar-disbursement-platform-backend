@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Add support to send payments with memos if the receiver wallet was registered with a memo, or when the flag `organizations.is_memo_tracing_enabled` is set to `true`. [#537](https://github.com/stellar/stellar-disbursement-platform-backend/pull/537)
 - Add support to memos when ingesting CSV files with known wallet addresses. [#572](https://github.com/stellar/stellar-disbursement-platform-backend/pull/572)
+- Add new CMD `distribution-account rotate` to rotate distribution account keys. [#579](https://github.com/stellar/stellar-disbursement-platform-backend/pull/579)
 
 ### Changed
 

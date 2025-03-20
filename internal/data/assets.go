@@ -11,6 +11,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
@@ -60,6 +61,13 @@ func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
 	}
 
 	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
+}
+
+func (a Asset) ToBasicAsset() txnbuild.Asset {
+	if a.IsNative() {
+		return txnbuild.NativeAsset{}
+	}
+	return txnbuild.CreditAsset{Code: a.Code, Issuer: a.Issuer}
 }
 
 type AssetModel struct {
