@@ -5,9 +5,8 @@ export enum Routes {
   BASE = "/wallet-registration",
   ROOT = "/",
   START = "/start",
-  VERIFY_EMAIL = "/verify/email",
-  VERIFY_PHONE = "/verify/phone",
   ENTER_PASSCODE = "/enter-passcode",
+  SUCCESS = "/success",
 }
 
 export const SUPPORTED_LANGUAGES = ["en", "uk"];

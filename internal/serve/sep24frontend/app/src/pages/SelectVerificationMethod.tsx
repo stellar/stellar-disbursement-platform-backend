@@ -21,6 +21,7 @@ import { Box } from "@/components/Box";
 import { ExpandBox } from "@/components/ExpandBox";
 
 import { getSearchParams } from "@/helpers/getSearchParams";
+import { renderApiErrorMessage } from "@/helpers/renderApiErrorMessage";
 import { RECAPTCHA_SITE_KEY, Routes } from "@/config/settings";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 
@@ -208,7 +209,7 @@ export const SelectVerificationMethod: FC = () => {
           ) : null}
         </div>
 
-        {/* TODO: switch theme */}
+        {/* TODO: match recaptcha theme */}
         <ReCaptcha
           ref={reCaptchaRef}
           size="normal"
@@ -303,14 +304,7 @@ export const SelectVerificationMethod: FC = () => {
 
         {otpError ? (
           <Alert variant="error" placement="inline" title={t("generic.error")}>
-            {otpError.error}
-            {otpError?.extras ? (
-              <ul>
-                {Object.entries(otpError.extras).map(([key, value]) => (
-                  <li key={`error-${key}`}>{value}</li>
-                ))}
-              </ul>
-            ) : null}
+            {renderApiErrorMessage(otpError)}
           </Alert>
         ) : null}
       </Box>

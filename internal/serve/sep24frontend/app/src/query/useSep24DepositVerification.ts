@@ -1,32 +1,38 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { SDP_API_ENDPOINT } from "@/config/settings";
-import { ApiError, Sep24DepositOtpResponse } from "@/types/types";
+import { ApiError } from "@/types/types";
 
 /**
- * Submit user’s verification method to get OTP.
+ * Submit verify receiver.
  */
-type Sep24DepositOtpProps = {
+type Sep24DepositVerificationProps = {
   token: string;
   phone_number: string | undefined;
   email: string | undefined;
   recaptcha_token: string;
+  otp: string;
+  verification: string;
+  verification_field: string;
 };
 
-export const useSep24DepositOtp = () => {
+export const useSep24DepositVerification = () => {
   const { t } = useTranslation();
 
   const mutation = useMutation<
-    Sep24DepositOtpResponse,
+    { message: string },
     ApiError,
-    Sep24DepositOtpProps
+    Sep24DepositVerificationProps
   >({
     mutationFn: async ({
       token,
       phone_number,
       email,
       recaptcha_token,
-    }: Sep24DepositOtpProps) => {
+      otp,
+      verification,
+      verification_field,
+    }: Sep24DepositVerificationProps) => {
       if (!token) {
         throw Error("Token is required.");
       }
@@ -35,16 +41,19 @@ export const useSep24DepositOtp = () => {
         recaptcha_token,
         ...(phone_number ? { phone_number } : {}),
         ...(email ? { email } : {}),
+        otp,
+        verification,
+        verification_field,
       };
 
       try {
         const response = await fetch(
-          `${SDP_API_ENDPOINT}/sep24-interactive-deposit/otp`,
+          `${SDP_API_ENDPOINT}/sep24-interactive-deposit/verification`,
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify(data),
           }

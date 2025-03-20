@@ -16,7 +16,14 @@
     "verDateOfBirth": "Дата народження",
     "verYearMonth": "Дата народження (тільки рік і місяць)",
     "verNationalIdNumber": "Національний ідентифікаційний номер",
-    "verPin": "PIN-код"
+    "verPin": "PIN-код",
+    "resendOtpSuccessTitle": "Новий OTP надіслано",
+    "resendOtpSuccessMessage": "Ви отримаєте новий одноразовий пароль."
+  },
+  "success": {
+    "title": "Вашу інформацію успішно перевірено!",
+    "message": "Ваш обліковий запис підтверджено за такою контактною інформацією: {{contactInfo}}.",
+    "goToHomeMessage": "Натисніть кнопку нижче, щоб повернутися додому та отримати виплату."
   },
   "footer": {
     "privacyMessage": "Ваші дані обробляє {{orgName}} відповідно до їхньої <Link href=''>Політики конфіденційності</Link>"
@@ -27,6 +34,9 @@
     "continue": "Продовжити",
     "error": "Помилка",
     "goBack": "Назад",
-    "resendOtp": "Повторно надіслати OTP"
+    "goToHome": "Назад на початок",
+    "resendOtp": "Повторно надіслати OTP",
+    "errorMessage": "Щось пішло не так, спробуйте пізніше.",
+    "errorReCaptchaRequired": "Потрібен reCAPTCHA"
   }
 }

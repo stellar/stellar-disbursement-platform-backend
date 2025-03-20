@@ -10,6 +10,7 @@ import i18next from "i18next";
 
 import { SelectVerificationMethod } from "@/pages/SelectVerificationMethod";
 import { PasscodeEntry } from "@/pages/PasscodeEntry";
+import { Success } from "@/pages/Success";
 
 import { Box } from "@/components/Box";
 
@@ -25,8 +26,7 @@ import { localStorageSavedLanguage } from "@/helpers/localStorageSavedLanguage";
 import { useStore } from "@/store/useStore";
 
 // TODO: handle API error translations
-// TODO: registered user?
-// TODO: success page
+// TODO: registered user view?
 
 const App: FC = () => {
   const searchParams = getSearchParams();
@@ -118,6 +118,7 @@ const App: FC = () => {
           <Route path={Routes.ROOT} element={<SelectVerificationMethod />} />
           <Route path={Routes.START} element={<SelectVerificationMethod />} />
           <Route path={Routes.ENTER_PASSCODE} element={<PasscodeEntry />} />
+          <Route path={Routes.SUCCESS} element={<Success />} />
           {/* Add a catch-all route that redirects to the start page */}
           <Route path="*" element={<SelectVerificationMethod />} />
         </RouterRoutes>

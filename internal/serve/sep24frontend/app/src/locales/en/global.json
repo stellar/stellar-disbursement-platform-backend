@@ -16,7 +16,14 @@
     "verDateOfBirth": "Date of Birth",
     "verYearMonth": "Date of Birth (Year & Month only)",
     "verNationalIdNumber": "National ID Number",
-    "verPin": "PIN"
+    "verPin": "PIN",
+    "resendOtpSuccessTitle": "New OTP sent",
+    "resendOtpSuccessMessage": "You will receive a new one-time passcode."
+  },
+  "success": {
+    "title": "Your information has been successfully verified!",
+    "message": "Your account was verified using the following contact information: {{contactInfo}}.",
+    "goToHomeMessage": "Click the button below to be taken back to home and receive your disbursement."
   },
   "footer": {
     "privacyMessage": "Your data is processed by {{orgName}} in accordance with their <Link href=''>Privacy Policy</Link>"
@@ -27,6 +34,9 @@
     "continue": "Continue",
     "error": "Error",
     "goBack": "Go Back",
-    "resendOtp": "Resend OTP"
+    "goToHome": "Back to Home",
+    "resendOtp": "Resend OTP",
+    "errorMessage": "Something went wrong, please try again later.",
+    "errorReCaptchaRequired": "reCAPTCHA is required"
   }
 }

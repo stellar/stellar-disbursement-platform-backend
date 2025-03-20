@@ -1,4 +1,4 @@
-import { FC, useRef, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -7,14 +7,20 @@ import {
   Heading,
   Input,
   Link,
+  Notification,
   Text,
 } from "@stellar/design-system";
 import ReCaptcha from "react-google-recaptcha";
 
 import { Box } from "@/components/Box";
 import { ContentLayout } from "@/components/ContentLayout";
+
 import { useStore } from "@/store/useStore";
-import { RECAPTCHA_SITE_KEY } from "@/config/settings";
+import { RECAPTCHA_SITE_KEY, Routes } from "@/config/settings";
+import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
+import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
+
+// TODO: clear view messages
 
 export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
@@ -27,38 +33,116 @@ export const PasscodeEntry: FC = () => {
   const reCaptchaRef = useRef<ReCaptcha>(null);
   const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
 
-  // TODO: handle verification
+  type ViewMessage = {
+    type: "error" | "success";
+    title: string;
+    message: string;
+    timestamp: number;
+  };
+
+  const [viewMessage, setViewMessage] = useState<ViewMessage | null>();
+
+  const {
+    isSuccess: isOtpSuccess,
+    error: otpError,
+    isPending: isOtpPending,
+    mutate: otpSubmit,
+  } = useSep24DepositOtp();
+
+  const {
+    isSuccess: isVerifySuccess,
+    error: verifyError,
+    isPending: isVerifyPending,
+    mutate: verifySubmit,
+  } = useSep24DepositVerification();
+
+  // OTP success
+  useEffect(() => {
+    if (isOtpSuccess) {
+      setViewMessage({
+        type: "success",
+        title: t("enterPasscode.resendOtpSuccessTitle"),
+        message: t("enterPasscode.resendOtpSuccessMessage"),
+        timestamp: new Date().getTime(),
+      });
+    }
+  }, [isOtpSuccess, t]);
+
+  // OTP error
+  useEffect(() => {
+    if (otpError) {
+      setViewMessage({
+        type: "error",
+        title: t("generic.error"),
+        message: otpError.error,
+        timestamp: new Date().getTime(),
+      });
+    }
+  }, [otpError, t]);
+
+  // Verify success
+  useEffect(() => {
+    if (isVerifySuccess) {
+      navigate(Routes.SUCCESS);
+    }
+  }, [isVerifySuccess, navigate]);
+
+  // Verify error
+  useEffect(() => {
+    if (verifyError) {
+      setViewMessage({
+        type: "error",
+        title: t("generic.error"),
+        message: verifyError.error,
+        timestamp: new Date().getTime(),
+      });
+    }
+  }, [verifyError, t]);
+
   const handleVerification = () => {
-    if (!(otp || verification || user.verification_field || reCaptchaToken)) {
+    if (!(otp && verification && user.verification_field && reCaptchaToken)) {
       return;
     }
 
-    let ver = verification;
+    const formattedVerification =
+      user.verification_field === "YEAR_MONTH"
+        ? verification.substring(0, 7)
+        : verification;
 
-    if (user.verification_field === "YEAR_MONTH") {
-      const dateString = verification.split("-");
-      ver = `${dateString[0]}-${dateString[1]}`;
+    verifySubmit({
+      phone_number: user.phone_number,
+      email: user.email,
+      otp,
+      verification: formattedVerification,
+      verification_field: user.verification_field,
+      recaptcha_token: reCaptchaToken,
+      token: jwtToken,
+    });
+  };
+
+  const handleResendOtp = () => {
+    if (!jwtToken) {
+      return;
+    }
+
+    if (!reCaptchaToken) {
+      setViewMessage({
+        type: "error",
+        title: t("generic.error"),
+        message: t("generic.errorReCaptchaRequired"),
+        timestamp: new Date().getTime(),
+      });
+
+      return;
     }
 
     const submitData = {
       phone_number: user.phone_number,
       email: user.email,
-      otp,
-      verification: ver,
-      verification_field: user.verification_field,
       recaptcha_token: reCaptchaToken,
-      token: jwtToken,
     };
 
-    console.log(">>> submit data: ", submitData);
-
-    // Handle verification success logic here
-    alert("Verification successful!");
-  };
-
-  // TODO: handle resend otp
-  const handleResendOtp = () => {
-    alert("New OTP sent!");
+    otpSubmit({ token: jwtToken, ...submitData });
   };
 
   const renderVerificationInput = () => {
@@ -137,7 +221,15 @@ export const PasscodeEntry: FC = () => {
             justify="center"
             addlClassName="Wallet__passcodeEntry__resendOtp"
           >
-            <Link onClick={handleResendOtp}> {t("generic.resendOtp")}</Link>
+            <Link
+              onClick={(e) => {
+                e.preventDefault();
+                handleResendOtp();
+              }}
+              isDisabled={isOtpPending}
+            >
+              {t("generic.resendOtp")}
+            </Link>
           </Box>
 
           <Box
@@ -153,7 +245,7 @@ export const PasscodeEntry: FC = () => {
               onClick={() => {
                 navigate(-1);
               }}
-              // disabled={}
+              disabled={isVerifyPending}
             >
               {t("generic.goBack")}
             </Button>
@@ -163,7 +255,7 @@ export const PasscodeEntry: FC = () => {
               variant="secondary"
               onClick={handleVerification}
               disabled={isSubmitDisabled()}
-              // isLoading={}
+              isLoading={isVerifyPending}
             >
               {t("generic.continue")}
             </Button>
@@ -175,6 +267,16 @@ export const PasscodeEntry: FC = () => {
         <Heading as="h1" size="sm">
           {t("enterPasscode.title")}
         </Heading>
+
+        {viewMessage ? (
+          <Notification
+            title={viewMessage.title}
+            variant={viewMessage.type}
+            isFilled
+          >
+            {viewMessage.message}
+          </Notification>
+        ) : null}
 
         <Text as="div" size="md">
           {t("enterPasscode.message")}
@@ -208,6 +310,10 @@ export const PasscodeEntry: FC = () => {
             sitekey={RECAPTCHA_SITE_KEY}
             onChange={(token) => {
               setReCaptchaToken(token);
+
+              if (viewMessage) {
+                setViewMessage(null);
+              }
             }}
           />
         </Box>
