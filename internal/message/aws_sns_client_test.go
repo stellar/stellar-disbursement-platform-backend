@@ -1,11 +1,13 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/aws-sdk-go-v2/service/sns/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -14,8 +16,13 @@ type mockAWSSNSClient struct {
 	mock.Mock
 }
 
-func (m *mockAWSSNSClient) Publish(input *sns.PublishInput) (*sns.PublishOutput, error) {
-	args := m.Called(input)
+func (m *mockAWSSNSClient) Publish(ctx context.Context, input *sns.PublishInput, optFns ...func(*sns.Options)) (*sns.PublishOutput, error) {
+	inputArgs := []interface{}{ctx, input}
+	for _, optFn := range optFns {
+		inputArgs = append(inputArgs, optFn)
+	}
+	args := m.Called(inputArgs...)
+
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -66,10 +73,10 @@ func Test_AWSSNS_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 	testSenderID := "senderID"
 	mAWSSNS := mockAWSSNSClient{}
 	mAWSSNS.
-		On("Publish", &sns.PublishInput{
+		On("Publish", mock.Anything, &sns.PublishInput{
 			PhoneNumber: aws.String(testPhoneNumber),
 			Message:     aws.String(testMessage),
-			MessageAttributes: map[string]*sns.MessageAttributeValue{
+			MessageAttributes: map[string]types.MessageAttributeValue{
 				"AWS.SNS.SMS.SenderID": {StringValue: aws.String(testSenderID), DataType: aws.String("String")},
 				"AWS.SNS.SMS.SMSType":  {StringValue: aws.String("Transactional"), DataType: aws.String("String")},
 			},
@@ -91,10 +98,10 @@ func Test_AWSSNS_SendMessage_success(t *testing.T) {
 	testSenderID := "senderID"
 	mAWSSNS := mockAWSSNSClient{}
 	mAWSSNS.
-		On("Publish", &sns.PublishInput{
+		On("Publish", mock.Anything, &sns.PublishInput{
 			PhoneNumber: aws.String(testPhoneNumber),
 			Message:     aws.String(testMessage),
-			MessageAttributes: map[string]*sns.MessageAttributeValue{
+			MessageAttributes: map[string]types.MessageAttributeValue{
 				"AWS.SNS.SMS.SenderID": {StringValue: aws.String(testSenderID), DataType: aws.String("String")},
 				"AWS.SNS.SMS.SMSType":  {StringValue: aws.String("Transactional"), DataType: aws.String("String")},
 			},
