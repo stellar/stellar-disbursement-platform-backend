@@ -1,12 +1,14 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ses"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ses"
+	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -15,8 +17,13 @@ type mockAWSSESClient struct {
 	mock.Mock
 }
 
-func (m *mockAWSSESClient) SendEmail(input *ses.SendEmailInput) (*ses.SendEmailOutput, error) {
-	args := m.Called(input)
+func (m *mockAWSSESClient) SendEmail(ctx context.Context, input *ses.SendEmailInput, optFns ...func(*ses.Options)) (*ses.SendEmailOutput, error) {
+	inputArgs := []interface{}{ctx, input}
+	for _, optFn := range optFns {
+		inputArgs = append(inputArgs, optFn)
+	}
+	args := m.Called(inputArgs...)
+
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -68,7 +75,7 @@ func Test_AWSSES_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 
 	mAWSSES := mockAWSSESClient{}
 	mAWSSES.
-		On("SendEmail", emailStr).
+		On("SendEmail", mock.Anything, emailStr).
 		Return(nil, fmt.Errorf("test AWS SES error")).
 		Once()
 
@@ -87,7 +94,7 @@ func Test_AWSSES_SendMessage_success(t *testing.T) {
 
 	mAWSSES := mockAWSSESClient{}
 	mAWSSES.
-		On("SendEmail", emailStr).
+		On("SendEmail", mock.Anything, emailStr).
 		Return(nil, nil).
 		Once()
 
@@ -124,18 +131,17 @@ func Test_generateAWSEmail_success(t *testing.T) {
 	wantHTML = strings.ReplaceAll(wantHTML, "\t", "")
 
 	wantEmail := &ses.SendEmailInput{
-		Destination: &ses.Destination{
-			CcAddresses: []*string{},
-			ToAddresses: []*string{aws.String(message.ToEmail)},
+		Destination: &types.Destination{
+			ToAddresses: []string{message.ToEmail},
 		},
-		Message: &ses.Message{
-			Body: &ses.Body{
-				Html: &ses.Content{
+		Message: &types.Message{
+			Body: &types.Body{
+				Html: &types.Content{
 					Charset: aws.String("utf-8"),
 					Data:    aws.String(wantHTML),
 				},
 			},
-			Subject: &ses.Content{
+			Subject: &types.Content{
 				Charset: aws.String("utf-8"),
 				Data:    aws.String("title"),
 			},
