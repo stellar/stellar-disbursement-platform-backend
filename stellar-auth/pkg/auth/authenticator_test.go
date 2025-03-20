@@ -483,12 +483,12 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now())
 
 		err := authenticator.ResetPassword(ctx, token, newPassword)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: error trying to encrypt user password: unexpected error")
+		assert.ErrorContains(t, err, "error trying to encrypt user password: unexpected error")
 	})
 
 	t.Run("Should treat a not found token error", func(t *testing.T) {
 		err := authenticator.ResetPassword(ctx, "notfoundtoken", "newpassword")
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: "+ErrInvalidResetPasswordToken.Error())
+		assert.ErrorIs(t, err, ErrInvalidResetPasswordToken)
 	})
 
 	t.Run("Should reset the password with a valid token, and make the token invalid after", func(t *testing.T) {
@@ -538,7 +538,7 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now().Add(-time.Hour*25))
 
 		err := authenticator.ResetPassword(ctx, token, newPassword)
-		require.EqualError(t, err, "running atomic function in RunInTransactionWithResult: "+ErrInvalidResetPasswordToken.Error())
+		require.ErrorIs(t, err, ErrInvalidResetPasswordToken)
 	})
 
 	passwordEncrypterMock.AssertExpectations(t)
@@ -558,7 +558,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 	t.Run("Should return an error if the email is empty", func(t *testing.T) {
 		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, "")
-		assert.EqualError(t, err, "generating user reset password token: email cannot be empty")
+		assert.EqualError(t, err, "generating user reset password token: email field is required")
 		assert.Empty(t, resetToken)
 	})
 

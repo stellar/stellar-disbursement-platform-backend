@@ -15,6 +15,7 @@ import (
 type Recipient struct {
 	ID         string            `json:"id"`
 	Chain      string            `json:"chain"`
+	AddressTag string            `json:"addressTag"`
 	Address    string            `json:"address"`
 	Metadata   RecipientMetadata `json:"metadata"`
 	Status     string            `json:"status"`
@@ -32,6 +33,7 @@ type RecipientMetadata struct {
 type RecipientRequest struct {
 	IdempotencyKey string            `json:"idempotencyKey"`
 	Address        string            `json:"address"`
+	AddressTag     string            `json:"addressTag"`
 	Chain          string            `json:"chain"`
 	Metadata       RecipientMetadata `json:"metadata"`
 }

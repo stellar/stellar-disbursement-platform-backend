@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -115,13 +116,13 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
 			log.Ctx(ctx).Errorf("in forgot password handler, user has a valid token")
 		} else {
-			httperror.InternalError(ctx, err.Error(), err, nil).Render(w)
+			httperror.InternalError(ctx, "Failed to reset password", err, nil).Render(w)
 			return
 		}
 	}
 
 	responseBody := map[string]string{
-		"message": "Password reset requested. If the email is registered, you'll receive a reset link shortly. Check your inbox and spam folders.",
+		"message": "If the email you provided is associated with an account, you'll receive a password reset link shortly. Check your inbox and spam folders.",
 	}
 	httpjson.RenderStatus(w, http.StatusOK, responseBody, httpjson.JSON)
 }
@@ -132,14 +133,15 @@ func (h ForgotPasswordHandler) SendForgotPasswordMessage(ctx context.Context, ui
 		return fmt.Errorf("getting organization data: %w", err)
 	}
 
-	resetPasswordLink, err := url.JoinPath(uiBaseURL, "reset-password")
+	resetPasswordURL, err := url.Parse(uiBaseURL)
 	if err != nil {
-		return fmt.Errorf("getting reset password link: %w", err)
+		return fmt.Errorf("parsing reset password link: %w", err)
 	}
+	resetPasswordURL.Path = path.Join(resetPasswordURL.Path, "reset-password")
+	resetPasswordURL.RawQuery = url.Values{"token": {resetToken}}.Encode()
 
 	forgotPasswordData := htmltemplate.StaffForgotPasswordEmailMessageTemplate{
-		ResetToken:        resetToken,
-		ResetPasswordLink: resetPasswordLink,
+		ResetPasswordLink: resetPasswordURL.String(),
 		OrganizationName:  organization.Name,
 	}
 	messageContent, err := htmltemplate.ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(forgotPasswordData)

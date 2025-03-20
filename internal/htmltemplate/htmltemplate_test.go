@@ -88,14 +88,12 @@ func Test_ExecuteHTMLTemplateForStaffInvitationEmailMessage_HTMLInjectionAttack(
 
 func Test_ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(t *testing.T) {
 	data := StaffForgotPasswordEmailMessageTemplate{
-		ResetToken:        "resetToken",
-		ResetPasswordLink: "https://sdp.com/reset-password",
+		ResetPasswordLink: "https://sdp.com/reset-password?token=resetToken",
 		OrganizationName:  "Organization Name",
 	}
 	content, err := ExecuteHTMLTemplateForStaffForgotPasswordEmailMessage(data)
 	require.NoError(t, err)
 
-	assert.Contains(t, content, "<strong>resetToken</strong>")
-	assert.Contains(t, content, "<a href=\"https://sdp.com/reset-password\">reset password page</a>")
+	assert.Contains(t, content, `<a href="https://sdp.com/reset-password?token=resetToken" class="button">Reset Password</a>`)
 	assert.Contains(t, content, "Organization Name")
 }

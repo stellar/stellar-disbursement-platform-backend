@@ -131,13 +131,17 @@ func TenantRoutingConfigOptions(opts *TenantRoutingOptions) []*config.ConfigOpti
 			ConfigKey:   &opts.All,
 			Required:    false,
 		},
-		{
-			Name:      "tenant-id",
-			Usage:     "The tenant ID where the command will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
-			OptType:   types.String,
-			ConfigKey: &opts.TenantID,
-			Required:  false,
-		},
+		SingleTenantRoutingConfigOptions(opts),
+	}
+}
+
+func SingleTenantRoutingConfigOptions(opts *TenantRoutingOptions) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:      "tenant-id",
+		Usage:     "The tenant ID where the command will be applied.",
+		OptType:   types.String,
+		ConfigKey: &opts.TenantID,
+		Required:  false,
 	}
 }
 

@@ -171,7 +171,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 			`--log-level string            The log level used in this project. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", or "PANIC". (LOG_LEVEL) (default "TRACE")`,
 			`--network-passphrase string   The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")`,
 			`--sentry-dsn string           The DSN (client key) of the Sentry project. If not provided, Sentry will not be used. (SENTRY_DSN)`,
-			`--tenant-id string            The tenant ID where the command will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set. (TENANT_ID)`,
+			`--tenant-id string            The tenant ID where the command will be applied. (TENANT_ID)`,
 		}
 
 		output := buf.String()

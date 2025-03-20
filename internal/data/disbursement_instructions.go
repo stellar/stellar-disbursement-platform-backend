@@ -10,6 +10,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type DisbursementInstruction struct {
@@ -20,6 +21,7 @@ type DisbursementInstruction struct {
 	VerificationValue string `csv:"verification"`
 	ExternalPaymentId string `csv:"paymentID"`
 	WalletAddress     string `csv:"walletAddress"`
+	WalletAddressMemo string `csv:"walletAddressMemo"`
 }
 
 func (di *DisbursementInstruction) Contact() (string, error) {
@@ -91,62 +93,60 @@ type DisbursementInstructionsOpts struct {
 //	|    |    |--- [ReceiverContactType.IncludesWalletAddress] Register the supplied wallet address
 //	|    |    |--- Delete all previously existing payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
-func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, opts DisbursementInstructionsOpts) error {
+func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.DBTransaction, opts DisbursementInstructionsOpts) error {
 	if len(opts.Instructions) > opts.MaxNumberOfInstructions {
 		return ErrMaxInstructionsExceeded
 	}
 
-	// We need all the following logic to be executed in one transaction.
-	return db.RunInTransaction(ctx, di.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		// Step 1: Fetch all receivers by contact information (phone, email, etc.) and create missing ones
-		registrationContactType := opts.Disbursement.RegistrationContactType
-		receiversByIDMap, err := di.reconcileExistingReceiversWithInstructions(ctx, dbTx, opts.Instructions, registrationContactType.ReceiverContactType)
+	// Step 1: Fetch all receivers by contact information (phone, email, etc.) and create missing ones
+	registrationContactType := opts.Disbursement.RegistrationContactType
+	receiversByIDMap, err := di.reconcileExistingReceiversWithInstructions(ctx, dbTx, opts.Instructions, registrationContactType.ReceiverContactType)
+	if err != nil {
+		return fmt.Errorf("processing receivers: %w", err)
+	}
+
+	// Step 2: Fetch all receiver wallets and create missing ones
+	receiverIDToReceiverWalletIDMap, err := di.processReceiverWallets(ctx, dbTx, receiversByIDMap, opts.Disbursement)
+	if err != nil {
+		return fmt.Errorf("processing receiver wallets: %w", err)
+	}
+
+	// Step 3: Register supplied wallets or process receiver verifications based on the registration contact type
+	if registrationContactType.IncludesWalletAddress {
+		if err = di.registerSuppliedWallets(ctx, dbTx, opts.Instructions, receiversByIDMap, receiverIDToReceiverWalletIDMap); err != nil {
+			return fmt.Errorf("registering supplied wallets: %w", err)
+		}
+	} else {
+		err = di.processReceiverVerifications(ctx, dbTx, receiversByIDMap, opts.Instructions, opts.Disbursement, registrationContactType.ReceiverContactType)
 		if err != nil {
-			return fmt.Errorf("processing receivers: %w", err)
+			return fmt.Errorf("processing receiver verifications: %w", err)
 		}
+	}
 
-		// Step 2: Fetch all receiver wallets and create missing ones
-		receiverIDToReceiverWalletIDMap, err := di.processReceiverWallets(ctx, dbTx, receiversByIDMap, opts.Disbursement)
-		if err != nil {
-			return fmt.Errorf("processing receiver wallets: %w", err)
-		}
+	// Step 4: Delete all pre-existing draft payments tied to this disbursement for each receiver in one call
+	if err = di.paymentModel.DeleteAllDraftForDisbursement(ctx, dbTx, opts.Disbursement.ID); err != nil {
+		return fmt.Errorf("deleting draft payments: %w", err)
+	}
 
-		// Step 3: Register supplied wallets or process receiver verifications based on the registration contact type
-		if registrationContactType.IncludesWalletAddress {
-			if err = di.registerSuppliedWallets(ctx, dbTx, opts.Instructions, receiversByIDMap, receiverIDToReceiverWalletIDMap); err != nil {
-				return fmt.Errorf("registering supplied wallets: %w", err)
-			}
-		} else {
-			err = di.processReceiverVerifications(ctx, dbTx, receiversByIDMap, opts.Instructions, opts.Disbursement, registrationContactType.ReceiverContactType)
-			if err != nil {
-				return fmt.Errorf("processing receiver verifications: %w", err)
-			}
-		}
+	// Step 5: Create payments for all receivers
+	if err = di.createPayments(ctx, dbTx, receiversByIDMap, receiverIDToReceiverWalletIDMap, opts.Instructions, opts.Disbursement); err != nil {
+		return fmt.Errorf("creating payments: %w", err)
+	}
 
-		// Step 4: Delete all pre-existing draft payments tied to this disbursement for each receiver in one call
-		if err = di.paymentModel.DeleteAllDraftForDisbursement(ctx, dbTx, opts.Disbursement.ID); err != nil {
-			return fmt.Errorf("deleting draft payments: %w", err)
-		}
+	// Step 6: Persist Payment file to Disbursement
+	if err = di.disbursementModel.Update(ctx, dbTx, opts.DisbursementUpdate); err != nil {
+		return fmt.Errorf("persisting payment file: %w", err)
+	}
 
-		// Step 5: Create payments for all receivers
-		if err = di.createPayments(ctx, dbTx, receiversByIDMap, receiverIDToReceiverWalletIDMap, opts.Instructions, opts.Disbursement); err != nil {
-			return fmt.Errorf("creating payments: %w", err)
-		}
+	// Step 7: Update Disbursement Status
+	if err = di.disbursementModel.UpdateStatus(ctx, dbTx, opts.UserID, opts.Disbursement.ID, ReadyDisbursementStatus); err != nil {
+		return fmt.Errorf("updating status: %w", err)
+	}
 
-		// Step 6: Persist Payment file to Disbursement
-		if err = di.disbursementModel.Update(ctx, opts.DisbursementUpdate); err != nil {
-			return fmt.Errorf("persisting payment file: %w", err)
-		}
-
-		// Step 7: Update Disbursement Status
-		if err = di.disbursementModel.UpdateStatus(ctx, dbTx, opts.UserID, opts.Disbursement.ID, ReadyDisbursementStatus); err != nil {
-			return fmt.Errorf("updating status: %w", err)
-		}
-
-		return nil
-	})
+	return nil
 }
 
+// registerSuppliedWallets registers the supplied wallets for the given instructions.
 func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Context, dbTx db.DBTransaction, instructions []*DisbursementInstruction, receiversByIDMap map[string]*Receiver, receiverIDToReceiverWalletIDMap map[string]string) error {
 	// Construct a map of receiverWalletID to receiverWallet
 	receiverWalletsByIDMap, err := di.getReceiverWalletsByIDMap(ctx, dbTx, maps.Values(receiverIDToReceiverWalletIDMap))
@@ -178,6 +178,14 @@ func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Conte
 		receiverWalletUpdate := ReceiverWalletUpdate{
 			Status:         RegisteredReceiversWalletStatus,
 			StellarAddress: instruction.WalletAddress,
+		}
+		if instruction.WalletAddressMemo != "" {
+			_, memoType, err := schema.ParseMemo(instruction.WalletAddressMemo)
+			if err != nil {
+				return fmt.Errorf("parsing memo %s: %w", instruction.WalletAddressMemo, err)
+			}
+			receiverWalletUpdate.StellarMemo = &instruction.WalletAddressMemo
+			receiverWalletUpdate.StellarMemoType = &memoType
 		}
 		if updateErr := di.receiverWalletModel.Update(ctx, receiverWalletID, receiverWalletUpdate, dbTx); updateErr != nil {
 			return fmt.Errorf("marking receiver wallet as registered: %w", updateErr)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
@@ -22,6 +23,22 @@ type Asset struct {
 	CreatedAt *time.Time `json:"created_at,omitempty" csv:"-" db:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty" csv:"-" db:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at" csv:"-" db:"deleted_at"`
+}
+
+func AssetColumnNames(tableReference, resultAlias string, includeDates bool) string {
+	cols := []string{"id", "code"}
+	if includeDates {
+		cols = append(cols, "created_at", "updated_at", "deleted_at")
+	}
+
+	columns := SQLColumnConfig{
+		TableReference:  tableReference,
+		ResultAlias:     resultAlias,
+		RawColumns:      cols,
+		CoalesceColumns: []string{"issuer"},
+	}.Build()
+
+	return strings.Join(columns, ",\n")
 }
 
 // IsNative returns true if the asset is the native asset (XLM).
@@ -46,6 +63,13 @@ func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
 	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
 }
 
+func (a Asset) ToBasicAsset() txnbuild.Asset {
+	if a.IsNative() {
+		return txnbuild.NativeAsset{}
+	}
+	return txnbuild.CreditAsset{Code: a.Code, Issuer: a.Issuer}
+}
+
 type AssetModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
@@ -53,16 +77,11 @@ type AssetModel struct {
 func (a *AssetModel) Get(ctx context.Context, id string) (*Asset, error) {
 	var asset Asset
 	query := `
-		SELECT 
-		    a.id, 
-		    a.code, 
-		    a.issuer,
-		    a.created_at,
-		    a.updated_at,
-		    a.deleted_at
-		FROM 
+		SELECT
+		    *
+		FROM
 		    assets a
-		WHERE 
+		WHERE
 		    a.id = $1
 		`
 
@@ -80,14 +99,9 @@ func (a *AssetModel) Get(ctx context.Context, id string) (*Asset, error) {
 func (a *AssetModel) GetByCodeAndIssuer(ctx context.Context, code, issuer string) (*Asset, error) {
 	var asset Asset
 	query := `
-		SELECT 
-		    a.id, 
-		    a.code, 
-		    a.issuer,
-		    a.created_at,
-		    a.updated_at,
-		    a.deleted_at
-		FROM 
+		SELECT
+		    *
+		FROM
 		    assets a
 		WHERE a.code = $1
 		AND a.issuer = $2
@@ -107,44 +121,43 @@ func (a *AssetModel) GetByCodeAndIssuer(ctx context.Context, code, issuer string
 func (a *AssetModel) GetByWalletID(ctx context.Context, walletID string) ([]Asset, error) {
 	assets := []Asset{}
 	query := `
-		SELECT 
+		SELECT
 		    a.*
-		FROM 
+		FROM
 		    assets a
-		JOIN 
+		JOIN
 		    wallets_assets wa ON a.id = wa.asset_id
-		WHERE 
-		    deleted_at IS NULL 
+		WHERE
+		    deleted_at IS NULL
 		    AND wa.wallet_id = $1
-		ORDER BY 
+		ORDER BY
 		    a.code ASC
 	`
 
 	err := a.dbConnectionPool.SelectContext(ctx, &assets, query, walletID)
 	if err != nil {
-		return nil, fmt.Errorf("querying assets: %w", err)
+		return nil, fmt.Errorf("selecting assets by wallet ID %s: %w", walletID, err)
 	}
 	return assets, nil
 }
 
 // GetAll returns all assets in the database.
 func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
-	// TODO: We will want to filter out "deleted" assets at some point
 	assets := []Asset{}
 	query := `
-		SELECT 
-			a.*
-		FROM 
-			assets a
-		WHERE 
+		SELECT
+			*
+		FROM
+			assets
+		WHERE
 		    deleted_at IS NULL
-		ORDER BY 
-			a.code ASC
+		ORDER BY
+			code ASC
 	`
 
 	err := a.dbConnectionPool.SelectContext(ctx, &assets, query)
 	if err != nil {
-		return nil, fmt.Errorf("error querying assets: %w", err)
+		return nil, fmt.Errorf("selecting assets: %w", err)
 	}
 	return assets, nil
 }
@@ -188,7 +201,7 @@ func (a *AssetModel) GetOrCreate(ctx context.Context, code, issuer string) (*Ass
 	)
 	SELECT * FROM create_asset ca
 	UNION ALL
-	SELECT * FROM assets a 
+	SELECT * FROM assets a
 	WHERE a.code = $1
 	AND a.issuer = $2
 	`
@@ -240,7 +253,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 
 	var receiverWalletsAssets []ReceiverWalletAsset
 	query := `
-		WITH latest_payments_by_wallet AS ( 
+		WITH latest_payments_by_wallet AS (
 			-- Gets the latest payment by wallet with its asset
 			SELECT
 				p.id AS payment_id,
@@ -263,7 +276,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 				m.receiver_wallet_id,
 				m.wallet_id,
 				m.asset_id,
-				COUNT(*) AS total_invitation_sms_resent_attempts
+				COUNT(*) AS total_invitation_resent_attempts
 			FROM
 				messages m
 				INNER JOIN receiver_wallets rw ON rw.id = m.receiver_wallet_id AND rw.wallet_id = m.wallet_id
@@ -282,15 +295,11 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			lpw.receiver_registration_message_template,
 			rw.id AS "receiver_wallet.id",
 			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
-			COALESCE(mrsi.total_invitation_sms_resent_attempts, 0) AS "receiver_wallet.total_invitation_sms_resent_attempts",
+			COALESCE(mrsi.total_invitation_resent_attempts, 0) AS "receiver_wallet.total_invitation_resent_attempts",
 			r.id AS "receiver_wallet.receiver.id",
 			COALESCE(r.phone_number, '') AS "receiver_wallet.receiver.phone_number",
 			COALESCE(r.email, '') AS "receiver_wallet.receiver.email",
-			a.id AS "asset.id",
-			a.code AS "asset.code",
-			a.issuer AS "asset.issuer",
-			a.created_at AS "asset.created_at",
-			a.updated_at AS "asset.updated_at"
+			` + AssetColumnNames("a", "asset", true) + `
 		FROM
 			assets a
 			INNER JOIN latest_payments_by_wallet lpw ON lpw.asset_id = a.id

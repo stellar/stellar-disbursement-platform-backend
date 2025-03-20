@@ -96,8 +96,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 
 	uiBaseURL := "https://sdp.com"
 	tnt := tenant.Tenant{SDPUIBaseURL: &uiBaseURL}
-	defaultSuccessishBody := `{"message": "Password reset requested. If the email is registered, you'll receive a reset link shortly. Check your inbox and spam folders."}`
-	// ctxWithTenant := tenant.SaveTenantInContext(ctxWithoutTenant, &tnt)
+	defaultSuccessishBody := `{"message": "If the email you provided is associated with an account, you'll receive a password reset link shortly. Check your inbox and spam folders."}`
 
 	testCases := []struct {
 		name              string
@@ -227,7 +226,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Once()
 			},
 			wantStatusCode:   http.StatusInternalServerError,
-			wantResponseBody: `{"error": "running atomic function in RunInTransactionWithResult: sending forgot password message: sending forgot password email for foo...com: unexpected error"}`,
+			wantResponseBody: `{"error": "Failed to reset password"}`,
 		},
 		{
 			name:              "🟢[200](ReCAPTCHADisabled=false) successfully handle forgot password",

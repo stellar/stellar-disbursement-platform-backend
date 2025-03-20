@@ -393,7 +393,7 @@ func (wdl WalletDeepLink) TomlFileDomain() (string, error) {
 		return "", fmt.Errorf("error parsing TenantBaseURL %s: %w", tenantBaseURL, err)
 	}
 
-	return tenantURL.Hostname(), nil
+	return tenantURL.Host, nil
 }
 
 // validate will make sure all the parameters are set correctly.

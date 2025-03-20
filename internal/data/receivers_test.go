@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,58 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+func Test_ReceiverColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableReference string
+		resultAlias    string
+		expected       string
+	}{
+		{
+			tableReference: "",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				`id`,
+				`external_id`,
+				`created_at`,
+				`updated_at`,
+				`COALESCE(phone_number, '') AS "phone_number"`,
+				`COALESCE(email, '') AS "email"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "",
+			resultAlias:    "receiver",
+			expected: strings.Join([]string{
+				`id AS "receiver.id"`,
+				`external_id AS "receiver.external_id"`,
+				`created_at AS "receiver.created_at"`,
+				`updated_at AS "receiver.updated_at"`,
+				`COALESCE(phone_number, '') AS "receiver.phone_number"`,
+				`COALESCE(email, '') AS "receiver.email"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "r",
+			resultAlias:    "receiver",
+			expected: strings.Join([]string{
+				`r.id AS "receiver.id"`,
+				`r.external_id AS "receiver.external_id"`,
+				`r.created_at AS "receiver.created_at"`,
+				`r.updated_at AS "receiver.updated_at"`,
+				`COALESCE(r.phone_number, '') AS "receiver.phone_number"`,
+				`COALESCE(r.email, '') AS "receiver.email"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
+			actual := ReceiverColumnNames(tc.tableReference, tc.resultAlias)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
 
 func Test_ReceiversModel_Get(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -102,7 +155,7 @@ func Test_ReceiversModel_Get(t *testing.T) {
 				CanceledPayments:   "0",
 				RemainingPayments:  "0",
 				RegisteredWallets:  "0",
-				ReceivedAmounts:    nil,
+				ReceivedAmounts:    []Amount{},
 			},
 		}
 		assert.Equal(t, expected, *actual)
@@ -668,13 +721,14 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 	t.Run("returns receivers successfully with IDs filter", func(t *testing.T) {
 		actualReceivers, err := receiverModel.GetAll(ctx, dbConnectionPool, &QueryParams{
 			Filters: map[FilterKey]interface{}{
-				FilterKeyIDs: []string{receiver1.ID, receiver2.ID},
+				FilterKeyID: []string{receiver1.ID, receiver2.ID},
 			},
+			SortBy:    SortFieldCreatedAt,
+			SortOrder: SortOrderASC,
 		}, QueryTypeSelectAll)
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(actualReceivers))
-		assert.Equal(t, receiver1.ID, actualReceivers[0].ID)
-		assert.Equal(t, receiver2.ID, actualReceivers[1].ID)
+		assert.ElementsMatch(t, []string{receiver1.ID, receiver2.ID}, []string{actualReceivers[0].ID, actualReceivers[1].ID})
 	})
 
 	t.Run("returns receivers successfully with query filter email", func(t *testing.T) {
@@ -1194,7 +1248,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 			Email:      utils.StringPtr("invalid"),
 			ExternalId: utils.StringPtr(""),
 		})
-		assert.EqualError(t, err, `validating receiver update: validating email: the provided email is not valid`)
+		assert.EqualError(t, err, `validating receiver update: validating email: the email address provided is not valid`)
 	})
 
 	t.Run("updates email name successfully", func(t *testing.T) {

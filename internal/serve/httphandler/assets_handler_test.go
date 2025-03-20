@@ -737,7 +737,7 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 		assert.Nil(t, assetDB.DeletedAt)
 
 		entries := getEntries()
-		assert.Len(t, entries, 2)
+		assert.Len(t, entries, 1)
 		assert.Equal(t, "not removing trustline for the asset ABC:GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ because the distribution account still has balance: 100.0000000 ABC", entries[0].Message)
 	})
 

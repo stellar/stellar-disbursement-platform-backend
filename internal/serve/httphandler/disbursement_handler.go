@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/dimchansky/utfbom"
@@ -96,52 +97,61 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Decode and validate body
-	var req PostDisbursementRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		httperror.BadRequest(err.Error(), err, nil).Render(w)
-		return
+	// Handle request based on content type.
+	var disbursement *data.Disbursement
+	var httpErr *httperror.HTTPError
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		disbursement, httpErr = d.postDisbursementWithInstructions(ctx, r, user)
+	} else {
+		var req PostDisbursementRequest
+		if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
+			httperror.BadRequest(err.Error(), err, nil).Render(w)
+			return
+		}
+		disbursement, httpErr = d.postDisbursementOnly(ctx, req, user)
 	}
-	v := d.validateRequest(req)
-	if v.HasErrors() {
-		httperror.BadRequest("", err, v.Errors).Render(w)
+
+	if httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
+	httpjson.RenderStatus(w, http.StatusCreated, disbursement, httpjson.JSON)
+}
+
+func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
 	var wallet *data.Wallet
+	var err error
+
 	if req.RegistrationContactType.IncludesWalletAddress {
 		wallets, findWalletErr := d.Models.Wallets.FindWallets(ctx,
 			data.NewFilter(data.FilterUserManaged, true),
 			data.NewFilter(data.FilterEnabledWallets, true))
 
 		if findWalletErr != nil {
-			httperror.InternalError(ctx, "Cannot get wallets", findWalletErr, nil).Render(w)
-			return
+			return nil, httperror.InternalError(ctx, "Cannot get wallets", findWalletErr, nil)
 		}
 		if len(wallets) == 0 {
-			httperror.BadRequest("No User Managed Wallets found", nil, nil).Render(w)
-			return
+			return nil, httperror.BadRequest("No User Managed Wallets found", nil, nil)
 		}
 		wallet = &wallets[0]
 	} else {
 		// Get Wallet
 		wallet, err = d.Models.Wallets.Get(ctx, req.WalletID)
 		if err != nil {
-			httperror.BadRequest("Wallet ID could not be retrieved", err, nil).Render(w)
-			return
+			return nil, httperror.BadRequest("Wallet ID could not be retrieved", err, nil)
 		}
 	}
+
 	if !wallet.Enabled {
-		httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
-		return
+		return nil, httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil)
 	}
 
 	// Get Asset
 	asset, err := d.Models.Assets.Get(ctx, req.AssetID)
 	if err != nil {
-		httperror.BadRequest("asset ID could not be retrieved", err, nil).Render(w)
-		return
+		return nil, httperror.BadRequest("asset ID could not be retrieved", err, nil)
 	}
 
 	// Insert disbursement
@@ -156,23 +166,21 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		StatusHistory: []data.DisbursementStatusHistoryEntry{{
 			Timestamp: time.Now(),
 			Status:    data.DraftDisbursementStatus,
-			UserID:    user.ID,
+			UserID:    userID,
 		}},
 	}
-	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
+	newID, err := d.Models.Disbursements.Insert(ctx, sqlExec, &disbursement)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordAlreadyExists) {
-			httperror.Conflict("disbursement already exists", err, nil).Render(w)
+			return nil, httperror.Conflict("disbursement already exists", err, nil)
 		} else {
-			httperror.BadRequest("could not create disbursement", err, nil).Render(w)
+			return nil, httperror.BadRequest("could not create disbursement", err, nil)
 		}
-		return
 	}
-	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, newId)
+	newDisbursement, err := d.Models.Disbursements.Get(ctx, sqlExec, newID)
 	if err != nil {
-		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newId)
-		httperror.InternalError(ctx, msg, err, nil).Render(w)
-		return
+		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newID)
+		return nil, httperror.InternalError(ctx, msg, err, nil)
 	}
 
 	// Monitor disbursement creation
@@ -185,7 +193,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
 	}
 
-	httpjson.RenderStatus(w, http.StatusCreated, newDisbursement, httpjson.JSON)
+	return newDisbursement, nil
 }
 
 // DeleteDisbursement deletes a draft or ready disbursement and its associated payments
@@ -273,78 +281,42 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 
 func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter, r *http.Request) {
 	disbursementID := chi.URLParam(r, "id")
-
-	// check if disbursement exists
 	ctx := r.Context()
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
-	if err != nil {
-		httperror.BadRequest("disbursement ID is invalid", err, nil).Render(w)
-		return
-	}
-
-	// check if disbursement is in draft, ready status
-	if !slices.Contains([]data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus}, disbursement.Status) {
-		httperror.BadRequest("disbursement is not in draft or ready status", nil, nil).Render(w)
-		return
-	}
-
-	buf, header, httpErr := parseCsvFromMultipartRequest(r)
-	if httpErr != nil {
-		httpErr.Render(w)
-		return
-	}
-
-	if err = validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
-		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
-			disbursement.RegistrationContactType,
-			err)
-		httperror.BadRequest(errMsg, err, nil).Render(w)
-		return
-	}
-
-	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, disbursement.VerificationField)
-	if v != nil && v.HasErrors() {
-		httperror.BadRequest("could not parse csv file", err, v.Errors).Render(w)
-		return
-	}
-
-	disbursementUpdate := &data.DisbursementUpdate{
-		ID:          disbursementID,
-		FileName:    header.Filename,
-		FileContent: buf.Bytes(),
-	}
 
 	token, ok := ctx.Value(middleware.TokenContextKey).(string)
 	if !ok {
 		msg := fmt.Sprintf("Cannot get token from context when processing instructions for disbursement with ID %s", disbursementID)
-		httperror.InternalError(ctx, msg, err, nil).Render(w)
+		httperror.InternalError(ctx, msg, nil, nil).Render(w)
 		return
 	}
 	user, err := d.AuthManager.GetUser(ctx, token)
 	if err != nil {
-		msg := fmt.Sprintf("Cannot get token from context when processing instructions for disbursement with ID %s", disbursementID)
+		msg := fmt.Sprintf("Cannot get user from context token when processing instructions for disbursement with ID %s", disbursementID)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
 	}
 
-	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, data.DisbursementInstructionsOpts{
-		UserID:                  user.ID,
-		Instructions:            instructions,
-		Disbursement:            disbursement,
-		DisbursementUpdate:      disbursementUpdate,
-		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
-	}); err != nil {
-		switch {
-		case errors.Is(err, data.ErrMaxInstructionsExceeded):
-			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
-		case errors.Is(err, data.ErrReceiverVerificationMismatch):
-			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
-		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
-			httperror.BadRequest(errors.Unwrap(err).Error(), err, nil).Render(w)
-		default:
-			httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursementID), err, nil).Render(w)
+	err = db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		// check if disbursement exists
+		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
+		if getErr != nil {
+			return httperror.BadRequest("disbursement ID is invalid", getErr, nil)
 		}
-		return
+
+		// check if disbursement is in draft, ready status
+		if !slices.Contains([]data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus}, disbursement.Status) {
+			return httperror.BadRequest("disbursement is not in draft or ready status", nil, nil)
+		}
+
+		return d.validateAndProcessInstructions(ctx, r, dbTx, user, disbursement)
+	})
+	if err != nil {
+		var httpErr *httperror.HTTPError
+		if errors.As(err, &httpErr) {
+			httpErr.Render(w)
+		} else {
+			httperror.InternalError(ctx, "Cannot process instructions for disbursement", err, nil).Render(w)
+		}
 	}
 
 	response := map[string]string{
@@ -352,6 +324,52 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 
 	httpjson.Render(w, response, httpjson.JSON)
+}
+
+func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) error {
+	buf, header, parseHttpErr := parseCsvFromMultipartRequest(r)
+	if parseHttpErr != nil {
+		return fmt.Errorf("could not parse csv file: %w", parseHttpErr)
+	}
+
+	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
+		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
+			disbursement.RegistrationContactType,
+			err)
+		return httperror.BadRequest(errMsg, err, nil)
+	}
+
+	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, disbursement.VerificationField)
+	if v != nil && v.HasErrors() {
+		return httperror.BadRequest("could not parse csv file", nil, v.Errors)
+	}
+
+	disbursementUpdate := &data.DisbursementUpdate{
+		ID:          disbursement.ID,
+		FileName:    header.Filename,
+		FileContent: buf.Bytes(),
+	}
+
+	if err := d.Models.DisbursementInstructions.ProcessAll(ctx, dbTx, data.DisbursementInstructionsOpts{
+		UserID:                  authUser.ID,
+		Instructions:            instructions,
+		Disbursement:            disbursement,
+		DisbursementUpdate:      disbursementUpdate,
+		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
+	}); err != nil {
+		switch {
+		case errors.Is(err, data.ErrMaxInstructionsExceeded):
+			return httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil)
+		case errors.Is(err, data.ErrReceiverVerificationMismatch):
+			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
+			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+		default:
+			return httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursement.ID), err, nil)
+		}
+	}
+
+	return nil
 }
 
 // parseCsvFromMultipartRequest parses the CSV file from a multipart request and returns the file content and header,
@@ -557,6 +575,47 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	}
 }
 
+func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Context, r *http.Request, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
+	var req PostDisbursementRequest
+	dd := r.FormValue("data")
+	if err := json.Unmarshal([]byte(dd), &req); err != nil {
+		return nil, httperror.BadRequest(err.Error(), err, nil)
+	}
+
+	disbursement, err := db.RunInTransactionWithResult(ctx, d.Models.DBConnectionPool, nil, func(tx db.DBTransaction) (*data.Disbursement, error) {
+		// 1. Create the Disbursement
+		disbursement, httpErr := d.createNewDisbursement(ctx, tx, user.ID, req)
+		if httpErr != nil {
+			return nil, httpErr
+		}
+
+		// 2. Process the instructions
+		if err := d.validateAndProcessInstructions(ctx, r, tx, user, disbursement); err != nil {
+			return nil, fmt.Errorf("could not process instructions: %w", err)
+		}
+
+		return disbursement, nil
+	})
+	if err != nil {
+		var httpErr *httperror.HTTPError
+		if errors.As(err, &httpErr) {
+			return nil, httpErr
+		} else {
+			return nil, httperror.InternalError(ctx, "Cannot create disbursement", err, nil)
+		}
+	}
+	return disbursement, nil
+}
+
+func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
+	v := d.validateRequest(req)
+	if v.HasErrors() {
+		return nil, httperror.BadRequest("", nil, v.Errors)
+	}
+
+	return d.createNewDisbursement(ctx, d.Models.DBConnectionPool, user.ID, req)
+}
+
 // parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
 func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType data.RegistrationContactType, verificationField data.VerificationType) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(contactType, verificationField)
@@ -588,10 +647,11 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
 func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType) error {
 	const (
-		phoneHeader         = "phone"
-		emailHeader         = "email"
-		walletAddressHeader = "walletAddress"
-		verificationHeader  = "verification"
+		phoneHeader             = "phone"
+		emailHeader             = "email"
+		walletAddressHeader     = "walletAddress"
+		walletAddressMemoHeader = "walletAddressMemo"
+		verificationHeader      = "verification"
 	)
 
 	headers, err := csv.NewReader(utfbom.SkipOnly(file)).Read()
@@ -600,10 +660,11 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 	}
 
 	hasHeaders := map[string]bool{
-		phoneHeader:         false,
-		emailHeader:         false,
-		walletAddressHeader: false,
-		verificationHeader:  false,
+		phoneHeader:             false,
+		emailHeader:             false,
+		walletAddressHeader:     false,
+		walletAddressMemoHeader: false,
+		verificationHeader:      false,
 	}
 
 	// Populate header presence map
@@ -622,11 +683,11 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 	rules := map[data.RegistrationContactType]headerRules{
 		data.RegistrationContactTypePhone: {
 			required:   []string{phoneHeader, verificationHeader},
-			disallowed: []string{emailHeader, walletAddressHeader},
+			disallowed: []string{emailHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmail: {
 			required:   []string{emailHeader, verificationHeader},
-			disallowed: []string{phoneHeader, walletAddressHeader},
+			disallowed: []string{phoneHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmailAndWalletAddress: {
 			required:   []string{emailHeader, walletAddressHeader},

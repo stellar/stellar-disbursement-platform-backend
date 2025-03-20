@@ -12,9 +12,13 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/strkey"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var ErrRecordNotFound = errors.New("record not found")
@@ -31,6 +35,8 @@ type Transaction struct {
 	AssetIssuer   string                   `db:"asset_issuer"`
 	Amount        float64                  `db:"amount"`
 	Destination   string                   `db:"destination"`
+	Memo          string                   `db:"memo"`
+	MemoType      schema.MemoType          `db:"memo_type"`
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
@@ -57,6 +63,10 @@ type Transaction struct {
 	// expiration ledger bound set in the Stellar transaction submitted to the blockchain, and the same value in the
 	// namesake column of the channel account model.
 	LockedUntilLedgerNumber sql.NullInt32 `db:"locked_until_ledger_number"`
+}
+
+func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
+	return schema.NewMemo(tx.MemoType, tx.Memo)
 }
 
 func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {
@@ -100,6 +110,44 @@ func NewTransactionModel(dbConnectionPool db.DBConnectionPool) *TransactionModel
 	return &TransactionModel{DBConnectionPool: dbConnectionPool}
 }
 
+func TransactionColumnNames(tableReference, resultAlias string) string {
+	columns := data.SQLColumnConfig{
+		TableReference: tableReference,
+		ResultAlias:    resultAlias,
+		RawColumns: []string{
+			"id",
+			"external_id",
+			"tenant_id",
+			"distribution_account",
+			"asset_code",
+			"asset_issuer",
+			"amount",
+			"destination",
+			"status",
+			"status_message",
+			"status_history",
+			"attempts_count",
+			"stellar_transaction_hash",
+			"xdr_sent",
+			"xdr_received",
+			"created_at",
+			"updated_at",
+			"started_at",
+			"sent_at",
+			"completed_at",
+			"synced_at",
+			"locked_at",
+			"locked_until_ledger_number",
+		},
+		CoalesceColumns: []string{
+			"memo",
+			"memo_type::text",
+		},
+	}.Build()
+
+	return strings.Join(columns, ",\n")
+}
+
 // Insert adds a new Transaction to the database.
 func (t *TransactionModel) Insert(ctx context.Context, tx Transaction) (*Transaction, error) {
 	transactions, err := t.BulkInsert(ctx, t.DBConnectionPool, []Transaction{tx})
@@ -117,7 +165,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination, tenant_id) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination, tenant_id, memo, memo_type) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
 	valueArgs := make([]interface{}, 0, len(transactions)*6)
 
@@ -125,7 +173,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
 			transaction.ExternalID,
 			transaction.AssetCode,
@@ -133,12 +181,14 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 			transaction.Amount,
 			transaction.Destination,
 			transaction.TenantID,
+			sdpUtils.SQLNullString(transaction.Memo),
+			sdpUtils.SQLNullString(string(transaction.MemoType)),
 		)
 	}
 
 	var insertedTransctions []Transaction
 	queryBuilder.WriteString(strings.Join(valueStrings, ", "))
-	queryBuilder.WriteString(" RETURNING *")
+	queryBuilder.WriteString(" RETURNING " + TransactionColumnNames("", ""))
 	query := sqlExec.Rebind(queryBuilder.String())
 	err := sqlExec.SelectContext(ctx, &insertedTransctions, query, valueArgs...)
 	if err != nil {
@@ -153,7 +203,7 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 	var transaction Transaction
 	q := `
 		SELECT
-			* 
+			` + TransactionColumnNames("", "") + `
 		FROM 
 			submitter_transactions t 
 		WHERE
@@ -173,9 +223,9 @@ func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []
 	var transactions []*Transaction
 	q := `
 		SELECT
-			* 
-		FROM 
-			submitter_transactions t 
+			` + TransactionColumnNames("", "") + `
+		FROM
+			submitter_transactions t
 		WHERE
 			t.external_id = ANY($1)
 		`
@@ -205,8 +255,7 @@ func (t *TransactionModel) UpdateStatusToSuccess(ctx context.Context, tx Transac
 			WHERE
 				id = $2
 			RETURNING
-				*
-			`
+				` + TransactionColumnNames("", "")
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusSuccess, tx.ID)
 	if err != nil {
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusSuccess: %w", err)
@@ -235,8 +284,7 @@ func (t *TransactionModel) UpdateStatusToError(ctx context.Context, tx Transacti
 			WHERE
 				id = $3
 			RETURNING
-				*
-			`
+				` + TransactionColumnNames("", "")
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusError, message, tx.ID)
 	if err != nil {
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusError: %w", err)
@@ -268,8 +316,7 @@ func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Co
 		WHERE 
 			id = $3
 		RETURNING
-			*
-	`
+			` + TransactionColumnNames("", "")
 	var tx Transaction
 	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, txID)
 	if err != nil {
@@ -299,8 +346,7 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 		WHERE 
 			id = $2
 		RETURNING
-			*
-		`
+			` + TransactionColumnNames("", "")
 	var updatedTx Transaction
 	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, xdrReceived, txID)
 	if err != nil {
@@ -326,7 +372,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 
 	query := `
 		SELECT 
-		    *
+		    ` + TransactionColumnNames("", "") + `
 		FROM 
 		    submitter_transactions
 		WHERE 
@@ -351,7 +397,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
 	query := `
 		SELECT 
-			*
+			` + TransactionColumnNames("", "") + `
 		FROM 
 			submitter_transactions
 		WHERE
@@ -432,8 +478,10 @@ func (ca *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, tr
 			AND %s
 			AND synced_at IS NULL
 			AND status = ANY($4)
-		RETURNING *
-	`, ca.queryFilterForLockedState(false, currentLedger))
+		RETURNING
+			`+TransactionColumnNames("", ""),
+		ca.queryFilterForLockedState(false, currentLedger),
+	)
 	var transaction Transaction
 	allowedTxStatuses := []TransactionStatus{TransactionStatusPending, TransactionStatusProcessing}
 	err := sqlExec.GetContext(ctx, &transaction, q, nextLedgerLock, TransactionStatusProcessing, transactionID, pq.Array(allowedTxStatuses))
@@ -457,8 +505,8 @@ func (ca *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, 
 			locked_until_ledger_number = NULL
 		WHERE
 			id = $1
-		RETURNING *
-	`
+		RETURNING
+			` + TransactionColumnNames("", "")
 	var transaction Transaction
 	err := sqlExec.GetContext(ctx, &transaction, q, publicKey)
 	if err != nil {
@@ -486,8 +534,8 @@ func (ca *TransactionModel) PrepareTransactionForReprocessing(ctx context.Contex
 			id = $1
 			AND synced_at IS NULL
 			AND status = ANY($2)
-		RETURNING *
-	`
+		RETURNING
+			` + TransactionColumnNames("", "")
 	var transaction Transaction
 	allowedTxStatuses := []TransactionStatus{TransactionStatusPending, TransactionStatusProcessing}
 	err := sqlExec.GetContext(ctx, &transaction, q, transactionID, pq.Array(allowedTxStatuses))

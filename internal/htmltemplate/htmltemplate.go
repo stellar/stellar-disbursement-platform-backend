@@ -53,7 +53,6 @@ func ExecuteHTMLTemplateForStaffInvitationEmailMessage(data StaffInvitationEmail
 }
 
 type StaffForgotPasswordEmailMessageTemplate struct {
-	ResetToken        string
 	ResetPasswordLink string
 	OrganizationName  string
 }
@@ -77,29 +76,29 @@ const emailStyle = template.HTML(`
         body {
 			font-family: Arial, sans-serif;
 			line-height: 1.6;
-			color: #000000;
+			color: #333333;
 			background-color: #ffffff;
 			margin: 0;
-			padding: 20px;
+			padding: 40px;
+			max-width: 600px;
+			margin: 0 auto;
 		}
 		p {
-			margin-bottom: 16px;
+			margin-bottom: 20px;
+			font-size: 16px;
 		}
 		.button {
 			display: inline-block;
-			padding: 10px 20px;
-			background-color: #000000;
-			color: #ffffff;
+			padding: 12px 24px;
+			background-color: #2c2c2c;
+			color: #ffffff !important;
 			text-decoration: none;
-			border-radius: 5px;
-			font-weight: bold;
+			border-radius: 6px;
+			font-weight: 500;
+			margin: 12px 0;
 		}
 		.button:hover {
-			background-color: #333333;
-		}
-		strong:hover {
-			font-weight: bold;
-			color: #cccccc;
+			background-color: #404040;
 		}
     </style>
 `)

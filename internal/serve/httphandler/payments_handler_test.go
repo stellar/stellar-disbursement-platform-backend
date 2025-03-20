@@ -39,7 +39,6 @@ import (
 func Test_PaymentsHandlerGet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -112,57 +111,70 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := fmt.Sprintf(`{
-			"id": %q,
+		wantJson := `{
+			"id": "` + payment.ID + `",
 			"amount": "50.0000000",
-			"stellar_transaction_id": %q,
-			"stellar_operation_id": %q,
+			"stellar_transaction_id": "` + payment.StellarTransactionID + `",
+			"stellar_operation_id": "` + payment.StellarOperationID + `",
 			"status": "DRAFT",
 			"status_history": [
 				{
 					"status": "DRAFT",
 					"status_message": "",
-					"timestamp": %q
+					"timestamp": "` + payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano) + `"
 				}
 			],
 			"disbursement": {
-				"id": %q,
+				"id": "` + disbursement.ID + `",
 				"name": "disbursement 1",
 				"status": "DRAFT",
-				"created_at": %q,
-				"updated_at": %q,
-				"registration_contact_type": %q,
+				"status_history": [
+					{
+						"status": "DRAFT",
+						"user_id": "",
+						"timestamp": "` + disbursement.StatusHistory[0].Timestamp.Format(time.RFC3339Nano) + `"
+					}
+				],
+				"created_at": "` + disbursement.CreatedAt.Format(time.RFC3339Nano) + `",
+				"updated_at": "` + disbursement.UpdatedAt.Format(time.RFC3339Nano) + `",
+				"registration_contact_type": "` + disbursement.RegistrationContactType.String() + `",
+				"verification_field": "` + string(disbursement.VerificationField) + `",
 				"receiver_registration_message_template":""
 			},
 			"asset": {
-				"id": %q,
+				"id": "` + asset.ID + `",
 				"code": "USDC",
 				"issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 				"deleted_at": null
 			},
 			"receiver_wallet": {
-				"id": %q,
+				"id": "` + receiverWallet.ID + `",
 				"receiver": {
-					"id": %q
+					"id": "` + receiver.ID + `"
 				},
 				"wallet": {
-					"id": %q,
+					"id": "` + wallet.ID + `",
 					"name": "wallet1",
+					"deep_link_schema": "` + wallet.DeepLinkSchema + `",
+					"homepage": "` + wallet.Homepage + `",
+					"sep_10_client_domain": "` + wallet.SEP10ClientDomain + `",
 					"enabled": true
 				},
 				"status": "DRAFT",
-				"created_at": %q,
-				"updated_at": %q,
+				"status_history": [
+					{
+						"status": "DRAFT",
+						"timestamp": "` + receiverWallet.StatusHistory[0].Timestamp.Format(time.RFC3339Nano) + `"
+					}
+				],
+				"created_at": "` + receiverWallet.CreatedAt.Format(time.RFC3339Nano) + `",
+				"updated_at": "` + receiverWallet.UpdatedAt.Format(time.RFC3339Nano) + `",
 				"invitation_sent_at": null
 			},
-			"created_at": %q,
-			"updated_at": %q,
-			"external_payment_id": %q
-		}`, payment.ID, payment.StellarTransactionID, payment.StellarOperationID, payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano),
-			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano), disbursement.RegistrationContactType.String(),
-			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.CreatedAt.Format(time.RFC3339Nano), receiverWallet.UpdatedAt.Format(time.RFC3339Nano),
-			payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano),
-			payment.ExternalPaymentID)
+			"created_at": "` + payment.CreatedAt.Format(time.RFC3339Nano) + `",
+			"updated_at": "` + payment.UpdatedAt.Format(time.RFC3339Nano) + `",
+			"external_payment_id": "` + payment.ExternalPaymentID + `"
+		}`
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
@@ -834,12 +846,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			assert.Equal(t, tc.expectedPagination, actualResponse.Pagination)
 
 			// Parse the response data
-			var actualPayments []data.Payment
-			err = json.Unmarshal(actualResponse.Data, &actualPayments)
+			expectedJson, err := json.Marshal(tc.expectedPayments)
 			require.NoError(t, err)
-
-			// Assert on the payments data
-			assert.Equal(t, tc.expectedPayments, actualPayments)
+			assert.JSONEq(t, string(expectedJson), string(actualResponse.Data))
 		})
 	}
 }
@@ -1557,7 +1566,7 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 				data.FilterKeyStatus: "INVALID",
 			},
 		})
-		require.EqualError(t, err, `running atomic function in RunInTransactionWithResult: error counting payments: error counting payments: pq: invalid input value for enum payment_status: "INVALID"`)
+		require.ErrorContains(t, err, `error counting payments: error counting payments: pq: invalid input value for enum payment_status: "INVALID"`)
 	})
 
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")

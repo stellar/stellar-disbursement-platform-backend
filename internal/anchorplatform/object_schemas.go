@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 // GetTransactionsQueryParams are the query parameters that can be used in the `GET {PlatformAPIBaseURL}/transactions`
@@ -134,9 +136,9 @@ type APSep24TransactionPatchPostError struct {
 
 // APTransactionStatus is the body of the Stellar transaction stored in the Anchor Platform.
 type APStellarTransaction struct {
-	ID       string `json:"id"`
-	Memo     string `json:"memo,omitempty"`
-	MemoType string `json:"memo_type,omitempty"`
+	ID       string          `json:"id"`
+	Memo     string          `json:"memo,omitempty"`
+	MemoType schema.MemoType `json:"memo_type,omitempty"`
 	// CreatedAt time.Time `json:"created_at"`
 	// Envelope string `json:"envelope"`
 	// Payments  []APStellarPayment `json:"payments,omitempty"`

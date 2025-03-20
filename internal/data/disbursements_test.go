@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,9 +51,9 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	t.Run("🔴 fails to insert disbursements with non-unique name", func(t *testing.T) {
 		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
-		_, err := disbursementModel.Insert(ctx, &disbursement)
+		_, err := disbursementModel.Insert(ctx, dbConnectionPool, &disbursement)
 		require.NoError(t, err)
-		_, err = disbursementModel.Insert(ctx, &disbursement)
+		_, err = disbursementModel.Insert(ctx, dbConnectionPool, &disbursement)
 		require.Error(t, err)
 		require.Equal(t, ErrRecordAlreadyExists, err)
 	})
@@ -60,7 +61,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	t.Run("🟢 successfully insert disbursement", func(t *testing.T) {
 		defer DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 
-		id, err := disbursementModel.Insert(ctx, &disbursement)
+		id, err := disbursementModel.Insert(ctx, dbConnectionPool, &disbursement)
 		require.NoError(t, err)
 		require.NotNil(t, id)
 
@@ -85,7 +86,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		d.ReceiverRegistrationMessageTemplate = ""
 		d.VerificationField = ""
 
-		id, err := disbursementModel.Insert(ctx, &d)
+		id, err := disbursementModel.Insert(ctx, dbConnectionPool, &d)
 		require.NoError(t, err)
 		require.NotNil(t, id)
 
@@ -471,7 +472,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("update instructions", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			ID:          disbursement.ID,
 			FileContent: disbursementFileContent,
 			FileName:    "instructions.csv",
@@ -485,7 +486,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("no disbursement ID in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileContent: disbursementFileContent,
 			FileName:    "instructions.csv",
 		})
@@ -493,7 +494,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("no file name in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileContent: disbursementFileContent,
 			ID:          disbursement.ID,
 		})
@@ -501,7 +502,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("no file content in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileName: "instructions.csv",
 			ID:       disbursement.ID,
 		})
@@ -509,7 +510,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("empty file content in update", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileName:    "instructions.csv",
 			ID:          disbursement.ID,
 			FileContent: []byte{},
@@ -518,7 +519,7 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	t.Run("wrong disbursement ID", func(t *testing.T) {
-		err := disbursementModel.Update(ctx, &DisbursementUpdate{
+		err := disbursementModel.Update(ctx, dbConnectionPool, &DisbursementUpdate{
 			FileName:    "instructions.csv",
 			ID:          "9e0ff65f-f6e9-46e9-bf03-dc46723e3bfb",
 			FileContent: disbursementFileContent,
@@ -770,5 +771,236 @@ func Test_DisbursementModel_Delete(t *testing.T) {
 		// Verify disbursement still exists
 		_, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
 		require.NoError(t, err)
+	})
+}
+
+func Test_DisbursementColumnNames(t *testing.T) {
+	testCases := []struct {
+		tableReference string
+		resultAlias    string
+		expected       string
+	}{
+		{
+			tableReference: "",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"id",
+				"name",
+				"status",
+				"status_history",
+				"file_content",
+				"created_at",
+				"updated_at",
+				"registration_contact_type",
+				"receiver_registration_message_template",
+				`COALESCE(verification_field::text, '') AS "verification_field"`,
+				`COALESCE(file_name, '') AS "file_name"`,
+				`COALESCE(receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "d",
+			resultAlias:    "",
+			expected: strings.Join([]string{
+				"d.id",
+				"d.name",
+				"d.status",
+				"d.status_history",
+				"d.file_content",
+				"d.created_at",
+				"d.updated_at",
+				"d.registration_contact_type",
+				"d.receiver_registration_message_template",
+				`COALESCE(d.verification_field::text, '') AS "verification_field"`,
+				`COALESCE(d.file_name, '') AS "file_name"`,
+				`COALESCE(d.receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
+			}, ",\n"),
+		},
+		{
+			tableReference: "d",
+			resultAlias:    "disbursement",
+			expected: strings.Join([]string{
+				`d.id AS "disbursement.id"`,
+				`d.name AS "disbursement.name"`,
+				`d.status AS "disbursement.status"`,
+				`d.status_history AS "disbursement.status_history"`,
+				`d.file_content AS "disbursement.file_content"`,
+				`d.created_at AS "disbursement.created_at"`,
+				`d.updated_at AS "disbursement.updated_at"`,
+				`d.registration_contact_type AS "disbursement.registration_contact_type"`,
+				`d.receiver_registration_message_template AS "disbursement.receiver_registration_message_template"`,
+				`COALESCE(d.verification_field::text, '') AS "disbursement.verification_field"`,
+				`COALESCE(d.file_name, '') AS "disbursement.file_name"`,
+				`COALESCE(d.receiver_registration_message_template, '') AS "disbursement.receiver_registration_message_template"`,
+			}, ",\n"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
+			actual := DisbursementColumnNames(tc.tableReference, tc.resultAlias)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+// testCaseNameForScanText returns a string that can be used as the name of a test case.
+// It is used to create a test case name for a given table reference and result alias.
+func testCaseNameForScanText(t *testing.T, tableReference, resultAlias string) string {
+	t.Helper()
+	originalColName := "{column_name}"
+	scanText := originalColName
+	if tableReference != "" {
+		scanText = fmt.Sprintf("%s.%s", tableReference, scanText)
+	}
+	if resultAlias != "" {
+		scanText = fmt.Sprintf("%s AS %s.%s", scanText, resultAlias, originalColName)
+	}
+	return scanText
+}
+
+func Test_DisbursementModel_CompleteIfNecessary(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	t.Run("does not complete not started disbursement", func(t *testing.T) {
+		readyDisbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement ready",
+			Status:            ReadyDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         readyDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursementIDs, err := models.Disbursements.CompleteIfNecessary(ctx, dbConnectionPool)
+		assert.NoError(t, err)
+		assert.Empty(t, disbursementIDs)
+
+		readyDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, readyDisbursement.ID)
+		require.NoError(t, err)
+		assert.Equal(t, ReadyDisbursementStatus, readyDisbursement.Status)
+	})
+
+	t.Run("does not complete started disbursement if not all payments are not completed", func(t *testing.T) {
+		startedDisbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement started",
+			Status:            StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         startedDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               FailedPaymentStatus,
+			Disbursement:         startedDisbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursementIDs, err := models.Disbursements.CompleteIfNecessary(ctx, dbConnectionPool)
+		assert.NoError(t, err)
+		assert.Empty(t, disbursementIDs)
+
+		startedDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, startedDisbursement.ID)
+		require.NoError(t, err)
+		assert.Equal(t, StartedDisbursementStatus, startedDisbursement.Status)
+	})
+
+	t.Run("completes all started disbursements after payments are successful / canceled", func(t *testing.T) {
+		disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement 1",
+			Status:            StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id",
+			StellarOperationID:   "operation-id",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement1,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Name:              "disbursement 2",
+			Status:            StartedDisbursementStatus,
+			Asset:             asset,
+			Wallet:            wallet,
+			VerificationField: VerificationTypeDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement2,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               CanceledPaymentStatus,
+			Disbursement:         disbursement2,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+
+		disbursementIDs, err := models.Disbursements.CompleteIfNecessary(ctx, dbConnectionPool)
+		assert.NoError(t, err)
+		assert.Len(t, disbursementIDs, 2)
+		assert.Equal(t, []string{disbursement1.ID, disbursement2.ID}, disbursementIDs)
+
+		disbursement1, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement1.ID)
+		require.NoError(t, err)
+		assert.Equal(t, CompletedDisbursementStatus, disbursement1.Status)
+
+		disbursement2, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement2.ID)
+		require.NoError(t, err)
+		assert.Equal(t, CompletedDisbursementStatus, disbursement2.Status)
 	})
 }

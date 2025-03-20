@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -61,6 +62,31 @@ func (wa *WalletAssets) Scan(src interface{}) error {
 
 type WalletModel struct {
 	dbConnectionPool db.DBConnectionPool
+}
+
+// WalletColumnNames returns a comma-separated string of wallet column names for SQL queries. It includes optional date
+// fields based on the provided parameter.
+func WalletColumnNames(tableReference, resultAlias string, includeDates bool) string {
+	colNames := []string{
+		"id",
+		"name",
+		"sep_10_client_domain",
+		"homepage",
+		"enabled",
+		"deep_link_schema",
+		"user_managed",
+	}
+	if includeDates {
+		colNames = append(colNames, "created_at", "updated_at", "deleted_at")
+	}
+
+	columns := SQLColumnConfig{
+		TableReference: tableReference,
+		ResultAlias:    resultAlias,
+		RawColumns:     colNames,
+	}.Build()
+
+	return strings.Join(columns, ",\n")
 }
 
 const getQuery = `
@@ -198,24 +224,12 @@ func (wm *WalletModel) GetOrCreate(ctx context.Context, name, homepage, deepLink
 			($1, $2, $3, $4)
 		ON CONFLICT (name, homepage, deep_link_schema) DO NOTHING
 		RETURNING
-			id, 
-			name, 
-			homepage,
-			sep_10_client_domain,
-			deep_link_schema,
-			created_at,
-			updated_at
+			*
 	)
 	SELECT * FROM create_wallet cw
 	UNION ALL
 	SELECT
-		id, 
-		name, 
-		homepage,
-		sep_10_client_domain,
-		deep_link_schema,
-		created_at,
-		updated_at
+		*
 	FROM wallets w
 	WHERE w.name = $1
 	`
