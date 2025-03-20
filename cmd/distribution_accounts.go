@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"go/types"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
@@ -26,7 +25,7 @@ type DistributionAccountCommand struct {
 	AdminDBConnectionPool db.DBConnectionPool
 }
 
-func (c *DistributionAccountCommand) Command() *cobra.Command {
+func (c *DistributionAccountCommand) Command(cmdService DistAccCmdServiceInterface) *cobra.Command {
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 	distAccResolverOpts := signing.DistributionAccountResolverOptions{}
 	configOpts := config.ConfigOptions{
@@ -89,28 +88,21 @@ func (c *DistributionAccountCommand) Command() *cobra.Command {
 		log.Ctx(distributionAccountCmd.Context()).Fatalf("Error initializing %s command: %v", distributionAccountCmd.Name(), err)
 	}
 
-	distributionAccountCmd.AddCommand(c.RotateCommand())
+	distributionAccountCmd.AddCommand(c.RotateCommand(cmdService))
 
 	return distributionAccountCmd
 }
 
-func (c *DistributionAccountCommand) RotateCommand() *cobra.Command {
+func (c *DistributionAccountCommand) RotateCommand(cmdService DistAccCmdServiceInterface) *cobra.Command {
 	var distAccService services.DistributionAccountServiceInterface
 	var submitterEngine engine.SubmitterEngine
 	var txSubmitterOpts di.TxSubmitterEngineOptions
+	var tenantRoutingOpts cmdUtils.TenantRoutingOptions
 	adminServeOpts := serveadmin.ServeOptions{}
 
 	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
-
-	// Add tenant ID option
-	var tenantID string
-	configOpts = append(configOpts, &config.ConfigOption{
-		Name:      "tenant-id",
-		Usage:     "The ID of the tenant whose distribution account should be rotated",
-		OptType:   types.String,
-		ConfigKey: &tenantID,
-		Required:  true,
-	},
+	configOpts = append(configOpts,
+		cmdUtils.SingleTenantRoutingConfigOptions(&tenantRoutingOpts),
 		cmdUtils.TenantXLMBootstrapAmount(&adminServeOpts.TenantAccountNativeAssetBootstrapAmount))
 
 	rotateCmd := &cobra.Command{
@@ -127,8 +119,11 @@ func (c *DistributionAccountCommand) RotateCommand() *cobra.Command {
 			}
 
 			// Save Tenant to Context
+			if tenantRoutingOpts.TenantID == "" {
+				log.Ctx(ctx).Fatalf("Tenant ID is required")
+			}
 			m := tenant.NewManager(tenant.WithDatabase(c.AdminDBConnectionPool))
-			t, err := m.GetTenantByID(ctx, tenantID)
+			t, err := m.GetTenantByID(ctx, tenantRoutingOpts.TenantID)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error getting tenant by ID: %v", err)
 			}
@@ -152,14 +147,14 @@ func (c *DistributionAccountCommand) RotateCommand() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			cmdService := DistAccCmdService{
+			distributionAccService := DistributionAccountService{
 				distAccService:             distAccService,
 				submitterEngine:            submitterEngine,
 				tenantManager:              tenant.NewManager(tenant.WithDatabase(c.AdminDBConnectionPool)),
 				nativeAssetBootstrapAmount: adminServeOpts.TenantAccountNativeAssetBootstrapAmount,
 				maxBaseFee:                 int64(txSubmitterOpts.MaxBaseFee),
 			}
-			err := cmdService.RotateDistributionAccount(ctx)
+			err := cmdService.RotateDistributionAccount(ctx, distributionAccService)
 			if err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd distribution-account rotate crash")
 				log.Ctx(ctx).Fatalf("Error rotating distribution account: %v", err)
