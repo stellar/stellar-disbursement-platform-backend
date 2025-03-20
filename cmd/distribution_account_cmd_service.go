@@ -81,7 +81,7 @@ func (s *DistributionAccountService) rotateDistributionAccount(ctx context.Conte
 
 func (s *DistributionAccountService) createNewStellarAccountFromAccount(ctx context.Context, oldAccount schema.TransactionAccount) (*schema.TransactionAccount, error) {
 	// 1. Create new account and persist it
-	log.Ctx(ctx).Infof("🔨 Creating new distribution account from account %q", truncAccount(oldAccount))
+	log.Ctx(ctx).Infof("🔨 Creating new distribution account from account %q", oldAccount.Address)
 	newAccounts, err := s.submitterEngine.BatchInsert(ctx, schema.DistributionAccountStellarDBVault, 1)
 	if err != nil {
 		return nil, fmt.Errorf("inserting new account: %w", err)
@@ -116,7 +116,7 @@ func (s *DistributionAccountService) buildCreateAccountOperation(ctx context.Con
 	minimumFundingAmount := (2 * baseReserveFee) + (float64(numberOfTrustlines) * baseReserveFee) // 2 base reserves to exist on the ledger + 1 base reserve per trustline
 	fundingAmount := math.Max(float64(s.nativeAssetBootstrapAmount), minimumFundingAmount)
 
-	log.Ctx(ctx).Infof("💰 Funding new account %s with %.2f XLMs", truncAccount(newAccount), fundingAmount)
+	log.Ctx(ctx).Infof("💰 Funding new account %q with %.2f XLMs", newAccount.Address, fundingAmount)
 
 	return &txnbuild.CreateAccount{
 		Destination: newAccount.Address,
@@ -135,7 +135,7 @@ func (s *DistributionAccountService) buildMergeAccountsOperations(ctx context.Co
 			continue
 		}
 
-		log.Ctx(ctx).Infof("🤝 Adding trustline for asset [%s] to account %q", asset.Code, truncAccount(newAccount))
+		log.Ctx(ctx).Infof("🤝 Adding trustline for asset [%s:%s] to account %q", asset.Code, asset.Issuer, newAccount.Address)
 		mergeOps = append(mergeOps,
 			&txnbuild.ChangeTrust{
 				Line: txnbuild.ChangeTrustAssetWrapper{
@@ -146,7 +146,7 @@ func (s *DistributionAccountService) buildMergeAccountsOperations(ctx context.Co
 			})
 
 		if balance != 0 {
-			log.Ctx(ctx).Infof("💸 Transferring %.2f %s to account %q", balance, asset.Code, truncAccount(newAccount))
+			log.Ctx(ctx).Infof("💸 Transferring %.2f %s to account %q", balance, asset.Code, newAccount.Address)
 			mergeOps = append(mergeOps, &txnbuild.Payment{
 				Destination: newAccount.Address,
 				Asset:       asset.ToBasicAsset(),
@@ -154,7 +154,7 @@ func (s *DistributionAccountService) buildMergeAccountsOperations(ctx context.Co
 			})
 		}
 
-		log.Ctx(ctx).Infof("🗑️ Removing trustline for asset [%s] from account %q", asset.Code, truncAccount(oldAccount))
+		log.Ctx(ctx).Infof("🗑️ Removing trustline for asset [%s:%s] from account %q", asset.Code, asset.Issuer, oldAccount.Address)
 		mergeOps = append(mergeOps,
 			&txnbuild.ChangeTrust{
 				Line: txnbuild.ChangeTrustAssetWrapper{
@@ -195,10 +195,7 @@ func (s *DistributionAccountService) buildAndSubmitTx(ctx context.Context, oldAc
 	}
 	transferTx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
-			SourceAccount: &txnbuild.SimpleAccount{
-				AccountID: oldAccountDetails.AccountID,
-				Sequence:  oldAccountDetails.Sequence,
-			},
+			SourceAccount:        &oldAccountDetails,
 			IncrementSequenceNum: true,
 			Operations:           ops,
 			BaseFee:              s.maxBaseFee,
@@ -209,7 +206,7 @@ func (s *DistributionAccountService) buildAndSubmitTx(ctx context.Context, oldAc
 		return fmt.Errorf("creating transaction for operations %w", err)
 	}
 
-	// 3. Sign Tx with old and new account
+	// 3. Sign Tx with the old and new accounts
 	transferTx, err = s.submitterEngine.SignStellarTransaction(ctx, transferTx, oldAccount, newAccount)
 	if err != nil {
 		return fmt.Errorf("signing transfer transaction: %w", err)
@@ -230,7 +227,7 @@ func (s *DistributionAccountService) buildAndSubmitTx(ctx context.Context, oldAc
 	// 5. Sign the fee bump with host account
 	feeBumpTx, err = s.submitterEngine.SignFeeBumpStellarTransaction(ctx, feeBumpTx, hostAccount)
 	if err != nil {
-		return fmt.Errorf("signing fee bump transaction with host account %s: %w", truncAccount(hostAccount), err)
+		return fmt.Errorf("signing fee bump transaction with host account %s: %w", hostAccount, err)
 	}
 
 	// 6. Submit the fee bumped transaction to the network
@@ -242,11 +239,7 @@ func (s *DistributionAccountService) buildAndSubmitTx(ctx context.Context, oldAc
 		return fmt.Errorf("submitting account migration transaction: %w", err)
 	}
 
-	log.Ctx(ctx).Infof("🎉 Successfully rotated from account %q to account %q", truncAccount(oldAccount), truncAccount(newAccount))
+	log.Ctx(ctx).Infof("🎉 Successfully rotated from account %q to account %q", oldAccount.Address, newAccount.Address)
 
 	return nil
-}
-
-func truncAccount(acc schema.TransactionAccount) string {
-	return utils.TruncateString(acc.Address, 4)
 }
