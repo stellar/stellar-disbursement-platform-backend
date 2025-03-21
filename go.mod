@@ -18,7 +18,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/httprate v0.14.1
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
-	github.com/golang-jwt/jwt/v4 v4.5.1
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/schema v1.4.1
 	github.com/jmoiron/sqlx v1.4.0
