@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/crypto/bcrypt"
@@ -300,18 +301,36 @@ func (it *IntegrationTestsService) registerReceiverWalletIfNeeded(ctx context.Co
 // processed by TSS or Circle, and then ensuring the transaction is present on the Stellar network.
 func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
 	log.Ctx(ctx).Info("Waiting for payment to be processed...")
+	var receivers []*data.DisbursementReceiver
+	var payment *data.Payment
+
 	time.Sleep(paymentProcessTimeSeconds * time.Second) // wait for payment to be processed by TSS or Circle
+	err := retry.Do(
+		func() error {
+			var innerErr error
+			receivers, innerErr = it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursement.ID)
+			if innerErr != nil {
+				return fmt.Errorf("getting receivers: %w", innerErr)
+			}
 
-	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursement.ID)
+			payment = receivers[0].Payment
+			if payment.Status != data.SuccessPaymentStatus || payment.StellarTransactionID == "" {
+				return fmt.Errorf("payment was not processed successfully by TSS within the expected time = %+v", payment)
+			}
+
+			return nil
+		},
+		retry.Context(ctx),
+		retry.Attempts(6),
+		retry.Delay(20*time.Second),
+		retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			log.Ctx(ctx).Infof("🔄 Retry attempt #%d: %v", n+1, err)
+		}),
+	)
+	// Max elapsed time is `paymentProcessTimeSeconds + 20 * (6-1)` = 130 seconds
 	if err != nil {
-		return fmt.Errorf("getting receivers: %w", err)
-	}
-
-	payment := receivers[0].Payment
-
-	log.Ctx(ctx).Info("Getting payment from disbursement receiver...")
-	if payment.Status != data.SuccessPaymentStatus || payment.StellarTransactionID == "" {
-		return fmt.Errorf("payment was not processed successfully by TSS: %+v", payment)
+		return fmt.Errorf("waiting for payment to be processed: %w", err)
 	}
 
 	log.Ctx(ctx).Infof("Validating transaction %s is on the Stellar network...", payment.StellarTransactionID)
