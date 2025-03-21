@@ -315,7 +315,7 @@ func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Conte
 
 			payment = receivers[0].Payment
 			if payment.Status != data.SuccessPaymentStatus || payment.StellarTransactionID == "" {
-				return fmt.Errorf("payment was not processed successfully by TSS within the expected time = %+v", payment)
+				return fmt.Errorf("payment was not processed successfully by TSS or Circle within the expected time = %+v", payment)
 			}
 
 			return nil
