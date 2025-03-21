@@ -399,7 +399,7 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 			return errors.As(err, &RetryableError{})
 		}),
 		retry.OnRetry(func(n uint, err error) {
-			log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, Retry number %d due to: %s", u, n, err)
+			log.Ctx(ctx).Warnf("🔄 CircleClient - Request to %s is rate limited, attempt %d failed with error: %v", u, n+1, err)
 		}),
 		retry.LastErrorOnly(true),
 	)
