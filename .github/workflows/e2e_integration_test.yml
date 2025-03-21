@@ -1,7 +1,6 @@
 name: Integration Tests
 
 on:
-  pull_request: # TODO: remove this before merging the PR.
   workflow_call: # allows this workflow to be called from another workflow, like `docker_image_public_release`
 
 env:
