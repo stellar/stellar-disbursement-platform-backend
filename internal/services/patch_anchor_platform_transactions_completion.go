@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -29,8 +30,10 @@ type PatchAnchorPlatformTransactionCompletionService struct {
 var _ PatchAnchorPlatformTransactionCompletionServiceInterface = new(PatchAnchorPlatformTransactionCompletionService)
 
 func NewPatchAnchorPlatformTransactionCompletionService(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, sdpModels *data.Models) (PatchAnchorPlatformTransactionCompletionServiceInterface, error) {
-	if apAPISvc == nil || sdpModels == nil {
-		return nil, fmt.Errorf("anchor platform API service and SDP models are required")
+	if apAPISvc == nil {
+		return nil, errors.New("anchor platform API service is required")
+	} else if sdpModels == nil {
+		return nil, errors.New("SDP models are required")
 	}
 
 	return &PatchAnchorPlatformTransactionCompletionService{

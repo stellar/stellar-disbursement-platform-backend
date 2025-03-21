@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/integrationtests"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type mockIntegrationTests struct {
@@ -80,7 +80,7 @@ func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 	t.Run("exit with status 1 when IntegrationTestsService fails", func(t *testing.T) {
 		utils.AssertFuncExitsWithFatal(t, func() {
 			serviceMock.
-				On("StartIntegrationServe", context.Background(), *integrationTestsOpts).
+				On("StartIntegrationTests", context.Background(), *integrationTestsOpts).
 				Return(errors.New("unexpected error"))
 			_ = parentCmdMock.Execute()
 		}, "Error starting integration tests: unexpected error")

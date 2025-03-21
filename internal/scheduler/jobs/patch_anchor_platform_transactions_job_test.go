@@ -3,8 +3,6 @@ package jobs
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -19,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -31,63 +30,21 @@ func Test_NewPatchAnchorPlatformTransactionCompletionJob(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	t.Run("exits with status 1 when AP API Client is missing", func(t *testing.T) {
-		if os.Getenv("TEST_FATAL") == "1" {
-			NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, nil, nil)
-			return
-		}
-
-		// We're using a strategy to setup a cmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
-		// Ref: https://go.dev/talks/2014/testing.slide#23
-		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
-		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
-
-		err := cmd.Run()
-		if exitError, ok := err.(*exec.ExitError); ok {
-			assert.False(t, exitError.Success())
-			return
-		}
-
-		t.Fatalf("process ran with err %v, want exit status 1", err)
+		utils.AssertFuncExitsWithFatal(t, func() {
+			_ = NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, nil, nil)
+		}, "anchor platform API service is required")
 	})
 
 	t.Run("exits with status 1 when SDP Models are missing", func(t *testing.T) {
-		if os.Getenv("TEST_FATAL") == "1" {
-			NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, &anchorplatform.AnchorPlatformAPIService{}, nil)
-			return
-		}
-
-		// We're using a strategy to setup a cmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
-		// Ref: https://go.dev/talks/2014/testing.slide#23
-		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
-		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
-
-		err := cmd.Run()
-		if exitError, ok := err.(*exec.ExitError); ok {
-			assert.False(t, exitError.Success())
-			return
-		}
-
-		t.Fatalf("process ran with err %v, want exit status 1", err)
+		utils.AssertFuncExitsWithFatal(t, func() {
+			_ = NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, &anchorplatform.AnchorPlatformAPIService{}, nil)
+		}, "SDP models are required")
 	})
 
 	t.Run("exits with status 1 when interval is not set correctly", func(t *testing.T) {
-		if os.Getenv("TEST_FATAL") == "1" {
-			NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds-1, &anchorplatform.AnchorPlatformAPIService{}, nil)
-			return
-		}
-
-		// We're using a strategy to setup a cmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
-		// Ref: https://go.dev/talks/2014/testing.slide#23
-		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
-		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
-
-		err := cmd.Run()
-		if exitError, ok := err.(*exec.ExitError); ok {
-			assert.False(t, exitError.Success())
-			return
-		}
-
-		t.Fatalf("process ran with err %v, want exit status 1", err)
+		utils.AssertFuncExitsWithFatal(t, func() {
+			_ = NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds-1, &anchorplatform.AnchorPlatformAPIService{}, nil)
+		}, "job interval is not set")
 	})
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {
