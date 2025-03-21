@@ -303,9 +303,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Maybe()
 
 		messengerClientMock.
-			On("SendMessage", mock.AnythingOfType("message.Message")).
+			On("SendMessage", mock.Anything, mock.AnythingOfType("message.Message")).
 			Run(func(args mock.Arguments) {
-				msg, ok := args.Get(0).(message.Message)
+				msg, ok := args.Get(1).(message.Message)
 				require.True(t, ok)
 
 				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)

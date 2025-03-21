@@ -1,11 +1,13 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/aws/aws-sdk-go-v2/service/sns/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -14,8 +16,13 @@ type mockAWSSNSClient struct {
 	mock.Mock
 }
 
-func (m *mockAWSSNSClient) Publish(input *sns.PublishInput) (*sns.PublishOutput, error) {
-	args := m.Called(input)
+func (m *mockAWSSNSClient) Publish(ctx context.Context, input *sns.PublishInput, optFns ...func(*sns.Options)) (*sns.PublishOutput, error) {
+	inputArgs := []interface{}{ctx, input}
+	for _, optFn := range optFns {
+		inputArgs = append(inputArgs, optFn)
+	}
+	args := m.Called(inputArgs...)
+
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -55,7 +62,7 @@ func Test_NewAWSSNSClient(t *testing.T) {
 
 func Test_AWSSNS_SendMessage_messageIsInvalid(t *testing.T) {
 	var mAWS MessengerClient = &awsSNSClient{}
-	err := mAWS.SendMessage(Message{})
+	err := mAWS.SendMessage(context.Background(), Message{})
 	require.EqualError(t, err, "validating message to send an SMS through AWS: invalid message: phone number cannot be empty")
 }
 
@@ -66,10 +73,10 @@ func Test_AWSSNS_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 	testSenderID := "senderID"
 	mAWSSNS := mockAWSSNSClient{}
 	mAWSSNS.
-		On("Publish", &sns.PublishInput{
+		On("Publish", mock.Anything, &sns.PublishInput{
 			PhoneNumber: aws.String(testPhoneNumber),
 			Message:     aws.String(testMessage),
-			MessageAttributes: map[string]*sns.MessageAttributeValue{
+			MessageAttributes: map[string]types.MessageAttributeValue{
 				"AWS.SNS.SMS.SenderID": {StringValue: aws.String(testSenderID), DataType: aws.String("String")},
 				"AWS.SNS.SMS.SMSType":  {StringValue: aws.String("Transactional"), DataType: aws.String("String")},
 			},
@@ -78,7 +85,7 @@ func Test_AWSSNS_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Once()
 
 	mAWS := awsSNSClient{snsService: &mAWSSNS, senderID: "senderID"}
-	err := mAWS.SendMessage(Message{ToPhoneNumber: "+14155555555", Body: "foo bar"})
+	err := mAWS.SendMessage(context.Background(), Message{ToPhoneNumber: "+14155555555", Body: "foo bar"})
 	require.EqualError(t, err, "sending AWS SNS SMS: test AWS SNS error")
 
 	mAWSSNS.AssertExpectations(t)
@@ -91,10 +98,10 @@ func Test_AWSSNS_SendMessage_success(t *testing.T) {
 	testSenderID := "senderID"
 	mAWSSNS := mockAWSSNSClient{}
 	mAWSSNS.
-		On("Publish", &sns.PublishInput{
+		On("Publish", mock.Anything, &sns.PublishInput{
 			PhoneNumber: aws.String(testPhoneNumber),
 			Message:     aws.String(testMessage),
-			MessageAttributes: map[string]*sns.MessageAttributeValue{
+			MessageAttributes: map[string]types.MessageAttributeValue{
 				"AWS.SNS.SMS.SenderID": {StringValue: aws.String(testSenderID), DataType: aws.String("String")},
 				"AWS.SNS.SMS.SMSType":  {StringValue: aws.String("Transactional"), DataType: aws.String("String")},
 			},
@@ -103,7 +110,7 @@ func Test_AWSSNS_SendMessage_success(t *testing.T) {
 		Once()
 
 	mAWS := awsSNSClient{snsService: &mAWSSNS, senderID: "senderID"}
-	err := mAWS.SendMessage(Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
+	err := mAWS.SendMessage(context.Background(), Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
 	require.NoError(t, err)
 
 	mAWSSNS.AssertExpectations(t)

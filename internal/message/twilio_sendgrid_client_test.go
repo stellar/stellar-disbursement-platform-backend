@@ -1,6 +1,7 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -57,7 +58,7 @@ func Test_NewTwilioSendGridClient(t *testing.T) {
 
 func Test_TwilioSendGridClient_SendMessage_messageIsInvalid(t *testing.T) {
 	var mSendGrid MessengerClient = &twilioSendGridClient{}
-	err := mSendGrid.SendMessage(Message{})
+	err := mSendGrid.SendMessage(context.Background(), Message{})
 	assert.EqualError(t, err, "validating message to send an email through SendGrid: invalid e-mail: invalid email format: email field is required")
 }
 
@@ -81,7 +82,7 @@ func Test_TwilioSendGridClient_SendMessage_errorIsHandledCorrectly(t *testing.T)
 		senderAddress: "sender@stellar.org",
 	}
 
-	err := client.SendMessage(message)
+	err := client.SendMessage(context.Background(), message)
 	assert.EqualError(t, err, "sending SendGrid email: test SendGrid error")
 }
 
@@ -103,7 +104,7 @@ func Test_TwilioSendGridClient_SendMessage_handlesAPIError(t *testing.T) {
 		senderAddress: "sender@stellar.org",
 	}
 
-	err := client.SendMessage(message)
+	err := client.SendMessage(context.Background(), message)
 	assert.EqualError(t, err, "sendGrid API returned error status code= 400, body= Bad Request")
 }
 
@@ -150,7 +151,7 @@ foo bar
 		senderAddress: "sender@stellar.org",
 	}
 
-	err := client.SendMessage(message)
+	err := client.SendMessage(context.Background(), message)
 	assert.NoError(t, err)
 }
 
@@ -179,7 +180,7 @@ func Test_TwilioSendGrid_SendMessage_withHTMLContent(t *testing.T) {
 		senderAddress: "sender@stellar.org",
 	}
 
-	err := client.SendMessage(message)
+	err := client.SendMessage(context.Background(), message)
 	assert.NoError(t, err)
 }
 

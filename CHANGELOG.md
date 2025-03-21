@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Allow the AWS configuration to be handled by the AWS session if the static credentials and region are not all passed to the SDP function. [#565](https://github.com/stellar/stellar-disbursement-platform-backend/pull/565)
 
+### Security and Dependencies
+
+- Upgrade AWS and stellar/go dependencies. [#581](https://github.com/stellar/stellar-disbursement-platform-backend/pull/581)
+
 ## [3.6.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.1...3.6.0))
 
 > [!WARNING]

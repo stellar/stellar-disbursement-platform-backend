@@ -62,7 +62,7 @@ func (d *MessageDispatcher) SendMessage(ctx context.Context, message Message, ch
 		}
 		messengerType = client.MessengerType()
 
-		err := client.SendMessage(message)
+		err := client.SendMessage(ctx, message)
 		if err == nil {
 			return messengerType, nil
 		}

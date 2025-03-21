@@ -1,6 +1,7 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -28,7 +29,7 @@ func (t *twilioClient) CreateMessage(params *twilioApi.CreateMessageParams) (*tw
 	return t.apiService.CreateMessage(params)
 }
 
-func (t *twilioClient) SendMessage(message Message) error {
+func (t *twilioClient) SendMessage(_ context.Context, message Message) error {
 	err := message.ValidateFor(t.MessengerType())
 	if err != nil {
 		return fmt.Errorf("validating SMS message: %w", err)

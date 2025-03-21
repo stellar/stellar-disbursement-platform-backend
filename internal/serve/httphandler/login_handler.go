@@ -178,7 +178,7 @@ func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code st
 		Title:   mfaMessageTitle,
 		Body:    msgContent,
 	}
-	if err = h.MessengerClient.SendMessage(msg); err != nil {
+	if err = h.MessengerClient.SendMessage(ctx, msg); err != nil {
 		return fmt.Errorf("sending MFA code to email %s: %w", user.Email, err)
 	}
 
