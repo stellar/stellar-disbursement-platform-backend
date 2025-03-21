@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 > [!WARNING]
 > This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.7.0`.
 
+### Added
+
+- Update integration test to wait for the payment to be processed by TSS/Circle with a retry mechanism. [#585](https://github.com/stellar/stellar-disbursement-platform-backend/pull/585)
+
 ### Changed
 
 - Allow the AWS configuration to be handled by the AWS session if the static credentials and region are not all passed to the SDP function. [#565](https://github.com/stellar/stellar-disbursement-platform-backend/pull/565)
