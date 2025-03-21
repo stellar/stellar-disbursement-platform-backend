@@ -14,14 +14,14 @@ import (
 func AssertFuncExitsWithFatal(t *testing.T, fatalFunc func(), stdErrContains ...string) {
 	t.Helper()
 
-	if os.Getenv("TEST_FATAL") == "1" {
+	if os.Getenv("TEST_SUBPROCESS") == "1" {
 		// Run the fatal function that will call os.Exit(n)
 		fatalFunc()
 		return
 	}
 
 	cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
-	cmd.Env = append(os.Environ(), "TEST_FATAL=1")
+	cmd.Env = append(os.Environ(), "TEST_SUBPROCESS=1")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
