@@ -21,7 +21,7 @@ import (
 
 func Test_NewPatchAnchorPlatformTransactionCompletionService(t *testing.T) {
 	svc, err := NewPatchAnchorPlatformTransactionCompletionService(nil, nil)
-	assert.EqualError(t, err, "anchor platform API service and SDP models are required")
+	assert.EqualError(t, err, "anchor platform API service is required")
 	assert.Nil(t, svc)
 
 	dbt := dbtest.Open(t)
