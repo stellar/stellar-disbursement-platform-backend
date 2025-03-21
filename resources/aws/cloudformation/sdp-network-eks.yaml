@@ -1,0 +1,297 @@
+Parameters:
+  AWSRegion:
+    Type: String
+    Default: "us-west-1"
+
+  env:
+    Type: String
+    Default: "dev"
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  ExistingVPCId:
+    Type: String
+    Default: ""
+    Description: "If specified, use an existing VPC instead of creating a new one"
+
+  ExistingPublicSubnet1Id:
+    Type: String
+    Default: ""
+    Description: "If using existing VPC, specify the first public subnet ID"
+
+  ExistingPublicSubnet2Id:
+    Type: String
+    Default: ""
+    Description: "If using existing VPC, specify the second public subnet ID"
+
+  ExistingPrivateSubnet1Id:
+    Type: String
+    Default: ""
+    Description: "If using existing VPC, specify the first private subnet ID"
+
+  ExistingPrivateSubnet2Id:
+    Type: String
+    Default: ""
+    Description: "If using existing VPC, specify the second private subnet ID"
+
+  VPCCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+
+  PublicSubnet1CIDR:
+    Type: String
+    Default: "10.0.0.0/24"
+
+  PublicSubnet2CIDR:
+    Type: String
+    Default: "10.0.1.0/24"
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: "10.0.2.0/24"
+
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: "10.0.3.0/24"
+
+Conditions:
+  CreateNewVPC: !Equals 
+    - !Ref ExistingVPCId
+    - ""
+
+Resources:
+  SDPVPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateNewVPC
+    Properties:
+      CidrBlock: !Ref VPCCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-vpc
+        - Key: env
+          Value: !Ref env
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateNewVPC
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-igw
+        - Key: env
+          Value: !Ref env
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref SDPVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Sub ${AWS::Region}a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-public-subnet-1
+        - Key: env
+          Value: !Ref env
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Sub ${AWS::Region}c
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-public-subnet-2
+        - Key: env
+          Value: !Ref env
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Sub ${AWS::Region}a
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-private-subnet-1
+        - Key: env
+          Value: !Ref env
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Sub ${AWS::Region}c
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-private-subnet-2
+        - Key: env
+          Value: !Ref env
+
+  # NAT Gateway
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    Condition: CreateNewVPC
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: env
+          Value: !Ref env
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNewVPC
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-nat-gateway
+        - Key: env
+          Value: !Ref env
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref SDPVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-public-route-table
+        - Key: env
+          Value: !Ref env
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateNewVPC
+    Properties:
+      VpcId: !Ref SDPVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-private-route-table
+        - Key: env
+          Value: !Ref env
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateNewVPC
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateNewVPC
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  # Subnet Route Table Associations
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNewVPC
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNewVPC
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNewVPC
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNewVPC
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !If 
+      - CreateNewVPC
+      - !Ref SDPVPC
+      - !Ref ExistingVPCId
+    Export:
+      Name: !Sub ${AWS::StackName}-vpc-id
+
+  VPCCidr:
+    Description: VIPC CIDR
+    Value: !If 
+    - CreateNewVPC
+    - !Ref VPCCidr
+    - !GetAtt SDPVPC.CidrBlock
+    Export:
+      Name: !Sub ${AWS::StackName}-vpc-cidr
+  
+  
+  PublicSubnet1:
+    Description: Public Subnet 1 ID
+    Value: !If 
+      - CreateNewVPC
+      - !Ref PublicSubnet1
+      - !Ref ExistingPublicSubnet1Id
+    Export:
+      Name: !Sub ${AWS::StackName}-public-subnet-1
+
+  PublicSubnet2:
+    Description: Public Subnet 2 ID
+    Value: !If 
+      - CreateNewVPC
+      - !Ref PublicSubnet2
+      - !Ref ExistingPublicSubnet2Id
+    Export:
+      Name: !Sub ${AWS::StackName}-public-subnet-2
+
+  PrivateSubnet1:
+    Description: Private Subnet 1 ID
+    Value: !If 
+      - CreateNewVPC
+      - !Ref PrivateSubnet1
+      - !Ref ExistingPrivateSubnet1Id
+    Export:
+      Name: !Sub ${AWS::StackName}-private-subnet-1
+
+  PrivateSubnet2:
+    Description: Private Subnet 2 ID
+    Value: !If 
+      - CreateNewVPC
+      - !Ref PrivateSubnet2
+      - !Ref ExistingPrivateSubnet2Id
+    Export:
+      Name: !Sub ${AWS::StackName}-private-subnet-2
