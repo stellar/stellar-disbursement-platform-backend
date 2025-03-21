@@ -144,6 +144,8 @@ func Test_IntegrationTestsCommand_CreateIntegrationTestsDataCommand(t *testing.T
 	t.Setenv("WALLET_NAME", "walletTest")
 	t.Setenv("WALLET_HOMEPAGE", "https://www.test_wallet.com")
 	t.Setenv("WALLET_DEEPLINK", "test-wallet://sdp")
+	t.Setenv("CIRCLE_API_KEY", "")
+	t.Setenv("CIRCLE_USDC_WALLET_ID", "")
 
 	parentCmdMock.SetArgs([]string{
 		"create-data",
