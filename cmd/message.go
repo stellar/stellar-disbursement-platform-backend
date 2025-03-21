@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"go/types"
 
@@ -16,7 +17,7 @@ type MessageCommand struct{}
 
 type MessengerServiceInterface interface {
 	GetClient(opts message.MessengerOptions) (message.MessengerClient, error)
-	SendMessage(opts message.MessengerOptions, message message.Message) error
+	SendMessage(ctx context.Context, opts message.MessengerOptions, message message.Message) error
 }
 
 type MessengerService struct{}
@@ -25,13 +26,13 @@ func (m *MessengerService) GetClient(opts message.MessengerOptions) (message.Mes
 	return message.GetClient(opts)
 }
 
-func (m *MessengerService) SendMessage(opts message.MessengerOptions, message message.Message) error {
+func (m *MessengerService) SendMessage(ctx context.Context, opts message.MessengerOptions, message message.Message) error {
 	messengerClient, err := m.GetClient(opts)
 	if err != nil {
 		return fmt.Errorf("getting messenger client: %w", err)
 	}
 
-	return messengerClient.SendMessage(message)
+	return messengerClient.SendMessage(ctx, message)
 }
 
 func (s *MessageCommand) Command(messengerService MessengerServiceInterface) *cobra.Command {
@@ -133,7 +134,7 @@ func (s *MessageCommand) sendMessageCommand(messengerService MessengerServiceInt
 			}
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
-			err := messengerService.SendMessage(*messageOptions, msg)
+			err := messengerService.SendMessage(cmd.Context(), *messageOptions, msg)
 			if err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error sending message: %s", err.Error())
 			}

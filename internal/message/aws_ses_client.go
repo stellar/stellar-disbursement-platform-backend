@@ -32,7 +32,7 @@ func (t *awsSESClient) MessengerType() MessengerType {
 	return MessengerTypeAWSEmail
 }
 
-func (a *awsSESClient) SendMessage(message Message) error {
+func (a *awsSESClient) SendMessage(ctx context.Context, message Message) error {
 	err := message.ValidateFor(a.MessengerType())
 	if err != nil {
 		return fmt.Errorf("validating message to send an email through AWS: %w", err)
@@ -43,7 +43,7 @@ func (a *awsSESClient) SendMessage(message Message) error {
 		return fmt.Errorf("generating AWS SES email template: %w", err)
 	}
 
-	_, err = a.emailService.SendEmail(context.Background(), emailTemplate)
+	_, err = a.emailService.SendEmail(ctx, emailTemplate)
 	if err != nil {
 		return fmt.Errorf("sending AWS SES email: %w", err)
 	}

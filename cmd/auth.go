@@ -142,7 +142,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("error executing invitation message template: %s", err.Error())
 				}
 
-				err = emailMessengerClient.SendMessage(message.Message{
+				err = emailMessengerClient.SendMessage(ctx, message.Message{
 					ToEmail: email,
 					Title:   "Welcome to Stellar Disbursement Platform",
 					Body:    msgBody,

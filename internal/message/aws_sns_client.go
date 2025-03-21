@@ -28,7 +28,7 @@ func (t *awsSNSClient) MessengerType() MessengerType {
 	return MessengerTypeAWSSMS
 }
 
-func (a *awsSNSClient) SendMessage(message Message) error {
+func (a *awsSNSClient) SendMessage(ctx context.Context, message Message) error {
 	err := message.ValidateFor(a.MessengerType())
 	if err != nil {
 		return fmt.Errorf("validating message to send an SMS through AWS: %w", err)
@@ -54,7 +54,7 @@ func (a *awsSNSClient) SendMessage(message Message) error {
 		MessageAttributes: messageAttributes,
 	}
 
-	_, err = a.snsService.Publish(context.Background(), params)
+	_, err = a.snsService.Publish(ctx, params)
 	if err != nil {
 		return fmt.Errorf("sending AWS SNS SMS: %w", err)
 	}

@@ -74,7 +74,7 @@ func SendInvitationMessage(ctx context.Context, messengerClient message.Messenge
 		Title:   invitationMessageTitle,
 	}
 
-	if sendMsgErr := messengerClient.SendMessage(msg); sendMsgErr != nil {
+	if sendMsgErr := messengerClient.SendMessage(ctx, msg); sendMsgErr != nil {
 		return fmt.Errorf("sending invitation message via messenger client: %w", sendMsgErr)
 	}
 

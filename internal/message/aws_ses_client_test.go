@@ -63,7 +63,7 @@ func Test_NewAWSSESClient(t *testing.T) {
 
 func Test_AWSSES_SendMessage_messageIsInvalid(t *testing.T) {
 	var mAWS MessengerClient = &awsSESClient{}
-	err := mAWS.SendMessage(Message{})
+	err := mAWS.SendMessage(context.Background(), Message{})
 	require.EqualError(t, err, "validating message to send an email through AWS: invalid e-mail: invalid email format: email field is required")
 }
 
@@ -80,7 +80,7 @@ func Test_AWSSES_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Once()
 
 	mAWS := awsSESClient{emailService: &mAWSSES, senderID: "sender@test.com"}
-	err = mAWS.SendMessage(Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"})
+	err = mAWS.SendMessage(context.Background(), Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"})
 	require.EqualError(t, err, "sending AWS SES email: test AWS SES error")
 
 	mAWSSES.AssertExpectations(t)
@@ -99,7 +99,7 @@ func Test_AWSSES_SendMessage_success(t *testing.T) {
 		Once()
 
 	mAWS := awsSESClient{emailService: &mAWSSES, senderID: "sender@test.com"}
-	err = mAWS.SendMessage(Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"})
+	err = mAWS.SendMessage(context.Background(), Message{ToEmail: "foo@test.com", Title: "test title", Body: "foo bar"})
 	require.NoError(t, err)
 
 	mAWSSES.AssertExpectations(t)

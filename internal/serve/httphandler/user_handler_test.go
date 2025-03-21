@@ -793,7 +793,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Body:    content,
 		}
 		messengerClientMock.
-			On("SendMessage", msg).
+			On("SendMessage", mock.Anything, msg).
 			Return(errors.New("unexpected error")).
 			Once()
 
@@ -960,7 +960,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Body:    content,
 		}
 		messengerClientMock.
-			On("SendMessage", msg).
+			On("SendMessage", mock.Anything, msg).
 			Return(nil).
 			Once()
 
