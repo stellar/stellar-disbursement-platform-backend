@@ -1,6 +1,7 @@
 name: Integration Tests
 
 on:
+  pull_request: # TODO: remove this before merging the PR.
   workflow_call: # allows this workflow to be called from another workflow, like `docker_image_public_release`
 
 env:
@@ -23,9 +24,10 @@ jobs:
         platform:
           - "Stellar-phone" # Stellar distribution account where receivers are registered with their phone number
           - "Stellar-phone-FUTURENET" # Stellar distribution account where receivers are registered with their phone number
-          - "Stellar-phone-wallet" # Stellar distribution account where receivers are registered with their phone number and wallet address
+          - "Stellar-phoneWallet" # Stellar distribution account where receivers are registered with their phone number and wallet address
           - "Stellar-email" # Stellar distribution account where receivers are registered with their email
-          - "Circle-phone" # Circle distribution account where receivers are registered with their email
+          - "Circle-transfers-phone" # Circle(Transfers) distribution account where receivers are registered with their phone number
+          - "Circle-payouts-phoneWallet" # Circle(Payouts) distribution account where receivers are registered with their phone number and wallet address
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
@@ -34,7 +36,7 @@ jobs:
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "Stellar-phone-wallet"
+          - platform: "Stellar-phoneWallet"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
@@ -48,11 +50,20 @@ jobs:
             REGISTRATION_CONTACT_TYPE: "EMAIL"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "Circle-phone"
+          - platform: "Circle-transfers-phone"
             environment: "Receiver Registration - E2E Integration Tests (Circle)"
+            CIRCLE_API_TYPE: "TRANSFERS"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+          - platform: "Circle-payouts-phoneWallet"
+            environment: "Receiver Registration - E2E Integration Tests (Circle)"
+            CIRCLE_API_TYPE: "PAYOUTS"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
           - platform: "Stellar-phone-FUTURENET"
@@ -72,6 +83,7 @@ jobs:
       DISBURSED_ASSET_ISSUER: ${{ matrix.DISBURSED_ASSET_ISSUER }}
       NETWORK_PASSPHRASE: ${{ matrix.NETWORK_PASSPHRASE }}
       HORIZON_URL: ${{ matrix.HORIZON_URL }}
+      CIRCLE_API_TYPE: ${{ matrix.CIRCLE_API_TYPE || 'TRANSFERS' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
