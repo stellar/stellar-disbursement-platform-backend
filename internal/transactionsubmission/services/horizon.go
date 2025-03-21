@@ -270,6 +270,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 		return err
 	},
+		retry.Context(ctx), // Respect the context's cancellation
 		retry.Attempts(CreateAndFundAccountRetryAttempts),
 		retry.MaxDelay(1*time.Minute),
 		retry.DelayType(retry.BackOffDelay),

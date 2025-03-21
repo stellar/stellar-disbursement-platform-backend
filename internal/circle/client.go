@@ -392,6 +392,7 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 			// default is back-off delay
 			return retry.BackOffDelay(n, err, config)
 		}),
+		retry.Context(ctx), // Respect the context's cancellation
 		retry.Attempts(4),
 		retry.MaxDelay(time.Second*600),
 		retry.RetryIf(func(err error) bool {
