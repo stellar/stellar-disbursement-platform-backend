@@ -94,6 +94,7 @@ for config_name in "${options[@]}"; do
   config=("${!config_name}")
 
   echo -e "\n====> 👀 Starting e2e setup and integration test for ${config_name}"
+  export CIRCLE_API_TYPE=""
 
   # Parse and export key-value pairs
   for pair in "${config[@]}"; do
@@ -103,7 +104,7 @@ for config_name in "${options[@]}"; do
   done
 
   # Example of using the exported variables
-  DESCRIPTION="$platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
+  DESCRIPTION="$platform$CIRCLE_API_TYPE - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
 
   echo $DIVIDER
   echo "====> 👀Step 1: start preparation"
