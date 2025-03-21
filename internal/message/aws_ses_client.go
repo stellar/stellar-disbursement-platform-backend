@@ -88,31 +88,26 @@ func generateAWSEmail(message Message, sender string) (*ses.SendEmailInput, erro
 // NewAWSSESClient creates a new AWS SES client, that is used to send emails.
 func NewAWSSESClient(accessKeyID, secretAccessKey, region, senderID string) (*awsSESClient, error) {
 	accessKeyID = strings.TrimSpace(accessKeyID)
-	if accessKeyID == "" {
-		return nil, fmt.Errorf("aws accessKeyID is empty")
-	}
-
 	secretAccessKey = strings.TrimSpace(secretAccessKey)
-	if secretAccessKey == "" {
-		return nil, fmt.Errorf("aws secretAccessKey is empty")
+	region = strings.TrimSpace(region)
+
+	awsConfig := aws.Config{}
+	if accessKeyID != "" && secretAccessKey != "" && region != "" {
+		log.Debug("Using SDP custom AWS static credential configuration")
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
+		awsConfig.Region = aws.String(region)
+	} else {
+		log.Debug("Loading AWS credentials from AWS Session")
 	}
 
-	region = strings.TrimSpace(region)
-	if region == "" {
-		return nil, fmt.Errorf("aws region is empty")
+	awsSession, err := session.NewSession(&awsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("creating AWS session: %w", err)
 	}
 
 	senderID = strings.TrimSpace(senderID)
 	if err := utils.ValidateEmail(senderID); err != nil {
 		return nil, fmt.Errorf("aws SES (email) senderID is invalid: %w", err)
-	}
-
-	awsSession, err := session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials(accessKeyID, secretAccessKey, ""),
-		Region:      aws.String(region),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("creating AWS session: %w", err)
 	}
 
 	return &awsSESClient{

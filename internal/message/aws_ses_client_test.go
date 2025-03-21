@@ -28,20 +28,20 @@ func Test_NewAWSSESClient(t *testing.T) {
 	var gotAWSSESClient *awsSESClient
 	var err error
 
-	// accessKeyID cannot be empty
-	gotAWSSESClient, err = NewAWSSESClient("", "", "", "")
-	require.Nil(t, gotAWSSESClient)
-	require.EqualError(t, err, "aws accessKeyID is empty")
+	// accessKeyID can be empty
+	gotAWSSESClient, err = NewAWSSESClient("", "", "", "foo@test.com")
+	require.NoError(t, err)
+	require.NotNil(t, gotAWSSESClient)
 
-	// secretAccessKey cannot be empty
-	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "", "", "")
-	require.Nil(t, gotAWSSESClient)
-	require.EqualError(t, err, "aws secretAccessKey is empty")
+	// secretAccessKey can be empty
+	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "", "", "foo@test.com")
+	require.NoError(t, err)
+	require.NotNil(t, gotAWSSESClient)
 
-	// region cannot be empty
-	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "", "")
-	require.Nil(t, gotAWSSESClient)
-	require.EqualError(t, err, "aws region is empty")
+	// region can be empty
+	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "", "foo@test.com")
+	require.NoError(t, err)
+	require.NotNil(t, gotAWSSESClient)
 
 	// [email] type needs a valid email as a sender ID:
 	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "invalid-email")

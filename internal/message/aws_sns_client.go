@@ -60,29 +60,24 @@ func (a *awsSNSClient) SendMessage(message Message) error {
 // NewAWSSNSClient creates a new awsSNSClient, that is used to send SMS messages.
 func NewAWSSNSClient(accessKeyID, secretAccessKey, region, senderID string) (*awsSNSClient, error) {
 	accessKeyID = strings.TrimSpace(accessKeyID)
-	if accessKeyID == "" {
-		return nil, fmt.Errorf("aws accessKeyID is empty")
-	}
-
 	secretAccessKey = strings.TrimSpace(secretAccessKey)
-	if secretAccessKey == "" {
-		return nil, fmt.Errorf("aws secretAccessKey is empty")
-	}
-
 	region = strings.TrimSpace(region)
-	if region == "" {
-		return nil, fmt.Errorf("aws region is empty")
+
+	awsConfig := aws.Config{}
+	if accessKeyID != "" && secretAccessKey != "" && region != "" {
+		log.Debug("Using SDP custom AWS static credential configuration")
+		awsConfig.Credentials = credentials.NewStaticCredentials(accessKeyID, secretAccessKey, "")
+		awsConfig.Region = aws.String(region)
+	} else {
+		log.Debug("Loading AWS credentials from AWS Session")
 	}
 
-	senderID = strings.TrimSpace(senderID)
-
-	awsSession, err := session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials(accessKeyID, secretAccessKey, ""),
-		Region:      aws.String(region),
-	})
+	awsSession, err := session.NewSession(&awsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("creating AWS session: %w", err)
 	}
+
+	senderID = strings.TrimSpace(senderID)
 
 	return &awsSNSClient{
 		senderID:   senderID,
