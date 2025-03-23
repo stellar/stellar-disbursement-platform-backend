@@ -18,14 +18,14 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/httprate v0.14.1
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
-	github.com/golang-jwt/jwt/v4 v4.5.1
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/schema v1.4.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/manifoldco/promptui v0.9.0
-	github.com/nyaruka/phonenumbers v1.5.0
+	github.com/nyaruka/phonenumbers v1.6.0
 	github.com/prometheus/client_golang v1.21.1
 	github.com/rs/cors v1.11.1
 	github.com/rubenv/sql-migrate v1.7.1
@@ -37,9 +37,9 @@ require (
 	github.com/spf13/viper v1.20.0
 	github.com/stellar/go v0.0.0-20250311234916-385ac5aca1a4
 	github.com/stretchr/testify v1.10.0
-	github.com/twilio/twilio-go v1.24.0
+	github.com/twilio/twilio-go v1.24.1
 	golang.org/x/crypto v0.36.0
-	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
+	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 	golang.org/x/net v0.37.0
 )
 
@@ -89,7 +89,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	google.golang.org/protobuf v1.36.1 // indirect
+	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/tylerb/graceful.v1 v1.2.15 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
