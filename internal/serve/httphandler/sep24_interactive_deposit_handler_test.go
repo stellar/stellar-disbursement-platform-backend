@@ -19,57 +19,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 )
 
-func Test_isStaticAsset(t *testing.T) {
-	testCases := []struct {
-		name     string
-		path     string
-		expected bool
-	}{
-		{
-			name:     "root path",
-			path:     "/",
-			expected: false,
-		},
-		{
-			name:     "path without extension in root",
-			path:     "/some-page",
-			expected: false,
-		},
-		{
-			name:     "file with extension in root",
-			path:     "/main.js",
-			expected: true,
-		},
-		{
-			name:     "file with extension with leading slash",
-			path:     "/favicon.ico",
-			expected: true,
-		},
-		{
-			name:     "file with empty extension",
-			path:     "/file.",
-			expected: true,
-		},
-		{
-			name:     "path in subdirectory without extension",
-			path:     "/assets/image",
-			expected: true,
-		},
-		{
-			name:     "path in subdirectory with extension",
-			path:     "/assets/images/logo.png",
-			expected: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := isStaticAsset(tc.path)
-			assert.Equal(t, tc.expected, result)
-		})
-	}
-}
-
 func Test_serveReactApp(t *testing.T) {
 	ctx := context.Background()
 	validClaims := &anchorplatform.SEP24JWTClaims{

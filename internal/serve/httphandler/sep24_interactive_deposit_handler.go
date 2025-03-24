@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type SEP24InteractiveDepositHandler struct {
@@ -50,7 +50,7 @@ func (h SEP24InteractiveDepositHandler) ServeApp(w http.ResponseWriter, r *http.
 	}
 
 	// If it's a static asset, serve it directly.
-	if isStaticAsset(path) {
+	if utils.IsStaticAsset(path) {
 		fileServer := http.StripPrefix(pathPrefix, http.FileServer(http.FS(subFS)))
 		fileServer.ServeHTTP(w, r)
 		return
@@ -58,22 +58,6 @@ func (h SEP24InteractiveDepositHandler) ServeApp(w http.ResponseWriter, r *http.
 
 	// For all other paths, serve the SPA.
 	serveReactApp(ctx, r.URL, w, subFS)
-}
-
-// isStaticAsset determines if a path refers to a static asset.
-func isStaticAsset(path string) bool {
-	// Remove leading slash for processing
-	path = strings.TrimPrefix(path, "/")
-
-	// Check if path contains a directory separator
-	if strings.Contains(path, "/") {
-		// If it's in a subdirectory, it's a static asset
-		return true
-	}
-
-	// If it's directly under the root and has a file extension, it's a static asset
-	// Empty extensions (like "file.") are not considered valid
-	return filepath.Ext(path) != ""
 }
 
 // serveReactApp serves the React SPA by delivering the index.html file.
