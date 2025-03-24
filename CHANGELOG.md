@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Security and Dependencies
 
 - Upgrade AWS and stellar/go dependencies. [#581](https://github.com/stellar/stellar-disbursement-platform-backend/pull/581)
+- Bump github.com/golang-jwt/jwt/v4 from 4.5.1 to 4.5.2. [#588](https://github.com/stellar/stellar-disbursement-platform-backend/pull/588)
 
 ## [3.6.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.1...3.6.0))
 
