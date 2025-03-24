@@ -28,13 +28,6 @@ func NewMemo(memoType MemoType, memoValue string) (txnbuild.Memo, error) {
 	case "":
 		return nil, nil
 
-	case MemoTypeText:
-		// Memo Text (up to 28 bytes)
-		if len(memoValue) > 28 {
-			return nil, fmt.Errorf("text memo must be 28 bytes or less")
-		}
-		return txnbuild.MemoText(memoValue), nil
-
 	case MemoTypeID:
 		// Memo ID (uint64)
 		id, err := strconv.ParseUint(memoValue, 10, 64)
@@ -42,6 +35,13 @@ func NewMemo(memoType MemoType, memoValue string) (txnbuild.Memo, error) {
 			return nil, fmt.Errorf("invalid Memo ID value, must be a uint64: %w", err)
 		}
 		return txnbuild.MemoID(id), nil
+
+	case MemoTypeText:
+		// Memo Text (up to 28 bytes)
+		if len(memoValue) > 28 {
+			return nil, fmt.Errorf("text memo must be 28 bytes or less")
+		}
+		return txnbuild.MemoText(memoValue), nil
 
 	case MemoTypeHash:
 		// Memo Hash (32-byte hash)
@@ -77,4 +77,20 @@ func hexStringToBytes(hexStr string) ([]byte, error) {
 		return nil, fmt.Errorf("decoding hex string %s: %w", hexStr, err)
 	}
 	return bytes, nil
+}
+
+// ParseMemo attempts to detect and parse a string into a Stellar memo by trying all possible memo types.
+// It returns the parsed memo and detected memo type, or any error that occurred.
+func ParseMemo(memoValue string) (txnbuild.Memo, MemoType, error) {
+	if memoValue == "" {
+		return nil, "", nil
+	}
+
+	for _, memoType := range []MemoType{MemoTypeID, MemoTypeText, MemoTypeHash} {
+		if memo, err := NewMemo(memoType, memoValue); err == nil {
+			return memo, memoType, nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("could not parse value %q as any valid memo type", memoValue)
 }

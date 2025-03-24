@@ -10,6 +10,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type DisbursementInstruction struct {
@@ -20,6 +21,7 @@ type DisbursementInstruction struct {
 	VerificationValue string `csv:"verification"`
 	ExternalPaymentId string `csv:"paymentID"`
 	WalletAddress     string `csv:"walletAddress"`
+	WalletAddressMemo string `csv:"walletAddressMemo"`
 }
 
 func (di *DisbursementInstruction) Contact() (string, error) {
@@ -144,6 +146,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.D
 	return nil
 }
 
+// registerSuppliedWallets registers the supplied wallets for the given instructions.
 func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Context, dbTx db.DBTransaction, instructions []*DisbursementInstruction, receiversByIDMap map[string]*Receiver, receiverIDToReceiverWalletIDMap map[string]string) error {
 	// Construct a map of receiverWalletID to receiverWallet
 	receiverWalletsByIDMap, err := di.getReceiverWalletsByIDMap(ctx, dbTx, maps.Values(receiverIDToReceiverWalletIDMap))
@@ -175,6 +178,14 @@ func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Conte
 		receiverWalletUpdate := ReceiverWalletUpdate{
 			Status:         RegisteredReceiversWalletStatus,
 			StellarAddress: instruction.WalletAddress,
+		}
+		if instruction.WalletAddressMemo != "" {
+			_, memoType, err := schema.ParseMemo(instruction.WalletAddressMemo)
+			if err != nil {
+				return fmt.Errorf("parsing memo %s: %w", instruction.WalletAddressMemo, err)
+			}
+			receiverWalletUpdate.StellarMemo = &instruction.WalletAddressMemo
+			receiverWalletUpdate.StellarMemoType = &memoType
 		}
 		if updateErr := di.receiverWalletModel.Update(ctx, receiverWalletID, receiverWalletUpdate, dbTx); updateErr != nil {
 			return fmt.Errorf("marking receiver wallet as registered: %w", updateErr)

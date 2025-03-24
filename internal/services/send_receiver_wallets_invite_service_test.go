@@ -1463,6 +1463,21 @@ func Test_WalletDeepLink_TomlFileDomain(t *testing.T) {
 			wantResult: "test.com",
 			wantErr:    nil,
 		},
+		{
+			link:       "https://test.com/foo",
+			wantResult: "test.com",
+			wantErr:    nil,
+		},
+		{
+			link:       "https://test.com:8000",
+			wantResult: "test.com:8000",
+			wantErr:    nil,
+		},
+		{
+			link:       "https://test.com:8000/foo",
+			wantResult: "test.com:8000",
+			wantErr:    nil,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1575,6 +1590,28 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 			},
 			wantResult: "wallet://sdp?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&custom=true&domain=foo.bar&name=Foo+Bar+Org",
+		},
+		{
+			name: "🎉 successful for deeplink with regular URL",
+			walletDeepLink: WalletDeepLink{
+				DeepLink:         "https://test.com",
+				TenantBaseURL:    "foo.bar",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "FOO",
+				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			},
+			wantResult: "https://test.com?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar&name=Foo+Bar+Org",
+		},
+		{
+			name: "🎉 successful for tenant base URL that contains a port",
+			walletDeepLink: WalletDeepLink{
+				DeepLink:         "https://test.com",
+				TenantBaseURL:    "http://foo.bar:8000",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "FOO",
+				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			},
+			wantResult: "https://test.com?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar%3A8000&name=Foo+Bar+Org",
 		},
 	}
 

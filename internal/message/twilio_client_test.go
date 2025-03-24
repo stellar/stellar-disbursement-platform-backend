@@ -1,6 +1,7 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -62,7 +63,7 @@ func Test_Twilio_messengerType(t *testing.T) {
 
 func Test_Twilio_SendMessage_messageIsInvalid(t *testing.T) {
 	var mTwilio MessengerClient = &twilioClient{}
-	err := mTwilio.SendMessage(Message{})
+	err := mTwilio.SendMessage(context.Background(), Message{})
 	require.EqualError(t, err, "validating SMS message: invalid message: phone number cannot be empty")
 }
 
@@ -82,7 +83,7 @@ func Test_Twilio_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Once()
 
 	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
-	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14155111111", Body: "foo bar"})
+	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14155111111", Body: "foo bar"})
 	require.EqualError(t, err, "sending Twilio SMS: test twilio error")
 
 	mTwilioApi.AssertExpectations(t)
@@ -112,7 +113,7 @@ func Test_Twilio_SendMessage_doesntReturnErrorButResponseContainsErrorEmbedded(t
 		Once()
 
 	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
-	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
+	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
 	require.EqualError(t, err, `sending Twilio SMS responded an error {code: "12345", message: "Foo bar error message"}`)
 }
 
@@ -132,7 +133,7 @@ func Test_Twilio_SendMessage_success(t *testing.T) {
 		Once()
 
 	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
-	err := mTwilio.SendMessage(Message{ToPhoneNumber: "+14153333333", Body: "foo bar"})
+	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14153333333", Body: "foo bar"})
 	require.NoError(t, err)
 
 	mTwilioApi.AssertExpectations(t)

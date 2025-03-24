@@ -301,7 +301,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
 
 	messengerClientMock := message.MessengerClientMock{}
-	messengerClientMock.On("SendMessage", mock.Anything).Return(nil)
+	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil)
 
 	messageDispatcherMock := message.NewMockMessageDispatcher(t)
 	messageDispatcherMock.

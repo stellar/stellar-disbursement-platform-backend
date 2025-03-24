@@ -14,7 +14,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -131,13 +130,17 @@ func TenantRoutingConfigOptions(opts *TenantRoutingOptions) []*config.ConfigOpti
 			ConfigKey:   &opts.All,
 			Required:    false,
 		},
-		{
-			Name:      "tenant-id",
-			Usage:     "The tenant ID where the command will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
-			OptType:   types.String,
-			ConfigKey: &opts.TenantID,
-			Required:  false,
-		},
+		SingleTenantRoutingConfigOptions(opts),
+	}
+}
+
+func SingleTenantRoutingConfigOptions(opts *TenantRoutingOptions) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:      "tenant-id",
+		Usage:     "The tenant ID where the command will be applied.",
+		OptType:   types.String,
+		ConfigKey: &opts.TenantID,
+		Required:  false,
 	}
 }
 
@@ -295,7 +298,7 @@ func SchedulerConfigOptions(opts *scheduler.SchedulerOptions) []*config.ConfigOp
 	return []*config.ConfigOption{
 		{
 			Name:        "scheduler-payment-job-seconds",
-			Usage:       fmt.Sprintf("The interval in seconds for the payment jobs that synchronize transactions between SDP and TSS. Must be greater than %d seconds.", jobs.DefaultMinimumJobIntervalSeconds),
+			Usage:       fmt.Sprintf("The interval in seconds for the payment jobs that synchronize transactions between SDP and TSS. Must be greater than %d seconds.", 5),
 			OptType:     types.Int,
 			ConfigKey:   &opts.PaymentJobIntervalSeconds,
 			FlagDefault: 30,
@@ -303,7 +306,7 @@ func SchedulerConfigOptions(opts *scheduler.SchedulerOptions) []*config.ConfigOp
 		},
 		{
 			Name:        "scheduler-receiver-invitation-job-seconds",
-			Usage:       fmt.Sprintf("The interval in seconds for the receiver invitation job that sends invitations to new receivers. Must be greater than %d seconds.", jobs.DefaultMinimumJobIntervalSeconds),
+			Usage:       fmt.Sprintf("The interval in seconds for the receiver invitation job that sends invitations to new receivers. Must be greater than %d seconds.", 5),
 			OptType:     types.Int,
 			ConfigKey:   &opts.ReceiverInvitationJobIntervalSeconds,
 			FlagDefault: 30,

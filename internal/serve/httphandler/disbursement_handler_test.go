@@ -942,6 +942,13 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		Wallet: wallet,
 	})
 
+	phoneWalletDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
+		Name:                    "disbursement with phone and wallet",
+		Asset:                   asset,
+		Wallet:                  wallet,
+		RegistrationContactType: data.RegistrationContactTypePhoneAndWalletAddress,
+	})
+
 	emailDraftDisbursement := data.CreateDraftDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, data.Disbursement{
 		Name:                    "disbursement with emails",
 		Asset:                   asset,
@@ -971,7 +978,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		})
 	}
 
-	testCases := []struct {
+	type TestCase struct {
 		name               string
 		disbursementID     string
 		multipartFieldName string
@@ -979,9 +986,10 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		csvRecords         [][]string
 		expectedStatus     int
 		expectedMessage    string
-	}{
+	}
+	testCases := []TestCase{
 		{
-			name:           "valid input",
+			name:           fmt.Sprintf("🟢 valid input [%s]", data.RegistrationContactTypePhone),
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -991,7 +999,37 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "File uploaded successfully",
 		},
 		{
-			name:           "valid input with BOM",
+			name:           fmt.Sprintf("🟢 valid input [%s]", data.RegistrationContactTypePhoneAndWalletAddress),
+			disbursementID: phoneWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "walletAddress", "walletAddressMemo", "id", "amount"},
+				{"+380445555555", "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH", "valid-memo-text", "123456789", "100.5"},
+			},
+			expectedStatus:  http.StatusOK,
+			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           fmt.Sprintf("🟢 valid input [%s]", data.RegistrationContactTypeEmail),
+			disbursementID: emailDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"email", "id", "amount", "verification"},
+				{"foobar@test.com", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusOK,
+			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           fmt.Sprintf("🟢 valid input [%s]", data.RegistrationContactTypeEmailAndWalletAddress),
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"email", "walletAddress", "walletAddressMemo", "id", "amount"},
+				{"foobar@test.com", "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH", "123456789", "123456789", "100.5"},
+			},
+			expectedStatus:  http.StatusOK,
+			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           "🟢 valid input with BOM",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"\xef\xbb\xbf" + "phone", "id", "amount", "verification"},
@@ -1001,7 +1039,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "File uploaded successfully",
 		},
 		{
-			name:           ".bat file fails",
+			name:           "🔴 .bat is rejected",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -1012,7 +1050,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "the file extension should be .csv",
 		},
 		{
-			name:           ".sh file fails",
+			name:           "🔴 .sh file is rejected",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -1023,7 +1061,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "the file extension should be .csv",
 		},
 		{
-			name:           ".bash file fails",
+			name:           "🔴 .bash file is rejected",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -1034,7 +1072,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "the file extension should be .csv",
 		},
 		{
-			name:           ".csv file with transversal path ..\\.. fails",
+			name:           "🔴 .csv file with transversal path ..\\.. is rejected",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -1045,7 +1083,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "file name contains invalid traversal pattern",
 		},
 		{
-			name:           "invalid date of birth",
+			name:           "🔴 invalid date of birth",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -1055,7 +1093,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "invalid date of birth format. Correct format: 1990-01-30",
 		},
 		{
-			name:           "invalid phone number",
+			name:           "🔴 invalid phone number",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -1065,32 +1103,32 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "invalid phone format. Correct format: +380445555555",
 		},
 		{
-			name:            "invalid disbursement id",
+			name:            "🔴 invalid disbursement id",
 			disbursementID:  "invalid",
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "disbursement ID is invalid",
 		},
 		{
-			name:               "invalid input",
+			name:               "🔴 invalid input",
 			disbursementID:     phoneDraftDisbursement.ID,
 			multipartFieldName: "instructions",
 			expectedStatus:     http.StatusBadRequest,
 			expectedMessage:    "could not parse file",
 		},
 		{
-			name:            "disbursement not in draft/ready status",
+			name:            "🔴 disbursement not in draft/ready status",
 			disbursementID:  startedDisbursement.ID,
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "disbursement is not in draft or ready status",
 		},
 		{
-			name:            "disbursement not in draft/ready state",
+			name:            "🔴 disbursement not in draft/ready state",
 			disbursementID:  startedDisbursement.ID,
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "disbursement is not in draft or ready status",
 		},
 		{
-			name:           "no instructions found in file",
+			name:           "🔴 no instructions found in file",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "id", "amount", "verification"},
@@ -1099,7 +1137,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "could not parse csv file",
 		},
 		{
-			name:           "headers invalid - email column missing for email contact type",
+			name:           "🔴 columns invalid - email column missing for email contact type",
 			disbursementID: emailDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"id", "amount", "verification"},
@@ -1111,7 +1149,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				data.RegistrationContactTypeEmail),
 		},
 		{
-			name:           "columns invalid - email column not allowed for phone contact type",
+			name:           "🔴 columns invalid - email column not allowed for phone contact type",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "email", "id", "amount", "verification"},
@@ -1123,7 +1161,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				data.RegistrationContactTypePhone),
 		},
 		{
-			name:           "columns invalid - phone column not allowed for email contact type",
+			name:           "🔴 columns invalid - phone column not allowed for email contact type",
 			disbursementID: emailDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "email", "id", "amount", "verification"},
@@ -1135,7 +1173,19 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				data.RegistrationContactTypeEmail),
 		},
 		{
-			name:           "columns invalid - wallet column missing for email-wallet contact type",
+			name:           "🔴 columns invalid - walletAddressMemo column not allowed for email contact type",
+			disbursementID: emailDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"walletAddressMemo", "email", "id", "amount", "verification"},
+				{"123456789", "foobar@test.com", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: walletAddressMemo column is not allowed for this registration contact type",
+				data.RegistrationContactTypeEmail),
+		},
+		{
+			name:           "🔴 columns invalid - wallet column missing for email-wallet contact type",
 			disbursementID: emailWalletDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"email", "id", "amount"},
@@ -1147,7 +1197,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				data.RegistrationContactTypeEmailAndWalletAddress),
 		},
 		{
-			name:           "columns invalid - verification column not allowed for wallet contact type",
+			name:           "🔴 columns invalid - verification column not allowed for wallet contact type",
 			disbursementID: emailWalletDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"walletAddress", "email", "id", "amount", "verification"},
@@ -1159,7 +1209,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				data.RegistrationContactTypeEmailAndWalletAddress),
 		},
 		{
-			name:           "instructions invalid - walletAddress is invalid",
+			name:           "🔴 instructions invalid - walletAddress is invalid",
 			disbursementID: emailWalletDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"walletAddress", "email", "id", "amount"},
@@ -1169,7 +1219,17 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "invalid wallet address",
 		},
 		{
-			name:            "max instructions exceeded",
+			name:           "🔴 instructions invalid - walletAddressMemo is invalid",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"walletAddress", "walletAddressMemo", "email", "id", "amount"},
+				{"GDBILPMQKKR3UKJDVZO6KZPJ4YP4HGAW67EHNMBEZ4DILI2YVFUI43ST", "this-string-is-not-a-valid-memo-because-it", "foobar@test.com", "123456789", "100.5"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "invalid wallet address memo",
+		},
+		{
+			name:            "🔴 max instructions exceeded",
 			disbursementID:  phoneDraftDisbursement.ID,
 			csvRecords:      maxCSVRecords,
 			expectedStatus:  http.StatusBadRequest,
@@ -1192,8 +1252,9 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			router.ServeHTTP(rr, req)
 
 			// Check the response status and message
-			assert.Equal(t, tc.expectedStatus, rr.Code)
-			assert.Contains(t, rr.Body.String(), tc.expectedMessage)
+			bodyStr := rr.Body.String()
+			assert.Equal(t, tc.expectedStatus, rr.Code, bodyStr)
+			assert.Contains(t, bodyStr, tc.expectedMessage)
 		})
 
 		authManagerMock.AssertExpectations(t)

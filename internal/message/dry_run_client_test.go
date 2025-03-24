@@ -1,6 +1,7 @@
 package message
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -27,7 +28,7 @@ func Test_DryRunClient(t *testing.T) {
 		Title:         "My Message Title",
 		Body:          "My email content",
 	}
-	err = cc.SendMessage(msg)
+	err = cc.SendMessage(context.Background(), msg)
 	require.NoError(t, err)
 
 	w.Close()
@@ -59,7 +60,7 @@ Content: My email content
 		Title:         "My Message Title",
 		Body:          "My SMS content",
 	}
-	err = cc.SendMessage(msg)
+	err = cc.SendMessage(context.Background(), msg)
 	require.NoError(t, err)
 
 	w.Close()
