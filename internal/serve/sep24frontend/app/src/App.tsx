@@ -26,7 +26,6 @@ import { localStorageSavedLanguage } from "@/helpers/localStorageSavedLanguage";
 import { useStore } from "@/store/useStore";
 
 // TODO: handle API error translations
-// TODO: registered user view?
 
 const App: FC = () => {
   const searchParams = getSearchParams();
