@@ -23,6 +23,7 @@ export type Sep24DepositInitResponse = {
   organization_logo?: string;
   truncated_contact_info?: string;
   is_recaptcha_disabled?: boolean;
+  recaptcha_site_key?: string;
 };
 
 export type Sep24DepositOtpResponse = {

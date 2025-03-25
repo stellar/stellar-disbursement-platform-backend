@@ -22,7 +22,7 @@ import { ExpandBox } from "@/components/ExpandBox";
 
 import { getSearchParams } from "@/helpers/getSearchParams";
 import { renderApiErrorMessage } from "@/helpers/renderApiErrorMessage";
-import { RECAPTCHA_SITE_KEY, Routes } from "@/config/settings";
+import { Routes } from "@/config/settings";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 
 import { useStore } from "@/store/useStore";
@@ -31,7 +31,7 @@ import { VerificationMethod } from "@/types/types";
 // TODO: persist entered values
 
 export const SelectVerificationMethod: FC = () => {
-  const { jwtToken, language, updateUser } = useStore();
+  const { jwtToken, language, updateUser, org } = useStore();
   const { t } = useTranslation();
 
   const navigate = useNavigate();
@@ -210,14 +210,16 @@ export const SelectVerificationMethod: FC = () => {
         </div>
 
         {/* TODO: match recaptcha theme */}
-        <ReCaptcha
-          ref={reCaptchaRef}
-          size="normal"
-          sitekey={RECAPTCHA_SITE_KEY}
-          onChange={(token) => {
-            setReCaptchaToken(token);
-          }}
-        />
+        {org.recaptcha_site_key && (
+          <ReCaptcha
+            ref={reCaptchaRef}
+            size="normal"
+            sitekey={org.recaptcha_site_key}
+            onChange={(token) => {
+              setReCaptchaToken(token);
+            }}
+          />
+        )}
       </Box>
     );
   };

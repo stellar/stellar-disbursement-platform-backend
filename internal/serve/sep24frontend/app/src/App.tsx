@@ -74,6 +74,7 @@ const App: FC = () => {
         organization_name,
         is_registered,
         is_recaptcha_disabled,
+        recaptcha_site_key,
       } = orgData;
 
       updateOrg({
@@ -81,6 +82,7 @@ const App: FC = () => {
         organization_name,
         is_registered,
         is_recaptcha_disabled: Boolean(is_recaptcha_disabled),
+        recaptcha_site_key,
       });
     }
   }, [orgData, updateOrg]);

@@ -11,6 +11,7 @@ export enum Routes {
 
 export const SUPPORTED_LANGUAGES = ["en", "uk"];
 
-// Env
-export const SDP_API_ENDPOINT = import.meta.env.VITE_SDP_API_ENDPOINT || "";
-export const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";
+// Env for local development
+export const SDP_API_ENDPOINT = import.meta.env.DEV
+  ? import.meta.env.VITE_SDP_API_ENDPOINT || ""
+  : "";

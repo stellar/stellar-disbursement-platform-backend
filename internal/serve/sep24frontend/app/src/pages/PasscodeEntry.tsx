@@ -16,7 +16,7 @@ import { Box } from "@/components/Box";
 import { ContentLayout } from "@/components/ContentLayout";
 
 import { useStore } from "@/store/useStore";
-import { RECAPTCHA_SITE_KEY, Routes } from "@/config/settings";
+import { Routes } from "@/config/settings";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
 
@@ -25,7 +25,7 @@ import { useSep24DepositVerification } from "@/query/useSep24DepositVerification
 export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user, jwtToken } = useStore();
+  const { user, jwtToken, org } = useStore();
 
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
@@ -304,18 +304,20 @@ export const PasscodeEntry: FC = () => {
 
           {renderVerificationInput()}
 
-          <ReCaptcha
-            ref={reCaptchaRef}
-            size="normal"
-            sitekey={RECAPTCHA_SITE_KEY}
-            onChange={(token) => {
-              setReCaptchaToken(token);
+          {org.recaptcha_site_key && (
+            <ReCaptcha
+              ref={reCaptchaRef}
+              size="normal"
+              sitekey={org.recaptcha_site_key}
+              onChange={(token) => {
+                setReCaptchaToken(token);
 
-              if (viewMessage) {
-                setViewMessage(null);
-              }
-            }}
-          />
+                if (viewMessage) {
+                  setViewMessage(null);
+                }
+              }}
+            />
+          )}
         </Box>
       </Box>
     </ContentLayout>
