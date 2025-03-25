@@ -7,6 +7,7 @@ export enum Routes {
   START = "/start",
   ENTER_PASSCODE = "/enter-passcode",
   SUCCESS = "/success",
+  ALREADY_REGISTERED = "/already-registered",
 }
 
 export const SUPPORTED_LANGUAGES = ["en", "uk"];

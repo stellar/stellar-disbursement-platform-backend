@@ -25,6 +25,11 @@
     "message": "Your account was verified using the following contact information: {{contactInfo}}.",
     "goToHomeMessage": "Click the button below to be taken back to home and receive your disbursement."
   },
+  "alreadyRegistered": {
+    "title": "You are already registered!",
+    "message": "Your account was already verified using the following contact information: {{contactInfo}}.",
+    "goToHomeMessage": "Click the button below to be taken back to home and receive your disbursement."
+  },
   "footer": {
     "privacyMessage": "Your data is processed by {{orgName}} in accordance with their <Link href=''>Privacy Policy</Link>"
   },

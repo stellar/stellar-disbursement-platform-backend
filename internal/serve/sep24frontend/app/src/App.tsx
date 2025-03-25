@@ -11,7 +11,7 @@ import i18next from "i18next";
 import { SelectVerificationMethod } from "@/pages/SelectVerificationMethod";
 import { PasscodeEntry } from "@/pages/PasscodeEntry";
 import { Success } from "@/pages/Success";
-
+import { AlreadyRegistered } from "@/pages/AlreadyRegistered";
 import { Box } from "@/components/Box";
 
 import {
@@ -121,6 +121,10 @@ const App: FC = () => {
           <Route path={Routes.START} element={<SelectVerificationMethod />} />
           <Route path={Routes.ENTER_PASSCODE} element={<PasscodeEntry />} />
           <Route path={Routes.SUCCESS} element={<Success />} />
+          <Route
+            path={Routes.ALREADY_REGISTERED}
+            element={<AlreadyRegistered />}
+          />
           {/* Add a catch-all route that redirects to the start page */}
           <Route path="*" element={<SelectVerificationMethod />} />
         </RouterRoutes>
