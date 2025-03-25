@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { SDP_API_ENDPOINT } from "@/config/settings";
 import { ApiError } from "@/types/types";
 
 /**
@@ -47,7 +48,7 @@ export const useSep24DepositVerification = () => {
 
       try {
         const response = await fetch(
-          `/sep24-interactive-deposit/verification`,
+          `${SDP_API_ENDPOINT}/sep24-interactive-deposit/verification`,
           {
             method: "POST",
             headers: {

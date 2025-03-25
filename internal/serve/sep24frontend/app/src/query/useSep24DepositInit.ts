@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { SDP_API_ENDPOINT } from "@/config/settings";
 import { Sep24DepositInitResponse } from "@/types/types";
 
 /**
@@ -14,12 +15,15 @@ export const useSep24DepositInit = (token: string | null) => {
       }
 
       try {
-        const response = await fetch(`/sep24-interactive-deposit/init`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(
+          `${SDP_API_ENDPOINT}/sep24-interactive-deposit/init`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         const responseJson = await response.json();
 

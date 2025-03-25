@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { SDP_API_ENDPOINT } from "@/config/settings";
 import { ApiError, Sep24DepositOtpResponse } from "@/types/types";
 
 /**
@@ -37,14 +38,17 @@ export const useSep24DepositOtp = () => {
       };
 
       try {
-        const response = await fetch(`/sep24-interactive-deposit/otp`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        });
+        const response = await fetch(
+          `${SDP_API_ENDPOINT}/sep24-interactive-deposit/otp`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+          }
+        );
 
         const responseJson = await response.json();
 

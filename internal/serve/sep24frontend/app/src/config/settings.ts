@@ -10,3 +10,8 @@ export enum Routes {
 }
 
 export const SUPPORTED_LANGUAGES = ["en", "uk"];
+
+// Env for local development
+export const SDP_API_ENDPOINT = import.meta.env.DEV
+  ? import.meta.env.VITE_SDP_API_ENDPOINT || ""
+  : "";
