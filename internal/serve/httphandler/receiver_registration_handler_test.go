@@ -113,7 +113,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			"organization_name": "MyCustomAid",
 			"organization_logo": "%s/organization/logo",
 			"is_registered": false,
-			"is_recaptcha_disabled": true
+			"is_recaptcha_disabled": true,
+			"recaptcha_site_key": "reCAPTCHASiteKey"
 		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
@@ -157,7 +158,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			"organization_logo": "%s/organization/logo",
 			"truncated_contact_info": "`+truncatedContactInfo+`",
 			"is_registered": true,
-			"is_recaptcha_disabled": true
+			"is_recaptcha_disabled": true,
+			"recaptcha_site_key": "reCAPTCHASiteKey"
 		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
@@ -186,7 +188,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			"organization_name": "MyCustomAid",
 			"organization_logo": "%s/organization/logo",
 			"is_registered": false,
-			"is_recaptcha_disabled": true
+			"is_recaptcha_disabled": true,
+			"recaptcha_site_key": "reCAPTCHASiteKey"
 		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
