@@ -11,7 +11,9 @@ import { useStore } from "@/store/useStore";
 export const AlreadyRegistered: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user } = useStore();
+  const {
+    org: { truncated_contact_info },
+  } = useStore();
 
   return (
     <ContentLayout
@@ -36,7 +38,7 @@ export const AlreadyRegistered: FC = () => {
           <Trans
             i18nKey="alreadyRegistered.message"
             values={{
-              contactInfo: user.email || user.phone_number,
+              contactInfo: truncated_contact_info,
             }}
           />
         </Text>

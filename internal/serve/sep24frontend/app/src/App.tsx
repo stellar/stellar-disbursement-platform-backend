@@ -72,6 +72,7 @@ const App: FC = () => {
         privacy_policy_link,
         organization_name,
         is_registered,
+        truncated_contact_info,
         is_recaptcha_disabled,
         recaptcha_site_key,
       } = orgData;
@@ -80,6 +81,7 @@ const App: FC = () => {
         privacy_policy_link,
         organization_name,
         is_registered,
+        truncated_contact_info,
         is_recaptcha_disabled: Boolean(is_recaptcha_disabled),
         recaptcha_site_key,
       });
