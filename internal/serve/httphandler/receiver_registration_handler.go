@@ -29,7 +29,7 @@ type ReceiverRegistrationResponse struct {
 	TruncatedContactInfo string `json:"truncated_contact_info,omitempty"`
 	IsRegistered         bool   `json:"is_registered"`
 	IsRecaptchaDisabled  bool   `json:"is_recaptcha_disabled"`
-	ReCAPTCHASiteKey     string `json:"recaptcha_site_key"`
+	ReCAPTCHASiteKey     string `json:"recaptcha_site_key,omitempty"`
 }
 
 // ServeHTTP will serve the SEP-24 deposit page needed to register users.

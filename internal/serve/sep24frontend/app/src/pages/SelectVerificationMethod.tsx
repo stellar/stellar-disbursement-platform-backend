@@ -50,6 +50,13 @@ export const SelectVerificationMethod: FC = () => {
   const reCaptchaRef = useRef<ReCaptcha>(null);
   const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
 
+  // Redirect to already registered page if user is registered
+  useEffect(() => {
+    if (org.is_registered) {
+      navigate({ pathname: Routes.ALREADY_REGISTERED });
+    }
+  }, [org.is_registered, navigate]);
+
   const {
     data: otpData,
     error: otpError,

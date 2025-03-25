@@ -11,7 +11,7 @@ import i18next from "i18next";
 import { SelectVerificationMethod } from "@/pages/SelectVerificationMethod";
 import { PasscodeEntry } from "@/pages/PasscodeEntry";
 import { Success } from "@/pages/Success";
-
+import { AlreadyRegistered } from "@/pages/AlreadyRegistered";
 import { Box } from "@/components/Box";
 
 import {
@@ -26,7 +26,6 @@ import { localStorageSavedLanguage } from "@/helpers/localStorageSavedLanguage";
 import { useStore } from "@/store/useStore";
 
 // TODO: handle API error translations
-// TODO: registered user view?
 
 const App: FC = () => {
   const searchParams = getSearchParams();
@@ -73,6 +72,7 @@ const App: FC = () => {
         privacy_policy_link,
         organization_name,
         is_registered,
+        truncated_contact_info,
         is_recaptcha_disabled,
         recaptcha_site_key,
       } = orgData;
@@ -81,6 +81,7 @@ const App: FC = () => {
         privacy_policy_link,
         organization_name,
         is_registered,
+        truncated_contact_info,
         is_recaptcha_disabled: Boolean(is_recaptcha_disabled),
         recaptcha_site_key,
       });
@@ -121,6 +122,10 @@ const App: FC = () => {
           <Route path={Routes.START} element={<SelectVerificationMethod />} />
           <Route path={Routes.ENTER_PASSCODE} element={<PasscodeEntry />} />
           <Route path={Routes.SUCCESS} element={<Success />} />
+          <Route
+            path={Routes.ALREADY_REGISTERED}
+            element={<AlreadyRegistered />}
+          />
           {/* Add a catch-all route that redirects to the start page */}
           <Route path="*" element={<SelectVerificationMethod />} />
         </RouterRoutes>
