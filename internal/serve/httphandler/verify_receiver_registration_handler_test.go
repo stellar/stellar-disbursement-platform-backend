@@ -94,7 +94,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 			contextSep24Claims:         sep24JWTClaims,
 			requestBody:                `{"reCAPTCHA_token": "token"}`,
 			isRecaptchaValidFnResponse: []interface{}{false, nil},
-			wantHTTPErr:                httperror.BadRequest("", nil, nil),
+			wantHTTPErr:                httperror.BadRequest("reCAPTCHA token is invalid", nil, nil),
 		},
 		{
 			name:               "returns a 400 response if a body field is invalid",
@@ -837,7 +837,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, readRespErr := io.ReadAll(resp.Body)
 		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+		assert.JSONEq(t, `{"error": "Not authorized.", "error_code": "401_0"}`, string(respBody))
 
 		// validate logs
 		require.Contains(t, buf.String(), "validating request in VerifyReceiverRegistrationHandler: no SEP-24 claims found in the request context")
@@ -872,7 +872,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, readRespErr := io.ReadAll(resp.Body)
 		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_2"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -912,7 +912,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, readRespErr := io.ReadAll(resp.Body)
 		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_2"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -968,7 +968,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		expectedError := "the number of attempts to confirm the verification value exceeded the max attempts"
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, expectedError)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_3"}`, expectedError)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -1014,7 +1014,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_2"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -1077,7 +1077,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		wantBody := `{"error": "An internal error occurred while processing this request."}`
+		wantBody := `{"error": "An internal error occurred while processing this request.", "error_code": "500_0"}`
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs

@@ -53,7 +53,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+		assert.JSONEq(t, `{"error":"Not authorized.", "error_code":"401_0"}`, string(respBody))
 	})
 
 	t.Run("returns 401 - Unauthorized if the token is in the request context but it's not valid", func(t *testing.T) {
@@ -70,7 +70,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+		assert.JSONEq(t, `{"error":"Not authorized.", "error_code":"401_0"}`, string(respBody))
 	})
 
 	ctx := context.Background()
