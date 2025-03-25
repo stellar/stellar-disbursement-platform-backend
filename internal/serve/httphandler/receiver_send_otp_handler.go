@@ -117,6 +117,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 	// Ensure XOR(PhoneNumber, Email)
 	if v := receiverSendOTPRequest.validateContactInfo(); v.HasErrors() {
+		// TODO: how to manage these extras?
 		httperror.BadRequest("", nil, v.Errors).WithErrorCode(ErrorCode400_0).Render(w)
 		return
 	}
