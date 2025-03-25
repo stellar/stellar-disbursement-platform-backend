@@ -1,16 +1,13 @@
 import { FC } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { Button, Heading, Text } from "@stellar/design-system";
 
 import { Box } from "@/components/Box";
 import { ContentLayout } from "@/components/ContentLayout";
-import { Routes } from "@/config/settings";
 import { useStore } from "@/store/useStore";
 
 export const AlreadyRegistered: FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const {
     org: { truncated_contact_info },
   } = useStore();
@@ -22,7 +19,10 @@ export const AlreadyRegistered: FC = () => {
           size="lg"
           variant="secondary"
           onClick={() => {
-            navigate(Routes.START);
+            window.close();
+
+            // Purpose: to let other windows know that this window has been closed
+            postMessage("close");
           }}
         >
           {t("generic.goToHome")}
