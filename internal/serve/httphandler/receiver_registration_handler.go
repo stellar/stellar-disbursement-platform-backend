@@ -29,6 +29,7 @@ type ReceiverRegistrationResponse struct {
 	TruncatedContactInfo string `json:"truncated_contact_info,omitempty"`
 	IsRegistered         bool   `json:"is_registered"`
 	IsRecaptchaDisabled  bool   `json:"is_recaptcha_disabled"`
+	ReCAPTCHASiteKey     string `json:"recaptcha_site_key"`
 }
 
 // ServeHTTP will serve the SEP-24 deposit page needed to register users.
@@ -78,6 +79,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		OrganizationName:    organization.Name,
 		OrganizationLogo:    logoURL,
 		IsRecaptchaDisabled: h.ReCAPTCHADisabled,
+		ReCAPTCHASiteKey:    h.ReCAPTCHASiteKey,
 	}
 
 	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.SEP10StellarMemo(), sep24Claims.ClientDomain())
