@@ -19,6 +19,7 @@ type StoreOrg = {
   organization_name: string;
   is_registered: boolean;
   is_recaptcha_disabled: boolean;
+  recaptcha_site_key?: string;
 };
 
 type StoreUser = {

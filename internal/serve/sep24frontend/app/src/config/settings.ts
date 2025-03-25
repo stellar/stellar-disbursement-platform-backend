@@ -10,6 +10,3 @@ export enum Routes {
 }
 
 export const SUPPORTED_LANGUAGES = ["en", "uk"];
-
-// Env
-export const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";
