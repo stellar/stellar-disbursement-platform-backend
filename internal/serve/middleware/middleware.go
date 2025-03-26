@@ -50,7 +50,7 @@ func RecoverHandler(next http.Handler) http.Handler {
 
 			ctx := req.Context()
 			log.Ctx(ctx).WithStack(err).Error(err)
-			httperror.InternalError(ctx, "", err, nil).Render(rw)
+			httperror.InternalError(ctx, "", err, nil).WithErrorCode(httperror.Code500_0).Render(rw)
 		}()
 
 		next.ServeHTTP(rw, req)

@@ -1,0 +1,64 @@
+{
+  "selectVerification": {
+    "title": "Select Verification Method",
+    "message": "Select how you received your invitation to claim funds.",
+    "warning": "Attention, it needs to match the form of contact where you received your invitation to receive this payment.",
+    "phoneErrorMessage": "Entered phone number is not valid",
+    "emailErrorMessage": "Entered email is not valid",
+    "missingAuthToken": "Authentication token is missing. Please make sure your URL is correct."
+  },
+  "enterPasscode": {
+    "title": "Enter Passcode",
+    "message": "If you are pre-approved, you will receive a one-time passcode, enter it below to continue.",
+    "messageNoOtp": "If you did not receive an OTP, it is likely because you used a phone number or email not registered with your organization. Please check the value you entered.",
+    "warning": "Do not share your OTP or verification data with anyone. People who ask for this information could be trying to access your account.",
+    "passcode": "Passcode",
+    "verDateOfBirth": "Date of Birth",
+    "verYearMonth": "Date of Birth (Year & Month only)",
+    "verNationalIdNumber": "National ID Number",
+    "verPin": "PIN",
+    "resendOtpSuccessTitle": "New OTP sent",
+    "resendOtpSuccessMessage": "You will receive a new one-time passcode."
+  },
+  "success": {
+    "title": "Your information has been successfully verified!",
+    "message": "Your account was verified using the following contact information: {{contactInfo}}.",
+    "goToHomeMessage": "Click the button below to be taken back to home and receive your disbursement."
+  },
+  "alreadyRegistered": {
+    "title": "You are already registered!",
+    "message": "Your account was already verified using the following contact information: {{contactInfo}}.",
+    "goToHomeMessage": "Click the button below to be taken back to home and receive your disbursement."
+  },
+  "footer": {
+    "privacyMessage": "Your data is processed by {{orgName}} in accordance with their <Link href=''>Privacy Policy</Link>"
+  },
+  "generic": {
+    "phoneNumber": "Phone Number",
+    "email": "Email",
+    "continue": "Continue",
+    "error": "Error",
+    "goBack": "Go Back",
+    "goToHome": "Back to Home",
+    "resendOtp": "Resend OTP",
+    "errorMessage": "Something went wrong, please try again later.",
+    "errorReCaptchaRequired": "reCAPTCHA is required"
+  },
+  "errorCodes": {
+    "400_0": "Invalid request body.",
+    "400_1": "ReCAPTCHA token is invalid.",
+    "400_2": "The information you provided could not be found.",
+    "400_3": "The number of attempts to confirm the verification value exceeded the max attempts.",
+    "401_0": "Not authorized.",
+    "500_0": "An internal error occurred while processing this request.",
+    "500_1": "Cannot get organization.",
+    "500_2": "Cannot retrieve the tenant from the context.",
+    "500_3": "Cannot get logo URL.",
+    "500_4": "Cannot register receiver wallet.",
+    "500_5": "Cannot validate reCAPTCHA token.",
+    "500_6": "Unexpected contact info.",
+    "500_7": "Cannot generate OTP for receiver wallet.",
+    "500_8": "Cannot update OTP for receiver wallet.",
+    "500_9": "Failed to send OTP message."
+  }
+}

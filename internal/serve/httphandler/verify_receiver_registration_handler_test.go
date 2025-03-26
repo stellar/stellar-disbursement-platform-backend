@@ -62,6 +62,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 		contextSep24Claims         *anchorplatform.SEP24JWTClaims
 		requestBody                string
 		isRecaptchaValidFnResponse []interface{}
+		isReCAPTCHADisabled        bool
 		wantHTTPErr                *httperror.HTTPError
 		wantSep24Claims            *anchorplatform.SEP24JWTClaims
 		wantResult                 data.ReceiverRegistrationRequest
@@ -93,7 +94,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 			contextSep24Claims:         sep24JWTClaims,
 			requestBody:                `{"reCAPTCHA_token": "token"}`,
 			isRecaptchaValidFnResponse: []interface{}{false, nil},
-			wantHTTPErr:                httperror.BadRequest("", nil, nil),
+			wantHTTPErr:                httperror.BadRequest("reCAPTCHA token is invalid", nil, nil),
 		},
 		{
 			name:               "returns a 400 response if a body field is invalid",
@@ -109,7 +110,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 			wantHTTPErr:                httperror.BadRequest("", nil, map[string]interface{}{"otp": "invalid otp format. Needs to be a 6 digit value"}),
 		},
 		{
-			name:               "🎉 successfully parses the body into an object if the SEP24 token, recaptcha token and reqquest body are all valid",
+			name:               "🎉 successfully parses the body into an object if the SEP24 token, recaptcha token and request body are all valid",
 			contextSep24Claims: sep24JWTClaims,
 			requestBody: `{
 				"phone_number": "+380445555555",
@@ -128,18 +129,39 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 				ReCAPTCHAToken:    "token",
 			},
 		},
+		{
+			name:               "🎉 successful when recaptcha is disabled",
+			contextSep24Claims: sep24JWTClaims,
+			requestBody: `{
+				"phone_number": "+380445555555",
+				"otp": "123456",
+				"verification": "1990-01-01",
+				"verification_field": "date_of_birth"
+			}`,
+			// isRecaptchaValidFnResponse: []interface{}{false, nil},
+			isReCAPTCHADisabled: true,
+			wantSep24Claims:     sep24JWTClaims,
+			wantResult: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "1990-01-01",
+				VerificationField: data.VerificationTypeDateOfBirth,
+			},
+		},
 	}
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
-	handler := &VerifyReceiverRegistrationHandler{
-		Models:                   models,
-		AnchorPlatformAPIService: &mockAnchorPlatformService,
-	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			handler := &VerifyReceiverRegistrationHandler{
+				Models:                   models,
+				AnchorPlatformAPIService: &mockAnchorPlatformService,
+				ReCAPTCHADisabled:        tc.isReCAPTCHADisabled,
+			}
+
 			var requestBody io.Reader
 			if tc.requestBody != "" {
 				requestBody = strings.NewReader(tc.requestBody)
@@ -815,7 +837,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, readRespErr := io.ReadAll(resp.Body)
 		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+		assert.JSONEq(t, `{"error": "Not authorized.", "error_code": "401_0"}`, string(respBody))
 
 		// validate logs
 		require.Contains(t, buf.String(), "validating request in VerifyReceiverRegistrationHandler: no SEP-24 claims found in the request context")
@@ -850,7 +872,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, readRespErr := io.ReadAll(resp.Body)
 		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_2"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -890,7 +912,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, readRespErr := io.ReadAll(resp.Body)
 		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_2"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -946,7 +968,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		expectedError := "the number of attempts to confirm the verification value exceeded the max attempts"
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, expectedError)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_3"}`, expectedError)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -992,7 +1014,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_2"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
@@ -1055,7 +1077,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		wantBody := `{"error": "An internal error occurred while processing this request."}`
+		wantBody := `{"error": "An internal error occurred while processing this request.", "error_code": "500_0"}`
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs

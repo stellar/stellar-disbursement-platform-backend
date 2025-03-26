@@ -1161,7 +1161,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		HostDistributionAccountPublicKey: hostDistAccPublicKey,
 	})
 	require.NoError(t, err)
-	handler := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: distAccResolver}
+	handler := &ProfileHandler{Models: models, DistributionAccountResolver: distAccResolver}
 	url := "/profile/info"
 
 	newDistAccountJSON := func(t *testing.T, distAcc string) string {
@@ -1173,24 +1173,13 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 	currentTenant, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 
-	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
-	})
-
 	t.Run("returns InternalServerError if getting logo URL fails", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		baseURL := currentTenant.BaseURL
+		currentTenant.BaseURL = utils.StringPtr("%invalid%")
+
+		defer func() {
+			currentTenant.BaseURL = baseURL
+		}()
 
 		w := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -1198,8 +1187,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
 
-		h := &ProfileHandler{Models: models, BaseURL: "%invalid%"}
-		http.HandlerFunc(h.GetOrganizationInfo).ServeHTTP(w, req)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
 
 		resp := w.Result()
 
@@ -1210,12 +1198,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		assert.JSONEq(t, `{"error": "Cannot get logo URL"}`, string(respBody))
 
 		entries := getEntries()
-		assert.Equal(t, `Cannot get logo URL: parse "%invalid%": invalid URL escape "%in"`, entries[0].Message)
+		assert.Equal(t, `Cannot get logo URL: constructing logo URL from base URL: parse "%invalid%": invalid URL escape "%in"`, entries[0].Message)
 	})
 
 	t.Run("returns InternalServerError if getting the distribution account public key fails", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
-
 		w := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
@@ -1227,7 +1213,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 			On("DistributionAccountFromContext", ctx).
 			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
-		h := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: mDistAccResolver}
+		h := &ProfileHandler{Models: models, DistributionAccountResolver: mDistAccResolver}
 		http.HandlerFunc(h.GetOrganizationInfo).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -1243,8 +1229,6 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	})
 
 	t.Run("returns the organization info successfully", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
-
 		w := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
@@ -1258,7 +1242,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		wantsBody := fmt.Sprintf(`
 			{
-				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"logo_url": "%s/organization/logo",
 				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
@@ -1272,15 +1256,13 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 0,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
+		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
 	t.Run("returns the receiver_registration_message_template and otp_message_template when they aren't the default values", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
-
 		msg := "My custom receiver wallet registration invite. MyOrg 👋"
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
 			ReceiverRegistrationMessageTemplate: &msg,
@@ -1299,7 +1281,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		wantsBody := fmt.Sprintf(`
 			{
-				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"logo_url": "%s/organization/logo",
 				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
@@ -1314,7 +1296,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
+		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1337,7 +1319,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		wantsBody = fmt.Sprintf(`
 			{
-				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"logo_url": "%s/organization/logo",
 				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
@@ -1353,7 +1335,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
+		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1361,8 +1343,6 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 	t.Run("returns the custom receiver_invitation_resend_interval_days", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
 		var resendInterval int64 = 2
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
@@ -1382,7 +1362,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		wantsBody := fmt.Sprintf(`
 			{
-				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"logo_url": "%s/organization/logo",
 				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
@@ -1396,7 +1376,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
+		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1404,8 +1384,6 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 	t.Run("returns the custom payment_cancellation_period_days", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
 		var paymentCancellationPeriodDays int64 = 5
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
@@ -1425,7 +1403,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		wantsBody := fmt.Sprintf(`
 			{
-				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"logo_url": "%s/organization/logo",
 				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
@@ -1439,7 +1417,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
+		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1447,8 +1425,6 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 	t.Run("returns the custom privacy_policy_link", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
 		var privacyPolicyLink string = "https://example.com/privacy-policy"
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
@@ -1468,7 +1444,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		wantsBody := fmt.Sprintf(`
 			{
-				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"logo_url": "%s/organization/logo",
 				"base_url": %q,
 				"name": "MyCustomAid",
 				"distribution_account": %s,
@@ -1482,7 +1458,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": "https://example.com/privacy-policy",
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
-		`, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
+		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1500,7 +1476,7 @@ func Test_ProfileHandler_GetOrganizationLogo(t *testing.T) {
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	handler := &ProfileHandler{Models: models, PublicFilesFS: publicfiles.PublicFiles}
+	handler := &OrganizationLogoHandler{Models: models, PublicFilesFS: publicfiles.PublicFiles}
 	url := "/organization/logo"
 
 	ctx := context.Background()
@@ -1513,7 +1489,7 @@ func Test_ProfileHandler_GetOrganizationLogo(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
 
 		fsMap := fstest.MapFS{}
-		h := &ProfileHandler{Models: models, PublicFilesFS: fsMap}
+		h := &OrganizationLogoHandler{Models: models, PublicFilesFS: fsMap}
 		http.HandlerFunc(h.GetOrganizationLogo).ServeHTTP(w, req)
 
 		resp := w.Result()

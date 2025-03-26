@@ -48,7 +48,8 @@ func Test_RecoverHandler(t *testing.T) {
 	// assert response
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	wantJson := `{
-		"error": "An internal error occurred while processing this request."
+		"error": "An internal error occurred while processing this request.",
+		"error_code": "500_0"
 	}`
 	assert.JSONEq(t, wantJson, rr.Body.String())
 

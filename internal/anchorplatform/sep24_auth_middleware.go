@@ -60,6 +60,12 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
+			// Skip the middleware if requesting a static asset or a file with an extension
+			if utils.IsStaticAsset(req.URL.Path) {
+				next.ServeHTTP(rw, req)
+				return
+			}
+
 			// get the token from the request query parameters
 			var reqParams SEP24RequestQuery
 			if err := httpdecode.DecodeQuery(req, &reqParams); err != nil {

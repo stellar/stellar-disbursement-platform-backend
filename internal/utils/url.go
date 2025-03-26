@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/stellar/go/keypair"
@@ -113,4 +114,24 @@ func GenerateTenantURL(baseURL string, tenantID string) (string, error) {
 	}
 
 	return parsedURL.String(), nil
+}
+
+// IsStaticAsset determines if a path refers to a static asset.
+func IsStaticAsset(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	path = strings.TrimPrefix(path, "/")
+
+	lastSlashIndex := strings.LastIndex(path, "/")
+	var lastPart string
+	if lastSlashIndex == -1 {
+		lastPart = path
+	} else {
+		lastPart = path[lastSlashIndex+1:]
+	}
+
+	// Check if the last part contains a dot (has an extension)
+	return filepath.Ext(lastPart) != ""
 }

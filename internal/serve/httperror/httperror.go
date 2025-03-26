@@ -17,6 +17,8 @@ type HTTPError struct {
 	Extras map[string]interface{} `json:"extras,omitempty"`
 	// Err is an optional field that can be used to wrap the original error to pass it forward.
 	Err error `json:"-"`
+	// ErrorCode is an optional field that can be used to set a custom error code. It's used to provide translations to the client.
+	ErrorCode string `json:"error_code,omitempty"`
 }
 
 // ReportErrorFunc is a function type used to report unexpected errors.
@@ -48,6 +50,11 @@ func (h *HTTPError) Error() string {
 
 func (e *HTTPError) Unwrap() error {
 	return e.Err
+}
+
+func (e *HTTPError) WithErrorCode(code string) *HTTPError {
+	e.ErrorCode = code
+	return e
 }
 
 func (e *HTTPError) Render(w http.ResponseWriter) {
