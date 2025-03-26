@@ -1,4 +1,5 @@
-## Values for running the SDP in minikube. This is a good starting point for local development.
+## Values for running the SDP locally. This is a good starting point for local development.
+## Refer to README.md and values.yaml for more information about the configuration options.
 
 ## Global configuration
 global:

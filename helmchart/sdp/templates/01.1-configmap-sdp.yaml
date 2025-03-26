@@ -20,6 +20,7 @@ data:
   HORIZON_URL: "https://horizon-testnet.stellar.org"
   {{- end }}
   BASE_URL: {{ include "sdp.baseURL" . | quote }}
+  SDP_UI_BASE_URL: {{ include "sdp.dashboard.baseURL" . | quote }}
   PORT: {{ include "sdp.port" . | quote }}
   METRICS_PORT: {{ include "sdp.metricsPort" . | quote }}
   ADMIN_PORT: {{ include "sdp.adminPort" . | quote }}

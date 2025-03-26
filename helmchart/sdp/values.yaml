@@ -176,7 +176,6 @@ sdp:
 #      DISTRIBUTION_PUBLIC_KEY: #required
 #      SEP10_SIGNING_PUBLIC_KEY: #required
 #      RECAPTCHA_SITE_KEY: #required
-#      SDP_UI_BASE_URL: #required
 
       # Optional values for the SDP service
       INSTANCE_NAME: "SDP Testnet"
@@ -559,5 +558,5 @@ dashboard:
     annotations: {}
     tls:
     - hosts:
-      - '{{ include "dashboard.domain" . }}'
+      - '{{ include "sdp.dashboard.domain" . }}'
       secretName: dashboard-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md

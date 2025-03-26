@@ -52,23 +52,23 @@ Your release is named {{ .Release.Name }} and deployed to namespace {{ .Release.
 {{- if and .Values.dashboard.enabled .Values.dashboard.ingress.enabled }}
 2. Access the Dashboard:
    {{- if .Values.dashboard.ingress.tls }}
-   https://{{ include "dashboard.domain" . }}
+   https://{{ include "sdp.dashboard.domain" . }}
    {{- else }}
-   http://{{ include "dashboard.domain" . }}
+   http://{{ include "sdp.dashboard.domain" . }}
    {{- end }}
 
    {{- if .Values.sdp.route.mtnDomain }}
    MTN Domain:
    {{- if .Values.dashboard.ingress.tls }}
-   https://{{ include "dashboard.mtnDomain" . }}
+   https://{{ include "sdp.dashboard.mtnDomain" . }}
    {{- else }}
-   http://{{ include "dashboard.mtnDomain" . }}
+   http://{{ include "sdp.dashboard.mtnDomain" . }}
    {{- end }}
    {{- end }}
 {{- else if and .Values.dashboard.enabled (contains "ClusterIP" .Values.global.service.type) }}
 2. Access the Dashboard:
    export DASHBOARD_POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=dashboard" -o jsonpath="{.items[0].metadata.name}")
-   kubectl --namespace {{ .Release.Namespace }} port-forward $DASHBOARD_POD_NAME 8081:{{ include "dashboard.port" . }}
+   kubectl --namespace {{ .Release.Namespace }} port-forward $DASHBOARD_POD_NAME 8081:{{ include "sdp.dashboard.port" . }}
    Visit http://127.0.0.1:8081 to use the Dashboard
 {{- end }}
 

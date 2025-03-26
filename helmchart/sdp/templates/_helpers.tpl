@@ -192,28 +192,28 @@ http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.lo
 {{/*
 Dashboard domain
 */}}
-{{- define "dashboard.domain" -}}
-{{- .Values.dashboard.route.domain | default (printf "localhost:%s" (include "dashboard.port" .)) }}
+{{- define "sdp.dashboard.domain" -}}
+{{- .Values.dashboard.route.domain | default (printf "localhost:%s" (include "sdp.dashboard.port" .)) }}
 {{- end }}
 
 {{/*
 Dashboard MTN domain
 */}}
-{{- define "dashboard.mtnDomain" -}}
-{{- .Values.dashboard.route.mtnDomain | default (printf "localhost:%s" (include "dashboard.port" .)) }}
+{{- define "sdp.dashboard.mtnDomain" -}}
+{{- .Values.dashboard.route.mtnDomain | default (printf "localhost:%s" (include "sdp.dashboard.port" .)) }}
 {{- end }}
 
 {{/*
 Dashboard domain schema
 */}}
-{{- define "dashboard.schema" -}}
+{{- define "sdp.dashboard.schema" -}}
 {{- .Values.dashboard.route.schema | default "https" }}
 {{- end }}
 
 {{/*
 Dashboard port
 */}}
-{{- define "dashboard.port" -}}
+{{- define "sdp.dashboard.port" -}}
 {{- .Values.dashboard.route.port | default "80" }}
 {{- end }}
 
@@ -311,3 +311,11 @@ AP SEP base URL with schema and domain
 {{- define "sdp.ap.baseURL" -}}
 {{- printf "%s://%s" (include "sdp.ap.schema" .) (include "sdp.ap.domain" .) -}}
 {{- end -}}
+
+{{/*
+Dashboard base URL with schema and domain
+*/}}
+{{- define "sdp.dashboard.baseURL" -}}
+{{- printf "%s://%s" (include "sdp.dashboard.schema" .) (include "sdp.dashboard.domain" .) -}}
+{{- end -}}
+
