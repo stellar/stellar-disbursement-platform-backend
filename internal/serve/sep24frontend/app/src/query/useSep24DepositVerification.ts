@@ -60,14 +60,13 @@ export const useSep24DepositVerification = () => {
           }
         );
 
-        const responseJson = await response.json();
-
-        if (responseJson.error) {
-          throw responseJson;
+        // Check if status is an error:
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw errorData;
         }
 
-        return responseJson;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return response.json();
       } catch (e: any) {
         if (e.error) {
           throw e;

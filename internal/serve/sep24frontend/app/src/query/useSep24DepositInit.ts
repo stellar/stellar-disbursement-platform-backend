@@ -29,13 +29,13 @@ export const useSep24DepositInit = (token: string | null) => {
           }
         );
 
-        const responseJson = await response.json();
-
-        if (responseJson.error) {
-          throw responseJson.error || "Unknown error.";
+        // Check if status is an error:
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw errorData;
         }
 
-        return responseJson;
+        return response.json();
       } catch (e: any) {
         if (e.error) {
           throw e;
