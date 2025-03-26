@@ -43,5 +43,22 @@
     "resendOtp": "Resend OTP",
     "errorMessage": "Something went wrong, please try again later.",
     "errorReCaptchaRequired": "reCAPTCHA is required"
+  },
+  "errorCodes": {
+    "400_0": "Invalid request body.",
+    "400_1": "ReCAPTCHA token is invalid.",
+    "400_2": "The information you provided could not be found.",
+    "400_3": "The number of attempts to confirm the verification value exceeded the max attempts.",
+    "401_0": "Not authorized.",
+    "500_0": "An internal error occurred while processing this request.",
+    "500_1": "Cannot get organization.",
+    "500_2": "Cannot retrieve the tenant from the context.",
+    "500_3": "Cannot get logo URL.",
+    "500_4": "Cannot register receiver wallet.",
+    "500_5": "Cannot validate reCAPTCHA token.",
+    "500_6": "Unexpected contact info.",
+    "500_7": "Cannot generate OTP for receiver wallet.",
+    "500_8": "Cannot update OTP for receiver wallet.",
+    "500_9": "Failed to send OTP message."
   }
 }
