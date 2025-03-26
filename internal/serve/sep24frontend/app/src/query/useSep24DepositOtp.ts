@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { SDP_API_ENDPOINT } from "@/config/settings";
+import { throwUnexpectedError } from "@/helpers/throwUnexpectedError";
 import { ApiError, Sep24DepositOtpResponse } from "@/types/types";
 
 /**
@@ -50,20 +51,19 @@ export const useSep24DepositOtp = () => {
           }
         );
 
-        const responseJson = await response.json();
-
-        if (responseJson.error) {
-          throw responseJson;
+        // Check if status is an error:
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          throw errorData;
         }
 
-        return responseJson;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return response.json();
       } catch (e: any) {
         if (e.error) {
           throw e;
         }
 
-        throw { error: t("generic.errorMessage") };
+        throwUnexpectedError(t, e);
       }
     },
   });

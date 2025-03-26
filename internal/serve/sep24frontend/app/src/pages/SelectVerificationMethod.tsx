@@ -12,7 +12,7 @@ import {
 
 import { useTranslation } from "react-i18next";
 import intlTelInput, { Iti } from "intl-tel-input";
-import { uk, en } from "intl-tel-input/i18n";
+import { ru, en } from "intl-tel-input/i18n";
 
 import ReCaptcha from "react-google-recaptcha";
 
@@ -45,7 +45,7 @@ export const SelectVerificationMethod: FC = () => {
   const [inputEmailError, setInputEmailError] = useState<string | false>("");
 
   const [iti, setIti] = useState<Iti | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
 
   const reCaptchaRef = useRef<ReCaptcha>(null);
   const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
@@ -62,25 +62,40 @@ export const SelectVerificationMethod: FC = () => {
     error: otpError,
     isPending: isOtpPending,
     mutate: otpSubmit,
+    reset: resetOtp,
   } = useSep24DepositOtp();
+
+  const clearErrors = () => {
+    if (otpError) {
+      resetOtp();
+    }
+
+    if (inputPhoneError) {
+      setInputPhoneError("");
+    }
+
+    if (inputEmailError) {
+      setInputEmailError("");
+    }
+  };
 
   // Initialize intlTelInput
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const intlTelInputDropdownLang: any = {
       en,
-      uk,
+      ua: ru,
     };
 
-    if (inputRef?.current) {
-      const itiInit = intlTelInput(inputRef.current, {
+    if (phoneInputRef?.current) {
+      const itiInit = intlTelInput(phoneInputRef.current, {
         loadUtils: () => import("intl-tel-input/utils"),
         separateDialCode: true,
         // Excluding Cuba, Iran, North Korea, and Syria
         excludeCountries: ["cu", "ir", "kp", "sy"],
         // Setting default country based on user's IP address
         initialCountry: "auto",
-        // Get the country code from user’s location
+        // Get the country code from user's location
         geoIpLookup: (callback) => {
           fetch("https://ipapi.co/json")
             .then((res) => res.json())
@@ -177,10 +192,7 @@ export const SelectVerificationMethod: FC = () => {
             fieldSize="lg"
             placeholder="email@email.com"
             onChange={(e) => {
-              if (inputEmailError) {
-                setInputEmailError("");
-              }
-
+              clearErrors();
               setInputEmail(e.target.value.trim());
             }}
             onBlur={() => {
@@ -195,18 +207,14 @@ export const SelectVerificationMethod: FC = () => {
           data-visible={selectedMethod === "phone"}
         >
           <input
-            ref={inputRef}
+            ref={phoneInputRef}
             id="input-phone-number"
             type="tel"
             placeholder="(506) 234-5678"
             onBlur={() => {
               validatePhoneNumber();
             }}
-            onChange={() => {
-              if (inputPhoneError) {
-                setInputPhoneError("");
-              }
-            }}
+            onChange={clearErrors}
             data-error={Boolean(inputPhoneError)}
           />
           {inputPhoneError ? (
@@ -295,7 +303,10 @@ export const SelectVerificationMethod: FC = () => {
             label={t("generic.phoneNumber")}
             fieldSize="lg"
             checked={selectedMethod === "phone"}
-            onChange={() => setSelectedMethod("phone")}
+            onChange={() => {
+              clearErrors();
+              setSelectedMethod("phone");
+            }}
           />
           <RadioButton
             id="verification-method-email"
@@ -303,7 +314,10 @@ export const SelectVerificationMethod: FC = () => {
             label={t("generic.email")}
             fieldSize="lg"
             checked={selectedMethod === "email"}
-            onChange={() => setSelectedMethod("email")}
+            onChange={() => {
+              clearErrors();
+              setSelectedMethod("email");
+            }}
           />
         </Box>
 
@@ -313,7 +327,7 @@ export const SelectVerificationMethod: FC = () => {
 
         {otpError ? (
           <Alert variant="error" placement="inline" title={t("generic.error")}>
-            {renderApiErrorMessage(otpError)}
+            {renderApiErrorMessage(t, otpError)}
           </Alert>
         ) : null}
       </Box>

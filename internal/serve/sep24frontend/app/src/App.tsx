@@ -7,6 +7,7 @@ import {
   ThemeSwitch,
 } from "@stellar/design-system";
 import i18next from "i18next";
+import { useTranslation } from "react-i18next";
 
 import { SelectVerificationMethod } from "@/pages/SelectVerificationMethod";
 import { PasscodeEntry } from "@/pages/PasscodeEntry";
@@ -22,14 +23,14 @@ import {
 import { useSep24DepositInit } from "@/query/useSep24DepositInit";
 import { getSearchParams } from "@/helpers/getSearchParams";
 import { localStorageSavedLanguage } from "@/helpers/localStorageSavedLanguage";
+import { renderApiErrorMessage } from "@/helpers/renderApiErrorMessage";
 
 import { useStore } from "@/store/useStore";
-
-// TODO: handle API error translations
 
 const App: FC = () => {
   const searchParams = getSearchParams();
   const token = searchParams.get("token");
+  const { t } = useTranslation();
 
   const { updateJwtToken, updateLanguage, updateOrg } = useStore();
   const [language, setLanguage] = useState<string>("");
@@ -107,8 +108,8 @@ const App: FC = () => {
     if (orgError) {
       return (
         <div className="Wallet__content">
-          <Notification variant="error" title="Error">
-            {orgError.toString()}
+          <Notification variant="error" title={t("generic.error")}>
+            {renderApiErrorMessage(t, orgError)}
           </Notification>
         </div>
       );
@@ -155,7 +156,7 @@ const App: FC = () => {
             }}
           >
             <option value="en">English</option>
-            <option value="uk">Українська</option>
+            <option value="ua">Українська</option>
           </Select>
         </Box>
 
