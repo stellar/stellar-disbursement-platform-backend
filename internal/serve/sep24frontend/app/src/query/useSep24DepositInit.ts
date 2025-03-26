@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { SDP_API_ENDPOINT } from "@/config/settings";
-import { Sep24DepositInitResponse } from "@/types/types";
+import { throwUnexpectedError } from "@/helpers/throwUnexpectedError";
+import { ApiError, Sep24DepositInitResponse } from "@/types/types";
 
 /**
  * Initial SEP-24 deposit call made when the app launches to get org data and
  * user’s registration status.
  */
 export const useSep24DepositInit = (token: string | null) => {
-  const query = useQuery<Sep24DepositInitResponse>({
+  const query = useQuery<Sep24DepositInitResponse, ApiError>({
     queryKey: ["useSep24DepositInit", token],
     queryFn: async () => {
       if (!token) {
@@ -32,8 +33,12 @@ export const useSep24DepositInit = (token: string | null) => {
         }
 
         return responseJson;
-      } catch (e) {
-        throw `There was an error initializing: ${e}`;
+      } catch (e: any) {
+        if (e.error) {
+          throw e;
+        }
+
+        throwUnexpectedError(e);
       }
     },
     enabled: Boolean(token),

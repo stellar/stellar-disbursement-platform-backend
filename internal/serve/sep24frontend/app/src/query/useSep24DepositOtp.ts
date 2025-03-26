@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import { SDP_API_ENDPOINT } from "@/config/settings";
+import { throwUnexpectedError } from "@/helpers/throwUnexpectedError";
 import { ApiError, Sep24DepositOtpResponse } from "@/types/types";
 
 /**
@@ -14,8 +14,6 @@ type Sep24DepositOtpProps = {
 };
 
 export const useSep24DepositOtp = () => {
-  const { t } = useTranslation();
-
   const mutation = useMutation<
     Sep24DepositOtpResponse,
     ApiError,
@@ -63,7 +61,7 @@ export const useSep24DepositOtp = () => {
           throw e;
         }
 
-        throw { error: t("generic.errorMessage") };
+        throwUnexpectedError(e);
       }
     },
   });
