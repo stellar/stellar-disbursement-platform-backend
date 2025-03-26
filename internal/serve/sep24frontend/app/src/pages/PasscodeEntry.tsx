@@ -21,8 +21,6 @@ import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
 
-// TODO: clear view messages
-
 export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -56,6 +54,12 @@ export const PasscodeEntry: FC = () => {
     isPending: isVerifyPending,
     mutate: verifySubmit,
   } = useSep24DepositVerification();
+
+  const clearMessages = () => {
+    if (viewMessage) {
+      setViewMessage(null);
+    }
+  };
 
   // OTP success
   useEffect(() => {
@@ -194,6 +198,7 @@ export const PasscodeEntry: FC = () => {
         fieldSize="lg"
         value={verification}
         onChange={(e) => {
+          clearMessages();
           setVerification(e.target.value);
         }}
       />
@@ -224,6 +229,7 @@ export const PasscodeEntry: FC = () => {
           >
             <Link
               onClick={(e) => {
+                clearMessages();
                 e.preventDefault();
                 handleResendOtp();
               }}
@@ -244,6 +250,7 @@ export const PasscodeEntry: FC = () => {
               size="lg"
               variant="tertiary"
               onClick={() => {
+                clearMessages();
                 navigate(-1);
               }}
               disabled={isVerifyPending}
@@ -254,7 +261,10 @@ export const PasscodeEntry: FC = () => {
             <Button
               size="lg"
               variant="secondary"
-              onClick={handleVerification}
+              onClick={() => {
+                clearMessages();
+                handleVerification();
+              }}
               disabled={isSubmitDisabled()}
               isLoading={isVerifyPending}
             >
@@ -299,6 +309,7 @@ export const PasscodeEntry: FC = () => {
             value={otp}
             fieldSize="lg"
             onChange={(e) => {
+              clearMessages();
               setOtp(e.target.value);
             }}
           />
@@ -311,6 +322,7 @@ export const PasscodeEntry: FC = () => {
               size="normal"
               sitekey={org.recaptcha_site_key}
               onChange={(token) => {
+                clearMessages();
                 setReCaptchaToken(token);
 
                 if (viewMessage) {
