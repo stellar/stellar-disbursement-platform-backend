@@ -28,5 +28,12 @@ data:
   CONSUMER_GROUP_ID: {{ .Values.global.eventBroker.consumerGroupId | quote }}
   KAFKA_SECURITY_PROTOCOL: {{ .Values.global.eventBroker.kafka.securityProtocol | quote }}
   {{- end }}
+  {{- if .Values.global.distributionPublicKey }}
+  DISTRIBUTION_PUBLIC_KEY: {{ .Values.global.distributionPublicKey | quote }}
+  {{- end }}
+  {{- /*
+  {{- /*
+Values from the tss configmap section - These will override the global values
+  */}}
   {{- tpl (toYaml .Values.tss.configMap.data | nindent 2) . }}
 {{- end }}
