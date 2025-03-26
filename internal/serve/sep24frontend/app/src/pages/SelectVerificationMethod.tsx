@@ -12,7 +12,7 @@ import {
 
 import { useTranslation } from "react-i18next";
 import intlTelInput, { Iti } from "intl-tel-input";
-import { uk, en } from "intl-tel-input/i18n";
+import { ru, en } from "intl-tel-input/i18n";
 
 import ReCaptcha from "react-google-recaptcha";
 
@@ -84,7 +84,7 @@ export const SelectVerificationMethod: FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const intlTelInputDropdownLang: any = {
       en,
-      uk,
+      ua: ru,
     };
 
     if (phoneInputRef?.current) {

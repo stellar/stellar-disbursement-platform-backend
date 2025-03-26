@@ -10,7 +10,7 @@ export enum Routes {
   ALREADY_REGISTERED = "/already-registered",
 }
 
-export const SUPPORTED_LANGUAGES = ["en", "uk"];
+export const SUPPORTED_LANGUAGES = ["en", "ua"];
 
 // Env for local development
 export const SDP_API_ENDPOINT = import.meta.env.DEV
