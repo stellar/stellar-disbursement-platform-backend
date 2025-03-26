@@ -1,14 +1,14 @@
 ## Values for running the SDP locally. This is a good starting point for local development.
 ## Refer to README.md and values.yaml for more information about the configuration options.
 
-## Global configuration
+# =========================== START global ========================
 global:
   ## global.ephemeralDatabase Enables the creation of an ephemeral database for testing purposes.
   ephemeralDatabase: true
   ## global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
   singleTenantMode: true
 
-## SDP configuration
+# =========================== START sdp ===========================
 sdp:
   route:
     schema: "http"
@@ -22,7 +22,7 @@ sdp:
     secretName: sdp
     create: true
 
-## Anchor Platform configuration
+# =========================== START Anchor ========================
 anchorPlatform:
   route:
     schema: "http"
@@ -35,14 +35,14 @@ anchorPlatform:
     secretName: sdp-ap
     create: true
 
-## TSS configuration
+# =========================== START TSS ===========================
 tss:
   ## Generate secrets for the TSS
   kubeSecrets:
     secretName: sdp-tss
     create: true
 
-## Dashboard configuration
+# =========================== START Dashboard =====================
 dashboard:
   route:
     schema: "http"
