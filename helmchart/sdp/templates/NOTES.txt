@@ -119,8 +119,8 @@ Your release is named {{ .Release.Name }} and deployed to namespace {{ .Release.
    To calculate the auth header for the admin API, run:
 
    # Get the admin credentials from the secrets
-   ADMIN_ACCOUNT=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ include "sdp.fullname" . }} -o jsonpath="{.data.ADMIN_ACCOUNT}" | base64 --decode)
-   ADMIN_API_KEY=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ include "sdp.fullname" . }} -o jsonpath="{.data.ADMIN_API_KEY}" | base64 --decode)
+   ADMIN_ACCOUNT=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.sdp.kubeSecrets.secretName }} -o jsonpath="{.data.ADMIN_ACCOUNT}" | base64 --decode)
+   ADMIN_API_KEY=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.sdp.kubeSecrets.secretName }} -o jsonpath="{.data.ADMIN_API_KEY}" | base64 --decode)
 
    # Create the auth header (Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY')
    AUTH_HEADER=$(echo -n "$ADMIN_ACCOUNT:$ADMIN_API_KEY" | base64)
