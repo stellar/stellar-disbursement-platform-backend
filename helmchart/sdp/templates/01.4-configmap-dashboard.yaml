@@ -25,7 +25,7 @@ data:
     {{- end }}
     {{- $_ := set $config "SINGLE_TENANT_MODE" .Values.global.singleTenantMode }}
     {{- $_ := set $config "RECAPTCHA_SITE_KEY" .Values.global.recaptchaSiteKey }}
-    {{- $_ := set $config "API_URL" (printf "%s://%s" (include "sdp.schema" .) (include "sdp.domain" .)) }}
+    {{- $_ := set $config "API_URL" ( include "sdp.baseURL" . ) }}
     {{- /*
 Values from the dashboard configmap section - These will override the global values
   */}}

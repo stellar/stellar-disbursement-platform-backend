@@ -152,17 +152,16 @@ sdp:
   ## @extra sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts. Required if global.distributionPublicKey not set.
   ## @extra sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key. Required if global.sep10PublicKey not set.
   ## @extra sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
-  ## @extra sdp.configMap.data.SDP_UI_BASE_URL The base URL of the SDP UI/dashboard.
+  ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
   ## @param sdp.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   ## @param sdp.configMap.data.METRICS_TYPE Defines the type of metrics system in use. Options: "PROMETHEUS".
   ## @param sdp.configMap.data.EMAIL_SENDER_TYPE The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL", "TWILIO_EMAIL".
-  ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS".
+  ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS", "AWS_SMS".
   ## @param sdp.configMap.data.CORS_ALLOWED_ORIGINS Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.
   ## @param sdp.configMap.data.DISABLE_RECAPTCHA Determines if ReCaptcha should be disabled for login ("true" or "false").
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
-  ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
   ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs are enabled in this instance ("true" or "false"). Default "false".
   ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
@@ -172,26 +171,37 @@ sdp:
   configMap:
     annotations:
     data:
-#      ## Required values for the SDP service
+      # Configurations with required values
 #      DISTRIBUTION_PUBLIC_KEY: #required
 #      SEP10_SIGNING_PUBLIC_KEY: #required
-#      RECAPTCHA_SITE_KEY: #required
+#      RECAPTCHA_SITE_KEY: #required when using ReCaptcha
 
-      # Optional values for the SDP service
+      # Configurations with default values
+      ## General configuration
       INSTANCE_NAME: "SDP Testnet"
+
+      ## Monitoring and logging configuration
       CRASH_TRACKER_TYPE: "DRY_RUN"
       ENVIRONMENT: "dev"
       LOG_LEVEL: "INFO"
       METRICS_TYPE: "PROMETHEUS"
+
+      ## Messaging service configuration
       EMAIL_SENDER_TYPE: "DRY_RUN"
       SMS_SENDER_TYPE: "DRY_RUN"
+
+      ## Security Configuration
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_RECAPTCHA: "false"
       DISABLE_MFA: "false"
+
+      ## Background tasks configuration
       ENABLE_SCHEDULER: "true"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       MAX_INVITATION_RESEND_ATTEMPTS: "3"
+
+      ## Disbursement configuration
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
       CIRCLE_API_TYPE: "TRANSFERS"
 
@@ -200,6 +210,7 @@ sdp:
   ## @param sdp.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
   ## @param sdp.kubeSecrets.annotations Annotations to be added to the secret.
   ## @param sdp.kubeSecrets.data The sensitive data to be stored in the secret.
+  ## @extra sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
   ## @extra sdp.kubeSecrets.data.AWS_ACCESS_KEY_ID AWS IAM user's access key ID for authenticating to AWS services.
   ## @extra sdp.kubeSecrets.data.AWS_REGION AWS region where services (like SES for email sending) are provisioned.
   ## @extra sdp.kubeSecrets.data.AWS_SECRET_ACCESS_KEY AWS IAM user's secret access key for authenticating to AWS services.
@@ -210,16 +221,15 @@ sdp:
   ## @extra sdp.kubeSecrets.data.TWILIO_SERVICE_SID Service SID for the specific Twilio service being utilized.
   ## @extra sdp.kubeSecrets.data.TWILIO_SENDGRID_API_KEY API key for the Twilio SendGrid (email) service.
   ## @extra sdp.kubeSecrets.data.TWILIO_SENDGRID_SENDER_ADDRESS Email address used to send emails via Twilio SendGrid.
+  ## @extra sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   ## @extra sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token. This EC key needs to be at least as strong as prime256v1 (P-256).
-  ## @extra sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs. Required if global.sep10PrivateKey not set.
+  ## @extra sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @extra sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token. Must be the same as Anchor Platform's SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET.
   ## @extra sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
-  ## @extra sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
-  ## @extra sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
+  ## @extra sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs. Required if global.sep10PrivateKey not set.
   ## @extra sdp.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts. This is needed for the init container.
-  ## @extra sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
   ## @extra sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.
-  ## @extra sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
+  ## @extra sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
   ## @extra sdp.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   ## @extra sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   ## @extra sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
@@ -231,30 +241,49 @@ sdp:
     create: false
     annotations:
     data: {}
+
+      ## General configuration
+#      DATABASE_URL: #required
+
+      ## Messaging configuration
+      ### AWS Config when EMAIL_SENDER_TYPE is set to "AWS_EMAIL" or SMS_SENDER_TYPE is set to "AWS_SMS"
 #      AWS_ACCESS_KEY_ID: MY_AWS_ACCESS_KEY_ID
 #      AWS_REGION: MY_AWS_REGION
 #      AWS_SECRET_ACCESS_KEY: MY_AWS_SECRET_ACCESS_KEY
 #      AWS_SES_SENDER_ID: MY_AWS_SES_SENDER_ID
 #      AWS_SNS_SENDER_ID: MY_AWS_SNS_SENDER_ID
+
+      ### Twilio Config when SMS_SENDER_TYPE is set to "TWILIO_SMS"
 #      TWILIO_ACCOUNT_SID: MY_TWILIO_ACCOUNT_SID
 #      TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
 #      TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
+
+      ### Twilio Sendgrid Config when EMAIL_SENDER_TYPE is set to "TWILIO_EMAIL"
 #      TWILIO_SENDGRID_API_KEY: MY_TWILIO_SENDGRID_API_KEY
 #      TWILIO_SENDGRID_SENDER_ADDRESS: MY_TWILIO_SENDGRID_SENDER_ADDRESS
-#      SENTRY_DSN: #optional
+
+      ## Monitoring and logging configuration
+#      SENTRY_DSN: #required when CRASH_TRACKER_TYPE is set to "SENTRY"
+
+      ## Security configuration
 #      EC256_PRIVATE_KEY: #required
-#      SEP10_SIGNING_PRIVATE_KEY: #required
-#      SEP24_JWT_SECRET: #required
-#      RECAPTCHA_SITE_SECRET_KEY:  #required
 #      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
-#      DATABASE_URL: #required
+#      SEP24_JWT_SECRET: #required
+#      RECAPTCHA_SITE_SECRET_KEY:  #required when using ReCaptcha
+
+      ## Stellar configuration
+#      SEP10_SIGNING_PRIVATE_KEY: #required
 #      DISTRIBUTION_SEED: #required
 #      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
 #      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
+
+      ## Kafka Configuration when global.eventBroker.type is set to "KAFKA"
 #      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 #      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 #      KAFKA_SSL_ACCESS_KEY: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 #      KAFKA_SSL_ACCESS_CERTIFICATE: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+
+      ## Admin account configuration
 #      ADMIN_ACCOUNT: #required
 #      ADMIN_API_KEY: #required
 
@@ -441,26 +470,32 @@ tss:
   ## @extra tss.configMap.data Used to inject non-sensitive environment variables into the TSS deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @extra tss.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts. Required if global.distributionPublicKey not set.
   ## @param tss.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
-  ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
-  ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
-  ## @param tss.configMap.data.TSS_METRICS_TYPE Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".
-  ## @param tss.configMap.data.QUEUE_POLLING_INTERVAL Specifies the interval (in seconds) at which the TSS should poll the queue.
   ## @param tss.configMap.data.ENVIRONMENT Specifies the environment TSS is running in (e.g. "localhost").
   ## @param tss.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
+  ## @param tss.configMap.data.TSS_METRICS_TYPE Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".
+  ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
+  ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
+  ## @param tss.configMap.data.QUEUE_POLLING_INTERVAL Specifies the interval (in seconds) at which the TSS should poll the queue.
   configMap:
     annotations:
     data:
-      # Required values for the TSS service
+      # Configurations with required values
       # DISTRIBUTION_PUBLIC_KEY: #required
 
-      # Optional values for the TSS service
+      # Configurations with default values
+
+      ## Monitoring and logging configuration
       CRASH_TRACKER_TYPE: "DRY_RUN"
-      NUM_CHANNEL_ACCOUNTS: "1"
-      MAX_BASE_FEE: "100000"
-      TSS_METRICS_TYPE: "TSS_PROMETHEUS"
-      QUEUE_POLLING_INTERVAL: "6"
       ENVIRONMENT: "development"
       LOG_LEVEL: "INFO"
+      TSS_METRICS_TYPE: "TSS_PROMETHEUS"
+
+      ## Stellar configuration
+      NUM_CHANNEL_ACCOUNTS: "1"
+      MAX_BASE_FEE: "100000"
+
+      ## Background tasks configuration
+      QUEUE_POLLING_INTERVAL: "6"
 
   ## @extra tss.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param tss.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
@@ -481,11 +516,18 @@ tss:
     create: false
     annotations: {}
     data: {}
+      ## General configuration
 #      DATABASE_URL: #required
+
+      ## Stellar configuration
 #      DISTRIBUTION_SEED: #required
 #      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
 #      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
+
+      ## Monitoring and logging configuration
 #      SENTRY_DSN: #optional
+
+      ## Kafka Configuration when global.eventBroker.type is set to "KAFKA"
 #      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 #      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 #      KAFKA_SSL_ACCESS_KEY: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
@@ -538,12 +580,10 @@ dashboard:
   ## @extra dashboard.configMap Configuration settings for the Dashboard ConfigMap.
   ## @param dashboard.configMap.annotations Annotations to be added to the ConfigMap.
   ## @param dashboard.configMap.data Used to inject non-sensitive environment variables into the Dashboard deployment.
-  ## @extra dashboard.configMap.data.API_URL The URL for the API the dashboard should interact with.
   ## @extra dashboard.configMap.data.RECAPTCHA_SITE_KEY The site key for Google reCAPTCHA service.
   configMap:
     annotations: {}
     data: {}
-#      API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
 #      RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
 
   ## @extra dashboard.ingress Configuration for the ingress controller for the dashboard.
