@@ -13,6 +13,7 @@ export type VerificationField =
 // =============================================================================
 export type ApiError = {
   error: string;
+  error_code?: string;
   extras?: { [key: string]: string };
 };
 
