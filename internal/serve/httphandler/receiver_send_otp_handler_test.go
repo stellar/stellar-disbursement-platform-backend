@@ -149,7 +149,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusInternalServerError,
-			wantBody:       `{"error":"Cannot validate reCAPTCHA token"}`,
+			wantBody:       `{"error":"Cannot validate reCAPTCHA token", "error_code":"500_5"}`,
 		},
 		{
 			name:                   "(400 - BadRequest) if the reCAPTCHA token is invalid",
@@ -162,7 +162,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusBadRequest,
-			wantBody:       `{"error":"reCAPTCHA token is invalid"}`,
+			wantBody:       `{"error":"reCAPTCHA token is invalid", "error_code":"400_1"}`,
 		},
 		{
 			name:                   "(401 - Unauthorized) if the SEP-24 claims are not in the request context",
@@ -175,7 +175,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusUnauthorized,
-			wantBody:       `{"error":"Not authorized."}`,
+			wantBody:       `{"error":"Not authorized.", "error_code":"401_0"}`,
 		},
 		{
 			name:                   "(401 - Unauthorized) if the SEP-24 claims are invalid",
@@ -188,7 +188,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusUnauthorized,
-			wantBody:       `{"error":"Not authorized."}`,
+			wantBody:       `{"error":"Not authorized.", "error_code":"401_0"}`,
 		},
 		{
 			name:                   "(400 - BadRequest) if the request body is invalid",
@@ -203,6 +203,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 			wantStatusCode: http.StatusBadRequest,
 			wantBody: `{
 				"error": "The request was invalid in some way.",
+				"error_code": "400_0",
 				"extras": {
 					"phone_number":"phone_number or email is required",
 					"email":"phone_number or email is required"
@@ -332,7 +333,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 						assert.Contains(t, entries[0].Message, wantLog)
 					},
 					wantStatusCode: http.StatusInternalServerError,
-					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s to %s: failed calling message dispatcher"}`, utils.Humanize(string(contactType)), truncatedContactInfo),
+					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s to %s: failed calling message dispatcher", "error_code": "500_9"}`, utils.Humanize(string(contactType)), truncatedContactInfo),
 				},
 				{
 					name:                   fmt.Sprintf("%s/%s/🟡 (200-Ok) with false positive", contactType, verificationField),
@@ -659,7 +660,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 				contactTypeStr := utils.Humanize(string(contactType))
 				truncatedContactInfo := utils.TruncateString(r.ContactByType(contactType), 3)
 				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s to %s: %w", contactTypeStr, truncatedContactInfo, errors.New("error sending message")))
-				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
+				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil).WithErrorCode(httperror.Code500_9)
 			},
 		},
 		{
