@@ -11,7 +11,7 @@ type Sep24DepositVerificationProps = {
   token: string;
   phone_number: string | undefined;
   email: string | undefined;
-  recaptcha_token: string;
+  recaptcha_token: string | undefined;
   otp: string;
   verification: string;
   verification_field: string;

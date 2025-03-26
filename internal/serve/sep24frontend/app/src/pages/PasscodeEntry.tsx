@@ -32,6 +32,9 @@ export const PasscodeEntry: FC = () => {
   const reCaptchaRef = useRef<ReCaptcha>(null);
   const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
 
+  const isRecaptchaPending = () =>
+    !org.is_recaptcha_disabled && !reCaptchaToken;
+
   type ViewMessage = {
     type: "error" | "success";
     title: string;
@@ -105,7 +108,10 @@ export const PasscodeEntry: FC = () => {
   }, [verifyError, t]);
 
   const handleVerification = () => {
-    if (!(otp && verification && user.verification_field && reCaptchaToken)) {
+    if (
+      !(otp && verification && user.verification_field) ||
+      isRecaptchaPending()
+    ) {
       return;
     }
 
@@ -120,7 +126,7 @@ export const PasscodeEntry: FC = () => {
       otp,
       verification: formattedVerification,
       verification_field: user.verification_field,
-      recaptcha_token: reCaptchaToken,
+      recaptcha_token: reCaptchaToken || undefined,
       token: jwtToken,
     });
   };
@@ -130,7 +136,7 @@ export const PasscodeEntry: FC = () => {
       return;
     }
 
-    if (!reCaptchaToken) {
+    if (isRecaptchaPending()) {
       setViewMessage({
         type: "error",
         title: t("generic.error"),
@@ -144,7 +150,7 @@ export const PasscodeEntry: FC = () => {
     const submitData = {
       phone_number: user.phone_number,
       email: user.email,
-      recaptcha_token: reCaptchaToken,
+      recaptcha_token: reCaptchaToken || undefined,
     };
 
     otpSubmit({ token: jwtToken, ...submitData });
@@ -210,7 +216,7 @@ export const PasscodeEntry: FC = () => {
       return true;
     }
 
-    if (!reCaptchaToken) {
+    if (isRecaptchaPending()) {
       return true;
     }
 
@@ -316,7 +322,7 @@ export const PasscodeEntry: FC = () => {
 
           {renderVerificationInput()}
 
-          {org.recaptcha_site_key && (
+          {!org.is_recaptcha_disabled && org.recaptcha_site_key && (
             <ReCaptcha
               ref={reCaptchaRef}
               size="normal"

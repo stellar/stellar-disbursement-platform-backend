@@ -51,7 +51,7 @@ export const SelectVerificationMethod: FC = () => {
   const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
 
   const isRecaptchaPending = () =>
-    !org.is_recaptcha_disabled && !reCaptchaToken && org.recaptcha_site_key;
+    !org.is_recaptcha_disabled && !reCaptchaToken;
 
   // Redirect to already registered page if user is registered
   useEffect(() => {
