@@ -22,6 +22,7 @@ import {
 import { useSep24DepositInit } from "@/query/useSep24DepositInit";
 import { getSearchParams } from "@/helpers/getSearchParams";
 import { localStorageSavedLanguage } from "@/helpers/localStorageSavedLanguage";
+import { renderApiErrorMessage } from "@/helpers/renderApiErrorMessage";
 
 import { useStore } from "@/store/useStore";
 
@@ -108,7 +109,7 @@ const App: FC = () => {
       return (
         <div className="Wallet__content">
           <Notification variant="error" title="Error">
-            {orgError.toString()}
+            {renderApiErrorMessage(orgError)}
           </Notification>
         </div>
       );

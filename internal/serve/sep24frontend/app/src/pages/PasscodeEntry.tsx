@@ -17,6 +17,7 @@ import { ContentLayout } from "@/components/ContentLayout";
 
 import { useStore } from "@/store/useStore";
 import { Routes } from "@/config/settings";
+import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
 
@@ -74,7 +75,7 @@ export const PasscodeEntry: FC = () => {
       setViewMessage({
         type: "error",
         title: t("generic.error"),
-        message: otpError.error,
+        message: translatedApiErrorMessage(otpError),
         timestamp: new Date().getTime(),
       });
     }
@@ -93,7 +94,7 @@ export const PasscodeEntry: FC = () => {
       setViewMessage({
         type: "error",
         title: t("generic.error"),
-        message: verifyError.error,
+        message: translatedApiErrorMessage(verifyError),
         timestamp: new Date().getTime(),
       });
     }
