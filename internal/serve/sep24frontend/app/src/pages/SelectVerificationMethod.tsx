@@ -50,6 +50,9 @@ export const SelectVerificationMethod: FC = () => {
   const reCaptchaRef = useRef<ReCaptcha>(null);
   const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
 
+  const isRecaptchaPending = () =>
+    !org.is_recaptcha_disabled && !reCaptchaToken && org.recaptcha_site_key;
+
   // Redirect to already registered page if user is registered
   useEffect(() => {
     if (org.is_registered) {
@@ -143,14 +146,14 @@ export const SelectVerificationMethod: FC = () => {
   }, [otpData, navigate, searchParams, updateUser]);
 
   const handleSubmit = () => {
-    if (!jwtToken || !reCaptchaToken) {
+    if (!jwtToken || isRecaptchaPending()) {
       return;
     }
 
     const submitData = {
       phone_number: iti?.getNumber() || undefined,
       email: inputEmail || undefined,
-      recaptcha_token: reCaptchaToken,
+      recaptcha_token: reCaptchaToken || undefined,
     };
 
     otpSubmit({ token: jwtToken, ...submitData });
@@ -225,7 +228,7 @@ export const SelectVerificationMethod: FC = () => {
         </div>
 
         {/* TODO: match recaptcha theme */}
-        {org.recaptcha_site_key && (
+        {!org.is_recaptcha_disabled && org.recaptcha_site_key && (
           <ReCaptcha
             ref={reCaptchaRef}
             size="normal"

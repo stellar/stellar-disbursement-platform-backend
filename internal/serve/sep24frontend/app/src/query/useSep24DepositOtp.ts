@@ -11,7 +11,7 @@ type Sep24DepositOtpProps = {
   token: string;
   phone_number: string | undefined;
   email: string | undefined;
-  recaptcha_token: string;
+  recaptcha_token: string | undefined;
 };
 
 export const useSep24DepositOtp = () => {
