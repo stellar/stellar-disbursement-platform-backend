@@ -275,6 +275,7 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 				{"frame-ancestors", []string{selfSrc}},
 
 				{"form-action", []string{selfSrc}},
+				{"img-src", []string{selfSrc, "data:", "https:"}},
 			}
 			cspStr := ""
 			for _, item := range cspItems {
