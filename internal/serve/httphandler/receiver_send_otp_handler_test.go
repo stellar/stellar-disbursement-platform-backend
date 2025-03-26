@@ -660,7 +660,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 				contactTypeStr := utils.Humanize(string(contactType))
 				truncatedContactInfo := utils.TruncateString(r.ContactByType(contactType), 3)
 				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s to %s: %w", contactTypeStr, truncatedContactInfo, errors.New("error sending message")))
-				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil).WithErrorCode(ErrorCode500_9)
+				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil).WithErrorCode(httperror.Code500_9)
 			},
 		},
 		{

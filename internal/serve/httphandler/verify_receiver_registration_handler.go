@@ -67,19 +67,19 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 	if sep24Claims == nil {
 		err := fmt.Errorf("no SEP-24 claims found in the request context")
 		log.Ctx(ctx).Error(err)
-		return reqObj, nil, httperror.Unauthorized("", err, nil).WithErrorCode(ErrorCode401_0)
+		return reqObj, nil, httperror.Unauthorized("", err, nil).WithErrorCode(httperror.Code401_0)
 	}
 
 	// STEP 2: Decode request body
 	if r.Body == nil {
 		err := fmt.Errorf("request body is empty")
-		return reqObj, nil, httperror.BadRequest("", err, nil).WithErrorCode(ErrorCode400_0)
+		return reqObj, nil, httperror.BadRequest("", err, nil).WithErrorCode(httperror.Code400_0)
 	}
 	receiverRegistrationRequest := data.ReceiverRegistrationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&receiverRegistrationRequest)
 	if err != nil {
 		err = fmt.Errorf("invalid request body: %w", err)
-		return reqObj, nil, httperror.BadRequest("", err, nil).WithErrorCode(ErrorCode400_0)
+		return reqObj, nil, httperror.BadRequest("", err, nil).WithErrorCode(httperror.Code400_0)
 	}
 
 	// STEP 3: Validate reCAPTCHA Token
@@ -87,13 +87,13 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 		isValid, tokenErr := v.ReCAPTCHAValidator.IsTokenValid(ctx, receiverRegistrationRequest.ReCAPTCHAToken)
 		if tokenErr != nil {
 			tokenErr = fmt.Errorf("validating reCAPTCHA token: %w", tokenErr)
-			return reqObj, nil, httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", tokenErr, nil).WithErrorCode(ErrorCode500_5)
+			return reqObj, nil, httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", tokenErr, nil).WithErrorCode(httperror.Code500_5)
 		}
 		if !isValid {
 			truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
 			truncatedOTP := utils.TruncateString(receiverRegistrationRequest.OTP, 2)
 			err = fmt.Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s", truncatedOTP, truncatedPhoneNumber)
-			return reqObj, nil, httperror.BadRequest("reCAPTCHA token is invalid", err, nil).WithErrorCode(ErrorCode400_1)
+			return reqObj, nil, httperror.BadRequest("reCAPTCHA token is invalid", err, nil).WithErrorCode(httperror.Code400_1)
 		}
 	}
 
@@ -103,7 +103,7 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 	if validator.HasErrors() {
 		err = fmt.Errorf("request invalid: %s", validator.Errors)
 		// TODO: how to manage these extras?
-		return reqObj, nil, httperror.BadRequest("", err, validator.Errors).WithErrorCode(ErrorCode400_0)
+		return reqObj, nil, httperror.BadRequest("", err, validator.Errors).WithErrorCode(httperror.Code400_0)
 	}
 
 	return receiverRegistrationRequest, sep24Claims, nil
@@ -299,7 +299,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	} else if receiverRegistrationRequest.Email != "" {
 		contactInfo = receiverRegistrationRequest.Email
 	} else {
-		httperror.InternalError(ctx, "Unexpected contact info", nil, nil).WithErrorCode(ErrorCode500_6).Render(w)
+		httperror.InternalError(ctx, "Unexpected contact info", nil, nil).WithErrorCode(httperror.Code500_6).Render(w)
 		return
 	}
 
@@ -362,7 +362,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		var errorInformationNotFound *ErrorInformationNotFound
 		if errors.As(atomicFnErr, &errorInformationNotFound) {
 			log.Ctx(ctx).Error(errorInformationNotFound.cause)
-			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).WithErrorCode(ErrorCode400_2).Render(w)
+			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).WithErrorCode(httperror.Code400_2).Render(w)
 			return
 		}
 		// if error is due to verification attempts being exceeded, we want to display the message with what that limit is clearly
@@ -370,11 +370,11 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		var errorVerficationAttemptsExceeded *ErrorVerificationAttemptsExceeded
 		if errors.As(atomicFnErr, &errorVerficationAttemptsExceeded) {
 			log.Ctx(ctx).Error(errorVerficationAttemptsExceeded.cause)
-			httperror.BadRequest(errorVerficationAttemptsExceeded.Error(), atomicFnErr, nil).WithErrorCode(ErrorCode400_3).Render(w)
+			httperror.BadRequest(errorVerficationAttemptsExceeded.Error(), atomicFnErr, nil).WithErrorCode(httperror.Code400_3).Render(w)
 			return
 		}
 
-		httperror.InternalError(ctx, "", atomicFnErr, nil).WithErrorCode(ErrorCode500_0).Render(w)
+		httperror.InternalError(ctx, "", atomicFnErr, nil).WithErrorCode(httperror.Code500_0).Render(w)
 		return
 	}
 

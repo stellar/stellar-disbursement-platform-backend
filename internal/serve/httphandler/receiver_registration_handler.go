@@ -15,24 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-const (
-	ErrorCode400_0 = "400_0" // Invalid request body.
-	ErrorCode400_1 = "400_1" // ReCAPTCHA token is invalid.
-	ErrorCode400_2 = "400_2" // The information you provided could not be found.
-	ErrorCode400_3 = "400_3" // The number of attempts to confirm the verification value exceeded the max attempts.
-	ErrorCode401_0 = "401_0" // Not authorized.
-	ErrorCode500_0 = "500_0" // An internal error occurred while processing this request.
-	ErrorCode500_1 = "500_1" // Cannot get organization.
-	ErrorCode500_2 = "500_2" // Cannot retrieve the tenant from the context.
-	ErrorCode500_3 = "500_3" // Cannot get logo URL.
-	ErrorCode500_4 = "500_4" // Cannot register receiver wallet.
-	ErrorCode500_5 = "500_5" // Cannot validate reCAPTCHA token.
-	ErrorCode500_6 = "500_6" // Unexpected contact info.
-	ErrorCode500_7 = "500_7" // Cannot generate OTP for receiver wallet.
-	ErrorCode500_8 = "500_8" // Cannot update OTP for receiver wallet.
-	ErrorCode500_9 = "500_9" // Failed to send OTP message.
-)
-
 type ReceiverRegistrationHandler struct {
 	Models              *data.Models
 	ReceiverWalletModel *data.ReceiverWalletModel
@@ -57,7 +39,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 	if sep24Claims == nil {
 		err := fmt.Errorf("no SEP-24 claims found in the request context")
 		log.Ctx(ctx).Error(err)
-		httperror.Unauthorized("", err, nil).WithErrorCode(ErrorCode401_0).Render(w)
+		httperror.Unauthorized("", err, nil).WithErrorCode(httperror.Code401_0).Render(w)
 		return
 	}
 
@@ -65,13 +47,13 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		err = fmt.Errorf("SEP-24 claims are invalid: %w", err)
 		log.Ctx(ctx).Error(err)
-		httperror.Unauthorized("", err, nil).WithErrorCode(ErrorCode401_0).Render(w)
+		httperror.Unauthorized("", err, nil).WithErrorCode(httperror.Code401_0).Render(w)
 		return
 	}
 
 	organization, err := h.Models.Organizations.Get(ctx)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot get organization", err, nil).WithErrorCode(ErrorCode500_1).Render(w)
+		httperror.InternalError(ctx, "Cannot get organization", err, nil).WithErrorCode(httperror.Code500_1).Render(w)
 		return
 	}
 
@@ -82,13 +64,13 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 	currentTenant, err := tenant.GetTenantFromContext(ctx)
 	if err != nil || currentTenant == nil {
-		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).WithErrorCode(ErrorCode500_2).Render(w)
+		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).WithErrorCode(httperror.Code500_2).Render(w)
 		return
 	}
 
 	logoURL, err := getLogoURL(currentTenant.BaseURL)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot get logo URL", err, nil).WithErrorCode(ErrorCode500_3).Render(w)
+		httperror.InternalError(ctx, "Cannot get logo URL", err, nil).WithErrorCode(httperror.Code500_3).Render(w)
 		return
 	}
 
@@ -102,7 +84,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.SEP10StellarMemo(), sep24Claims.ClientDomain())
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
-		httperror.InternalError(ctx, "Cannot register receiver wallet", err, nil).WithErrorCode(ErrorCode500_4).Render(w)
+		httperror.InternalError(ctx, "Cannot register receiver wallet", err, nil).WithErrorCode(httperror.Code500_4).Render(w)
 		return
 	}
 	if rw != nil {
