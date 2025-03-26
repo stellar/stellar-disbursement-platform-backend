@@ -50,8 +50,11 @@ export const SelectVerificationMethod: FC = () => {
   const reCaptchaRef = useRef<ReCaptcha>(null);
   const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
 
-  const isRecaptchaPending = () =>
-    !org.is_recaptcha_disabled && !reCaptchaToken;
+  const isRecaptchaPending = () => {
+    const res = !org.is_recaptcha_disabled && !reCaptchaToken;
+    console.log("isRecaptchaPending", res);
+    return res;
+  };
 
   // Redirect to already registered page if user is registered
   useEffect(() => {
@@ -255,7 +258,7 @@ export const SelectVerificationMethod: FC = () => {
       isDisabled = inputPhoneError !== false || !iti?.isValidNumber();
     }
 
-    if (!reCaptchaToken) {
+    if (isRecaptchaPending()) {
       isDisabled = true;
     }
 
