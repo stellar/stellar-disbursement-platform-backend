@@ -75,7 +75,7 @@ export const PasscodeEntry: FC = () => {
       setViewMessage({
         type: "error",
         title: t("generic.error"),
-        message: translatedApiErrorMessage(otpError),
+        message: translatedApiErrorMessage(t, otpError),
         timestamp: new Date().getTime(),
       });
     }
@@ -94,7 +94,7 @@ export const PasscodeEntry: FC = () => {
       setViewMessage({
         type: "error",
         title: t("generic.error"),
-        message: translatedApiErrorMessage(verifyError),
+        message: translatedApiErrorMessage(t, verifyError),
         timestamp: new Date().getTime(),
       });
     }

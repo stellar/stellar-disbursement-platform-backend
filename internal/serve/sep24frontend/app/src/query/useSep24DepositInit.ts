@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { SDP_API_ENDPOINT } from "@/config/settings";
 import { throwUnexpectedError } from "@/helpers/throwUnexpectedError";
 import { ApiError, Sep24DepositInitResponse } from "@/types/types";
@@ -8,6 +9,8 @@ import { ApiError, Sep24DepositInitResponse } from "@/types/types";
  * user’s registration status.
  */
 export const useSep24DepositInit = (token: string | null) => {
+  const { t } = useTranslation();
+
   const query = useQuery<Sep24DepositInitResponse, ApiError>({
     queryKey: ["useSep24DepositInit", token],
     queryFn: async () => {
@@ -38,7 +41,7 @@ export const useSep24DepositInit = (token: string | null) => {
           throw e;
         }
 
-        throwUnexpectedError(e);
+        throwUnexpectedError(t, e);
       }
     },
     enabled: Boolean(token),
