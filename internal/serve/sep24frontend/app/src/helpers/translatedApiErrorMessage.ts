@@ -1,17 +1,15 @@
 import { ApiError } from "@/types/types";
-import { useTranslation } from "react-i18next";
-
-const { t } = useTranslation();
+import { TFunction } from "i18next";
 
 /**
  * Gets the translated text to be displayed to the user based on the error code. If no error code is provided, then the
  * original English error message is returned.
  * @returns The error message.
  */
-export const translatedApiErrorMessage = ({
-  error,
-  error_code,
-}: ApiError): string => {
+export const translatedApiErrorMessage = (
+  t: TFunction,
+  { error, error_code }: ApiError
+): string => {
   if (!error_code) {
     return error;
   }

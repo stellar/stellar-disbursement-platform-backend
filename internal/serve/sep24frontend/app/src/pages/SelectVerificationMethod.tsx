@@ -313,7 +313,7 @@ export const SelectVerificationMethod: FC = () => {
 
         {otpError ? (
           <Alert variant="error" placement="inline" title={t("generic.error")}>
-            {renderApiErrorMessage(otpError)}
+            {renderApiErrorMessage(t, otpError)}
           </Alert>
         ) : null}
       </Box>
