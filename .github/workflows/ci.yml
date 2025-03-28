@@ -93,6 +93,34 @@ jobs:
             exit 1
           fi
 
+  check-sep24-react-dist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: internal/serve/sep24frontend/app
+
+      - name: Install NodeJs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Build React app
+        run: yarn build
+
+      - name: Check if the `dist` folder is in sync
+        run: |
+          if git diff --quiet; then
+            echo "✅ dist folder is in sync"
+          else
+            echo "🚨 dist folder is not in sync"
+            exit 1
+          fi
+
   build:
     runs-on: ubuntu-latest
     steps:
