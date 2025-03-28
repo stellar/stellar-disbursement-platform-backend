@@ -100,9 +100,9 @@ export const PasscodeEntry: FC = () => {
   // Verify success
   useEffect(() => {
     if (isVerifySuccess) {
-      navigate(Routes.SUCCESS);
+      navigate({ pathname: Routes.SUCCESS, search: searchParams });
     }
-  }, [isVerifySuccess, navigate]);
+  }, [isVerifySuccess, navigate, searchParams]);
 
   // Verify error
   useEffect(() => {
