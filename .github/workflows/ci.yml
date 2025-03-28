@@ -112,7 +112,7 @@ jobs:
         working-directory: internal/serve/sep24frontend/app
         run: yarn build
 
-      - name: Check if the `dist` folder is in sync
+      - name: Check If `sep24frontend/app/dist` folder is in sync
         run: |
           if [[ -z $(git status --porcelain) ]]; then
             echo "✅ dist folder is in sync"
