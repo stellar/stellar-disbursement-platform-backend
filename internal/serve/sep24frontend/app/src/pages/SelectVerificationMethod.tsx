@@ -58,9 +58,9 @@ export const SelectVerificationMethod: FC = () => {
   // Redirect to already registered page if user is registered
   useEffect(() => {
     if (org.is_registered) {
-      navigate({ pathname: Routes.ALREADY_REGISTERED });
+      navigate({ pathname: Routes.ALREADY_REGISTERED, search: searchParams });
     }
-  }, [org.is_registered, navigate]);
+  }, [org.is_registered, navigate, searchParams]);
 
   const {
     data: otpData,
