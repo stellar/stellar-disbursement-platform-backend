@@ -52,7 +52,6 @@ export const SelectVerificationMethod: FC = () => {
 
   const isRecaptchaPending = () => {
     const res = !org.is_recaptcha_disabled && !reCaptchaToken;
-    console.log("isRecaptchaPending", res);
     return res;
   };
 
