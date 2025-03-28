@@ -66,6 +66,9 @@ global:
   ##   - postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
   ephemeralDatabase: true
 
+  ## @param global.autoGenerateSecrets Determines if secrets should be auto-generated.
+  autoGenerateSecrets: false
+
   ## @extra global.eventBroker Configuration related to the event broker used by the application.
   ## @param global.eventBroker.type The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".
   ## @param global.eventBroker.urls A comma-separated list of broker URLs for the event broker.

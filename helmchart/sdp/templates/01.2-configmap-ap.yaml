@@ -40,7 +40,7 @@ data:
   SEP24_MORE_INFO_URL_BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}/wallet-registration/start
   CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
   PLATFORM_SERVER_AUTH_TYPE: JWT
-  {{- if .Values.global.distributionPublicKey }}
+  {{- if and .Values.global.distributionPublicKey (not .Values.anchorPlatform.configMap.data.ASSETS_VALUE) }}
   ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
     {
       "assets": [

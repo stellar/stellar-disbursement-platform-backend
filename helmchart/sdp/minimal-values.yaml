@@ -5,6 +5,8 @@
 global:
   ## global.ephemeralDatabase Enables the creation of an ephemeral database for testing purposes.
   ephemeralDatabase: true
+  ## @param global.autoGenerateSecrets Determines if secrets should be auto-generated.
+  autoGenerateSecrets: true
   ## global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
   singleTenantMode: true
 
