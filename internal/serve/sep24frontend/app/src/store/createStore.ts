@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { VerificationField } from "@/types/types";
 
 // Types
@@ -40,26 +41,32 @@ const initOrg = {
 // Store
 export const createStore = () =>
   create<Store>()(
-    immer((set) => ({
-      jwtToken: "",
-      language: "",
-      org: initOrg,
-      user: {},
-      updateJwtToken: (token: string) =>
-        set((state) => {
-          state.jwtToken = token;
-        }),
-      updateLanguage: (language: string) =>
-        set((state) => {
-          state.language = language;
-        }),
-      updateOrg: (orgData) =>
-        set((state) => {
-          state.org = { ...state.org, ...orgData };
-        }),
-      updateUser: (userData) =>
-        set((state) => {
-          state.user = { ...state.user, ...userData };
-        }),
-    }))
+    persist(
+      immer((set) => ({
+        jwtToken: "",
+        language: "",
+        org: initOrg,
+        user: {},
+        updateJwtToken: (token: string) =>
+          set((state) => {
+            state.jwtToken = token;
+          }),
+        updateLanguage: (language: string) =>
+          set((state) => {
+            state.language = language;
+          }),
+        updateOrg: (orgData) =>
+          set((state) => {
+            state.org = { ...state.org, ...orgData };
+          }),
+        updateUser: (userData) =>
+          set((state) => {
+            state.user = { ...state.user, ...userData };
+          }),
+      })),
+      {
+        name: "sep24:store",
+        storage: createJSONStorage(() => sessionStorage), // (optional). defaults to 'localStorage'
+      }
+    )
   );
