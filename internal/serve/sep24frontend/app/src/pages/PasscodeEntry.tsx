@@ -20,11 +20,20 @@ import { Routes } from "@/config/settings";
 import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
+import { getSearchParams } from "@/helpers/getSearchParams";
 
 export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const searchParams = getSearchParams().toString();
   const { user, jwtToken, org } = useStore();
+
+  // Redirect to root if user is not set
+  useEffect(() => {
+    if (Object.keys(user).length === 0) {
+      navigate({ pathname: Routes.START, search: searchParams });
+    }
+  }, [user, navigate, searchParams]);
 
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
