@@ -98,8 +98,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          path: internal/serve/sep24frontend/app
 
       - name: Install NodeJs
         uses: actions/setup-node@v4
@@ -107,9 +105,11 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
+        working-directory: internal/serve/sep24frontend/app
         run: yarn install
 
       - name: Build React app
+        working-directory: internal/serve/sep24frontend/app
         run: yarn build
 
       - name: Check if the `dist` folder is in sync
