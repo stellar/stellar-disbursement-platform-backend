@@ -28,8 +28,6 @@ import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useStore } from "@/store/useStore";
 import { VerificationMethod } from "@/types/types";
 
-// TODO: persist entered values
-
 export const SelectVerificationMethod: FC = () => {
   const { jwtToken, language, updateUser, org } = useStore();
   const { t } = useTranslation();
