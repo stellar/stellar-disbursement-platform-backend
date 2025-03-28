@@ -71,14 +71,21 @@ Selector labels
 SDP domain
 */}}
 {{- define "sdp.domain" -}}
-{{- .Values.sdp.route.domain | default "localhost" }}
+{{- .Values.sdp.route.domain | default (printf "localhost:%s" (include "sdp.port" .)) }}
 {{- end }}
 
 {{/*
 SDP MTN domain
 */}}
 {{- define "sdp.mtnDomain" -}}
-{{- .Values.sdp.route.mtnDomain | default "localhost" }}
+{{- .Values.sdp.route.mtnDomain | default (printf "localhost:%s" (include "sdp.port" .)) }}
+{{- end }}
+
+{{/*
+SDP ADMIN domain
+*/}}
+{{- define "sdp.adminDomain" -}}
+{{- .Values.sdp.route.adminDomain | default "" }}
 {{- end }}
 
 {{/*
@@ -136,7 +143,7 @@ TSS Metrics port
 Anchor Platform domain
 */}}
 {{- define "sdp.ap.domain" -}}
-{{- .Values.anchorPlatform.route.domain | default "localhost" }}
+{{- .Values.anchorPlatform.route.domain | default (printf "localhost:%s" (include "sdp.ap.sepPort" .)) }}
 {{- end }}
 
 {{/*
@@ -185,28 +192,28 @@ http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.lo
 {{/*
 Dashboard domain
 */}}
-{{- define "dashboard.domain" -}}
-{{- .Values.dashboard.route.domain | default "localhost" }}
+{{- define "sdp.dashboard.domain" -}}
+{{- .Values.dashboard.route.domain | default (printf "localhost:%s" (include "sdp.dashboard.port" .)) }}
 {{- end }}
 
 {{/*
 Dashboard MTN domain
 */}}
-{{- define "dashboard.mtnDomain" -}}
-{{- .Values.dashboard.route.mtnDomain | default "localhost" }}
+{{- define "sdp.dashboard.mtnDomain" -}}
+{{- .Values.dashboard.route.mtnDomain | default (printf "localhost:%s" (include "sdp.dashboard.port" .)) }}
 {{- end }}
 
 {{/*
 Dashboard domain schema
 */}}
-{{- define "dashboard.schema" -}}
+{{- define "sdp.dashboard.schema" -}}
 {{- .Values.dashboard.route.schema | default "https" }}
 {{- end }}
 
 {{/*
 Dashboard port
 */}}
-{{- define "dashboard.port" -}}
+{{- define "sdp.dashboard.port" -}}
 {{- .Values.dashboard.route.port | default "80" }}
 {{- end }}
 
@@ -218,9 +225,97 @@ Is Pubnet?
 {{- eq .Values.global.isPubnet true | default false }}
 {{- end }}
 
+
 {{/*
-Image Tag
+USDC Issuer depending on network
 */}}
-{{- define "imageTag" -}}
-{{- .Values.sdp.image.tag | default .Chart.AppVersion }}
-{{- end }}
+{{- define "sdp.usdcIssuer" -}}
+{{- if eq .Values.global.isPubnet true -}}
+GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN
+{{- else -}}
+GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+{{- end -}}
+{{- end -}}
+
+{{/*
+EURC Issuer depending on network
+*/}}
+{{- define "sdp.eurcIssuer" -}}
+{{- if eq .Values.global.isPubnet true -}}
+GDHU6WRG4IEQXM5NZ4BMPKOXHW76MZM4Y2IEMFDVXBSDP6SJY4ITNPP2
+{{- else -}}
+GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO
+{{- end -}}
+{{- end -}}
+
+{{/*
+Generate JWT secret - generates once per template rendering
+Returns: A 32-character random alphanumeric string
+*/}}
+{{- define "sdp.jwtSecret" -}}
+{{- $jwtSecret := default (randAlphaNum 32) .Values._generatedJwtSecret -}}
+{{- $_ := set .Values "_generatedJwtSecret" $jwtSecret -}}
+{{- $jwtSecret -}}
+{{- end -}}
+
+{{/*
+Generate platform auth secret - generates once per template rendering
+Returns: A 32-character random alphanumeric string
+*/}}
+{{- define "sdp.platformAuthSecret" -}}
+{{- $authSecret := default (randAlphaNum 32) .Values._generatedPlatformAuthSecret -}}
+{{- $_ := set .Values "_generatedPlatformAuthSecret" $authSecret -}}
+{{- $authSecret -}}
+{{- end -}}
+
+{{/*
+Generate admin account name - generates once per template rendering
+Returns: Default "sdp-admin" or user-provided value
+*/}}
+{{- define "sdp.adminAccount" -}}
+{{- $adminAccount := default "sdp-admin" .Values._generatedAdminAccount -}}
+{{- $_ := set .Values "_generatedAdminAccount" $adminAccount -}}
+{{- $adminAccount -}}
+{{- end -}}
+
+{{/*
+Generate admin API key - generates once per template rendering
+Returns: A 32-character random alphanumeric string
+*/}}
+{{- define "sdp.adminApiKey" -}}
+{{- $adminApiKey := default (randAlphaNum 32) .Values._generatedAdminApiKey -}}
+{{- $_ := set .Values "_generatedAdminApiKey" $adminApiKey -}}
+{{- $adminApiKey -}}
+{{- end -}}
+
+{{/*
+Generate EC256 private key - generates once per template rendering
+Returns: ECDSA private key in PEM format
+*/}}
+{{- define "sdp.ec256PrivateKey" -}}
+{{- $key := default (genPrivateKey "ecdsa") .Values._generatedEC256Key -}}
+{{- $_ := set .Values "_generatedEC256Key" $key -}}
+{{- $key -}}
+{{- end -}}
+
+{{/*
+SDP base URL with schema and domain
+*/}}
+{{- define "sdp.baseURL" -}}
+{{- printf "%s://%s" (include "sdp.schema" .) (include "sdp.domain" .) -}}
+{{- end -}}
+
+{{/*
+AP SEP base URL with schema and domain
+*/}}
+{{- define "sdp.ap.baseURL" -}}
+{{- printf "%s://%s" (include "sdp.ap.schema" .) (include "sdp.ap.domain" .) -}}
+{{- end -}}
+
+{{/*
+Dashboard base URL with schema and domain
+*/}}
+{{- define "sdp.dashboard.baseURL" -}}
+{{- printf "%s://%s" (include "sdp.dashboard.schema" .) (include "sdp.dashboard.domain" .) -}}
+{{- end -}}
+

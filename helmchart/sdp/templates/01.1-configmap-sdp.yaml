@@ -6,13 +6,11 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "sdp.labels" . | nindent 4 }}
-
   {{- if .Values.sdp.configMap.annotations }}
   annotations:
     {{- toYaml .Values.sdp.configMap.annotations | nindent 4 }}
   {{- end }}
 
-{{- if .Values.sdp.configMap.data }}
 data:
   {{- if eq (include "isPubnet" .) "true" }}
   NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
@@ -21,18 +19,35 @@ data:
   NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
   HORIZON_URL: "https://horizon-testnet.stellar.org"
   {{- end }}
-  BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}
+  BASE_URL: {{ include "sdp.baseURL" . | quote }}
+  SDP_UI_BASE_URL: {{ include "sdp.dashboard.baseURL" . | quote }}
   PORT: {{ include "sdp.port" . | quote }}
   METRICS_PORT: {{ include "sdp.metricsPort" . | quote }}
   ADMIN_PORT: {{ include "sdp.adminPort" . | quote }}
-  ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.schema" . }}://{{ include "sdp.ap.domain" . }}
-  ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . }}
-  EVENT_BROKER_TYPE: {{ .Values.global.eventBroker.type | quote }}
-  {{- if eq .Values.global.eventBroker.type "KAFKA" }}
-  BROKER_URLS: {{ .Values.global.eventBroker.urls | quote }}
-  CONSUMER_GROUP_ID: {{ .Values.global.eventBroker.consumerGroupId | quote }}
-  KAFKA_SECURITY_PROTOCOL: {{ .Values.global.eventBroker.kafka.securityProtocol | quote }}
+  ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.baseURL" . | quote }}
+  ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . | quote }}
+  {{- /*
+Values from the `global` section
+  */}}
+  {{- with .Values.global }}
+  EVENT_BROKER_TYPE: {{ .eventBroker.type | quote }}
+  {{- if eq .eventBroker.type "KAFKA" }}
+  BROKER_URLS: {{ .eventBroker.urls | quote }}
+  CONSUMER_GROUP_ID: {{ .eventBroker.consumerGroupId | quote }}
+  KAFKA_SECURITY_PROTOCOL: {{ .eventBroker.kafka.securityProtocol | quote }}
   {{- end }}
-  SINGLE_TENANT_MODE: {{ .Values.global.singleTenantMode | quote }}
+  SINGLE_TENANT_MODE: {{ .singleTenantMode | quote }}
+  {{- if .distributionPublicKey }}
+  DISTRIBUTION_PUBLIC_KEY: {{ .distributionPublicKey | quote }}
+  {{- end }}
+  {{- if .recaptchaSiteKey }}
+  RECAPTCHA_SITE_KEY: {{ .recaptchaSiteKey | quote }}
+  {{- end }}
+  {{- if .sep10PublicKey}}
+  SEP10_SIGNING_PUBLIC_KEY: {{ .sep10PublicKey | quote }}
+  {{- end }}
+  {{- end }}
+  {{- /*
+Values from the sdp configmap section - These will override the global values
+  */}}
   {{- tpl (toYaml .Values.sdp.configMap.data | nindent 2) . }}
-{{- end }}

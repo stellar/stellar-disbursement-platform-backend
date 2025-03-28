@@ -34,8 +34,16 @@ spec:
       {{- if .Values.global.serviceAccount.name }}
       serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
       {{- end }}
+      {{- if or .Values.sdp.deployment.priorityClassName .Values.global.deployment.priorityClassName }}
+      priorityClassName: {{ .Values.sdp.deployment.priorityClassName | default .Values.global.deployment.priorityClassName | quote }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.sdp.deployment.podSecurityContext | nindent 8 }}
+      
+      {{- with default .Values.global.deployment.topologySpreadConstraints .Values.sdp.deployment.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       
       initContainers:
       # ============================= SDP Migrations: =============================
@@ -125,7 +133,7 @@ spec:
           - secretRef:
               name: {{ .Values.sdp.kubeSecrets.secretName }}
           {{ end }}
-          
+
 
       {{- with .Values.sdp.deployment.nodeSelector }}
       nodeSelector:

@@ -36,8 +36,16 @@ spec:
       {{- if .Values.global.serviceAccount.name }}
       serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
       {{- end }}
+      {{- if or .Values.tss.deployment.priorityClassName .Values.global.deployment.priorityClassName }}
+      priorityClassName: {{ .Values.tss.deployment.priorityClassName | default .Values.global.deployment.priorityClassName | quote }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.tss.deployment.podSecurityContext | nindent 8 }}
+      
+      {{- with default .Values.global.deployment.topologySpreadConstraints .Values.tss.deployment.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       
       containers:
       # ============================= Stellar Disbursement Platform: =============================

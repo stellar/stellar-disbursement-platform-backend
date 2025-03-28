@@ -34,8 +34,16 @@ spec:
       # {{- if .Values.global.serviceAccount.name }}
       # serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
       # {{- end }}
+      {{- if or .Values.anchorPlatform.deployment.priorityClassName .Values.global.deployment.priorityClassName }}
+      priorityClassName: {{ .Values.anchorPlatform.deployment.priorityClassName | default .Values.global.deployment.priorityClassName | quote }}
+      {{- end }}
       securityContext:
         {{- tpl (toYaml .Values.anchorPlatform.deployment.podSecurityContext) . | nindent 8 }}
+      
+      {{- with default .Values.global.deployment.topologySpreadConstraints .Values.anchorPlatform.deployment.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       
       containers:
       # ============================= Anchor Platform: =============================

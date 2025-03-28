@@ -15,19 +15,24 @@ metadata:
 
 data:
   env-config.js: |-
-    window._env_ = {
-      {{- with .Values.dashboard.configMap.data }}
-      {{- range $key, $value := . }}
-      {{ $key }}: "{{ tpl ($value) $ }}",
-      {{- end }}
-      {{- end }}
-      {{- if eq (include "isPubnet" .) "true" }}
-      HORIZON_URL: "https://horizon.stellar.org",
-      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/pubnet",
-      {{- else }}
-      HORIZON_URL: "https://horizon-testnet.stellar.org",
-      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/testnet",
-      {{- end }}
-      SINGLE_TENANT_MODE: {{ .Values.global.singleTenantMode }}
-    };
+    {{- $config := dict }}
+    {{- if eq (include "isPubnet" .) "true" }}
+    {{- $_ := set $config "HORIZON_URL" "https://horizon.stellar.org" }}
+    {{- $_ := set $config "STELLAR_EXPERT_URL" "https://stellar.expert/explorer/pubnet" }}
+    {{- else }}
+    {{- $_ := set $config "HORIZON_URL" "https://horizon-testnet.stellar.org" }}
+    {{- $_ := set $config "STELLAR_EXPERT_URL" "https://stellar.expert/explorer/testnet" }}
+    {{- end }}
+    {{- $_ := set $config "SINGLE_TENANT_MODE" .Values.global.singleTenantMode }}
+    {{- $_ := set $config "RECAPTCHA_SITE_KEY" .Values.global.recaptchaSiteKey }}
+    {{- $_ := set $config "API_URL" ( include "sdp.baseURL" . ) }}
+    {{- /*
+Values from the dashboard configmap section - These will override the global values
+  */}}
+    {{- if .Values.dashboard.configMap.data }}
+    {{- range $key, $value := .Values.dashboard.configMap.data }}
+    {{- $_ := set $config $key (tpl $value $) }}
+    {{- end }}
+    {{- end }}
+    window._env_ = {{- toJson $config }}
 {{- end }}
