@@ -18,13 +18,22 @@ import { ContentLayout } from "@/components/ContentLayout";
 import { useStore } from "@/store/useStore";
 import { Routes } from "@/config/settings";
 import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
+import { getSearchParams } from "@/helpers/getSearchParams";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
 
 export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const searchParams = getSearchParams().toString();
   const { user, jwtToken, org } = useStore();
+
+  // Redirect to /start if user is not set
+  useEffect(() => {
+    if (Object.keys(user).length === 0) {
+      navigate({ pathname: Routes.START, search: searchParams });
+    }
+  }, [user, navigate, searchParams]);
 
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
@@ -91,9 +100,9 @@ export const PasscodeEntry: FC = () => {
   // Verify success
   useEffect(() => {
     if (isVerifySuccess) {
-      navigate(Routes.SUCCESS);
+      navigate({ pathname: Routes.SUCCESS, search: searchParams });
     }
-  }, [isVerifySuccess, navigate]);
+  }, [isVerifySuccess, navigate, searchParams]);
 
   // Verify error
   useEffect(() => {
