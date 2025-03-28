@@ -114,7 +114,7 @@ jobs:
 
       - name: Check if the `dist` folder is in sync
         run: |
-          if git diff --quiet; then
+          if [[ -z $(git status --porcelain) ]]; then
             echo "✅ dist folder is in sync"
           else
             echo "🚨 dist folder is not in sync"
