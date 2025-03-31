@@ -56,6 +56,13 @@ global:
     annotations:
     name: ""
 
+  ## @extra global.deployment Configuration related to the deployment of the application.
+  ## @param global.deployment.priorityClassName Name of the priority class to be used by the deployment.
+  ## @param global.deployment.topologySpreadConstraints Pod topology spread constraints for all services.
+  deployment:
+    priorityClassName: ""
+    topologySpreadConstraints: []
+
   ## @param global.ephemeralDatabase Enables or disables the creation of an ephemeral database for testing purposes.
   ## If this option is enabled, make sure to set the `DATABASE_URL` environment variable to:
   ##   - postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5432/postgres-sdp?sslmode=disable
@@ -122,6 +129,8 @@ sdp:
   ## @param sdp.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param sdp.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param sdp.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
+  ## @param sdp.deployment.priorityClassName Name of the priority class to be used by the SDP deployment. If not specified, no priority class will be used.
+  ## @param sdp.deployment.topologySpreadConstraints Pod topology spread constraints for the SDP service, overrides global setting if defined.
   deployment:
     annotations:
     podAnnotations: {}
@@ -131,6 +140,8 @@ sdp:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
 
   ## @extra sdp.configMap Configuration for the ConfigMap used by the SDP service.
   ## @param sdp.configMap.annotations Annotations to be added to the ConfigMap.
@@ -299,6 +310,8 @@ anchorPlatform:
   ## @param anchorPlatform.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param anchorPlatform.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param anchorPlatform.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
+  ## @param anchorPlatform.deployment.priorityClassName Name of the priority class to be used by the Anchor Platform deployment. If not specified, no priority class will be used.
+  ## @param anchorPlatform.deployment.topologySpreadConstraints Pod topology spread constraints for the Anchor Platform service, overrides global setting if defined.
   deployment:
     annotations: {}
     podAnnotations: {}
@@ -309,6 +322,8 @@ anchorPlatform:
     nodeSelector: {}
     tolerations: []
     affinity: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
 
 
   ## @extra anchorPlatform.configMap Configuration for the ConfigMap used by the anchorPlatform service.
@@ -446,6 +461,8 @@ tss:
   ## @param tss.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param tss.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param tss.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
+  ## @param tss.deployment.priorityClassName Name of the priority class to be used by the TSS deployment. If not specified, no priority class will be used.
+  ## @param tss.deployment.topologySpreadConstraints Pod topology spread constraints for the TSS service, overrides global setting if defined.
   deployment:
     annotations:
     podAnnotations: { }
@@ -456,6 +473,8 @@ tss:
     nodeSelector: { }
     tolerations: [ ]
     affinity: { }
+    priorityClassName: ""
+    topologySpreadConstraints: []
 
   ## @extra tss.configMap Configuration settings for the Transaction Submission Service (TSS) ConfigMap.
   ## @param tss.configMap.annotations Annotations to be added to the ConfigMap.
@@ -546,6 +565,8 @@ dashboard:
   ## @param dashboard.deployment.podSecurityContext Security settings for the pods.
   ## @param dashboard.deployment.securityContext Security settings for the container within the pod.
   ## @param dashboard.deployment.resources Resource limits and requests for the application pods.
+  ## @param dashboard.deployment.priorityClassName Name of the priority class to be used by the Dashboard deployment. If not specified, no priority class will be used.
+  ## @param dashboard.deployment.topologySpreadConstraints Pod topology spread constraints for the Dashboard service, overrides global setting if defined.
   deployment:
     annotations: {}
     podAnnotations: {}
@@ -553,6 +574,8 @@ dashboard:
     podSecurityContext: {}
     securityContext: {}
     resources: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
 
   ## @extra dashboard.configMap Configuration settings for the Dashboard ConfigMap.
   ## @param dashboard.configMap.annotations Annotations to be added to the ConfigMap.
