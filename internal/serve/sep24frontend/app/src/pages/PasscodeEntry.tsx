@@ -19,6 +19,7 @@ import { useStore } from "@/store/useStore";
 import { Routes } from "@/config/settings";
 import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
 import { getSearchParams } from "@/helpers/getSearchParams";
+import { useIsEmptyUser } from "@/hooks/useIsEmptyUser";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
 
@@ -27,13 +28,7 @@ export const PasscodeEntry: FC = () => {
   const navigate = useNavigate();
   const searchParams = getSearchParams().toString();
   const { user, jwtToken, org } = useStore();
-
-  // Redirect to /start if user is not set
-  useEffect(() => {
-    if (Object.keys(user).length === 0) {
-      navigate({ pathname: Routes.START, search: searchParams });
-    }
-  }, [user, navigate, searchParams]);
+  useIsEmptyUser();
 
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
