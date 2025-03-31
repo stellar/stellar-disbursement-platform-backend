@@ -1,14 +1,17 @@
 import { FC } from "react";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
+import { Trans } from "react-i18next";
 import { Button, Heading, Text } from "@stellar/design-system";
 
 import { Box } from "@/components/Box";
 import { ContentLayout } from "@/components/ContentLayout";
+import { useIsEmptyUser } from "@/hooks/useIsEmptyUser";
 import { useStore } from "@/store/useStore";
 
 export const Success: FC = () => {
   const { t } = useTranslation();
   const { user } = useStore();
+  useIsEmptyUser();
 
   return (
     <ContentLayout

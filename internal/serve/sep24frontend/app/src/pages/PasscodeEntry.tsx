@@ -18,13 +18,17 @@ import { ContentLayout } from "@/components/ContentLayout";
 import { useStore } from "@/store/useStore";
 import { Routes } from "@/config/settings";
 import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
+import { getSearchParams } from "@/helpers/getSearchParams";
+import { useIsEmptyUser } from "@/hooks/useIsEmptyUser";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useSep24DepositVerification } from "@/query/useSep24DepositVerification";
 
 export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const searchParams = getSearchParams().toString();
   const { user, jwtToken, org } = useStore();
+  useIsEmptyUser();
 
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
@@ -91,9 +95,9 @@ export const PasscodeEntry: FC = () => {
   // Verify success
   useEffect(() => {
     if (isVerifySuccess) {
-      navigate(Routes.SUCCESS);
+      navigate({ pathname: Routes.SUCCESS, search: searchParams });
     }
-  }, [isVerifySuccess, navigate]);
+  }, [isVerifySuccess, navigate, searchParams]);
 
   // Verify error
   useEffect(() => {

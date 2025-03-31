@@ -28,8 +28,6 @@ import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 import { useStore } from "@/store/useStore";
 import { VerificationMethod } from "@/types/types";
 
-// TODO: persist entered values
-
 export const SelectVerificationMethod: FC = () => {
   const { jwtToken, language, updateUser, org } = useStore();
   const { t } = useTranslation();
@@ -52,16 +50,15 @@ export const SelectVerificationMethod: FC = () => {
 
   const isRecaptchaPending = () => {
     const res = !org.is_recaptcha_disabled && !reCaptchaToken;
-    console.log("isRecaptchaPending", res);
     return res;
   };
 
-  // Redirect to already registered page if user is registered
+  // Redirect to /already-registered if user is registered
   useEffect(() => {
     if (org.is_registered) {
-      navigate({ pathname: Routes.ALREADY_REGISTERED });
+      navigate({ pathname: Routes.ALREADY_REGISTERED, search: searchParams });
     }
-  }, [org.is_registered, navigate]);
+  }, [org.is_registered, navigate, searchParams]);
 
   const {
     data: otpData,
