@@ -786,7 +786,7 @@ func Test_CSPMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		wantCSP := "script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/;style-src 'self' https://www.google.com/recaptcha/ https://fonts.googleapis.com/css2 'unsafe-inline';connect-src 'self' https://www.google.com/recaptcha/ https://ipapi.co/json;font-src 'self' https://fonts.gstatic.com;default-src 'self';frame-src 'self' https://www.google.com/recaptcha/;frame-ancestors 'self';form-action 'self';"
+		wantCSP := "script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/;style-src 'self' https://www.google.com/recaptcha/ https://fonts.googleapis.com/css2 'unsafe-inline';connect-src 'self' https://www.google.com/recaptcha/ https://ipapi.co/json;font-src 'self' https://fonts.gstatic.com;default-src 'self';frame-src 'self' https://www.google.com/recaptcha/;frame-ancestors 'self';form-action 'self';img-src 'self' data: https:;"
 		gotCSP := resp.Header.Get("Content-Security-Policy")
 		assert.Equal(t, wantCSP, gotCSP)
 		assert.Equal(t, expectedRespBody, string(respBody))
