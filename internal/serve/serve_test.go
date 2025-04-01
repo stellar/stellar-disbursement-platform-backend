@@ -386,6 +386,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		method string
 		path   string
 	}{
+		{http.MethodGet, "/organization/logo"},
 		{http.MethodGet, "/health"},
 		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
@@ -474,7 +475,6 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// Organization
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
-		{http.MethodGet, "/organization/logo"},
 		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
@@ -482,6 +482,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/exports/disbursements"},
 		{http.MethodGet, "/exports/payments"},
 		{http.MethodGet, "/exports/receivers"},
+		// SEP-24 Wallet Registration
+		{http.MethodGet, "/wallet-registration/start"},
+		{http.MethodGet, "/sep24-interactive-deposit/info"},
+		{http.MethodPost, "/sep24-interactive-deposit/otp"},
+		{http.MethodPost, "/sep24-interactive-deposit/verification"},
 	}
 
 	// Expect 401 as a response:
