@@ -57,9 +57,15 @@ global:
     name: ""
 
   ## @extra global.deployment Configuration related to the deployment of the application.
+  ## @param global.deployment.nodeSelector Node selector to determine which nodes should run the pods.
+  ## @param global.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
+  ## @param global.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
   ## @param global.deployment.priorityClassName Name of the priority class to be used by the deployment.
   ## @param global.deployment.topologySpreadConstraints Pod topology spread constraints for all services.
   deployment:
+    nodeSelector: { }
+    tolerations: [ ]
+    affinity: { }
     priorityClassName: ""
     topologySpreadConstraints: []
 
@@ -184,8 +190,8 @@ sdp:
       DISABLE_MFA: "false"
       INSTANCE_NAME: #required
       ENABLE_SCHEDULER: "false"
-      SCHEDULER_PAYMENT_JOB_SECONDS: "60"
-      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "60"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       MAX_INVITATION_RESEND_ATTEMPTS: "3"
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
       CIRCLE_API_TYPE: "TRANSFERS"
@@ -565,6 +571,9 @@ dashboard:
   ## @param dashboard.deployment.podSecurityContext Security settings for the pods.
   ## @param dashboard.deployment.securityContext Security settings for the container within the pod.
   ## @param dashboard.deployment.resources Resource limits and requests for the application pods.
+  ## @param dashboard.deployment.nodeSelector Node selector to determine which nodes should run the pods.
+  ## @param dashboard.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
+  ## @param dashboard.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
   ## @param dashboard.deployment.priorityClassName Name of the priority class to be used by the Dashboard deployment. If not specified, no priority class will be used.
   ## @param dashboard.deployment.topologySpreadConstraints Pod topology spread constraints for the Dashboard service, overrides global setting if defined.
   deployment:
@@ -574,6 +583,9 @@ dashboard:
     podSecurityContext: {}
     securityContext: {}
     resources: {}
+    nodeSelector: { }
+    tolerations: [ ]
+    affinity: { }
     priorityClassName: ""
     topologySpreadConstraints: []
 
