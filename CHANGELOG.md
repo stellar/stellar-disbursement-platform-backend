@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Allow the AWS configuration to be handled by the AWS session if the static credentials and region are not all passed to the SDP function. [#565](https://github.com/stellar/stellar-disbursement-platform-backend/pull/565)
 - GET `/organization/logo` is changed to be a public (unauthenticated) endpoint. [#564](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/564)
 - ReCAPTCHA is now optional for the SEP-24 interactive deposit flow. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
+- Simplified Helm Charts, added documentation and instructions for local set-up, auto-generation of secrets. [#596](https://github.com/stellar/stellar-disbursement-platform-backend/pull/596)
 
 ### Fixed
 

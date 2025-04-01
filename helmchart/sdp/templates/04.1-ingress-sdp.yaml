@@ -39,5 +39,16 @@ spec:
                 port:
                   number: {{ include "sdp.port" . }}
 {{- end }}
-
+{{- if .Values.sdp.route.adminDomain }}
+    - host: {{ include "sdp.adminDomain" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sdp.fullname" . }}
+                port:
+                  number: {{ include "sdp.adminPort" . }}
+{{- end }}
 {{- end }}
