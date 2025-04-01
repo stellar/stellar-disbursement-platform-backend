@@ -492,7 +492,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Route("/sep24-interactive-deposit", func(r chi.Router) {
-			r.Get("/init", httphandler.ReceiverRegistrationHandler{
+			r.Get("/info", httphandler.ReceiverRegistrationHandler{
 				Models:              o.Models,
 				ReceiverWalletModel: o.Models.ReceiverWallet,
 				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
