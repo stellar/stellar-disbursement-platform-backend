@@ -82,15 +82,16 @@ spec:
           - secretRef:
               name: {{ .Values.tss.kubeSecrets.secretName }}
           {{ end }}
-      {{- with .Values.tss.deployment.nodeSelector }}
+
+      {{- with .Values.tss.deployment.nodeSelector | default .Values.global.deployment.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tss.deployment.affinity }}
+      {{- with .Values.tss.deployment.affinity | default .Values.global.deployment.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tss.deployment.tolerations }}
+      {{- with .Values.tss.deployment.tolerations | default .Values.global.deployment.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -77,4 +77,18 @@ spec:
         - name: env-config
           configMap:
             name: {{ include "sdp.fullname" . }}-dashboard
+
+      {{- with .Values.dashboard.deployment.nodeSelector | default .Values.global.deployment.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dashboard.deployment.affinity | default .Values.global.deployment.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dashboard.deployment.tolerations | default .Values.global.deployment.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
 {{- end }}
