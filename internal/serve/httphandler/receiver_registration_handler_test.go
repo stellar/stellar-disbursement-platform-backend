@@ -35,7 +35,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	reCAPTCHASiteKey := "reCAPTCHASiteKey"
 
 	r := chi.NewRouter()
-	r.Get("/sep24-interactive-deposit/init", ReceiverRegistrationHandler{
+	r.Get("/sep24-interactive-deposit/info", ReceiverRegistrationHandler{
 		Models:              models,
 		ReceiverWalletModel: receiverWalletModel,
 		ReCAPTCHASiteKey:    reCAPTCHASiteKey,
@@ -43,7 +43,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	}.ServeHTTP)
 
 	t.Run("returns 401 - Unauthorized if the token is not in the request context", func(t *testing.T) {
-		req, reqErr := http.NewRequest("GET", "/sep24-interactive-deposit/init", nil)
+		req, reqErr := http.NewRequest("GET", "/sep24-interactive-deposit/info", nil)
 		require.NoError(t, reqErr)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -57,7 +57,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	})
 
 	t.Run("returns 401 - Unauthorized if the token is in the request context but it's not valid", func(t *testing.T) {
-		req, reqErr := http.NewRequest("GET", "/sep24-interactive-deposit/init", nil)
+		req, reqErr := http.NewRequest("GET", "/sep24-interactive-deposit/info", nil)
 		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
@@ -95,7 +95,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	ctxWithClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
 
 	t.Run("returns 200 - Ok with JSON response for unregistered user", func(t *testing.T) {
-		req, reqErr := http.NewRequestWithContext(ctxWithClaims, "GET", "/sep24-interactive-deposit/init", nil)
+		req, reqErr := http.NewRequestWithContext(ctxWithClaims, "GET", "/sep24-interactive-deposit/info", nil)
 		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
@@ -138,7 +138,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns 200 - Ok with JSON response for registered user", func(t *testing.T) {
-		req, reqErr := http.NewRequestWithContext(ctxWithClaims, "GET", "/sep24-interactive-deposit/init", nil)
+		req, reqErr := http.NewRequestWithContext(ctxWithClaims, "GET", "/sep24-interactive-deposit/info", nil)
 		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
@@ -170,7 +170,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			RegisteredClaims:  validClaims.RegisteredClaims,
 		}
 		ctxWithOtherWalletClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, otherWalletClaims)
-		req, reqErr := http.NewRequestWithContext(ctxWithOtherWalletClaims, "GET", "/sep24-interactive-deposit/init", nil)
+		req, reqErr := http.NewRequestWithContext(ctxWithOtherWalletClaims, "GET", "/sep24-interactive-deposit/info", nil)
 		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()

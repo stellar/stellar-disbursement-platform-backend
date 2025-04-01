@@ -484,7 +484,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/exports/receivers"},
 		// SEP-24 Wallet Registration
 		{http.MethodGet, "/wallet-registration/start"},
-		{http.MethodGet, "/sep24-interactive-deposit/init"},
+		{http.MethodGet, "/sep24-interactive-deposit/info"},
 		{http.MethodPost, "/sep24-interactive-deposit/otp"},
 		{http.MethodPost, "/sep24-interactive-deposit/verification"},
 	}

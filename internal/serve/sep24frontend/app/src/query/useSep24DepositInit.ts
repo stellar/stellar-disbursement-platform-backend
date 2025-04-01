@@ -20,7 +20,7 @@ export const useSep24DepositInit = (token: string | null) => {
 
       try {
         const response = await fetch(
-          `${SDP_API_ENDPOINT}/sep24-interactive-deposit/init`,
+          `${SDP_API_ENDPOINT}/sep24-interactive-deposit/info`,
           {
             method: "GET",
             headers: {
