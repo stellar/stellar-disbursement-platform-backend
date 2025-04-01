@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add Circle Payouts API to the e2e integration test. [#586](https://github.com/stellar/stellar-disbursement-platform-backend/pull/586)
 - Add GH Workflow to automatically set the pull request assignee. [#591](https://github.com/stellar/stellar-disbursement-platform-backend/pull/591)
 - Added `priorityClassName` and `topologySpreadConstraints` properties to helm charts. [#601](https://github.com/stellar/stellar-disbursement-platform-backend/pull/601)
+- Added `nodeSelector`, `tolerations` and `affinity` global defaults to helm charts. [#607](https://github.com/stellar/stellar-disbursement-platform-backend/pull/607)
+
 
 ### Changed
 

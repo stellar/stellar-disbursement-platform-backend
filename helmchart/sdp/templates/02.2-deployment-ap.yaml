@@ -116,15 +116,15 @@ spec:
               name: {{ .Values.anchorPlatform.kubeSecrets.secretName }}
           {{ end }}
 
-      {{- with .Values.anchorPlatform.deployment.nodeSelector }}
+      {{- with .Values.anchorPlatform.deployment.nodeSelector | default .Values.global.deployment.nodeSelector }}
       nodeSelector:
-        {{- tpl (toYaml .) . | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.anchorPlatform.deployment.affinity }}
+      {{- with .Values.anchorPlatform.deployment.affinity | default .Values.global.deployment.affinity }}
       affinity:
-        {{- tpl (toYaml .) . | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.anchorPlatform.deployment.tolerations }}
+      {{- with .Values.anchorPlatform.deployment.tolerations | default .Values.global.deployment.tolerations }}
       tolerations:
-        {{- tpl (toYaml .) . | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -135,15 +135,15 @@ spec:
           {{ end }}
 
 
-      {{- with .Values.sdp.deployment.nodeSelector }}
+      {{- with .Values.sdp.deployment.nodeSelector | default .Values.global.deployment.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.sdp.deployment.affinity }}
+      {{- with .Values.sdp.deployment.affinity | default .Values.global.deployment.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.sdp.deployment.tolerations }}
+      {{- with .Values.sdp.deployment.tolerations | default .Values.global.deployment.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
