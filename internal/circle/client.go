@@ -392,13 +392,14 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 			// default is back-off delay
 			return retry.BackOffDelay(n, err, config)
 		}),
+		retry.Context(ctx), // Respect the context's cancellation
 		retry.Attempts(4),
 		retry.MaxDelay(time.Second*600),
 		retry.RetryIf(func(err error) bool {
 			return errors.As(err, &RetryableError{})
 		}),
 		retry.OnRetry(func(n uint, err error) {
-			log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, Retry number %d due to: %s", u, n, err)
+			log.Ctx(ctx).Warnf("🔄 CircleClient - Request to %s is rate limited, attempt %d failed with error: %v", u, n+1, err)
 		}),
 		retry.LastErrorOnly(true),
 	)

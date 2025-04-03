@@ -1,6 +1,7 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"strings"
@@ -29,7 +30,7 @@ func (t *twilioSendGridClient) MessengerType() MessengerType {
 	return MessengerTypeTwilioEmail
 }
 
-func (t *twilioSendGridClient) SendMessage(message Message) error {
+func (t *twilioSendGridClient) SendMessage(_ context.Context, message Message) error {
 	err := message.ValidateFor(t.MessengerType())
 	if err != nil {
 		return fmt.Errorf("validating message to send an email through SendGrid: %w", err)

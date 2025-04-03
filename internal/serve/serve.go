@@ -28,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/sep24frontend"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -370,10 +371,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:                      o.Models,
 			AuthManager:                 authManager,
 			MaxMemoryAllocation:         httphandler.DefaultMaxMemoryAllocation,
-			BaseURL:                     o.BaseURL,
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			PasswordValidator:           o.PasswordValidator,
-			PublicFilesFS:               publicfiles.PublicFiles,
 			NetworkType:                 o.NetworkType,
 		}
 		r.Route("/profile", func(r chi.Router) {
@@ -393,9 +392,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/", profileHandler.GetOrganizationInfo)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Get("/logo", profileHandler.GetOrganizationLogo)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
 				Patch("/circle-config", httphandler.CircleConfigHandler{
@@ -433,6 +429,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.EnsureTenantMiddleware)
+
+		r.Get("/organization/logo", httphandler.OrganizationLogoHandler{
+			Models:        o.Models,
+			PublicFilesFS: publicfiles.PublicFiles,
+		}.GetOrganizationLogo)
 
 		r.Post("/login", httphandler.LoginHandler{
 			AuthManager:        authManager,
@@ -483,24 +484,32 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			InstanceName:                o.InstanceName,
 		}.ServeHTTP)
 
-		r.Route("/wallet-registration", func(r chi.Router) {
-			sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
-			r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
+		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/wallet-registration/*", httphandler.SEP24InteractiveDepositHandler{
+			App:      sep24frontend.App,
+			BasePath: "app/dist",
+		}.ServeApp)
+
+		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		r.With(sep24HeaderTokenAuthenticationMiddleware).Route("/sep24-interactive-deposit", func(r chi.Router) {
+			r.Get("/info", httphandler.ReceiverRegistrationHandler{
 				Models:              o.Models,
 				ReceiverWalletModel: o.Models.ReceiverWallet,
 				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
-			}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
+				ReCAPTCHADisabled:   o.DisableReCAPTCHA,
+			}.ServeHTTP)
 
-			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
-			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{
+			r.Post("/otp", httphandler.ReceiverSendOTPHandler{
 				Models:             o.Models,
 				MessageDispatcher:  o.MessageDispatcher,
 				ReCAPTCHAValidator: reCAPTCHAValidator,
+				ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 			}.ServeHTTP)
-			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
+			r.Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
 				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
 				Models:                      o.Models,
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
+				ReCAPTCHADisabled:           o.DisableReCAPTCHA,
 				NetworkPassphrase:           o.NetworkPassphrase,
 				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,

@@ -12,9 +12,7 @@ metadata:
     {{- toYaml .Values.anchorPlatform.configMap.annotations | nindent 4 }}
   {{- end }}
 
-{{- if .Values.anchorPlatform.configMap.data }}
 data:
-  # if {{ include "isPubnet" . }} is true, then the network is set to PUBNET, else it's all TESTNET
   {{- if eq (include "isPubnet" .) "true" }}
   STELLAR_NETWORK_NETWORK: "PUBLIC"
   STELLAR_NETWORK_NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
@@ -24,7 +22,7 @@ data:
   STELLAR_NETWORK_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
   STELLAR_NETWORK_HORIZON_URL: "https://horizon-testnet.stellar.org"
   {{- end }}
-  HOST_URL: {{ include "sdp.ap.schema" . }}://{{ include "sdp.ap.domain" . }}
+  HOST_URL: {{ include "sdp.ap.baseURL" . | quote }}
   SEP_SERVER_PORT: {{ include "sdp.ap.sepPort" . | quote }}
   CALLBACK_API_BASE_URL: 'http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}:{{ include "sdp.port" . }}'
   DATA_TYPE: postgres
@@ -34,7 +32,7 @@ data:
   SEP10_ENABLED: "true"
   SEP10_WEB_AUTH_DOMAIN: {{ include "sdp.ap.domain" . | quote }}
   SEP10_HOME_DOMAIN: ""
-  SEP10_HOME_DOMAINS: {{ include "sdp.mtnDomain" . | quote }}
+  SEP10_HOME_DOMAINS: "{{ include "sdp.domain" . }},{{ include "sdp.mtnDomain" .  }}"
   SEP24_ENABLED: "true"
   SEP24_INTERACTIVE_URL_JWT_EXPIRATION: "1800"  # 1800 seconds is 30 minutes
   ASSETS_TYPE: json
@@ -42,5 +40,62 @@ data:
   SEP24_MORE_INFO_URL_BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}/wallet-registration/start
   CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
   PLATFORM_SERVER_AUTH_TYPE: JWT
-  {{- tpl (toYaml .Values.anchorPlatform.configMap.data | nindent 2) . }}
-{{- end }}
+  {{- if and .Values.global.distributionPublicKey (not .Values.anchorPlatform.configMap.data.ASSETS_VALUE) }}
+  ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
+    {
+      "assets": [
+        {
+          "sep24_enabled": true,
+          "schema": "stellar",
+          "code": "native",
+          "issuer": "",
+          "distribution_account": {{ .Values.global.distributionPublicKey | quote }},
+          "significant_decimals": 7,
+          "deposit": {
+            "enabled": true,
+            "fee_minimum": 0,
+            "fee_percent": 0,
+            "min_amount": 1,
+            "max_amount": 10000
+          },
+          "withdraw": {"enabled": false}
+        },
+        {
+          "sep24_enabled": true,
+          "schema": "stellar",
+          "code": "USDC",
+          "issuer": {{- include "sdp.usdcIssuer" . | quote }},
+          "distribution_account": {{ .Values.global.distributionPublicKey | quote }},
+          "significant_decimals": 7,
+          "deposit": {
+            "enabled": true,
+            "fee_minimum": 0,
+            "fee_percent": 0,
+            "min_amount": 1,
+            "max_amount": 10000
+          },
+          "withdraw": {"enabled": false}
+        },
+        {
+          "sep24_enabled": true,
+          "schema": "stellar",
+          "code": "EURC",
+          "issuer": {{- include "sdp.eurcIssuer" . | quote }},
+          "distribution_account": {{ .Values.global.distributionPublicKey | quote }},
+          "significant_decimals": 7,
+          "deposit": {
+            "enabled": true,
+            "fee_minimum": 0,
+            "fee_percent": 0,
+            "min_amount": 1,
+            "max_amount": 10000
+          },
+          "withdraw": {"enabled": false}
+        }
+      ]
+    }
+    {{- end }}
+    {{- /*
+Values from the ap configmap section - These will override the global values
+  */}}
+    {{- tpl (toYaml .Values.anchorPlatform.configMap.data | nindent 2) . }}

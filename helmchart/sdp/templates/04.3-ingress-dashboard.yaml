@@ -17,7 +17,7 @@ spec:
     {{- tpl (toYaml .Values.dashboard.ingress.tls) . | nindent 4 }}
   {{- end }}
   rules:
-    - host: {{ include "dashboard.domain" . | quote }}
+    - host: {{ include "sdp.dashboard.domain" . | quote }}
       http:
         paths:
           - path: /
@@ -26,9 +26,9 @@ spec:
               service:
                 name: {{ include "sdp.fullname" . }}-dashboard
                 port:
-                  number: {{ include "dashboard.port" . }}
+                  number: {{ include "sdp.dashboard.port" . }}
   {{- if .Values.sdp.route.mtnDomain }}
-    - host: {{ include "dashboard.mtnDomain" . | quote }}
+    - host: {{ include "sdp.dashboard.mtnDomain" . | quote }}
       http:
         paths:
           - path: /
@@ -37,7 +37,7 @@ spec:
               service:
                 name: {{ include "sdp.fullname" . }}-dashboard
                 port:
-                  number: {{ include "dashboard.port" . }}
+                  number: {{ include "sdp.dashboard.port" . }}
   {{- end }}
 
 {{- end }}

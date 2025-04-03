@@ -265,17 +265,17 @@ func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, a
 func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PatchCircleConfigRequest) error {
 	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, organizationURL, "circle-config")
 	if err != nil {
-		return fmt.Errorf("error creating url: %w", err)
+		return fmt.Errorf("creating url: %w", err)
 	}
 
 	reqBody, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("error creating json post body: %w", err)
+		return fmt.Errorf("creating json post body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, reqURL, strings.NewReader(string(reqBody)))
 	if err != nil {
-		return fmt.Errorf("error creating new request: %w", err)
+		return fmt.Errorf("creating new request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -284,12 +284,12 @@ func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("error making request to server API patch CIRCLE CONFIG: %w", err)
+		return fmt.Errorf("making request to server API patch CIRCLE CONFIG: %w", err)
 	}
 
 	if resp.StatusCode/100 != 2 {
 		logErrorResponses(ctx, resp.Body)
-		return fmt.Errorf("error trying to configure Circle access on the server API")
+		return fmt.Errorf("statusCode %d when trying to configure Circle access on the server API", resp.StatusCode)
 	}
 
 	return nil

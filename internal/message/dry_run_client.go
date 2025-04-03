@@ -1,13 +1,14 @@
 package message
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
 
 type dryRunClient struct{}
 
-func (c *dryRunClient) SendMessage(message Message) error {
+func (c *dryRunClient) SendMessage(_ context.Context, message Message) error {
 	recipient := message.ToEmail
 	if message.ToEmail == "" {
 		recipient = message.ToPhoneNumber
