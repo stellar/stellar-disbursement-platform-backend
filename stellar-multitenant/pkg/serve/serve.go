@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
+	multitenantmiddleware "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -133,7 +134,8 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 	// Authenticated Routes
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.BasicAuthMiddleware(opts.AdminAccount, opts.AdminApiKey))
-
+		r.Use(multitenantmiddleware.TenantResolutionMiddleware(opts.tenantManager, opts.SingleTenantMode))
+		
 		r.Route("/tenants", func(r chi.Router) {
 			tenantsHandler := httphandler.TenantsHandler{
 				Manager:                     opts.tenantManager,
