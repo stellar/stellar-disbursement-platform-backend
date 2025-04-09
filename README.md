@@ -216,6 +216,14 @@ Currently, the SDP only supports Kafka as an Event Broker even though it has bee
 > [!NOTE]  
 > In order to avoid concurrency issues, the SDP only supports one Event Broker or Background Jobs at a time.
 
+### Configuration Options
+
+The SDP configuration is controlled by the `EVENT_BROKER_TYPE` environment variable:
+
+* `EVENT_BROKER_TYPE=KAFKA` - Uses Kafka for event handling (recommended for multi-tenant deployments)
+* `EVENT_BROKER_TYPE=SCHEDULER` - Uses background jobs (recommended for single-tenant deployments)
+
+
 #### Kafka
 We recommend Kafka for organizations that require high throughput and low latency. Organizations that plan on hosting multiple tenants on the SDP should consider using Kafka.
 
@@ -266,10 +274,14 @@ We recommend Background Jobs for organizations that require a simpler setup and 
 In order to use Background Jobs, we need to set the following environment variable for Core. 
 
 ```sh
-  ENABLE_SCHEDULER: "true"
+  EVENT_BROKER_TYPE: "SCHEDULER"
   SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: # interval in seconds
   SCHEDULER_PAYMENT_JOB_SECONDS: # interval in seconds
 ```
+
+>[!NOTE]
+>Prior to version 3.7.0, background jobs were configured using ENABLE_SCHEDULER=true and EVENT_BROKER_TYPE=NONE.
+>This configuration has been deprecated in favor of using EVENT_BROKER_TYPE=SCHEDULER.
 
 ## Wallets
 
