@@ -43,6 +43,7 @@ type ManagerInterface interface {
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error)
 	DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error
+	EnsureDefaultTenant(ctx context.Context) (*Tenant, error)
 }
 
 type Manager struct {
@@ -367,7 +368,7 @@ func SaveTenantInContext(ctx context.Context, t *Tenant) context.Context {
 	return context.WithValue(ctx, tenantContextKey{}, t)
 }
 
-func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (string, []interface{}) {
+func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (string, []any) {
 	qb := data.NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyNameOrID] != nil {
 		param := queryParams.Filters[FilterKeyNameOrID]
@@ -412,6 +413,36 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 
 	query, params := qb.Build()
 	return m.db.Rebind(query), params
+}
+
+func (m *Manager) EnsureDefaultTenant(ctx context.Context) (*Tenant, error) {
+    defaultTenant, err := m.GetDefault(ctx)
+    if err == nil {
+        return defaultTenant, nil
+    }
+    
+    if !errors.Is(err, ErrTenantDoesNotExist) {
+        return nil, fmt.Errorf("getting default tenant: %w", err)
+    }
+    
+    tenants, err := m.GetAllTenants(ctx, &QueryParams{
+        Filters: excludeInactiveTenantsFilters(),
+    })
+    if err != nil {
+        return nil, fmt.Errorf("getting all tenants: %w", err)
+    }
+    
+    if len(tenants) == 1 {
+        defaultTenant, err := db.RunInTransactionWithResult(ctx, m.db, nil, func(dbTx db.DBTransaction) (*Tenant, error) {
+            return m.SetDefault(ctx, dbTx, tenants[0].ID)
+        })
+        if err != nil {
+            return nil, fmt.Errorf("setting default tenant: %w", err)
+        }
+        return defaultTenant, nil
+    }
+    
+    return nil, ErrTenantDoesNotExist
 }
 
 type Option func(m *Manager)
