@@ -27,26 +27,26 @@ func TestTenantResolutionMiddleware(t *testing.T) {
 		{
 			name:           "Default tenant already set",
 			singleTenant:   true,
-			setupMock:      func(m *tenant.TenantManagerMock) { setupSingleTenant(m, "default-tenant-id", "default-tenant") },
+			setupMock:      func(m *tenant.TenantManagerMock) { setupSingleTenant(m, "default-tenant-id", "apperture-labs") },
 			expectedOutput: "default-tenant-id",
 		},
 		{
 			name:           "Multiple tenants",
 			singleTenant:   true,
 			setupMock:      setupMultipleTenants,
-			expectedOutput: "no tenant",
+			expectedOutput: tenant.ErrTenantNotFoundInContext.Error(),
 		},
 		{
 			name:           "Not in single tenant mode",
 			singleTenant:   false,
 			setupMock:      func(m *tenant.TenantManagerMock) {}, // No-op, no mock setup needed
-			expectedOutput: "no tenant",
+			expectedOutput: tenant.ErrTenantNotFoundInContext.Error(),
 		},
 		{
 			name:           "Error getting tenants",
 			singleTenant:   true,
 			setupMock:      setupError,
-			expectedOutput: "no tenant",
+			expectedOutput: tenant.ErrTenantNotFoundInContext.Error(),
 		},
 	}
 
@@ -55,15 +55,15 @@ func TestTenantResolutionMiddleware(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mockManager := tenant.NewTenantManagerMock(t)
 			tc.setupMock(mockManager)
-			
+
 			middleware := TenantResolutionMiddleware(mockManager, tc.singleTenant)
 			handler := middleware(createTestHandler())
-			
+
 			req := httptest.NewRequest("GET", "/", nil)
 			rec := httptest.NewRecorder()
-			
+
 			handler.ServeHTTP(rec, req)
-			
+
 			assert.Equal(t, tc.expectedOutput, rec.Body.String())
 		})
 	}
@@ -76,7 +76,7 @@ func createTestHandler() http.HandlerFunc {
 		if err == nil {
 			w.Write([]byte(tnt.ID))
 		} else {
-			w.Write([]byte("no tenant"))
+			w.Write([]byte(err.Error()))
 		}
 	})
 }
