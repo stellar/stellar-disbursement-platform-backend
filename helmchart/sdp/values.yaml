@@ -80,7 +80,7 @@ global:
   ## @param global.eventBroker.urls A comma-separated list of broker URLs for the event broker.
   ## @param global.eventBroker.consumerGroupId The consumer group ID for the event broker.
   eventBroker:
-    type: "NONE"
+    type: "SCHEDULER"
     urls: #required
     consumerGroupId: #required
 
@@ -183,7 +183,6 @@ sdp:
   ## @param sdp.configMap.data.CORS_ALLOWED_ORIGINS Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.
   ## @param sdp.configMap.data.DISABLE_RECAPTCHA Determines if ReCaptcha should be disabled for login ("true" or "false").
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
-  ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs are enabled in this instance ("true" or "false"). Default "false".
   ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
@@ -217,7 +216,6 @@ sdp:
       DISABLE_MFA: "false"
 
       ## Background tasks configuration
-      ENABLE_SCHEDULER: "true"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       MAX_INVITATION_RESEND_ATTEMPTS: "3"
