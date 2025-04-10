@@ -143,7 +143,7 @@ func (opts *ServeOptions) ValidateSecurity() error {
 		if opts.DisableMFA {
 			return fmt.Errorf("MFA cannot be disabled in pubnet")
 		} else if opts.DisableReCAPTCHA {
-			return fmt.Errorf("reCAPTCHA cannot be disabled in pubnet")
+			log.Warnf("reCAPTCHA is disabled in pubnet. This might reduce security!")
 		}
 	}
 
