@@ -135,7 +135,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.BasicAuthMiddleware(opts.AdminAccount, opts.AdminApiKey))
 		r.Use(multitenantmiddleware.TenantResolutionMiddleware(opts.tenantManager, opts.SingleTenantMode))
-		
+
 		r.Route("/tenants", func(r chi.Router) {
 			tenantsHandler := httphandler.TenantsHandler{
 				Manager:                     opts.tenantManager,

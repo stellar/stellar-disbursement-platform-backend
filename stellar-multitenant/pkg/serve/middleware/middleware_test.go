@@ -74,9 +74,18 @@ func createTestHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tnt, err := tenant.GetTenantFromContext(r.Context())
 		if err == nil {
-			w.Write([]byte(tnt.ID))
+			_, writeErr := w.Write([]byte(tnt.ID))
+			if writeErr != nil {
+				http.Error(w, "Failed to write response", http.StatusInternalServerError)
+				return
+			}
 		} else {
-			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusNotFound)
+			_, writeErr := w.Write([]byte(err.Error()))
+			if writeErr != nil {
+				// We already sent the header
+				return
+			}
 		}
 	})
 }
