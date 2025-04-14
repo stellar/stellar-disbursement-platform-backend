@@ -706,8 +706,8 @@ func Test_Manager_EnsureDefaultTenant(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, dbErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, dbErr)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
@@ -720,8 +720,8 @@ func Test_Manager_EnsureDefaultTenant(t *testing.T) {
 	})
 
 	// Create tenants for testing
-	tnt1, err := m.AddTenant(ctx, "gotham")
-	require.NoError(t, err)
+	tnt1, tenantErr := m.AddTenant(ctx, "gotham")
+	require.NoError(t, tenantErr)
 
 	t.Run("automatically sets default when only one tenant exists", func(t *testing.T) {
 		defaultTnt, err := m.EnsureDefaultTenant(ctx)
@@ -744,8 +744,8 @@ func Test_Manager_EnsureDefaultTenant(t *testing.T) {
 	})
 
 	// Add a second tenant
-	tnt2, err := m.AddTenant(ctx, "metropolis")
-	require.NoError(t, err)
+	tnt2, tenantErr := m.AddTenant(ctx, "metropolis")
+	require.NoError(t, tenantErr)
 
 	t.Run("doesn't change default when multiple tenants exist", func(t *testing.T) {
 		// Should still return tnt1 as default
@@ -761,7 +761,7 @@ func Test_Manager_EnsureDefaultTenant(t *testing.T) {
 	})
 
 	// Reset default tenants for next test
-	_, err = dbConnectionPool.ExecContext(ctx, "UPDATE tenants SET is_default = false")
+	_, err := dbConnectionPool.ExecContext(ctx, "UPDATE tenants SET is_default = false")
 	require.NoError(t, err)
 
 	t.Run("returns error when multiple tenants exist but none is default", func(t *testing.T) {
