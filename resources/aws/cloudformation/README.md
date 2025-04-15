@@ -78,7 +78,6 @@ aws cloudformation create-stack \
   --template-body file://sdp-database-eks.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
-    ParameterKey=env,ParameterValue=dev \
     ParameterKey=NetworkStackName,ParameterValue=sdp-network \
     ParameterKey=DBInstanceClass,ParameterValue=db.t3.small \
     ParameterKey=DBUsername,ParameterValue=postgres \
@@ -102,8 +101,8 @@ aws cloudformation create-stack \
   --parameters \
     ParameterKey=env,ParameterValue=dev \
     ParameterKey=namespace,ParameterValue=sdp \
-    ParameterKey=RecaptchaSiteSecretKey,ParameterValue=YOUR_RECAPTCHA_SITE_SECRET_KEY \
-    ParameterKey=RecaptchaSiteKey,ParameterValue=YOUR_RECAPTCHA_SITE_KEY
+    ParameterKey=RecaptchaSiteSecretKey,ParameterValue=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe \
+    ParameterKey=RecaptchaSiteKey,ParameterValue=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
 ```
 
 **Note**: Leave the following parameters empty to auto-generate new keys:
@@ -160,36 +159,6 @@ Continue with the manual Helm deployment steps as provided in the deployment gui
 7. SDP Helm chart deployment
 
 Refer to the Helm deployment instructions for these steps.
-
-## Verification Steps
-
-### Check Network Stack
-```bash
-aws cloudformation describe-stacks --stack-name sdp-network \
-  --query 'Stacks[0].Outputs'
-```
-
-### Check Database Connectivity
-```bash
-aws cloudformation describe-stacks --stack-name sdp-database \
-  --query 'Stacks[0].Outputs'
-```
-
-### Verify EKS Cluster
-```bash
-aws eks describe-cluster \
-  --name $(aws cloudformation describe-stacks \
-    --stack-name sdp-eks \
-    --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
-    --output text)
-```
-
-### Check Secrets in Secrets Manager
-```bash
-aws secretsmanager list-secrets \
-  --filters Key=name-prefix,Values=/sdp/dev
-```
-
 
 ## Initial Setup
 ```bash
@@ -294,6 +263,8 @@ kubectl get pods -n ingress-nginx
 
 ## 5. Install Cert-Manager
 ```bash
+# Add Jetstack helm repo
+helm repo add jetstack https://charts.jetstack.io
 # Set role ARN
 export CERT_MANAGER_ROLE_ARN=$(aws cloudformation describe-stacks \
     --stack-name sdp-eks \
@@ -322,15 +293,14 @@ Replace the domainFilters with your registered domain below.
 helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
 helm repo update
 
-# Install external-dns
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+# Install external-dns with UPSERT policy and placeholder domain
 helm install external-dns external-dns/external-dns \
     --namespace external-dns \
     --create-namespace \
     --set provider=aws \
     --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="arn:aws:iam::${AWS_ACCOUNT_ID}:role/dev-external-dns-role" \
-    --set policy=sync \
-    --set "domainFilters[0]=mystellarsdpdomain.org" \
+    --set policy=upsert-only \
+    --set "domainFilters[0]=<your-domain-here>" \
     --set txtOwnerId=eks \
     --set interval=1m
 
@@ -373,11 +343,9 @@ sdp-tss-84bc97659-bf9pb          1/1     Running   0          13m
 
 kubectl -n sdp exec -it sdp-5bddb74b4d-skqsv -- /bin/bash
 ```
-#### Install curl and use the /tenant endpoint to add a tenant
+#### Add a tenant using port-forwarding to the /tenants endpoint 
 ```bash
-Setting up curl (8.5.0-2ubuntu10.6) ...
-Processing triggers for libc-bin (2.39-0ubuntu8.3) ...
-root@sdp-5bddb74b4d-skqsv:/app# curl --location 'http://localhost:8003/tenants/' \
+curl --location 'http://localhost:8003/tenants/' \
 --header 'Content-Type: application/json' \
 --header 'Authorization: Basic cmVlY2VAc3RlbGxhci5vcmc6YWRtaW4tYXBpLWtleQ==' \
 --data-raw '{
@@ -386,24 +354,10 @@ root@sdp-5bddb74b4d-skqsv:/app# curl --location 'http://localhost:8003/tenants/'
     "owner_first_name": "reece",
     "owner_last_name": "markowsky",
     "organization_name": "aid-retreat",
-    "sdp_ui_base_url": "https://ridedash.mystellarsdpdomain.org",
-    "base_url": "https://ridedash.mystellarsdpdomain.org",
+    "sdp_ui_base_url": "https://ridedash.<your-domain>",
+    "base_url": "https://ridedash.<your-domain>",
     "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
 }'
-{
-  "id": "db10d670-d126-4935-a7ad-4a6abe312ada",
-  "name": "ridedash",
-  "base_url": "https://ridedash.mystellarsdpdomain.org",
-  "sdp_ui_base_url": "https://ridedash.mystellarsdpdomain.org",
-  "status": "TENANT_PROVISIONED",
-  "is_default": false,
-  "created_at": "2025-01-30T19:30:15.315509Z",
-  "updated_at": "2025-01-30T19:30:16.711518Z",
-  "deleted_at": null,
-  "distribution_account_address": "GCKNCA7EZYZEQNQR22XGL47WCRL3VVDQDKLF7DOIK6O3Y5TLBAWQYQWA",
-  "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
-  "distribution_account_status": "ACTIVE"
-}root@sdp-5bddb74b4d-skqsv:/app#
 ```
 
 ## Troubleshooting
@@ -439,4 +393,31 @@ kubectl logs -n sdp <pod-name>
 
 # Check pod details
 kubectl describe pods -n sdp
+```
+
+### Check Secrets in Secrets Manager
+```bash
+aws secretsmanager list-secrets \
+  --filters Key=name-prefix,Values=/sdp/dev
+```
+
+### Check Network Stack
+```bash
+aws cloudformation describe-stacks --stack-name sdp-network \
+  --query 'Stacks[0].Outputs'
+```
+
+### Check Database Connectivity
+```bash
+aws cloudformation describe-stacks --stack-name sdp-database \
+  --query 'Stacks[0].Outputs'
+```
+
+### Verify EKS Cluster
+```bash
+aws eks describe-cluster \
+  --name $(aws cloudformation describe-stacks \
+    --stack-name sdp-eks \
+    --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
+    --output text)
 ```

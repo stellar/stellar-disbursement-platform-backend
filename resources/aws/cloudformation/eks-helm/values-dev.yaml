@@ -3,13 +3,11 @@ global:
   ephemeralDatabase: false
   eventBroker:
     type: "NONE"
-    urls: "kafka:9092"
-    consumerGroupId: "group-id"
 
 sdp:
   route:
-    domain: sdp-backend.mystellarsdpdomain.org
-    mtnDomain: "*.sdp-backend.mystellarsdpdomain.org"
+    domain: sdp-backend.yourdomain.org
+    mtnDomain: "*.sdp-backend.yourdomain.org"
   deployment:
     podAnnotations:
       prometheus.io/path: /metrics
@@ -42,28 +40,14 @@ sdp:
       DATABASE_URL: "/sdp/dev/DATABASE_URL"
       RECAPTCHA_SITE_KEY: "/sdp/dev/RECAPTCHA_SITE_KEY"
       RECAPTCHA_SITE_SECRET_KEY: "/sdp/dev/RECAPTCHA_SITE_SECRET_KEY"
-      AWS_SECRET_ACCESS_KEY: "/sdp/dev/AWS_SECRET_ACCESS_KEY"
-      AWS_ACCESS_KEY_ID: "/sdp/dev/AWS_ACCESS_KEY_ID"
   # =========================== START sdp.configMap ===========================
   configMap:
     data:
-      AWS_SNS_SENDER_ID: ""
-      AWS_REGION: "us-west-2"
-      ADMIN_ACCOUNT: "reece@stellar.org"
+      ADMIN_ACCOUNT: "admin@yourdomain.com"
       ENVIRONMENT: "dev"
-      LOG_LEVEL: "debug"
-      METRICS_TYPE: "PROMETHEUS"
-      EMAIL_SENDER_TYPE: "DRY_RUN"
-      SMS_SENDER_TYPE: "AWS_SMS"
-      ENABLE_MFA: "false"
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-      HORIZON_URL: "https://horizon-testnet.stellar.org"
-      INSTANCE_NAME: "Stellar Disbursement Platform"
-      CORS_ALLOWED_ORIGINS: "*"
-      ENABLE_SCHEDULER: "true"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
-      SDP_UI_BASE_URL: "https://dashboard.mystellarsdpdomain.org"
+      SDP_UI_BASE_URL: "https://dashboard.yourdomain.org"
   # =========================== START sdp.ingress ===========================
   ingress:
     enabled: true
@@ -72,13 +56,13 @@ sdp:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'sdp-backend.mystellarsdpdomain.org'
-          - '*.sdp-backend.mystellarsdpdomain.org'
+          - 'sdp-backend.yourdomain.org'
+          - '*.sdp-backend.yourdomain.org'
         secretName: sdp-backend-cert
 # ============================= anchorPlatform ===================================
 anchorPlatform:
   route:
-    domain: ap-sdp-backend.mystellarsdpdomain.org
+    domain: ap-sdp-backend.yourdomain.org
   deployment:
     podAnnotations:
       prometheus.io/path: /metrics
@@ -110,30 +94,11 @@ anchorPlatform:
       eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
   configMap:
     data:
-      HOST_URL: https://ap-sdp-backend.mystellarsdpdomain.org
-      SEP_SERVER_PORT: "8080"
-      CALLBACK_API_BASE_URL: https://sdp-backend.mystellarsdpdomain.org
-      CALLBACK_API_AUTH_TYPE: "none"
-      PLATFORM_SERVER_AUTH_TYPE: "JWT"
       APP_LOGGING_LEVEL: "INFO"
-      DATA_TYPE: "postgres"
       DATA_DATABASE: "sdp_dev"
-      DATA_FLYWAY_ENABLED: "true"
       DATA_DDL_AUTO: "update"
-      METRICS_ENABLED: "false"
-      METRICS_EXTRAS_ENABLED: "false"
-      EVENT_BROKER_TYPE: "NONE"
-      SEP10_ENABLED: "true"
-      SEP10_WEB_AUTH_DOMAIN: ap-sdp-backend.mystellarsdpdomain.org
-      SEP10_HOME_DOMAINS: "*.sdp-backend.mystellarsdpdomain.org"
-      SEP24_ENABLED: "true"
-      SEP24_INTERACTIVE_URL_BASE_URL: https://sdp-backend.mystellarsdpdomain.org/wallet-registration/start
-      SEP24_INTERACTIVE_URL_JWT_EXPIRATION: "1800"
-      SEP24_MORE_INFO_URL_BASE_URL: https://sdp-backend.mystellarsdpdomain.org/wallet-registration/start
-      SEP1_ENABLED: "true"
-      SEP1_TOML_TYPE: "url"
-      SEP1_TOML_VALUE: https://sdp-backend.mystellarsdpdomain.org/.well-known/stellar.toml
-      ASSETS_TYPE: "json"
+      METRICS_ENABLED: "true"
+      METRICS_EXTRAS_ENABLED: "true"
       ASSETS_VALUE: |
         {
           "assets": [
@@ -177,7 +142,7 @@ anchorPlatform:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'ap-sdp-backend.mystellarsdpdomain.org'
+          - 'ap-sdp-backend.yourdomain.org'
         secretName: sdp-ap-cert
 
 # ============================= tss ===================================
@@ -208,23 +173,14 @@ tss:
       eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
   configMap:
     data:
-      LOG_LEVEL: "info"
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-      HORIZON_URL: "https://horizon-testnet.stellar.org"
       NUM_CHANNEL_ACCOUNTS: "3"
       MAX_BASE_FEE: "100"
-      TSS_METRICS_PORT: "9002"
-      TSS_METRICS_TYPE: "TSS_PROMETHEUS"
-      EVENT_BROKER_TYPE: "NONE"
-      BROKER_URLS: "kafka:9092"
-      CONSUMER_GROUP_ID: "group-id"
-      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
 # ============================= dashboard ===================================
 dashboard:
   enabled: true
   route:
-    domain: "dashboard.mystellarsdpdomain.org"
-    mtnDomain: "*.dashboard.mystellarsdpdomain.org"
+    domain: "dashboard.yourdomain.org"
+    mtnDomain: "*.dashboard.yourdomain.org"
   deployment:
     strategy:
       type: "RollingUpdate"
@@ -239,8 +195,7 @@ dashboard:
             key: RECAPTCHA_SITE_KEY
   configMap:
     data:
-      RECAPTCHA_SITE_KEY: 6LcArsEqAAAAAIxEcbaHI4HTp7I5C1RrTv6LC9-Y
-      API_URL: https://sdp-backend.mystellarsdpdomain.org
+      RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
   ingress:
     enabled: true
     className: "ingress-public"
@@ -248,6 +203,6 @@ dashboard:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'dashboard.mystellarsdpdomain.org'
-          - '*.dashboard.mystellarsdpdomain.org'
+          - 'dashboard.yourdomain.org'
+          - '*.dashboard.yourdomain.org'
         secretName: sdp-dashboard-cert
