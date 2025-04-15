@@ -45,37 +45,16 @@ aws sts get-caller-identity
 ```
 
 ## 1. Network Stack Deployment
-Deploy the networking infrastructure:
+Deploy the networking infrastructure. Review custom parameters if needed.
 
 ```bash
 aws cloudformation create-stack \
   --stack-name sdp-network \
   --template-body file://sdp-network-eks.yaml \
-  --parameters \
-    ParameterKey=env,ParameterValue=dev
-```
-
-**Note**: To use existing network resources, provide the VPC and subnet IDs:
-```bash
-aws cloudformation create-stack \
-  --stack-name sdp-network \
-  --template-body file://sdp-network-eks.yaml \
-  --parameters \
-    ParameterKey=env,ParameterValue=dev \
-    ParameterKey=ExistingVPCId,ParameterValue=vpc-1234567890abcdef0 \
-    ParameterKey=ExistingPublicSubnet1Id,ParameterValue=subnet-xxxxx \
-    ParameterKey=ExistingPublicSubnet2Id,ParameterValue=subnet-yyyyy \
-    ParameterKey=ExistingPrivateSubnet1Id,ParameterValue=subnet-aaaaa \
-    ParameterKey=ExistingPrivateSubnet2Id,ParameterValue=subnet-bbbbb
-```
-
-Wait for stack completion:
-```bash
-aws cloudformation wait stack-create-complete --stack-name sdp-network
 ```
 
 ## 2. Database Stack Deployment
-Deploy the RDS database:
+Deploy the RDS database. Review custom parameters if needed.
 
 ```bash
 aws cloudformation create-stack \
@@ -83,16 +62,7 @@ aws cloudformation create-stack \
   --template-body file://sdp-database-eks.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
-    ParameterKey=NetworkStackName,ParameterValue=sdp-network \
-    ParameterKey=DBInstanceClass,ParameterValue=db.t3.small \
-    ParameterKey=DBUsername,ParameterValue=postgres \
-    ParameterKey=DBPassword,ParameterValue=your-secure-password \
-    ParameterKey=MultiAZ,ParameterValue=false
-```
-
-Wait for stack completion:
-```bash
-aws cloudformation wait stack-create-complete --stack-name sdp-database
+    ParameterKey=NetworkStackName,ParameterValue=sdp-network
 ```
 
 ## 3. Keys Stack Deployment
@@ -102,12 +72,7 @@ Deploy the secrets and keys management stack:
 aws cloudformation create-stack \
   --stack-name sdp-keys-eks \
   --template-body file://sdp-keys-eks.yaml \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --parameters \
-    ParameterKey=env,ParameterValue=dev \
-    ParameterKey=namespace,ParameterValue=sdp \
-    ParameterKey=RecaptchaSiteSecretKey,ParameterValue=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe \
-    ParameterKey=RecaptchaSiteKey,ParameterValue=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+  --capabilities CAPABILITY_NAMED_IAM 
 ```
 
 **Note**: Leave the following parameters empty to auto-generate new keys:
@@ -118,11 +83,6 @@ aws cloudformation create-stack \
 - ChannelAccountEncryptionPassphrase
 - DistributionAccountEncryptionPassphrase
 
-Wait for stack completion:
-```bash
-aws cloudformation wait stack-create-complete --stack-name sdp-keys
-```
-
 ## 4. EKS Cluster Deployment
 Deploy the EKS cluster:
 
@@ -132,15 +92,19 @@ aws cloudformation create-stack \
   --template-body file://sdp-eks.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
-    ParameterKey=env,ParameterValue=dev \
     ParameterKey=NetworkStackName,ParameterValue=sdp-network \
     ParameterKey=DatabaseStackName,ParameterValue=sdp-database
 ```
 
-Wait for stack completion (this will take ~15-20 minutes):
-```bash
-aws cloudformation wait stack-create-complete --stack-name sdp-eks
-```
+### EKS Configuration and Deployment
+The remaining steps will guide you through Kubernetes and Helm deployment steps. This includes:
+1. External Secrets Operator installation
+2. AWS Secrets Manager access configuration
+3. External Secrets creation
+4. Nginx Ingress Controller installation
+5. Cert-Manager installation
+6. External-DNS setup
+7. SDP Helm chart deployment
 
 ## 5. Configure kubectl
 After the EKS cluster is created, configure kubectl:
@@ -153,31 +117,19 @@ aws eks update-kubeconfig --name $(aws cloudformation describe-stacks \
     --region your-region
 ```
 
-## 6. Follow Manual Helm Deployment Steps
-Continue with the manual Helm deployment steps as provided in the deployment guide, which includes:
-1. External Secrets Operator installation
-2. AWS Secrets Manager access configuration
-3. External Secrets creation
-4. Nginx Ingress Controller installation
-5. Cert-Manager installation
-6. External-DNS setup
-7. SDP Helm chart deployment
-
-Refer to the Helm deployment instructions for these steps.
-
-## Initial Setup
+verify you are pointing kubectl to the correct AWS EKS Cluster 
 ```bash
-# Configure kubectl for your cluster
-aws eks update-kubeconfig --name $(aws cloudformation describe-stacks \
-    --stack-name sdp-eks \
-    --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
-    --output text)
+kubectl config get-contexts
+```
 
+## 6. Create Namespace
+
+```bash
 # Create namespace
 kubectl create namespace sdp
 ```
 
-## 1. External Secrets Operator Installation
+## 7. External Secrets Operator Installation
 ```bash
 # Create external-secrets namespace
 kubectl create namespace external-secrets
@@ -196,17 +148,16 @@ helm install external-secrets external-secrets/external-secrets \
         --query 'Stacks[0].Outputs[?OutputKey==`ExternalSecretsOperatorRoleArn`].OutputValue' \
         --output text)
 
-# Verify installation
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=external-secrets -n external-secrets --timeout=120s
-```
-
-## 2. Configure AWS Secrets Manager Access
+## 8. Configure AWS Secrets Manager Access
 ```bash
 # Set role ARN
 export SECRETSTORE_ROLE_ARN=$(aws cloudformation describe-stacks \
     --stack-name sdp-eks \
     --query 'Stacks[0].Outputs[?OutputKey==`SecretStoreRoleArn`].OutputValue' \
     --output text)
+
+# Verify the ARN is assigned to the environment variable
+echo $SECRETSTORE_ROLE_ARN
 
 # Create ServiceAccount and SecretStore
 cat <<EOF | kubectl apply -f -
@@ -236,12 +187,21 @@ EOF
 
 # Verify setup
 kubectl get secretstore aws-backend -n sdp
+
+# You should see output similar to the following with READY state True:
+#NAME          AGE   STATUS   CAPABILITIES   READY
+#aws-backend   7s    Valid    ReadWrite      True
 ```
 
 ## 3. Create External Secrets
 ```bash
 kubectl apply -n sdp -f helm/sdp-secrets-dev.yaml
 kubectl get externalsecret sdp-secrets -n sdp
+
+# Verify. You should see STATUS: SecretSynced and READY: True
+#NAME          STORETYPE     STORE         REFRESH INTERVAL   STATUS         READY
+#sdp-secrets   SecretStore   aws-backend   1h                 SecretSynced   True
+
 ```
 
 ## 4. Install Nginx Ingress Controller
@@ -270,6 +230,8 @@ kubectl get pods -n ingress-nginx
 ```bash
 # Add Jetstack helm repo
 helm repo add jetstack https://charts.jetstack.io
+helm repo update
+
 # Set role ARN
 export CERT_MANAGER_ROLE_ARN=$(aws cloudformation describe-stacks \
     --stack-name sdp-eks \
@@ -298,7 +260,7 @@ Replace the domainFilters with your registered domain below.
 helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
 helm repo update
 
-# Install external-dns with UPSERT policy and placeholder domain
+# Install external-dns with UPSERT policy and placeholder domain. Be sure to repl
 helm install external-dns external-dns/external-dns \
     --namespace external-dns \
     --create-namespace \
@@ -326,7 +288,7 @@ Replace occurrences of "mystellarsdpdomain.org" in [values-dev.yaml](aws/cloudfo
 ### Install SDP
 
 ```bash
-helm install sdp stellar/stellar-disbursement-platform -f eks-helm/values-dev.yaml --namespace sdp
+helm install sdp stellar/stellar-disbursement-platform -f helm/values-dev.yaml --namespace sdp
 ```
 ### Verify Pods are healthy 
 ```
@@ -337,16 +299,14 @@ kubectl -n sdp get pods
 
 ### Get the SDP Pod name and exec to its shell
 ```bash
-kubectl -n sdp get pods
-
-reecemarkowsky  …/cloudformation   reece/SDP-1491-sdp-cloudformation ● ?  kubectl -n sdp get pods                                                                                                   ✔  11:30:38
+kubectl -n sdp get pods                                                                                                   ✔  11:30:38
 NAME                             READY   STATUS    RESTARTS   AGE
 sdp-5bddb74b4d-skqsv             1/1     Running   0          13m
 sdp-ap-58b6cc978-8q4sg           1/1     Running   0          13m
 sdp-dashboard-7799755844-nwnw5   1/1     Running   0          13m
 sdp-tss-84bc97659-bf9pb          1/1     Running   0          13m
 
-kubectl -n sdp exec -it sdp-5bddb74b4d-skqsv -- /bin/bash
+kubectl -n sdp port-forward pod/sdp-5bddb74b4d-skqsv 8003:8003
 ```
 #### Add a tenant using port-forwarding to the /tenants endpoint 
 ```bash
@@ -363,6 +323,22 @@ curl --location 'http://localhost:8003/tenants/' \
     "base_url": "https://ridedash.<your-domain>",
     "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
 }'
+
+#example output
+{
+  "id": "c68146db-5f12-4422-9313-37027ba438bb",
+  "name": "ridedash",
+  "base_url": "https://ridedash.mystellarsdpdomain.org",
+  "sdp_ui_base_url": "https://ridedash.mystellarsdpdomain.org",
+  "status": "TENANT_PROVISIONED",
+  "is_default": false,
+  "created_at": "2025-04-15T19:48:40.029056Z",
+  "updated_at": "2025-04-15T19:48:41.790493Z",
+  "deleted_at": null,
+  "distribution_account_address": "GC4YTNYK3YIRSLYYH7D6R27OEKMOXZYFSRVYDOAQN5NY5SZMIQWJSZ7Q",
+  "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+  "distribution_account_status": "ACTIVE"
+}
 ```
 
 ## Troubleshooting
