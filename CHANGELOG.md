@@ -4,11 +4,77 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [3.6.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.1...3.6.0))
+## [3.7.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.7.0`.
+
+### Added
+
+- Update integration test to wait for the payment to be processed by TSS/Circle with a retry mechanism. [#585](https://github.com/stellar/stellar-disbursement-platform-backend/pull/585)
+- Add Circle Payouts API to the e2e integration test. [#586](https://github.com/stellar/stellar-disbursement-platform-backend/pull/586)
+- A React app for the SEP-24 interactive deposit flow. This app is served by the backend and is accessible at `/wallet-registration/start`. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
+- A new endpoint `GET /sep24-interactive-deposit/info` to kick off the SEP-24 interactive deposit flow. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
+- Add GH Workflow to automatically set the pull request assignee. [#591](https://github.com/stellar/stellar-disbursement-platform-backend/pull/591)
+- Added `priorityClassName` and `topologySpreadConstraints` properties to helm charts. [#601](https://github.com/stellar/stellar-disbursement-platform-backend/pull/601)
+- Added `nodeSelector`, `tolerations` and `affinity` global defaults to helm charts. [#607](https://github.com/stellar/stellar-disbursement-platform-backend/pull/607)
+
 
 ### Changed
 
+- Allow the AWS configuration to be handled by the AWS session if the static credentials and region are not all passed to the SDP function. [#565](https://github.com/stellar/stellar-disbursement-platform-backend/pull/565)
+- GET `/organization/logo` is changed to be a public (unauthenticated) endpoint. [#564](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/564)
+- ReCAPTCHA is now optional for the SEP-24 interactive deposit flow. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
+- Simplified Helm Charts, added documentation and instructions for local set-up, auto-generation of secrets. [#596](https://github.com/stellar/stellar-disbursement-platform-backend/pull/596)
+
+### Fixed
+
+- Fix CLI tests and test assertions. [#587](https://github.com/stellar/stellar-disbursement-platform-backend/pull/587)
+
+### Security and Dependencies
+
+- Upgrade AWS and stellar/go dependencies. [#581](https://github.com/stellar/stellar-disbursement-platform-backend/pull/581)
+- Bump github.com/golang-jwt/jwt/v4 from 4.5.1 to 4.5.2. [#588](https://github.com/stellar/stellar-disbursement-platform-backend/pull/588)
+
+## [3.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.6.1))
+
+### Added
+
+- Add support for Decaf wallet on Pubnet. [#611](https://github.com/stellar/stellar-disbursement-platform-backend/pull/611)
+
+## [3.6.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.1...3.6.0))
+
+> [!WARNING]
+> This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.6.0`.
+
+### Added
+
+- Add support to send payments with memos if the receiver wallet was registered with a memo, or when the flag `organizations.is_memo_tracing_enabled` is set to `true`. [#537](https://github.com/stellar/stellar-disbursement-platform-backend/pull/537)
+- Add support to memos when ingesting CSV files with known wallet addresses. [#572](https://github.com/stellar/stellar-disbursement-platform-backend/pull/572)
+- Add new CMD `distribution-account rotate` to rotate distribution account keys. [#579](https://github.com/stellar/stellar-disbursement-platform-backend/pull/579)
+
+### Changed
+
+- Reuse column names in SQL queries (DRY principle). [#535](https://github.com/stellar/stellar-disbursement-platform-backend/pull/535)
 - Improve UX on the reset-password flow by embedding the reset token in the URL so it can be parsed by the FE without human intervention. [#557](https://github.com/stellar/stellar-disbursement-platform-backend/pull/557)
+- Make create disbursement atomic. [#554](https://github.com/stellar/stellar-disbursement-platform-backend/pull/554)
+- Refactor the PR checklist to be more user-friendly and easier to follow. [#568](https://github.com/stellar/stellar-disbursement-platform-backend/pull/568)
+- Enabled scheduler instead of Kafka in the default environment variable template `.env.example`. [#573](https://github.com/stellar/stellar-disbursement-platform-backend/pull/573)
+- Change `{CIRCLE_API}/ping` method to validate only the response status code and not the body. [#580](https://github.com/stellar/stellar-disbursement-platform-backend/pull/580)
+
+### Fixed
+
+- Preserve port numbers in SEP-24 invitation links [#567](https://github.com/stellar/stellar-disbursement-platform-backend/pull/567)
+- `POST /users` fails with 500 during validation errors. [#562](https://github.com/stellar/stellar-disbursement-platform-backend/pull/562)
+- Preserve port numbers in SEP-24 invitation links [#567](https://github.com/stellar/stellar-disbursement-platform-backend/pull/567)
+
+### Security and Dependencies
+
+- Bump golang in the all-docker group. [#552](https://github.com/stellar/stellar-disbursement-platform-backend/pull/552), [#570](https://github.com/stellar/stellar-disbursement-platform-backend/pull/570)
+- Bump the all-actions group. [#569](https://github.com/stellar/stellar-disbursement-platform-backend/pull/569), [#578](https://github.com/stellar/stellar-disbursement-platform-backend/pull/578)
+- Bump golang.org/x/net from 0.34.0 to 0.36.0. [#575](https://github.com/stellar/stellar-disbursement-platform-backend/pull/575)
+- Bump checks versions so they work with the latest Golang versions. [#576](https://github.com/stellar/stellar-disbursement-platform-backend/pull/576)
+- Bump the minor-and-patch group across 1 directory with 8 updates [#577](https://github.com/stellar/stellar-disbursement-platform-backend/pull/577)
 
 ## [3.5.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.5.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.5.0...3.5.1))
 

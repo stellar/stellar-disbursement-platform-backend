@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,8 +98,8 @@ func Test_ValidateEmail(t *testing.T) {
 		email   string
 		wantErr error
 	}{
-		{"", fmt.Errorf("email cannot be empty")},
-		{"notvalidemail", fmt.Errorf("the provided email is not valid")},
+		{"", fmt.Errorf("email field is required")},
+		{"notvalidemail", fmt.Errorf("the email address provided is not valid")},
 		{"valid@test.com", nil},
 		{"valid+email@test.com", nil},
 	}
@@ -107,6 +108,83 @@ func Test_ValidateEmail(t *testing.T) {
 		t.Run(tc.email, func(t *testing.T) {
 			gotError := ValidateEmail(tc.email)
 			assert.Equalf(t, tc.wantErr, gotError, "ValidateEmail(%q) should be %v, but got %v", tc.email, tc.wantErr, gotError)
+		})
+	}
+}
+
+func TestValidateStringLength(t *testing.T) {
+	tests := []struct {
+		name        string
+		field       string
+		fieldName   string
+		maxLength   int
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "🔴error - empty field",
+			field:       "",
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: true,
+			errorMsg:    "username field is required",
+		},
+		{
+			name:        "🔴error - field with only spaces",
+			field:       "   ",
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: true,
+			errorMsg:    "username field is required",
+		},
+		{
+			name:        "🔴error - field exceeds max length",
+			field:       strings.Repeat("a", 51),
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: true,
+			errorMsg:    "username cannot exceed 50 characters",
+		},
+		{
+			name:        "🔴error - field with spaces exceeds max length",
+			field:       "  " + strings.Repeat("a", 49) + "  ",
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: true,
+			errorMsg:    "username cannot exceed 50 characters",
+		},
+		{
+			name:        "🟢success - field at exact max length",
+			field:       strings.Repeat("a", 50),
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: false,
+		},
+		{
+			name:        "🟢success - field under max length",
+			field:       "John Doe",
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: false,
+		},
+		{
+			name:        "🟢success - field with leading/trailing spaces but still under max length",
+			field:       "  John Doe  ",
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateStringLength(tc.field, tc.fieldName, tc.maxLength)
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Equal(t, tc.errorMsg, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func Test_NewMessageDispatcher(t *testing.T) {
@@ -124,7 +125,7 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 			supportedChannels: []MessageChannel{MessageChannelEmail},
 			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
 				emailClientMock.
-					On("SendMessage", emailMessage).
+					On("SendMessage", mock.Anything, emailMessage).
 					Return(nil).
 					Once()
 
@@ -140,7 +141,7 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 			supportedChannels: []MessageChannel{MessageChannelSMS},
 			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
 				smsClientMock.
-					On("SendMessage", smsMessage).
+					On("SendMessage", mock.Anything, smsMessage).
 					Return(nil).
 					Once()
 
@@ -156,7 +157,7 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 			supportedChannels: []MessageChannel{MessageChannelEmail, MessageChannelSMS},
 			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
 				smsClientMock.
-					On("SendMessage", multiChannelMessage).
+					On("SendMessage", mock.Anything, multiChannelMessage).
 					Return(nil).
 					Once()
 
@@ -172,12 +173,12 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 			supportedChannels: []MessageChannel{MessageChannelSMS, MessageChannelEmail},
 			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
 				smsClientMock.
-					On("SendMessage", multiChannelMessage).
+					On("SendMessage", mock.Anything, multiChannelMessage).
 					Return(errors.New("send error")).
 					Once()
 
 				emailClientMock.
-					On("SendMessage", multiChannelMessage).
+					On("SendMessage", mock.Anything, multiChannelMessage).
 					Return(nil).
 					Once()
 			},
@@ -191,12 +192,12 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 			supportedChannels: []MessageChannel{MessageChannelSMS, MessageChannelEmail},
 			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
 				emailClientMock.
-					On("SendMessage", multiChannelMessage).
+					On("SendMessage", mock.Anything, multiChannelMessage).
 					Return(errors.New("send error")).
 					Once()
 
 				smsClientMock.
-					On("SendMessage", multiChannelMessage).
+					On("SendMessage", mock.Anything, multiChannelMessage).
 					Return(errors.New("send error")).
 					Once()
 			},

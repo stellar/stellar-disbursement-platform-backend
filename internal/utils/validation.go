@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -20,7 +21,7 @@ var (
 	rxOTP                     = regexp.MustCompile(`^\d{6}$`)
 	ErrInvalidE164PhoneNumber = fmt.Errorf("the provided phone number is not a valid E.164 number")
 	ErrEmptyPhoneNumber       = fmt.Errorf("phone number cannot be empty")
-	ErrEmptyEmail             = fmt.Errorf("email cannot be empty")
+	ErrEmptyEmail             = fmt.Errorf("email field is required")
 )
 
 const (
@@ -76,7 +77,20 @@ func ValidateEmail(email string) error {
 	}
 
 	if !rxEmail.MatchString(email) {
-		return fmt.Errorf("the provided email is not valid")
+		return fmt.Errorf("the email address provided is not valid")
+	}
+
+	return nil
+}
+
+// ValidateStringLength will validate the given string to ensure it is not empty and does not exceed the maximum length.
+func ValidateStringLength(field, fieldName string, maxLength int) error {
+	if strings.TrimSpace(field) == "" {
+		return fmt.Errorf("%s field is required", fieldName)
+	}
+
+	if len(field) > maxLength {
+		return fmt.Errorf("%s cannot exceed %d characters", fieldName, maxLength)
 	}
 
 	return nil

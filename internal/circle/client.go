@@ -103,18 +103,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	var pingResp struct {
-		Message string `json:"message"`
-	}
-	if err = json.NewDecoder(resp.Body).Decode(&pingResp); err != nil {
-		return false, fmt.Errorf("decoding Ping response: %w", err)
-	}
-
-	if pingResp.Message == "pong" {
-		return true, nil
-	}
-
-	return false, fmt.Errorf("unexpected response message: %s", pingResp.Message)
+	return true, nil
 }
 
 // PostTransfer creates a new transfer.
@@ -403,13 +392,14 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 			// default is back-off delay
 			return retry.BackOffDelay(n, err, config)
 		}),
+		retry.Context(ctx), // Respect the context's cancellation
 		retry.Attempts(4),
 		retry.MaxDelay(time.Second*600),
 		retry.RetryIf(func(err error) bool {
 			return errors.As(err, &RetryableError{})
 		}),
 		retry.OnRetry(func(n uint, err error) {
-			log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, Retry number %d due to: %s", u, n, err)
+			log.Ctx(ctx).Warnf("🔄 CircleClient - Request to %s is rate limited, attempt %d failed with error: %v", u, n+1, err)
 		}),
 		retry.LastErrorOnly(true),
 	)

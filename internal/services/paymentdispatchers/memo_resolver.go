@@ -23,10 +23,12 @@ type MemoResolver struct {
 
 func (m *MemoResolver) GetMemo(ctx context.Context, receiverWallet data.ReceiverWallet) (schema.Memo, error) {
 	if receiverWallet.StellarMemo != "" {
-		return schema.Memo{
-			Value: receiverWallet.StellarMemo,
-			Type:  schema.MemoTypeID,
-		}, nil
+		memoValue := receiverWallet.StellarMemo
+		memoType := receiverWallet.StellarMemoType
+		if memoType == "" {
+			memoType = schema.MemoTypeID
+		}
+		return schema.Memo{Value: memoValue, Type: memoType}, nil
 	}
 
 	org, err := m.Organizations.Get(ctx)

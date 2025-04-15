@@ -270,6 +270,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 		return err
 	},
+		retry.Context(ctx), // Respect the context's cancellation
 		retry.Attempts(CreateAndFundAccountRetryAttempts),
 		retry.MaxDelay(1*time.Minute),
 		retry.DelayType(retry.BackOffDelay),
@@ -286,7 +287,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 			return false
 		}),
 		retry.OnRetry(func(n uint, err error) {
-			log.Ctx(ctx).Warnf("submitting create account tx for account %s - attempt %d failed with error: %v",
+			log.Ctx(ctx).Warnf("🔄 Submitting create account tx for account %s - attempt %d failed with error: %v",
 				destinationAcc,
 				n+1,
 				err)

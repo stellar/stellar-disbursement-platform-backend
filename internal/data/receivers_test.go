@@ -1248,7 +1248,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 			Email:      utils.StringPtr("invalid"),
 			ExternalId: utils.StringPtr(""),
 		})
-		assert.EqualError(t, err, `validating receiver update: validating email: the provided email is not valid`)
+		assert.EqualError(t, err, `validating receiver update: validating email: the email address provided is not valid`)
 	})
 
 	t.Run("updates email name successfully", func(t *testing.T) {

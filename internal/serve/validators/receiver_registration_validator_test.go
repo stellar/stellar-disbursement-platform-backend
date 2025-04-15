@@ -38,7 +38,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				VerificationField: data.VerificationTypeDateOfBirth,
 			},
 			expectedValidationErrors: map[string]interface{}{
-				"email": "the provided email is not valid",
+				"email": "the email address provided is not valid",
 			},
 		},
 		{

@@ -154,7 +154,7 @@ func (h ForgotPasswordHandler) SendForgotPasswordMessage(ctx context.Context, ui
 		Title:   forgotPasswordMessageTitle,
 		Body:    messageContent,
 	}
-	err = h.MessengerClient.SendMessage(msg)
+	err = h.MessengerClient.SendMessage(ctx, msg)
 	if err != nil {
 		return fmt.Errorf("sending forgot password email for %s: %w", utils.TruncateString(email, 3), err)
 	}

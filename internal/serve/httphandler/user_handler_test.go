@@ -340,48 +340,141 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 }
 
 func Test_CreateUserRequest_validate(t *testing.T) {
-	cur := CreateUserRequest{
-		FirstName: "",
-		LastName:  "",
-		Email:     "",
-		Roles:     []data.UserRole{},
+	tests := []struct {
+		name        string
+		request     CreateUserRequest
+		expectError bool
+		errorExtras map[string]interface{}
+	}{
+		{
+			name: "🔴error - all fields empty",
+			request: CreateUserRequest{
+				FirstName: "",
+				LastName:  "",
+				Email:     "",
+				Roles:     []data.UserRole{},
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"email":     "email field is required",
+				"fist_name": "first_name field is required",
+				"last_name": "last_name field is required",
+				"roles":     "the number of roles required is exactly one",
+			},
+		},
+		{
+			name: "🔴error - all fields empty with spaces",
+			request: CreateUserRequest{
+				FirstName: "  ",
+				LastName:  " ",
+				Email:     "   ",
+				Roles:     []data.UserRole{},
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"email":     "email field is required",
+				"fist_name": "first_name field is required",
+				"last_name": "last_name field is required",
+				"roles":     "the number of roles required is exactly one",
+			},
+		},
+		{
+			name: "🔴error - multiple roles",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.BusinessUserRole, data.DeveloperUserRole},
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"roles": "the number of roles required is exactly one",
+			},
+		},
+		{
+			name: "🔴error - invalid email format",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "invalid-email",
+				Roles:     []data.UserRole{data.DeveloperUserRole},
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"email": "the email address provided is not valid",
+			},
+		},
+		{
+			name: "🔴error - first name too long",
+			request: CreateUserRequest{
+				FirstName: strings.Repeat("a", 256),
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.DeveloperUserRole},
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"fist_name": "first_name cannot exceed 128 characters",
+			},
+		},
+		{
+			name: "🔴error - last name too long",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  strings.Repeat("a", 256),
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.DeveloperUserRole},
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"last_name": "last_name cannot exceed 128 characters",
+			},
+		},
+		{
+			name: "🔴error - invalid role",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{"invalid_role"},
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"roles": "unexpected value for roles[0]=invalid_role. Expect one of these values: [owner financial_controller developer business]",
+			},
+		},
+		{
+			name: "🟢success - valid request",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.DeveloperUserRole},
+			},
+			expectError: false,
+		},
 	}
 
-	extras := map[string]interface{}{
-		"email":     "email is required",
-		"fist_name": "fist_name is required",
-		"last_name": "last_name is required",
-		"roles":     "the number of roles required is exactly one",
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.validate()
+			if tc.expectError {
+				assert.NotNil(t, err)
+				var httpErr *httperror.HTTPError
+				require.True(t, errors.As(err, &httpErr), "expected an HTTPError")
+				assert.Equal(t, http.StatusBadRequest, httpErr.StatusCode)
+				assert.Equal(t, "Request invalid", httpErr.Message)
+
+				for key, expectedValue := range tc.errorExtras {
+					actualValue, exists := httpErr.Extras[key]
+					assert.True(t, exists)
+					assert.Equal(t, expectedValue, actualValue)
+				}
+			} else {
+				assert.Nil(t, err)
+			}
+		})
 	}
-	expectedErr := httperror.BadRequest("Request invalid", nil, extras)
-
-	err := cur.validate()
-	assert.Equal(t, expectedErr, err)
-
-	cur = CreateUserRequest{
-		FirstName: "First",
-		LastName:  "Last",
-		Email:     "email@email.com",
-		Roles:     []data.UserRole{data.BusinessUserRole, data.DeveloperUserRole},
-	}
-
-	extras = map[string]interface{}{
-		"roles": "the number of roles required is exactly one",
-	}
-	expectedErr = httperror.BadRequest("Request invalid", nil, extras)
-
-	err = cur.validate()
-	assert.Equal(t, expectedErr, err)
-
-	cur = CreateUserRequest{
-		FirstName: "First",
-		LastName:  "Last",
-		Email:     "email@email.com",
-		Roles:     []data.UserRole{data.DeveloperUserRole},
-	}
-
-	err = cur.validate()
-	assert.Nil(t, err)
 }
 
 func Test_UserHandler_CreateUser(t *testing.T) {
@@ -438,9 +531,9 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			{
 				"error": "Request invalid",
 				"extras": {
-					"email": "email is required",
-					"fist_name": "fist_name is required",
-					"last_name": "last_name is required",
+					"email": "email field is required",
+					"fist_name": "first_name field is required",
+					"last_name": "last_name field is required",
 					"roles": "the number of roles required is exactly one"
 				}
 			}
@@ -700,7 +793,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Body:    content,
 		}
 		messengerClientMock.
-			On("SendMessage", msg).
+			On("SendMessage", mock.Anything, msg).
 			Return(errors.New("unexpected error")).
 			Once()
 
@@ -867,7 +960,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Body:    content,
 		}
 		messengerClientMock.
-			On("SendMessage", msg).
+			On("SendMessage", mock.Anything, msg).
 			Return(nil).
 			Once()
 
