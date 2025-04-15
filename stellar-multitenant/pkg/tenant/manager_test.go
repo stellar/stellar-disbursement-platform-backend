@@ -424,7 +424,7 @@ func Test_Manager_GetDefault(t *testing.T) {
 	tnt2, err := m.AddTenant(ctx, "myorg2")
 	require.NoError(t, err)
 
-	t.Run("returns error when there's no default tenant", func(t *testing.T) {
+	t.Run("returns error when there's no default tenant (single tenant mode disabled)", func(t *testing.T) {
 		defaultTnt, dbErr := m.GetDefault(ctx)
 		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
 		assert.Nil(t, defaultTnt)
@@ -457,6 +457,97 @@ func Test_Manager_GetDefault(t *testing.T) {
 		assert.Equal(t, tnt2.ID, tntDB.ID)
 		assert.Equal(t, tnt2.Name, tntDB.Name)
 		assert.True(t, tntDB.IsDefault)
+	})
+	
+	// Clean up between test sections
+	DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+	
+	// Test with single tenant mode enabled
+	mSingleMode := NewManager(
+		WithDatabase(dbConnectionPool),
+		WithSingleTenantMode(true),
+	)
+	
+	t.Run("returns error when no tenants exist (single tenant mode enabled)", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, defaultTnt)
+	})
+	
+	singleTnt, err := mSingleMode.AddTenant(ctx, "gotham")
+	require.NoError(t, err)
+	
+	t.Run("returns the only tenant when in single tenant mode, even if not marked as default", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, singleTnt.ID, defaultTnt.ID)
+		assert.Equal(t, singleTnt.Name, defaultTnt.Name)
+		assert.False(t, defaultTnt.IsDefault) // Not marked as default in database
+	})
+	
+	// Add a second tenant
+	secondTnt, err := mSingleMode.AddTenant(ctx, "metropolis")
+	require.NoError(t, err)
+	
+	t.Run("returns error with multiple tenants but none default in single tenant mode", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, defaultTnt)
+	})
+	
+	// Set one as default
+	updateTenantIsDefault(t, ctx, dbConnectionPool, secondTnt.ID, true)
+	
+	t.Run("returns explicitly set default tenant in single tenant mode with multiple tenants", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, secondTnt.ID, defaultTnt.ID)
+		assert.True(t, defaultTnt.IsDefault)
+	})
+	
+	// Deactivate all but one tenant
+	deactivateTenant(t, ctx, mSingleMode, secondTnt)
+	
+	t.Run("returns the only active tenant in single tenant mode when others are deactivated", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, singleTnt.ID, defaultTnt.ID)
+		assert.False(t, defaultTnt.IsDefault) // Not marked as default in database
+	})
+
+	t.Run("ignores deactivated tenants when counting the total in single tenant mode", func(t *testing.T) {
+		// Clean up previous tenants
+		DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		
+		// Create 2 tenants, then deactivate one
+		activeTenant, err := mSingleMode.AddTenant(ctx, "wakanda")
+		require.NoError(t, err)
+		
+		inactiveTenant, err := mSingleMode.AddTenant(ctx, "asgard")
+		require.NoError(t, err)
+		deactivateTenant(t, ctx, mSingleMode, inactiveTenant)
+		
+		// Should return the only active tenant
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, activeTenant.ID, defaultTnt.ID)
+		assert.Equal(t, "wakanda", defaultTnt.Name)
+	})
+
+	t.Run("prioritizes explicitly set default tenant even in single tenant mode", func(t *testing.T) {
+		// Clean up previous tenants
+		DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		
+		// Create a tenant and set it as default
+		defaultTenant, err := mSingleMode.AddTenant(ctx, "krypton")
+		require.NoError(t, err)
+		updateTenantIsDefault(t, ctx, dbConnectionPool, defaultTenant.ID, true)
+		
+		// Should return the explicitly set default tenant
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, defaultTenant.ID, defaultTnt.ID)
+		assert.True(t, defaultTnt.IsDefault)
 	})
 }
 
@@ -700,97 +791,4 @@ func Test_Manager_CreateTenantSchema(t *testing.T) {
 	// attempt to create the same schema again, which fails
 	err = m.CreateTenantSchema(ctx, orgName)
 	require.ErrorContains(t, err, fmt.Sprintf("creating schema for tenant sdp_%s: pq: schema \"sdp_%s\" already exists", orgName, orgName))
-}
-
-func Test_Manager_EnsureDefaultTenant(t *testing.T) {
-	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
-	defer dbt.Close()
-
-	dbConnectionPool, dbErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, dbErr)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-	m := NewManager(WithDatabase(dbConnectionPool))
-
-	t.Run("returns error when no tenants exist", func(t *testing.T) {
-		defaultTnt, err := m.EnsureDefaultTenant(ctx)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
-		assert.Nil(t, defaultTnt)
-	})
-
-	// Create tenants for testing
-	tnt1, tenantErr := m.AddTenant(ctx, "gotham")
-	require.NoError(t, tenantErr)
-
-	t.Run("automatically sets default when only one tenant exists", func(t *testing.T) {
-		defaultTnt, err := m.EnsureDefaultTenant(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, tnt1.ID, defaultTnt.ID)
-		assert.True(t, defaultTnt.IsDefault)
-
-		// Verify in database
-		dbTnt, err := m.GetTenantByID(ctx, tnt1.ID)
-		require.NoError(t, err)
-		assert.True(t, dbTnt.IsDefault)
-	})
-
-	t.Run("returns existing default tenant without changes", func(t *testing.T) {
-		// First call already set the default in previous test
-		defaultTnt, err := m.EnsureDefaultTenant(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, tnt1.ID, defaultTnt.ID)
-		assert.True(t, defaultTnt.IsDefault)
-	})
-
-	// Add a second tenant
-	tnt2, tenantErr := m.AddTenant(ctx, "metropolis")
-	require.NoError(t, tenantErr)
-
-	t.Run("doesn't change default when multiple tenants exist", func(t *testing.T) {
-		// Should still return tnt1 as default
-		defaultTnt, err := m.EnsureDefaultTenant(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, tnt1.ID, defaultTnt.ID)
-		assert.True(t, defaultTnt.IsDefault)
-
-		// tnt2 shouldn't be default
-		dbTnt, err := m.GetTenantByID(ctx, tnt2.ID)
-		require.NoError(t, err)
-		assert.False(t, dbTnt.IsDefault)
-	})
-
-	// Reset default tenants for next test
-	_, err := dbConnectionPool.ExecContext(ctx, "UPDATE tenants SET is_default = false")
-	require.NoError(t, err)
-
-	t.Run("returns error when multiple tenants exist but none is default", func(t *testing.T) {
-		defaultTnt, err := m.EnsureDefaultTenant(ctx)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
-		assert.Nil(t, defaultTnt)
-
-		// Verify neither tenant was set as default
-		dbTnt1, err := m.GetTenantByID(ctx, tnt1.ID)
-		require.NoError(t, err)
-		assert.False(t, dbTnt1.IsDefault)
-
-		dbTnt2, err := m.GetTenantByID(ctx, tnt2.ID)
-		require.NoError(t, err)
-		assert.False(t, dbTnt2.IsDefault)
-	})
-
-	// Test deactivated tenant
-	deactivateTenant(t, ctx, m, tnt1)
-
-	t.Run("only considers active tenants", func(t *testing.T) {
-		defaultTnt, err := m.EnsureDefaultTenant(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, tnt2.ID, defaultTnt.ID)
-		assert.True(t, defaultTnt.IsDefault)
-
-		// Verify tnt2 was set as default since it's the only active one
-		dbTnt, err := m.GetTenantByID(ctx, tnt2.ID)
-		require.NoError(t, err)
-		assert.True(t, dbTnt.IsDefault)
-	})
 }

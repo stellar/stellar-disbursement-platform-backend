@@ -43,11 +43,11 @@ type ManagerInterface interface {
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error)
 	DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error
-	EnsureDefaultTenant(ctx context.Context) (*Tenant, error)
 }
 
 type Manager struct {
-	db db.DBConnectionPool
+	db               db.DBConnectionPool
+	singleTenantMode bool
 }
 
 func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (string, error) {
@@ -136,28 +136,46 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 	return m.GetTenant(ctx, queryParams)
 }
 
-// GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.
+// GetDefault returns the tenant where is_default is true.
+// In single tenant mode, if no default exists and there's only one tenant, it returns that tenant.
 func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: excludeInactiveTenantsFilters(),
 	}
-	queryParams.Filters[FilterKeyIsDefault] = true
 
 	tnts := []Tenant{}
 	query, params := m.newManagerQuery(selectQuery, queryParams)
 	err := m.db.SelectContext(ctx, &tnts, query, params...)
 	if err != nil {
-		return nil, fmt.Errorf("getting default tenant: %w", err)
+		return nil, fmt.Errorf("getting tenants: %w", err)
 	}
 
-	switch {
-	case len(tnts) == 0:
+	if len(tnts) == 0 {
 		return nil, ErrTenantDoesNotExist
-	case len(tnts) > 1:
-		return nil, ErrTooManyDefaultTenants
 	}
 
-	return &tnts[0], nil
+	if len(tnts) == 1 && m.singleTenantMode {
+		return &tnts[0], nil
+	}
+
+	var defaultTenant *Tenant
+	defaultCount := 0
+
+	for i, tnt := range tnts {
+		if tnt.IsDefault {
+			defaultCount++
+			if defaultCount > 1 {
+				return nil, ErrTooManyDefaultTenants
+			}
+			defaultTenant = &tnts[i]
+		}
+	}
+
+	if defaultTenant != nil {
+		return defaultTenant, nil
+	}
+
+	return nil, ErrTenantDoesNotExist
 }
 
 // SetDefault sets the is_default = true for the given tenant id.
@@ -415,36 +433,6 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 	return m.db.Rebind(query), params
 }
 
-func (m *Manager) EnsureDefaultTenant(ctx context.Context) (*Tenant, error) {
-	defaultTenant, err := m.GetDefault(ctx)
-	if err == nil {
-		return defaultTenant, nil
-	}
-
-	if !errors.Is(err, ErrTenantDoesNotExist) {
-		return nil, fmt.Errorf("getting default tenant: %w", err)
-	}
-
-	tenants, err := m.GetAllTenants(ctx, &QueryParams{
-		Filters: excludeInactiveTenantsFilters(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("getting all tenants: %w", err)
-	}
-
-	if len(tenants) == 1 {
-		defaultTenant, err := db.RunInTransactionWithResult(ctx, m.db, nil, func(dbTx db.DBTransaction) (*Tenant, error) {
-			return m.SetDefault(ctx, dbTx, tenants[0].ID)
-		})
-		if err != nil {
-			return nil, fmt.Errorf("setting default tenant: %w", err)
-		}
-		return defaultTenant, nil
-	}
-
-	return nil, ErrTenantDoesNotExist
-}
-
 type Option func(m *Manager)
 
 func NewManager(opts ...Option) *Manager {
@@ -458,6 +446,12 @@ func NewManager(opts ...Option) *Manager {
 func WithDatabase(dbConnectionPool db.DBConnectionPool) Option {
 	return func(m *Manager) {
 		m.db = dbConnectionPool
+	}
+}
+
+func WithSingleTenantMode(singleTenantMode bool) Option {
+	return func(m *Manager) {
+		m.singleTenantMode = singleTenantMode
 	}
 }
 

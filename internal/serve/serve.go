@@ -106,7 +106,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 	httperror.SetDefaultReportErrorFunc(opts.CrashTrackerClient.LogAndReportErrors)
 
 	// Setup Multi-Tenant Database when enabled
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
+	opts.tenantManager = tenant.NewManager(
+		tenant.WithDatabase(opts.AdminDBConnectionPool),
+		tenant.WithSingleTenantMode(opts.SingleTenantMode),
+	)
 
 	var err error
 	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)

@@ -20,7 +20,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
-	multitenantmiddleware "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -61,7 +60,10 @@ type ServeOptions struct {
 // SetupDependencies uses the serve options to setup the dependencies for the server.
 func (opts *ServeOptions) SetupDependencies() error {
 	var err error
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
+	opts.tenantManager = tenant.NewManager(
+		tenant.WithDatabase(opts.AdminDBConnectionPool),
+		tenant.WithSingleTenantMode(opts.SingleTenantMode),
+	)
 	opts.tenantProvisioningManager, err = provisioning.NewManager(provisioning.ManagerOptions{
 		DBConnectionPool:           opts.AdminDBConnectionPool,
 		TenantManager:              opts.tenantManager,
@@ -134,7 +136,6 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 	// Authenticated Routes
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.BasicAuthMiddleware(opts.AdminAccount, opts.AdminApiKey))
-		r.Use(multitenantmiddleware.TenantResolutionMiddleware(opts.tenantManager, opts.SingleTenantMode))
 
 		r.Route("/tenants", func(r chi.Router) {
 			tenantsHandler := httphandler.TenantsHandler{

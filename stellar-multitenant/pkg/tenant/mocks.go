@@ -134,14 +134,6 @@ func (m *TenantManagerMock) DeactivateTenantDistributionAccount(ctx context.Cont
 	return args.Error(0)
 }
 
-func (m *TenantManagerMock) EnsureDefaultTenant(ctx context.Context) (*Tenant, error) {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*Tenant), args.Error(1)
-}
-
 var _ ManagerInterface = (*TenantManagerMock)(nil)
 
 type testInterface interface {
