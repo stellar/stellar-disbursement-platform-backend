@@ -193,7 +193,7 @@ kubectl get secretstore aws-backend -n sdp
 #aws-backend   7s    Valid    ReadWrite      True
 ```
 
-## 3. Create External Secrets
+## 9. Create External Secrets
 ```bash
 kubectl apply -n sdp -f helm/sdp-secrets-dev.yaml
 kubectl get externalsecret sdp-secrets -n sdp
@@ -204,7 +204,7 @@ kubectl get externalsecret sdp-secrets -n sdp
 
 ```
 
-## 4. Install Nginx Ingress Controller
+## 10. Install Nginx Ingress Controller
 ```bash
 # Add and update repository
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -226,7 +226,7 @@ helm install ingress-nginx ingress-nginx/ingress-nginx \
 kubectl get pods -n ingress-nginx
 ```
 
-## 5. Install Cert-Manager
+## 11. Install Cert-Manager
 ```bash
 # Add Jetstack helm repo
 helm repo add jetstack https://charts.jetstack.io
@@ -252,7 +252,7 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manage
 kubectl apply -f helm/cluster-issuer.yaml
 ```
 
-## 6. Install External-DNS
+## 12. Install External-DNS
 Replace the domainFilters with your registered domain below.
 
 ```bashd
@@ -275,7 +275,7 @@ helm install external-dns external-dns/external-dns \
 kubectl get pods -n external-dns
 ```
 
-## 7. Deploy SDP Helm Chart
+## 13. Deploy SDP Helm Chart
 
 ### Add Stellar Repository
 ```bash
@@ -295,7 +295,7 @@ helm install sdp stellar/stellar-disbursement-platform -f helm/values-dev.yaml -
 kubectl -n sdp get pods
 ```
 
-## Adding a tenant from the SDP Pod
+## 14. Adding an SDP Tenant 
 
 ### Get the SDP Pod name and exec to its shell
 ```bash
