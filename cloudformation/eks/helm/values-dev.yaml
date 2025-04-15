@@ -6,8 +6,8 @@ global:
 
 sdp:
   route:
-    domain: sdp-backend.mystellarsdpdomain.org
-    mtnDomain: "*.sdp-backend.mystellarsdpdomain.org"
+    domain: sdp-backend.<yourdomain>
+    mtnDomain: "*.sdp-backend.<yourdomain>"
   deployment:
     podAnnotations:
       prometheus.io/path: /metrics
@@ -49,7 +49,7 @@ sdp:
       ENABLE_SCHEDULER: "true"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
-      SDP_UI_BASE_URL: "https://dashboard.mystellarsdpdomain.org"
+      SDP_UI_BASE_URL: "https://dashboard.<yourdomain>"
   # =========================== START sdp.ingress ===========================
   ingress:
     enabled: true
@@ -58,13 +58,13 @@ sdp:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'sdp-backend.mystellarsdpdomain.org'
-          - '*.sdp-backend.mystellarsdpdomain.org'
+          - 'sdp-backend.<yourdomain>'
+          - '*.sdp-backend.<yourdomain>'
         secretName: sdp-backend-cert
 # ============================= anchorPlatform ===================================
 anchorPlatform:
   route:
-    domain: ap-sdp-backend.mystellarsdpdomain.org
+    domain: ap-sdp-backend.<yourdomain>
   deployment:
     podAnnotations:
       prometheus.io/path: /metrics
@@ -144,7 +144,7 @@ anchorPlatform:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'ap-sdp-backend.mystellarsdpdomain.org'
+          - 'ap-sdp-backend.<yourdomain>'
         secretName: sdp-ap-cert
 
 # ============================= tss ===================================
@@ -181,8 +181,8 @@ tss:
 dashboard:
   enabled: true
   route:
-    domain: "dashboard.mystellarsdpdomain.org"
-    mtnDomain: "*.dashboard.mystellarsdpdomain.org"
+    domain: "dashboard.<yourdomain>"
+    mtnDomain: "*.dashboard.<yourdomain>"
   deployment:
     strategy:
       type: "RollingUpdate"
@@ -205,6 +205,6 @@ dashboard:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'dashboard.mystellarsdpdomain.org'
-          - '*.dashboard.mystellarsdpdomain.org'
+          - 'dashboard.<yourdomain>'
+          - '*.dashboard.<yourdomain>'
         secretName: sdp-dashboard-cert
