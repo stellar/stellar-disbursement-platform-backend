@@ -122,13 +122,13 @@ Parameters:
   RecaptchaSiteKey:
     Type: String
     NoEcho: true
-    Default: "YOUR_RECAPTCHA_KEY"
+    Default: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
     Description: "Environment variable: RECAPTCHA_SITE_KEY"
 
   RecaptchaSiteSecretKey:
     Type: String
     NoEcho: true
-    Default: "YOUR_RECAPTCHA_SECRET_KEY"
+    Default: "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
     Description: "Environment variable: RECAPTCHA_SITE_SECRET_KEY"
 
   AwsSnsSenderId:

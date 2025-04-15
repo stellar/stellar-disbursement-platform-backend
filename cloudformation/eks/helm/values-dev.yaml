@@ -6,8 +6,8 @@ global:
 
 sdp:
   route:
-    domain: sdp-backend.yourdomain.org
-    mtnDomain: "*.sdp-backend.yourdomain.org"
+    domain: sdp-backend.mystellarsdpdomain.org
+    mtnDomain: "*.sdp-backend.mystellarsdpdomain.org"
   deployment:
     podAnnotations:
       prometheus.io/path: /metrics
@@ -43,11 +43,13 @@ sdp:
   # =========================== START sdp.configMap ===========================
   configMap:
     data:
-      ADMIN_ACCOUNT: "admin@yourdomain.com"
+      INSTANCE_NAME: "SDP-dev"
+      ADMIN_ACCOUNT: "admin@mystellarsdpdomain.com"
       ENVIRONMENT: "dev"
+      ENABLE_SCHEDULER: "true"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
-      SDP_UI_BASE_URL: "https://dashboard.yourdomain.org"
+      SDP_UI_BASE_URL: "https://dashboard.mystellarsdpdomain.org"
   # =========================== START sdp.ingress ===========================
   ingress:
     enabled: true
@@ -56,13 +58,13 @@ sdp:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'sdp-backend.yourdomain.org'
-          - '*.sdp-backend.yourdomain.org'
+          - 'sdp-backend.mystellarsdpdomain.org'
+          - '*.sdp-backend.mystellarsdpdomain.org'
         secretName: sdp-backend-cert
 # ============================= anchorPlatform ===================================
 anchorPlatform:
   route:
-    domain: ap-sdp-backend.yourdomain.org
+    domain: ap-sdp-backend.mystellarsdpdomain.org
   deployment:
     podAnnotations:
       prometheus.io/path: /metrics
@@ -142,7 +144,7 @@ anchorPlatform:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'ap-sdp-backend.yourdomain.org'
+          - 'ap-sdp-backend.mystellarsdpdomain.org'
         secretName: sdp-ap-cert
 
 # ============================= tss ===================================
@@ -179,8 +181,8 @@ tss:
 dashboard:
   enabled: true
   route:
-    domain: "dashboard.yourdomain.org"
-    mtnDomain: "*.dashboard.yourdomain.org"
+    domain: "dashboard.mystellarsdpdomain.org"
+    mtnDomain: "*.dashboard.mystellarsdpdomain.org"
   deployment:
     strategy:
       type: "RollingUpdate"
@@ -203,6 +205,6 @@ dashboard:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'dashboard.yourdomain.org'
-          - '*.dashboard.yourdomain.org'
+          - 'dashboard.mystellarsdpdomain.org'
+          - '*.dashboard.mystellarsdpdomain.org'
         secretName: sdp-dashboard-cert
