@@ -1,4 +1,4 @@
-# # Stellar Disbursement Platform (SDP) AWS Kubernetes (EKS) Deployment Guide
+# Stellar Disbursement Platform (SDP) AWS Kubernetes (EKS) Deployment Guide
 
 ## Prerequisites
 - AWS CLI installed and configured
@@ -33,7 +33,12 @@ This guide walks through deploying the Stellar Disbursement Platform (SDP) infra
 After the CloudFormation stacks are deployed, additional Kubernetes resources are installed via Helm charts to complete the setup. The SDP expects secrets to be available as Kubernetes secrets, but how those secrets are synchronized (whether through ExternalSecrets, direct creation, or other means) is left to the deployer's preference.
 
 Note: Both the Keys stack and ExternalSecrets are optional implementation choices. You can manage and sync secrets to Kubernetes secrets through whatever mechanism best fits your security requirements and operational preferences.
-##Verify AWS CLI Configuration
+## Change Directory to the EKS Cloudformation Directory
+```bash
+cd cloudformation/eks
+```
+
+## Verify AWS CLI Configuration
 ```bash
 aws configure list
 aws sts get-caller-identity
@@ -235,7 +240,7 @@ kubectl get secretstore aws-backend -n sdp
 
 ## 3. Create External Secrets
 ```bash
-kubectl apply -n sdp -f eks-helm/sdp-secrets-dev.yaml
+kubectl apply -n sdp -f helm/sdp-secrets-dev.yaml
 kubectl get externalsecret sdp-secrets -n sdp
 ```
 
@@ -282,7 +287,7 @@ helm install cert-manager jetstack/cert-manager \
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=120s
 
 # Apply ClusterIssuer
-kubectl apply -f eks-helm/cluster-issuer.yaml
+kubectl apply -f helm/cluster-issuer.yaml
 ```
 
 ## 6. Install External-DNS
