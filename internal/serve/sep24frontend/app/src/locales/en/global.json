@@ -1,18 +1,18 @@
 {
   "selectVerification": {
-    "title": "Select Verification Method",
-    "message": "Select how you received your invitation to claim funds.",
-    "warning": "Attention, it needs to match the form of contact where you received your invitation to receive this payment.",
+    "title": "Select Payment Invite Method",
+    "message": "How did you receive your invitation to claim funds?",
+    "warning": "ATTENTION: you must use the contact that was invited to claim this payment.",
     "phoneErrorMessage": "Entered phone number is not valid",
     "emailErrorMessage": "Entered email is not valid",
     "missingAuthToken": "Authentication token is missing. Please make sure your URL is correct."
   },
   "enterPasscode": {
-    "title": "Enter Passcode",
-    "message": "If you are pre-approved, you will receive a one-time passcode, enter it below to continue.",
+    "title": "Verify Information",
+    "message": "If your contact information matches a pending payment from your organization, you will receive a one-time passcode. Enter it below to continue.",
     "messageNoOtp": "If you did not receive an OTP, it is likely because you used a phone number or email not registered with your organization. Please check the value you entered.",
     "warning": "Do not share your OTP or verification data with anyone. People who ask for this information could be trying to access your account.",
-    "passcode": "Passcode",
+    "passcode": "One-Time Passcode (OTP)",
     "verDateOfBirth": "Date of Birth",
     "verYearMonth": "Date of Birth (Year & Month only)",
     "verNationalIdNumber": "National ID Number",
