@@ -84,15 +84,16 @@ type ServeOptions struct {
 	DisableMFA                      bool
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
-	EnableScheduler                 bool
-	tenantManager                   tenant.ManagerInterface
-	DistributionAccountService      services.DistributionAccountServiceInterface
-	DistAccEncryptionPassphrase     string
-	EventProducer                   events.Producer
-	MaxInvitationResendAttempts     int
-	SingleTenantMode                bool
-	CircleService                   circle.ServiceInterface
-	CircleAPIType                   circle.APIType
+	// Deprecated: Use EventBrokerType=SCHEDULER instead.
+	EnableScheduler             bool
+	tenantManager               tenant.ManagerInterface
+	DistributionAccountService  services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase string
+	EventProducer               events.Producer
+	MaxInvitationResendAttempts int
+	SingleTenantMode            bool
+	CircleService               circle.ServiceInterface
+	CircleAPIType               circle.APIType
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
