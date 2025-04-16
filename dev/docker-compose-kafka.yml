@@ -46,7 +46,7 @@ services:
 
   sdp-api:
     environment:
-      # Kafka Configuration - only used if EVENT_BROKER_TYPE is set to "SCHEDULER"
+      # Kafka Configuration - only used if EVENT_BROKER_TYPE is set to "KAFKA"
       EVENT_BROKER_TYPE: "KAFKA"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
