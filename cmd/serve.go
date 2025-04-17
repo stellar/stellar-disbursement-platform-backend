@@ -702,7 +702,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			case events.SchedulerEventBrokerType:
 				serveOpts.EventProducer = events.NoopProducer{}
 			}
-			
+
 			log.Ctx(ctx).Info("Starting Scheduler Service...")
 			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
 			if innerErr != nil {
