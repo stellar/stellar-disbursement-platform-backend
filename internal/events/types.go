@@ -10,8 +10,7 @@ type EventBrokerType string
 const (
 	KafkaEventBrokerType EventBrokerType = "KAFKA"
 	// NoneEventBrokerType means that no event broker was chosen.
-	// Deprecated: use SCHEDULER instead
-	NoneEventBrokerType      EventBrokerType = "NONE"
+	NoneEventBrokerType      EventBrokerType = "NONE" // Deprecated: use SCHEDULER instead
 	SchedulerEventBrokerType EventBrokerType = "SCHEDULER"
 )
 

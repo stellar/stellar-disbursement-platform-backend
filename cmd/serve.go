@@ -663,7 +663,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			switch eventBrokerOptions.EventBrokerType {
 			case events.KafkaEventBrokerType:
 				if serveOpts.EnableScheduler {
-					log.Ctx(ctx).Fatalf("Both Event Broker Type=KAFKA and enable-scheduler=true are set. Please use only one approach.")
+					log.Ctx(ctx).Fatalf("Both 'event-broker-type=KAFKA' and 'enable-scheduler=true' are set. Please use only one approach.")
 				}
 			case events.NoneEventBrokerType:
 				if !serveOpts.EnableScheduler {
@@ -700,13 +700,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Warn("Event Broker Type is NONE (deprecated). Using NoopProducer for logging events.")
 				serveOpts.EventProducer = events.NoopProducer{}
 			case events.SchedulerEventBrokerType:
-				log.Ctx(ctx).Info("Starting Scheduler Service...")
-				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
-				if innerErr != nil {
-					log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
-				}
-				go scheduler.StartScheduler(serveOpts.AdminDBConnectionPool, crashTrackerClient.Clone(), schedulerJobRegistrars...)
+				serveOpts.EventProducer = events.NoopProducer{}
 			}
+			
+			log.Ctx(ctx).Info("Starting Scheduler Service...")
+			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
+			if innerErr != nil {
+				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
+			}
+			go scheduler.StartScheduler(serveOpts.AdminDBConnectionPool, crashTrackerClient.Clone(), schedulerJobRegistrars...)
 
 			// Starting Metrics Server (background job)
 			log.Ctx(ctx).Info("Starting Metrics Server...")
