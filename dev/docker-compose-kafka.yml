@@ -46,14 +46,12 @@ services:
 
   sdp-api:
     environment:
-      # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
+      # Kafka Configuration - only used if EVENT_BROKER_TYPE is set to "KAFKA"
       EVENT_BROKER_TYPE: "KAFKA"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
       KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
 
-      # scheduler has to be disabled to use kafka
-      ENABLE_SCHEDULER: "false"
     depends_on:
       kafka:
         condition: service_started
