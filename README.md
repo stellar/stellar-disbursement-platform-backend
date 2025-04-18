@@ -52,7 +52,7 @@ Google's reCAPTCHA has been integrated into the SDP to prevent automated attacks
 
 ReCAPTCHA is enabled by default and can be disabled in the development environment by setting the `DISABLE_RECAPTCHA` environment variable to `true`.
 
-**Note:** Disabling reCAPTCHA is not supported for production environments due to security risks.
+**Note:** Disabling reCAPTCHA is supported for pubnet environments but this might reduce security!.
 
 ### Enforcement of Multi-Factor Authentication
 
