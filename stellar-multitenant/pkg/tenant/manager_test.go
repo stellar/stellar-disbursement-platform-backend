@@ -424,7 +424,7 @@ func Test_Manager_GetDefault(t *testing.T) {
 	tnt2, err := m.AddTenant(ctx, "myorg2")
 	require.NoError(t, err)
 
-	t.Run("returns error when there's no default tenant", func(t *testing.T) {
+	t.Run("returns error when there's no default tenant (single tenant mode disabled)", func(t *testing.T) {
 		defaultTnt, dbErr := m.GetDefault(ctx)
 		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
 		assert.Nil(t, defaultTnt)
@@ -457,6 +457,97 @@ func Test_Manager_GetDefault(t *testing.T) {
 		assert.Equal(t, tnt2.ID, tntDB.ID)
 		assert.Equal(t, tnt2.Name, tntDB.Name)
 		assert.True(t, tntDB.IsDefault)
+	})
+
+	// Clean up between test sections
+	DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+
+	// Test with single tenant mode enabled
+	mSingleMode := NewManager(
+		WithDatabase(dbConnectionPool),
+		WithSingleTenantMode(true),
+	)
+
+	t.Run("returns error when no tenants exist (single tenant mode enabled)", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, defaultTnt)
+	})
+
+	singleTnt, err := mSingleMode.AddTenant(ctx, "gotham")
+	require.NoError(t, err)
+
+	t.Run("returns the only tenant when in single tenant mode, even if not marked as default", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, singleTnt.ID, defaultTnt.ID)
+		assert.Equal(t, singleTnt.Name, defaultTnt.Name)
+		assert.False(t, defaultTnt.IsDefault) // Not marked as default in database
+	})
+
+	// Add a second tenant
+	secondTnt, err := mSingleMode.AddTenant(ctx, "metropolis")
+	require.NoError(t, err)
+
+	t.Run("returns error with multiple tenants but none default in single tenant mode", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, defaultTnt)
+	})
+
+	// Set one as default
+	updateTenantIsDefault(t, ctx, dbConnectionPool, secondTnt.ID, true)
+
+	t.Run("returns explicitly set default tenant in single tenant mode with multiple tenants", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, secondTnt.ID, defaultTnt.ID)
+		assert.True(t, defaultTnt.IsDefault)
+	})
+
+	// Deactivate all but one tenant
+	deactivateTenant(t, ctx, mSingleMode, secondTnt)
+
+	t.Run("returns the only active tenant in single tenant mode when others are deactivated", func(t *testing.T) {
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, singleTnt.ID, defaultTnt.ID)
+		assert.False(t, defaultTnt.IsDefault) // Not marked as default in database
+	})
+
+	t.Run("ignores deactivated tenants when counting the total in single tenant mode", func(t *testing.T) {
+		// Clean up previous tenants
+		DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+
+		// Create 2 tenants, then deactivate one
+		activeTenant, err := mSingleMode.AddTenant(ctx, "wakanda")
+		require.NoError(t, err)
+
+		inactiveTenant, err := mSingleMode.AddTenant(ctx, "asgard")
+		require.NoError(t, err)
+		deactivateTenant(t, ctx, mSingleMode, inactiveTenant)
+
+		// Should return the only active tenant
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, activeTenant.ID, defaultTnt.ID)
+		assert.Equal(t, "wakanda", defaultTnt.Name)
+	})
+
+	t.Run("prioritizes explicitly set default tenant even in single tenant mode", func(t *testing.T) {
+		// Clean up previous tenants
+		DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+
+		// Create a tenant and set it as default
+		defaultTenant, err := mSingleMode.AddTenant(ctx, "krypton")
+		require.NoError(t, err)
+		updateTenantIsDefault(t, ctx, dbConnectionPool, defaultTenant.ID, true)
+
+		// Should return the explicitly set default tenant
+		defaultTnt, dbErr := mSingleMode.GetDefault(ctx)
+		require.NoError(t, dbErr)
+		assert.Equal(t, defaultTenant.ID, defaultTnt.ID)
+		assert.True(t, defaultTnt.IsDefault)
 	})
 }
 
