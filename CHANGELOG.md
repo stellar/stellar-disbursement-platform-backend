@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - GET `/organization/logo` is changed to be a public (unauthenticated) endpoint. [#564](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/564)
 - ReCAPTCHA is now optional for the SEP-24 interactive deposit flow. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
 - Simplified Helm Charts, added documentation and instructions for local set-up, auto-generation of secrets. [#596](https://github.com/stellar/stellar-disbursement-platform-backend/pull/596)
+- ReCAPTCHA now allowed to be disabled in pubnet environments. [#618](https://github.com/stellar/stellar-disbursement-platform-backend/pull/618)
 
 ### Fixed
 
