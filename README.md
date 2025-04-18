@@ -216,7 +216,7 @@ Currently, the SDP only supports Kafka as an Event Broker even though it has bee
 > [!NOTE]  
 > In order to avoid concurrency issues, the SDP only supports one Event Broker or Background Jobs at a time.
 
-### Configuration Options
+#### Configuration Options
 
 The SDP configuration is controlled by the `EVENT_BROKER_TYPE` environment variable:
 
