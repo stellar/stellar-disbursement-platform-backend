@@ -60,7 +60,10 @@ type ServeOptions struct {
 // SetupDependencies uses the serve options to setup the dependencies for the server.
 func (opts *ServeOptions) SetupDependencies() error {
 	var err error
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
+	opts.tenantManager = tenant.NewManager(
+		tenant.WithDatabase(opts.AdminDBConnectionPool),
+		tenant.WithSingleTenantMode(opts.SingleTenantMode),
+	)
 	opts.tenantProvisioningManager, err = provisioning.NewManager(provisioning.ManagerOptions{
 		DBConnectionPool:           opts.AdminDBConnectionPool,
 		TenantManager:              opts.tenantManager,

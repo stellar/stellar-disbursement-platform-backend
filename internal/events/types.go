@@ -10,7 +10,8 @@ type EventBrokerType string
 const (
 	KafkaEventBrokerType EventBrokerType = "KAFKA"
 	// NoneEventBrokerType means that no event broker was chosen.
-	NoneEventBrokerType EventBrokerType = "NONE"
+	NoneEventBrokerType      EventBrokerType = "NONE" // Deprecated: use SCHEDULER instead
+	SchedulerEventBrokerType EventBrokerType = "SCHEDULER"
 )
 
 func ParseEventBrokerType(ebType string) (EventBrokerType, error) {
@@ -19,6 +20,8 @@ func ParseEventBrokerType(ebType string) (EventBrokerType, error) {
 		return KafkaEventBrokerType, nil
 	case NoneEventBrokerType:
 		return NoneEventBrokerType, nil
+	case SchedulerEventBrokerType:
+		return SchedulerEventBrokerType, nil
 	default:
 		return "", fmt.Errorf("invalid event broker type")
 	}
