@@ -1,4 +1,3 @@
-// pkg/provisioning/manager.go
 package provisioning
 
 import (
