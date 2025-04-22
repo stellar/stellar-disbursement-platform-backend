@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"go/types"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
@@ -9,7 +13,9 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/db"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -20,21 +26,66 @@ import (
 // TenantsCommand for commands related to tenant operations
 type TenantsCommand struct{}
 
+// DefaultTenantConfig holds configuration for default tenant creation
 type DefaultTenantConfig struct {
 	DefaultTenantOwnerEmail              string
 	DefaultTenantOwnerFirstName          string
 	DefaultTenantOwnerLastName           string
 	DefaultTenantDistributionAccountType string
 	DistributionPublicKey                string
-	HorizonURL                           string
-	MaxBaseFee                           int
-	DistAccEncryptionPassphrase          string
-	ChAccEncryptionPassphrase            string
-	DistributionPrivateKey               string
 }
 
-// DefaultTenantsService implements TenantsService
-type DefaultTenantsService struct{}
+// Validate ensures required fields are set and valid
+func (c *DefaultTenantConfig) Validate() error {
+	if c.DefaultTenantOwnerEmail == "" {
+		return errors.New("missing default-tenant-owner-email")
+	}
+	if c.DefaultTenantOwnerFirstName == "" {
+		return errors.New("missing default-tenant-owner-first-name")
+	}
+	if c.DefaultTenantOwnerLastName == "" {
+		return errors.New("missing default-tenant-owner-last-name")
+	}
+
+	acctType := schema.AccountType(c.DefaultTenantDistributionAccountType)
+	switch acctType {
+	case schema.DistributionAccountStellarDBVault,
+		schema.DistributionAccountStellarEnv,
+		schema.DistributionAccountCircleDBVault:
+		// valid
+	default:
+		return fmt.Errorf("invalid distribution account type: %s", c.DefaultTenantDistributionAccountType)
+	}
+	return nil
+}
+
+// TenantsService defines the interface for tenant operations
+type TenantsService interface {
+	EnsureDefaultTenant(ctx context.Context, cfg DefaultTenantConfig, opts cmdUtils.GlobalOptionsType) error
+}
+
+// defaultTenantsService implements TenantsService
+type defaultTenantsService struct {
+	adminDBConnectionPool dbpkg.DBConnectionPool
+	tenantProvisioning    provisioning.Provisioner
+	submitterEngine       engine.SubmitterEngine
+	tenantManager         tenant.ManagerInterface
+}
+
+// NewDefaultTenantsService constructs the service
+func NewDefaultTenantsService(
+	dbc dbpkg.DBConnectionPool,
+	tenantProvisioning provisioning.Provisioner,
+	submitterEngine engine.SubmitterEngine,
+	tenantManager tenant.ManagerInterface,
+) *defaultTenantsService {
+	return &defaultTenantsService{
+		adminDBConnectionPool: dbc,
+		tenantProvisioning:    tenantProvisioning,
+		submitterEngine:       submitterEngine,
+		tenantManager:         tenantManager,
+	}
+}
 
 // Command returns the cobra command for tenant operations
 func (cmd *TenantsCommand) Command() *cobra.Command {
@@ -69,11 +120,10 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 			OptType:     types.String,
 			ConfigKey:   &cfg.DefaultTenantDistributionAccountType,
 			FlagDefault: string(schema.DistributionAccountStellarDBVault),
-			Required:    false,
 		},
 		{
 			Name:        db.DBConfigOptionFlagName,
-			Usage:       `Postgres DB URL`,
+			Usage:       "Postgres DB URL",
 			OptType:     types.String,
 			FlagDefault: "postgres://localhost:5432/sdp?sslmode=disable",
 			ConfigKey:   &globalOptions.DatabaseURL,
@@ -81,7 +131,7 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 		},
 		{
 			Name:        "base-url",
-			Usage:       "The SDP backend server's base URL.",
+			Usage:       "SDP backend base URL",
 			OptType:     types.String,
 			ConfigKey:   &globalOptions.BaseURL,
 			FlagDefault: "http://localhost:8000",
@@ -89,7 +139,7 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 		},
 		{
 			Name:        "sdp-ui-base-url",
-			Usage:       "The SDP UI server's base URL.",
+			Usage:       "SDP UI base URL",
 			OptType:     types.String,
 			ConfigKey:   &globalOptions.SDPUIBaseURL,
 			FlagDefault: "http://localhost:3000",
@@ -104,158 +154,155 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
 	)
 
-	tenantCmd := &cobra.Command{
+	tenantsRoot := &cobra.Command{
 		Use:   "tenants",
 		Short: "Tenant related operations",
 		Long:  "Manage tenant operations like creating a default tenant",
 	}
 
-	ensureDefaultCmd := &cobra.Command{
+	ensureDefault := &cobra.Command{
 		Use:   "ensure-default",
 		Short: "Ensure a default tenant exists",
-		Long:  "Creates a default tenant if none exists and sets it as the default tenant. Uses environment variables for configuration.",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		Long:  "Creates a default tenant if none exists and sets it as default.",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			configOpts.Require()
 			if err := configOpts.SetValues(); err != nil {
 				log.Fatalf("Error setting values of config options: %s", err.Error())
 			}
+
+			return cfg.Validate()
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			ctx := cmd.Context()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+			defer cancel()
 
-			cfg.MaxBaseFee = txSubmitterOpts.MaxBaseFee
-			cfg.HorizonURL = txSubmitterOpts.HorizonURL
-			cfg.DistAccEncryptionPassphrase = txSubmitterOpts.SignatureServiceOptions.DistAccEncryptionPassphrase
-			cfg.DistributionPrivateKey = txSubmitterOpts.SignatureServiceOptions.DistributionPrivateKey
-			cfg.ChAccEncryptionPassphrase = txSubmitterOpts.SignatureServiceOptions.ChAccEncryptionPassphrase
-			// Set default account type if not provided
-			distributionAccountType := schema.DistributionAccountStellarDBVault
-			if cfg.DefaultTenantDistributionAccountType != "" {
-				distributionAccountType = schema.AccountType(cfg.DefaultTenantDistributionAccountType)
-			}
-
-			// Validate account type
-			switch distributionAccountType {
-			case schema.DistributionAccountStellarDBVault, schema.DistributionAccountStellarEnv, schema.DistributionAccountCircleDBVault:
-			default:
-				log.Ctx(ctx).Fatalf("invalid distribution account type: %s", cfg.DefaultTenantDistributionAccountType)
-				return
-			}
-
-			// Connect to the database
-			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL}
-			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
+			// Initialize dependencies
+			adminPool, mtnPool, tssPool, err := initDBPools(ctx, globalOptions.DatabaseURL)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %s", err)
-				return
+				return err
 			}
-			defer func() {
-				di.CleanupInstanceByValue(ctx, adminDBConnectionPool)
-			}()
+			defer di.CleanupInstanceByValue(ctx, adminPool)
 
-			// Setup the Multi-tenant DB connection pool
-			mtnDBConnectionPool, err := di.NewMtnDBConnectionPool(ctx, dbcpOptions)
+			submitter, err := initSubmitter(ctx, txSubmitterOpts, adminPool, mtnPool, tssPool, cfg.DistributionPublicKey)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %s", err)
-				return
+				return err
 			}
 
-			// Setup the TSS DB connection pool
-			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
+			provMgr, tenantMgr, err := initProvisioning(adminPool, mtnPool, submitter)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %s", err)
-				return
+				return err
 			}
 
-			// Create tenant manager
-			tenantManager := tenant.NewManager(
-				tenant.WithDatabase(adminDBConnectionPool),
-			)
-
-			// Check if a default tenant already exists
-			defaultTenant, err := tenantManager.GetDefault(ctx)
-			if err == nil {
-				log.Ctx(ctx).Infof("Default tenant already exists: %s (%s)", defaultTenant.Name, defaultTenant.ID)
-				return
-			} else if err != tenant.ErrTenantDoesNotExist {
-				log.Ctx(ctx).Fatalf("error checking for default tenant: %s", err)
-				return
-			}
-
-			log.Ctx(ctx).Info("No default tenant found, creating...")
-
-			// Setup Distribution Account Resolver
-			distAccResolverOpts := signing.DistributionAccountResolverOptions{
-				HostDistributionAccountPublicKey: cfg.DistributionPublicKey,
-				AdminDBConnectionPool:            adminDBConnectionPool,
-				MTNDBConnectionPool:              mtnDBConnectionPool,
-			}
-			distAccountResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %s", err)
-				return
-			}
-
-			// Setup the Submitter Engine
-			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
-			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
-			txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = distAccountResolver
-
-			submitterEngine, err := di.NewTxSubmitterEngine(ctx, txSubmitterOpts)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating submitter engine: %s", err)
-				return
-			}
-
-			networkType, err := utils.GetNetworkTypeFromNetworkPassphrase(globalOptions.NetworkPassphrase)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error getting network type: %s", err)
-				return
-			}
-
-			// Create provisioning manager
-			provisioningManager, err := provisioning.NewManager(provisioning.ManagerOptions{
-				DBConnectionPool:           mtnDBConnectionPool,
-				TenantManager:              tenantManager,
-				SubmitterEngine:            submitterEngine,
-				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
-			})
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating provisioning manager: %s", err)
-				return
-			}
-
-			// Create the tenant
-			newTenant, err := provisioningManager.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
-				Name:                    "default",
-				UserFirstName:           cfg.DefaultTenantOwnerFirstName,
-				UserLastName:            cfg.DefaultTenantOwnerLastName,
-				UserEmail:               cfg.DefaultTenantOwnerEmail,
-				OrgName:                 "Default Organization",
-				UiBaseURL:               globalOptions.SDPUIBaseURL,
-				BaseURL:                 globalOptions.BaseURL,
-				NetworkType:             string(networkType),
-				DistributionAccountType: distributionAccountType,
-			})
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating default tenant: %s", err)
-				return
-			}
-
-			_, err = tenantManager.SetDefault(ctx, adminDBConnectionPool, newTenant.ID)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error setting tenant as default: %s", err)
-				return
-			}
-
-			log.Ctx(ctx).Infof("Successfully created and set default tenant: %s (%s)", newTenant.Name, newTenant.ID)
+			svc := NewDefaultTenantsService(adminPool, provMgr, submitter, tenantMgr)
+			return svc.EnsureDefaultTenant(ctx, cfg, globalOptions)
 		},
 	}
 
-	if err := configOpts.Init(ensureDefaultCmd); err != nil {
-		log.Fatalf("Error initializing a config option: %s", err.Error())
+	if err := configOpts.Init(ensureDefault); err != nil {
+		log.Fatalf("Error initializing config: %s", err)
 	}
 
-	tenantCmd.AddCommand(ensureDefaultCmd)
-	return tenantCmd
+	tenantsRoot.AddCommand(ensureDefault)
+	return tenantsRoot
+}
+
+// initDBPools sets up admin, multi-tenant, and TSS DB pools
+func initDBPools(ctx context.Context, dbURL string) (admin, mtn, tss dbpkg.DBConnectionPool, err error) {
+	opts := di.DBConnectionPoolOptions{DatabaseURL: dbURL}
+	if admin, err = di.NewAdminDBConnectionPool(ctx, opts); err != nil {
+		return
+	}
+	if mtn, err = di.NewMtnDBConnectionPool(ctx, opts); err != nil {
+		return
+	}
+	tss, err = di.NewTSSDBConnectionPool(ctx, opts)
+	return
+}
+
+// initSubmitter builds the transaction submitter engine
+func initSubmitter(
+	ctx context.Context,
+	txOpts di.TxSubmitterEngineOptions,
+	adminPool, mtnPool, tssPool dbpkg.DBConnectionPool,
+	hostDistPubKey string,
+) (engine.SubmitterEngine, error) {
+	txOpts.SignatureServiceOptions.DBConnectionPool = tssPool
+	txOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+
+	distAccResolver, err := di.NewDistributionAccountResolver(ctx, signing.DistributionAccountResolverOptions{
+		HostDistributionAccountPublicKey: hostDistPubKey,
+		AdminDBConnectionPool:            adminPool,
+		MTNDBConnectionPool:              mtnPool,
+	})
+	if err != nil {
+		return engine.SubmitterEngine{}, fmt.Errorf("distribution account resolver: %w", err)
+	}
+	txOpts.SignatureServiceOptions.DistributionAccountResolver = distAccResolver
+
+	submitter, err := di.NewTxSubmitterEngine(ctx, txOpts)
+	if err != nil {
+		return engine.SubmitterEngine{}, fmt.Errorf("submitter engine: %w", err)
+	}
+	return submitter, nil
+}
+
+// initProvisioning wires tenant manager and provisioning logic
+func initProvisioning(
+	adminPool, mtnPool dbpkg.DBConnectionPool,
+	submitter engine.SubmitterEngine,
+) (provisioning.Provisioner, tenant.ManagerInterface, error) {
+	tenantMgr := tenant.NewManager(tenant.WithDatabase(adminPool))
+	provMgr, err := provisioning.NewManager(provisioning.ManagerOptions{
+		DBConnectionPool:           mtnPool,
+		TenantManager:              tenantMgr,
+		SubmitterEngine:            submitter,
+		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("provisioning manager: %w", err)
+	}
+	return provMgr, tenantMgr, nil
+}
+
+// EnsureDefaultTenant contains the core logic for ensuring a default tenant exists
+func (s *defaultTenantsService) EnsureDefaultTenant(
+	ctx context.Context,
+	cfg DefaultTenantConfig,
+	opts cmdUtils.GlobalOptionsType,
+) error {
+	// Check existing default
+	existing, err := s.tenantManager.GetDefault(ctx)
+	if err == nil {
+		log.Ctx(ctx).Infof("Default tenant exists: %s (%s)", existing.Name, existing.ID)
+		return nil
+	}
+	if err != tenant.ErrTenantDoesNotExist {
+		return fmt.Errorf("checking default tenant: %w", err)
+	}
+
+	log.Ctx(ctx).Info("Provisioning default tenant")
+	netType, err := utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("network type: %w", err)
+	}
+
+	newTenant, err := s.tenantProvisioning.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
+		Name:                    "default",
+		UserFirstName:           cfg.DefaultTenantOwnerFirstName,
+		UserLastName:            cfg.DefaultTenantOwnerLastName,
+		UserEmail:               cfg.DefaultTenantOwnerEmail,
+		OrgName:                 "Default Organization",
+		UiBaseURL:               opts.SDPUIBaseURL,
+		BaseURL:                 opts.BaseURL,
+		NetworkType:             string(netType),
+		DistributionAccountType: schema.AccountType(cfg.DefaultTenantDistributionAccountType),
+	})
+	if err != nil {
+		return fmt.Errorf("provision new tenant: %w", err)
+	}
+	if _, err := s.tenantManager.SetDefault(ctx, s.adminDBConnectionPool, newTenant.ID); err != nil {
+		return fmt.Errorf("set default tenant: %w", err)
+	}
+	log.Ctx(ctx).Infof("Created default tenant: %s (%s)", newTenant.Name, newTenant.ID)
+	return nil
 }
