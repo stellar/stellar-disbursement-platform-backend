@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.6.2](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.2) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.1...3.6.2))
+
+### Fixed
+
+- Tenant resolution fails after tenant is deleted. [#638](https://github.com/stellar/stellar-disbursement-platform-backend/pull/638)
+
 ## [3.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.6.1))
 
 ### Added

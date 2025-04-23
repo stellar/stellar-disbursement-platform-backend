@@ -400,9 +400,9 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 
 	if queryParams.Filters[FilterKeyDeleted] != nil {
 		if queryParams.Filters[FilterKeyDeleted] == true {
-			qb.AddOrCondition("t.deleted_at IS NOT NULL")
-		} else {
 			qb.AddCondition("t.deleted_at IS NULL")
+		} else {
+			qb.AddCondition("t.deleted_at IS NOT NULL")
 		}
 	}
 
