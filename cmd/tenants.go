@@ -23,7 +23,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant/provisioning"
 )
 
-// TenantsCommand for commands related to tenant operations
 type TenantsCommand struct{}
 
 // DefaultTenantConfig holds configuration for default tenant creation
@@ -35,7 +34,6 @@ type DefaultTenantConfig struct {
 	DistributionPublicKey                string
 }
 
-// Validate ensures required fields are set and valid
 func (c *DefaultTenantConfig) Validate() error {
 	if c.DefaultTenantOwnerEmail == "" {
 		return errors.New("missing default-tenant-owner-email")
@@ -59,12 +57,10 @@ func (c *DefaultTenantConfig) Validate() error {
 	return nil
 }
 
-// TenantsService defines the interface for tenant operations
 type TenantsService interface {
 	EnsureDefaultTenant(ctx context.Context, cfg DefaultTenantConfig, opts cmdUtils.GlobalOptionsType) error
 }
 
-// defaultTenantsService implements TenantsService
 type defaultTenantsService struct {
 	adminDBConnectionPool dbpkg.DBConnectionPool
 	tenantProvisioning    provisioning.Provisioner
@@ -72,7 +68,6 @@ type defaultTenantsService struct {
 	tenantManager         tenant.ManagerInterface
 }
 
-// NewDefaultTenantsService constructs the service
 func NewDefaultTenantsService(
 	dbc dbpkg.DBConnectionPool,
 	tenantProvisioning provisioning.Provisioner,
@@ -87,7 +82,6 @@ func NewDefaultTenantsService(
 	}
 }
 
-// Command returns the cobra command for tenant operations
 func (cmd *TenantsCommand) Command() *cobra.Command {
 	cfg := DefaultTenantConfig{}
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
@@ -206,7 +200,6 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 	return tenantsRoot
 }
 
-// initDBPools sets up admin, multi-tenant, and TSS DB pools
 func initDBPools(ctx context.Context, dbURL string) (admin, mtn, tss dbpkg.DBConnectionPool, err error) {
 	opts := di.DBConnectionPoolOptions{DatabaseURL: dbURL}
 	if admin, err = di.NewAdminDBConnectionPool(ctx, opts); err != nil {
@@ -219,7 +212,6 @@ func initDBPools(ctx context.Context, dbURL string) (admin, mtn, tss dbpkg.DBCon
 	return
 }
 
-// initSubmitter builds the transaction submitter engine
 func initSubmitter(
 	ctx context.Context,
 	txOpts di.TxSubmitterEngineOptions,
@@ -246,7 +238,6 @@ func initSubmitter(
 	return submitter, nil
 }
 
-// initProvisioning wires tenant manager and provisioning logic
 func initProvisioning(
 	adminPool, mtnPool dbpkg.DBConnectionPool,
 	submitter engine.SubmitterEngine,
@@ -264,7 +255,6 @@ func initProvisioning(
 	return provMgr, tenantMgr, nil
 }
 
-// EnsureDefaultTenant contains the core logic for ensuring a default tenant exists
 func (s *defaultTenantsService) EnsureDefaultTenant(
 	ctx context.Context,
 	cfg DefaultTenantConfig,
