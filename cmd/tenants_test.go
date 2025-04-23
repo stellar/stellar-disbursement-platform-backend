@@ -22,7 +22,6 @@ import (
 )
 
 func TestEnsureDefaultTenant(t *testing.T) {
-	// Shared setup
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 

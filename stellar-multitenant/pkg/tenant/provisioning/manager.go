@@ -15,7 +15,6 @@ type Provisioner interface {
 	ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*tenant.Tenant, error)
 }
 
-// ProvisionTenant contains all the metadata about a tenant to provision one
 type ProvisionTenant struct {
 	Name                    string
 	UserFirstName           string
@@ -28,7 +27,6 @@ type ProvisionTenant struct {
 	DistributionAccountType schema.AccountType
 }
 
-// ManagerOptions contains options for creating a new provisioning manager
 type ManagerOptions struct {
 	DBConnectionPool           db.DBConnectionPool
 	TenantManager              tenant.ManagerInterface
@@ -41,7 +39,6 @@ type Manager struct {
 	internalManager *provisioning.Manager
 }
 
-// NewManager creates a new provisioning manager
 func NewManager(opts ManagerOptions) (Provisioner, error) {
 	internalOpts := provisioning.ManagerOptions{
 		DBConnectionPool:           opts.DBConnectionPool,
@@ -60,7 +57,6 @@ func NewManager(opts ManagerOptions) (Provisioner, error) {
 	}, nil
 }
 
-// ProvisionNewTenant provisions a new tenant
 func (m *Manager) ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*tenant.Tenant, error) {
 	internalPT := provisioning.ProvisionTenant{
 		Name:                    pt.Name,
