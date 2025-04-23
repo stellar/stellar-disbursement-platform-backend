@@ -75,7 +75,7 @@ services:
       TWILIO_SENDGRID_SENDER_ADDRESS: MY_TWILIO_SENDGRID_SENDER_ADDRESS
       EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
       SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
-      SEP24_JWT_SECRET: jwt_secret_1234567890
+      SEP24_JWT_SECRET: jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
     entrypoint: ""
@@ -109,7 +109,7 @@ services:
 
   anchor-platform:
     container_name: anchor-platform
-    image: stellar/anchor-platform:2.6.0
+    image: stellar/anchor-platform:3.1.0
     depends_on:
       - db
     command: --sep-server --platform-server --platform linux/amd64
@@ -149,38 +149,40 @@ services:
       ASSETS_TYPE: json
       ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
-          "assets": [
+          "items": [
             {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "USDC",
-              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+              "id": "stellar:USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
               "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
               "significant_decimals": 7,
-              "deposit": {
+              "sep24": {
                 "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
+                "deposit": {
+                  "enabled": true,
+                  "min_amount": 1,
+                  "max_amount": 10000,
+                  "methods": ["none"]
+                },
+                "withdraw": {
+                  "enabled": false
+                }
+              }
             },
             {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "native",
-              "issuer": "",
+              "id": "stellar:native",
               "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
               "significant_decimals": 7,
-              "deposit": {
+              "sep24": {
                 "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
+                "deposit": {
+                  "enabled": true,
+                  "min_amount": 1,
+                  "max_amount": 10000,
+                  "methods": ["none"]
+                },
+                "withdraw": {
+                  "enabled": false
+                }
+              }
             }
           ]
         }
@@ -189,10 +191,10 @@ services:
       SECRET_DATA_USERNAME: postgres
       SECRET_DATA_PASSWORD: postgres
       SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
-      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890
+      SECRET_SEP10_JWT_SECRET: jwt_secret_cQBnfcDSfvrphw8JBMcg1KfHRvvk3425
       SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
+      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4
+      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_IyLxs6PW41Znaysr8ft8Wx326QJepCrQ
 
   demo-wallet:
     build:
