@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Bastion Host for Stellar Disbursement Platform Access & Management'
+
+Parameters:
+  env:
+    Type: String
+    Default: "dev"
+    AllowedValues: 
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair for SSH access
+
+  DomainName:
+    Type: String
+    Description: Domain name for the SDP deployment
+
+  NetworkStackName:
+    Type: String
+    Default: "sdp-network-ecs"
+    Description: Name of the network stack to import values from
+
+  DatabaseStackName:
+    Type: String
+    Default: "sdp-database-ecs"
+    Description: Name of the database stack to import values from
+    
+  AppStackName:
+    Type: String
+    Default: "sdp-ecs"
+    Description: Name of the main SDP application stack
+
+Resources:
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for SDP bastion host
+      VpcId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-vpc-id"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: "Allow SSH inbound"
+        - IpProtocol: tcp
+          FromPort: 2345
+          ToPort: 2345
+          CidrIp: 0.0.0.0/0
+          Description: "Allow Delve debugger connections"
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8003
+          CidrIp: 0.0.0.0/0
+          Description: "Allow access to service ports"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-sdp-bastion-sg
+        - Key: env
+          Value: !Ref env
+
+  ECSDebugIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: BastionSecurityGroup
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-ecs-services-sg"
+      IpProtocol: tcp
+      FromPort: 2345
+      ToPort: 2345
+      SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Description: "Allow Delve debugger from Bastion Host"
+
+  BastionHost:
+    Type: AWS::EC2::Instance
+    DependsOn: BastionSecurityGroup
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      KeyName: !Ref KeyName
+      SubnetId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-public-subnet-1"
+      SecurityGroupIds: 
+        - !Ref BastionSecurityGroup
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf update -y
+          dnf install -y postgresql15
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-sdp-bastion
+        - Key: env
+          Value: !Ref env
+
+  RDSIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: BastionSecurityGroup
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub "${DatabaseStackName}-db-sg"
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Description: "Allow PostgreSQL from Bastion Host"
+
+  ECSServicesIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: BastionSecurityGroup
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-ecs-services-sg"
+      IpProtocol: tcp
+      FromPort: 8000
+      ToPort: 8003
+      SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Description: "Allow access to ECS service ports from Bastion Host"
+
+  PrivateALBIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: BastionSecurityGroup
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-private-alb-sg"
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Description: "Allow HTTPS access to Private ALB from Bastion Host"
+
+Outputs:
+  StackName:
+    Description: "The name of this stack"
+    Value: !Ref AWS::StackName
+    
+  BastionPublicIP:
+    Description: Public IP of the Bastion Host
+    Value: !GetAtt BastionHost.PublicIp
+    Export:
+      Name: !Sub "${AWS::StackName}-bastion-ip"
+
+  BastionPublicDNS:
+    Description: Public DNS of the Bastion Host
+    Value: !GetAtt BastionHost.PublicDnsName
+    Export:
+      Name: !Sub "${AWS::StackName}-bastion-dns"
+
+  SSHCommand:
+    Description: Command to SSH to bastion host
+    Value: !Sub "ssh -i ${KeyName}.pem ec2-user@${BastionHost.PublicIp}"
+
+  DatabaseTunnelCommand:
+    Description: Command to create SSH tunnel for PostgreSQL
+    Value: !Sub 
+      - "ssh -N -L 5432:${dbEndpoint}:5432 -i ${KeyName}.pem ec2-user@${BastionHost.PublicIp}"
+      - dbEndpoint: 
+          Fn::ImportValue: !Sub "${DatabaseStackName}-db-endpoint"
+
+  AdminAPITunnelCommand:
+    Description: Command to create SSH tunnel for SDP Admin API
+    Value: !Sub "ssh -N -L 8003:admin.${DomainName}:443 -i ${KeyName}.pem ec2-user@${BastionHost.PublicIp}"
+
+  PostmanTenantCreationCommand:
+    Description: Postman request details for tenant creation
+    Value: !Sub |
+      Host: localhost:8003
+      Path: /tenants/
+      Method: POST
+      Headers: 
+        Content-Type: application/json
+        Authorization: Basic base64(admin:YOUR_ADMIN_API_KEY)
+      Body:
+      {
+        "name": "acme",
+        "owner_email": "admin@acme.org",
+        "owner_first_name": "John",
+        "owner_last_name": "Doe",
+        "organization_name": "Acme Organization",
+        "sdp_ui_base_url": "https://acme.${DomainName}",
+        "base_url": "https://acme.${DomainName}",
+        "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
+      }

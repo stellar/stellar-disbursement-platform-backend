@@ -1,0 +1,415 @@
+Parameters:
+  AWSRegion:
+    Type: String
+    Default: "us-west-1"
+
+  env:
+    Type: String
+    Default: "dev"
+    AllowedValues: 
+      - dev
+      - staging
+      - prod
+
+  VPCCidr:
+    Type: String
+    Default: "10.0.0.0/16" 
+
+  PublicSubnet1CIDR:
+    Type: String
+    Default: "10.0.0.0/24"
+
+  PublicSubnet2CIDR:
+    Type: String
+    Default: "10.0.1.0/24"
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: "10.0.2.0/24"
+
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: "10.0.3.0/24"
+  
+  CertificateArn:
+    Type: String
+    Default: ""
+
+Resources:
+  SDPVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-vpc
+        - Key: env
+          Value: !Ref env
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-igw
+        - Key: env
+          Value: !Ref env
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SDPVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: env
+          Value: !Ref env
+
+  # Public Subnets - Only for ALB
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-public-1
+        - Key: env
+          Value: !Ref env
+        - Key: Tier
+          Value: Public
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-public-2
+        - Key: env
+          Value: !Ref env
+        - Key: Tier
+          Value: Public
+
+  # Private Subnets - For ECS Services and RDS
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-private-1
+        - Key: env
+          Value: !Ref env
+        - Key: Tier
+          Value: Private
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SDPVPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-private-2
+        - Key: env
+          Value: !Ref env
+        - Key: Tier
+          Value: Private
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-nat
+        - Key: env
+          Value: !Ref env
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SDPVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-public-rt
+        - Key: env
+          Value: !Ref env
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SDPVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-private-rt
+        - Key: env
+          Value: !Ref env
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PublicALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref PublicALBSecurityGroup
+      Subnets: 
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  PrivateALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internal 
+      SecurityGroups:
+        - !Ref PrivateALBSecurityGroup
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref PublicALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '443'
+            StatusCode: HTTP_301
+
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref PublicALB
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            ContentType: text/plain
+            MessageBody: "Not Found"
+            StatusCode: 404
+
+  PrivateHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref PrivateALB
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            ContentType: text/plain
+            MessageBody: "Not Found"
+            StatusCode: 404
+
+  # Public ALB Security Group
+  PublicALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for public ALB
+      VpcId: !Ref SDPVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+  
+  PrivateALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for private ALB
+      VpcId: !Ref SDPVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VPCCidr  # Accept traffic from within VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+  ECSServicesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS services
+      VpcId: !Ref SDPVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref PublicALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: !Ref VPCCidr  # Accept traffic from within VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+Outputs:
+
+  StackName:
+    Description: "The name of this stack"
+    Value: !Ref AWS::StackName
+  
+  VPCId:
+    Description: VPC ID
+    Value: !Ref SDPVPC
+    Export:
+      Name: !Sub ${AWS::StackName}-vpc-id
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-public-subnet-1
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-public-subnet-2
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-private-subnet-1
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-private-subnet-2
+
+  PublicALBDNSName:
+    Value: !GetAtt PublicALB.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}-public-alb-dns
+
+  PrivateALBDNSName:
+    Value: !GetAtt PrivateALB.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}-private-alb-dns
+
+  HTTPSListenerArn:
+    Value: !Ref HTTPSListener
+    Export:
+      Name: !Sub ${AWS::StackName}-https-listener-arn
+
+  PrivateHTTPSListenerArn:
+    Value: !Ref PrivateHTTPSListener
+    Export:
+      Name: !Sub ${AWS::StackName}-private-https-listener-arn
+  
+  PublicALBSecurityGroupId:
+    Description: Public ALB Security Group ID
+    Value: !Ref PublicALBSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-public-alb-sg
+
+  PrivateALBSecurityGroupId:
+    Description: Private ALB Security Group ID
+    Value: !Ref PrivateALBSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-private-alb-sg
+
+  ECSServicesSecurityGroupId:
+    Description: ECS Services Security Group ID
+    Value: !Ref ECSServicesSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-ecs-services-sg
+
+  VPCCidr:
+    Description: VPC CIDR Block
+    Value: !Ref VPCCidr
+    Export:
+      Name: !Sub ${AWS::StackName}-vpc-cidr
+  
+  PublicALBHostedZoneID:
+    Value: !GetAtt PublicALB.CanonicalHostedZoneID
+    Export:
+      Name: !Sub ${AWS::StackName}-public-alb-hosted-zone
+
+  PrivateALBHostedZoneID:
+    Value: !GetAtt PrivateALB.CanonicalHostedZoneID
+    Export:
+      Name: !Sub ${AWS::StackName}-private-alb-hosted-zone

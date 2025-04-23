@@ -1,0 +1,91 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "DomainName",
+    "ParameterValue": "mystellarsdpdomain.org"
+  },
+  {
+    "ParameterKey": "HostedZoneId",
+    "ParameterValue": "Z06404593U3HC3DPDLDQK"
+  },
+  {
+    "ParameterKey": "CertificateArn",
+    "ParameterValue": "arn:aws:acm:us-west-2:245943599471:certificate/ff147acc-5267-4d24-9635-cccd00f658b6"
+  },
+  {
+    "ParameterKey": "DBInstanceClass",
+    "ParameterValue": "db.t3.small"
+  },
+  {
+    "ParameterKey": "DBUsername",
+    "ParameterValue": "postgres"
+  },
+  {
+    "ParameterKey": "DBPassword",
+    "ParameterValue": "postgres"
+  },
+  {
+    "ParameterKey": "BackupRetentionPeriod",
+    "ParameterValue": "0"
+  },
+  {
+    "ParameterKey": "MultiAZ",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "BackendImage",
+    "ParameterValue": "stellar/stellar-disbursement-platform-backend:3.6.1"
+  },
+  {
+    "ParameterKey": "FrontendImage",
+    "ParameterValue": "stellar/stellar-disbursement-platform-frontend:3.6.0"
+  },
+  {
+    "ParameterKey": "AnchorImage",
+    "ParameterValue": "stellar/anchor-platform:2.6.0"
+  },
+  {
+    "ParameterKey": "AdminApiKey",
+    "ParameterValue": "admin-api-key"
+  },
+  
+  {
+    "ParameterKey": "StellarLayerS3Bucket",
+    "ParameterValue": "stellar-layer"
+  },
+  {
+    "ParameterKey": "TenantName",
+    "ParameterValue": "default"
+  },
+  {
+    "ParameterKey": "TenantOwnerEmail",
+    "ParameterValue": "reece@stellar.org"
+  },
+  {
+    "ParameterKey": "TenantOwnerFirstName",
+    "ParameterValue": "Reece"
+  },
+  {
+    "ParameterKey": "TenantOwnerLastName",
+    "ParameterValue": "Markowsky"
+  },
+  {
+    "ParameterKey": "TenantOrganizationName",
+    "ParameterValue": "Default"
+  },
+  {
+    "ParameterKey": "KeyName",
+    "ParameterValue": "psql"
+  },
+  {
+    "ParameterKey": "RecaptchaSiteKey",
+    "ParameterValue": "6LcArsEqAAAAAIxEcbaHI4HTp7I5C1RrTv6LC9-Y"
+  },
+  {
+    "ParameterKey": "RecaptchaSiteSecretKey",
+    "ParameterValue": "6LcArsEqAAAAANZEc02pTusik082VtmuzpTPZJ4r"
+  }
+]
