@@ -654,6 +654,16 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: "test-domain.test",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444:ANYMEMO",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	}
+	ctx = context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
 	receiverWithoutWalletInsert := &data.Receiver{
 		PhoneNumber: "+141555550000",
