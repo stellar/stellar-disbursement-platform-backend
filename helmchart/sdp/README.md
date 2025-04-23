@@ -166,10 +166,6 @@ These parameters are shared by all charts.
 | `global.sep10PrivateKey`                               | The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.                              | `nil`                                      |
 | `global.recaptchaSiteKey`                              | Site key for ReCaptcha V2 to verify user's non-robotic behavior. Default value is for testing.                                      | `6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI` |
 | `global.recaptchaSiteSecretKey`                        | Secret key for ReCaptcha V2 to verify user's non-robotic behavior. Default value is for testing.                                    | `6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe` |
-|`global.DefaultTenantOwnerEmail`|Email address for the default tenant owner||
-|`global.DefaultTenantOwnerFirstName`|First name for the default tenant owner||
-|`global.DefaultTenantOwnerLastName`|Last name for the default tenant owner||
-|`global.DefaultTenantDistributionAccountType`|Distribution account type for the default tenant|`DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT`|
 
 ### Stellar Disbursement Platform (SDP) parameters
 
