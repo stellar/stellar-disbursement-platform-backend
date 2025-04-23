@@ -17,4 +17,4 @@ CREATE INDEX idx_receiver_reg_attempts_email ON receiver_registration_attempts (
 CREATE INDEX idx_receiver_registration_attempts_attempt_ts ON receiver_registration_attempts (attempt_ts);
 
 -- +migrate Down
-DROP TABLE IF EXISTS receiver_registration_attempts;Ø
+DROP TABLE IF EXISTS receiver_registration_attempts;
