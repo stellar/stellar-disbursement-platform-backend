@@ -1661,10 +1661,20 @@ func Test_ReceiverWalletUpdate_Validate(t *testing.T) {
 			err: "OTPConfirmedAt is required when OTPConfirmedWith is provided",
 		},
 		{
-			name: "valid update",
+			name: "valid update with public key",
 			update: ReceiverWalletUpdate{
 				Status:           RegisteredReceiversWalletStatus,
 				StellarAddress:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+				OTPConfirmedAt:   time.Now(),
+				OTPConfirmedWith: "test@email.com",
+			},
+			err: "",
+		},
+		{
+			name: "valid update with contract address",
+			update: ReceiverWalletUpdate{
+				Status:           RegisteredReceiversWalletStatus,
+				StellarAddress:   "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
 				OTPConfirmedAt:   time.Now(),
 				OTPConfirmedWith: "test@email.com",
 			},

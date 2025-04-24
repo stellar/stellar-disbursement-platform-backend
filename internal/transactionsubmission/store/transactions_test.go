@@ -708,27 +708,44 @@ func Test_Transaction_validate(t *testing.T) {
 			},
 			wantErrContains: `tenant ID is required`,
 		},
-		{
-			name: "🎉 successfully validate USDC transaction",
+	}
+
+	validAddresses := []string{
+		"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		"CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
+	}
+
+	for _, address := range validAddresses {
+		testCases = append(testCases, struct {
+			name            string
+			transaction     Transaction
+			wantErrContains string
+		}{
+			name: fmt.Sprintf("🎉 successfully validate XLM transaction with (%c) destination", address[0]),
+			transaction: Transaction{
+				ExternalID:  "123",
+				AssetCode:   "XLM",
+				Amount:      100.0,
+				Destination: address,
+				TenantID:    "tenant-id",
+			},
+		})
+
+		testCases = append(testCases, struct {
+			name            string
+			transaction     Transaction
+			wantErrContains string
+		}{
+			name: fmt.Sprintf("🎉 successfully validate USDC transaction with (%c) destination", address[0]),
 			transaction: Transaction{
 				ExternalID:  "123",
 				AssetCode:   "USDC",
 				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				Amount:      100.0,
-				Destination: "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG",
+				Destination: address,
 				TenantID:    "tenant-id",
 			},
-		},
-		{
-			name: "🎉 successfully validate XLM transaction",
-			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "xLm",
-				Amount:      100.0,
-				Destination: "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG",
-				TenantID:    "tenant-id",
-			},
-		},
+		})
 	}
 
 	for _, tc := range testCases {
