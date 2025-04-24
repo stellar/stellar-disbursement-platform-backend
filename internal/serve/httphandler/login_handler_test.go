@@ -370,7 +370,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 					Return("123456", nil).
 					Once()
 				messengerClientMock.
-					On("SendMessage", mock.Anything).
+					On("SendMessage", mock.Anything, mock.Anything).
 					Return(errors.New("unexpected error")).
 					Once()
 			},
@@ -402,7 +402,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 					Return("123456", nil).
 					Once()
 				messengerClientMock.
-					On("SendMessage", mock.Anything).
+					On("SendMessage", mock.Anything, mock.Anything).
 					Return(nil).
 					Once()
 			},

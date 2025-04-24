@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -20,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -43,54 +42,25 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	dryRunDispatcher.RegisterClient(ctx, message.MessageChannelEmail, messageDryRunClient)
 
 	t.Run("exits with status 1 when Messenger Client is missing config", func(t *testing.T) {
-		if os.Getenv("TEST_FATAL") == "1" {
+		utils.AssertFuncExitsWithFatal(t, func() {
 			o := SendReceiverWalletsInvitationJobOptions{
 				Models:                      models,
 				MaxInvitationResendAttempts: 3,
+				JobIntervalSeconds:          int(DefaultMinimumJobIntervalSeconds),
 			}
-
-			NewSendReceiverWalletsInvitationJob(o)
-			return
-		}
-
-		// We're using a strategy to setup a cmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
-		// Ref: https://go.dev/talks/2014/testing.slide#23
-		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
-		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
-
-		err := cmd.Run()
-		if exitError, ok := err.(*exec.ExitError); ok {
-			assert.False(t, exitError.Success())
-			return
-		}
-
-		t.Fatalf("process ran with err %v, want exit status 1", err)
+			_ = NewSendReceiverWalletsInvitationJob(o)
+		}, "messenger dispatcher can't be nil")
 	})
 
 	t.Run("exits with status 1 when Base URL is empty", func(t *testing.T) {
-		if os.Getenv("TEST_FATAL") == "1" {
+		utils.AssertFuncExitsWithFatal(t, func() {
 			o := SendReceiverWalletsInvitationJobOptions{
 				Models:                      models,
 				MessageDispatcher:           dryRunDispatcher,
 				MaxInvitationResendAttempts: 3,
 			}
-
-			NewSendReceiverWalletsInvitationJob(o)
-			return
-		}
-
-		// We're using a strategy to setup a cmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
-		// Ref: https://go.dev/talks/2014/testing.slide#23
-		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
-		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
-
-		err := cmd.Run()
-		if exitError, ok := err.(*exec.ExitError); ok {
-			assert.False(t, exitError.Success())
-			return
-		}
-
-		t.Fatalf("process ran with err %v, want exit status 1", err)
+			_ = NewSendReceiverWalletsInvitationJob(o)
+		}, "job interval is not set")
 	})
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {

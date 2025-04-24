@@ -7,14 +7,18 @@ toolchain go1.23.7
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/avast/retry-go/v4 v4.6.1
-	github.com/aws/aws-sdk-go v1.55.6
+	github.com/aws/aws-sdk-go-v2 v1.36.3
+	github.com/aws/aws-sdk-go-v2/config v1.29.9
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.62
+	github.com/aws/aws-sdk-go-v2/service/ses v1.30.1
+	github.com/aws/aws-sdk-go-v2/service/sns v1.34.2
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/getsentry/sentry-go v0.31.1
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/httprate v0.14.1
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
-	github.com/golang-jwt/jwt/v4 v4.5.1
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/schema v1.4.1
 	github.com/jmoiron/sqlx v1.4.0
@@ -31,7 +35,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.0
-	github.com/stellar/go v0.0.0-20241115082344-969db9917c2d
+	github.com/stellar/go v0.0.0-20250311234916-385ac5aca1a4
 	github.com/stretchr/testify v1.10.0
 	github.com/twilio/twilio-go v1.24.0
 	golang.org/x/crypto v0.36.0
@@ -41,6 +45,16 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.3.2 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.25.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17 // indirect
+	github.com/aws/smithy-go v1.22.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
@@ -51,7 +65,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/manucorporat/sse v0.0.0-20160126180136-ee05b128a739 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -81,8 +94,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/gin-gonic/gin v1.8.1 => github.com/gin-gonic/gin v1.9.1
-
-replace gopkg.in/square/go-jose.v2 v2.4.1 => gopkg.in/go-jose/go-jose.v2 v2.6.3
-
-replace github.com/gofiber/fiber/v2 v2.52.2 => github.com/gofiber/fiber/v2 v2.52.5
+replace gopkg.in/square/go-jose.v2 v2.6.0 => gopkg.in/go-jose/go-jose.v2 v2.6.3

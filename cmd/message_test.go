@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -25,8 +26,8 @@ func (m *mockMessengerService) GetClient(opts message.MessengerOptions) (message
 	return args.Get(0).(message.MessengerClient), args.Error(1)
 }
 
-func (m *mockMessengerService) SendMessage(opts message.MessengerOptions, message message.Message) error {
-	return m.Called(opts, message).Error(0)
+func (m *mockMessengerService) SendMessage(ctx context.Context, opts message.MessengerOptions, message message.Message) error {
+	return m.Called(ctx, opts, message).Error(0)
 }
 
 func Test_message_help(t *testing.T) {
@@ -95,7 +96,7 @@ func Test_message_send_SendMessage_wasCalled(t *testing.T) {
 		ToPhoneNumber: "+41555511111",
 		Body:          "hello world",
 	}
-	mMessageService.On("SendMessage", wantMessageOptions, wantMessage).Return(nil).Once()
+	mMessageService.On("SendMessage", mock.Anything, wantMessageOptions, wantMessage).Return(nil).Once()
 
 	// setup
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")

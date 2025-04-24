@@ -129,12 +129,6 @@ func Test_Serve_callsValidateSecurity(t *testing.T) {
 	serveOptions.DisableMFA = true
 	err = Serve(serveOptions, &mHTTPServer)
 	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
-
-	// Make sure reCAPTCHA is enforced in pubnet
-	serveOptions.DisableMFA = false
-	serveOptions.DisableReCAPTCHA = true
-	err = Serve(serveOptions, &mHTTPServer)
-	require.EqualError(t, err, "validating security options: reCAPTCHA cannot be disabled in pubnet")
 }
 
 func Test_ServeOptions_ValidateSecurity(t *testing.T) {
@@ -146,17 +140,6 @@ func Test_ServeOptions_ValidateSecurity(t *testing.T) {
 
 		err := serveOptions.ValidateSecurity()
 		require.EqualError(t, err, "MFA cannot be disabled in pubnet")
-	})
-
-	t.Run("Pubnet + DisableReCAPTCHA: should return error", func(t *testing.T) {
-		// Pubnet + DisableReCAPTCHA: should return error
-		serveOptions := ServeOptions{
-			NetworkPassphrase: network.PublicNetworkPassphrase,
-			DisableReCAPTCHA:  true,
-		}
-
-		err := serveOptions.ValidateSecurity()
-		require.EqualError(t, err, "reCAPTCHA cannot be disabled in pubnet")
 	})
 
 	t.Run("Testnet + DisableMFA: should not return error", func(t *testing.T) {
@@ -301,7 +284,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
 
 	messengerClientMock := message.MessengerClientMock{}
-	messengerClientMock.On("SendMessage", mock.Anything).Return(nil)
+	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil)
 
 	messageDispatcherMock := message.NewMockMessageDispatcher(t)
 	messageDispatcherMock.
@@ -386,6 +369,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		method string
 		path   string
 	}{
+		{http.MethodGet, "/organization/logo"},
 		{http.MethodGet, "/health"},
 		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
@@ -474,7 +458,6 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// Organization
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
-		{http.MethodGet, "/organization/logo"},
 		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
@@ -482,6 +465,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/exports/disbursements"},
 		{http.MethodGet, "/exports/payments"},
 		{http.MethodGet, "/exports/receivers"},
+		// SEP-24 Wallet Registration
+		{http.MethodGet, "/wallet-registration/start"},
+		{http.MethodGet, "/sep24-interactive-deposit/info"},
+		{http.MethodPost, "/sep24-interactive-deposit/otp"},
+		{http.MethodPost, "/sep24-interactive-deposit/verification"},
 	}
 
 	// Expect 401 as a response:

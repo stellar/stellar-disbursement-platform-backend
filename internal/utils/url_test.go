@@ -249,3 +249,74 @@ func Test_GenerateTenantURL(t *testing.T) {
 		})
 	}
 }
+
+func Test_IsStaticAsset(t *testing.T) {
+	testCases := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{
+			name:     "file with extension",
+			path:     "/static/images/logo.png",
+			expected: true,
+		},
+		{
+			name:     "CSS file",
+			path:     "/static/css/style.css",
+			expected: true,
+		},
+		{
+			name:     "JavaScript file",
+			path:     "/static/js/app.js",
+			expected: true,
+		},
+		{
+			name:     "file with multiple dots",
+			path:     "/static/files/document.v1.2.pdf",
+			expected: true,
+		},
+		{
+			name:     "API endpoint",
+			path:     "/api/users",
+			expected: false,
+		},
+		{
+			name:     "root path",
+			path:     "/",
+			expected: false,
+		},
+		{
+			name:     "path without leading slash",
+			path:     "static/images/logo.png",
+			expected: true,
+		},
+		{
+			name:     "file in root directory",
+			path:     "/favicon.ico",
+			expected: true,
+		},
+		{
+			name:     "hidden file",
+			path:     "/.gitignore",
+			expected: true,
+		},
+		{
+			name:     "directory",
+			path:     "/static/images/",
+			expected: false,
+		},
+		{
+			name:     "empty path",
+			path:     "",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := IsStaticAsset(tc.path)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
