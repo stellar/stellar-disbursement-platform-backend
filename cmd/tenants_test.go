@@ -48,7 +48,7 @@ func TestEnsureDefaultTenant(t *testing.T) {
 
 	t.Run("AlreadyExists", func(t *testing.T) {
 		tenantMock := tenant.NewTenantManagerMock(t)
-		provMock := prov.NewMockProvisionerInterface(t)
+		provMock := prov.NewMockTenantProvisioningServiceInterface(t)
 
 		tenantMock.
 			On("GetDefault", ctx).
@@ -73,7 +73,7 @@ func TestEnsureDefaultTenant(t *testing.T) {
 
 	t.Run("ProvisionNew", func(t *testing.T) {
 		tenantMock := tenant.NewTenantManagerMock(t)
-		provMock := prov.NewMockProvisionerInterface(t)
+		provMock := prov.NewMockTenantProvisioningServiceInterface(t)
 
 		tenantMock.
 			On("GetDefault", ctx).

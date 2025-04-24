@@ -11,7 +11,6 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/db"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
@@ -63,17 +62,17 @@ type TenantsService interface {
 
 type defaultTenantsService struct {
 	adminDBConnectionPool dbpkg.DBConnectionPool
-	tenantProvisioning    provisioning.Provisioner
+	tenantProvisioning    provisioning.TenantProvisioningService
 	submitterEngine       engine.SubmitterEngine
 	tenantManager         tenant.ManagerInterface
 }
 
 func NewDefaultTenantsService(
 	dbc dbpkg.DBConnectionPool,
-	tenantProvisioning provisioning.Provisioner,
+	tenantProvisioning provisioning.TenantProvisioningService,
 	submitterEngine engine.SubmitterEngine,
 	tenantManager tenant.ManagerInterface,
-) *defaultTenantsService {
+) TenantsService {
 	return &defaultTenantsService{
 		adminDBConnectionPool: dbc,
 		tenantProvisioning:    tenantProvisioning,
@@ -115,32 +114,7 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 			ConfigKey:   &cfg.DefaultTenantDistributionAccountType,
 			FlagDefault: string(schema.DistributionAccountStellarDBVault),
 		},
-		{
-			Name:        db.DBConfigOptionFlagName,
-			Usage:       "Postgres DB URL",
-			OptType:     types.String,
-			FlagDefault: "postgres://localhost:5432/sdp?sslmode=disable",
-			ConfigKey:   &globalOptions.DatabaseURL,
-			Required:    true,
-		},
-		{
-			Name:        "base-url",
-			Usage:       "SDP backend base URL",
-			OptType:     types.String,
-			ConfigKey:   &globalOptions.BaseURL,
-			FlagDefault: "http://localhost:8000",
-			Required:    true,
-		},
-		{
-			Name:        "sdp-ui-base-url",
-			Usage:       "SDP UI base URL",
-			OptType:     types.String,
-			ConfigKey:   &globalOptions.SDPUIBaseURL,
-			FlagDefault: "http://localhost:3000",
-			Required:    true,
-		},
 		cmdUtils.DistributionPublicKey(&cfg.DistributionPublicKey),
-		cmdUtils.NetworkPassphrase(&globalOptions.NetworkPassphrase),
 	}
 
 	configOpts = append(
@@ -152,6 +126,9 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 		Use:   "tenants",
 		Short: "Tenant related operations",
 		Long:  "Manage tenant operations like creating a default tenant",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+		},
 	}
 
 	ensureDefault := &cobra.Command{
@@ -159,6 +136,8 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 		Short: "Ensure a default tenant exists",
 		Long:  "Creates a default tenant if none exists and sets it as default.",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+
 			configOpts.Require()
 			if err := configOpts.SetValues(); err != nil {
 				log.Fatalf("Error setting values of config options: %s", err.Error())
@@ -241,8 +220,11 @@ func initSubmitter(
 func initProvisioning(
 	adminPool, mtnPool dbpkg.DBConnectionPool,
 	submitter engine.SubmitterEngine,
-) (provisioning.Provisioner, tenant.ManagerInterface, error) {
-	tenantMgr := tenant.NewManager(tenant.WithDatabase(adminPool))
+) (provisioning.TenantProvisioningService, tenant.ManagerInterface, error) {
+	tenantMgr := tenant.NewManager(
+		tenant.WithDatabase(adminPool),
+		tenant.WithSingleTenantMode(true),
+	)
 	provMgr, err := provisioning.NewManager(provisioning.ManagerOptions{
 		DBConnectionPool:           mtnPool,
 		TenantManager:              tenantMgr,

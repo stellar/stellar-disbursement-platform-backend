@@ -10,8 +10,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-//go:generate mockery --name=Provisioner --case=underscore --structname=MockProvisionerInterface --inpackage --filename=mocks.go
-type Provisioner interface {
+//go:generate mockery --name=TenantProvisioningService --case=underscore --structname=MockTenantProvisioningServiceInterface --inpackage --filename=mocks.go
+type TenantProvisioningService interface {
 	ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*tenant.Tenant, error)
 }
 
@@ -39,7 +39,7 @@ type Manager struct {
 	internalManager *provisioning.Manager
 }
 
-func NewManager(opts ManagerOptions) (Provisioner, error) {
+func NewManager(opts ManagerOptions) (TenantProvisioningService, error) {
 	internalOpts := provisioning.ManagerOptions{
 		DBConnectionPool:           opts.DBConnectionPool,
 		TenantManager:              opts.TenantManager,
