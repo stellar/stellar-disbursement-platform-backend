@@ -105,7 +105,7 @@ github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 github.com/golang/mock v1.6.0
 github.com/golang/protobuf v1.5.4
-github.com/google/go-cmp v0.6.0
+github.com/google/go-cmp v0.7.0
 github.com/google/go-querystring v0.0.0-20160401233042-9235644dd9e5
 github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1
 github.com/google/renameio/v2 v2.0.0
@@ -212,7 +212,7 @@ github.com/spf13/cast v1.7.1
 github.com/spf13/cobra v1.9.1
 github.com/spf13/pflag v1.0.6
 github.com/spf13/viper v1.20.0
-github.com/stellar/go v0.0.0-20250311234916-385ac5aca1a4
+github.com/stellar/go v0.0.0-20250423200217-8eabd901dc82
 github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2
 github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 github.com/stretchr/objx v0.5.2
