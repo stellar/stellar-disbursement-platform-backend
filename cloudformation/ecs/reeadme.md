@@ -14,11 +14,10 @@ Our deployment uses a modular CloudFormation stack design that builds the platfo
 Let me walk you through deploying the Stellar Disbursement Platform (SDP) using our CloudFormation stacks.
 # Prerequisites
 Before starting the deployment, you need:
-1 An AWS account with administrative permissions 
-2 A domain registered in Route53 with a hosted zone (mystellardomain.org in this example)
-3 An ACM certificate for your domain (must be in the same region as your deployment)
-4 An EC2 key pair for SSH access to the bastion host
-5 (Optional) Google reCAPTCHA site key and secret
+* An AWS account with administrative permissions 
+* A domain registered in Route53 with a hosted zone 
+* An ACM certificate for your domain (must be in the same region as your deployment)
+* An EC2 key pair for SSH access to the bastion host
 
 ⠀Deployment Steps
 ### 1. Prepare the deployment parameters
