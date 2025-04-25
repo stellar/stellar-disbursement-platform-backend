@@ -1832,10 +1832,9 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 							AccountID: txJob.ChannelAccount.PublicKey,
 							Sequence:  accountSequence,
 						},
-						Memo: tc.wantMemo,
-						Operations: []txnbuild.Operation{
-							operation},
-						BaseFee: int64(transactionWorker.engine.MaxBaseFee),
+						Memo:       tc.wantMemo,
+						Operations: []txnbuild.Operation{operation},
+						BaseFee:    int64(transactionWorker.engine.MaxBaseFee),
 						Preconditions: txnbuild.Preconditions{
 							TimeBounds:   txnbuild.NewTimeout(300),
 							LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
