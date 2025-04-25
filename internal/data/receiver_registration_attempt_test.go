@@ -7,9 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 func TestInsertReceiverRegistrationAttempt(t *testing.T) {
@@ -43,7 +40,8 @@ func TestInsertReceiverRegistrationAttempt(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			models, ctx := setupModels(t)
+			ctx := context.Background()
+			models := SetupModels(t)
 
 			now := time.Now().UTC()
 			tc.attempt.AttemptTs = now
@@ -73,18 +71,4 @@ func TestInsertReceiverRegistrationAttempt(t *testing.T) {
 			_, _ = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
 		})
 	}
-}
-
-func setupModels(t *testing.T) (*Models, context.Context) {
-	dbt := dbtest.Open(t)
-	t.Cleanup(func() { dbt.Close() })
-
-	pool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	t.Cleanup(func() { pool.Close() })
-
-	models, err := NewModels(pool)
-	require.NoError(t, err)
-
-	return models, context.Background()
 }
