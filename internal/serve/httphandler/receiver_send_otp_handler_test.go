@@ -482,7 +482,12 @@ func Test_newReceiverSendOTPResponseBody(t *testing.T) {
 func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	models := data.SetupModels(t)
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	organization, err := models.Organizations.Get(ctx)
@@ -579,6 +584,7 @@ func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.
 	ctx := context.WithValue(context.Background(), anchorplatform.SEP24ClaimsContextKey, validClaims)
 
 	models := data.SetupModels(t)
+
 	handler := ReceiverSendOTPHandler{
 		Models:             models,
 		MessageDispatcher:  message.NewMockMessageDispatcher(t),
@@ -604,11 +610,6 @@ func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.
 			want:    "salamander@fireborn.cod",
 		},
 	}
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -624,12 +625,12 @@ func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.
 			query := fmt.Sprintf(
 				`SELECT count(*) FROM receiver_registration_attempts WHERE %s = $1`, tc.column,
 			)
-			err = dbConnectionPool.QueryRowxContext(ctx, query, tc.want).Scan(&count)
+			err = models.DBConnectionPool.QueryRowxContext(ctx, query, tc.want).Scan(&count)
 			require.NoError(t, err)
 			assert.Equal(t, 1, count)
 
 			// cleanup
-			_, _ = dbConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
+			_, _ = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
 		})
 	}
 }
