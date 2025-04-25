@@ -469,6 +469,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"short_urls",
 		"wallets",
 		"wallets_assets",
+		"receiver_registration_attempts",
 	}
 }
 
