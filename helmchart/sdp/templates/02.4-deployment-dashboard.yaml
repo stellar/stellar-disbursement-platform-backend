@@ -56,7 +56,7 @@ spec:
           imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ include "dashboard.port" . }}
+              containerPort: {{ include "sdp.dashboard.port" . }}
               protocol: TCP
 
           {{- if .Values.dashboard.deployment.resources }}

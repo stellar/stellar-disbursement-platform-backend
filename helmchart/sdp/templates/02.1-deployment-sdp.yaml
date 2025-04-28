@@ -44,7 +44,7 @@ spec:
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      
+
       initContainers:
       # ============================= SDP Migrations: =============================
       - name: db-migrations

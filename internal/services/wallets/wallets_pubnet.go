@@ -7,6 +7,15 @@ import (
 
 var PubnetWallets = []data.Wallet{
 	{
+		Name:              "Decaf",
+		Homepage:          "https://decaf.so",
+		DeepLinkSchema:    "https://decafwallet.app.link",
+		SEP10ClientDomain: "decaf.so",
+		Assets: []data.Asset{
+			assets.USDCAssetPubnet,
+		},
+	},
+	{
 		Name:              "Vibrant Assist",
 		Homepage:          "https://vibrantapp.com/vibrant-assist",
 		DeepLinkSchema:    "https://vibrantapp.com/sdp",

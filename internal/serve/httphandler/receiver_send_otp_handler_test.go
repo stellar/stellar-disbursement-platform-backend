@@ -572,6 +572,69 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 	}
 }
 
+func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.T) {
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: "calgar.indomitus",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "TX-MARINES",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+	ctx := context.WithValue(context.Background(), anchorplatform.SEP24ClaimsContextKey, validClaims)
+
+	models := data.SetupModels(t)
+
+	handler := ReceiverSendOTPHandler{
+		Models:             models,
+		MessageDispatcher:  message.NewMockMessageDispatcher(t),
+		ReCAPTCHAValidator: validators.NewReCAPTCHAValidatorMock(t),
+		ReCAPTCHADisabled:  true,
+	}
+	r := chi.NewRouter()
+	r.Post("/wallet-registration/otp", handler.ServeHTTP)
+
+	tests := []struct {
+		name, payload, column, want string
+	}{
+		{
+			name:    "phone not found",
+			payload: `{"phone_number":"+14155550001","recaptcha_token":""}`,
+			column:  "phone_number",
+			want:    "+14155550001",
+		},
+		{
+			name:    "email not found",
+			payload: `{"email":"salamander@fireborn.cod","recaptcha_token":""}`,
+			column:  "email",
+			want:    "salamander@fireborn.cod",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+				"/wallet-registration/otp", strings.NewReader(tc.payload))
+			require.NoError(t, err)
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			require.Equal(t, http.StatusOK, rr.Code)
+
+			var count int
+			query := fmt.Sprintf(
+				`SELECT count(*) FROM receiver_registration_attempts WHERE %s = $1`, tc.column,
+			)
+			err = models.DBConnectionPool.QueryRowxContext(ctx, query, tc.want).Scan(&count)
+			require.NoError(t, err)
+			assert.Equal(t, 1, count)
+
+			// cleanup
+			_, _ = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
+		})
+	}
+}
+
 func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -583,6 +646,16 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: "test-domain.test",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444:ANYMEMO",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	}
+	ctx = context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
 	receiverWithoutWalletInsert := &data.Receiver{
 		PhoneNumber: "+141555550000",
