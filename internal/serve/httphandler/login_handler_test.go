@@ -82,7 +82,7 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-		  t.Parallel()
+			t.Parallel()
 			headers := http.Header{}
 			for k, v := range tc.req.headers {
 				headers.Set(k, v)
@@ -413,7 +413,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-		  t.Parallel()
+			t.Parallel()
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManagerMock := auth.NewAuthManagerMock(t)
 			messengerClientMock := message.NewMessengerClientMock(t)

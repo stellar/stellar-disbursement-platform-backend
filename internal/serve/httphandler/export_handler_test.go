@@ -20,7 +20,7 @@ import (
 
 func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 	t.Parallel()
-	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)	
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
@@ -130,7 +130,7 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 func Test_ExportHandler_ExportPayments(t *testing.T) {
 	t.Parallel()
 	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
-	
+
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

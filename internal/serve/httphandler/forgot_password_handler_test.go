@@ -75,7 +75,7 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-		  t.Parallel()
+			t.Parallel()
 			err := tc.handler.validateRequest(tc.req.body)
 			if tc.expected == nil {
 				require.Nil(t, err)
@@ -272,7 +272,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-		  t.Parallel()
+			t.Parallel()
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManagerMock := auth.NewAuthManagerMock(t)
 			messengerClientMock := message.NewMessengerClientMock(t)

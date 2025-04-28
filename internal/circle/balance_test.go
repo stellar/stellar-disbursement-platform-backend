@@ -74,7 +74,7 @@ func Test_ParseStellarAsset(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		testCases:= tc
+		testCases := tc
 		t.Run(testCases.name, func(t *testing.T) {
 			t.Parallel()
 

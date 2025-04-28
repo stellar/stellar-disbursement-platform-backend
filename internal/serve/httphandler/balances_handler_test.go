@@ -211,7 +211,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-		  t.Parallel()
+			t.Parallel()
 			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
 			mCircleService := circle.NewMockService(t)
 			tc.prepareMocks(t, mCircleService, mDistributionAccountResolver)
@@ -320,7 +320,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-		  t.Parallel()
+			t.Parallel()
 			h := BalancesHandler{NetworkType: tc.networkType}
 
 			actualBalances := h.filterBalances(ctx, tc.circleBalances.Available)
@@ -370,7 +370,7 @@ func Test_wrapCircleError(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-		  t.Parallel()
+			t.Parallel()
 			actualHTTPError := wrapCircleError(ctx, tc.err)
 			assert.Equal(t, tc.wantHTTPError, actualHTTPError)
 		})

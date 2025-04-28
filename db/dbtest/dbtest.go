@@ -10,7 +10,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 )
 
-
 func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
 	t.Helper()
 
