@@ -1,0 +1,102 @@
+{
+  "items": [
+    {
+      "id": "stellar:USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      "distribution_account": "GAZFH5J3HO4XASKGHQPISU2MJUOU7XHMWMLTWOFUZHUZMIH6AZKPZJYS",
+      "significant_decimals": 7,
+      "sep24": {
+        "enabled": true,
+        "deposit": {
+          "enabled": true,
+          "fee_minimum": 0,
+          "fee_percent": 0,
+          "min_amount": 1,
+          "max_amount": 10000,
+          "methods": ["cash"]
+        },
+        "withdraw": {
+          "enabled": false,
+          "min_amount": 0,
+          "max_amount": 0,
+          "methods": []
+        }
+      },
+      "sep6": {
+        "enabled": false,
+        "deposit": {
+          "enabled": false,
+          "min_amount": 0,
+          "methods": []
+        },
+        "withdraw": {
+          "enabled": false,
+          "min_amount": 0,
+          "max_amount": 0,
+          "methods": []
+        }
+      },
+      "sep31": {
+        "enabled": false,
+        "receive": {
+          "min_amount": 0,
+          "max_amount": 0,
+          "methods": []
+        },
+        "quotes_supported": false,
+        "quotes_required": false
+      },
+      "sep38": {
+        "enabled": false
+      }
+    },
+    {
+      "id": "stellar:native:",
+      "distribution_account": "GAZFH5J3HO4XASKGHQPISU2MJUOU7XHMWMLTWOFUZHUZMIH6AZKPZJYS",
+      "significant_decimals": 7,
+      "sep24": {
+        "enabled": true,
+        "deposit": {
+          "enabled": true,
+          "fee_minimum": 0,
+          "fee_percent": 0,
+          "min_amount": 1,
+          "max_amount": 10000,
+          "methods": ["cash"]
+        },
+        "withdraw": {
+          "enabled": false,
+          "min_amount": 0,
+          "max_amount": 0,
+          "methods": []
+        }
+      },
+      "sep6": {
+        "enabled": false,
+        "deposit": {
+          "enabled": false,
+          "min_amount": 0,
+          "methods": []
+        },
+        "withdraw": {
+          "enabled": false,
+          "min_amount": 0,
+          "max_amount": 0,
+          "methods": []
+        }
+      },
+      "sep31": {
+        "enabled": false,
+        "receive": {
+          "min_amount": 0,
+          "max_amount": 0,
+          "methods": []
+        },
+        "quotes_supported": false,
+        "quotes_required": false
+      },
+      "sep38": {
+        "enabled": false
+      }
+    }
+  ]
+}
