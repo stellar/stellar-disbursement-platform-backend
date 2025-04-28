@@ -22,6 +22,7 @@ import (
 )
 
 func Test_BalancesHandler_Get(t *testing.T) {
+	t.Parallel()
 	circleAPIError := &circle.APIError{
 		Code:    400,
 		Message: "some circle error",
@@ -208,7 +209,9 @@ func Test_BalancesHandler_Get(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+		  t.Parallel()
 			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
 			mCircleService := circle.NewMockService(t)
 			tc.prepareMocks(t, mCircleService, mDistributionAccountResolver)
@@ -235,6 +238,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 }
 
 func Test_BalancesHandler_filterBalances(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -314,7 +318,9 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+		  t.Parallel()
 			h := BalancesHandler{NetworkType: tc.networkType}
 
 			actualBalances := h.filterBalances(ctx, tc.circleBalances.Available)
@@ -325,6 +331,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 }
 
 func Test_wrapCircleError(t *testing.T) {
+	t.Parallel()
 	circleAPIError := &circle.APIError{
 		Code:    400,
 		Message: "some circle error",
@@ -361,7 +368,9 @@ func Test_wrapCircleError(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+		  t.Parallel()
 			actualHTTPError := wrapCircleError(ctx, tc.err)
 			assert.Equal(t, tc.wantHTTPError, actualHTTPError)
 		})

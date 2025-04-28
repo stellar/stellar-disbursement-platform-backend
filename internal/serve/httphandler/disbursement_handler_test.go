@@ -21,8 +21,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -32,6 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -39,6 +38,7 @@ import (
 )
 
 func Test_DisbursementHandler_validateRequest(t *testing.T) {
+	t.Parallel()
 	type TestCase struct {
 		name           string
 		request        PostDisbursementRequest
@@ -180,11 +180,8 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 }
 
 func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -422,12 +419,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -528,12 +521,8 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -896,12 +885,8 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 }
 
 func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1262,12 +1247,8 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1381,12 +1362,8 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1545,11 +1522,8 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 }
 
 func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1910,11 +1884,8 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	models, outerErr := data.NewModels(dbConnectionPool)
@@ -2007,12 +1978,8 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 }
 
 func Test_DisbursementHandler_DeleteDisbursement(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
@@ -2148,11 +2115,8 @@ func Test_DisbursementHandler_DeleteDisbursement(t *testing.T) {
 }
 
 func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

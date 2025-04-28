@@ -15,8 +15,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -27,11 +25,8 @@ import (
 )
 
 func TestCircleConfigHandler_Patch(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	// Creates a tenant and inserts it in the context
 	tnt := tenant.Tenant{ID: "test-tenant-id"}
@@ -212,6 +207,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 }
 
 func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	encryptionPassphrase := "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6"

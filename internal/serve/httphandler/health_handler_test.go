@@ -18,6 +18,7 @@ import (
 
 // test HealthHandler:
 func TestHealthHandler(t *testing.T) {
+	t.Parallel()
 	// create database connection pool
 	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()

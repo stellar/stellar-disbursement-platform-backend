@@ -61,11 +61,8 @@ Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 )
 
 func Test_Serve(t *testing.T) {
-	dbt := dbtest.OpenWithoutMigrations(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -115,6 +112,7 @@ func Test_Serve(t *testing.T) {
 }
 
 func Test_Serve_callsValidateSecurity(t *testing.T) {
+	t.Parallel()
 	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
@@ -171,11 +169,8 @@ func Test_ServeOptions_ValidateSecurity(t *testing.T) {
 }
 
 func Test_handleHTTP_Health(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -237,6 +232,7 @@ func Test_handleHTTP_Health(t *testing.T) {
 }
 
 func Test_staticFileServer(t *testing.T) {
+	t.Parallel()
 	r := chi.NewMux()
 
 	staticFileServer(r, publicfiles.PublicFiles)

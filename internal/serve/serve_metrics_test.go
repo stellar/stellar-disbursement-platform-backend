@@ -14,6 +14,7 @@ import (
 )
 
 func Test_ServeMetrics(t *testing.T) {
+	t.Parallel()
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	mMonitorService.On("GetMetricHttpHandler").

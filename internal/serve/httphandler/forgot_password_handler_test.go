@@ -12,17 +12,17 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
+	t.Parallel()
 	type Req struct {
 		body ForgotPasswordRequest
 	}
@@ -73,7 +73,9 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+		  t.Parallel()
 			err := tc.handler.validateRequest(tc.req.body)
 			if tc.expected == nil {
 				require.Nil(t, err)
@@ -85,11 +87,8 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 }
 
 func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -271,7 +270,9 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+		  t.Parallel()
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManagerMock := auth.NewAuthManagerMock(t)
 			messengerClientMock := message.NewMessengerClientMock(t)
