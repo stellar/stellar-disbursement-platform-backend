@@ -13,11 +13,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -29,11 +28,7 @@ import (
 func Test_DistAccCmdService_RotateDistributionAccount(t *testing.T) {
 	ctx := context.Background()
 
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	// Create test data
 	oldAccount := schema.NewDefaultStellarTransactionAccount(keypair.MustRandom().Address())
@@ -128,7 +123,9 @@ func Test_DistAccCmdService_RotateDistributionAccount(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			// Setup mocks
 			distAccServiceMock := mocks.NewMockDistributionAccountService(t)
 			ledgerTrackerMock := preconditionsMocks.NewMockLedgerNumberTracker(t)
@@ -505,7 +502,9 @@ func Test_distributionAccountService_createNewStellarAccountFromAccount(t *testi
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			// Setup mocks
 			distAccServiceMock := mocks.NewMockDistributionAccountService(t)
 			ledgerTrackerMock := preconditionsMocks.NewMockLedgerNumberTracker(t)

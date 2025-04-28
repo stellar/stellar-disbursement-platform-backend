@@ -9,6 +9,8 @@ import (
 )
 
 func Test_PayoutRequest_validate(t *testing.T) {
+	t.Parallel()
+
 	idempotencyKey := uuid.NewString()
 	source := TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"}
 	destination := TransferAccount{

@@ -78,6 +78,7 @@ func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 	})
 
 	t.Run("exit with status 1 when IntegrationTestsService fails", func(t *testing.T) {
+		t.Parallel()
 		utils.AssertFuncExitsWithFatal(t, func() {
 			serviceMock.
 				On("StartIntegrationTests", context.Background(), *integrationTestsOpts).
@@ -87,6 +88,7 @@ func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 	})
 
 	t.Run("executes the start integration tests command successfully", func(t *testing.T) {
+		t.Parallel()
 		serviceMock.
 			On("StartIntegrationTests", context.Background(), *integrationTestsOpts).
 			Return(nil)
@@ -132,6 +134,7 @@ func Test_IntegrationTestsCommand_CreateIntegrationTestsDataCommand(t *testing.T
 	})
 
 	t.Run("exit with status 1 when IntegrationTestsService fails", func(t *testing.T) {
+		t.Parallel()
 		utils.AssertFuncExitsWithFatal(t, func() {
 			serviceMock.
 				On("CreateTestData", context.Background(), *integrationTestsOpts).
@@ -141,6 +144,7 @@ func Test_IntegrationTestsCommand_CreateIntegrationTestsDataCommand(t *testing.T
 	})
 
 	t.Run("executes the create integration tests data command successfully", func(t *testing.T) {
+		t.Parallel()
 		serviceMock.
 			On("CreateTestData", context.Background(), *integrationTestsOpts).
 			Return(nil)

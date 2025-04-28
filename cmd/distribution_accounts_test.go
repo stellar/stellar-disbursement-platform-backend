@@ -20,9 +20,9 @@ import (
 )
 
 func Test_DistributionAccountCommand_RotateCommand(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	dbt := dbtest.Open(t)
-	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)

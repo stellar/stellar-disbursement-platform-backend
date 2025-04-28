@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -73,11 +74,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 	jwtManager, err := NewJWTManager(tokenSecret, 5000)
 	require.NoError(t, err)
 
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 

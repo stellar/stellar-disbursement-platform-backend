@@ -9,6 +9,8 @@ import (
 )
 
 func Test_RecipientRequest_validate(t *testing.T) {
+	t.Parallel()
+
 	idempotencyKey := uuid.NewString()
 
 	testCases := []struct {

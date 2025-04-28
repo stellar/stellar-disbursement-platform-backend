@@ -27,9 +27,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -40,11 +39,7 @@ import (
 var defaultPreconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
 
 func Test_AssetsHandlerGetAssets(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -97,11 +92,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 }
 
 func Test_AssetHandler_CreateAsset(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	model, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -546,12 +537,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 }
 
 func Test_AssetHandler_DeleteAsset(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	model, err := data.NewModels(dbConnectionPool)

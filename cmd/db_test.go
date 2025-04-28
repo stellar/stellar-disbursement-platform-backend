@@ -85,6 +85,7 @@ func getAuthMigrationsApplied(t *testing.T, ctx context.Context, db db.DBConnect
 }
 
 func Test_DatabaseCommand_db_help(t *testing.T) {
+	t.Parallel()
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
@@ -135,6 +136,7 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 }
 
 func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
+	t.Parallel()
 	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
 
@@ -446,6 +448,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 }
 
 func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
+	t.Parallel()
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 

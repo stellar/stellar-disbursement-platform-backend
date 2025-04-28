@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 type MockDataSourceRouter struct {
@@ -41,11 +39,8 @@ func (m *MockDataSourceRouter) GetDataSource(ctx context.Context) (DBConnectionP
 }
 
 func TestSQLExecutorWithRouter_GetContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -83,11 +78,8 @@ func TestSQLExecutorWithRouter_GetContext(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_SelectContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -125,11 +117,8 @@ func TestSQLExecutorWithRouter_SelectContext(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_ExecContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -170,11 +159,8 @@ func TestSQLExecutorWithRouter_ExecContext(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_QueryContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -220,11 +206,8 @@ func TestSQLExecutorWithRouter_QueryContext(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_QueryxContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -270,11 +253,8 @@ func TestSQLExecutorWithRouter_QueryxContext(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_PrepareContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -323,11 +303,8 @@ func TestSQLExecutorWithRouter_PrepareContext(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_QueryRowxContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -366,11 +343,8 @@ func TestSQLExecutorWithRouter_QueryRowxContext(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_Rebind(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -399,11 +373,8 @@ func TestSQLExecutorWithRouter_Rebind(t *testing.T) {
 }
 
 func TestSQLExecutorWithRouter_DriverName(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 

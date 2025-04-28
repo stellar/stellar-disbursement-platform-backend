@@ -11,6 +11,8 @@ import (
 )
 
 func Test_ParseStellarAsset(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name             string
 		circleCurrency   string
@@ -72,28 +74,31 @@ func Test_ParseStellarAsset(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if !assert.ObjectsAreEqual(tc.allowedAssetsMap, AllowedAssetsMap) {
+		testCases:= tc
+		t.Run(testCases.name, func(t *testing.T) {
+			t.Parallel()
+
+			if !assert.ObjectsAreEqual(testCases.allowedAssetsMap, AllowedAssetsMap) {
 				return
 			}
-			asset, err := ParseStellarAsset(tc.circleCurrency, tc.networkType)
+			asset, err := ParseStellarAsset(testCases.circleCurrency, testCases.networkType)
 
-			if tc.expectedError == nil {
+			if testCases.expectedError == nil {
 				assert.NoError(t, err)
-				assert.Equal(t, tc.expectedAsset, asset)
+				assert.Equal(t, testCases.expectedAsset, asset)
 			} else {
-				assert.Equal(t, tc.expectedError, err)
+				assert.Equal(t, testCases.expectedError, err)
 			}
 		})
 
-		t.Run("FromAllowlist/"+tc.name, func(t *testing.T) {
-			asset, err := parseStellarAssetFromAllowlist(tc.circleCurrency, tc.networkType, tc.allowedAssetsMap)
+		t.Run("FromAllowlist/"+testCases.name, func(t *testing.T) {
+			asset, err := parseStellarAssetFromAllowlist(testCases.circleCurrency, testCases.networkType, testCases.allowedAssetsMap)
 
-			if tc.expectedError == nil {
+			if testCases.expectedError == nil {
 				assert.NoError(t, err)
-				assert.Equal(t, tc.expectedAsset, asset)
+				assert.Equal(t, testCases.expectedAsset, asset)
 			} else {
-				assert.Equal(t, tc.expectedError, err)
+				assert.Equal(t, testCases.expectedError, err)
 			}
 		})
 	}

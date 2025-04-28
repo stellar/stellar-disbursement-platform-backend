@@ -6,16 +6,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func TestDBTransactionWithMetrics_Commit(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
@@ -36,11 +32,8 @@ func TestDBTransactionWithMetrics_Commit(t *testing.T) {
 }
 
 func TestDBTransactionWithMetrics_Rollback(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 

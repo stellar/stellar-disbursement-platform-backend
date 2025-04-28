@@ -38,7 +38,9 @@ func TestMigrate_up_1(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(fmt.Sprintf("%s-up-1", tc.migrationRouter.TableName), func(t *testing.T) {
+			t.Parallel()
 			db := dbtest.OpenWithoutMigrations(t)
 			defer db.Close()
 			dbConnectionPool, err := OpenDBConnectionPool(db.DSN)
@@ -84,7 +86,9 @@ func TestMigrate_up_2_down_1(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(fmt.Sprintf("%s-up-2--down-1", tc.migrationRouter.TableName), func(t *testing.T) {
+			t.Parallel()
 			db := dbtest.OpenWithoutMigrations(t)
 			defer db.Close()
 			dbConnectionPool, err := OpenDBConnectionPool(db.DSN)
@@ -119,7 +123,9 @@ func TestMigrate_upAndDownAllTheWayTwice(t *testing.T) {
 	}
 
 	for _, migrationRouter := range migrationRouters {
+		migrationRouter := migrationRouter
 		t.Run(fmt.Sprintf("%s-up-and-down-all-the-way-twice", migrationRouter.TableName), func(t *testing.T) {
+			t.Parallel()
 			db := dbtest.OpenWithoutMigrations(t)
 			defer db.Close()
 			dbConnectionPool, err := OpenDBConnectionPool(db.DSN)

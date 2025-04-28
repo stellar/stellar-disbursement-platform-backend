@@ -13,6 +13,7 @@ import (
 )
 
 func TestOpen_OpenDBConnectionPool(t *testing.T) {
+	t.Parallel()
 	db := dbtest.Postgres(t)
 	defer db.Close()
 
@@ -28,6 +29,7 @@ func TestOpen_OpenDBConnectionPool(t *testing.T) {
 }
 
 func TestOpen_OpenDBConnectionPoolWithMetrics(t *testing.T) {
+	t.Parallel()
 	db := dbtest.Postgres(t)
 	defer db.Close()
 
@@ -49,6 +51,7 @@ func TestOpen_OpenDBConnectionPoolWithMetrics(t *testing.T) {
 }
 
 func Test_CloseConnectionPoolIfNeeded(t *testing.T) {
+	t.Parallel()
 	db := dbtest.Postgres(t)
 	defer db.Close()
 	ctx := context.Background()

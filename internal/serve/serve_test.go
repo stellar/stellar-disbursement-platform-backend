@@ -30,6 +30,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -114,11 +115,7 @@ func Test_Serve(t *testing.T) {
 }
 
 func Test_Serve_callsValidateSecurity(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
@@ -127,7 +124,7 @@ func Test_Serve_callsValidateSecurity(t *testing.T) {
 
 	// Make sure MFA is enforced in pubnet
 	serveOptions.DisableMFA = true
-	err = Serve(serveOptions, &mHTTPServer)
+	err := Serve(serveOptions, &mHTTPServer)
 	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
 }
 
@@ -353,11 +350,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 }
 
 func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 	data.CreateShortURLFixture(t, context.Background(), dbConnectionPool, "123", "https://stellar.org")
@@ -474,7 +467,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 
 	// Expect 401 as a response:
 	for _, endpoint := range authenticatedEndpoints {
+		endpoint := endpoint
 		t.Run(fmt.Sprintf("expect 401 for %s %s", endpoint.method, endpoint.path), func(t *testing.T) {
+			t.Parallel()
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
 			req.Header.Set(middleware.TenantHeaderKey, "aid-org")
 
@@ -488,11 +483,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 }
 
 func Test_handleHTTP_rateLimit(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 

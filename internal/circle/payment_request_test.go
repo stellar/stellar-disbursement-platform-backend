@@ -11,6 +11,8 @@ import (
 )
 
 func Test_ParseAPIType(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		apiType string
 		wantErr error
@@ -37,6 +39,8 @@ func Test_ParseAPIType(t *testing.T) {
 }
 
 func Test_PaymentRequest_GetCircleAssetCode(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name              string
 		stellarAssetCode  string
@@ -83,6 +87,8 @@ func Test_PaymentRequest_GetCircleAssetCode(t *testing.T) {
 }
 
 func Test_PaymentRequest_Validate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		paymentReq PaymentRequest

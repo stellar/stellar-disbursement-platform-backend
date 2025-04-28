@@ -917,6 +917,8 @@ func Test_Client_GetAccountConfiguration(t *testing.T) {
 }
 
 func Test_Client_handleError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tnt := &tenant.Tenant{ID: "test-id"}
 	ctx = tenant.SaveTenantInContext(ctx, tnt)
@@ -983,6 +985,8 @@ func Test_Client_handleError(t *testing.T) {
 }
 
 func Test_Client_request(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name               string
 		responses          []http.Response

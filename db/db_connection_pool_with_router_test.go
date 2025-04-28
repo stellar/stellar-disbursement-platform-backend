@@ -6,18 +6,14 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 func TestConnectionPoolWithRouter_BeginTxx(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -63,11 +59,8 @@ func TestConnectionPoolWithRouter_BeginTxx(t *testing.T) {
 }
 
 func TestConnectionPoolWithRouter_Close(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -100,11 +93,8 @@ func TestConnectionPoolWithRouter_Close(t *testing.T) {
 }
 
 func TestConnectionPoolWithRouter_Ping(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -138,11 +128,8 @@ func TestConnectionPoolWithRouter_Ping(t *testing.T) {
 }
 
 func TestConnectionPoolWithRouter_SqlDB(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -179,11 +166,8 @@ func TestConnectionPoolWithRouter_SqlDB(t *testing.T) {
 }
 
 func TestConnectionPoolWithRouter_SqlxDB(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mockRouter := new(MockDataSourceRouter)
 
@@ -220,6 +204,7 @@ func TestConnectionPoolWithRouter_SqlxDB(t *testing.T) {
 }
 
 func TestConnectionPoolWithRouter_DSN(t *testing.T) {
+	t.Parallel()
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, outerErr := OpenDBConnectionPool(dbt.DSN)

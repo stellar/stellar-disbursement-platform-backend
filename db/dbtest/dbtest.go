@@ -10,10 +10,16 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 )
 
+
 func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
 	t.Helper()
 
 	db := dbtest.Postgres(t)
+
+	t.Cleanup(func() {
+		db.Close()
+	})
+
 	return db
 }
 

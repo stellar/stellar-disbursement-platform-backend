@@ -11,6 +11,8 @@ import (
 )
 
 func Test_TransferRequest_validate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		tr      TransferRequest
@@ -106,6 +108,8 @@ func Test_TransferRequest_validate(t *testing.T) {
 }
 
 func Test_TransferStatus_ToPaymentStatus(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name           string
 		transferStatus TransferStatus

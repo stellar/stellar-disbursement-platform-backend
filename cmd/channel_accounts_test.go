@@ -20,7 +20,6 @@ import (
 
 func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 	dbt := dbtest.Open(t)
-	defer dbt.Close()
 
 	distributionKP := keypair.MustRandom()
 	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
@@ -70,7 +69,6 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 
 func Test_ChannelAccountsCommand_VerifyCommand(t *testing.T) {
 	dbt := dbtest.Open(t)
-	defer dbt.Close()
 
 	distributionKP := keypair.MustRandom()
 	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
@@ -122,7 +120,6 @@ func Test_ChannelAccountsCommand_VerifyCommand(t *testing.T) {
 
 func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 	dbt := dbtest.Open(t)
-	defer dbt.Close()
 
 	distributionKP := keypair.MustRandom()
 	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
@@ -172,7 +169,6 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 
 func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 	dbt := dbtest.Open(t)
-	defer dbt.Close()
 
 	distributionKP := keypair.MustRandom()
 	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase

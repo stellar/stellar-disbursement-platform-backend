@@ -80,6 +80,7 @@ func (m *mockServer) SetupConsumers(ctx context.Context, o SetupConsumersOptions
 }
 
 func Test_serve_wasCalled(t *testing.T) {
+	t.Parallel()
 	// setup
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
 	serveCmdFound := false

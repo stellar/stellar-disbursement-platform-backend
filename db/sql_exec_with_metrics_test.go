@@ -9,17 +9,13 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func Test_NewSQLExecuterWithMetrics(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
@@ -48,11 +44,8 @@ func Test_NewSQLExecuterWithMetrics(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_GetContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	var mDest string
@@ -63,7 +56,7 @@ func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err := dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in GetContext", func(t *testing.T) {
@@ -108,11 +101,8 @@ func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	var mDest []string
@@ -123,7 +113,7 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err := dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	_, err = dbConnectionPool.ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
@@ -171,11 +161,8 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -185,7 +172,7 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err := dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	_, err = dbConnectionPool.ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
@@ -242,11 +229,8 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -256,7 +240,7 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err := dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	_, err = dbConnectionPool.ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
@@ -313,11 +297,8 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -327,7 +308,7 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err := dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in QueryRowxContext", func(t *testing.T) {
@@ -374,11 +355,8 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := openTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	const query = `
@@ -387,7 +365,7 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err := dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in ExecContext", func(t *testing.T) {
@@ -433,6 +411,7 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_getMetricTag(t *testing.T) {
+	t.Parallel()
 	t.Run("return successful metric tag", func(t *testing.T) {
 		metricTag := getMetricTag(nil)
 
@@ -447,6 +426,7 @@ func TestSQLExecWithMetrics_getMetricTag(t *testing.T) {
 }
 
 func TestSQLExecWithMetrics_getQueryType(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		query             string
 		expectedQueryType QueryType

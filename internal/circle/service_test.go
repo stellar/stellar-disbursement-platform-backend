@@ -7,9 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -147,11 +146,7 @@ func Test_NewService(t *testing.T) {
 }
 
 func Test_Service_getClient(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -165,7 +160,7 @@ func Test_Service_getClient(t *testing.T) {
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	// Add a client config to the database.
-	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
+	err := clientConfigModel.Upsert(ctx, ClientConfigUpdate{
 		WalletID:           utils.StringPtr("the_wallet_id"),
 		EncryptedAPIKey:    utils.StringPtr(encryptedAPIKey),
 		EncrypterPublicKey: utils.StringPtr(pubKey),
@@ -195,11 +190,7 @@ func Test_Service_getClient(t *testing.T) {
 }
 
 func Test_Service_allMethods(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -211,7 +202,7 @@ func Test_Service_allMethods(t *testing.T) {
 	mockTntManager := &tenant.TenantManagerMock{}
 
 	// Add a client config to the database.
-	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
+	err := clientConfigModel.Upsert(ctx, ClientConfigUpdate{
 		WalletID:           utils.StringPtr("the_wallet_id"),
 		EncryptedAPIKey:    utils.StringPtr(encryptedAPIKey),
 		EncrypterPublicKey: utils.StringPtr(pubKey),
