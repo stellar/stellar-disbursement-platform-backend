@@ -21,6 +21,7 @@ import (
 const mfaEndpoint = "/mfa"
 
 func Test_MFAHandler_validateRequest(t *testing.T) {
+	t.Parallel()
 	type Req struct {
 		body     MFARequest
 		deviceID string

@@ -29,6 +29,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -37,11 +38,8 @@ import (
 )
 
 func Test_PaymentsHandlerGet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -197,14 +195,10 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 }
 
 func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
@@ -343,12 +337,8 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 }
 
 func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -449,12 +439,8 @@ func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 }
 
 func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -854,11 +840,8 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 }
 
 func Test_PaymentHandler_RetryPayments(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

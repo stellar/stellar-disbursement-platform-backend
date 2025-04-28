@@ -21,13 +21,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -94,7 +93,9 @@ func Test_ReceiverSendOTPRequest_validateContactInfo(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			v := tc.receiverSendOTPRequest.validateContactInfo()
 			if len(tc.wantValidationErrors) == 0 {
 				assert.Len(t, v.Errors, 0)
@@ -106,11 +107,7 @@ func Test_ReceiverSendOTPRequest_validateContactInfo(t *testing.T) {
 }
 
 func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
@@ -213,7 +210,9 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			mockReCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
 			mockMessageDispatcher := message.NewMockMessageDispatcher(t)
 
@@ -246,11 +245,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 }
 
 func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
@@ -480,11 +475,7 @@ func Test_newReceiverSendOTPResponseBody(t *testing.T) {
 }
 
 func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -636,11 +627,7 @@ func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.
 }
 
 func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

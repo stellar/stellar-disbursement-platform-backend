@@ -14,20 +14,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_ReceiverHandlerGet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -359,12 +354,8 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -465,12 +456,8 @@ func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1383,12 +1370,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 }
 
 func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	t.Parallel()
+	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1576,6 +1559,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
+	t.Parallel()
 	handler := &ReceiverHandler{}
 
 	rr := httptest.NewRecorder()
