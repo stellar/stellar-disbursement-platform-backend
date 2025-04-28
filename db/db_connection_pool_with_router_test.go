@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

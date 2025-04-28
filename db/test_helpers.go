@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+
 	"github.com/stretchr/testify/require"
 )
 
