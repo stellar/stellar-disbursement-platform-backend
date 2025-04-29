@@ -26,6 +26,7 @@ import (
 )
 
 func Test_DistAccCmdService_RotateDistributionAccount(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	dbConnectionPool := testutils.OpenTestDBConnectionPool(t)
@@ -123,9 +124,7 @@ func Test_DistAccCmdService_RotateDistributionAccount(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			// Setup mocks
 			distAccServiceMock := mocks.NewMockDistributionAccountService(t)
 			ledgerTrackerMock := preconditionsMocks.NewMockLedgerNumberTracker(t)
@@ -503,7 +502,7 @@ func Test_distributionAccountService_createNewStellarAccountFromAccount(t *testi
 
 	for _, tc := range testCases {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) { 
 			t.Parallel()
 			// Setup mocks
 			distAccServiceMock := mocks.NewMockDistributionAccountService(t)

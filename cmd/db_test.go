@@ -136,7 +136,6 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 }
 
 func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
-	t.Parallel()
 	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
 

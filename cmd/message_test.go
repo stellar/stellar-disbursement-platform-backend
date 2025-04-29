@@ -31,7 +31,6 @@ func (m *mockMessengerService) SendMessage(ctx context.Context, opts message.Mes
 }
 
 func Test_message_help(t *testing.T) {
-	t.Parallel()
 	// setup
 	var out bytes.Buffer
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
