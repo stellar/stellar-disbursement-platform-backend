@@ -502,7 +502,7 @@ func Test_distributionAccountService_createNewStellarAccountFromAccount(t *testi
 
 	for _, tc := range testCases {
 		tc := tc
-		t.Run(tc.name, func(t *testing.T) { 
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			// Setup mocks
 			distAccServiceMock := mocks.NewMockDistributionAccountService(t)
