@@ -9,8 +9,8 @@
   },
   "enterPasscode": {
     "title": "Verify Information",
-    "message": "If your contact information matches a pending payment from your organization, you will receive a one-time passcode. Enter it below to continue.",
-    "messageNoOtp": "If you did not receive an OTP, it is likely because you used a phone number or email not registered with your organization. Please check the value you entered.",
+    "message": "If your contact information matches a pending payment, you will receive a one-time passcode. Enter it below to continue.",
+    "messageNoOtp": "If you didn’t receive an OTP, you probably used a phone number or email not registered with your organization. Please check your contact information.",
     "warning": "Do not share your OTP or verification data with anyone. People who ask for this information could be trying to access your account.",
     "passcode": "One-Time Passcode (OTP)",
     "verDateOfBirth": "Date of Birth",
