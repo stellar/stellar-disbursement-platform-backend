@@ -578,7 +578,7 @@ func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceN
 		}
 	} else if strkey.IsValidContractAddress(txJob.Transaction.Destination) {
 		if txJob.Transaction.Memo != "" {
-			return nil, fmt.Errorf("memo is not supported for contract destination: %s", txJob.Transaction.Destination)
+			return nil, fmt.Errorf("memo is not supported for contract destination (%s)", txJob.Transaction.Destination)
 		}
 		params := txnbuild.PaymentToContractParams{
 			NetworkPassphrase: tw.engine.SignatureService.NetworkPassphrase(),
@@ -593,7 +593,7 @@ func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceN
 		}
 		operation = &op
 	} else {
-		return nil, fmt.Errorf("invalid destination account: %v", txJob.Transaction.Destination)
+		return nil, fmt.Errorf("invalid destination account (%s)", txJob.Transaction.Destination)
 	}
 
 	paymentTx, err := txnbuild.NewTransaction(
