@@ -48,11 +48,14 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 	if iv.contactType.IncludesWalletAddress {
 		iv.Check(instruction.WalletAddress != "", fmt.Sprintf("line %d - wallet address", lineNumber), "wallet address cannot be empty")
 		if instruction.WalletAddress != "" {
-			iv.Check(strkey.IsValidEd25519PublicKey(instruction.WalletAddress), fmt.Sprintf("line %d - wallet address", lineNumber), "invalid wallet address. Must be a valid Stellar public key")
+			iv.Check(strkey.IsValidEd25519PublicKey(instruction.WalletAddress) || strkey.IsValidContractAddress(instruction.WalletAddress), fmt.Sprintf("line %d - wallet address", lineNumber), "invalid wallet address. Must be a valid Stellar public key or contract address")
 		}
-		if instruction.WalletAddressMemo != "" {
+		if instruction.WalletAddressMemo != "" && strkey.IsValidEd25519PublicKey(instruction.WalletAddress) {
 			_, _, err := schema.ParseMemo(instruction.WalletAddressMemo)
 			iv.CheckError(err, fmt.Sprintf("line %d - wallet address memo", lineNumber), "invalid wallet address memo. For more information, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos")
+		}
+		if instruction.WalletAddressMemo != "" && strkey.IsValidContractAddress(instruction.WalletAddress) {
+			iv.AddError(fmt.Sprintf("line %d - wallet address memo", lineNumber), "wallet address memo is not supported for contract addresses")
 		}
 	} else {
 		// 4. Validate verification field

@@ -93,8 +93,8 @@ func (tx *Transaction) validate() error {
 	if tx.Amount <= 0 {
 		return fmt.Errorf("amount must be positive")
 	}
-	if !strkey.IsValidEd25519PublicKey(tx.Destination) {
-		return fmt.Errorf("destination %q is not a valid ed25519 public key", tx.Destination)
+	if !strkey.IsValidEd25519PublicKey(tx.Destination) && !strkey.IsValidContractAddress(tx.Destination) {
+		return fmt.Errorf("destination %q is not a valid ed25519 public key or contract address", tx.Destination)
 	}
 	if tx.TenantID == "" {
 		return fmt.Errorf("tenant ID is required")

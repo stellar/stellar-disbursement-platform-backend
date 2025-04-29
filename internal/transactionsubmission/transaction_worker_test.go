@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
@@ -1670,6 +1671,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		getAccountResponseObj   horizon.Account
 		getAccountResponseError *horizonclient.Error
 		wantErrorContains       string
+		destinationAddress      string
 		memoType                schema.MemoType
 		memoValue               string
 		wantMemo                txnbuild.Memo
@@ -1693,25 +1695,54 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			wantErrorContains:       "horizon response error: ",
 		},
 		{
-			name:                  "🎉 successfully build and sign a transaction",
+			name:                  "returns an error if memo is present for C destination",
 			assetCode:             "USDC",
 			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+			destinationAddress:    "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
+			memoType:              schema.MemoTypeText,
+			memoValue:             "HelloWorld!",
+			wantErrorContains:     "memo is not supported for contract destination",
 		},
 		{
-			name:                  "🎉 successfully build and sign a transaction with native asset",
+			name:                  "🎉 successfully build and sign a payment transaction for G destination",
+			assetCode:             "USDC",
+			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			destinationAddress:    "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+		},
+		{
+			name:                  "🎉 successfully build and sign a payment transaction with native asset for G destination",
 			assetCode:             "XLM",
 			assetIssuer:           "",
 			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+			destinationAddress:    "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 		},
 		{
-			name:                  "🎉 successfully build and sign a transaction with memo",
+			name:                  "🎉 successfully build and sign a payment transaction with memo for G destination",
 			assetCode:             "USDC",
 			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+			destinationAddress:    "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 			memoType:              schema.MemoTypeText,
 			memoValue:             "HelloWorld!",
 			wantMemo:              txnbuild.MemoText("HelloWorld!"),
+		},
+		{
+			name:                  "🎉 successfully build and sign a SAC transfer transaction for C destination",
+			assetCode:             "USDC",
+			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			destinationAddress:    "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
+			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+			wantMemo:              nil,
+		},
+		{
+			name:                  "🎉 successfully build and sign a SAC transfer transaction with native asset for C destination",
+			assetCode:             "XLM",
+			assetIssuer:           "",
+			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+			destinationAddress:    "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
+			wantMemo:              nil,
 		},
 	}
 
@@ -1725,6 +1756,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
 			txJob.Transaction.AssetCode = tc.assetCode
 			txJob.Transaction.AssetIssuer = tc.assetIssuer
+			txJob.Transaction.Destination = tc.destinationAddress
 			txJob.Transaction.Memo = tc.memoValue
 			txJob.Transaction.MemoType = tc.memoType
 
@@ -1772,22 +1804,37 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 						Issuer: txJob.Transaction.AssetIssuer,
 					}
 				}
+
+				var operation txnbuild.Operation
+				amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+				if strkey.IsValidEd25519PublicKey(tc.destinationAddress) {
+					operation = &txnbuild.Payment{
+						SourceAccount: distributionKP.Address(),
+						Amount:        amount,
+						Destination:   txJob.Transaction.Destination,
+						Asset:         wantAsset,
+					}
+				} else if strkey.IsValidContractAddress(tc.destinationAddress) {
+					params := txnbuild.PaymentToContractParams{
+						NetworkPassphrase: network.TestNetworkPassphrase,
+						Destination:       txJob.Transaction.Destination,
+						Amount:            amount,
+						Asset:             wantAsset,
+						SourceAccount:     distributionKP.Address(),
+					}
+					op, _ := txnbuild.NewPaymentToContract(params)
+					operation = &op
+				}
+
 				wantInnerTx, err := txnbuild.NewTransaction(
 					txnbuild.TransactionParams{
 						SourceAccount: &txnbuild.SimpleAccount{
 							AccountID: txJob.ChannelAccount.PublicKey,
 							Sequence:  accountSequence,
 						},
-						Memo: tc.wantMemo,
-						Operations: []txnbuild.Operation{
-							&txnbuild.Payment{
-								SourceAccount: distributionKP.Address(),
-								Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32), // TODO find a better way to do this
-								Destination:   txJob.Transaction.Destination,
-								Asset:         wantAsset,
-							},
-						},
-						BaseFee: int64(transactionWorker.engine.MaxBaseFee),
+						Memo:       tc.wantMemo,
+						Operations: []txnbuild.Operation{operation},
+						BaseFee:    int64(transactionWorker.engine.MaxBaseFee),
 						Preconditions: txnbuild.Preconditions{
 							TimeBounds:   txnbuild.NewTimeout(300),
 							LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},

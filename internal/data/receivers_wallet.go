@@ -615,7 +615,7 @@ func (rwu ReceiverWalletUpdate) Validate() error {
 	}
 
 	if rwu.StellarAddress != "" {
-		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) {
+		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) && !strkey.IsValidContractAddress(rwu.StellarAddress) {
 			return fmt.Errorf("invalid stellar address")
 		}
 	}
