@@ -47,8 +47,8 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	allowedIPs, err := parseAllowedIPs(req.AllowedIPs)
 	if err != nil {
 		v.AddError("allowed_ips", err.Error())
-	} else if err := data.ValidateAllowedIPs(allowedIPs); err != nil {
-		v.AddError("allowed_ips", err.Error())
+	} else if validationErr := data.ValidateAllowedIPs(allowedIPs); validationErr != nil {
+		v.AddError("allowed_ips", validationErr.Error())
 	}
 
 	if req.ExpiryDate != nil && req.ExpiryDate.Before(time.Now()) {
