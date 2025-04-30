@@ -470,6 +470,8 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"wallets",
 		"wallets_assets",
 		"receiver_registration_attempts",
+		"api_keys",
+		"api_keys_audit",
 	}
 }
 
