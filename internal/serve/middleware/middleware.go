@@ -26,8 +26,9 @@ import (
 type ContextKey string
 
 const (
-	TokenContextKey ContextKey = "auth_token"
-	TenantHeaderKey string     = "SDP-Tenant-Name"
+	TokenContextKey  ContextKey = "auth_token"
+	UserIDContextKey ContextKey = "user_id"
+	TenantHeaderKey  string     = "SDP-Tenant-Name"
 )
 
 // RecoverHandler is a middleware that recovers from panics and logs the error.
@@ -113,6 +114,7 @@ func AuthenticateMiddleware(authManager auth.AuthManager, tenantManager tenant.M
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, TokenContextKey, token)
+			ctx = context.WithValue(ctx, UserIDContextKey, userID)
 
 			// Attempt fetching tenant ID from token
 			tenantID, err := authManager.GetTenantID(ctx, token)
