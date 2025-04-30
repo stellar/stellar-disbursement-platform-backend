@@ -231,6 +231,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Use(middleware.AuthenticateMiddleware(authManager, o.tenantManager))
 		r.Use(middleware.EnsureTenantMiddleware)
 
+		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole)).Route("/api-keys", func(r chi.Router) {
+			apiKeyHandler := httphandler.APIKeyHandler{
+				Models: o.Models,
+			}
+			r.Post("/", apiKeyHandler.CreateAPIKey)
+		})
+
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
 			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
 			r.Get("/", statisticsHandler.GetStatistics)
