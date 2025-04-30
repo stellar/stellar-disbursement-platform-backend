@@ -1,0 +1,64 @@
+{
+  "selectVerification": {
+    "title": "Seleccione el método de invitación de pago",
+    "message": "¿Cómo recibió su invitación para reclamar los fondos?",
+    "warning": "ATENCIÓN: Debe usar el contacto que fue invitado para reclamar este pago.",
+    "phoneErrorMessage": "El número de teléfono ingresado no es válido",
+    "emailErrorMessage": "El correo electrónico ingresado no es válido",
+    "missingAuthToken": "Falta el token de autenticación. Asegúrese de que su URL sea correcta."
+  },
+  "enterPasscode": {
+    "title": "Verifique su información",
+    "message": "Si su información de contacto coincide con un pago pendiente de reclamar, recibirá un código de acceso único. Ingréselo para continuar.",
+    "messageNoOtp": "Si no recibió un código de acceso único, es probable que haya utilizado un número de teléfono o correo electrónico no registrado en su organización. Verifique el valor ingresado.",
+    "warning": "No comparta su código de acceso único ni sus datos de verificación con nadie. Las personas que soliciten esta información podrían estar intentando acceder a su cuenta.",
+    "passcode": "Código de acceso",
+    "verDateOfBirth": "Fecha de nacimiento",
+    "verYearMonth": "Fecha de nacimiento (solo año y mes)",
+    "verNationalIdNumber": "Número de identificación nacional",
+    "verPin": "PIN",
+    "resendOtpSuccessTitle": "Nuevo código de acceso único enviado",
+    "resendOtpSuccessMessage": "Recibirá un nuevo código de acceso único."
+  },
+  "success": {
+    "title": "¡Su información ha sido verificada con éxito!",
+    "message": "Su cuenta fue verificada utilizando la siguiente información de contacto: {{contactInfo}}.",
+    "goToHomeMessage": "Haga clic en el botón a continuación para volver a inicio y recibir su desembolso."
+  },
+  "alreadyRegistered": {
+    "title": "¡Ya está registrado!",
+    "message": "Su cuenta ya fue verificada utilizando la siguiente información de contacto: {{contactInfo}}.",
+    "goToHomeMessage": "Haga clic en el botón a continuación para volver a inicio y recibir su desembolso."
+  },
+  "footer": {
+    "privacyMessage": "Sus datos son procesados por {{orgName}} de acuerdo con su <Link href=''>Política de privacidad</Link>"
+  },
+  "generic": {
+    "phoneNumber": "Número de teléfono",
+    "email": "Correo electrónico",
+    "continue": "Continuar",
+    "error": "Error",
+    "goBack": "Volver",
+    "goToHome": "Volver a inicio",
+    "resendOtp": "Reenviar código de acceso único",
+    "errorMessage": "Algo salió mal, por favor intente nuevamente más tarde.",
+    "errorReCaptchaRequired": "Se requiere reCAPTCHA"
+  },
+  "errorCodes": {
+    "400_0": "Cuerpo de solicitud no válido.",
+    "400_1": "El token de reCAPTCHA no es válido.",
+    "400_2": "La información proporcionada no pudo ser encontrada.",
+    "400_3": "El número de intentos para confirmar el valor de verificación excedió el máximo permitido.",
+    "401_0": "No autorizado.",
+    "500_0": "Ocurrió un error interno al procesar esta solicitud.",
+    "500_1": "No se puede obtener la organización.",
+    "500_2": "No se puede recuperar el inquilino del contexto.",
+    "500_3": "No se puede obtener la URL del logotipo.",
+    "500_4": "No se puede registrar la billetera del receptor.",
+    "500_5": "No se puede validar el token de reCAPTCHA.",
+    "500_6": "Información de contacto inesperada.",
+    "500_7": "No se puede generar código de acceso único para la billetera del receptor.",
+    "500_8": "No se puede actualizar código de acceso único para la billetera del receptor.",
+    "500_9": "Error al enviar el mensaje código de acceso único."
+  }
+}
