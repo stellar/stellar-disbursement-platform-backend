@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Add API keys management endpoints [#655](https://github.com/stellar/stellar-disbursement-platform-backend/pull/655)
+- Add API keys management endpoints [#655](https://github.com/stellar/stellar-disbursement-platform-backend/pull/655) [#657](https://github.com/stellar/stellar-disbursement-platform-backend/pull/657)
 
 ## [3.7.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
 
@@ -28,7 +28,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Added CMD to create default tenant `tenants ensure-default`, introduced new env variables. [#634](https://github.com/stellar/stellar-disbursement-platform-backend/pull/634)
 - Added functionality and new `receiver_registration_attempts` table to track failed OTP attempts. [#635](https://github.com/stellar/stellar-disbursement-platform-backend/pull/635)
 
-
 ### Changed
 
 - Allow the AWS configuration to be handled by the AWS session if the static credentials and region are not all passed to the SDP function. [#565](https://github.com/stellar/stellar-disbursement-platform-backend/pull/565)
@@ -38,7 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - ReCAPTCHA now allowed to be disabled in pubnet environments. [#618](https://github.com/stellar/stellar-disbursement-platform-backend/pull/618)
 
 - Deprecated `ENABLE_SCHEDULER` and `EVENT_BROKER_TYPE=NONE` in favor of using `EVENT_BROKER_TYPE=SCHEDULER` for background jobs. [#617](https://github.com/stellar/stellar-disbursement-platform-backend/pull/617)
-
 
 ### Fixed
 
@@ -54,7 +52,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 
 - Tenant resolution fails after tenant is deleted. [#638](https://github.com/stellar/stellar-disbursement-platform-backend/pull/638)
-
 
 ## [3.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.6.1))
 
@@ -109,13 +106,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Added short linking for Wallet Registration Links. 
+- Added short linking for Wallet Registration Links.
   [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
-- Added a new `is_link_shortener_enabled` property to `GET` and `PATCH` organizations endpoints to enable/disable the short link feature. 
+- Added a new `is_link_shortener_enabled` property to `GET` and `PATCH` organizations endpoints to enable/disable the short link feature.
   [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
-- Added receiver contact info for Payments export. 
+- Added receiver contact info for Payments export.
   [#538](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/538)
-
 
 ## [3.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.3.0...3.4.0))
 
@@ -382,7 +378,6 @@ Each organization has its own set of users, receivers, disbursements, etc.
 - Use `DistributionAccountResolver` instead of passing around distribution public key [#212](https://github.com/stellar/stellar-disbursement-platform-backend/pull/212)
 - Make provision new tenant an atomic operation [#233](https://github.com/stellar/stellar-disbursement-platform-backend/pull/233)
 - Make `ready_payments_cancellation` job multi-tenant [#223](https://github.com/stellar/stellar-disbursement-platform-backend/pull/223)
-
 
 ### Added
 
