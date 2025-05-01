@@ -474,6 +474,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/api-keys"},
 		{http.MethodGet, "/api-keys"},
 		{http.MethodGet, "/api-keys/12345"},
+		{http.MethodPatch, "/api-keys/12345"},
 		{http.MethodDelete, "/api-keys/12345"},
 	}
 
