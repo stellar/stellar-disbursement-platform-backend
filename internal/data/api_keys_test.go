@@ -145,26 +145,8 @@ func Test_hashAPIKey(t *testing.T) {
 	assert.NotEmpty(t, h1)
 }
 
-func CreateAPIKeyFixture(t *testing.T, ctx context.Context, pool db.DBConnectionPool, perms []APIKeyPermission, ips []string) *APIKey {
-	t.Helper()
-	models, err := NewModels(pool)
-	require.NoError(t, err)
-
-	name := "Relic of the Omnissiah"
-	createdBy := "00000000-0000-0000-0000-000000000000"
-
-	key, err := models.APIKeys.Insert(ctx, pool, name, perms, ips, nil, createdBy)
-	require.NoError(t, err)
-	return key
-}
-
 func Test_APIKeyModel_Insert(t *testing.T) {
-	dbt := dbtest.Open(t)
-	t.Cleanup(func() { dbt.Close() })
-
-	pool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	t.Cleanup(func() { pool.Close() })
+	pool := getConnectionPool(t)
 
 	ctx := context.Background()
 	models, err := NewModels(pool)
@@ -173,7 +155,15 @@ func Test_APIKeyModel_Insert(t *testing.T) {
 	t.Run("insert key", func(t *testing.T) {
 		perms := APIKeyPermissions{ReadStatistics, ReadExports}
 		ips := IPList{"1.2.3.4", "10.0.0.0/8"}
-		key := CreateAPIKeyFixture(t, ctx, pool, perms, ips)
+
+		key := createAPIKeyFixture(
+			t, ctx, pool,
+			"Relic of the Omnissiah",
+			perms,
+			ips,
+			nil,
+			"00000000-0000-0000-0000-000000000000",
+		)
 
 		assert.NotEmpty(t, key.ID)
 		assert.Equal(t, "Relic of the Omnissiah", key.Name)
@@ -197,11 +187,83 @@ func Test_APIKeyModel_Insert(t *testing.T) {
 		name := "Stygies VIII Archive Key"
 		createdBy := "00000000-0000-0000-0000-000000000000"
 
-		key, err := models.APIKeys.Insert(ctx, pool, name, perms, ips, &expiry, createdBy)
+		key, err := models.APIKeys.Insert(ctx, name, perms, ips, &expiry, createdBy)
 		require.NoError(t, err)
 
 		assert.Equal(t, name, key.Name)
 		require.NotNil(t, key.ExpiryDate)
 		assert.WithinDuration(t, expiry, *key.ExpiryDate, time.Second)
 	})
+}
+
+func TestAPIKeyModel_GetAll_SortsByCreatedAtDesc(t *testing.T) {
+	t.Parallel()
+
+	pool := getConnectionPool(t)
+
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+	ctx := context.Background()
+	creator := "fe302e77-ec3f-4a3b-9f8a-1234567890ab"
+
+	k1 := createAPIKeyFixture(
+		t, ctx, pool,
+		"Black Crusade Vault Key",
+		[]APIKeyPermission{ReadExports},
+		nil, // no IP restrictions
+		nil,
+		creator,
+	)
+
+	k2 := createAPIKeyFixture(
+		t, ctx, pool,
+		"Cadian Token",
+		[]APIKeyPermission{ReadStatistics},
+		[]string{"10.0.0.0/8"},
+		nil,
+		creator,
+	)
+
+	k3 := createAPIKeyFixture(
+		t, ctx, pool,
+		"Sigil",
+		[]APIKeyPermission{WriteAll},
+		nil,
+		nil,
+		creator,
+	)
+
+	keys, err := models.APIKeys.GetAll(ctx, creator)
+	require.NoError(t, err)
+
+	require.Len(t, keys, 3)
+	assert.Equal(t, "Sigil", k3.Name)
+	assert.Equal(t, "Cadian Token", k2.Name)
+	assert.Equal(t, "Black Crusade Vault Key", k1.Name)
+}
+
+func getConnectionPool(t *testing.T) db.DBConnectionPool {
+	dbt := dbtest.Open(t)
+	t.Cleanup(func() { dbt.Close() })
+
+	pool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
+	return pool
+}
+
+func createAPIKeyFixture(t *testing.T, ctx context.Context, pool db.DBConnectionPool, name string, perms []APIKeyPermission, ips []string, expiry *time.Time, createdBy string) *APIKey {
+	t.Helper()
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+
+	key, err := models.APIKeys.Insert(ctx,
+		name,
+		perms,
+		ips,
+		expiry,
+		createdBy,
+	)
+	require.NoError(t, err)
+	return key
 }

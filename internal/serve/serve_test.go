@@ -472,6 +472,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/sep24-interactive-deposit/verification"},
 		// api-keys
 		{http.MethodPost, "/api-keys"},
+		{http.MethodGet, "/api-keys"},
 	}
 
 	// Expect 401 as a response:
