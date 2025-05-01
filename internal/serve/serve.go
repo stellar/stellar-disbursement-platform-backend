@@ -235,8 +235,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models: o.Models,
 			}
-			r.Post("/", apiKeyHandler.CreateAPIKey)
 			r.Get("/", apiKeyHandler.GetAllApiKeys)
+			r.Post("/", apiKeyHandler.CreateAPIKey)
+			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {

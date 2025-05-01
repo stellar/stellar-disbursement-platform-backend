@@ -67,6 +67,8 @@ const (
 	ReadExports APIKeyPermission = "read:exports"
 )
 
+var ErrNotFound = fmt.Errorf("api key not found")
+
 // validPermissionsMap is the set of all valid permissions for the validation purposes
 var validPermissionsMap = map[APIKeyPermission]struct{}{
 	ReadAll:            {},
@@ -329,6 +331,22 @@ func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string) ([]*APIKey, 
 	}
 
 	return apiKeys, nil
+}
+
+func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string) error {
+	res, err := m.dbConnectionPool.ExecContext(ctx,
+		`DELETE FROM api_keys
+           WHERE id = $1
+             AND created_by = $2`, id, createdBy,
+	)
+	if err != nil {
+		return fmt.Errorf("delete api key: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func generateSecret() (string, error) {
