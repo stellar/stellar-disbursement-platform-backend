@@ -196,7 +196,7 @@ func Test_APIKeyModel_Insert(t *testing.T) {
 	})
 }
 
-func TestAPIKeyModel_GetAll_SortsByCreatedAtDesc(t *testing.T) {
+func Test_APIKeyModel_GetAll_SortsByCreatedAtDesc(t *testing.T) {
 	t.Parallel()
 
 	pool := getConnectionPool(t)
@@ -240,6 +240,101 @@ func TestAPIKeyModel_GetAll_SortsByCreatedAtDesc(t *testing.T) {
 	assert.Equal(t, "Sigil", k3.Name)
 	assert.Equal(t, "Cadian Token", k2.Name)
 	assert.Equal(t, "Black Crusade Vault Key", k1.Name)
+}
+
+func Test_APIKeyModel_GetByID(t *testing.T) {
+	t.Parallel()
+
+	pool := getConnectionPool(t)
+
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	creator := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	wrongCreator := "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+
+	expiry := time.Now().Add(1 * time.Hour).UTC().Truncate(time.Second)
+	fixture := createAPIKeyFixture(
+		t, ctx, pool,
+		"Forgefather’s Grimoire",
+		[]APIKeyPermission{ReadStatistics},
+		[]string{"192.0.2.0/24"},
+		&expiry,
+		creator,
+	)
+
+	cases := []struct {
+		name      string
+		id        string
+		creatorID string
+		wantErr   error
+	}{
+		{"success", fixture.ID, creator, nil},
+		{"wrong_creator", fixture.ID, wrongCreator, ErrNotFound},
+		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrNotFound},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := models.APIKeys.GetByID(ctx, tc.id, tc.creatorID)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, fixture.ID, got.ID)
+			assert.Equal(t, "Forgefather’s Grimoire", got.Name)
+			assert.ElementsMatch(t, fixture.Permissions, got.Permissions)
+			assert.Equal(t, IPList{"192.0.2.0/24"}, got.AllowedIPs)
+			require.NotNil(t, got.ExpiryDate)
+			assert.WithinDuration(t, expiry, *got.ExpiryDate, time.Second)
+		})
+	}
+}
+
+func Test_APIKeyModel_Delete(t *testing.T) {
+	t.Parallel()
+
+	pool := getConnectionPool(t)
+
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	creator := "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+	other := "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+
+	fixture := createAPIKeyFixture(
+		t, ctx, pool,
+		"Imperial Cogitator Key",
+		[]APIKeyPermission{ReadAll},
+		nil,
+		nil,
+		creator,
+	)
+
+	cases := []struct {
+		name      string
+		id        string
+		creatorID string
+		wantErr   error
+	}{
+		{"success", fixture.ID, creator, nil},
+		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrNotFound},
+		{"wrong_creator", fixture.ID, other, ErrNotFound},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := models.APIKeys.Delete(ctx, tc.id, tc.creatorID)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
 
 func getConnectionPool(t *testing.T) db.DBConnectionPool {
