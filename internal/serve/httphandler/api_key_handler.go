@@ -60,7 +60,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
 		log.Ctx(ctx).Error("User ID not found in context")
@@ -68,7 +67,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create API key
 	apiKey, err := h.Models.APIKeys.Insert(
 		ctx,
 		h.Models.DBConnectionPool,

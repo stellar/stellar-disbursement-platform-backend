@@ -26,7 +26,7 @@ const (
 	maxAttempts      = 3
 )
 
-// alphabet is the allowed character set
+// alphabet is the allowed character set for the keygen
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 type APIKeyPermission string
@@ -154,7 +154,6 @@ func ValidateAllowedIPs(ips []string) error {
 	return nil
 }
 
-// APIKey is the primary model for API keys.
 type APIKey struct {
 	ID          string            `db:"id" json:"id"`
 	Name        string            `db:"name" json:"name"`
@@ -212,7 +211,6 @@ func (a *APIKey) IsAllowedIP(ipStr string) bool {
 	return false
 }
 
-// APIKeyModel encapsulates DB operations around APIKey.
 type APIKeyModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
