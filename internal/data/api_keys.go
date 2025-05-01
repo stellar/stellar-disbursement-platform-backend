@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"maps"
 	"net"
 	"slices"
 	"strings"
@@ -122,14 +121,6 @@ func ValidatePermissions(perms []APIKeyPermission) error {
 		}
 	}
 	return nil
-}
-
-func GetAllPermissions() []APIKeyPermission {
-	out := make([]APIKeyPermission, 0, len(validPermissionsMap))
-	for perm := range maps.Keys(validPermissionsMap) {
-		out = append(out, perm)
-	}
-	return out
 }
 
 // IPList represents a list of IPs/CIDRs
