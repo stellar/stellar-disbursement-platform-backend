@@ -1,10 +1,12 @@
 package httphandler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -60,7 +62,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
 		log.Ctx(ctx).Error("User ID not found in context")
@@ -68,7 +69,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create API key
 	apiKey, err := h.Models.APIKeys.Insert(
 		ctx,
 		req.Name,
@@ -96,7 +96,6 @@ func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delegate to service
 	apiKeys, err := h.Models.APIKeys.GetAll(ctx, userID)
 	if err != nil {
 		log.Ctx(ctx).Errorf("Error retrieving API keys: %s", err)
@@ -104,8 +103,29 @@ func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Success
 	httpjson.RenderStatus(w, http.StatusOK, apiKeys, httpjson.JSON)
+}
+
+func (h APIKeyHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	keyID := chi.URLParam(r, "id")
+
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
+	if !ok {
+		httperror.InternalError(ctx, "User identification error", nil, nil).Render(w)
+		return
+	}
+
+	if err := h.Models.APIKeys.Delete(ctx, keyID, userID); err != nil {
+		if errors.Is(err, data.ErrNotFound) {
+			httperror.NotFound("API key not found", nil, nil).Render(w)
+		} else {
+			httperror.InternalError(ctx, "Failed to delete API key", err, nil).Render(w)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // parseAllowedIPs converts the allowed_ips field from the request into a string slice.
