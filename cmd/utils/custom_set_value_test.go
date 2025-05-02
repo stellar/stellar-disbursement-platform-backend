@@ -435,6 +435,7 @@ func Test_SetConfigOptionStellarContractId(t *testing.T) {
 		OptType:        types.String,
 		CustomSetValue: SetConfigOptionStellarContractId,
 		ConfigKey:      &opts.stellarContractId,
+		Required:       false,
 	}
 	expectedContractId := "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"
 
@@ -475,6 +476,17 @@ func Test_SetConfigOptionStellarContractId(t *testing.T) {
 			customSetterTester(t, tc, co)
 		})
 	}
+
+	tc := customSetterTestCase[[]string]{
+		name:            "returns an error if contract id is empty and it's required",
+		args:            []string{"--stellar-contract-id", "   "}, // Workaround to test empty values
+		wantErrContains: "cannot be empty",
+	}
+	t.Run(tc.name, func(t *testing.T) {
+		opts.stellarContractId = ""
+		co.Required = true
+		customSetterTester(t, tc, co)
+	})
 }
 
 func Test_SetCorsAllowedOriginsFunc(t *testing.T) {
@@ -553,9 +565,9 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 
 	testCases := []customSetterTestCase[string]{
 		{
-			name:            "returns an error if the ui base url flag is empty",
-			args:            []string{"--sdp-ui-base-url", ""},
-			wantErrContains: "URL cannot be empty in sdp-ui-base-url",
+			name:       "🎉 handles ui base url is empty but it's not required",
+			args:       []string{"--sdp-ui-base-url", ""},
+			wantResult: "",
 		},
 		{
 			name:       "🎉 handles ui base url successfully (from CLI args)",
@@ -576,9 +588,20 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.uiBaseURL = ""
-			customSetterTester[string](t, tc, co)
+			customSetterTester(t, tc, co)
 		})
 	}
+
+	tc := customSetterTestCase[[]string]{
+		name:            "returns an error if ui base url is empty and it's required",
+		args:            []string{"--sdp-ui-base-url", "   "}, // Workaround to test empty values
+		wantErrContains: "cannot be empty",
+	}
+	t.Run(tc.name, func(t *testing.T) {
+		opts.uiBaseURL = ""
+		co.Required = true
+		customSetterTester(t, tc, co)
+	})
 }
 
 func Test_SetConfigOptionURLList(t *testing.T) {
