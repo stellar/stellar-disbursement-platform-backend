@@ -282,6 +282,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
+			Name:           "sep45-contract-id",
+			Usage:          "The ID of the SEP-45 web authentication contract",
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionStellarContractId,
+			ConfigKey:      &serveOpts.Sep45ContractId,
+			Required:       false,
+		},
+		{
 			Name: "anchor-platform-base-platform-url",
 			Usage: "The Base URL of the platform server of the anchor platform. This is the base URL where the Anchor Platform " +
 				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint.",
@@ -375,6 +383,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault:    string(circle.APITypeTransfers),
 		},
 	}
+	// rpc options
+	configOpts = append(configOpts, cmdUtils.RpcConfigOptions(&serveOpts.RpcConfig)...)
 
 	// crash tracker options
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
@@ -613,6 +623,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = distAccResolver
 
 			// Setup the Submitter Engine
+			txSubmitterOpts.RpcOptions = serveOpts.RpcConfig
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
 			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
 			submitterEngine, err := di.NewTxSubmitterEngine(ctx, txSubmitterOpts)

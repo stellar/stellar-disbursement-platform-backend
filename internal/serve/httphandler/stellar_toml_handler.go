@@ -23,6 +23,7 @@ type StellarTomlHandler struct {
 	NetworkPassphrase           string
 	Models                      *data.Models
 	Sep10SigningPublicKey       string
+	Sep45ContractId             string
 	InstanceName                string
 }
 
@@ -48,16 +49,26 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	}
 
 	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
+	webAuthForContractsEndpoint := s.AnchorPlatformBaseSepURL + "/sep45/auth"
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
 
-	return fmt.Sprintf(`
-		ACCOUNTS=%s
-		SIGNING_KEY=%q
-		NETWORK_PASSPHRASE=%q
-		HORIZON_URL=%q
-		WEB_AUTH_ENDPOINT=%q
-		TRANSFER_SERVER_SEP0024=%q
-	`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
+	result := fmt.Sprintf(`
+	ACCOUNTS=%s
+	SIGNING_KEY=%q
+	NETWORK_PASSPHRASE=%q
+	HORIZON_URL=%q
+	WEB_AUTH_ENDPOINT=%q
+	TRANSFER_SERVER_SEP0024=%q
+`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
+
+	if s.Sep45ContractId != "" {
+		result += fmt.Sprintf(`
+		WEB_AUTH_CONTRACT_ID=%q
+		WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
+		`, s.Sep45ContractId, webAuthForContractsEndpoint)
+	}
+
+	return result
 }
 
 func (s *StellarTomlHandler) buildOrganizationDocumentation(instanceName string) string {

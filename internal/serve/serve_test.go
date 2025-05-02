@@ -30,6 +30,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -187,6 +188,166 @@ func Test_ServeOptions_ValidateSecurity(t *testing.T) {
 		err := serveOptions.ValidateSecurity()
 		require.NoError(t, err)
 		require.Contains(t, buf.String(), "reCAPTCHA is disabled in network 'Test SDF Network ; September 2015'")
+	})
+}
+
+func Test_Serve_callsValidateRpc(t *testing.T) {
+	t.Run("RPC Header Key + Value without URL: should return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcRequestHeaderKey:   "Authorization: Bearer",
+			RpcRequestHeaderValue: "test",
+		}
+		serveOptions := ServeOptions{
+			RpcConfig: rpcOptions,
+		}
+
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
+	})
+
+	t.Run("RPC Header Key without URL: should return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcRequestHeaderKey: "Authorization: Bearer",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig: rpcOptions,
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
+	})
+
+	t.Run("RPC Header Value without URL: should return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcRequestHeaderValue: "test",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig: rpcOptions,
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
+	})
+
+	t.Run("RPC URL + Header Key without Value: should return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcURL:              "http://localhost:8000",
+			RpcRequestHeaderKey: "Authorization: Bearer",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig: rpcOptions,
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC request header value must be set when RPC request header key is set")
+	})
+
+	t.Run("RPC URL + Header Value without Value: should return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcURL:                "http://localhost:8000",
+			RpcRequestHeaderValue: "test",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig: rpcOptions,
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC request header key must be set when RPC request header value is set")
+	})
+
+	t.Run("RPC URL without Headers: should not return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcURL: "http://localhost:8000",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig: rpcOptions,
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
+	})
+
+	t.Run("RPC URL + Headers: should not return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcURL:                "http://localhost:8000",
+			RpcRequestHeaderKey:   "Authorization: Bearer",
+			RpcRequestHeaderValue: "test",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig: rpcOptions,
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
+	})
+
+	t.Run("SEP-45 contract ID without RPC URL: should return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{}
+
+		serveOptions := ServeOptions{
+			RpcConfig:       rpcOptions,
+			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when SEP-45 contract ID is set")
+	})
+
+	t.Run("SEP-45 contract ID with RPC URL: should not return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcURL: "http://localhost:8000",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig:       rpcOptions,
+			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
+	})
+
+	t.Run("SEP-45 contract ID with RPC URL and Headers: should not return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		rpcOptions := stellar.RpcOptions{
+			RpcURL:                "http://localhost:8000",
+			RpcRequestHeaderKey:   "Authorization: Bearer",
+			RpcRequestHeaderValue: "test",
+		}
+
+		serveOptions := ServeOptions{
+			RpcConfig:       rpcOptions,
+			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
 	})
 }
 

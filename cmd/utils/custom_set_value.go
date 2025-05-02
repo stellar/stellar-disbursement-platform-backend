@@ -181,6 +181,26 @@ func SetConfigOptionStellarPrivateKey(co *config.ConfigOption) error {
 	return nil
 }
 
+func SetConfigOptionStellarContractId(co *config.ConfigOption) error {
+	contractId := viper.GetString(co.Name)
+	if contractId == "" {
+		return nil
+	}
+
+	isValid := strkey.IsValidContractAddress(contractId)
+	if !isValid {
+		return fmt.Errorf("error validating contract id in %s: %q", co.Name, contractId)
+	}
+
+	key, ok := co.ConfigKey.(*string)
+	if !ok {
+		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
+	}
+	*key = contractId
+
+	return nil
+}
+
 func SetConfigOptionURLString(co *config.ConfigOption) error {
 	u := viper.GetString(co.Name)
 

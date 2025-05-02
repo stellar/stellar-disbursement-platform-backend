@@ -6,6 +6,7 @@ import (
 
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
@@ -14,6 +15,7 @@ const TxSubmitterEngineInstanceName = "tx_submitter_engine_instance"
 
 type TxSubmitterEngineOptions struct {
 	HorizonURL              string
+	RpcOptions              stellar.RpcOptions
 	SignatureServiceOptions signing.SignatureServiceOptions
 	MaxBaseFee              int
 }

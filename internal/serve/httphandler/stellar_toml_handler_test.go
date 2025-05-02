@@ -98,6 +98,50 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			},
 		},
 		{
+			name:              "pubnet with SEP-45 enabled (with tenant in context)",
+			isTenantInContext: true,
+			s: StellarTomlHandler{
+				// DistributionAccountResolver: <---- this is being injected in the test below
+				NetworkPassphrase:        network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+			},
+			wantLines: []string{
+				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				"",
+				`WEB_AUTH_CONTRACT_ID="CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"`,
+				`WEB_AUTH_FOR_CONTRACTS_ENDPOINT="https://anchor-platform-domain/sep45/auth"`,
+			},
+		},
+		{
+			name:              "pubnet with SEP-45 enabled (without tenant in context)",
+			isTenantInContext: false,
+			s: StellarTomlHandler{
+				// DistributionAccountResolver: <---- this is being injected in the test below
+				NetworkPassphrase:        network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+			},
+			wantLines: []string{
+				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				"",
+				`WEB_AUTH_CONTRACT_ID="CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"`,
+				`WEB_AUTH_FOR_CONTRACTS_ENDPOINT="https://anchor-platform-domain/sep45/auth"`,
+			},
+		},
+		{
 			name:              "testnet (without tenant in context)",
 			isTenantInContext: false,
 			s: StellarTomlHandler{
@@ -131,6 +175,50 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
 				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+			},
+		},
+		{
+			name:              "testnet with SEP-45 enabled (with tenant in context)",
+			isTenantInContext: true,
+			s: StellarTomlHandler{
+				// DistributionAccountResolver: <---- this is being injected in the test below
+				NetworkPassphrase:        network.TestNetworkPassphrase,
+				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+			},
+			wantLines: []string{
+				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				"",
+				`WEB_AUTH_CONTRACT_ID="CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"`,
+				`WEB_AUTH_FOR_CONTRACTS_ENDPOINT="https://anchor-platform-domain/sep45/auth"`,
+			},
+		},
+		{
+			name:              "testnet with SEP-45 enabled (without tenant in context)",
+			isTenantInContext: false,
+			s: StellarTomlHandler{
+				// DistributionAccountResolver: <---- this is being injected in the test below
+				NetworkPassphrase:        network.TestNetworkPassphrase,
+				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+			},
+			wantLines: []string{
+				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				"",
+				`WEB_AUTH_CONTRACT_ID="CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"`,
+				`WEB_AUTH_FOR_CONTRACTS_ENDPOINT="https://anchor-platform-domain/sep45/auth"`,
 			},
 		},
 	}
