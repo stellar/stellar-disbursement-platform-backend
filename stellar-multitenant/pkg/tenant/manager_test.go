@@ -338,12 +338,6 @@ func Test_Manager_GetTenantByIDIncludingDeactivated(t *testing.T) {
 	deletedTenant, outerErr = m.SoftDeleteTenantByID(ctx, deletedTenant.ID)
 	require.NoError(t, outerErr)
 
-	t.Run("error when tenant is deleted", func(t *testing.T) {
-		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, deletedTenant.ID)
-		require.NoError(t, err)
-		assert.Equal(t, deletedTenant, tntDB)
-	})
-
 	t.Run("gets deactivated tenant successfully", func(t *testing.T) {
 		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, deactivatedTenant.ID)
 		require.NoError(t, err)
@@ -354,6 +348,12 @@ func Test_Manager_GetTenantByIDIncludingDeactivated(t *testing.T) {
 		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, activeTenant.ID)
 		require.NoError(t, err)
 		assert.Equal(t, activeTenant, tntDB)
+	})
+
+	t.Run("error when tenant is deleted", func(t *testing.T) {
+		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, deletedTenant.ID)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
 	})
 
 	t.Run("returns error when tenant is not found", func(t *testing.T) {

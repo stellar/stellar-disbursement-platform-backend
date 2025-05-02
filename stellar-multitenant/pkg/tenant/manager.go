@@ -113,7 +113,8 @@ func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Ten
 func (m *Manager) GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: map[FilterKey]interface{}{
-			FilterKeyID: id,
+			FilterKeyID:      id,
+			FilterKeyDeleted: true,
 		},
 	}
 
