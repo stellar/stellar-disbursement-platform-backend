@@ -310,6 +310,59 @@ func Test_Manager_GetTenantByID(t *testing.T) {
 	})
 }
 
+func Test_Manager_GetTenantByIDIncludingDeactivated(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	activeTenant, outerErr := m.AddTenant(ctx, "active-tenant")
+	require.NoError(t, outerErr)
+
+	// deactivated Tenant
+	deactivatedTenant, outerErr := m.AddTenant(ctx, "deactivated-tenant")
+	require.NoError(t, outerErr)
+	deactivatedTenant, outerErr = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: deactivatedTenant.ID, Status: pointerTo(DeactivatedTenantStatus)})
+	require.NoError(t, outerErr)
+
+	// deleted Tenant
+	deletedTenant, outerErr := m.AddTenant(ctx, "deleted-tenant")
+	require.NoError(t, outerErr)
+	deletedTenant, outerErr = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: deletedTenant.ID, Status: pointerTo(DeactivatedTenantStatus)})
+	require.NoError(t, outerErr)
+	deletedTenant, outerErr = m.SoftDeleteTenantByID(ctx, deletedTenant.ID)
+	require.NoError(t, outerErr)
+
+	t.Run("error when tenant is deleted", func(t *testing.T) {
+		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, deletedTenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, deletedTenant, tntDB)
+	})
+
+	t.Run("gets deactivated tenant successfully", func(t *testing.T) {
+		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, deactivatedTenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, deactivatedTenant, tntDB)
+	})
+
+	t.Run("gets active tenant successfully", func(t *testing.T) {
+		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, activeTenant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, activeTenant, tntDB)
+	})
+
+	t.Run("returns error when tenant is not found", func(t *testing.T) {
+		tntDB, err := m.GetTenantByIDIncludingDeactivated(ctx, "unknown")
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
+	})
+}
+
 func Test_Manager_GetTenantByName(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()

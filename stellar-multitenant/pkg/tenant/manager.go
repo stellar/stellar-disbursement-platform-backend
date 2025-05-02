@@ -31,6 +31,7 @@ type ManagerInterface interface {
 	GetDSNForTenantByID(ctx context.Context, id string) (string, error)
 	GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error)
 	GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error)
+	GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
 	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
@@ -106,6 +107,17 @@ func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Ten
 		return nil, fmt.Errorf("getting tenant: %w", err)
 	}
 	return &t, nil
+}
+
+// GetTenantByIDIncludingDeactivated returns the tenant with a given id, including deleted tenants.
+func (m *Manager) GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error) {
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyID: id,
+		},
+	}
+
+	return m.GetTenant(ctx, queryParams)
 }
 
 func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
