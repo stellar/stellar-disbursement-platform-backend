@@ -1,5 +1,6 @@
 package stellar
 
+// RpcOptions contains the configuration options for the Stellar RPC server.
 type RpcOptions struct {
 	// URL of the Stellar RPC server where this application will communicate with.
 	RpcURL string
