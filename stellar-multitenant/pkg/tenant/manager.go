@@ -109,7 +109,7 @@ func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Ten
 	return &t, nil
 }
 
-// GetTenantByIDIncludingDeactivated returns the tenant with a given id, including deleted tenants.
+// GetTenantByIDIncludingDeactivated returns the tenant with a given id, including deactivated tenants.
 func (m *Manager) GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: map[FilterKey]interface{}{
