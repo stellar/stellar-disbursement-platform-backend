@@ -52,23 +52,24 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	webAuthForContractsEndpoint := s.AnchorPlatformBaseSepURL + "/sep45/auth"
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
 
-	result := fmt.Sprintf(`
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf(`
 	ACCOUNTS=%s
 	SIGNING_KEY=%q
 	NETWORK_PASSPHRASE=%q
 	HORIZON_URL=%q
 	WEB_AUTH_ENDPOINT=%q
 	TRANSFER_SERVER_SEP0024=%q
-`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
+`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024))
 
 	if s.Sep45ContractId != "" {
-		result += fmt.Sprintf(`
+		builder.WriteString(fmt.Sprintf(`
 		WEB_AUTH_CONTRACT_ID=%q
 		WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
-		`, s.Sep45ContractId, webAuthForContractsEndpoint)
+		`, s.Sep45ContractId, webAuthForContractsEndpoint))
 	}
 
-	return result
+	return builder.String()
 }
 
 func (s *StellarTomlHandler) buildOrganizationDocumentation(instanceName string) string {
