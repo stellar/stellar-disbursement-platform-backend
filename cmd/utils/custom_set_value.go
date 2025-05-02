@@ -183,7 +183,8 @@ func SetConfigOptionStellarPrivateKey(co *config.ConfigOption) error {
 
 func SetConfigOptionStellarContractId(co *config.ConfigOption) error {
 	contractId := viper.GetString(co.Name)
-	if contractId == "" {
+
+	if !co.Required && contractId == "" {
 		return nil
 	}
 
@@ -203,6 +204,10 @@ func SetConfigOptionStellarContractId(co *config.ConfigOption) error {
 
 func SetConfigOptionURLString(co *config.ConfigOption) error {
 	u := viper.GetString(co.Name)
+
+	if !co.Required && u == "" {
+		return nil
+	}
 
 	if u == "" {
 		return fmt.Errorf("URL cannot be empty in %s", co.Name)
