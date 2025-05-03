@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Fix CLI tests and test assertions. [#587](https://github.com/stellar/stellar-disbursement-platform-backend/pull/587)
 - Fix error message for duplicate instructions in a disbursement. [#662](https://github.com/stellar/stellar-disbursement-platform-backend/pull/662)
+- Fix `DELETE /tenants/:id` when tenant is a DB Vault tenant.[#664](https://github.com/stellar/stellar-disbursement-platform-backend/pull/664)
 
 ### Security and Dependencies
 
