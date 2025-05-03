@@ -623,7 +623,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = distAccResolver
 
 			// Setup the Submitter Engine
-			txSubmitterOpts.RpcOptions = serveOpts.RpcConfig
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
 			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
 			submitterEngine, err := di.NewTxSubmitterEngine(ctx, txSubmitterOpts)
