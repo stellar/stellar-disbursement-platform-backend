@@ -279,21 +279,14 @@ kubectl get pods -n external-dns
 ```
 
 ## 13. Deploy SDP Helm Chart
+Before deploying the Stellar Disbursement Platform helm chart you need to configure the helm values.  Review (`helm-values-example.yaml`) and substitute the example domain with your own.  You may also want to change the front-end (dashboard) and backend (api) base domains.  See [Stellar Disbursement Platform Domain Structure](#stellar-disbursement-platform-domain-structure) for more information.
+
 
 ### Add Stellar Repository
 ```bash
 helm repo add stellar https://helm.stellar.org
 ```
 
-### Configure Domain Structure
-The Helm values file (`helm-values-example.yaml`) contains example domain configurations. Before deploying, you should:
-
-1. Review the domain settings in `helm-values-example.yaml`
-2. Replace the example domain with your actual domain:
-   ```bash
-   # Replace example.org with your actual domain
-   sed -i '' "s/example.org/${DOMAIN_NAME}/g" helm/helm-values-example.yaml
-   ```
 
 ### Install SDP
 ```bash
@@ -369,7 +362,7 @@ aws cloudformation delete-stack --stack-name ${STACK_NAME_PREFIX}-database --reg
 aws cloudformation delete-stack --stack-name ${STACK_NAME_PREFIX}-network --region ${AWS_REGION}
 ```
 
-## Additional Resources
+## Additional Information
 
 ### Stellar Disbursement Platform Domain Structure
 The SDP platform uses two base-level domains for multi-tenant frontend and backend access. For example, lets say your hosted public domain is `api.example.org`. Then, you could configure a subdomain called `api.example.org` as the base-level domain for api access and `dashboard.example.org` as the front-end dashboard base-level domain.   If you then added a tenant (eg `ridedash`) to the SDP, the api and dashboard URLs for them would be `ridedash.api.example.org` and `ridedash.dashboard.example.org` respectively.  you can see this example in the helm-example-values file.   
