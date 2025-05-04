@@ -280,49 +280,6 @@ kubectl get pods -n external-dns
 
 ## 13. Deploy SDP Helm Chart
 
-### Determine your SDP Domain Structure
-
-The SDP platform requires two base-level domains for frontend and backend access, configured in the Helm chart using Kubernetes route configurations. These domains form the foundation for all tenant-specific URLs:
-
-```yaml
-sdp:
-  route:
-    domain: api.example.org
-    mtnDomain: "*.api.example.org"
-
-dashboard:
-  route:
-    domain: "dashboard.example.org"
-    mtnDomain: "*.dashboard.example.org"
-```
-
-#### Base Domains Configuration
-
-1. **Frontend (Dashboard)**
-   - Base Domain: `dashboard.example.org`
-   - Environment Variable: `SDP_UI_BASE_URL`
-   - Purpose: Web interface for administrators to manage disbursements
-
-2. **Backend (API)**
-   - Base Domain: `api.example.org`
-   - Environment Variable: `BASE_URL`
-   - Purpose: API access and service-to-service communication
-
-#### Tenant URL Structure
-
-Each tenant gets their own dedicated URLs under the base domains:
-
-```
-Dashboard: https://<tenant>.dashboard.example.org
-Backend:  https://<tenant>.api.example.org
-```
-
-**Example: "ridedash" Tenant**
-```
-Dashboard: https://ridedash.dashboard.example.org
-Backend:  https://ridedash.api.example.org
-```
-
 ### Add Stellar Repository
 ```bash
 helm repo add stellar https://helm.stellar.org
@@ -362,7 +319,7 @@ kubectl -n sdp port-forward pod/${SDP_POD} 8003:8003
 ```
 
 ### Add a tenant using port-forwarding to the /tenants endpoint
-You need to use Basic Auth for API requests the the tenant API endpoint. You will first need to port forward to the SDP pod on port 8003.
+You need to use Basic Auth for API requests the the tenant API endpoint. You will first need to port forward to the SDP pod on port 8003. Example:
 ```bash
 kubectl -n sdp get pods                    ⎈ dev-sdp-cluster  12:58:44
 NAME                             READY   STATUS    RESTARTS        AGE
@@ -374,35 +331,21 @@ kubectl -n sdp port-forward pod/sdp-548ccbb67b-gw2tt 8003:8003
 ```
 
 ```bash
-echo -n "youremail@yourdomain.org:admin-api-key" | base64                                                                                               ✘ INT  13:13:42
-eW91cmVtYWlsQHlvdXJkb21haW4ub3JnOmFkbWluLWFwaS1rZXk=
-  ~ ❯ curl --location 'http://localhost:8003/tenants/' \                                                                                                             13:13:50
+echo -n "admin@example.org:admin-api-key" | base64      1m 27s  14:38:20
+YWRtaW5AZXhhbXBsZS5vcmc6YWRtaW4tYXBpLWtleQ==
+
+curl --location 'http://localhost:8003/tenants/' \                                                                                                             13:13:50
 --header 'Content-Type: application/json' \
---header 'Authorization: Basic eW91cmVtYWlsQHlvdXJkb21haW4ub3JnOmFkbWluLWFwaS1rZXk=' \
+--header 'Authorization: Basic YWRtaW5AZXhhbXBsZS5vcmc6YWRtaW4tYXBpLWtleQ==' \
 --data-raw '{
     "name": "ridedash",
-    "owner_email": "owner@ownersemail.org",
+    "owner_email": "admin@example.org",
     "owner_first_name": "John",
     "owner_last_name": "Doe",
     "organization_name": "ridedash",
-    "sdp_ui_base_url": "https://dashboard.mystellarsdpdomain.org",
-    "base_url": "https://api.mystellarsdpdomain.org",
     "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
 }'
-{
-  "id": "91bf5cd8-c20f-4754-9447-890f3d166224",
-  "name": "ridedash",
-  "base_url": "https://api.mystellarsdpdomain.org",
-  "sdp_ui_base_url": "https://dashboard.mystellarsdpdomain.org",
-  "status": "TENANT_PROVISIONED",
-  "is_default": false,
-  "created_at": "2025-05-04T17:14:21.089835Z",
-  "updated_at": "2025-05-04T17:14:22.563535Z",
-  "deleted_at": null,
-  "distribution_account_address": "GADPUDSM6OFQRIWPV73KH3LDSLYFG6JDMAVT6B23TW4Z5ORR7RS3LUI2",
-  "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
-  "distribution_account_status": "ACTIVE"
-}%
+
 ```
 
 ## Cleanup and Teardown
@@ -426,7 +369,102 @@ aws cloudformation delete-stack --stack-name ${STACK_NAME_PREFIX}-database --reg
 aws cloudformation delete-stack --stack-name ${STACK_NAME_PREFIX}-network --region ${AWS_REGION}
 ```
 
-## Troubleshooting
+## Additional Resources
+
+### Stellar Disbursement Platform Domain Structure
+The SDP platform uses two base-level domains for multi-tenant frontend and backend access. For example, lets say your hosted public domain is `api.example.org`. Then, you could configure a subdomain called `api.example.org` as the base-level domain for api access and `dashboard.example.org` as the front-end dashboard base-level domain.   If you then added a tenant (eg `ridedash`) to the SDP, the api and dashboard URLs for them would be `ridedash.api.example.org` and `ridedash.dashboard.example.org` respectively.  you can see this example in the helm-example-values file.   
+
+## Example Helm Values configuration
+The following illustrates the example configuration for backend (api) and frontend (dashboard) base domains for the public domain `example.org`. Note, these domains must have a wild-card certificate.
+```yaml
+sdp:
+  route:
+    domain: api.example.org
+    mtnDomain: "*.api.example.org"
+
+dashboard:
+  route:
+    domain: "dashboard.example.org"
+    mtnDomain: "*.dashboard.example.org"
+```
+
+The following illustrates the kubernetes configurations that result from the above helm values.
+```bash
+kubectl -n sdp get ingress              
+NAME            CLASS            HOSTS                                           ADDRESS                                                                         PORTS     AGE
+sdp             ingress-public   api.example.org,*.api.example.org               a3ca0226bd4494ffb808a64476ddfc4f-66bf685869e3cc2e.elb.us-west-2.amazonaws.com   80, 443   9s
+sdp-ap          ingress-public   ap-api.example.org                              a3ca0226bd4494ffb808a64476ddfc4f-66bf685869e3cc2e.elb.us-west-2.amazonaws.com   80, 443   9s
+sdp-dashboard   ingress-public   dashboard.example.org,*.dashboard.example.org   a3ca0226bd4494ffb808a64476ddfc4f-66bf685869e3cc2e.elb.us-west-2.amazonaws.com   80, 443   9s
+
+kubectl -n sdp get service                    ⎈ dev-sdp-cluster  14:41:55
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+sdp             ClusterIP   172.20.160.118   <none>        8000/TCP,8003/TCP   2m39s
+sdp-ap          ClusterIP   172.20.246.71    <none>        8080/TCP,8085/TCP   2m39s
+sdp-dashboard   ClusterIP   172.20.112.135   <none>        80/TCP              2m39s
+
+kubectl -n sdp describe ingress sdp     ✘ INT ⎈ dev-sdp-cluster  14:47:04
+Name:             sdp
+Labels:           app.kubernetes.io/instance=sdp
+                  app.kubernetes.io/managed-by=Helm
+                  app.kubernetes.io/name=sdp
+                  app.kubernetes.io/version=3.6.2
+                  helm.sh/chart=stellar-disbursement-platform-3.6.4
+Namespace:        sdp
+Address:          a3ca0226bd4494ffb808a64476ddfc4f-66bf685869e3cc2e.elb.us-west-2.amazonaws.com
+Ingress Class:    ingress-public
+Default backend:  <default>
+TLS:
+  api-cert terminates api.example.org,*.api.example.org
+Rules:
+  Host               Path  Backends
+  ----               ----  --------
+  api.example.org
+                     /   sdp:8000 (10.0.2.230:8000)
+  *.api.example.org
+                     /   sdp:8000 (10.0.2.230:8000)
+Annotations:         cert-manager.io/cluster-issuer: letsencrypt-prod
+                     meta.helm.sh/release-name: sdp
+                     meta.helm.sh/release-namespace: sdp
+                     nginx.ingress.kubernetes.io/custom-response-headers:
+                       X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains
+                     nginx.ingress.kubernetes.io/limit-burst-multiplier: 5
+                     nginx.ingress.kubernetes.io/limit-rpm: 120
+Events:
+  Type    Reason             Age                    From                       Message
+  ----    ------             ----                   ----                       -------
+  Normal  CreateCertificate  5m39s                  cert-manager-ingress-shim  Successfully created Certificate "api-cert"
+  Normal  Sync               5m31s (x2 over 5m39s)  nginx-ingress-controller   Scheduled for sync
+
+  kubectl -n sdp describe ingress sdp-dashboard
+Name:             sdp-dashboard
+Labels:           app.kubernetes.io/instance=sdp-dashboard
+                  app.kubernetes.io/managed-by=Helm
+                  app.kubernetes.io/name=sdp-dashboard
+                  app.kubernetes.io/version=3.6.2
+                  helm.sh/chart=stellar-disbursement-platform-3.6.4
+Namespace:        sdp
+Address:          a3ca0226bd4494ffb808a64476ddfc4f-66bf685869e3cc2e.elb.us-west-2.amazonaws.com
+Ingress Class:    ingress-public
+Default backend:  <default>
+TLS:
+  sdp-dashboard-cert terminates dashboard.example.org,*.dashboard.example.org
+Rules:
+  Host                     Path  Backends
+  ----                     ----  --------
+  dashboard.example.org
+                           /   sdp-dashboard:80 (10.0.2.248:80)
+  *.dashboard.example.org
+                           /   sdp-dashboard:80 (10.0.2.248:80)
+Annotations:               cert-manager.io/cluster-issuer: letsencrypt-prod
+                           meta.helm.sh/release-name: sdp
+                           meta.helm.sh/release-namespace: sdp
+Events:
+  Type    Reason             Age                   From                       Message
+  ----    ------             ----                  ----                       -------
+  Normal  CreateCertificate  6m6s                  cert-manager-ingress-shim  Successfully created Certificate "sdp-dashboard-cert"
+  Normal  Sync               5m58s (x2 over 6m6s)  nginx-ingress-controller   Scheduled for sync
+
+```
 
 ### External Secrets Issues
 ```bash
