@@ -195,7 +195,7 @@ func SetConfigOptionStellarContractId(co *config.ConfigOption) error {
 
 	isValid := strkey.IsValidContractAddress(contractId)
 	if !isValid {
-		return fmt.Errorf("error validating contract id in %s: %q", co.Name, contractId)
+		return fmt.Errorf("validating contract id in %s: %q", co.Name, contractId)
 	}
 
 	key, ok := co.ConfigKey.(*string)

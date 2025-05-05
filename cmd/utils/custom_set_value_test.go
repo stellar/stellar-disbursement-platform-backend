@@ -446,17 +446,17 @@ func Test_SetConfigOptionStellarContractId(t *testing.T) {
 		{
 			name:            "returns an error if the contract id is invalid",
 			args:            []string{"--stellar-contract-id", "invalid_contract_id"},
-			wantErrContains: `error validating contract id in stellar-contract-id: "invalid_contract_id"`,
+			wantErrContains: `validating contract id in stellar-contract-id: "invalid_contract_id"`,
 		},
 		{
 			name:            "returns an error if the contract id is invalid (public key instead)",
 			args:            []string{"--stellar-contract-id", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"},
-			wantErrContains: `error validating contract id in stellar-contract-id: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+			wantErrContains: `validating contract id in stellar-contract-id: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 		},
 		{
 			name:            "returns an error if the contract id is invalid (private key instead)",
 			args:            []string{"--stellar-contract-id", "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"},
-			wantErrContains: `error validating contract id in stellar-contract-id: "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"`,
+			wantErrContains: `validating contract id in stellar-contract-id: "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"`,
 		},
 		{
 			name:       "🎉 handles Stellar contract id through the CLI flag",
