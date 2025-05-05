@@ -50,12 +50,11 @@ services:
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options
-      ENABLE_SCHEDULER: "true" # set to disabled to use kafka for this.
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
-      # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
-      EVENT_BROKER_TYPE: "NONE"
+      # Kafka Configuration - possible values: KAFKA; SCHEDULER
+      EVENT_BROKER_TYPE: "SCHEDULER"
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin

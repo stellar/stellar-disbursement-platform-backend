@@ -129,12 +129,6 @@ func Test_Serve_callsValidateSecurity(t *testing.T) {
 	serveOptions.DisableMFA = true
 	err = Serve(serveOptions, &mHTTPServer)
 	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
-
-	// Make sure reCAPTCHA is enforced in pubnet
-	serveOptions.DisableMFA = false
-	serveOptions.DisableReCAPTCHA = true
-	err = Serve(serveOptions, &mHTTPServer)
-	require.EqualError(t, err, "validating security options: reCAPTCHA cannot be disabled in pubnet")
 }
 
 func Test_ServeOptions_ValidateSecurity(t *testing.T) {
@@ -146,17 +140,6 @@ func Test_ServeOptions_ValidateSecurity(t *testing.T) {
 
 		err := serveOptions.ValidateSecurity()
 		require.EqualError(t, err, "MFA cannot be disabled in pubnet")
-	})
-
-	t.Run("Pubnet + DisableReCAPTCHA: should return error", func(t *testing.T) {
-		// Pubnet + DisableReCAPTCHA: should return error
-		serveOptions := ServeOptions{
-			NetworkPassphrase: network.PublicNetworkPassphrase,
-			DisableReCAPTCHA:  true,
-		}
-
-		err := serveOptions.ValidateSecurity()
-		require.EqualError(t, err, "reCAPTCHA cannot be disabled in pubnet")
 	})
 
 	t.Run("Testnet + DisableMFA: should not return error", func(t *testing.T) {

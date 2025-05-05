@@ -60,7 +60,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push to DockerHub (release prd)
-        uses: docker/build-push-action@v6.15.0
+        uses: docker/build-push-action@v6.16.0
         with:
           push: true
           build-args: |
@@ -95,7 +95,7 @@ jobs:
         run: echo "SHA=$(git rev-parse --short ${{ github.sha }} )" >> $GITHUB_OUTPUT
 
       - name: Build and push to DockerHub (develop branch)
-        uses: docker/build-push-action@v6.15.0
+        uses: docker/build-push-action@v6.16.0
         with:
           push: true
           build-args: |
