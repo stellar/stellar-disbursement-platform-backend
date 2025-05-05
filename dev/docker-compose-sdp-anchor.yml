@@ -139,7 +139,7 @@ services:
       SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
       # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
       # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
-      JAVA_TOOL_OPTIONS: "${SEP45_CONTRACT_ID:+-Dsep45.enabled=true} ${SEP45_CONTRACT_ID:- -Dsep45.enabled=false}" #  Enable/disable SEP-45 based on SEP45_CONTRACT_ID
+      JAVA_TOOL_OPTIONS: "${SEP45_CONTRACT_ID:+-Dsep45.enabled=true}" #  Enable/disable SEP-45 based on SEP45_CONTRACT_ID
       SEP45_WEB_AUTH_DOMAIN: ${SEP45_CONTRACT_ID:+localhost:8080}
       SEP45_WEB_AUTH_CONTRACT_ID: ${SEP45_CONTRACT_ID}
       SEP45_HOME_DOMAINS: ${SEP45_CONTRACT_ID:+localhost:8000, *.stellar.local:8000} # Comma separated list of home domains
