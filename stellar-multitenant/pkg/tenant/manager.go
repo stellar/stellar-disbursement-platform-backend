@@ -31,6 +31,7 @@ type ManagerInterface interface {
 	GetDSNForTenantByID(ctx context.Context, id string) (string, error)
 	GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error)
 	GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error)
+	GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
 	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
@@ -46,7 +47,8 @@ type ManagerInterface interface {
 }
 
 type Manager struct {
-	db db.DBConnectionPool
+	db               db.DBConnectionPool
+	singleTenantMode bool
 }
 
 func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (string, error) {
@@ -107,6 +109,18 @@ func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Ten
 	return &t, nil
 }
 
+// GetTenantByIDIncludingDeactivated returns the tenant with a given id, including deactivated tenants.
+func (m *Manager) GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error) {
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyID:      id,
+			FilterKeyDeleted: true,
+		},
+	}
+
+	return m.GetTenant(ctx, queryParams)
+}
+
 func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: excludeInactiveTenantsFilters(),
@@ -135,28 +149,46 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 	return m.GetTenant(ctx, queryParams)
 }
 
-// GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.
+// GetDefault returns the tenant where is_default is true.
+// In single tenant mode, if no default exists and there's only one tenant, it returns that tenant.
 func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: excludeInactiveTenantsFilters(),
 	}
-	queryParams.Filters[FilterKeyIsDefault] = true
 
 	tnts := []Tenant{}
 	query, params := m.newManagerQuery(selectQuery, queryParams)
 	err := m.db.SelectContext(ctx, &tnts, query, params...)
 	if err != nil {
-		return nil, fmt.Errorf("getting default tenant: %w", err)
+		return nil, fmt.Errorf("getting tenants: %w", err)
 	}
 
-	switch {
-	case len(tnts) == 0:
+	if len(tnts) == 0 {
 		return nil, ErrTenantDoesNotExist
-	case len(tnts) > 1:
-		return nil, ErrTooManyDefaultTenants
 	}
 
-	return &tnts[0], nil
+	if len(tnts) == 1 && m.singleTenantMode {
+		return &tnts[0], nil
+	}
+
+	var defaultTenant *Tenant
+	defaultCount := 0
+
+	for i, tnt := range tnts {
+		if tnt.IsDefault {
+			defaultCount++
+			if defaultCount > 1 {
+				return nil, ErrTooManyDefaultTenants
+			}
+			defaultTenant = &tnts[i]
+		}
+	}
+
+	if defaultTenant != nil {
+		return defaultTenant, nil
+	}
+
+	return nil, ErrTenantDoesNotExist
 }
 
 // SetDefault sets the is_default = true for the given tenant id.
@@ -367,7 +399,7 @@ func SaveTenantInContext(ctx context.Context, t *Tenant) context.Context {
 	return context.WithValue(ctx, tenantContextKey{}, t)
 }
 
-func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (string, []interface{}) {
+func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (string, []any) {
 	qb := data.NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyNameOrID] != nil {
 		param := queryParams.Filters[FilterKeyNameOrID]
@@ -400,9 +432,9 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 
 	if queryParams.Filters[FilterKeyDeleted] != nil {
 		if queryParams.Filters[FilterKeyDeleted] == true {
-			qb.AddOrCondition("t.deleted_at IS NOT NULL")
-		} else {
 			qb.AddCondition("t.deleted_at IS NULL")
+		} else {
+			qb.AddCondition("t.deleted_at IS NOT NULL")
 		}
 	}
 
@@ -427,6 +459,12 @@ func NewManager(opts ...Option) *Manager {
 func WithDatabase(dbConnectionPool db.DBConnectionPool) Option {
 	return func(m *Manager) {
 		m.db = dbConnectionPool
+	}
+}
+
+func WithSingleTenantMode(singleTenantMode bool) Option {
+	return func(m *Manager) {
+		m.singleTenantMode = singleTenantMode
 	}
 }
 

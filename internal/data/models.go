@@ -14,21 +14,22 @@ var (
 )
 
 type Models struct {
-	Disbursements            *DisbursementModel
-	Wallets                  *WalletModel
-	Assets                   *AssetModel
-	Organizations            *OrganizationModel
-	Payment                  *PaymentModel
-	Receiver                 *ReceiverModel
-	DisbursementInstructions *DisbursementInstructionModel
-	ReceiverVerification     *ReceiverVerificationModel
-	ReceiverWallet           *ReceiverWalletModel
-	DisbursementReceivers    *DisbursementReceiverModel
-	Message                  *MessageModel
-	CircleTransferRequests   *CircleTransferRequestModel
-	CircleRecipient          *CircleRecipientModel
-	URLShortener             *URLShortenerModel
-	DBConnectionPool         db.DBConnectionPool
+	Disbursements               *DisbursementModel
+	Wallets                     *WalletModel
+	Assets                      *AssetModel
+	Organizations               *OrganizationModel
+	Payment                     *PaymentModel
+	Receiver                    *ReceiverModel
+	DisbursementInstructions    *DisbursementInstructionModel
+	ReceiverVerification        *ReceiverVerificationModel
+	ReceiverRegistrationAttempt *ReceiverRegistrationAttemptModel
+	ReceiverWallet              *ReceiverWalletModel
+	DisbursementReceivers       *DisbursementReceiverModel
+	Message                     *MessageModel
+	CircleTransferRequests      *CircleTransferRequestModel
+	CircleRecipient             *CircleRecipientModel
+	URLShortener                *URLShortenerModel
+	DBConnectionPool            db.DBConnectionPool
 }
 
 func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
@@ -36,20 +37,21 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		return nil, errors.New("dbConnectionPool is required for NewModels")
 	}
 	return &Models{
-		Disbursements:            &DisbursementModel{dbConnectionPool: dbConnectionPool},
-		Wallets:                  &WalletModel{dbConnectionPool: dbConnectionPool},
-		Assets:                   &AssetModel{dbConnectionPool: dbConnectionPool},
-		Organizations:            &OrganizationModel{dbConnectionPool: dbConnectionPool},
-		Payment:                  &PaymentModel{dbConnectionPool: dbConnectionPool},
-		Receiver:                 &ReceiverModel{},
-		DisbursementInstructions: NewDisbursementInstructionModel(dbConnectionPool),
-		ReceiverVerification:     &ReceiverVerificationModel{dbConnectionPool: dbConnectionPool},
-		ReceiverWallet:           &ReceiverWalletModel{dbConnectionPool: dbConnectionPool},
-		DisbursementReceivers:    &DisbursementReceiverModel{dbConnectionPool: dbConnectionPool},
-		Message:                  &MessageModel{dbConnectionPool: dbConnectionPool},
-		CircleTransferRequests:   &CircleTransferRequestModel{dbConnectionPool: dbConnectionPool},
-		CircleRecipient:          &CircleRecipientModel{dbConnectionPool: dbConnectionPool},
-		URLShortener:             NewURLShortenerModel(dbConnectionPool),
-		DBConnectionPool:         dbConnectionPool,
+		Disbursements:               &DisbursementModel{dbConnectionPool: dbConnectionPool},
+		Wallets:                     &WalletModel{dbConnectionPool: dbConnectionPool},
+		Assets:                      &AssetModel{dbConnectionPool: dbConnectionPool},
+		Organizations:               &OrganizationModel{dbConnectionPool: dbConnectionPool},
+		Payment:                     &PaymentModel{dbConnectionPool: dbConnectionPool},
+		Receiver:                    &ReceiverModel{},
+		DisbursementInstructions:    NewDisbursementInstructionModel(dbConnectionPool),
+		ReceiverVerification:        &ReceiverVerificationModel{dbConnectionPool: dbConnectionPool},
+		ReceiverWallet:              &ReceiverWalletModel{dbConnectionPool: dbConnectionPool},
+		ReceiverRegistrationAttempt: &ReceiverRegistrationAttemptModel{dbConnectionPool: dbConnectionPool},
+		DisbursementReceivers:       &DisbursementReceiverModel{dbConnectionPool: dbConnectionPool},
+		Message:                     &MessageModel{dbConnectionPool: dbConnectionPool},
+		CircleTransferRequests:      &CircleTransferRequestModel{dbConnectionPool: dbConnectionPool},
+		CircleRecipient:             &CircleRecipientModel{dbConnectionPool: dbConnectionPool},
+		URLShortener:                NewURLShortenerModel(dbConnectionPool),
+		DBConnectionPool:            dbConnectionPool,
 	}, nil
 }
