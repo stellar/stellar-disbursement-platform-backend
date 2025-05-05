@@ -362,6 +362,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"short_urls",
 			"wallets",
 			"wallets_assets",
+			"receiver_registration_attempts",
 		}
 		tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, expectedSchema)
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, expectedSchema, expectedTablesAfterMigrationsApplied)

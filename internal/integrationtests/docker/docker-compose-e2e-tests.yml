@@ -46,7 +46,6 @@ services:
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
-      ENABLE_SCHEDULER: "false"
       EVENT_BROKER_TYPE: "KAFKA"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"

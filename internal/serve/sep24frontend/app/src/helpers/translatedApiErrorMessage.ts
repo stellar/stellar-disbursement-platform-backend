@@ -3,21 +3,29 @@ import { TFunction } from "i18next";
 
 /**
  * Gets the translated text to be displayed to the user based on the error code. If no error code is provided, then the
- * original English error message is returned.
+ * original English error message is returned. Includes extra details if provided in the error response.
  * @returns The error message.
  */
 export const translatedApiErrorMessage = (
-  t: TFunction,
-  { error, error_code }: ApiError
+    t: TFunction,
+    { error = 'Unknown error', error_code, extras }: ApiError
 ): string => {
-  if (!error_code) {
-    return error;
+  let baseMessage = error;
+
+  if (error_code) {
+    const translationKey = "errorCodes." + error_code;
+    const translatedText = t(translationKey);
+    if (translatedText !== translationKey) {
+      baseMessage = translatedText;
+    }
+  }
+  // Append extras if available
+  if (extras && typeof extras === 'object' && Object.keys(extras).length > 0) {
+    const extrasString = Object.entries(extras)
+        .map(([key, value]) => `${key}: ${String(value)}`)
+        .join(', ');
+    baseMessage += ` (${extrasString})`;
   }
 
-  const translatedText = t("errorCodes." + error_code);
-  if (!translatedText) {
-    return error;
-  }
-
-  return translatedText;
+  return baseMessage;
 };

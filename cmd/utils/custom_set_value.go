@@ -293,6 +293,10 @@ func SetConfigOptionEventBrokerType(co *config.ConfigOption) error {
 		return fmt.Errorf("couldn't parse event broker type in %s: %w", co.Name, err)
 	}
 
+	if ebTypeParsed == events.NoneEventBrokerType {
+		log.Warn("NONE event broker type is deprecated and will be removed in future releases. Please use SCHEDULER instead.")
+	}
+
 	*(co.ConfigKey.(*events.EventBrokerType)) = ebTypeParsed
 	return nil
 }

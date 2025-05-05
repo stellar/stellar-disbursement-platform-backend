@@ -87,7 +87,7 @@ type ServeOptions struct {
 	DisableMFA                      bool
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
-	EnableScheduler                 bool
+	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
 	tenantManager                   tenant.ManagerInterface
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
@@ -109,7 +109,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 	httperror.SetDefaultReportErrorFunc(opts.CrashTrackerClient.LogAndReportErrors)
 
 	// Setup Multi-Tenant Database when enabled
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
+	opts.tenantManager = tenant.NewManager(
+		tenant.WithDatabase(opts.AdminDBConnectionPool),
+		tenant.WithSingleTenantMode(opts.SingleTenantMode),
+	)
 
 	var err error
 	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)
@@ -146,7 +149,7 @@ func (opts *ServeOptions) ValidateSecurity() error {
 		if opts.DisableMFA {
 			return fmt.Errorf("MFA cannot be disabled in pubnet")
 		} else if opts.DisableReCAPTCHA {
-			return fmt.Errorf("reCAPTCHA cannot be disabled in pubnet")
+			log.Warnf("reCAPTCHA is disabled in pubnet. This might reduce security!")
 		}
 	}
 
