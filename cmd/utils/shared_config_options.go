@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -345,6 +346,33 @@ func HorizonURL(targetPointer interface{}) *config.ConfigOption {
 		ConfigKey:   targetPointer,
 		FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
 		Required:    true,
+	}
+}
+
+func RpcConfigOptions(opts *stellar.RpcOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:           "rpc-url",
+			Usage:          "The URL of the Stellar RPC server where this application will communicate with.",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionURLString,
+			ConfigKey:      &opts.RpcURL,
+			Required:       false,
+		},
+		{
+			Name:      "rpc-request-header-key",
+			Usage:     "The key of the request header to be used for authentication with the RPC server.",
+			OptType:   types.String,
+			ConfigKey: &opts.RpcRequestHeaderKey,
+			Required:  false,
+		},
+		{
+			Name:      "rpc-request-header-value",
+			Usage:     "The value of the request header to be used for authentication with the RPC server.",
+			OptType:   types.String,
+			ConfigKey: &opts.RpcRequestHeaderValue,
+			Required:  false,
+		},
 	}
 }
 
