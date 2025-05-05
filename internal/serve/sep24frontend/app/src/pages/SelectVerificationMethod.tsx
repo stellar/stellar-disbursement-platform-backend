@@ -103,7 +103,8 @@ export const SelectVerificationMethod: FC = () => {
           fetch("https://ipapi.co/json")
             .then((res) => res.json())
             .then((data) => callback(data.country_code))
-            .catch(() => callback(""));
+            // If the IP check fails, set default to USA
+            .catch(() => callback("US"));
         },
         i18n: intlTelInputDropdownLang[language] || en,
         fixDropdownWidth: false,
@@ -121,14 +122,16 @@ export const SelectVerificationMethod: FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
 
-  // Reset state when selected method changes
+  // Reset state when selected method changes (and not the language)
   useEffect(() => {
     setInputEmail("");
     setInputEmailError("");
 
     iti?.setNumber("");
     setInputPhoneError("");
-  }, [iti, selectedMethod]);
+    // Not including iti to keep entered value when language changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMethod]);
 
   // OTP response
   useEffect(() => {
