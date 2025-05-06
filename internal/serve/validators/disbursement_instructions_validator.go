@@ -95,3 +95,23 @@ func (iv *DisbursementInstructionsValidator) SanitizeInstruction(instruction *da
 
 	return &sanitizedInstruction
 }
+
+// CheckForDuplicateContacts checks for duplicate contact information (phone or email) within the instructions.
+func (iv *DisbursementInstructionsValidator) CheckForDuplicateContacts(instructions []*data.DisbursementInstruction) {
+	seenContacts := make(map[string]int)
+
+	for i, instruction := range instructions {
+		lineNumber := i + 2
+		contact, err := instruction.Contact()
+		if err != nil {
+			iv.AddError(fmt.Sprintf("line %d - contact info", lineNumber), "invalid contact information")
+			continue
+		}
+
+		if firstLine, ok := seenContacts[contact]; ok {
+			iv.AddError(fmt.Sprintf("line %d - contact info", lineNumber), fmt.Sprintf("duplicate contact information. Also found on line %d", firstLine))
+		} else {
+			seenContacts[contact] = lineNumber
+		}
+	}
+}
