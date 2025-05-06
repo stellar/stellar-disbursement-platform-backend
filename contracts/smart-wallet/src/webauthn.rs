@@ -1,32 +1,18 @@
-use soroban_sdk::{contracttype, crypto::Hash, log, panic_with_error, Bytes, BytesN, Env};
+use soroban_sdk::{contracttype, crypto::Hash, panic_with_error, Bytes, BytesN, Env};
 
 use crate::{base64_url, AccountContractError};
 
-const AUTH_DATA_FLAG_OFFSET: u32 = 32;
-const AUTH_DATA_FLAG_UP: u8 = 0x01;
-const AUTH_DATA_FLAG_UV: u8 = 0x04;
-const ENCODED_CHALLENGE_LEN: u32 = 43;
-const WEBAUTHN_TYPE_GET: &str = "webauthn.get";
-
-/// A signed WebAuthn credential.
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-#[contracttype]
-pub struct WebAuthnSignedCredential {
-    pub public_key: BytesN<65>,
-    pub credential: WebAuthnCredential,
-}
-
-/// A signer with a public key.
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-#[contracttype]
-pub struct Signer {
-    pub public_key: BytesN<65>,
-}
+pub(crate) const AUTH_DATA_FLAG_OFFSET: u32 = 32;
+pub(crate) const AUTH_DATA_FLAG_UP: u8 = 0x01;
+pub(crate) const AUTH_DATA_FLAG_UV: u8 = 0x04;
+pub(crate) const ENCODED_CHALLENGE_LEN: u32 = 43;
+pub(crate) const WEBAUTHN_TYPE_GET: &str = "webauthn.get";
 
 /// A WebAuthn credential.
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[contracttype]
 pub struct WebAuthnCredential {
+    pub public_key: BytesN<65>,
     /// The authenticator data is a base64url encoded string.
     pub authenticator_data: Bytes,
     /// The client data JSON is a base64url encoded string.

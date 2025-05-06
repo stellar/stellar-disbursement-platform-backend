@@ -1,4 +1,5 @@
 #![no_std]
+
 use soroban_sdk::{
     auth::{Context, CustomAccountInterface},
     contract, contracterror, contractimpl, contracttype,
@@ -32,11 +33,11 @@ pub struct AccountContract;
 
 #[contractimpl]
 impl AccountContract {
-    pub fn __constructor(env: Env, admin: Address, signer: webauthn::Signer) {
+    pub fn __constructor(env: Env, admin: Address, signer: BytesN<65>) {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
-            .set(&DataKey::Signer(signer.public_key), &());
+            .set(&DataKey::Signer(signer), &());
     }
 
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
@@ -50,7 +51,7 @@ impl AccountContract {
 #[contractimpl]
 impl CustomAccountInterface for AccountContract {
     type Error = AccountContractError;
-    type Signature = Vec<webauthn::WebAuthnSignedCredential>;
+    type Signature = Vec<webauthn::WebAuthnCredential>;
 
     fn __check_auth(
         env: Env,
@@ -77,7 +78,7 @@ impl CustomAccountInterface for AccountContract {
             &env,
             &signature_payload,
             &signature.public_key,
-            &signature.credential,
+            &signature,
         );
 
         Ok(())
