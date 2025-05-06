@@ -59,13 +59,17 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 		verification := instruction.VerificationValue
 		switch iv.verificationField {
 		case data.VerificationTypeDateOfBirth:
-			iv.CheckError(utils.ValidateDateOfBirthVerification(verification), fmt.Sprintf("line %d - date of birth", lineNumber), "")
+			_, validationErr := utils.ValidateDateOfBirthVerification(verification)
+			iv.CheckError(validationErr, fmt.Sprintf("line %d - date of birth", lineNumber), "")
 		case data.VerificationTypeYearMonth:
-			iv.CheckError(utils.ValidateYearMonthVerification(verification), fmt.Sprintf("line %d - year/month", lineNumber), "")
+			_, validationErr := utils.ValidateYearMonthVerification(verification)
+			iv.CheckError(validationErr, fmt.Sprintf("line %d - year/month", lineNumber), "")
 		case data.VerificationTypePin:
-			iv.CheckError(utils.ValidatePinVerification(verification), fmt.Sprintf("line %d - pin", lineNumber), "")
+			_, validationErr := utils.ValidatePinVerification(verification)
+			iv.CheckError(validationErr, fmt.Sprintf("line %d - pin", lineNumber), "")
 		case data.VerificationTypeNationalID:
-			iv.CheckError(utils.ValidateNationalIDVerification(verification), fmt.Sprintf("line %d - national id", lineNumber), "")
+			_, validationErr := utils.ValidateNationalIDVerification(verification)
+			iv.CheckError(validationErr, fmt.Sprintf("line %d - national id", lineNumber), "")
 		}
 	}
 }
