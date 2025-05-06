@@ -13,3 +13,6 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+p256 = { version = "0.13.2", features = ["ecdsa"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+hex = "0.4"

@@ -1,9 +1,9 @@
-use soroban_sdk::{contracttype, crypto::Hash, panic_with_error, Bytes, BytesN, Env};
+use soroban_sdk::{contracttype, crypto::Hash, log, panic_with_error, Bytes, BytesN, Env};
 
 use crate::{base64_url, AccountContractError};
 
 const AUTH_DATA_FLAG_OFFSET: u32 = 32;
-const AUTH_DATA_UP: u8 = 0x01;
+const AUTH_DATA_FLAG_UP: u8 = 0x01;
 const AUTH_DATA_FLAG_UV: u8 = 0x04;
 const ENCODED_CHALLENGE_LEN: u32 = 43;
 const WEBAUTHN_TYPE_GET: &str = "webauthn.get";
@@ -83,7 +83,7 @@ pub fn verify(
         .unwrap();
     
     // Check user presence flag
-    if flags & AUTH_DATA_UP != AUTH_DATA_UP {
+    if flags & AUTH_DATA_FLAG_UP != AUTH_DATA_FLAG_UP {
         panic_with_error!(env, AccountContractError::WebAuthnUserNotPresent);
     }
     
