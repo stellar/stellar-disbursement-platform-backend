@@ -46,7 +46,7 @@ helm repo add stellar https://helm.stellar.org/charts
 
 - Customize the chart by downloading and modifying `minimal-values.yaml`. This chart contains the minimum set of values required to deploy the SDP. For a complete list of values, refer to the [Parameters](#parameters) section below.
 ```shell
-curl -LJO https://raw.githubusercontent.com/stellar/stellar-disbursement-platform-backend/develop/helmchart/sdp/minimal-values.yaml
+curl -LJO https://raw.githubusercontent.com/stellar/stellar-disbursement-platform-backend/main/helmchart/sdp/minimal-values.yaml
 ```
 
 - Install the chart
@@ -57,13 +57,26 @@ helm install sdp -f myvalues.yaml stellar/stellar-disbursement-platform
 ### From the git repository
 
 - Clone the git repository
-```
+```shell
 git clone git@github.com:stellar/stellar-disbursement-platform-backend.git
 ```
 
-- Install the chart
+- Change directory to the helm chart
 ```shell
-helm install sdp -f myvalues.yaml ./stellar-disbursement-platform-backend/helmchart/sdp
+cd stellar-disbursement-platform-backend/helmchart/sdp
+```
+
+- Prepare the values needed to run the SDP locally. We will only need a distribution account and a SEP-10 account. 
+Both can be created using the [Stellar Laboratory](https://lab.stellar.org/account/create?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;;).
+
+- Install the chart
+It is possible to use the `minimal-values.yaml` file provided in the repository or create your own values file. The `minimal-values.yaml` file contains the minimum set of values required to deploy the SDP.
+```shell
+helm install sdp -f minimal-values.yaml . \
+     --set "global.distributionPublicKey=GCUD...EZW7" \
+     --set "global.distributionPrivateKey=SC7G...AGJA" \
+     --set "global.sep10PublicKey=GD4L...LYR2U" \
+     --set "global.sep10PrivateKey=SBNY...FZAG"
 ```
 
 ## Uninstalling the Chart
@@ -94,19 +107,18 @@ minikube addons enable ingress
 ```
 
 3. Prepare the values needed to run the SDP locally. 
-We will only need a distribution account and a SEP-10 account. See [Create and Fund a Host Distribution Account](https://developers.stellar.org/platforms/stellar-disbursement-platform/admin-guide/getting-started#create-and-fund-a-host-distribution-account) in the documentation for detailed instructions on creating these accounts.
-
+We will only need a distribution account and a SEP-10 account. Both can be created using the [Stellar Laboratory](https://lab.stellar.org/account/create?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;;).
 
 4. Run helm install using the provided `minimal-values.yaml` file
 ```shell
-helm install sdp -f minimal-values.yaml stellar/stellar-disbursement-platform \
+helm install sdp -f minimal-values.yaml . \
      --set "global.distributionPublicKey=GCUD...EZW7" \
      --set "global.distributionPrivateKey=SC7G...AGJA" \
      --set "global.sep10PublicKey=GD4L...LYR2U" \
      --set "global.sep10PrivateKey=SBNY...FZAG"
 ```
 
-5. Setup Local DNS resolution
+5. Setup Local DNS resolution.
 Add entries to your `/etc/hosts` file to access the services.
 ```shell
 sudo bash -c 'echo "127.0.0.1 dashboard.local sdp.local ap.local admin.local" >> /etc/hosts'
