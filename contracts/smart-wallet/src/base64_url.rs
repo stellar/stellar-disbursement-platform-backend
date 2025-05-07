@@ -1,3 +1,5 @@
+// Copied from https://github.com/kalepail/passkey-kit/blob/76e2918e83e1997069f1878cdd49693fdb9d2514/contracts/smart-wallet/src/base64_url.rs
+//
 // Ported from https://github.com/golang/go/blob/26b5783b72376acd0386f78295e678b9a6bff30e/src/encoding/base64/base64.go#L53-L192
 //
 // Modifications:
