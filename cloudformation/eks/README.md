@@ -82,7 +82,7 @@ aws cloudformation create-stack \
 ```
 
 ## 3. Keys Stack Deployment
-Deploy the secrets and keys management stack:
+For testnet, you can auto-generate Stellar secrets using the following command: 
 
 ```bash
 aws cloudformation create-stack \
@@ -91,14 +91,23 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region ${AWS_REGION}
 ```
-
-**Note**: Leave the following parameters empty to auto-generate new keys:
-- DistributionSeed
-- DistributionPublicKey
-- SEP10SigningPrivateKey
-- SEP10SigningPublicKey
-- ChannelAccountEncryptionPassphrase
-- DistributionAccountEncryptionPassphrase
+For mainnet (or using pre-created Stellar accounts), you will need to provide (at a minimum)the necessary parameters. Example:
+```bash
+aws cloudformation create-stack \
+  --stack-name ${STACK_NAME_PREFIX}-keys-eks \
+  --template-body file://sdp-keys-eks.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region ${AWS_REGION} \
+  --parameters \
+    ParameterKey=DistributionSeed,ParameterValue=your-distribution-account-secret-key \
+    ParameterKey=DistributionPublicKey,ParameterValue=your-distribution-account-public-key \
+    ParameterKey=SEP10SigningPrivateKey,ParameterValue=your-sep10-signing-private-key \
+    ParameterKey=SEP10SigningPublicKey,ParameterValue=your-sep10-signing-public-key \
+    ParameterKey=SecretSep10SigningSeed,ParameterValue=your-secret-sep10-signing-secret-key \
+    ParameterKey=ChannelAccountEncryptionPassphrase,ParameterValue=your-channel-encryption-passphrase \
+    ParameterKey=DistributionAccountEncryptionPassphrase,ParameterValue=your-distribution-encryption-passphrase
+```
+for a description of these parameters, please see: [Configuring the SDP](https://developers.stellar.org/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp)
 
 ## 4. EKS Cluster Deployment
 Deploy the EKS cluster:
@@ -279,7 +288,7 @@ kubectl get pods -n external-dns
 ```
 
 ## 13. Deploy SDP Helm Chart
-Before deploying the Stellar Disbursement Platform helm chart you need to configure the helm values.  Review (`helm-values-example.yaml`) and substitute the example domain with your own.  You may also want to change the front-end (dashboard) and backend (api) base domains.  See [Stellar Disbursement Platform Domain Structure](#stellar-disbursement-platform-domain-structure) for more information.
+Before deploying the Stellar Disbursement Platform helm chart you need to configure the helm values.  Review `values-testnet.yaml` (for Stellar Testnet) or `values-mainnet.yaml` (for Stellar Mainnet)  and substitute the example domain with your own.  For example, you may also want to change the front-end (dashboard) and backend (api) base domains.  See [Stellar Disbursement Platform Domain Structure](#stellar-disbursement-platform-domain-structure) for more information.
 
 
 ### Add Stellar Repository
