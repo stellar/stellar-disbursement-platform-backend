@@ -30,16 +30,20 @@ fn generate_test_p256_keypair(env: Env) -> (BytesN<65>, SigningKey) {
 fn sign(
     env: Env,
     challenge_hash: &[u8; 32],
-    public_key: BytesN<65>,
+    credential_id: Bytes,
     signing_key: &mut SigningKey,
 ) -> WebAuthnCredential {
-    let mut auth_data = Bytes::from_slice(&env, &[0; 37]);
-    // Fill in the rpIdHash
-    for i in 0..32 {
-        auth_data.set(i, i as u8);
-    }
-    auth_data.set(AUTH_DATA_FLAG_OFFSET, AUTH_DATA_FLAG_UP | AUTH_DATA_FLAG_UV);
+    let mut authenticator_data = Bytes::from_slice(&env, &[0; 37]);
 
+    // Fill in RP ID Hash. It's not verified by the contract.
+    for i in 0..32 {
+        authenticator_data.set(i, i as u8);
+    }
+
+    // Set flags: User Present (UP) and User Verified (UV)s
+    authenticator_data.set(AUTH_DATA_FLAG_OFFSET, AUTH_DATA_FLAG_UP | AUTH_DATA_FLAG_UV);
+
+    // Create the challenge string
     let mut expected_challenge_buffer = [0_u8; ENCODED_CHALLENGE_LEN as usize];
     base64_url::encode(&mut expected_challenge_buffer, &challenge_hash[0..32]);
     let challenge_str = std::str::from_utf8(&expected_challenge_buffer).unwrap();
@@ -49,12 +53,13 @@ fn sign(
         challenge_str
     );
 
+    // Create the client data hash
     let client_data_json_bytes = client_data_json.as_bytes();
     let client_data_hash = env
         .crypto()
         .sha256(&Bytes::from_slice(&env, client_data_json_bytes));
 
-    let mut message = auth_data.clone();
+    let mut message = authenticator_data.clone();
     message.extend_from_slice(&client_data_hash.to_array());
 
     let mut message_std_vec = std::vec::Vec::with_capacity(message.len() as usize);
@@ -62,6 +67,7 @@ fn sign(
         message_std_vec.push(message.get(i).unwrap());
     }
 
+    // Sign the message (authenticator data + client data hash)
     let signature_object: p256::ecdsa::Signature = signing_key.sign(&message_std_vec);
     let normalized_signature = signature_object.normalize_s();
 
@@ -75,14 +81,14 @@ fn sign(
     raw_signature_bytes[0..32].copy_from_slice(r_bytes.as_slice());
     raw_signature_bytes[32..64].copy_from_slice(s_bytes.as_slice());
 
-    // Correctly determine the indices
+    // Correctly determine the indices of the type and challenge in the client data JSON
     let type_index = client_data_json.find("webauthn.get").unwrap() as u32;
     let challenge_index = client_data_json.find(challenge_str).unwrap() as u32;
 
     WebAuthnCredential {
-        public_key: public_key.clone(),
+        credential_id,
         client_data_json: Bytes::from_slice(&env, client_data_json_bytes),
-        authenticator_data: auth_data,
+        authenticator_data,
         type_index,
         challenge_index,
         signature: BytesN::from_array(&env, &raw_signature_bytes),
@@ -93,10 +99,11 @@ fn sign(
 fn test_validate_signature() {
     let env = Env::default();
 
+    let credential_id: Bytes = BytesN::<32>::random(&env).into();
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
     let admin = Address::generate(&env);
-    let args = (admin, public_key.clone());
+    let args = (admin,  credential_id.clone(), public_key.clone());
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -107,7 +114,7 @@ fn test_validate_signature() {
     let credential = sign(
         env.clone(),
         &payload_hash.to_array(),
-        public_key.clone(),
+        credential_id,
         &mut signing_key,
     );
 
@@ -123,9 +130,13 @@ fn test_validate_signature() {
 #[test]
 fn test_webauthn_invalid_type() {
     let env = Env::default();
+
+    let credential_id: Bytes = BytesN::<32>::random(&env).into();
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
+
     let admin = Address::generate(&env);
-    let contract_address = env.register(AccountContract {}, (admin, public_key.clone()));
+    let args = (admin,  credential_id.clone(), public_key.clone());
+    let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
     let payload_hash = env.crypto().sha256(&payload.clone().into());
@@ -133,7 +144,7 @@ fn test_webauthn_invalid_type() {
     let mut credential = sign(
         env.clone(),
         &payload_hash.to_array(),
-        public_key.clone(),
+        credential_id,
         &mut signing_key,
     );
 
@@ -168,16 +179,21 @@ fn test_webauthn_invalid_type() {
 #[test]
 fn test_webauthn_user_not_present() {
     let env = Env::default();
+
+    let credential_id: Bytes = BytesN::<32>::random(&env).into();
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
+
     let admin = Address::generate(&env);
-    let contract_address = env.register(AccountContract {}, (admin, public_key.clone()));
+    let args = (admin,  credential_id.clone(), public_key.clone());
+    let contract_address = env.register(AccountContract {}, args);
+
     let payload: BytesN<32> = BytesN::random(&env);
     let payload_hash = env.crypto().sha256(&payload.clone().into());
 
     let mut credential = sign(
         env.clone(),
         &payload_hash.to_array(),
-        public_key.clone(),
+        credential_id,
         &mut signing_key,
     );
 
@@ -204,16 +220,21 @@ fn test_webauthn_user_not_present() {
 #[test]
 fn test_webauthn_user_not_verified() {
     let env = Env::default();
+
+    let credential_id: Bytes = BytesN::<32>::random(&env).into();
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
+
     let admin = Address::generate(&env);
-    let contract_address = env.register(AccountContract {}, (admin, public_key.clone()));
+    let args = (admin,  credential_id.clone(), public_key.clone());
+    let contract_address = env.register(AccountContract {}, args);
+
     let payload: BytesN<32> = BytesN::random(&env);
     let payload_hash = env.crypto().sha256(&payload.clone().into());
 
     let mut credential = sign(
         env.clone(),
         &payload_hash.to_array(),
-        public_key.clone(),
+        credential_id,
         &mut signing_key,
     );
 
@@ -240,9 +261,13 @@ fn test_webauthn_user_not_verified() {
 #[test]
 fn test_webauthn_invalid_challenge_content() {
     let env = Env::default();
+
+    let credential_id: Bytes = BytesN::<32>::random(&env).into();
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
+
     let admin = Address::generate(&env);
-    let contract_address = env.register(AccountContract {}, (admin, public_key.clone()));
+    let args = (admin,  credential_id.clone(), public_key.clone());
+    let contract_address = env.register(AccountContract {}, args);
     
     let payload_sign: BytesN<32> = BytesN::random(&env);
     let payload_hash_sign = env.crypto().sha256(&payload_sign.clone().into());
@@ -250,7 +275,7 @@ fn test_webauthn_invalid_challenge_content() {
     let credential = sign(
         env.clone(),
         &payload_hash_sign.to_array(), 
-        public_key.clone(),
+        credential_id,
         &mut signing_key,
     );
 
@@ -272,16 +297,21 @@ fn test_webauthn_invalid_challenge_content() {
 #[test]
 fn test_webauthn_tampered_signature() {
     let env = Env::default();
+
+    let credential_id: Bytes = BytesN::<32>::random(&env).into();
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
+
     let admin = Address::generate(&env);
-    let contract_address = env.register(AccountContract {}, (admin, public_key.clone()));
+    let args = (admin,  credential_id.clone(), public_key.clone());
+    let contract_address = env.register(AccountContract {}, args);
+
     let payload: BytesN<32> = BytesN::random(&env);
     let payload_hash = env.crypto().sha256(&payload.clone().into());
 
     let mut credential = sign(
         env.clone(),
         &payload_hash.to_array(),
-        public_key.clone(),
+        credential_id,
         &mut signing_key,
     );
 
@@ -303,9 +333,13 @@ fn test_webauthn_tampered_signature() {
 #[test]
 fn test_webauthn_invalid_challenge_length_in_client_data() {
     let env = Env::default();
+
+    let credential_id: Bytes = BytesN::<32>::random(&env).into();
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
+
     let admin = Address::generate(&env);
-    let contract_address = env.register(AccountContract {}, (admin, public_key.clone()));
+    let args = (admin,  credential_id.clone(), public_key.clone());
+    let contract_address = env.register(AccountContract {}, args);    
 
     let payload: BytesN<32> = BytesN::random(&env);
     let payload_hash = env.crypto().sha256(&payload.clone().into());
@@ -313,7 +347,7 @@ fn test_webauthn_invalid_challenge_length_in_client_data() {
     let mut credential = sign(
         env.clone(),
         &payload_hash.to_array(),
-        public_key.clone(),
+        credential_id,
         &mut signing_key,
     );
     

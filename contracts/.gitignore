@@ -101,4 +101,7 @@ tests/rustdoc-gui/src/**.lock
 flake.lock
 /default.nix
 
+# Soroban
+test_snapshots/
+
 # Before adding new lines, see the comment at the top.

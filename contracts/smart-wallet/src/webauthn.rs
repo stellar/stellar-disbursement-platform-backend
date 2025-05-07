@@ -2,17 +2,23 @@ use soroban_sdk::{contracttype, crypto::Hash, panic_with_error, Bytes, BytesN, E
 
 use crate::{base64_url, AccountContractError};
 
+/// Authenticator data flag offset. It appears after the RP ID hash in the authenticator data.
 pub(crate) const AUTH_DATA_FLAG_OFFSET: u32 = 32;
+/// Authenticator data flags for user presence
 pub(crate) const AUTH_DATA_FLAG_UP: u8 = 0x01;
+/// Authenticator data flags for user verification
 pub(crate) const AUTH_DATA_FLAG_UV: u8 = 0x04;
+/// Length of the encoded challenge in the client data JSON.
 pub(crate) const ENCODED_CHALLENGE_LEN: u32 = 43;
+/// The WebAuthn type for the get operation.
 pub(crate) const WEBAUTHN_TYPE_GET: &str = "webauthn.get";
 
 /// A WebAuthn credential.
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[contracttype]
 pub struct WebAuthnCredential {
-    pub public_key: BytesN<65>,
+    /// The credential ID.
+    pub credential_id: Bytes,
     /// The authenticator data is a base64url encoded string.
     pub authenticator_data: Bytes,
     /// The client data JSON is a base64url encoded string.
@@ -26,38 +32,37 @@ pub struct WebAuthnCredential {
 }
 
 /// The `verify` function checks the validity of a WebAuthn signature.
-/// 
+///
 /// It performs the following checks:
 /// 1. Verifies the WebAuthn type.
 /// 2. Checks the authenticator data flags.
 /// 3. Validates the challenge.
 /// 4. Verifies the cryptographic signature.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `env` - The Soroban environment.
 /// * `signature_payload` - The payload used for signature verification.
-/// * `public_key` - The public key of the signer.
 /// * `credential` - The WebAuthn credential containing the signature and other data.
-/// 
+///
 /// # Panics
-/// 
+///
 /// This function will panic if any of the checks fail.
 pub fn verify(
     env: &Env,
     signature_payload: &Hash<32>,
-    public_key: &BytesN<65>,
     credential: &WebAuthnCredential,
+    public_key: &BytesN<65>,
 ) {
     // 1. Verify the Webauthn type
     const WEBAUTHN_TYPE_GET_LEN: u32 = 12;
-    
-    let type_slice = credential.client_data_json.slice(
-        credential.type_index..(credential.type_index + WEBAUTHN_TYPE_GET_LEN)
-    );
-    
+
+    let type_slice = credential
+        .client_data_json
+        .slice(credential.type_index..(credential.type_index + WEBAUTHN_TYPE_GET_LEN));
+
     let expected_type = Bytes::from_slice(env, WEBAUTHN_TYPE_GET.as_bytes());
-    
+
     if !type_slice.eq(&expected_type) {
         panic_with_error!(env, AccountContractError::WebAuthnInvalidType);
     }
@@ -67,12 +72,12 @@ pub fn verify(
         .authenticator_data
         .get(AUTH_DATA_FLAG_OFFSET)
         .unwrap();
-    
+
     // Check user presence flag
     if flags & AUTH_DATA_FLAG_UP != AUTH_DATA_FLAG_UP {
         panic_with_error!(env, AccountContractError::WebAuthnUserNotPresent);
     }
-    
+
     // Check user verification flag
     if flags & AUTH_DATA_FLAG_UV != AUTH_DATA_FLAG_UV {
         panic_with_error!(env, AccountContractError::WebAuthnUserNotVerified);
