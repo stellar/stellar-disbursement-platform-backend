@@ -44,6 +44,7 @@ pub struct WebAuthnCredential {
 /// * `env` - The Soroban environment.
 /// * `signature_payload` - The payload used for signature verification.
 /// * `credential` - The WebAuthn credential containing the signature and other data.
+/// * `public_key` - The public key used for signature verification.
 ///
 /// # Panics
 ///
