@@ -34,6 +34,8 @@ services:
       SMS_SENDER_TYPE: DRY_RUN
       NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
+      SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID}
+      RPC_URL: "https://soroban-testnet.stellar.org"
       ANCHOR_PLATFORM_BASE_SEP_URL: http://localhost:8080
       ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
@@ -50,12 +52,11 @@ services:
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options
-      ENABLE_SCHEDULER: "true" # set to disabled to use kafka for this.
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
-      # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
-      EVENT_BROKER_TYPE: "NONE"
+      # Kafka Configuration - possible values: KAFKA; SCHEDULER
+      EVENT_BROKER_TYPE: "SCHEDULER"
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin
@@ -109,7 +110,7 @@ services:
 
   anchor-platform:
     container_name: anchor-platform
-    image: stellar/anchor-platform:3.1.0
+    image: stellar/anchor-platform:3.2.0-beta.1
     depends_on:
       - db
     command: --sep-server --platform-server --platform linux/amd64
@@ -138,6 +139,10 @@ services:
       SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
       # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
       # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
+      JAVA_TOOL_OPTIONS: "${SEP45_CONTRACT_ID:+-Dsep45.enabled=true}" #  Enable/disable SEP-45 based on SEP45_CONTRACT_ID
+      SEP45_WEB_AUTH_DOMAIN: ${SEP45_CONTRACT_ID:+localhost:8080}
+      SEP45_WEB_AUTH_CONTRACT_ID: ${SEP45_CONTRACT_ID}
+      SEP45_HOME_DOMAINS: ${SEP45_CONTRACT_ID:+localhost:8000, *.stellar.local:8000} # Comma separated list of home domains
       SEP24_ENABLED: "true"
       SEP24_INTERACTIVE_URL_BASE_URL: http://localhost:8000/wallet-registration/start
       SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
@@ -193,6 +198,7 @@ services:
       SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
       SECRET_SEP10_JWT_SECRET: jwt_secret_cQBnfcDSfvrphw8JBMcg1KfHRvvk3425
       SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
+      SECRET_SEP45_JWT_SECRET: jwt_secret_cQBnfcDSfvrphw8JBMcg1KfHRvvk3425
       SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4
       SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_IyLxs6PW41Znaysr8ft8Wx326QJepCrQ
 

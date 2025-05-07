@@ -33,7 +33,9 @@ services:
       SMS_SENDER_TYPE: DRY_RUN
       NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
       HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
+      RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
+      SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID}
       ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
       ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
@@ -44,7 +46,6 @@ services:
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
-      ENABLE_SCHEDULER: "false"
       EVENT_BROKER_TYPE: "KAFKA"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
@@ -167,7 +168,7 @@ services:
 
   anchor-platform:
     container_name: e2e-anchor-platform
-    image: stellar/anchor-platform:3.1.0
+    image: stellar/anchor-platform:3.2.0-beta.1
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
@@ -195,6 +196,10 @@ services:
       SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
       # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
       # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
+      JAVA_TOOL_OPTIONS: "${SEP45_CONTRACT_ID:+-Dsep45.enabled=true}" # Enable/disable SEP-45 based on SEP45_CONTRACT_ID
+      SEP45_WEB_AUTH_DOMAIN: ${SEP45_CONTRACT_ID:+localhost:8080}
+      SEP45_WEB_AUTH_CONTRACT_ID: ${SEP45_CONTRACT_ID}
+      SEP45_HOME_DOMAINS: ${SEP45_CONTRACT_ID:+localhost:8000, *.stellar.local:8000} # Comma separated list of home domains
       SEP24_ENABLED: "true"
       SEP24_INTERACTIVE_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
       SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
@@ -202,6 +207,7 @@ services:
       STELLAR_NETWORK_NETWORK: ${NETWORK_NETWORK:-TESTNET}
       STELLAR_NETWORK_NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
       STELLAR_NETWORK_HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
+      STELLAR_NETWORK_RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
       SEP1_ENABLED: "true"
       SEP1_TOML_TYPE: url
       SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
@@ -252,6 +258,7 @@ services:
       SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
       SECRET_SEP10_JWT_SECRET: jwt_secret_cQBnfcDSfvrphw8JBMcg1KfHRvvk3425
       SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
+      SECRET_SEP45_JWT_SECRET: jwt_secret_cQBnfcDSfvrphw8JBMcg1KfHRvvk3425
       SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4
       SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_IyLxs6PW41Znaysr8ft8Wx326QJepCrQ
 

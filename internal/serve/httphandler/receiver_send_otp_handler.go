@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -173,6 +174,7 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByContactInfo(ctx, contactInfo)
 	if err != nil {
 		log.Ctx(ctx).Warnf("Could not find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, err)
+		h.recordRegistrationAttempt(ctx, contactType, contactInfo)
 		return placeholderVerificationField, nil
 	}
 
@@ -189,12 +191,12 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 	}
 	if numberOfUpdatedRows < 1 {
 		log.Ctx(ctx).Warnf("Could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, sep24ClientDomain)
+		h.recordRegistrationAttempt(ctx, contactType, contactInfo)
 		return placeholderVerificationField, nil
 	}
 
 	// Send OTP message
-	err = h.sendOTP(ctx, contactType, contactInfo, newOTP)
-	if err != nil {
+	if err = h.sendOTP(ctx, contactType, contactInfo, newOTP); err != nil {
 		err = fmt.Errorf("sending OTP message: %w", err)
 		return placeholderVerificationField, httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil).WithErrorCode(httperror.Code500_9)
 	}
@@ -248,4 +250,32 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	}
 
 	return nil
+}
+
+func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
+	ctx context.Context,
+	contactType data.ReceiverContactType,
+	contactInfo string,
+) {
+	claims := anchorplatform.GetSEP24Claims(ctx)
+	attempt := data.ReceiverRegistrationAttempt{
+		PhoneNumber:   "",
+		Email:         "",
+		AttemptTs:     time.Now(),
+		ClientDomain:  claims.ClientDomain(),
+		TransactionID: claims.TransactionID(),
+		WalletAddress: claims.SEP10StellarAccount(),
+		WalletMemo:    claims.SEP10StellarMemo(),
+	}
+
+	switch contactType {
+	case data.ReceiverContactTypeSMS:
+		attempt.PhoneNumber = contactInfo
+	case data.ReceiverContactTypeEmail:
+		attempt.Email = contactInfo
+	}
+
+	if err := h.Models.ReceiverRegistrationAttempt.InsertReceiverRegistrationAttempt(ctx, attempt); err != nil {
+		log.Ctx(ctx).Errorf("failed to record registration attempt: %v", err)
+	}
 }

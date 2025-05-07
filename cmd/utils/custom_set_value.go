@@ -181,14 +181,45 @@ func SetConfigOptionStellarPrivateKey(co *config.ConfigOption) error {
 	return nil
 }
 
-func SetConfigOptionURLString(co *config.ConfigOption) error {
-	u := viper.GetString(co.Name)
+func SetConfigOptionStellarContractId(co *config.ConfigOption) error {
+	contractId := viper.GetString(co.Name)
+	contractId = strings.TrimSpace(contractId)
 
-	if u == "" {
+	if !co.Required && contractId == "" {
+		return nil
+	}
+
+	if contractId == "" {
+		return fmt.Errorf("contract id cannot be empty in %s", co.Name)
+	}
+
+	isValid := strkey.IsValidContractAddress(contractId)
+	if !isValid {
+		return fmt.Errorf("validating contract id in %s: %q", co.Name, contractId)
+	}
+
+	key, ok := co.ConfigKey.(*string)
+	if !ok {
+		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
+	}
+	*key = contractId
+
+	return nil
+}
+
+func SetConfigOptionURLString(co *config.ConfigOption) error {
+	urlStr := viper.GetString(co.Name)
+	urlStr = strings.TrimSpace(urlStr)
+
+	if !co.Required && urlStr == "" {
+		return nil
+	}
+
+	if urlStr == "" {
 		return fmt.Errorf("URL cannot be empty in %s", co.Name)
 	}
 
-	_, err := url.ParseRequestURI(u)
+	_, err := url.ParseRequestURI(urlStr)
 	if err != nil {
 		return fmt.Errorf("parsing URL in %s: %w", co.Name, err)
 	}
@@ -197,7 +228,7 @@ func SetConfigOptionURLString(co *config.ConfigOption) error {
 	if !ok {
 		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
-	*key = u
+	*key = urlStr
 
 	return nil
 }
@@ -260,6 +291,10 @@ func SetConfigOptionEventBrokerType(co *config.ConfigOption) error {
 	ebTypeParsed, err := events.ParseEventBrokerType(ebType)
 	if err != nil {
 		return fmt.Errorf("couldn't parse event broker type in %s: %w", co.Name, err)
+	}
+
+	if ebTypeParsed == events.NoneEventBrokerType {
+		log.Warn("NONE event broker type is deprecated and will be removed in future releases. Please use SCHEDULER instead.")
 	}
 
 	*(co.ConfigKey.(*events.EventBrokerType)) = ebTypeParsed

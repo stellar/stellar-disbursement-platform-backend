@@ -282,6 +282,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
+			Name:           "sep45-contract-id",
+			Usage:          "The ID of the SEP-45 web authentication contract",
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionStellarContractId,
+			ConfigKey:      &serveOpts.Sep45ContractId,
+			Required:       false,
+		},
+		{
 			Name: "anchor-platform-base-platform-url",
 			Usage: "The Base URL of the platform server of the anchor platform. This is the base URL where the Anchor Platform " +
 				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint.",
@@ -344,7 +352,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:        "enable-scheduler",
-			Usage:       "Enable Scheduler Jobs. Either this or Event Brokers must be enabled.",
+			Usage:       "Enable Scheduler Jobs. Deprecated: Use event-broker-type=SCHEDULER instead.",
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.EnableScheduler,
 			FlagDefault: false,
@@ -375,6 +383,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault:    string(circle.APITypeTransfers),
 		},
 	}
+	// rpc options
+	configOpts = append(configOpts, cmdUtils.RpcConfigOptions(&serveOpts.RpcConfig)...)
 
 	// crash tracker options
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
@@ -656,15 +666,31 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.DistributionAccountService = distributionAccountService
 
 			// Validate the Event Broker Type and Scheduler Jobs
-			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {
-				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are disabled. Please enable one.")
-			}
-			if eventBrokerOptions.EventBrokerType != events.NoneEventBrokerType && serveOpts.EnableScheduler {
-				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are enabled. Please enable only one.")
+			if serveOpts.EnableScheduler {
+				log.Ctx(ctx).Warn("The 'enable-scheduler' flag is deprecated. Please use 'event-broker-type=SCHEDULER' instead.")
 			}
 
-			// Kafka (background)
-			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
+			switch eventBrokerOptions.EventBrokerType {
+			case events.KafkaEventBrokerType:
+				if serveOpts.EnableScheduler {
+					log.Ctx(ctx).Fatalf("Both 'event-broker-type=KAFKA' and 'enable-scheduler=true' are set. Please use only one approach.")
+				}
+			case events.NoneEventBrokerType:
+				if !serveOpts.EnableScheduler {
+					log.Ctx(ctx).Fatalf("No background processing method is enabled. Please set event-broker-type=SCHEDULER or event-broker-type=KAFKA.")
+				} else {
+					log.Ctx(ctx).Warn("Using event-broker-type=NONE with enable-scheduler=true is deprecated. Please use event-broker-type=SCHEDULER instead.")
+				}
+			case events.SchedulerEventBrokerType:
+				if serveOpts.EnableScheduler {
+					log.Ctx(ctx).Warn("Both event-broker-type=SCHEDULER and enable-scheduler=true are set. The enable-scheduler flag is redundant and can be removed.")
+				}
+				serveOpts.EnableScheduler = true
+			}
+
+			// Initialize event producer based on the event broker type
+			switch eventBrokerOptions.EventBrokerType {
+			case events.KafkaEventBrokerType:
 				kafkaProducer, kafkaErr := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
 				if kafkaErr != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
@@ -680,12 +706,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				if kafkaErr != nil {
 					log.Fatalf("error setting up consumers: %v", kafkaErr)
 				}
-			} else {
-				log.Ctx(ctx).Warn("Event Broker Type is NONE. Using Noop producer for logging events")
+			case events.NoneEventBrokerType:
+				log.Ctx(ctx).Warn("Event Broker Type is NONE (deprecated). Using NoopProducer for logging events.")
+				serveOpts.EventProducer = events.NoopProducer{}
+			case events.SchedulerEventBrokerType:
 				serveOpts.EventProducer = events.NoopProducer{}
 			}
 
-			// Starting Scheduler Service (background job) if enabled
 			log.Ctx(ctx).Info("Starting Scheduler Service...")
 			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
 			if innerErr != nil {

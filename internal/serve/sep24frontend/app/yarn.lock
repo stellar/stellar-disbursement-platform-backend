@@ -1887,10 +1887,10 @@ vite-tsconfig-paths@^5.1.4:
     globrex "^0.1.2"
     tsconfck "^3.0.3"
 
-vite@^6.1.0:
-  version "6.1.1"
-  resolved "https://registry.npmjs.org/vite/-/vite-6.1.1.tgz"
-  integrity sha512-4GgM54XrwRfrOp297aIYspIti66k56v16ZnqHvrIM7mG+HjDlAwS7p+Srr7J6fGvEdOJ5JcQ/D9T7HhtdXDTzA==
+vite@^6.1.5:
+  version "6.1.5"
+  resolved "https://registry.yarnpkg.com/vite/-/vite-6.1.5.tgz#3791609c7a5f434d2c6ed0610c2570cd083541b4"
+  integrity sha512-H/gAFpW5I4ow/8Bz4t4i8k2St5JThMlqUT8gsH5v0rkqbqpf4qLrFozjq/V2KG1iOXF+3Ko9mlG0kmGerktWJw==
   dependencies:
     esbuild "^0.24.2"
     postcss "^8.5.2"

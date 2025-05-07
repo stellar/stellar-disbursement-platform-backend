@@ -31,6 +31,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/sep24frontend"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -74,6 +75,8 @@ type ServeOptions struct {
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
+	Sep45ContractId                 string
+	RpcConfig                       stellar.RpcOptions
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
@@ -84,7 +87,7 @@ type ServeOptions struct {
 	DisableMFA                      bool
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
-	EnableScheduler                 bool
+	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
 	tenantManager                   tenant.ManagerInterface
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
@@ -106,7 +109,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 	httperror.SetDefaultReportErrorFunc(opts.CrashTrackerClient.LogAndReportErrors)
 
 	// Setup Multi-Tenant Database when enabled
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
+	opts.tenantManager = tenant.NewManager(
+		tenant.WithDatabase(opts.AdminDBConnectionPool),
+		tenant.WithSingleTenantMode(opts.SingleTenantMode),
+	)
 
 	var err error
 	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)
@@ -143,7 +149,7 @@ func (opts *ServeOptions) ValidateSecurity() error {
 		if opts.DisableMFA {
 			return fmt.Errorf("MFA cannot be disabled in pubnet")
 		} else if opts.DisableReCAPTCHA {
-			return fmt.Errorf("reCAPTCHA cannot be disabled in pubnet")
+			log.Warnf("reCAPTCHA is disabled in pubnet. This might reduce security!")
 		}
 	}
 
@@ -157,9 +163,35 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	return nil
 }
 
+// ValidateRpc validates the RPC options.
+func (opts *ServeOptions) ValidateRpc() error {
+	if opts.RpcConfig.RpcURL == "" && (opts.RpcConfig.RpcRequestHeaderKey != "" || opts.RpcConfig.RpcRequestHeaderValue != "") {
+		return fmt.Errorf("RPC URL must be set when RPC request header key or value is set")
+	}
+
+	if opts.RpcConfig.RpcRequestHeaderKey != "" && opts.RpcConfig.RpcRequestHeaderValue == "" {
+		return fmt.Errorf("RPC request header value must be set when RPC request header key is set")
+	}
+
+	if opts.RpcConfig.RpcRequestHeaderKey == "" && opts.RpcConfig.RpcRequestHeaderValue != "" {
+		return fmt.Errorf("RPC request header key must be set when RPC request header value is set")
+	}
+
+	// Feature specific validation
+	if opts.Sep45ContractId != "" && opts.RpcConfig.RpcURL == "" {
+		return fmt.Errorf("RPC URL must be set when SEP-45 contract ID is set")
+	}
+
+	return nil
+}
+
 func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 	if err := opts.ValidateSecurity(); err != nil {
 		return fmt.Errorf("validating security options: %w", err)
+	}
+
+	if err := opts.ValidateRpc(); err != nil {
+		return fmt.Errorf("validating RPC options: %w", err)
 	}
 
 	if err := opts.SetupDependencies(); err != nil {
@@ -481,6 +513,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkPassphrase:           o.NetworkPassphrase,
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
+			Sep45ContractId:             o.Sep45ContractId,
 			InstanceName:                o.InstanceName,
 		}.ServeHTTP)
 
