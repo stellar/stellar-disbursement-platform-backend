@@ -1,0 +1,27 @@
+name: Contract Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_call: # allows this workflow to be called from another workflow
+
+jobs:
+  build_and_test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose
+      - name: Check formatting 
+        run: cargo clippy -- -Dwarnings
+      - name: Run tests
+        run: cargo test --verbose
