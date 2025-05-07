@@ -22,7 +22,7 @@ const (
 	loginURL        = "login"
 	disbursementURL = "disbursements"
 	organizationURL = "organization"
-	registrationURL = "wallet-registration"
+	registrationURL = "sep24-interactive-deposit"
 )
 
 type ServerApiIntegrationTestsInterface interface {

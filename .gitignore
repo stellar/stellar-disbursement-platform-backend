@@ -1,0 +1,25 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Environment file
+.env
+
+# subproject used for testing:
+v1_compatibility/stellar-relief-backoffice-backend
+
+# Project binary:
+stellar-disbursement-platform-backend
+
+# Text Editors
+.vscode
+.idea

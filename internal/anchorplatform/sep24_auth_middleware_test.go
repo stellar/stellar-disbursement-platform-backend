@@ -761,3 +761,40 @@ func Test_getCurrentTenant(t *testing.T) {
 		assert.Equal(t, &expectedTenant, currentTnt)
 	})
 }
+
+func Test_getCurrentTenant_WithSingleTenant(t *testing.T) {
+	tenantManagerMock := &tenant.TenantManagerMock{}
+	ctx := context.Background()
+
+	t.Run("returns the only tenant automatically in single tenant mode", func(t *testing.T) {
+		expectedTenant := tenant.Tenant{ID: "gotham-city-id", Name: "gotham"}
+
+		// Set up mock to return our single tenant
+		tenantManagerMock.
+			On("GetDefault", ctx).
+			Return(&expectedTenant, nil).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, true, "anything.stellar.org")
+		require.Nil(t, httpErr)
+		assert.Equal(t, &expectedTenant, currentTnt)
+		assert.Equal(t, "gotham", currentTnt.Name)
+	})
+
+	t.Run("uses the enhanced GetDefault method which handles auto-selection", func(t *testing.T) {
+		expectedTenant := tenant.Tenant{ID: "metropolis-id", Name: "metropolis", IsDefault: false}
+
+		tenantManagerMock.
+			On("GetDefault", ctx).
+			Return(&expectedTenant, nil).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, true, "anything.stellar.org")
+		require.Nil(t, httpErr)
+		assert.Equal(t, &expectedTenant, currentTnt)
+		assert.Equal(t, "metropolis", currentTnt.Name)
+		assert.False(t, currentTnt.IsDefault)
+	})
+}

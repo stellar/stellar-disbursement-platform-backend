@@ -22,7 +22,7 @@ services:
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE}
 
       # multi-tenant
-      EVENT_BROKER_TYPE: "NONE"
+      EVENT_BROKER_TYPE: "SCHEDULER"
     entrypoint: ""
     command:
       - sh
