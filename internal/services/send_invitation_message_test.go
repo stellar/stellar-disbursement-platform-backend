@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -119,7 +120,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 			},
 			mockSetup: func(t *testing.T, msgClientMock *message.MessengerClientMock) {
 				msgClientMock.
-					On("SendMessage", message.Message{
+					On("SendMessage", mock.Anything, message.Message{
 						ToEmail: email,
 						Title:   invitationMessageTitle,
 						Body:    content,
@@ -139,7 +140,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 			},
 			mockSetup: func(t *testing.T, msgClientMock *message.MessengerClientMock) {
 				msgClientMock.
-					On("SendMessage", message.Message{
+					On("SendMessage", mock.Anything, message.Message{
 						ToEmail: email,
 						Title:   invitationMessageTitle,
 						Body:    content,

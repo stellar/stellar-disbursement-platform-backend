@@ -1,140 +1,60 @@
+## Values for running the SDP locally. This is a good starting point for local development.
+## Refer to README.md and values.yaml for more information about the configuration options.
 
-## @section Minimal Values
-## @descriptionStart
-##  These are the minimal values required to deploy the SDP helm chart.
-## @descriptionEnd
-
+# =========================== START global ========================
 global:
-  ## @extra global.eventBroker Configuration related to the event broker used by the application.
-  ## @param global.eventBroker.type The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".
-  ## @param global.eventBroker.urls A comma-separated list of broker URLs for the event broker.
-  ## @param global.eventBroker.consumerGroupId The consumer group ID for the event broker.
-  eventBroker:
-    type: "NONE"
+  ## global.ephemeralDatabase Enables the creation of an ephemeral database for testing purposes.
+  ephemeralDatabase: true
+  ## @param global.autoGenerateSecrets Determines if secrets should be auto-generated.
+  autoGenerateSecrets: true
+  ## global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
+  singleTenantMode: true
 
+# =========================== START sdp ===========================
 sdp:
-
-  ## @param sdp.route.domain Public domain/address of the SDP service.
-  ## @param sdp.route.mtnDomain Public domain/address of the multi-tenant SDP service. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp.localhost.com".
   route:
-    domain: #required
-    mtnDomain: #required
-
-  ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs are enabled in this instance ("true" or "false"). Setting to "true" because broker type is `NONE`.
-  ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
-  ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
-  ## @param sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
-  ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
-  configMap:
-    annotations:
-    data:
-      ENABLE_SCHEDULER: "true"
-      SEP10_SIGNING_PUBLIC_KEY: #required
-      DISTRIBUTION_PUBLIC_KEY: #required
-      RECAPTCHA_SITE_KEY: #required
-      INSTANCE_NAME: #required
-
-  ## @param sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token.
-  ## @param sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.
-  ## @param sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token.
-  ## @param sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
-  ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
-  ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants’ distribution accounts.
-  ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
-  ## @param sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
-  ## @param sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+    schema: "http"
+    domain: "sdp.local"
+    adminDomain: "admin.local"
+  ## Disable the TLS for the SDP ingress
+  ingress:
+    tls: []
+  ## Generate secrets for the SDP
   kubeSecrets:
     secretName: sdp
     create: true
-    data:
-      EC256_PRIVATE_KEY: #required
-      SEP10_SIGNING_PRIVATE_KEY: #required
-      SEP24_JWT_SECRET: #required
-      RECAPTCHA_SITE_SECRET_KEY:  #required
-      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
-      DATABASE_URL: #required
-      DISTRIBUTION_SEED: #required
-      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
-      ADMIN_ACCOUNT: #required
-      ADMIN_API_KEY: #required
+  ## Using edge for development. It is recommended to use a fixed version for production.
+  image:
+    tag: "edge"
 
-  ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
-  ingress: #required
-
-
+# =========================== START Anchor ========================
 anchorPlatform:
-
-  ## @param anchorPlatform.route.domain Public domain/address of the Anchor Platform service. If using localhost, consider including the port as part of the domain.
   route:
-    domain: #required
-
-  ## @param anchorPlatform.configMap.data.ASSETS_VALUE [string] Specifies the details and configuration of assets supported by the anchor platform. This includes SEP-24 enabled assets, schema type, code, issuer details, distribution account, precision details, and deposit and withdrawal configurations. Currently, it needs to be *manually* kept up to date with the SDP state.
-  configMap:
-    data:
-      ASSETS_VALUE: #required
-
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_DATA_PASSWORD Database password for the anchor platform.
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_DATA_USERNAME Database username for the anchor platform.
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_PLATFORM_API_AUTH_SECRET The secret used for authenticating API requests between the SDP and the Anchor Platform.
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP10_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-10 JWT tokens. These tokens are used for various authentication and transaction-related purposes.
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP10_SIGNING_SEED The seed for the SEP-10 signing process. It's essential for ensuring the security and authenticity of SEP-10 transactions.
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 interactive URLs. These URLs typically initiate user-interactive processes like deposits and withdrawals.
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP24_MORE_INFO_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 'More Info' URLs. These URLs provide users with additional details or steps related to their transactions.
+    schema: "http"
+    domain: "ap.local"
+  ## Disable the TLS for the Anchor Platform ingress
+  ingress:
+    tls: []
+  ## Generate secrets for the Anchor Platform
   kubeSecrets:
     secretName: sdp-ap
     create: true
-    data:
-      SECRET_DATA_PASSWORD: #required
-      SECRET_DATA_USERNAME: #required
-      SECRET_PLATFORM_API_AUTH_SECRET: #required for mySdpToAnchorPlatformSecret
-      SECRET_SEP10_JWT_SECRET: #required
-      SECRET_SEP10_SIGNING_SEED: #required
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: #required
-      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: #required
 
-  ## @extra anchorPlatform.ingress Configuration for the ingress controller for the Anchor Platform.
-  ingress: #required
-
+# =========================== START TSS ===========================
 tss:
-
-  ## @extra tss.configMap Configuration settings for the Transaction Submission Service (TSS) ConfigMap.
-  ## @param tss.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts.
-  configMap:
-    data:
-      DISTRIBUTION_PUBLIC_KEY: #required
-
-  ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants’ distribution accounts.
-  ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
+  ## Generate secrets for the TSS
   kubeSecrets:
     secretName: sdp-tss
     create: true
-    data:
-      DATABASE_URL: #required
-      DISTRIBUTION_SEED: #required
-      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
 
+# =========================== START Dashboard =====================
 dashboard:
-
-  ## @param dashboard.enabled If true, the dashboard will be deployed.
-  enabled: true
-
-  ## @extra dashboard.route Configuration related to the routing of the Dashboard.
-  ## @param dashboard.route.domain Public domain/address of the Dashboard.
-  ## @param dashboard.route.mtnDomain Public domain/address of the multi-tenant Dashboard. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp-dashboard.localhost.com".
   route:
-    domain: #required
-    mtnDomain: #required
-
-  ## @param dashboard.configMap.data.RECAPTCHA_SITE_KEY The site key for Google reCAPTCHA service.
-  configMap:
-    data:
-      RECAPTCHA_SITE_KEY: #required
-
-  ## @extra dashboard.ingress Configuration for the ingress controller for the dashboard.
-  ingress: #required
+    schema: "http"
+    domain: "dashboard.local"
+  ## Using edge for development. It is recommended to use a fixed version for production.
+  image:
+    fullName: stellar/stellar-disbursement-platform-frontend:edge
+  ## Disable the TLS for the Dashboard ingress
+  ingress:
+    tls: []

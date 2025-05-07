@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -43,7 +44,8 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	}
 
 	// validate otp field
-	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value")
+	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value").
+		WithErrorCode(httperror.Extra_1)
 
 	// validate verification type field
 	rv.Check(verificationField != "", "verification_field", "verification type cannot be empty")
@@ -52,13 +54,17 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	// validate verification fields
 	switch vf {
 	case data.VerificationTypeDateOfBirth:
-		rv.CheckError(utils.ValidateDateOfBirthVerification(verification), "verification", "")
+		code, validationErr := utils.ValidateDateOfBirthVerification(verification)
+		rv.CheckError(validationErr, "verification", "").WithErrorCode(code)
 	case data.VerificationTypeYearMonth:
-		rv.CheckError(utils.ValidateYearMonthVerification(verification), "verification", "")
+		code, validationErr := utils.ValidateYearMonthVerification(verification)
+		rv.CheckError(validationErr, "verification", "").WithErrorCode(code)
 	case data.VerificationTypePin:
-		rv.CheckError(utils.ValidatePinVerification(verification), "verification", "")
+		code, validationErr := utils.ValidatePinVerification(verification)
+		rv.CheckError(validationErr, "verification", "").WithErrorCode(code)
 	case data.VerificationTypeNationalID:
-		rv.CheckError(utils.ValidateNationalIDVerification(verification), "verification", "")
+		code, validationErr := utils.ValidateNationalIDVerification(verification)
+		rv.CheckError(validationErr, "verification", "").WithErrorCode(code)
 	}
 
 	receiverInfo.PhoneNumber = phone

@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -30,6 +31,7 @@ type ReceiverSendOTPHandler struct {
 	Models             *data.Models
 	MessageDispatcher  message.MessageDispatcherInterface
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
+	ReCAPTCHADisabled  bool
 }
 
 type ReceiverSendOTPData struct {
@@ -78,22 +80,24 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	receiverSendOTPRequest := ReceiverSendOTPRequest{}
 	err := json.NewDecoder(r.Body).Decode(&receiverSendOTPRequest)
 	if err != nil {
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		httperror.BadRequest("invalid request body", err, nil).WithErrorCode(httperror.Code400_0).Render(w)
 		return
 	}
 	receiverSendOTPRequest.PhoneNumber = utils.TrimAndLower(receiverSendOTPRequest.PhoneNumber)
 	receiverSendOTPRequest.Email = utils.TrimAndLower(receiverSendOTPRequest.Email)
 
-	// validating reCAPTCHA Token
-	isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, receiverSendOTPRequest.ReCAPTCHAToken)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil).Render(w)
-		return
-	}
-	if !isValid {
-		log.Ctx(ctx).Errorf("reCAPTCHA token is invalid")
-		httperror.BadRequest("reCAPTCHA token is invalid", nil, nil).Render(w)
-		return
+	// validating reCAPTCHA Token if it is enabled
+	if !h.ReCAPTCHADisabled {
+		isValid, tokenErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, receiverSendOTPRequest.ReCAPTCHAToken)
+		if tokenErr != nil {
+			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", tokenErr, nil).WithErrorCode(httperror.Code500_5).Render(w)
+			return
+		}
+		if !isValid {
+			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid")
+			httperror.BadRequest("reCAPTCHA token is invalid", nil, nil).WithErrorCode(httperror.Code400_1).Render(w)
+			return
+		}
 	}
 
 	// Validate SEP-24 JWT claims
@@ -101,20 +105,21 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	if sep24Claims == nil {
 		err = fmt.Errorf("no SEP-24 claims found in the request context")
 		log.Ctx(ctx).Error(err)
-		httperror.Unauthorized("", err, nil).Render(w)
+		httperror.Unauthorized("", err, nil).WithErrorCode(httperror.Code401_0).Render(w)
 		return
 	}
 	err = sep24Claims.Valid()
 	if err != nil {
 		err = fmt.Errorf("SEP-24 claims are invalid: %w", err)
 		log.Ctx(ctx).Error(err)
-		httperror.Unauthorized("", err, nil).Render(w)
+		httperror.Unauthorized("", err, nil).WithErrorCode(httperror.Code401_0).Render(w)
 		return
 	}
 
 	// Ensure XOR(PhoneNumber, Email)
 	if v := receiverSendOTPRequest.validateContactInfo(); v.HasErrors() {
-		httperror.BadRequest("", nil, v.Errors).Render(w)
+		// TODO: how to manage these extras?
+		httperror.BadRequest("", nil, v.Errors).WithErrorCode(httperror.Code400_0).Render(w)
 		return
 	}
 
@@ -126,7 +131,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	} else if receiverSendOTPRequest.Email != "" {
 		contactType, contactInfo = data.ReceiverContactTypeEmail, receiverSendOTPRequest.Email
 	} else {
-		httperror.InternalError(ctx, "Unexpected contact info", nil, nil).Render(w)
+		httperror.InternalError(ctx, "Unexpected contact info", nil, nil).WithErrorCode(httperror.Code500_6).Render(w)
 		return
 	}
 	verificationField, httpErr := h.handleOTPForReceiver(ctx, contactType, contactInfo, sep24Claims.ClientDomainClaim)
@@ -136,7 +141,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	response := newReceiverSendOTPResponseBody(contactType, verificationField)
-	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+	httpjson.Render(w, response, httpjson.JSON)
 }
 
 // newReceiverSendOTPResponseBody creates a new ReceiverSendOTPResponseBody based on the OTP registration type and verification field.
@@ -169,30 +174,31 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByContactInfo(ctx, contactInfo)
 	if err != nil {
 		log.Ctx(ctx).Warnf("Could not find ANY receiver verification for %s %s: %v", contactTypeStr, truncatedContactInfo, err)
+		h.recordRegistrationAttempt(ctx, contactType, contactInfo)
 		return placeholderVerificationField, nil
 	}
 
 	// Generate a new 6 digits OTP
 	newOTP, err := utils.RandomString(6, utils.NumberBytes)
 	if err != nil {
-		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot generate OTP for receiver wallet", err, nil)
+		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot generate OTP for receiver wallet", err, nil).WithErrorCode(httperror.Code500_7)
 	}
 
 	// Update OTP for receiver wallet
 	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, contactInfo, sep24ClientDomain, newOTP)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
-		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil)
+		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil).WithErrorCode(httperror.Code500_8)
 	}
 	if numberOfUpdatedRows < 1 {
 		log.Ctx(ctx).Warnf("Could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, sep24ClientDomain)
+		h.recordRegistrationAttempt(ctx, contactType, contactInfo)
 		return placeholderVerificationField, nil
 	}
 
 	// Send OTP message
-	err = h.sendOTP(ctx, contactType, contactInfo, newOTP)
-	if err != nil {
+	if err = h.sendOTP(ctx, contactType, contactInfo, newOTP); err != nil {
 		err = fmt.Errorf("sending OTP message: %w", err)
-		return placeholderVerificationField, httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
+		return placeholderVerificationField, httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil).WithErrorCode(httperror.Code500_9)
 	}
 
 	return receiverVerification.VerificationField, nil
@@ -244,4 +250,32 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	}
 
 	return nil
+}
+
+func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
+	ctx context.Context,
+	contactType data.ReceiverContactType,
+	contactInfo string,
+) {
+	claims := anchorplatform.GetSEP24Claims(ctx)
+	attempt := data.ReceiverRegistrationAttempt{
+		PhoneNumber:   "",
+		Email:         "",
+		AttemptTs:     time.Now(),
+		ClientDomain:  claims.ClientDomain(),
+		TransactionID: claims.TransactionID(),
+		WalletAddress: claims.SEP10StellarAccount(),
+		WalletMemo:    claims.SEP10StellarMemo(),
+	}
+
+	switch contactType {
+	case data.ReceiverContactTypeSMS:
+		attempt.PhoneNumber = contactInfo
+	case data.ReceiverContactTypeEmail:
+		attempt.Email = contactInfo
+	}
+
+	if err := h.Models.ReceiverRegistrationAttempt.InsertReceiverRegistrationAttempt(ctx, attempt); err != nil {
+		log.Ctx(ctx).Errorf("failed to record registration attempt: %v", err)
+	}
 }

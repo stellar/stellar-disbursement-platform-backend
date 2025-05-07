@@ -22,7 +22,7 @@ wait_for_server() {
 }
 
 # Configuration arrays with key-value strings
-Config_StellarEnvPhoneUSDCTestnet=(
+Config_Stellar_Env_Phone_USDC_Testnet=(
   "platform=Stellar"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
@@ -31,8 +31,9 @@ Config_StellarEnvPhoneUSDCTestnet=(
   "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 )
 
-Config_CircleDBVaultPhoneUSDCTestnet=(
+Config_CircleTransfer_DBVault_Phone_USDC_Testnet=(
   "platform=Circle"
+  "CIRCLE_API_TYPE=TRANSFERS"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
   "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
@@ -40,7 +41,17 @@ Config_CircleDBVaultPhoneUSDCTestnet=(
   "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 )
 
-Config_StellarEnvEmailUSDCTestnet=(
+Config_CirclePayouts_DBVault_PhoneWithWallet_USDC_Testnet=(
+  "platform=Circle"
+  "CIRCLE_API_TYPE=PAYOUTS"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
+  "DISBURSED_ASSET_CODE=USDC"
+  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+)
+
+Config_Stellar_Env_Email_USDC_Testnet=(
   "platform=Stellar"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv"
@@ -49,7 +60,7 @@ Config_StellarEnvEmailUSDCTestnet=(
   "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 )
 
-Config_StellarEnvPhoneWithWalletUSDCTestnet=(
+Config_Stellar_Env_PhoneWithWallet_USDC_Testnet=(
   "platform=Stellar"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv"
@@ -58,7 +69,7 @@ Config_StellarEnvPhoneWithWalletUSDCTestnet=(
   "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 )
 
-Config_StellarEnvPhoneXLMFuturenet=(
+Config_Stellar_Env_Phone_XLM_Futurenet=(
   "platform=Stellar"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
@@ -69,11 +80,12 @@ Config_StellarEnvPhoneXLMFuturenet=(
 )
 
 options=(
-  Config_StellarEnvPhoneUSDCTestnet[@]
-  Config_CircleDBVaultPhoneUSDCTestnet[@]
-  Config_StellarEnvEmailUSDCTestnet[@]
-  Config_StellarEnvPhoneWithWalletUSDCTestnet[@]
-  Config_StellarEnvPhoneXLMFuturenet[@]
+  Config_Stellar_Env_Phone_USDC_Testnet[@]
+  Config_CircleTransfer_DBVault_Phone_USDC_Testnet[@]
+  Config_CirclePayouts_DBVault_PhoneWithWallet_USDC_Testnet[@]
+  Config_Stellar_Env_Email_USDC_Testnet[@]
+  Config_Stellar_Env_PhoneWithWallet_USDC_Testnet[@]
+  Config_Stellar_Env_Phone_XLM_Futurenet[@]
 )
 
 # Iterate over each configuration
@@ -82,6 +94,7 @@ for config_name in "${options[@]}"; do
   config=("${!config_name}")
 
   echo -e "\n====> 👀 Starting e2e setup and integration test for ${config_name}"
+  export CIRCLE_API_TYPE=""
 
   # Parse and export key-value pairs
   for pair in "${config[@]}"; do
@@ -91,7 +104,7 @@ for config_name in "${options[@]}"; do
   done
 
   # Example of using the exported variables
-  DESCRIPTION="$platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
+  DESCRIPTION="$platform$CIRCLE_API_TYPE - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
 
   echo $DIVIDER
   echo "====> 👀Step 1: start preparation"

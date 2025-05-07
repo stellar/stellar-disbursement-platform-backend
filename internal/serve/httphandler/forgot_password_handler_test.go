@@ -221,7 +221,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Return("resetToken", nil).
 					Once()
 				messengerClientMock.
-					On("SendMessage", mock.Anything).
+					On("SendMessage", mock.Anything, mock.Anything).
 					Return(errors.New("unexpected error")).
 					Once()
 			},
@@ -243,7 +243,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Return("resetToken", nil).
 					Once()
 				messengerClientMock.
-					On("SendMessage", mock.Anything).
+					On("SendMessage", mock.Anything, mock.Anything).
 					Return(nil).
 					Once()
 			},
@@ -261,7 +261,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Return("resetToken", nil).
 					Once()
 				messengerClientMock.
-					On("SendMessage", mock.Anything).
+					On("SendMessage", mock.Anything, mock.Anything).
 					Return(nil).
 					Once()
 			},

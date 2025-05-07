@@ -10,7 +10,7 @@ metadata:
 spec:
   type: {{ .Values.global.service.type }}
   ports:
-    - port: {{ include "dashboard.port" . }}
+    - port: {{ include "sdp.dashboard.port" . }}
       targetPort: http
       protocol: TCP
       name: http

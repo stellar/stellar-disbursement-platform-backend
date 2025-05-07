@@ -1,18 +1,133 @@
-1. Get the application URL by running these commands:
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }} and deployed to namespace {{ .Release.Namespace }}.
+
 {{- if .Values.sdp.ingress.enabled }}
-{{- range $host := .Values.sdp.ingress.hosts }}
-  {{- range .paths }}
-  http{{ if $.Values.sdp.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
-  {{- end }}
-{{- end }}
+1. Access the SDP application:
+   {{- if .Values.sdp.ingress.tls }}
+   https://{{ include "sdp.domain" . }}
+   {{- else }}
+   http://{{ include "sdp.domain" . }}
+   {{- end }}
+
+   {{- if .Values.sdp.route.mtnDomain }}
+   MTN Domain:
+   {{- if .Values.sdp.ingress.tls }}
+   https://{{ include "sdp.mtnDomain" . }}
+   {{- else }}
+   http://{{ include "sdp.mtnDomain" . }}
+   {{- end }}
+   {{- end }}
+
+   {{- if .Values.sdp.route.adminDomain }}
+   Admin Interface:
+   {{- if .Values.sdp.ingress.tls }}
+   https://{{ include "sdp.adminDomain" . }}
+   {{- else }}
+   http://{{ include "sdp.adminDomain" . }}
+   {{- end }}
+   {{- end }}
+
 {{- else if contains "NodePort" .Values.global.service.type }}
-  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "sdp.fullname" . }}) && export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}") && echo http://$NODE_IP:$NODE_PORT
+1. Access the SDP application:
+   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "sdp.fullname" . }})
+   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+   echo http://$NODE_IP:$NODE_PORT
+
 {{- else if contains "LoadBalancer" .Values.global.service.type }}
-     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
-           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "sdp.fullname" . }}'
-  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "sdp.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
-  echo http://$SERVICE_IP:{{ include "sdp.port" . }}
+1. Access the SDP application:
+   NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+         You can watch the status by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "sdp.fullname" . }}'
+   export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "sdp.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+   echo http://$SERVICE_IP:{{ include "sdp.port" . }}
+
 {{- else if contains "ClusterIP" .Values.global.service.type }}
-  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}") && export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}") && echo "Visit http://127.0.0.1:8080 to use your application"
-  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+1. Access the SDP application:
+   export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+   export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+   kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+   Visit http://127.0.0.1:8080 to use the SDP application
 {{- end }}
+
+{{- if and .Values.dashboard.enabled .Values.dashboard.ingress.enabled }}
+2. Access the Dashboard:
+   {{- if .Values.dashboard.ingress.tls }}
+   https://{{ include "sdp.dashboard.domain" . }}
+   {{- else }}
+   http://{{ include "sdp.dashboard.domain" . }}
+   {{- end }}
+
+   {{- if .Values.sdp.route.mtnDomain }}
+   MTN Domain:
+   {{- if .Values.dashboard.ingress.tls }}
+   https://{{ include "sdp.dashboard.mtnDomain" . }}
+   {{- else }}
+   http://{{ include "sdp.dashboard.mtnDomain" . }}
+   {{- end }}
+   {{- end }}
+{{- else if and .Values.dashboard.enabled (contains "ClusterIP" .Values.global.service.type) }}
+2. Access the Dashboard:
+   export DASHBOARD_POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=dashboard" -o jsonpath="{.items[0].metadata.name}")
+   kubectl --namespace {{ .Release.Namespace }} port-forward $DASHBOARD_POD_NAME 8081:{{ include "sdp.dashboard.port" . }}
+   Visit http://127.0.0.1:8081 to use the Dashboard
+{{- end }}
+
+{{- if .Values.anchorPlatform.ingress.enabled }}
+3. Access the Anchor Platform:
+   {{- if .Values.anchorPlatform.ingress.tls }}
+   https://{{ include "sdp.ap.domain" . }}
+   {{- else }}
+   http://{{ include "sdp.ap.domain" . }}
+   {{- end }}
+{{- else }}
+3. Access the AP Service:
+   AP SEP Port: {{ include "sdp.ap.sepPort" . }}
+   AP Platform Port: {{ include "sdp.ap.platformPort" . }}
+   {{- if contains "ClusterIP" .Values.global.service.type }}
+
+   Run these commands to port-forward to the AP service:
+   export AP_POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=ap" -o jsonpath="{.items[0].metadata.name}")
+   kubectl --namespace {{ .Release.Namespace }} port-forward $AP_POD_NAME {{ include "sdp.ap.sepPort" . }}:ap-sep {{ include "sdp.ap.platformPort" . }}:ap-platform
+   {{- end }}
+{{- end }}
+
+4. View logs:
+   # SDP logs
+   kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }}" -f
+
+   # Dashboard logs (if enabled)
+   {{- if .Values.dashboard.enabled }}
+   kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ .Release.Name }}-dashboard" -f
+   {{- end }}
+
+   # AP logs
+   kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ .Release.Name }}-ap" -f
+
+   # TSS logs (if enabled)
+   {{- if .Values.tss.enabled }}
+   kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ .Release.Name }}-tss" -f
+   {{- end }}
+
+5. Check deployment status:
+   kubectl get deployments,pods,services,ingress,secrets --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ .Release.Name }}"
+
+6. Create your first tenant:
+   If you don't have a tenant yet, you'll need to create one to start using the SDP.
+   Tenant provisioning is documented at:
+   https://developers.stellar.org/platforms/stellar-disbursement-platform/admin-guide/tenant-provisioning
+
+   To calculate the auth header for the admin API, run:
+
+   # Get the admin credentials from the secrets
+   ADMIN_ACCOUNT=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.sdp.kubeSecrets.secretName }} -o jsonpath="{.data.ADMIN_ACCOUNT}" | base64 --decode)
+   ADMIN_API_KEY=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.sdp.kubeSecrets.secretName }} -o jsonpath="{.data.ADMIN_API_KEY}" | base64 --decode)
+
+   # Create the auth header (Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY')
+   AUTH_HEADER=$(echo -n "$ADMIN_ACCOUNT:$ADMIN_API_KEY" | base64)
+
+   echo "Authorization header: $AUTH_HEADER"
+
+   # Use this value in your API requests as:
+   # curl -H "Authorization: $AUTH_HEADER" ...
+
+For more information and configuration options, please refer to the README.md file.

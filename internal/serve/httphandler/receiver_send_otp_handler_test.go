@@ -149,7 +149,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusInternalServerError,
-			wantBody:       `{"error":"Cannot validate reCAPTCHA token"}`,
+			wantBody:       `{"error":"Cannot validate reCAPTCHA token", "error_code":"500_5"}`,
 		},
 		{
 			name:                   "(400 - BadRequest) if the reCAPTCHA token is invalid",
@@ -162,7 +162,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusBadRequest,
-			wantBody:       `{"error":"reCAPTCHA token is invalid"}`,
+			wantBody:       `{"error":"reCAPTCHA token is invalid", "error_code":"400_1"}`,
 		},
 		{
 			name:                   "(401 - Unauthorized) if the SEP-24 claims are not in the request context",
@@ -175,7 +175,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusUnauthorized,
-			wantBody:       `{"error":"Not authorized."}`,
+			wantBody:       `{"error":"Not authorized.", "error_code":"401_0"}`,
 		},
 		{
 			name:                   "(401 - Unauthorized) if the SEP-24 claims are invalid",
@@ -188,7 +188,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 					Once()
 			},
 			wantStatusCode: http.StatusUnauthorized,
-			wantBody:       `{"error":"Not authorized."}`,
+			wantBody:       `{"error":"Not authorized.", "error_code":"401_0"}`,
 		},
 		{
 			name:                   "(400 - BadRequest) if the request body is invalid",
@@ -203,6 +203,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 			wantStatusCode: http.StatusBadRequest,
 			wantBody: `{
 				"error": "The request was invalid in some way.",
+				"error_code": "400_0",
 				"extras": {
 					"phone_number":"phone_number or email is required",
 					"email":"phone_number or email is required"
@@ -275,6 +276,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 		receiverSendOTPRequest ReceiverSendOTPRequest
 		verificationField      data.VerificationType
 		contactType            data.ReceiverContactType
+		isReCAPTCHADisabled    bool
 		prepareMocksFn         func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher)
 		shouldCreateObjects    bool
 		assertLogsFn           func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry)
@@ -331,7 +333,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 						assert.Contains(t, entries[0].Message, wantLog)
 					},
 					wantStatusCode: http.StatusInternalServerError,
-					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s to %s: failed calling message dispatcher"}`, utils.Humanize(string(contactType)), truncatedContactInfo),
+					wantBody:       fmt.Sprintf(`{"error":"Failed to send OTP message, reason: sending OTP message: cannot send OTP message through %s to %s: failed calling message dispatcher", "error_code": "500_9"}`, utils.Humanize(string(contactType)), truncatedContactInfo),
 				},
 				{
 					name:                   fmt.Sprintf("%s/%s/🟡 (200-Ok) with false positive", contactType, verificationField),
@@ -380,6 +382,30 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 					wantStatusCode: http.StatusOK,
 					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"%s"}`, utils.Humanize(string(contactType)), verificationField),
 				},
+				{
+					name:                   fmt.Sprintf("%s/%s/🟢 (200-Ok) OTP sent with no ReCAPTCHA", contactType, verificationField),
+					receiverSendOTPRequest: receiverSendOTPRequest,
+					verificationField:      verificationField,
+					contactType:            contactType,
+					isReCAPTCHADisabled:    true,
+					shouldCreateObjects:    true,
+					prepareMocksFn: func(t *testing.T, mockReCAPTCHAValidator *validators.ReCAPTCHAValidatorMock, mockMessageDispatcher *message.MockMessageDispatcher) {
+						mockMessageDispatcher.
+							On("SendMessage",
+								mock.Anything,
+								mock.AnythingOfType("message.Message"),
+								[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+							Return(messengerType, nil).
+							Once().
+							Run(func(args mock.Arguments) {
+								msg := args.Get(1).(message.Message)
+								assert.Contains(t, msg.Body, "is your MyCustomAid verification code.")
+								assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Body)
+							})
+					},
+					wantStatusCode: http.StatusOK,
+					wantBody:       fmt.Sprintf(`{"message":"if your %s is registered, you'll receive an OTP","verification_field":"%s"}`, utils.Humanize(string(contactType)), verificationField),
+				},
 			}...)
 		}
 	}
@@ -411,6 +437,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 				Models:             models,
 				MessageDispatcher:  mockMessageDispatcher,
 				ReCAPTCHAValidator: mockReCAPTCHAValidator,
+				ReCAPTCHADisabled:  tc.isReCAPTCHADisabled,
 			}.ServeHTTP)
 
 			reqBody, err := json.Marshal(tc.receiverSendOTPRequest)
@@ -545,6 +572,69 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 	}
 }
 
+func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.T) {
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: "calgar.indomitus",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "TX-MARINES",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+	ctx := context.WithValue(context.Background(), anchorplatform.SEP24ClaimsContextKey, validClaims)
+
+	models := data.SetupModels(t)
+
+	handler := ReceiverSendOTPHandler{
+		Models:             models,
+		MessageDispatcher:  message.NewMockMessageDispatcher(t),
+		ReCAPTCHAValidator: validators.NewReCAPTCHAValidatorMock(t),
+		ReCAPTCHADisabled:  true,
+	}
+	r := chi.NewRouter()
+	r.Post("/wallet-registration/otp", handler.ServeHTTP)
+
+	tests := []struct {
+		name, payload, column, want string
+	}{
+		{
+			name:    "phone not found",
+			payload: `{"phone_number":"+14155550001","recaptcha_token":""}`,
+			column:  "phone_number",
+			want:    "+14155550001",
+		},
+		{
+			name:    "email not found",
+			payload: `{"email":"salamander@fireborn.cod","recaptcha_token":""}`,
+			column:  "email",
+			want:    "salamander@fireborn.cod",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+				"/wallet-registration/otp", strings.NewReader(tc.payload))
+			require.NoError(t, err)
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			require.Equal(t, http.StatusOK, rr.Code)
+
+			var count int
+			query := fmt.Sprintf(
+				`SELECT count(*) FROM receiver_registration_attempts WHERE %s = $1`, tc.column,
+			)
+			err = models.DBConnectionPool.QueryRowxContext(ctx, query, tc.want).Scan(&count)
+			require.NoError(t, err)
+			assert.Equal(t, 1, count)
+
+			// cleanup
+			_, _ = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
+		})
+	}
+}
+
 func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -556,6 +646,16 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: "test-domain.test",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444:ANYMEMO",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+		},
+	}
+	ctx = context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
 	receiverWithoutWalletInsert := &data.Receiver{
 		PhoneNumber: "+141555550000",
@@ -633,7 +733,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 				contactTypeStr := utils.Humanize(string(contactType))
 				truncatedContactInfo := utils.TruncateString(r.ContactByType(contactType), 3)
 				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s to %s: %w", contactTypeStr, truncatedContactInfo, errors.New("error sending message")))
-				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil)
+				return httperror.InternalError(ctx, "Failed to send OTP message, reason: "+err.Error(), err, nil).WithErrorCode(httperror.Code500_9)
 			},
 		},
 		{
