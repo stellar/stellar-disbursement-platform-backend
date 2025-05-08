@@ -17,8 +17,6 @@ pub(crate) const WEBAUTHN_TYPE_GET: &str = "webauthn.get";
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[contracttype]
 pub struct WebAuthnCredential {
-    /// The credential ID.
-    pub credential_id: Bytes,
     /// The authenticator data is a base64url encoded string.
     pub authenticator_data: Bytes,
     /// The client data JSON is a base64url encoded string.

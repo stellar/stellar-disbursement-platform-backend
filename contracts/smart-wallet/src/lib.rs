@@ -4,7 +4,7 @@ use soroban_sdk::{
     auth::{Context, CustomAccountInterface},
     contract, contracterror, contractimpl, contracttype,
     crypto::Hash,
-    Address, Bytes, BytesN, Env, Vec,
+    Address, BytesN, Env, Vec,
 };
 
 mod base64_url;
@@ -14,18 +14,17 @@ mod webauthn;
 #[contracttype]
 pub enum DataKey {
     Admin,
-    Signer(Bytes),
+    Signer,
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[contracterror]
 pub enum AccountContractError {
-    SingleSignatureRequired = 0,
-    UnknownSigner = 1,
-    WebAuthnInvalidType = 2,
-    WebAuthnUserNotPresent = 3,
-    WebAuthnUserNotVerified = 4,
-    WebAuthnInvalidChallenge = 5,
+    MissingSigner = 0,
+    WebAuthnInvalidType = 1,
+    WebAuthnUserNotPresent = 2,
+    WebAuthnUserNotVerified = 3,
+    WebAuthnInvalidChallenge = 4,
 }
 
 #[contract]
@@ -33,11 +32,9 @@ pub struct AccountContract;
 
 #[contractimpl]
 impl AccountContract {
-    pub fn __constructor(env: Env, admin: Address, credential_id: Bytes, public_key: BytesN<65>) {
+    pub fn __constructor(env: Env, admin: Address, public_key: BytesN<65>) {
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::Signer(credential_id), &public_key);
+        env.storage().instance().set(&DataKey::Signer, &public_key);
     }
 
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
@@ -51,7 +48,7 @@ impl AccountContract {
 #[contractimpl]
 impl CustomAccountInterface for AccountContract {
     type Error = AccountContractError;
-    type Signature = Vec<webauthn::WebAuthnCredential>;
+    type Signature = webauthn::WebAuthnCredential;
 
     fn __check_auth(
         env: Env,
@@ -59,19 +56,13 @@ impl CustomAccountInterface for AccountContract {
         signatures: Self::Signature,
         _auth_contexts: Vec<Context>,
     ) -> Result<(), Self::Error> {
-        if signatures.len() != 1 {
-            return Err(AccountContractError::SingleSignatureRequired);
-        }
-
-        let signature = signatures.get(0).unwrap();
-
         let public_key = env
             .storage()
             .instance()
-            .get::<_, BytesN<65>>(&DataKey::Signer(signature.clone().credential_id))
-            .ok_or(AccountContractError::UnknownSigner)?;
+            .get::<_, BytesN<65>>(&DataKey::Signer)
+            .ok_or(AccountContractError::MissingSigner)?;
 
-        webauthn::verify(&env, &signature_payload, &signature, &public_key);
+        webauthn::verify(&env, &signature_payload, &signatures, &public_key);
 
         Ok(())
     }
