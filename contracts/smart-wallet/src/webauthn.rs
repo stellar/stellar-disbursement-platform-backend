@@ -90,20 +90,14 @@ pub fn verify(
         panic_with_error!(env, AccountContractError::WebAuthnInvalidChallenge);
     }
 
-    let challenge_slice = credential
+    // Compare actual challenge with expected challenge
+    let actual_challenge = credential
         .client_data_json
         .slice(challenge_start..challenge_end);
 
-    if challenge_slice.len() != ENCODED_CHALLENGE_LEN {
-        panic_with_error!(env, AccountContractError::WebAuthnInvalidChallenge);
-    }
-
-    // Compare actual challenge with expected challenge
-    let mut actual_challenge = [0_u8; ENCODED_CHALLENGE_LEN as usize];
-    challenge_slice.copy_into_slice(&mut actual_challenge);
-
-    let mut expected_challenge = [0_u8; ENCODED_CHALLENGE_LEN as usize];
-    base64_url::encode(&mut expected_challenge, &signature_payload.to_array());
+    let mut encoded_challenge_buffer = [0_u8; ENCODED_CHALLENGE_LEN as usize];
+    base64_url::encode(&mut encoded_challenge_buffer, &signature_payload.to_array());
+    let expected_challenge = Bytes::from_slice(env, &encoded_challenge_buffer);
 
     if expected_challenge != actual_challenge {
         panic_with_error!(env, AccountContractError::WebAuthnInvalidChallenge);
