@@ -220,12 +220,14 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 
 		tenantID := uuid.NewString()
 		tx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
-			ExternalID:  paymentID,
-			AssetCode:   asset.Code,
-			AssetIssuer: asset.Issuer,
-			Amount:      100,
-			Destination: rw1.StellarAddress,
-			TenantID:    tenantID,
+			Payment: txSubStore.Payment{
+				ExternalID:  paymentID,
+				AssetCode:   asset.Code,
+				AssetIssuer: asset.Issuer,
+				Amount:      100,
+				Destination: rw1.StellarAddress,
+			},
+			TenantID: tenantID,
 		})
 		require.NoError(t, err)
 
@@ -424,12 +426,14 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		paymentID := "dummy_payment_id"
 
 		tx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
-			ExternalID:  paymentID,
-			AssetCode:   asset.Code,
-			AssetIssuer: asset.Issuer,
-			Amount:      100,
-			Destination: rw1.StellarAddress,
-			TenantID:    uuid.NewString(),
+			Payment: txSubStore.Payment{
+				ExternalID:  paymentID,
+				AssetCode:   asset.Code,
+				AssetIssuer: asset.Issuer,
+				Amount:      100,
+				Destination: rw1.StellarAddress,
+			},
+			TenantID: uuid.NewString(),
 		})
 		require.NoError(t, err)
 
@@ -458,12 +462,14 @@ func createTSSTxs(t *testing.T, testCtx *testContext, payments ...*data.Payment)
 		require.NoError(t, err)
 
 		transactionsToCreate = append(transactionsToCreate, txSubStore.Transaction{
-			ExternalID:  payment.ID,
-			AssetCode:   payment.Asset.Code,
-			AssetIssuer: payment.Asset.Issuer,
-			Amount:      amount,
-			Destination: payment.ReceiverWallet.StellarAddress,
-			TenantID:    testCtx.tenantID,
+			Payment: txSubStore.Payment{
+				ExternalID:  payment.ID,
+				AssetCode:   payment.Asset.Code,
+				AssetIssuer: payment.Asset.Issuer,
+				Amount:      amount,
+				Destination: payment.ReceiverWallet.StellarAddress,
+			},
+			TenantID: testCtx.tenantID,
 		})
 	}
 

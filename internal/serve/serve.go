@@ -496,6 +496,19 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 	})
 
+	mux.Group(func(r chi.Router) {
+		r.Use(middleware.EnsureTenantMiddleware)
+		r.Route("embedded-wallet", func(r chi.Router) {
+			handler := httphandler.EmbeddedWalletHandler{
+				Models:      o.Models,
+				AuthManager: authManager,
+			}
+
+			r.Post("/create", handler.CreateAccount)
+		})
+
+	})
+
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{

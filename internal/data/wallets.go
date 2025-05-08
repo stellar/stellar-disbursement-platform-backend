@@ -29,6 +29,7 @@ type Wallet struct {
 	DeepLinkSchema    string       `json:"deep_link_schema,omitempty" csv:"-" db:"deep_link_schema"`
 	Enabled           bool         `json:"enabled" csv:"-" db:"enabled"`
 	UserManaged       bool         `json:"user_managed,omitempty" csv:"-" db:"user_managed"`
+	Embedded          bool         `json:"embedded,omitempty" csv:"-" db:"embedded"`
 	Assets            WalletAssets `json:"assets,omitempty" csv:"-" db:"assets"`
 	CreatedAt         *time.Time   `json:"created_at,omitempty" csv:"-" db:"created_at"`
 	UpdatedAt         *time.Time   `json:"updated_at,omitempty" csv:"-" db:"updated_at"`

@@ -2037,8 +2037,10 @@ func Test_TransactionWorker_buildPaymentCompletedEvent(t *testing.T) {
 
 	t.Run("🎉 successfully builds sync payment event of type=ERROR", func(t *testing.T) {
 		tx := store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "payment-id",
+			ID: "tx-id",
+			Payment: store.Payment{
+				ExternalID: "payment-id",
+			},
 			TenantID:               "tenant-id",
 			StellarTransactionHash: sql.NullString{},
 		}
@@ -2067,8 +2069,10 @@ func Test_TransactionWorker_buildPaymentCompletedEvent(t *testing.T) {
 
 	t.Run("🎉 successfully builds sync payment event of type=SUCCESS", func(t *testing.T) {
 		tx := store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "payment-id",
+			ID: "tx-id",
+			Payment: store.Payment{
+				ExternalID: "payment-id",
+			},
 			TenantID:               "tenant-id",
 			StellarTransactionHash: sql.NullString{},
 		}

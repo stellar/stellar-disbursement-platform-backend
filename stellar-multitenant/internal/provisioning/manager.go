@@ -238,7 +238,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		return fmt.Errorf("running setup assets for proper network: %w", err)
 	}
 
-	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.NetworkType), services.DefaultWalletsNetworkMap)
+	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.NetworkType), services.DefaultWalletsNetworkMap, pt.BaseURL)
 	if err != nil {
 		return fmt.Errorf("running setup wallets for proper network: %w", err)
 	}

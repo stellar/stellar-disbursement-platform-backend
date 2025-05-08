@@ -21,4 +21,9 @@ var FuturenetWallets = []data.Wallet{
 		Assets:      assets.AllAssetsTestnet,
 		UserManaged: true,
 	},
+	{
+		Name:     "SDP Embedded Wallet",
+		Embedded: true,
+		Assets:   assets.AllAssetsTestnet,
+	},
 }

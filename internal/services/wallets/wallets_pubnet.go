@@ -38,6 +38,11 @@ var PubnetWallets = []data.Wallet{
 		Assets:      assets.AllAssetsPubnet,
 		UserManaged: true,
 	},
+	{
+		Name:     "SDP Embedded Wallet",
+		Embedded: true,
+		Assets:   assets.AllAssetsPubnet,
+	},
 	// {
 	// 	Name:              "Beans App",
 	// 	Homepage:          "https://www.beansapp.com/disbursements",
