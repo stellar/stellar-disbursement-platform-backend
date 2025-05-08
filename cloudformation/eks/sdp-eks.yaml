@@ -1,0 +1,511 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EKS Cluster for SDP'
+
+Parameters:
+  env:
+    Type: String
+    Default: "dev"
+    AllowedValues: 
+      - dev
+      - staging
+      - prod
+
+  NetworkStackName:
+    Type: String
+    Default: sdp-network
+    Description: Name of the networking stack
+
+  DatabaseStackName:
+    Type: String
+    Default: sdp-database
+    Description: Name of the database stack used to create security group
+
+Resources:
+  ########################################################################
+  # EKS Cluster
+  ########################################################################
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Sub "${env}-sdp-cluster"
+      Version: "1.27"
+      RoleArn: !GetAtt EKSClusterRole.Arn
+      ResourcesVpcConfig:
+        SecurityGroupIds: 
+          - !Ref EKSClusterSecurityGroup
+        SubnetIds: 
+          - Fn::ImportValue: !Sub ${NetworkStackName}-private-subnet-1
+          - Fn::ImportValue: !Sub ${NetworkStackName}-private-subnet-2
+      Logging:
+        ClusterLogging:
+          EnabledTypes: []
+
+  ########################################################################
+  # OIDC Provider for IRSA
+  ########################################################################
+  OIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    DependsOn: [EKSCluster, ClusterOIDCId]
+    Properties:
+      Url: !Sub "https://oidc.eks.${AWS::Region}.amazonaws.com/id/${ClusterOIDCId.OIDCId}" 
+      ClientIdList: 
+        - "sts.amazonaws.com"
+      ThumbprintList:
+        - "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+
+  ########################################################################
+  # NodeGroup
+  ########################################################################
+  
+  EKSNodeGroup:    # Changed from EKSNodeGroup
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName: !Ref EKSCluster
+      NodeRole: !GetAtt EKSNodeGroupRole.Arn
+      ScalingConfig:
+        MinSize: 2
+        DesiredSize: 3
+        MaxSize: 4
+      InstanceTypes:
+        - t3.small
+      Subnets:
+        - Fn::ImportValue: !Sub ${NetworkStackName}-private-subnet-1
+        - Fn::ImportValue: !Sub ${NetworkStackName}-private-subnet-2
+
+  ########################################################################
+  # IAM Roles
+  ########################################################################
+  EKSClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+
+  CertManagerRole:
+    Type: AWS::IAM::Role
+    DependsOn: [OIDCProvider, ClusterOIDCId]
+    Properties:
+      RoleName: !Sub "${env}-cert-manager-role"
+      AssumeRolePolicyDocument:
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:cert-manager:cert-manager",
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:aud": "sts.amazonaws.com"
+                    }
+                  }
+                }
+              ]
+            }
+          - OIDCId: !GetAtt ClusterOIDCId.OIDCId
+      Policies:
+        - PolicyName: Route53Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'route53:GetChange'
+                Resource: 'arn:aws:route53:::change/*'
+              - Effect: Allow
+                Action:
+                  - 'route53:ChangeResourceRecordSets'
+                  - 'route53:ListResourceRecordSets'
+                Resource: 'arn:aws:route53:::hostedzone/*'
+              - Effect: Allow
+                Action: 'route53:ListHostedZonesByName'
+                Resource: '*'
+  
+  EKSNodeGroupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: 
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
+
+  ExternalDNSPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy for external-dns to manage Route53 records
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - route53:ChangeResourceRecordSets
+            Resource: 
+              - !Sub "arn:aws:route53:::hostedzone/*"
+          - Effect: Allow
+            Action:
+              - route53:ListHostedZones
+              - route53:ListResourceRecordSets
+              - route53:ListTagsForResource
+            Resource: ["*"]
+
+  ExternalDNSRole:
+    Type: AWS::IAM::Role
+    DependsOn: [OIDCProvider, ClusterOIDCId]
+    Properties:
+      RoleName: !Sub "${env}-external-dns-role"
+      ManagedPolicyArns:
+        - !Ref ExternalDNSPolicy
+      AssumeRolePolicyDocument:
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:external-dns:external-dns",
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:aud": "sts.amazonaws.com"
+                    }
+                  }
+                }
+              ]
+            }
+          - OIDCId: !GetAtt ClusterOIDCId.OIDCId
+
+  ########################################################################
+  # Security Group for EKS
+  ########################################################################
+  EKSClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EKS cluster
+      VpcId: 
+        Fn::ImportValue: !Sub ${NetworkStackName}-vpc-id
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 
+            Fn::ImportValue: !Sub ${NetworkStackName}-vpc-cidr
+  
+  RDSIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub ${DatabaseStackName}-db-sg  # This imports the RDS security group ID
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref EKSClusterSecurityGroup  # This references the EKS cluster security group
+
+  NodeToRDSIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub ${DatabaseStackName}-db-sg
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
+
+  EKSNodeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EKS worker nodes
+      VpcId: 
+        Fn::ImportValue: !Sub ${NetworkStackName}-vpc-id
+      Tags:
+        - Key: Name
+          Value: !Sub "${env}-sdp-cluster-node-sg"
+
+  EKSCreatedSGToRDSIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: 
+        Fn::ImportValue: !Sub ${DatabaseStackName}-db-sg
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !GetAtt EKSCluster.ClusterSecurityGroupId
+
+  NodeGroupSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EKSNodeSecurityGroup
+      SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
+      IpProtocol: '-1'
+      FromPort: -1
+      ToPort: -1
+
+  NodeToClusterIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EKSClusterSecurityGroup
+      SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
+      IpProtocol: '-1'
+      FromPort: -1
+      ToPort: -1
+
+  ClusterToNodeIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EKSNodeSecurityGroup
+      SourceSecurityGroupId: !Ref EKSClusterSecurityGroup
+      IpProtocol: '-1'
+      FromPort: -1
+      ToPort: -1
+  ########################################################################
+  # Service Account Role for SDP
+  ########################################################################
+  ExternalSecretsOperatorRole:
+    Type: AWS::IAM::Role
+    DependsOn: [OIDCProvider, ClusterOIDCId]
+    Properties:
+      RoleName: !Sub "${env}-${AWS::StackName}-eso-role"
+      AssumeRolePolicyDocument:
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:aud": "sts.amazonaws.com",
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:external-secrets:external-secrets"
+                    }
+                  }
+                }
+              ]
+            }
+          - OIDCId: !GetAtt ClusterOIDCId.OIDCId
+      Policies:
+        - PolicyName: ExternalSecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                  - 'secretsmanager:DescribeSecret'
+                Resource:
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
+
+  SDPServiceAccountRole:
+    Type: AWS::IAM::Role
+    DependsOn: [OIDCProvider, ClusterOIDCId]
+    Properties:
+      RoleName: !Sub "${env}-sdp-service-account"
+      AssumeRolePolicyDocument:
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:aud": "sts.amazonaws.com",
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:external-secrets:external-secrets"
+                    }
+                  }
+                }
+              ]
+            }
+          - OIDCId: !GetAtt ClusterOIDCId.OIDCId
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: 
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
+
+  ClusterOIDCIdFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      eks = boto3.client('eks')
+                      cluster_name = event['ResourceProperties']['ClusterName']
+                      
+                      response = eks.describe_cluster(name=cluster_name)
+                      issuer_url = response['cluster']['identity']['oidc']['issuer']
+                      oidc_id = issuer_url.split('/')[-1]
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'OIDCId': oidc_id
+                      })
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Runtime: python3.9
+      Timeout: 30
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EKSDescribe
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: eks:DescribeCluster
+                Resource: !GetAtt EKSCluster.Arn
+
+  ClusterOIDCId:
+    Type: Custom::OIDCId
+    Properties:
+      ServiceToken: !GetAtt ClusterOIDCIdFunction.Arn
+      ClusterName: !Ref EKSCluster
+
+  SecretStoreRole:
+    Type: AWS::IAM::Role
+    DependsOn: [OIDCProvider, ClusterOIDCId]
+    Properties:
+      RoleName: !Sub "${env}-${AWS::StackName}-secretstore-role"
+      AssumeRolePolicyDocument:
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                    "StringEquals": {
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:sdp:external-secrets-sa",
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:aud": "sts.amazonaws.com"
+                    }
+                  }
+                }
+              ]
+            }
+          - OIDCId: !GetAtt ClusterOIDCId.OIDCId
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                  - 'secretsmanager:DescribeSecret'
+                Resource:
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
+
+Outputs:
+  ClusterName:
+    Description: EKS cluster name
+    Value: !Ref EKSCluster
+    Export:
+      Name: !Sub "${AWS::StackName}-cluster-name"
+  
+  ClusterSecurityGroupId:
+    Description: Security Group ID for EKS cluster
+    Value: !Ref EKSClusterSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-cluster-sg"
+
+  SecretStoreRoleArn:
+    Description: IAM Role ARN for SecretStore
+    Value: !GetAtt SecretStoreRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-secretstore-role-arn"
+
+  CertManagerRoleArn:
+    Description: IAM Role ARN for cert-manager
+    Value: !GetAtt CertManagerRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-cert-manager-role-arn"
+  
+  ExternalSecretsOperatorRoleArn:
+    Description: IAM Role ARN for External Secrets Operator
+    Value: !GetAtt ExternalSecretsOperatorRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-eso-role-arn"
+
+  ServiceAccountRoleArn:
+    Description: IAM Role ARN for SDP Service Account
+    Value: !GetAtt SDPServiceAccountRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-service-account-role-arn"
+
+  ExternalDNSRoleArn:
+    Description: IAM Role ARN for external-dns
+    Value: !GetAtt ExternalDNSRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-external-dns-role-arn"
