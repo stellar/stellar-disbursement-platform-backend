@@ -25,7 +25,7 @@ pub struct WebAuthnCredential {
     pub type_index: u32,
     /// The challenge index is the starting index of the challenge in the client data JSON.
     pub challenge_index: u32,
-    /// The signature over the authenticator data and client data JSON.
+    /// The signature over the authenticator data and client data JSON hash.
     pub signature: BytesN<64>,
 }
 
