@@ -21,10 +21,11 @@ pub enum DataKey {
 #[contracterror]
 pub enum AccountContractError {
     MissingSigner = 0,
-    WebAuthnInvalidType = 1,
-    WebAuthnUserNotPresent = 2,
-    WebAuthnUserNotVerified = 3,
-    WebAuthnInvalidChallenge = 4,
+    WebAuthnInvalidClientData = 1,
+    WebAuthnInvalidType = 2,
+    WebAuthnUserNotPresent = 3,
+    WebAuthnUserNotVerified = 4,
+    WebAuthnInvalidChallenge = 5,
 }
 
 #[contract]
