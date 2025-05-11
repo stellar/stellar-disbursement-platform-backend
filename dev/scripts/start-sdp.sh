@@ -19,8 +19,8 @@ print_status "Checking prerequisites..."
 for cmd in postgres psql go; do
     if ! command -v $cmd &>/dev/null; then
         echo "$cmd is required but not installed. Please install it."
-        exit 1
-    fi
+    exit 1
+fi
 done
 
 # Set up environment variables

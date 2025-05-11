@@ -30,5 +30,9 @@ export EVENT_BROKER_TYPE="SCHEDULER"
 # Run TSS migrations
 cd .. && go run ./main.go db tss migrate up
 
+# Delete all channel accounts and ensure one channel account
+go run ./main.go channel-accounts delete --delete-all-accounts
+go run ./main.go channel-accounts ensure 1
+
 # Start TSS
 go run ./main.go tss
