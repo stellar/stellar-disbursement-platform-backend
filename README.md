@@ -38,7 +38,13 @@ stellar-disbursement-platform --help
 
 ## Quick Start
 
+### Docker Compose 
+
 To quickly test the SDP using preconfigured values, see the [Quick Start Guide](./dev/README.md).
+
+### Helm 
+
+To deploy the SDP using Helm, see the [Helm Chart](./helmchart/sdp/README.md).
 
 ## Secure Operation Manual
 

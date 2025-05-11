@@ -59,6 +59,12 @@
     "500_6": "Información de contacto inesperada.",
     "500_7": "No se puede generar código de acceso único para la billetera del receptor.",
     "500_8": "No se puede actualizar código de acceso único para la billetera del receptor.",
-    "500_9": "Error al enviar el mensaje código de acceso único."
+    "500_9": "Error al enviar el mensaje código de acceso único.",
+    "EXTRA_1": "OTP: Formato inválido del código de acceso único. Debe tener 6 dígitos.",
+    "EXTRA_2": "Verificación: Formato inválido de fecha de nacimiento. Formato correcto: 1990-01-30.",
+    "EXTRA_3": "Verificación: Formato inválido de año/mes. Formato correcto: 1990-12.",
+    "EXTRA_4": "Verificación: La fecha no puede estar en el futuro.",
+    "EXTRA_5": "Verificación: Longitud del PIN no válida. Debe tener entre 4 y 8 caracteres.",
+    "EXTRA_6": "Verificación: Identificación nacional inválida. No puede tener más de 50 caracteres."
   }
 }

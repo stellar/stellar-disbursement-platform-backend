@@ -13,6 +13,8 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/nyaruka/phonenumbers"
 	"golang.org/x/net/html"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
 var (
@@ -119,66 +121,66 @@ func ValidateOTP(otp string) error {
 }
 
 // ValidateDateOfBirthVerification will validate the date of birth field for receiver verification.
-func ValidateDateOfBirthVerification(dob string) error {
+func ValidateDateOfBirthVerification(dob string) (string, error) {
 	// make sure date of birth is not empty
 	if dob == "" {
-		return fmt.Errorf("date of birth cannot be empty")
+		return httperror.Extra_0, fmt.Errorf("date of birth cannot be empty")
 	}
 	// make sure date of birth with format 2006-01-02
 	dateOfBrith, err := time.Parse("2006-01-02", dob)
 	if err != nil {
-		return fmt.Errorf("invalid date of birth format. Correct format: 1990-01-30")
+		return httperror.Extra_2, fmt.Errorf("invalid date of birth format. Correct format: 1990-01-30")
 	}
 
 	// check if date of birth is in the past
 	if dateOfBrith.After(time.Now()) {
-		return fmt.Errorf("date of birth cannot be in the future")
+		return httperror.Extra_4, fmt.Errorf("date of birth cannot be in the future")
 	}
 
-	return nil
+	return "", nil
 }
 
 // ValidateYearMonthVerification will validate the year/month field for receiver verification.
-func ValidateYearMonthVerification(yearMonth string) error {
+func ValidateYearMonthVerification(yearMonth string) (string, error) {
 	// make sure year/month is not empty
 	if yearMonth == "" {
-		return fmt.Errorf("year/month cannot be empty")
+		return httperror.Extra_0, fmt.Errorf("year/month cannot be empty")
 	}
 
 	// make sure year/month with format 2006-01
 	ym, err := time.Parse("2006-01", yearMonth)
 	if err != nil {
-		return fmt.Errorf("invalid year/month format. Correct format: 1990-12")
+		return httperror.Extra_3, fmt.Errorf("invalid year/month format. Correct format: 1990-12")
 	}
 
 	// check if year/month is in the past
 	if ym.After(time.Now()) {
-		return fmt.Errorf("year/month cannot be in the future")
+		return httperror.Extra_4, fmt.Errorf("year/month cannot be in the future")
 	}
 
-	return nil
+	return "", nil
 }
 
 // ValidatePinVerification will validate the pin field for receiver verification.
-func ValidatePinVerification(pin string) error {
+func ValidatePinVerification(pin string) (string, error) {
 	if len(pin) < VerificationFieldPinMinLength || len(pin) > VerificationFieldPinMaxLength {
-		return fmt.Errorf("invalid pin length. Cannot have less than %d or more than %d characters in pin", VerificationFieldPinMinLength, VerificationFieldPinMaxLength)
+		return httperror.Extra_5, fmt.Errorf("invalid pin length. Cannot have less than %d or more than %d characters in pin", VerificationFieldPinMinLength, VerificationFieldPinMaxLength)
 	}
 
-	return nil
+	return "", nil
 }
 
 // ValidateNationalIDVerification will validate the national id field for receiver verification.
-func ValidateNationalIDVerification(nationalID string) error {
+func ValidateNationalIDVerification(nationalID string) (string, error) {
 	if nationalID == "" {
-		return fmt.Errorf("national id cannot be empty")
+		return httperror.Extra_0, fmt.Errorf("national id cannot be empty")
 	}
 
 	if len(nationalID) > VerificationFieldMaxIdLength {
-		return fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIdLength)
+		return httperror.Extra_6, fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIdLength)
 	}
 
-	return nil
+	return "", nil
 }
 
 // ValidatePathIsNotTraversal will validate the given path to ensure it does not contain path traversal.

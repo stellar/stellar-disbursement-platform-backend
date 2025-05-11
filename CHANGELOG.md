@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [3.7.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
+## [3.7.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
 
 > [!WARNING]
 > This version is compatible with the [stellar/stellar-disbursement-platform-frontend] version `3.7.0`.
@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Added `nodeSelector`, `tolerations` and `affinity` global defaults to helm charts. [#607](https://github.com/stellar/stellar-disbursement-platform-backend/pull/607)
 - Added CMD to create default tenant `tenants ensure-default`, introduced new env variables. [#634](https://github.com/stellar/stellar-disbursement-platform-backend/pull/634)
 - Added functionality and new `receiver_registration_attempts` table to track failed OTP attempts. [#635](https://github.com/stellar/stellar-disbursement-platform-backend/pull/635)
-
+- Added automatic default tenant resolution for single tenant mode. [#616](https://github.com/stellar/stellar-disbursement-platform-backend/pull/616)
 
 ### Changed
 
@@ -30,27 +30,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - ReCAPTCHA is now optional for the SEP-24 interactive deposit flow. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
 - Simplified Helm Charts, added documentation and instructions for local set-up, auto-generation of secrets. [#596](https://github.com/stellar/stellar-disbursement-platform-backend/pull/596)
 - ReCAPTCHA now allowed to be disabled in pubnet environments. [#618](https://github.com/stellar/stellar-disbursement-platform-backend/pull/618)
-
 - Deprecated `ENABLE_SCHEDULER` and `EVENT_BROKER_TYPE=NONE` in favor of using `EVENT_BROKER_TYPE=SCHEDULER` for background jobs. [#617](https://github.com/stellar/stellar-disbursement-platform-backend/pull/617)
 
 
 ### Fixed
 
 - Fix CLI tests and test assertions. [#587](https://github.com/stellar/stellar-disbursement-platform-backend/pull/587)
-- Fix error message for duplicate instructions in a disbursement. [#662](https://github.com/stellar/stellar-disbursement-platform-backend/pull/662)
+- Fix the error message for duplicate instructions in a disbursement. [#662](https://github.com/stellar/stellar-disbursement-platform-backend/pull/662)
 - Fix `DELETE /tenants/:id` when tenant is a DB Vault tenant.[#664](https://github.com/stellar/stellar-disbursement-platform-backend/pull/664)
 
 ### Security and Dependencies
 
 - Upgrade AWS and stellar/go dependencies. [#581](https://github.com/stellar/stellar-disbursement-platform-backend/pull/581)
 - Bump github.com/golang-jwt/jwt/v4 from 4.5.1 to 4.5.2. [#588](https://github.com/stellar/stellar-disbursement-platform-backend/pull/588)
+- Bump vite. [#643](https://github.com/stellar/stellar-disbursement-platform-backend/pull/643)
+- Bump golang from 1.24.1-bullseye to 1.24.2-bullseye in the all-docker group. [#615](https://github.com/stellar/stellar-disbursement-platform-backend/pull/615)
+- Bump golang.org/x/net from 0.37.0 to 0.38.0 in the go_modules group [#622](https://github.com/stellar/stellar-disbursement-platform-backend/pull/622)
+- Bump docker/build-push-action in the all-actions group [#642](https://github.com/stellar/stellar-disbursement-platform-backend/pull/642)
+- Bump the minor-and-patch group across 1 directory with 14 updates [#632](https://github.com/stellar/stellar-disbursement-platform-backend/pull/632)
+
 
 ## [3.6.2](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.2) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.1...3.6.2))
 
 ### Fixed
 
 - Tenant resolution fails after tenant is deleted. [#638](https://github.com/stellar/stellar-disbursement-platform-backend/pull/638)
-
+- Fix tenant deletion when the tenant is a DB Vault tenant. [#664](https://github.com/stellar/stellar-disbursement-platform-backend/pull/664)
 
 ## [3.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.6.1))
 
