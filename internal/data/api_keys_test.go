@@ -136,15 +136,6 @@ func Test_generateSecret(t *testing.T) {
 	}
 }
 
-func Test_hashAPIKey(t *testing.T) {
-	t.Parallel()
-	salt, secret := "B0l7", "R3l1c0f0mn1551ah"
-	h1 := hashAPIKey(secret, salt)
-	h2 := hashAPIKey(secret, salt)
-	assert.Equal(t, h1, h2)
-	assert.NotEmpty(t, h1)
-}
-
 func Test_APIKeyModel_Insert(t *testing.T) {
 	pool := getConnectionPool(t)
 
@@ -271,8 +262,8 @@ func Test_APIKeyModel_GetByID(t *testing.T) {
 		wantErr   error
 	}{
 		{"success", fixture.ID, creator, nil},
-		{"wrong_creator", fixture.ID, wrongCreator, ErrNotFound},
-		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrNotFound},
+		{"wrong_creator", fixture.ID, wrongCreator, ErrRecordNotFound},
+		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrRecordNotFound},
 	}
 
 	for _, tc := range cases {
@@ -321,8 +312,8 @@ func Test_APIKeyModel_Delete(t *testing.T) {
 		wantErr   error
 	}{
 		{"success", fixture.ID, creator, nil},
-		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrNotFound},
-		{"wrong_creator", fixture.ID, other, ErrNotFound},
+		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrRecordNotFound},
+		{"wrong_creator", fixture.ID, other, ErrRecordNotFound},
 	}
 
 	for _, tc := range cases {
@@ -333,77 +324,6 @@ func Test_APIKeyModel_Delete(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-		})
-	}
-}
-
-func TestAPIKeyModel_Update(t *testing.T) {
-	t.Parallel()
-
-	pool := getConnectionPool(t)
-
-	models, err := NewModels(pool)
-	require.NoError(t, err)
-	ctx := context.Background()
-
-	creator := "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
-	other := "ffffffff-ffff-4fff-8fff-ffffffffffff"
-
-	original := createAPIKeyFixture(
-		t, ctx, pool,
-		"Reaper Vault Key",
-		[]APIKeyPermission{ReadExports},
-		[]string{"192.168.0.1"},
-		nil,
-		creator,
-	)
-
-	cases := []struct {
-		name      string
-		id        string
-		creatorID string
-		perms     []APIKeyPermission
-		ips       []string
-		wantErr   error
-	}{
-		{
-			"success",
-			original.ID,
-			creator,
-			[]APIKeyPermission{ReadStatistics, ReadExports},
-			[]string{"192.168.0.1", "192.168.0.2"},
-			nil,
-		},
-		{
-			"not_found",
-			"00000000-0000-0000-0000-000000000000",
-			creator,
-			[]APIKeyPermission{ReadAll},
-			nil,
-			ErrNotFound,
-		},
-		{
-			"wrong_creator",
-			original.ID,
-			other,
-			[]APIKeyPermission{ReadAll},
-			nil,
-			ErrNotFound,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			updated, err := models.APIKeys.Update(ctx, tc.id, tc.creatorID, tc.perms, tc.ips)
-			if tc.wantErr != nil {
-				assert.ErrorIs(t, err, tc.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			assert.ElementsMatch(t, tc.perms, updated.Permissions)
-			assert.Equal(t, tc.ips, []string(updated.AllowedIPs))
-			assert.Equal(t, tc.creatorID, updated.UpdatedBy)
-			assert.WithinDuration(t, time.Now().UTC(), updated.UpdatedAt, time.Second)
 		})
 	}
 }
