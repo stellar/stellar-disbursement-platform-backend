@@ -338,7 +338,7 @@ func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string) e
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
-		return ErrNotFound
+		return ErrRecordNotFound
 	}
 	return nil
 }

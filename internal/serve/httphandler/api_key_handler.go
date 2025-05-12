@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -113,7 +112,7 @@ func (h APIKeyHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Models.APIKeys.Delete(ctx, keyID, userID); err != nil {
-		if errors.Is(err, data.ErrNotFound) {
+		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("API key not found", nil, nil).Render(w)
 		} else {
 			httperror.InternalError(ctx, "Failed to delete API key", err, nil).Render(w)
