@@ -14,15 +14,6 @@ print_status() {
     echo -e "${GREEN}====>${NC} $1"
 }
 
-# Check prerequisites
-print_status "Checking prerequisites..."
-for cmd in postgres psql go; do
-    if ! command -v $cmd &>/dev/null; then
-        echo "$cmd is required but not installed. Please install it."
-    exit 1
-fi
-done
-
 # Set up environment variables
 print_status "Setting up environment variables..."
 if [ ! -f ".env" ]; then
