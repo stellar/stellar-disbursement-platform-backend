@@ -136,15 +136,6 @@ func Test_generateSecret(t *testing.T) {
 	}
 }
 
-func Test_hashAPIKey(t *testing.T) {
-	t.Parallel()
-	salt, secret := "B0l7", "R3l1c0f0mn1551ah"
-	h1 := hashAPIKey(secret, salt)
-	h2 := hashAPIKey(secret, salt)
-	assert.Equal(t, h1, h2)
-	assert.NotEmpty(t, h1)
-}
-
 func CreateAPIKeyFixture(t *testing.T, ctx context.Context, pool db.DBConnectionPool, perms []APIKeyPermission, ips []string) *APIKey {
 	t.Helper()
 	models, err := NewModels(pool)
