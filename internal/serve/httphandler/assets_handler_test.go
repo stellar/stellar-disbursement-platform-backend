@@ -1439,7 +1439,6 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 
-	// matchPreconditionsTimeboundsFn is a function meant to be used with mock.MatchedBy to check that the preconditions are set as expected.
 	const code = "USDC"
 	const issuer = "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
 	acc := &horizon.Account{}

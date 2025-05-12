@@ -64,7 +64,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
-		log.Ctx(ctx).Error("User ID not found in context")
 		httperror.InternalError(ctx, "User identification error", nil, nil).Render(w)
 		return
 	}
@@ -78,7 +77,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Error creating API key: %s", err)
 		httperror.InternalError(ctx, "Failed to create API key", err, nil).Render(w)
 		return
 	}
@@ -91,14 +89,12 @@ func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
-		log.Ctx(ctx).Error("User ID not found in context")
 		httperror.InternalError(ctx, "User identification error", nil, nil).Render(w)
 		return
 	}
 
 	apiKeys, err := h.Models.APIKeys.GetAll(ctx, userID)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Error retrieving API keys: %s", err)
 		httperror.InternalError(ctx, "Failed to retrieve API keys", err, nil).Render(w)
 		return
 	}

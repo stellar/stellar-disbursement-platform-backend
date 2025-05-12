@@ -474,6 +474,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/api-keys"},
 		{http.MethodGet, "/api-keys"},
 		{http.MethodDelete, "/api-keys/12345"},
+
 	}
 
 	// Expect 401 as a response:

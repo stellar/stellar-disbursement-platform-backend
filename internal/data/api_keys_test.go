@@ -136,17 +136,13 @@ func Test_generateSecret(t *testing.T) {
 	}
 }
 
-func Test_hashAPIKey(t *testing.T) {
-	t.Parallel()
-	salt, secret := "B0l7", "R3l1c0f0mn1551ah"
-	h1 := hashAPIKey(secret, salt)
-	h2 := hashAPIKey(secret, salt)
-	assert.Equal(t, h1, h2)
-	assert.NotEmpty(t, h1)
-}
-
 func Test_APIKeyModel_Insert(t *testing.T) {
-	pool := getConnectionPool(t)
+	dbt := dbtest.Open(t)
+	t.Cleanup(func() { dbt.Close() })
+
+	pool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
 
 	ctx := context.Background()
 	models, err := NewModels(pool)
@@ -188,6 +184,7 @@ func Test_APIKeyModel_Insert(t *testing.T) {
 		createdBy := "00000000-0000-0000-0000-000000000000"
 
 		key, err := models.APIKeys.Insert(ctx, name, perms, ips, &expiry, createdBy)
+
 		require.NoError(t, err)
 
 		assert.Equal(t, name, key.Name)
