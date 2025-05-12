@@ -633,7 +633,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 		{
 			name: "does not update OTP for a receiver wallet with a different contact info",
 			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
-				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
 			},
 			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
 				return "invalid_contact_info"
@@ -644,7 +644,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 		{
 			name: "does not update OTP for a receiver wallet with a different client domain",
 			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
-				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
 			},
 			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
 				return r.ContactByType(contactType)
@@ -670,7 +670,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 		{
 			name: "🎉 successfully updates OTP for an unconfirmed receiver wallet",
 			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
-				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
 			},
 			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
 				return r.ContactByType(contactType)
@@ -683,14 +683,14 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
 				// Create a receiver with a different contact info toi make sure they will not be picked by the query
 				receiverNoOp := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{PhoneNumber: "+141555550000", Email: "zoopbar@test.com"})
-				rwNoOp := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverNoOp.ID, wallet.ID, RegisteredReceiversWalletStatus)
+				rwNoOp := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverNoOp.ID, wallet.ID, ReadyReceiversWalletStatus)
 
 				// Confirm OTP for the first receiver
 				q := `UPDATE receiver_wallets SET otp_confirmed_at = NOW() WHERE id = $1`
 				_, err := dbConnectionPool.ExecContext(ctx, q, rwNoOp.ID)
 				require.NoError(t, err)
 
-				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
 			},
 			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
 				return r.ContactByType(contactType)
@@ -1342,9 +1342,6 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	})
 
 	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
-	results, err := receiverWalletModel.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, receiver.PhoneNumber, wallet.SEP10ClientDomain, "123456")
-	require.NoError(t, err)
-	require.Equal(t, 1, results)
 
 	t.Run("wont find the result if stellar address is provided but memo is not", func(t *testing.T) {
 		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, "", wallet.SEP10ClientDomain)
@@ -1373,16 +1370,19 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
-			OTP:                         "123456",
+			OTP:                         receiverWallet.OTP,
 			Status:                      receiverWallet.Status,
 			StatusHistory:               actual.StatusHistory,
 			OTPCreatedAt:                actual.OTPCreatedAt,
+			OTPConfirmedAt:              actual.OTPConfirmedAt,
+			OTPConfirmedWith:            actual.OTPConfirmedWith,
 			CreatedAt:                   actual.CreatedAt,
 			UpdatedAt:                   actual.UpdatedAt,
 			StellarAddress:              receiverWallet.StellarAddress,
 			StellarMemo:                 receiverWallet.StellarMemo,
 			StellarMemoType:             receiverWallet.StellarMemoType,
 			AnchorPlatformTransactionID: receiverWallet.AnchorPlatformTransactionID,
+			InvitationSentAt:            actual.InvitationSentAt,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -1408,15 +1408,18 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				Enabled:           true,
 			},
 			Status:                      receiverWallet.Status,
-			OTP:                         "123456",
+			OTP:                         receiverWallet.OTP,
 			StatusHistory:               actual.StatusHistory,
 			OTPCreatedAt:                actual.OTPCreatedAt,
+			OTPConfirmedAt:              actual.OTPConfirmedAt,
+			OTPConfirmedWith:            actual.OTPConfirmedWith,
 			CreatedAt:                   actual.CreatedAt,
 			UpdatedAt:                   actual.UpdatedAt,
 			StellarAddress:              receiverWallet.StellarAddress,
 			StellarMemo:                 "",
 			StellarMemoType:             "",
 			AnchorPlatformTransactionID: receiverWallet.AnchorPlatformTransactionID,
+			InvitationSentAt:            actual.InvitationSentAt,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -1804,5 +1807,69 @@ func Test_ReceiverWalletModel_GetByIDs(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, rws, 1)
 		assert.Equal(t, receiverWallet.ID, rws[0].ID)
+	})
+}
+
+func Test_ReceiverWalletModel_UpdateStatusToReady(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	model := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	wallet := CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+
+	t.Run("returns ErrRecordNotFound when wallet does not exist", func(t *testing.T) {
+		err := model.UpdateStatusToReady(ctx, "non-existent-id")
+		require.ErrorIs(t, err, ErrRecordNotFound)
+	})
+
+	t.Run("returns ErrWalletNotRegistered when status is not REGISTERED", func(t *testing.T) {
+		defer func() {
+			DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		}()
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		err := model.UpdateStatusToReady(ctx, rw.ID)
+		require.ErrorIs(t, err, ErrWalletNotRegistered)
+	})
+
+	t.Run("successfully transition rw from REGISTERED -> READY", func(t *testing.T) {
+		defer func() {
+			DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		}()
+
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		assert.NotEmpty(t, rw.StellarAddress)
+		assert.NotEmpty(t, rw.StellarMemo)
+		assert.NotEmpty(t, rw.StellarMemoType)
+		assert.NotEmpty(t, rw.InvitationSentAt)
+		assert.NotEmpty(t, rw.OTP)
+		assert.NotEmpty(t, rw.OTPConfirmedWith)
+		assert.NotEmpty(t, rw.OTPConfirmedAt)
+		assert.NotEmpty(t, rw.OTPCreatedAt)
+		assert.NotEmpty(t, rw.AnchorPlatformTransactionID)
+		assert.Equal(t, RegisteredReceiversWalletStatus, rw.Status)
+
+		err := model.UpdateStatusToReady(ctx, rw.ID)
+		require.NoError(t, err)
+		rw, err = model.GetByID(ctx, dbConnectionPool, rw.ID)
+		require.NoError(t, err)
+		assert.Equal(t, ReadyReceiversWalletStatus, rw.Status)
+		assert.Empty(t, rw.StellarAddress)
+		assert.Empty(t, rw.StellarMemo)
+		assert.Empty(t, rw.StellarMemoType)
+		assert.Empty(t, rw.InvitationSentAt)
+		assert.Empty(t, rw.OTP)
+		assert.Empty(t, rw.OTPConfirmedWith)
+		assert.Empty(t, rw.OTPConfirmedAt)
+		assert.Empty(t, rw.OTPCreatedAt)
+		assert.Empty(t, rw.AnchorPlatformTransactionID)
+		assert.Empty(t, rw.AnchorPlatformTransactionSyncedAt)
 	})
 }
