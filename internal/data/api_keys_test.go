@@ -328,6 +328,97 @@ func Test_APIKeyModel_Delete(t *testing.T) {
 	}
 }
 
+func Test_APIKeyModel_Update(t *testing.T) {
+	t.Parallel()
+
+	pool := getConnectionPool(t)
+
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	creator := "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+	otherUser := "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+
+	initialPermissions := APIKeyPermissions{ReadAll}
+	initialIPs := []string{"10.0.0.0/8"}
+
+	fixture := createAPIKeyFixture(
+		t, ctx, pool,
+		"Magos Dominus Cipher",
+		initialPermissions,
+		initialIPs,
+		nil,
+		creator,
+	)
+
+	// New values for update
+	newPermissions := APIKeyPermissions{ReadStatistics, ReadExports}
+	newIPs := []string{"192.168.1.0/24", "203.0.113.42"}
+
+	cases := []struct {
+		name       string
+		id         string
+		creatorID  string
+		perms      APIKeyPermissions
+		ips        []string
+		wantErr    error
+		checkPerms APIKeyPermissions
+		checkIPs   []string
+	}{
+		{
+			name:       "success",
+			id:         fixture.ID,
+			creatorID:  creator,
+			perms:      newPermissions,
+			ips:        newIPs,
+			wantErr:    nil,
+			checkPerms: newPermissions,
+			checkIPs:   newIPs,
+		},
+		{
+			name:      "not_found",
+			id:        "00000000-0000-0000-0000-000000000000",
+			creatorID: creator,
+			perms:     newPermissions,
+			ips:       newIPs,
+			wantErr:   ErrRecordNotFound,
+		},
+		{
+			name:      "wrong_creator",
+			id:        fixture.ID,
+			creatorID: otherUser,
+			perms:     newPermissions,
+			ips:       newIPs,
+			wantErr:   ErrRecordNotFound,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated, err := models.APIKeys.Update(ctx, tc.id, tc.creatorID, tc.perms, tc.ips)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.id, updated.ID)
+			assert.ElementsMatch(t, tc.checkPerms, updated.Permissions)
+			assert.ElementsMatch(t, tc.checkIPs, updated.AllowedIPs)
+
+			// Verify other fields preserved
+			assert.Equal(t, fixture.Name, updated.Name)
+			assert.Equal(t, fixture.ExpiryDate, updated.ExpiryDate)
+			assert.Equal(t, fixture.CreatedBy, updated.CreatedBy)
+
+			// Verify timestamps - UpdatedAt should be more recent than CreatedAt
+			assert.True(t, updated.UpdatedAt.After(updated.CreatedAt) ||
+				updated.UpdatedAt.Equal(updated.CreatedAt))
+		})
+	}
+}
+
 func getConnectionPool(t *testing.T) db.DBConnectionPool {
 	dbt := dbtest.Open(t)
 	t.Cleanup(func() { dbt.Close() })

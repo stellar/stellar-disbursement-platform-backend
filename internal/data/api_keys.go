@@ -351,6 +351,37 @@ func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string) (*APIKe
 	return &key, nil
 }
 
+func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, perms APIKeyPermissions, ips []string) (*APIKey, error) {
+	query := `
+		UPDATE api_keys
+			SET permissions = $1,
+				allowed_ips = $2,
+				updated_at = NOW()
+			WHERE id = $3
+			AND created_by = $4
+		 RETURNING
+		   id, name,
+		   expiry_date, permissions, allowed_ips,
+		   created_at, created_by,
+		   updated_at, updated_by,
+		   last_used_at
+	`
+
+	var key APIKey
+	if err := m.dbConnectionPool.GetContext(ctx, &key, query, perms, IPList(ips), id, createdBy); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("update api key: %w", err)
+	}
+
+	if key.AllowedIPs == nil {
+		key.AllowedIPs = IPList{}
+	}
+
+	return &key, nil
+}
+
 func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string) error {
 	res, err := m.dbConnectionPool.ExecContext(ctx,
 		`DELETE FROM api_keys

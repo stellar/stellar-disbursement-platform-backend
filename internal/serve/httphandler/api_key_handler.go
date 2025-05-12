@@ -27,6 +27,11 @@ type CreateAPIKeyRequest struct {
 	AllowedIPs  any                     `json:"allowed_ips,omitempty"` // Can be a string or array of strings
 }
 
+type UpdateAPIKeyRequest struct {
+	Permissions []data.APIKeyPermission `json:"permissions"`
+	AllowedIPs  any                     `json:"allowed_ips,omitempty"` // Can be a string or array of strings
+}
+
 func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -39,8 +44,7 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	v := validators.NewValidator()
 
 	v.Check(req.Name != "", "name", "name is required")
-	v.Check(len(req.Permissions) > 0, "permissions", "at least one permission is required")
-
+	v.Check(len(req.Permissions) > 0, "permissions", "API key must have at least one permission assigned")
 	if err := data.ValidatePermissions(req.Permissions); err != nil {
 		v.AddError("permissions", err.Error())
 	}
@@ -122,6 +126,55 @@ func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, apiKeys, httpjson.JSON)
+}
+
+func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	keyID := chi.URLParam(r, "id")
+
+	var req UpdateAPIKeyRequest
+	if err := httpdecode.DecodeJSON(r, &req); err != nil {
+		httperror.BadRequest("Invalid request body", err, nil).Render(w)
+		return
+	}
+
+	if len(req.Permissions) == 0 {
+		httperror.BadRequest("permissions must be non-empty", nil, nil).Render(w)
+		return
+	}
+	if err := data.ValidatePermissions(req.Permissions); err != nil {
+		httperror.BadRequest("Invalid permissions", err, nil).Render(w)
+		return
+	}
+
+	ips, err := parseAllowedIPs(req.AllowedIPs)
+	if err != nil {
+		httperror.BadRequest("Invalid allowed_ips", err, nil).Render(w)
+		return
+	}
+
+	if validationErr := data.ValidateAllowedIPs(ips); validationErr != nil {
+		httperror.BadRequest("Invalid allowed_ips", validationErr, nil).Render(w)
+		return
+	}
+
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
+	if !ok {
+		httperror.InternalError(ctx, "User identification error", nil, nil).Render(w)
+		return
+	}
+
+	updated, err := h.Models.APIKeys.Update(ctx, keyID, userID, req.Permissions, ips)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("API key not found", nil, nil).Render(w)
+		} else {
+			httperror.InternalError(ctx, "Failed to update API key", err, nil).Render(w)
+		}
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, updated, httpjson.JSON)
 }
 
 func (h APIKeyHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request) {

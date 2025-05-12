@@ -47,7 +47,7 @@ func setupHandler(t *testing.T) (APIKeyHandler, context.Context) {
 	return handler, ctx
 }
 
-func TestCreateAPIKey_WithAllFields(t *testing.T) {
+func Test_CreateAPIKey_WithAllFields(t *testing.T) {
 	handler, ctx := setupHandler(t)
 
 	expiry := time.Now().Add(24 * time.Hour)
@@ -81,7 +81,7 @@ func TestCreateAPIKey_WithAllFields(t *testing.T) {
 	assert.Equal(t, adminUserID, out.CreatedBy)
 }
 
-func TestCreateAPIKey_WithMinimumFields(t *testing.T) {
+func Test_CreateAPIKey_WithMinimumFields(t *testing.T) {
 	handler, ctx := setupHandler(t)
 
 	reqBody := map[string]any{
@@ -108,7 +108,23 @@ func TestCreateAPIKey_WithMinimumFields(t *testing.T) {
 	assert.Nil(t, out.ExpiryDate)
 }
 
-func TestCreateAPIKey_AllowedIPsHandling(t *testing.T) {
+func TestUpdateKey_AllowedIPsHandling(t *testing.T) {
+	t.Parallel()
+	handler, ctx := setupHandler(t)
+
+	r := chi.NewRouter()
+	r.Patch("/api-keys/{id}", handler.UpdateKey)
+
+	originalKey, err := handler.Models.APIKeys.Insert(
+		ctx,
+		"Techpriest Archive Key",
+		[]data.APIKeyPermission{data.ReadAll},
+		[]string{"10.0.0.0/8"},
+		nil,
+		adminUserID,
+	)
+	require.NoError(t, err)
+
 	successCases := []struct {
 		name       string
 		allowedIPs any
@@ -127,44 +143,40 @@ func TestCreateAPIKey_AllowedIPsHandling(t *testing.T) {
 		{
 			name:       "empty array",
 			allowedIPs: data.IPList{},
-			expected:   nil,
-		},
-		{
-			name:       "no allowed_ips field",
-			allowedIPs: nil,
-			expected:   nil,
+			expected:   data.IPList{},
 		},
 	}
 
 	for _, tc := range successCases {
 		t.Run(tc.name, func(t *testing.T) {
-			handler, ctx := setupHandler(t)
-
 			reqBody := map[string]any{
-				"name":        "Magos Explorator Key - " + tc.name,
-				"permissions": []string{"read:statistics"},
+				"permissions": []string{"read:statistics", "read:exports"},
+				"allowed_ips": tc.allowedIPs,
 			}
-			if tc.allowedIPs != nil {
-				reqBody["allowed_ips"] = tc.allowedIPs
-			}
-
 			b, _ := json.Marshal(reqBody)
-			req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api-keys", bytes.NewReader(b))
+
+			req := httptest.NewRequestWithContext(
+				ctx,
+				http.MethodPatch,
+				"/api-keys/"+originalKey.ID,
+				bytes.NewReader(b),
+			)
 			rr := httptest.NewRecorder()
 
-			handler.CreateAPIKey(rr, req)
+			r.ServeHTTP(rr, req)
+
 			resp := rr.Result()
 			defer resp.Body.Close()
 
-			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
 			var out data.APIKey
 			require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
-			assert.Equal(t, tc.expected, out.AllowedIPs)
+			assert.ElementsMatch(t, tc.expected, out.AllowedIPs)
 		})
 	}
 }
 
-func TestCreateAPIKey_ValidationErrors(t *testing.T) {
+func Test_CreateAPIKey_ValidationErrors(t *testing.T) {
 	errorCases := []struct {
 		name          string
 		requestBody   map[string]any
@@ -271,7 +283,7 @@ func TestCreateAPIKey_IPValidationErrors(t *testing.T) {
 	}
 }
 
-func TestCreateAPIKey_InvalidJSON(t *testing.T) {
+func Test_CreateAPIKey_InvalidJSON(t *testing.T) {
 	handler, ctx := setupHandler(t)
 
 	invalid := []byte(`{invalid-json}`)
@@ -308,7 +320,7 @@ func TestCreateAPIKey_MissingUserID(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
-func TestGetAllApiKeys_Success(t *testing.T) {
+func Test_GetAllApiKeys_Success(t *testing.T) {
 	t.Parallel()
 	handler, ctx := setupHandler(t)
 	userID := adminUserID
@@ -355,7 +367,7 @@ func TestGetAllApiKeys_Success(t *testing.T) {
 	assert.Empty(t, list[1].AllowedIPs)
 }
 
-func TestDeleteApiKeyEndpoints(t *testing.T) {
+func Test_DeleteApiKeyEndpoints(t *testing.T) {
 	t.Parallel()
 	handler, ctx := setupHandler(t)
 
@@ -413,7 +425,7 @@ func TestDeleteApiKeyEndpoints(t *testing.T) {
 	})
 }
 
-func TestGetApiKeyByIDEndpoints(t *testing.T) {
+func Test_GetApiKeyByIDEndpoints(t *testing.T) {
 	t.Parallel()
 	handler, ctx := setupHandler(t)
 
@@ -477,5 +489,140 @@ func TestGetApiKeyByIDEndpoints(t *testing.T) {
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+}
+
+func Test_UpdateKeyEndpoints(t *testing.T) {
+	t.Parallel()
+	handler, ctx := setupHandler(t)
+
+	r := chi.NewRouter()
+	r.Put("/api-keys/{id}", handler.UpdateKey)
+
+	originalKey, err := handler.Models.APIKeys.Insert(
+		ctx,
+		"Adeptus Mechanicus Secret Key",
+		[]data.APIKeyPermission{data.ReadAll, data.ReadStatistics},
+		[]string{"10.0.0.0/8"},
+		nil,
+		adminUserID,
+	)
+	require.NoError(t, err)
+
+	t.Run("success", func(t *testing.T) {
+		reqBody := map[string]any{
+			"permissions": []string{"read:statistics", "read:exports"},
+			"allowed_ips": []string{"192.168.1.0/24", "203.0.113.42"},
+		}
+		b, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var updated data.APIKey
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&updated))
+
+		assert.Equal(t, originalKey.ID, updated.ID)
+		assert.Equal(t, "Adeptus Mechanicus Secret Key", updated.Name) // Name shouldn't change
+		assert.ElementsMatch(t, []data.APIKeyPermission{data.ReadStatistics, data.ReadExports}, updated.Permissions)
+		assert.ElementsMatch(t, []string{"192.168.1.0/24", "203.0.113.42"}, updated.AllowedIPs)
+	})
+
+	t.Run("empty permissions", func(t *testing.T) {
+		reqBody := map[string]any{
+			"permissions": []string{},
+			"allowed_ips": []string{"192.168.1.0/24"},
+		}
+		b, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("invalid permissions", func(t *testing.T) {
+		reqBody := map[string]any{
+			"permissions": []string{"read:statistics", "heresy:purge"},
+			"allowed_ips": []string{"192.168.1.0/24"},
+		}
+		b, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("invalid IP format", func(t *testing.T) {
+		reqBody := map[string]any{
+			"permissions": []string{"read:statistics"},
+			"allowed_ips": []string{"192.168.1.0/24", "not-an-ip"},
+		}
+		b, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		reqBody := map[string]any{
+			"permissions": []string{"read:statistics"},
+			"allowed_ips": []string{"192.168.1.0/24"},
+		}
+		b, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/00000000-0000-0000-0000-000000000000", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("other user cannot update", func(t *testing.T) {
+		reqBody := map[string]any{
+			"permissions": []string{"read:statistics"},
+			"allowed_ips": []string{"192.168.1.0/24"},
+		}
+		b, _ := json.Marshal(reqBody)
+
+		otherUserID := "11111111-2222-3333-4444-555555555555"
+		otherCtx := context.WithValue(context.Background(), middleware.UserIDContextKey, otherUserID)
+		req := httptest.NewRequestWithContext(otherCtx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		invalid := []byte(`{invalid-json}`)
+		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(invalid))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("missing user id", func(t *testing.T) {
+		reqBody := map[string]any{
+			"permissions": []string{"read:statistics"},
+			"allowed_ips": []string{"192.168.1.0/24"},
+		}
+		b, _ := json.Marshal(reqBody)
+
+		emptyCtx := context.Background()
+		req := httptest.NewRequestWithContext(emptyCtx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	})
 }
