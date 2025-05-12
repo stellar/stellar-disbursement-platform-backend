@@ -1,10 +1,12 @@
 package httphandler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/render/httpjson"
 
@@ -96,10 +98,32 @@ func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Success
 	httpjson.RenderStatus(w, http.StatusOK, apiKeys, httpjson.JSON)
 }
 
+func (h APIKeyHandler) DeleteApiKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	keyID := chi.URLParam(r, "id")
+
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
+	if !ok {
+		httperror.InternalError(ctx, "User identification error", nil, nil).Render(w)
+		return
+	}
+
+	if err := h.Models.APIKeys.Delete(ctx, keyID, userID); err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("API key not found", nil, nil).Render(w)
+		} else {
+			httperror.InternalError(ctx, "Failed to delete API key", err, nil).Render(w)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// parseAllowedIPs converts the allowed_ips field from the request into a string slice.
 func parseAllowedIPs(input any) ([]string, error) {
 	if input == nil {
 		return []string{}, nil

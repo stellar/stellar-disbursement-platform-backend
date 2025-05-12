@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -352,4 +353,62 @@ func TestGetAllApiKeys_Success(t *testing.T) {
 	assert.Equal(t, "Eisenhorn Archive Key", list[1].Name)
 	assert.ElementsMatch(t, []data.APIKeyPermission{data.ReadAll}, list[1].Permissions)
 	assert.Empty(t, list[1].AllowedIPs)
+}
+
+func TestDeleteApiKeyEndpoints(t *testing.T) {
+	t.Parallel()
+	handler, ctx := setupHandler(t)
+
+	r := chi.NewRouter()
+	r.Delete("/api-keys/{id}", handler.DeleteApiKey)
+
+	t.Run("success", func(t *testing.T) {
+		key, err := handler.Models.APIKeys.Insert(
+			ctx,
+			"Tempestus Scion Key",
+			[]data.APIKeyPermission{data.ReadAll},
+			nil, nil,
+			adminUserID,
+		)
+		require.NoError(t, err)
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api-keys/"+key.ID, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusNoContent, rr.Code)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		fake := "00000000-0000-0000-0000-000000000000"
+		req := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api-keys/"+fake, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("other user cannot delete", func(t *testing.T) {
+		key, err := handler.Models.APIKeys.Insert(
+			ctx,
+			"Stormcaller Relic Key",
+			[]data.APIKeyPermission{data.ReadAll},
+			nil, nil,
+			adminUserID,
+		)
+		require.NoError(t, err)
+
+		otherCtx := context.WithValue(context.Background(), middleware.UserIDContextKey,
+			"11111111-2222-3333-4444-555555555555",
+		)
+		req := httptest.NewRequestWithContext(otherCtx, http.MethodDelete, "/api-keys/"+key.ID, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("missing user id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/api-keys/irrelevant", nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
 }

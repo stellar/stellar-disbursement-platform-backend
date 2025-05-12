@@ -234,6 +234,7 @@ func (m *APIKeyModel) Insert(
 		if _, err := rand.Read(saltBytes); err != nil {
 			return nil, fmt.Errorf("salt gen: %w", err)
 		}
+
 		salt := hex.EncodeToString(saltBytes)
 		for i := range saltBytes {
 			saltBytes[i] = 0
@@ -324,6 +325,22 @@ func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string) ([]*APIKey, 
 	}
 
 	return apiKeys, nil
+}
+
+func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string) error {
+	res, err := m.dbConnectionPool.ExecContext(ctx,
+		`DELETE FROM api_keys
+           WHERE id = $1
+             AND created_by = $2`, id, createdBy,
+	)
+	if err != nil {
+		return fmt.Errorf("delete api key: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrRecordNotFound
+	}
+	return nil
 }
 
 func generateSecret() (string, error) {

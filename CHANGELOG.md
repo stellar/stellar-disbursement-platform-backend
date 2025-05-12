@@ -8,8 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Add API keys management endpoints [#655](https://github.com/stellar/stellar-disbursement-platform-backend/pull/655) [#657](https://github.com/stellar/stellar-disbursement-platform-backend/pull/657)
-
+- Add API keys management endpoints [#655](https://github.com/stellar/stellar-disbursement-platform-backend/pull/655) [#657](https://github.com/stellar/stellar-disbursement-platform-backend/pull/657) [#658](https://github.com/stellar/stellar-disbursement-platform-backend/pull/658)
 
 ## [3.7.0 UNRELEASED](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
 
