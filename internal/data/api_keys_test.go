@@ -136,15 +136,6 @@ func Test_generateSecret(t *testing.T) {
 	}
 }
 
-func Test_hashAPIKey(t *testing.T) {
-	t.Parallel()
-	salt, secret := "B0l7", "R3l1c0f0mn1551ah"
-	h1 := hashAPIKey(secret, salt)
-	h2 := hashAPIKey(secret, salt)
-	assert.Equal(t, h1, h2)
-	assert.NotEmpty(t, h1)
-}
-
 func Test_APIKeyModel_Insert(t *testing.T) {
 	pool := getConnectionPool(t)
 
@@ -271,8 +262,8 @@ func Test_APIKeyModel_GetByID(t *testing.T) {
 		wantErr   error
 	}{
 		{"success", fixture.ID, creator, nil},
-		{"wrong_creator", fixture.ID, wrongCreator, ErrNotFound},
-		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrNotFound},
+		{"wrong_creator", fixture.ID, wrongCreator, ErrRecordNotFound},
+		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrRecordNotFound},
 	}
 
 	for _, tc := range cases {
@@ -321,8 +312,8 @@ func Test_APIKeyModel_Delete(t *testing.T) {
 		wantErr   error
 	}{
 		{"success", fixture.ID, creator, nil},
-		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrNotFound},
-		{"wrong_creator", fixture.ID, other, ErrNotFound},
+		{"not_found", "00000000-0000-0000-0000-000000000000", creator, ErrRecordNotFound},
+		{"wrong_creator", fixture.ID, other, ErrRecordNotFound},
 	}
 
 	for _, tc := range cases {
