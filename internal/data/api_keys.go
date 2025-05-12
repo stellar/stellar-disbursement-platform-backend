@@ -342,8 +342,7 @@ func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string) (*APIKe
       LIMIT 1
     `
 	var key APIKey
-	err := m.dbConnectionPool.GetContext(ctx, &key, q, id, createdBy)
-	if err != nil {
+	if err := m.dbConnectionPool.GetContext(ctx, &key, q, id, createdBy); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
