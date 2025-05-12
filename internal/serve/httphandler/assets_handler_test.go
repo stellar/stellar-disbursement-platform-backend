@@ -1439,27 +1439,6 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 
-	// matchPreconditionsTimeboundsFn is a function meant to be used with mock.MatchedBy to check that the preconditions are set as expected.
-	assertExpectedPreconditionsWithTimeboundsTolerance := func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
-		creationTime := time.Now()
-		return func(args mock.Arguments) {
-			actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
-			require.True(t, ok)
-
-			expectedPreconditions := expectedTx.ToXDR().Preconditions()
-			actualPreconditions := actualTx.ToXDR().Preconditions()
-
-			require.Equal(t, expectedPreconditions.TimeBounds.MinTime, actualPreconditions.TimeBounds.MinTime)
-
-			expectedMaxTime := time.Unix(int64(expectedPreconditions.TimeBounds.MaxTime), 0).UTC()
-			actualMaxTime := time.Unix(int64(actualPreconditions.TimeBounds.MaxTime), 0).UTC()
-			timeSinceCreation := time.Since(creationTime)
-
-			expectedAdjustedMaxTime := expectedMaxTime.Add(timeSinceCreation)
-			require.WithinDuration(t, expectedAdjustedMaxTime, actualMaxTime, 30*time.Second)
-		}
-	}
-
 	const code = "USDC"
 	const issuer = "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
 	acc := &horizon.Account{}
@@ -1508,13 +1487,45 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 
 		mocks.SignatureRouter.
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 1)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
 
 		mocks.HorizonClientMock.
 			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 0)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 0)).
 			Return(horizon.Transaction{}, nil).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
@@ -1538,14 +1549,46 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 
 		mocks.SignatureRouter.
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 1)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
 
 		mocks.HorizonClientMock.
 			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 0)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 0)).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
 

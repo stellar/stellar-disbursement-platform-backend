@@ -218,7 +218,6 @@ type APIKeyModel struct {
 // Insert creates, stores, and returns a new APIKey (including the raw key once).
 func (m *APIKeyModel) Insert(
 	ctx context.Context,
-	sqlExec db.SQLExecuter,
 	name string,
 	permissions []APIKeyPermission,
 	allowedIPs []string,
@@ -239,6 +238,7 @@ func (m *APIKeyModel) Insert(
 		for i := range saltBytes {
 			saltBytes[i] = 0
 		}
+
 		secret, err := generateSecret()
 		if err != nil {
 			return nil, err
@@ -270,7 +270,8 @@ func (m *APIKeyModel) Insert(
             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
             RETURNING created_at, updated_at
         `
-		row := sqlExec.QueryRowxContext(ctx, q,
+
+		row := m.dbConnectionPool.QueryRowxContext(ctx, q,
 			candidate.ID, candidate.Name, candidate.KeyHash, candidate.Salt,
 			candidate.ExpiryDate, candidate.Permissions, candidate.AllowedIPs,
 			candidate.CreatedBy, candidate.UpdatedBy,
@@ -293,6 +294,36 @@ func (m *APIKeyModel) Insert(
 		return nil, fmt.Errorf("could not generate unique API key after %d attempts", maxAttempts)
 	}
 	return apiKey, nil
+}
+
+func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string) ([]*APIKey, error) {
+	apiKeys := []*APIKey{}
+	query := `
+        SELECT
+            id, 
+			name,
+    		expiry_date, 
+			permissions, 
+			allowed_ips,
+    		created_at, 
+			created_by,
+    		updated_at, 
+			updated_by,
+    		last_used_at
+        FROM
+            api_keys
+        WHERE
+            created_by = $1
+        ORDER BY
+            created_at DESC
+    `
+
+	err := m.dbConnectionPool.SelectContext(ctx, &apiKeys, query, createdBy)
+	if err != nil {
+		return nil, fmt.Errorf("selecting api keys: %w", err)
+	}
+
+	return apiKeys, nil
 }
 
 func generateSecret() (string, error) {
