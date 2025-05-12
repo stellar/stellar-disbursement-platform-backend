@@ -68,6 +68,10 @@ export const PasscodeEntry: FC = () => {
     }
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   // OTP success
   useEffect(() => {
     if (isOtpSuccess) {
@@ -77,6 +81,9 @@ export const PasscodeEntry: FC = () => {
         message: t("enterPasscode.resendOtpSuccessMessage"),
         timestamp: new Date().getTime(),
       });
+
+      scrollToTop();
+      reCaptchaRef.current?.reset();
     }
   }, [isOtpSuccess, t]);
 
@@ -89,6 +96,9 @@ export const PasscodeEntry: FC = () => {
         message: translatedApiErrorMessage(t, otpError),
         timestamp: new Date().getTime(),
       });
+
+      scrollToTop();
+      reCaptchaRef.current?.reset();
     }
   }, [otpError, t]);
 
@@ -96,6 +106,7 @@ export const PasscodeEntry: FC = () => {
   useEffect(() => {
     if (isVerifySuccess) {
       navigate({ pathname: Routes.SUCCESS, search: searchParams });
+      reCaptchaRef.current?.reset();
     }
   }, [isVerifySuccess, navigate, searchParams]);
 
@@ -108,6 +119,8 @@ export const PasscodeEntry: FC = () => {
         message: translatedApiErrorMessage(t, verifyError),
         timestamp: new Date().getTime(),
       });
+
+      reCaptchaRef.current?.reset();
     }
   }, [verifyError, t]);
 
@@ -147,6 +160,8 @@ export const PasscodeEntry: FC = () => {
         message: t("generic.errorReCaptchaRequired"),
         timestamp: new Date().getTime(),
       });
+
+      scrollToTop();
 
       return;
     }
@@ -239,8 +254,8 @@ export const PasscodeEntry: FC = () => {
           >
             <Link
               onClick={(e) => {
-                clearMessages();
                 e.preventDefault();
+                clearMessages();
                 handleResendOtp();
               }}
               isDisabled={isOtpPending}
@@ -314,7 +329,7 @@ export const PasscodeEntry: FC = () => {
         <Box gap="lg" addlClassName="Wallet__passcodeEntry__inputs">
           <Input
             id="input-otp"
-            type="text"
+            type="number"
             label={t("enterPasscode.passcode")}
             value={otp}
             fieldSize="lg"

@@ -637,6 +637,8 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 
 	validator.Check(len(sanitizedInstructions) > 0, "instructions", "no valid instructions found")
 
+	validator.CheckForDuplicateContacts(instructions)
+
 	if validator.HasErrors() {
 		return nil, validator
 	}

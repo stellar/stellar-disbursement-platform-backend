@@ -970,11 +970,12 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	})
 
 	maxCSVRecords := [][]string{
-		{"phone", "id", "amount", "verification"},
+		{"email", "id", "amount", "verification"},
 	}
 	for i := 0; i < 10001; i++ {
+		email := fmt.Sprintf("user+%d@example.com", i)
 		maxCSVRecords = append(maxCSVRecords, []string{
-			"+380445555555", "123456789", "100.5", "1990-01-01",
+			email, "123456789", "100.5", "1990-01-01",
 		})
 	}
 
@@ -1230,7 +1231,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		},
 		{
 			name:            "🔴 max instructions exceeded",
-			disbursementID:  phoneDraftDisbursement.ID,
+			disbursementID:  emailDraftDisbursement.ID,
 			csvRecords:      maxCSVRecords,
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "number of instructions exceeds maximum of 10000",
@@ -1256,7 +1257,6 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, rr.Code, bodyStr)
 			assert.Contains(t, bodyStr, tc.expectedMessage)
 		})
-
 		authManagerMock.AssertExpectations(t)
 	}
 }
