@@ -83,6 +83,29 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusCreated, apiKey, httpjson.JSON)
 }
 
+func (h APIKeyHandler) GetApiKeyByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	keyID := chi.URLParam(r, "id")
+
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
+	if !ok {
+		httperror.InternalError(ctx, "User identification error", nil, nil).Render(w)
+		return
+	}
+
+	key, err := h.Models.APIKeys.GetByID(ctx, keyID, userID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("API key not found", nil, nil).Render(w)
+		} else {
+			httperror.InternalError(ctx, "Failed to retrieve API key", err, nil).Render(w)
+		}
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, key, httpjson.JSON)
+}
+
 func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

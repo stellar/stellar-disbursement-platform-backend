@@ -235,6 +235,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models: o.Models,
 			}
+			r.Get("/api-keys/{id}", apiKeyHandler.GetApiKeyByID)
 			r.Get("/", apiKeyHandler.GetAllApiKeys)
 			r.Post("/", apiKeyHandler.CreateAPIKey)
 			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)

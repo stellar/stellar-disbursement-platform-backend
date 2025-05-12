@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/hex"
 	"errors"
@@ -325,6 +326,29 @@ func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string) ([]*APIKey, 
 	}
 
 	return apiKeys, nil
+}
+
+func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string) (*APIKey, error) {
+	const q = `
+      SELECT
+        id, name,
+        expiry_date, permissions, allowed_ips,
+        created_at, created_by,
+        updated_at, updated_by,
+        last_used_at
+      FROM api_keys
+      WHERE id = $1
+        AND created_by = $2
+      LIMIT 1
+    `
+	var key APIKey
+	if err := m.dbConnectionPool.GetContext(ctx, &key, q, id, createdBy); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("get api key by id: %w", err)
+	}
+	return &key, nil
 }
 
 func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string) error {

@@ -412,3 +412,70 @@ func TestDeleteApiKeyEndpoints(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	})
 }
+
+func TestGetApiKeyByIDEndpoints(t *testing.T) {
+	t.Parallel()
+	handler, ctx := setupHandler(t)
+
+	r := chi.NewRouter()
+	r.Get("/api-keys/{id}", handler.GetApiKeyByID)
+
+	t.Run("success", func(t *testing.T) {
+		expiry := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
+		key, err := handler.Models.APIKeys.Insert(
+			ctx,
+			"Vox Imperator Index Key",
+			[]data.APIKeyPermission{data.ReadStatistics, data.ReadExports},
+			[]string{"198.51.100.0/24"},
+			&expiry,
+			adminUserID,
+		)
+		require.NoError(t, err)
+
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api-keys/"+key.ID, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var out data.APIKey
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&out))
+
+		assert.Equal(t, key.ID, out.ID)
+		assert.Equal(t, "Vox Imperator Index Key", out.Name)
+		assert.ElementsMatch(t, key.Permissions, out.Permissions)
+		assert.Equal(t, data.IPList{"198.51.100.0/24"}, out.AllowedIPs)
+
+		require.NotNil(t, out.ExpiryDate)
+		assert.WithinDuration(t, expiry, *out.ExpiryDate, time.Second)
+		assert.WithinDuration(t, key.CreatedAt.UTC(), out.CreatedAt.UTC(), time.Second)
+		assert.WithinDuration(t, key.UpdatedAt.UTC(), out.UpdatedAt.UTC(), time.Second)
+		assert.Nil(t, out.LastUsedAt)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		fake := "00000000-0000-0000-0000-000000000000"
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api-keys/"+fake, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("other user cannot access", func(t *testing.T) {
+		key, err := handler.Models.APIKeys.Insert(
+			ctx,
+			"Iridium Tomb Key",
+			[]data.APIKeyPermission{data.ReadAll},
+			nil, nil,
+			adminUserID,
+		)
+		require.NoError(t, err)
+
+		otherCtx := context.WithValue(context.Background(), middleware.UserIDContextKey,
+			"11111111-2222-3333-4444-555555555555",
+		)
+		req := httptest.NewRequestWithContext(otherCtx, http.MethodGet, "/api-keys/"+key.ID, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+}
