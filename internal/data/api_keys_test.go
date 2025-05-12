@@ -136,19 +136,6 @@ func Test_generateSecret(t *testing.T) {
 	}
 }
 
-func CreateAPIKeyFixture(t *testing.T, ctx context.Context, pool db.DBConnectionPool, perms []APIKeyPermission, ips []string) *APIKey {
-	t.Helper()
-	models, err := NewModels(pool)
-	require.NoError(t, err)
-
-	name := "Relic of the Omnissiah"
-	createdBy := "00000000-0000-0000-0000-000000000000"
-
-	key, err := models.APIKeys.Insert(ctx, pool, name, perms, ips, nil, createdBy)
-	require.NoError(t, err)
-	return key
-}
-
 func Test_APIKeyModel_Insert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	t.Cleanup(func() { dbt.Close() })
@@ -173,8 +160,6 @@ func Test_APIKeyModel_Insert(t *testing.T) {
 			nil,
 			"00000000-0000-0000-0000-000000000000",
 		)
-
-		key := CreateAPIKeyFixture(t, ctx, pool, perms, ips)
 
 		assert.NotEmpty(t, key.ID)
 		assert.Equal(t, "Relic of the Omnissiah", key.Name)

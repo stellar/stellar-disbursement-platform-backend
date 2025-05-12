@@ -100,7 +100,7 @@ func (p APIKeyPermissions) Value() (driver.Value, error) {
 func (p *APIKeyPermissions) Scan(src any) error {
 	var arr pq.StringArray
 	if err := arr.Scan(src); err != nil {
-    return fmt.Errorf("scanning APIKeyPermissions: %w", err)
+		return fmt.Errorf("scanning APIKeyPermissions: %w", err)
 	}
 	perms := make(APIKeyPermissions, len(arr))
 	for i, s := range arr {
@@ -218,7 +218,6 @@ type APIKeyModel struct {
 // Insert creates, stores, and returns a new APIKey (including the raw key once).
 func (m *APIKeyModel) Insert(
 	ctx context.Context,
-	sqlExec db.SQLExecuter,
 	name string,
 	permissions []APIKeyPermission,
 	allowedIPs []string,
@@ -273,9 +272,6 @@ func (m *APIKeyModel) Insert(
         `
 
 		row := m.dbConnectionPool.QueryRowxContext(ctx, q,
-
-		row := sqlExec.QueryRowxContext(ctx, q,
-
 			candidate.ID, candidate.Name, candidate.KeyHash, candidate.Salt,
 			candidate.ExpiryDate, candidate.Permissions, candidate.AllowedIPs,
 			candidate.CreatedBy, candidate.UpdatedBy,
