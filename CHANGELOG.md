@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [UNRELEASED]
+
+### Added
+
+- Add API keys management endpoints [#677](https://github.com/stellar/stellar-disbursement-platform-backend/pull/677)
+
 ## [3.7.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
 
 > [!WARNING]
@@ -32,7 +38,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - ReCAPTCHA now allowed to be disabled in pubnet environments. [#618](https://github.com/stellar/stellar-disbursement-platform-backend/pull/618)
 - Deprecated `ENABLE_SCHEDULER` and `EVENT_BROKER_TYPE=NONE` in favor of using `EVENT_BROKER_TYPE=SCHEDULER` for background jobs. [#617](https://github.com/stellar/stellar-disbursement-platform-backend/pull/617)
 
-
 ### Fixed
 
 - Fix CLI tests and test assertions. [#587](https://github.com/stellar/stellar-disbursement-platform-backend/pull/587)
@@ -55,7 +60,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 
 - Tenant resolution fails after tenant is deleted. [#638](https://github.com/stellar/stellar-disbursement-platform-backend/pull/638)
-- Fix tenant deletion when the tenant is a DB Vault tenant. [#664](https://github.com/stellar/stellar-disbursement-platform-backend/pull/664)
 
 ## [3.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.6.1))
 
@@ -110,13 +114,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Added short linking for Wallet Registration Links. 
+- Added short linking for Wallet Registration Links.
   [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
-- Added a new `is_link_shortener_enabled` property to `GET` and `PATCH` organizations endpoints to enable/disable the short link feature. 
+- Added a new `is_link_shortener_enabled` property to `GET` and `PATCH` organizations endpoints to enable/disable the short link feature.
   [#523](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/523)
-- Added receiver contact info for Payments export. 
+- Added receiver contact info for Payments export.
   [#538](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/538)
-
 
 ## [3.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.3.0...3.4.0))
 
@@ -383,7 +386,6 @@ Each organization has its own set of users, receivers, disbursements, etc.
 - Use `DistributionAccountResolver` instead of passing around distribution public key [#212](https://github.com/stellar/stellar-disbursement-platform-backend/pull/212)
 - Make provision new tenant an atomic operation [#233](https://github.com/stellar/stellar-disbursement-platform-backend/pull/233)
 - Make `ready_payments_cancellation` job multi-tenant [#223](https://github.com/stellar/stellar-disbursement-platform-backend/pull/223)
-
 
 ### Added
 
