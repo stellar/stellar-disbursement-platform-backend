@@ -26,7 +26,7 @@ const (
 	maxAttempts      = 3
 )
 
-// alphabet is the allowed character set
+// alphabet is the allowed character set for the keygen
 const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 type APIKeyPermission string
@@ -100,13 +100,13 @@ func (p APIKeyPermissions) Value() (driver.Value, error) {
 func (p *APIKeyPermissions) Scan(src any) error {
 	var arr pq.StringArray
 	if err := arr.Scan(src); err != nil {
-		return err
+    return fmt.Errorf("scanning APIKeyPermissions: %w", err)
 	}
 	perms := make(APIKeyPermissions, len(arr))
 	for i, s := range arr {
 		perm := APIKeyPermission(s)
 		if _, ok := validPermissionsMap[perm]; !ok {
-			return fmt.Errorf("invalid permission from DB: %s", s)
+			return fmt.Errorf("invalid permission from DB (%s)", s)
 		}
 		perms[i] = perm
 	}
@@ -117,7 +117,7 @@ func (p *APIKeyPermissions) Scan(src any) error {
 func ValidatePermissions(perms []APIKeyPermission) error {
 	for _, p := range perms {
 		if _, ok := validPermissionsMap[p]; !ok {
-			return fmt.Errorf("invalid permission: %s", p)
+			return fmt.Errorf("invalid permission (%s)", p)
 		}
 	}
 	return nil
@@ -133,7 +133,7 @@ func (ip IPList) Value() (driver.Value, error) {
 func (ip *IPList) Scan(src any) error {
 	var arr pq.StringArray
 	if err := arr.Scan(src); err != nil {
-		return err
+		return fmt.Errorf("scanning IPList: %w", err)
 	}
 	*ip = IPList(arr)
 	return nil
@@ -154,7 +154,6 @@ func ValidateAllowedIPs(ips []string) error {
 	return nil
 }
 
-// APIKey is the primary model for API keys.
 type APIKey struct {
 	ID          string            `db:"id" json:"id"`
 	Name        string            `db:"name" json:"name"`
@@ -212,7 +211,6 @@ func (a *APIKey) IsAllowedIP(ipStr string) bool {
 	return false
 }
 
-// APIKeyModel encapsulates DB operations around APIKey.
 type APIKeyModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
@@ -220,13 +218,13 @@ type APIKeyModel struct {
 // Insert creates, stores, and returns a new APIKey (including the raw key once).
 func (m *APIKeyModel) Insert(
 	ctx context.Context,
+	sqlExec db.SQLExecuter,
 	name string,
 	permissions []APIKeyPermission,
 	allowedIPs []string,
 	expiry *time.Time,
 	createdBy string,
 ) (*APIKey, error) {
-	const maxAttempts = 3
 	var apiKey *APIKey
 	if allowedIPs == nil {
 		allowedIPs = IPList{}
@@ -237,12 +235,10 @@ func (m *APIKeyModel) Insert(
 		if _, err := rand.Read(saltBytes); err != nil {
 			return nil, fmt.Errorf("salt gen: %w", err)
 		}
-		defer func() {
-			for i := range saltBytes {
-				saltBytes[i] = 0
-			}
-		}()
 		salt := hex.EncodeToString(saltBytes)
+		for i := range saltBytes {
+			saltBytes[i] = 0
+		}
 
 		secret, err := generateSecret()
 		if err != nil {
@@ -277,6 +273,9 @@ func (m *APIKeyModel) Insert(
         `
 
 		row := m.dbConnectionPool.QueryRowxContext(ctx, q,
+
+		row := sqlExec.QueryRowxContext(ctx, q,
+
 			candidate.ID, candidate.Name, candidate.KeyHash, candidate.Salt,
 			candidate.ExpiryDate, candidate.Permissions, candidate.AllowedIPs,
 			candidate.CreatedBy, candidate.UpdatedBy,
@@ -347,11 +346,4 @@ func generateSecret() (string, error) {
 		out[i] = alphabet[int(b)%len(alphabet)]
 	}
 	return string(out), nil
-}
-
-func hashAPIKey(salt, secret string) string {
-	h := sha256.New()
-	h.Write([]byte(salt))
-	h.Write([]byte(secret))
-	return hex.EncodeToString(h.Sum(nil))
 }

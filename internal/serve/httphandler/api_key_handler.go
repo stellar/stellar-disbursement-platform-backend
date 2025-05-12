@@ -60,7 +60,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
 		log.Ctx(ctx).Error("User ID not found in context")
@@ -68,7 +67,6 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create API key
 	apiKey, err := h.Models.APIKeys.Insert(
 		ctx,
 		req.Name,
@@ -85,6 +83,7 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	httpjson.RenderStatus(w, http.StatusCreated, apiKey, httpjson.JSON)
 }
+
 
 func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -108,7 +107,6 @@ func (h APIKeyHandler) GetAllApiKeys(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, apiKeys, httpjson.JSON)
 }
 
-// parseAllowedIPs converts the allowed_ips field from the request into a string slice.
 func parseAllowedIPs(input any) ([]string, error) {
 	if input == nil {
 		return []string{}, nil

@@ -1,7 +1,7 @@
 -- +migrate Up
 
 CREATE TABLE IF NOT EXISTS api_keys (
-    id UUID PRIMARY KEY,
+    id VARCHAR(36) PRIMARY KEY DEFAULT public.uuid_generate_v4(),
     name VARCHAR(128) NOT NULL,
     key_hash VARCHAR(64) NOT NULL,
     salt VARCHAR(32) NOT NULL,
