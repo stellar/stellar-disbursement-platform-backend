@@ -36,7 +36,7 @@ func (job TxJob) String() string {
 	return fmt.Sprintf("TxJob{ChannelAccount: %q, Transaction: %q, Tenant: %q, LockedUntilLedgerNumber: \"%d\"}", job.ChannelAccount.PublicKey, job.Transaction.ID, job.Transaction.TenantID, job.LockedUntilLedgerNumber)
 }
 
-type TransactionWorker struct {
+type PaymentTransactionWorker struct {
 	dbConnectionPool    db.DBConnectionPool
 	txModel             store.TransactionStore
 	chAccModel          store.ChannelAccountStore
@@ -48,7 +48,7 @@ type TransactionWorker struct {
 	jobUUID             string
 }
 
-func NewTransactionWorker(
+func NewPaymentTranscationWorker(
 	dbConnectionPool db.DBConnectionPool,
 	txModel *store.TransactionModel,
 	chAccModel *store.ChannelAccountModel,
@@ -57,39 +57,39 @@ func NewTransactionWorker(
 	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
 	eventProducer events.Producer,
-) (TransactionWorker, error) {
+) (PaymentTransactionWorker, error) {
 	if dbConnectionPool == nil {
-		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
+		return PaymentTransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
 	}
 
 	if txModel == nil {
-		return TransactionWorker{}, fmt.Errorf("txModel cannot be nil")
+		return PaymentTransactionWorker{}, fmt.Errorf("txModel cannot be nil")
 	}
 
 	if chAccModel == nil {
-		return TransactionWorker{}, fmt.Errorf("chAccModel cannot be nil")
+		return PaymentTransactionWorker{}, fmt.Errorf("chAccModel cannot be nil")
 	}
 
 	if engine == nil {
-		return TransactionWorker{}, fmt.Errorf("engine cannot be nil")
+		return PaymentTransactionWorker{}, fmt.Errorf("engine cannot be nil")
 	}
 	if err := engine.Validate(); err != nil {
-		return TransactionWorker{}, fmt.Errorf("validating engine: %w", err)
+		return PaymentTransactionWorker{}, fmt.Errorf("validating engine: %w", err)
 	}
 
 	if crashTrackerClient == nil {
-		return TransactionWorker{}, fmt.Errorf("crashTrackerClient cannot be nil")
+		return PaymentTransactionWorker{}, fmt.Errorf("crashTrackerClient cannot be nil")
 	}
 
 	if txProcessingLimiter == nil {
-		return TransactionWorker{}, fmt.Errorf("txProcessingLimiter cannot be nil")
+		return PaymentTransactionWorker{}, fmt.Errorf("txProcessingLimiter cannot be nil")
 	}
 
 	if tssUtils.IsEmpty(monitorSvc) {
-		return TransactionWorker{}, fmt.Errorf("monitorSvc cannot be nil")
+		return PaymentTransactionWorker{}, fmt.Errorf("monitorSvc cannot be nil")
 	}
 
-	return TransactionWorker{
+	return PaymentTransactionWorker{
 		jobUUID:             uuid.NewString(),
 		dbConnectionPool:    dbConnectionPool,
 		txModel:             txModel,
@@ -103,7 +103,7 @@ func NewTransactionWorker(
 }
 
 // updateContextLogger will update the context logger with the transaction job details.
-func (tw *TransactionWorker) updateContextLogger(ctx context.Context, job *TxJob) context.Context {
+func (tw *PaymentTransactionWorker) updateContextLogger(ctx context.Context, job *TxJob) context.Context {
 	tx := job.Transaction
 
 	labels := map[string]interface{}{
@@ -140,7 +140,7 @@ func (tw *TransactionWorker) updateContextLogger(ctx context.Context, job *TxJob
 	return log.Set(ctx, log.Ctx(ctx).WithFields(labels))
 }
 
-func (tw *TransactionWorker) Run(ctx context.Context, txJob *TxJob) {
+func (tw *PaymentTransactionWorker) Run(ctx context.Context, txJob *TxJob) {
 	ctx = tw.updateContextLogger(ctx, txJob)
 	err := tw.runJob(ctx, txJob)
 	if err != nil {
@@ -149,7 +149,7 @@ func (tw *TransactionWorker) Run(ctx context.Context, txJob *TxJob) {
 }
 
 // TODO: add unit tests and godoc to this function
-func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
+func (tw *PaymentTransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 	err := tw.validateJob(txJob)
 	if err != nil {
 		return fmt.Errorf("validating job: %w", err)
@@ -181,7 +181,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 // Errors that are marked for retry without pause/jitter and are not reported to CrashTracker:
 //   - 400 - tx_too_late: Bad Request
 //   - xxx - Any unexpected error.
-func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
+func (tw *PaymentTransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
 
 	metricsMetadata := tssMonitor.TxMetadata{
@@ -256,7 +256,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 // unlockJob will unlock the channel account and transaction instantaneously, so they can be made available ASAP. If
 // this method is not called, the algorithm will fall back to get these resources qutomatically unlocked when their
 // `locked-to-ledger` expire.
-func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error {
+func (tw *PaymentTransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error {
 	_, err := tw.chAccModel.Unlock(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey)
 	if err != nil {
 		return fmt.Errorf("unlocking channel account: %w", err)
@@ -272,7 +272,7 @@ func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error 
 
 // handleSuccessfulTransaction will wrap up the job when the transaction has been successfully submitted to the network.
 // This method will only return an error if something goes wromg when handling the result and marking the transaction as SUCCESS.
-func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction) error {
+func (tw *PaymentTransactionWorker) handleSuccessfulTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction) error {
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
 		return fmt.Errorf("saving response XDR: %w", err)
@@ -313,7 +313,7 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 // reconcileSubmittedTransaction will check the status of a previously submitted transaction and handle it accordingly.
 // If the transaction was successful, it will be marked as such and the job will be unlocked.
 // If the transaction failed, it will be marked for resubmission.
-func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, txJob *TxJob) error {
+func (tw *PaymentTransactionWorker) reconcileSubmittedTransaction(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🔍 Reconciling previously submitted transaction %v...", txJob)
 
 	err := tw.validateJob(txJob)
@@ -378,7 +378,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	return nil
 }
 
-func (tw *TransactionWorker) buildPaymentCompletedEvent(eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus, statusMsg string) (*events.Message, error) {
+func (tw *PaymentTransactionWorker) buildPaymentCompletedEvent(eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus, statusMsg string) (*events.Message, error) {
 	if paymentStatus != data.SuccessPaymentStatus && paymentStatus != data.FailedPaymentStatus {
 		return nil, fmt.Errorf("invalid payment status to produce payment completed event")
 	}
@@ -406,7 +406,7 @@ func (tw *TransactionWorker) buildPaymentCompletedEvent(eventType string, tx *st
 	return msg, nil
 }
 
-func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
+func (tw *PaymentTransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
 	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
@@ -437,7 +437,7 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 }
 
 // validateJob will check if the job is valid for processing or reconciliation.
-func (tw *TransactionWorker) validateJob(txJob *TxJob) error {
+func (tw *PaymentTransactionWorker) validateJob(txJob *TxJob) error {
 	if txJob == nil {
 		return fmt.Errorf("transaction job cannot be nil")
 	}
@@ -463,7 +463,7 @@ func (tw *TransactionWorker) validateJob(txJob *TxJob) error {
 	return nil
 }
 
-func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
+func (tw *PaymentTransactionWorker) prepareForSubmission(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
 	feeBumpTx, err := tw.buildAndSignTransaction(ctx, txJob)
 	if err != nil {
 		return nil, fmt.Errorf("building transaction: %w", err)
@@ -492,7 +492,7 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 }
 
 // buildAndSignTransaction builds & signs a Stellar payment transaction that is wrapped in a feebump transaction.
-func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob *TxJob) (feeBumpTx *txnbuild.FeeBumpTransaction, err error) {
+func (tw *PaymentTransactionWorker) buildAndSignTransaction(ctx context.Context, txJob *TxJob) (feeBumpTx *txnbuild.FeeBumpTransaction, err error) {
 	// validate the transaction asset
 	if txJob.Transaction.AssetCode == "" {
 		return nil, fmt.Errorf("asset code cannot be empty")
@@ -558,7 +558,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	return feeBumpTx, nil
 }
 
-func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string, asset txnbuild.Asset) (*txnbuild.Transaction, error) {
+func (tw *PaymentTransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string, asset txnbuild.Asset) (*txnbuild.Transaction, error) {
 	var operation txnbuild.Operation
 	var txMemo txnbuild.Memo
 	amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
@@ -618,7 +618,7 @@ func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceN
 	return paymentTx, err
 }
 
-func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {
+func (tw *PaymentTransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {
 	resp, err := tw.engine.HorizonClient.SubmitFeeBumpTransactionWithOptions(feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
 		err = tw.handleFailedTransaction(ctx, txJob, resp, utils.NewHorizonErrorWrapper(err))
@@ -647,7 +647,7 @@ func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx
 	return nil
 }
 
-func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob *TxJob, resp horizon.Transaction) error {
+func (tw *PaymentTransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob *TxJob, resp horizon.Transaction) error {
 	if tssUtils.IsEmpty(resp) {
 		return nil
 	}

@@ -176,23 +176,42 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 			log.Ctx(ctx).Debugf("Loaded '%d' transactions from database", len(jobs))
 
 			for _, job := range jobs {
-				worker, err := NewTransactionWorker(
-					m.dbConnectionPool,
-					m.txModel,
-					m.chAccModel,
-					m.engine,
-					m.crashTrackerClient,
-					m.txProcessingLimiter,
-					m.monitorService,
-					m.eventProducer,
-				)
-				if err != nil {
-					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
-					continue
-				}
-
 				txJob := TxJob(*job)
-				go worker.Run(ctx, &txJob)
+				if txJob.Transaction.TransactionType == store.TransactionTypePayment {
+					worker, err := NewPaymentTranscationWorker(
+						m.dbConnectionPool,
+						m.txModel,
+						m.chAccModel,
+						m.engine,
+						m.crashTrackerClient,
+						m.txProcessingLimiter,
+						m.monitorService,
+						m.eventProducer,
+					)
+					if err != nil {
+						m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
+						continue
+					}
+
+					go worker.Run(ctx, &txJob)
+				} else if txJob.Transaction.TransactionType == store.TransactionTypeWalletCreation {
+					worker, err := NewWalletCreationTransactionWorker(
+						m.dbConnectionPool,
+						m.txModel,
+						m.chAccModel,
+						m.engine,
+						m.crashTrackerClient,
+						m.txProcessingLimiter,
+						m.monitorService,
+						m.eventProducer,
+					)
+					if err != nil {
+						m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
+						continue
+					}
+
+					go worker.Run(ctx, &txJob)
+				}
 			}
 		}
 	}

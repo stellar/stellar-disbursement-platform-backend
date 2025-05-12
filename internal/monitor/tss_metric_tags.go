@@ -36,6 +36,12 @@ const (
 	PaymentReconciliationUnexpectedErrorLabel       string = "payment_reconciliation_unexpected_error"
 	PaymentMarkedForReprocessingLabel               string = "payment_marked_for_reprocessing"
 	PaymentFailedLabel                              string = "payment_failed"
+
+	// Wallet creation tags
+	WalletCreationStartedTag MetricTag = "wallet_creation_started"
+	WalletCreationErrorTag   MetricTag = "wallet_creation_error"
+
+	WalletCreationMarkedForReprocessingTag string = "wallet_creation_marked_for_reprocessing"
 )
 
 func (m MetricTag) ListAllTSSMetricTags() []MetricTag {

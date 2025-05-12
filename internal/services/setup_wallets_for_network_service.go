@@ -24,7 +24,7 @@ var DefaultWalletsNetworkMap = WalletsNetworkMapType{
 
 // SetupWalletsForProperNetwork updates and inserts wallets for the given Network Passphrase (`network`). So it avoids the application having
 // wallets that doesn't support the given network.
-func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, walletsNetworkMap WalletsNetworkMapType) error {
+func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, walletsNetworkMap WalletsNetworkMapType, tenantBaseURL string) error {
 	log.Ctx(ctx).Infof("updating/inserting wallets for the '%s' network", network)
 
 	wallets, ok := walletsNetworkMap[network]
@@ -40,8 +40,18 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 	buf.WriteString("wallets that will be updated or inserted:\n\n")
 	for _, wallet := range wallets {
 		names = append(names, wallet.Name)
-		homepages = append(homepages, wallet.Homepage)
-		deepLinkSchemas = append(deepLinkSchemas, wallet.DeepLinkSchema)
+		if wallet.Embedded {
+			homepage := tenantBaseURL
+			homepages = append(homepages, homepage)
+		} else {
+			homepages = append(homepages, wallet.Homepage)
+		}
+		if wallet.Embedded {
+			deepLinkSchema := tenantBaseURL
+			deepLinkSchemas = append(deepLinkSchemas, deepLinkSchema)
+		} else {
+			deepLinkSchemas = append(deepLinkSchemas, wallet.DeepLinkSchema)
+		}
 		sep10ClientDomains = append(sep10ClientDomains, wallet.SEP10ClientDomain)
 		userManagedFlags = append(userManagedFlags, wallet.UserManaged)
 

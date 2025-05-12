@@ -13,6 +13,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
+const (
+	ChannelAccountPurposePayment        string = "PAYMENT"
+	ChannelAccountPurposeWalletCreation string = "WALLET_CREATION"
+)
+
 type ChannelAccount struct {
 	PublicKey  string       `db:"public_key"`
 	PrivateKey string       `db:"private_key"` // TODO: remove this from the model, since we now rely on a Signer interface.

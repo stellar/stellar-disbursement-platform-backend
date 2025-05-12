@@ -96,6 +96,7 @@ type ServeOptions struct {
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
 	CircleAPIType                   circle.APIType
+	EmbeddedWalletService           services.EmbeddedWalletServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -494,6 +495,19 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.ServeHTTP)
 
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
+	})
+
+	mux.Group(func(r chi.Router) {
+		r.Use(middleware.EnsureTenantMiddleware)
+
+		r.Route("/embedded-wallet", func(r chi.Router) {
+			handler := httphandler.EmbeddedWalletHandler{
+				EmbeddedWalletService: o.EmbeddedWalletService,
+			}
+
+			r.Post("/create", handler.CreateAccount)
+		})
+
 	})
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware

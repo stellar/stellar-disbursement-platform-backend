@@ -30,7 +30,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 	t.Run("returns error when a invalid network is set", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, "invalid", DefaultWalletsNetworkMap)
+		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, "invalid", DefaultWalletsNetworkMap, "localhost")
 		assert.EqualError(t, err, "invalid network provided")
 	})
 
@@ -41,7 +41,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		log.DefaultLogger.SetLevel(log.InfoLevel)
 		log.DefaultLogger.SetOutput(buf)
 
-		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, DefaultWalletsNetworkMap)
+		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, DefaultWalletsNetworkMap, "localhost")
 		require.NoError(t, err)
 
 		wallets, err := models.Wallets.GetAll(ctx)
@@ -117,7 +117,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		log.DefaultLogger.SetLevel(log.InfoLevel)
 		log.DefaultLogger.SetOutput(buf)
 
-		err = SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, walletsNetworkMap)
+		err = SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, walletsNetworkMap, "localhost")
 		require.NoError(t, err)
 
 		wallets, err = models.Wallets.GetAll(ctx)
@@ -192,7 +192,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			},
 		}
 
-		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, walletsNetworkMap)
+		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, walletsNetworkMap, "localhost")
 		require.NoError(t, err)
 
 		wallets, err := models.Wallets.GetAll(ctx)
@@ -223,7 +223,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 
 		// run the setup function again
-		err = SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, walletsNetworkMap)
+		err = SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, walletsNetworkMap, "localhost")
 		require.NoError(t, err)
 
 		// validate BOSS Money wallet assets (USDC *and* XLM)
@@ -287,7 +287,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			},
 		}
 
-		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.TestnetNetworkType, walletNetworkMap)
+		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.TestnetNetworkType, walletNetworkMap, "localhost")
 
 		// The problem was that in the DefaultWalletsNetworkMap, in the `testnet` key, we used the name `Boss Money` and not `BOSS Money`
 		// to refer to the BOSS Money wallet. So the query tried to insert the `Boss Money` wallet, but since the `homepage` and `deep_link_schema`
@@ -297,7 +297,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		// DefaultNetworkMap test - should NOT error
 		data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
 
-		err = SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.TestnetNetworkType, DefaultWalletsNetworkMap)
+		err = SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.TestnetNetworkType, DefaultWalletsNetworkMap, "localhost")
 		require.NoError(t, err)
 	})
 }

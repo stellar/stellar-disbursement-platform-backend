@@ -51,7 +51,7 @@ import (
 
 // getTransactionWorkerInstance is used to create a valid instance of the class TransactionWorker, which is needed in
 // many tests in this file.
-func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnectionPool) TransactionWorker {
+func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnectionPool) PaymentTransactionWorker {
 	t.Helper()
 
 	txModel := store.NewTransactionModel(dbConnectionPool)
@@ -92,7 +92,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		MaxBaseFee:          100,
 	}
 
-	return TransactionWorker{
+	return PaymentTransactionWorker{
 		dbConnectionPool:   dbConnectionPool,
 		txModel:            txModel,
 		chAccModel:         chAccModel,
@@ -187,7 +187,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		Version:       "version123",
 	}
 
-	wantWorker := TransactionWorker{
+	wantWorker := PaymentTransactionWorker{
 		dbConnectionPool:    dbConnectionPool,
 		txModel:             txModel,
 		chAccModel:          chAccModel,
@@ -310,7 +310,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotWorker, err := NewTransactionWorker(
+			gotWorker, err := NewPaymentTranscationWorker(
 				tc.dbConnectionPool,
 				tc.txModel,
 				tc.chAccModel,
@@ -453,7 +453,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 		name         string
 		hTxRespFn    func(txJob *TxJob) horizon.Transaction
 		hErr         *utils.HorizonErrorWrapper
-		setupMocksFn func(t *testing.T, tw *TransactionWorker, txJob *TxJob)
+		setupMocksFn func(t *testing.T, tw *PaymentTransactionWorker, txJob *TxJob)
 		errContains  []string
 	}{
 		{
@@ -467,7 +467,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				}
 			},
 			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
-			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
+			setupMocksFn: func(t *testing.T, tw *PaymentTransactionWorker, txJob *TxJob) {
 				// PART 1: mock UpdateStellarTransactionXDRReceived that'll be called in saveResponseXDRIfPresent
 				mockTxStore := storeMocks.NewMockTransactionStore(t)
 				mockTxStore.
@@ -502,7 +502,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				}
 			},
 			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
-			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
+			setupMocksFn: func(t *testing.T, tw *PaymentTransactionWorker, txJob *TxJob) {
 				// PART 1: mock UpdateStellarTransactionXDRReceived that'll be called in saveResponseXDRIfPresent
 				mockTxStore := storeMocks.NewMockTransactionStore(t)
 				txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
@@ -1589,7 +1589,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 				HorizonClient:       hMock,
 				LedgerNumberTracker: ledgerNumberTracker,
 			}
-			transactionWorker := &TransactionWorker{
+			transactionWorker := &PaymentTransactionWorker{
 				engine:     &submitterEngine,
 				txModel:    store.NewTransactionModel(dbConnectionPool),
 				chAccModel: store.NewChannelAccountModel(dbConnectionPool),
@@ -1780,7 +1780,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 				SignatureService:    sigService,
 				MaxBaseFee:          100,
 			}
-			transactionWorker := &TransactionWorker{
+			transactionWorker := &PaymentTransactionWorker{
 				engine:     submitterEngine,
 				txModel:    store.NewTransactionModel(dbConnectionPool),
 				chAccModel: store.NewChannelAccountModel(dbConnectionPool),
@@ -1987,7 +1987,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				On("SubmitFeeBumpTransactionWithOptions", feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 				Return(tc.horizonResponse, tc.horizonError).
 				Once()
-			transactionWorker := TransactionWorker{
+			transactionWorker := PaymentTransactionWorker{
 				dbConnectionPool: dbConnectionPool,
 				txModel:          txModel,
 				chAccModel:       chAccModel,
@@ -2027,7 +2027,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 }
 
 func Test_TransactionWorker_buildPaymentCompletedEvent(t *testing.T) {
-	transactionWorker := TransactionWorker{}
+	transactionWorker := PaymentTransactionWorker{}
 
 	t.Run("returns error when an unexpected payment status is passed", func(t *testing.T) {
 		msg, err := transactionWorker.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &store.Transaction{}, data.PendingPaymentStatus, "")
@@ -2039,6 +2039,7 @@ func Test_TransactionWorker_buildPaymentCompletedEvent(t *testing.T) {
 		tx := store.Transaction{
 			ID:                     "tx-id",
 			ExternalID:             "payment-id",
+			Payment:                store.Payment{},
 			TenantID:               "tenant-id",
 			StellarTransactionHash: sql.NullString{},
 		}
@@ -2069,6 +2070,7 @@ func Test_TransactionWorker_buildPaymentCompletedEvent(t *testing.T) {
 		tx := store.Transaction{
 			ID:                     "tx-id",
 			ExternalID:             "payment-id",
+			Payment:                store.Payment{},
 			TenantID:               "tenant-id",
 			StellarTransactionHash: sql.NullString{},
 		}

@@ -638,6 +638,17 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error parsing network type: %v", err)
 			}
 
+			// Setup Embedded Wallet Service
+			embeddedWalletServiceOpts := services.EmbeddedWalletServiceOptions{
+				MTNDBConnectionPool: mtnDBConnectionPool,
+				TSSDBConnectionPool: tssDBConnectionPool,
+			}
+			embeddedWalletService, err := di.NewEmbeddedWalletService(ctx, embeddedWalletServiceOpts)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating embedded wallet service: %v", err)
+			}
+			serveOpts.EmbeddedWalletService = embeddedWalletService
+
 			// Inject Circle Service dependencies
 			circleService, err := di.NewCircleService(ctx, circle.ServiceOptions{
 				ClientFactory:        circle.NewClient,

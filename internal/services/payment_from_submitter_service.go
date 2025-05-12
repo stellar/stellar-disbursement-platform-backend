@@ -38,7 +38,7 @@ func NewPaymentFromSubmitterService(models *data.Models, tssDBConnectionPool db.
 func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
 		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize, tenantID)
+			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize, tenantID, txSubStore.TransactionTypePayment)
 			if err != nil {
 				return fmt.Errorf("getting transactions for update: %w", err)
 			}

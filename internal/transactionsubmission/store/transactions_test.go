@@ -82,7 +82,7 @@ func Test_Transaction_BuildMemo(t *testing.T) {
 			emojiPrefix = "🔴"
 		}
 		t.Run(fmt.Sprintf("%s%s(%s)", emojiPrefix, tc.memoType, tc.memoValue), func(t *testing.T) {
-			tx := &Transaction{MemoType: tc.memoType, Memo: tc.memoValue}
+			tx := &Transaction{Payment: Payment{MemoType: tc.memoType, Memo: tc.memoValue}}
 			gotMemo, err := tx.BuildMemo()
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
@@ -139,7 +139,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 	txModel := NewTransactionModel(dbConnectionPool)
 
 	t.Run("return an error if the input parameters are invalid", func(t *testing.T) {
-		tx, err := txModel.Insert(ctx, Transaction{ExternalID: "external-id-1", TenantID: uuid.NewString()})
+		tx, err := txModel.Insert(ctx, Transaction{TenantID: uuid.NewString()})
 		require.Error(t, err)
 		assert.EqualError(t, err, "inserting single transaction: validating transaction for insertion: asset code must have between 1 and 12 characters")
 		assert.Nil(t, tx)
@@ -147,12 +147,14 @@ func Test_TransactionModel_Insert(t *testing.T) {
 
 	t.Run("🎉 successfully insert a new Transaction", func(t *testing.T) {
 		transaction, err := txModel.Insert(ctx, Transaction{
-			ExternalID:  "external-id-1",
-			AssetCode:   "USDC",
-			AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-			Amount:      1,
-			Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-			TenantID:    "tenant-id-1",
+			ExternalID: "external-id-1",
+			Payment: Payment{
+				AssetCode:   "USDC",
+				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+				Amount:      1,
+				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+			},
+			TenantID: "tenant-id-1",
 		})
 		require.NoError(t, err)
 		require.NotNil(t, transaction)
@@ -195,7 +197,7 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 	})
 
 	t.Run("return an error if the input parameters are invalid", func(t *testing.T) {
-		transactionsToInsert := []Transaction{{ExternalID: "external-id-1"}}
+		transactionsToInsert := []Transaction{{}}
 		insertedTransactions, err := txModel.BulkInsert(ctx, dbConnectionPool, transactionsToInsert)
 		require.Error(t, err)
 		assert.EqualError(t, err, "validating transaction for insertion: asset code must have between 1 and 12 characters")
@@ -204,22 +206,26 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 
 	t.Run("🎉 successfully inserts the transactions successfully", func(t *testing.T) {
 		incomingTx1 := Transaction{
-			ExternalID:  "external-id-1",
-			AssetCode:   "USDC",
-			AssetIssuer: keypair.MustRandom().Address(),
-			// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
-			Amount:      0.0000001,
-			Destination: keypair.MustRandom().Address(),
-			TenantID:    uuid.NewString(),
+			ExternalID: "external-id-1",
+			Payment: Payment{
+				AssetCode:   "USDC",
+				AssetIssuer: keypair.MustRandom().Address(),
+				// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+				Amount:      0.0000001,
+				Destination: keypair.MustRandom().Address(),
+			},
+			TenantID: uuid.NewString(),
 		}
 		incomingTx2 := Transaction{
-			ExternalID:  "external-id-2",
-			AssetCode:   "USDC",
-			AssetIssuer: keypair.MustRandom().Address(),
-			// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
-			Amount:      922337203685.4775807,
-			Destination: keypair.MustRandom().Address(),
-			TenantID:    uuid.NewString(),
+			ExternalID: "external-id-2",
+			Payment: Payment{
+				AssetCode:   "USDC",
+				AssetIssuer: keypair.MustRandom().Address(),
+				// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+				Amount:      922337203685.4775807,
+				Destination: keypair.MustRandom().Address(),
+			},
+			TenantID: uuid.NewString(),
 		}
 		insertedTransactions, err := txModel.BulkInsert(ctx, dbConnectionPool, []Transaction{incomingTx1, incomingTx2})
 		require.NoError(t, err)
@@ -486,12 +492,14 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			// create a new transaction
 			tx, err := txModel.Insert(ctx, Transaction{
-				ExternalID:  uuid.NewString(),
-				AssetCode:   "USDC",
-				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-				Amount:      1,
-				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-				TenantID:    uuid.NewString(),
+				ExternalID: uuid.NewString(),
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+					Amount:      1,
+					Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+				},
+				TenantID: uuid.NewString(),
 			})
 			require.NoError(t, err)
 			require.NotNil(t, tx)
@@ -594,12 +602,14 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// create a new transaction
 			tx, err := txModel.Insert(ctx, Transaction{
-				ExternalID:  uuid.NewString(),
-				AssetCode:   "USDC",
-				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-				Amount:      1,
-				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-				TenantID:    uuid.NewString(),
+				ExternalID: uuid.NewString(),
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+					Amount:      1,
+					Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+				},
+				TenantID: uuid.NewString(),
 			})
 			require.NoError(t, err)
 			require.NotNil(t, tx)
@@ -648,6 +658,7 @@ func Test_Transaction_validate(t *testing.T) {
 			name: "validate AssetCode (min size)",
 			transaction: Transaction{
 				ExternalID: "123",
+				Payment:    Payment{},
 			},
 			wantErrContains: "asset code must have between 1 and 12 characters",
 		},
@@ -655,7 +666,9 @@ func Test_Transaction_validate(t *testing.T) {
 			name: "validate AssetCode (max size)",
 			transaction: Transaction{
 				ExternalID: "123",
-				AssetCode:  "1234567890123",
+				Payment: Payment{
+					AssetCode: "1234567890123",
+				},
 			},
 			wantErrContains: "asset code must have between 1 and 12 characters",
 		},
@@ -663,48 +676,58 @@ func Test_Transaction_validate(t *testing.T) {
 			name: "validate AssetIssuer (cannot be nil)",
 			transaction: Transaction{
 				ExternalID: "123",
-				AssetCode:  "USDC",
+				Payment: Payment{
+					AssetCode: "USDC",
+				},
 			},
 			wantErrContains: "asset issuer is required",
 		},
 		{
 			name: "validate AssetIssuer (not a valid public key)",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "invalid-issuer",
+				ExternalID: "123",
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "invalid-issuer",
+				},
 			},
 			wantErrContains: `asset issuer "invalid-issuer" is not a valid ed25519 public key`,
 		},
 		{
 			name: "validate Amount",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				ExternalID: "123",
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				},
 			},
 			wantErrContains: "amount must be positive",
 		},
 		{
 			name: "validate Destination",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100.0,
-				Destination: "invalid-destination",
+				ExternalID: "123",
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					Amount:      100.0,
+					Destination: "invalid-destination",
+				},
 			},
 			wantErrContains: `destination "invalid-destination" is not a valid ed25519 public key`,
 		},
 		{
 			name: "validate tenant ID",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100.0,
-				Destination: "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG",
-				TenantID:    "",
+				ExternalID: "123",
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					Amount:      100.0,
+					Destination: "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG",
+				},
+				TenantID: "",
 			},
 			wantErrContains: `tenant ID is required`,
 		},
@@ -723,11 +746,13 @@ func Test_Transaction_validate(t *testing.T) {
 		}{
 			name: fmt.Sprintf("🎉 successfully validate XLM transaction with (%c) destination", address[0]),
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "XLM",
-				Amount:      100.0,
-				Destination: address,
-				TenantID:    "tenant-id",
+				ExternalID: "123",
+				Payment: Payment{
+					AssetCode:   "XLM",
+					Amount:      100.0,
+					Destination: address,
+				},
+				TenantID: "tenant-id",
 			},
 		})
 
@@ -738,19 +763,21 @@ func Test_Transaction_validate(t *testing.T) {
 		}{
 			name: fmt.Sprintf("🎉 successfully validate USDC transaction with (%c) destination", address[0]),
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100.0,
-				Destination: address,
-				TenantID:    "tenant-id",
+				ExternalID: "123",
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					Amount:      100.0,
+					Destination: address,
+				},
+				TenantID: "tenant-id",
 			},
 		})
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.transaction.validate()
+			err := tc.transaction.Payment.validate()
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 			} else {
@@ -844,7 +871,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 				txIDs = append(txIDs, tx.ID)
 			}
 
-			foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, tc.batchSize, tenantID)
+			foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, tc.batchSize, tenantID, TransactionTypePayment)
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 			} else {

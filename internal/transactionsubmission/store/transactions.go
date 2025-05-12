@@ -23,20 +23,24 @@ import (
 
 var ErrRecordNotFound = errors.New("record not found")
 
+const (
+	TransactionTypePayment        string = "PAYMENT"
+	TransactionTypeWalletCreation string = "WALLET_CREATION"
+)
+
 type Transaction struct {
 	ID string `db:"id"`
 	// ExternalID contains an external ID for the transaction. This is used for reconciliation.
 	ExternalID string `db:"external_id"`
+
 	// Status is the status of the transaction. Don't change it directly and use the internal methods of the model instead.
 	Status        TransactionStatus        `db:"status"`
 	StatusMessage sql.NullString           `db:"status_message"`
 	StatusHistory TransactionStatusHistory `db:"status_history"`
-	AssetCode     string                   `db:"asset_code"`
-	AssetIssuer   string                   `db:"asset_issuer"`
-	Amount        float64                  `db:"amount"`
-	Destination   string                   `db:"destination"`
-	Memo          string                   `db:"memo"`
-	MemoType      schema.MemoType          `db:"memo_type"`
+
+	TransactionType string `db:"transaction_type"`
+	Payment
+	WalletCreation
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
@@ -65,6 +69,21 @@ type Transaction struct {
 	LockedUntilLedgerNumber sql.NullInt32 `db:"locked_until_ledger_number"`
 }
 
+type Payment struct {
+	AssetCode   string          `db:"asset_code"`
+	AssetIssuer string          `db:"asset_issuer"`
+	Amount      float64         `db:"amount"`
+	Destination string          `db:"destination"`
+	Memo        string          `db:"memo"`
+	MemoType    schema.MemoType `db:"memo_type"`
+}
+
+type WalletCreation struct {
+	CredentialID string `db:"credential_id"`
+	PublicKey    string `db:"public_key"`
+	WasmHash     string `db:"wasm_hash"`
+}
+
 func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
 	return schema.NewMemo(tx.MemoType, tx.Memo)
 }
@@ -75,29 +94,63 @@ func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {
 
 // validate checks if the transaction fields are valid and can be added to the DB.
 func (tx *Transaction) validate() error {
+	if tx.TenantID == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
 	if tx.ExternalID == "" {
 		return fmt.Errorf("external ID is required")
 	}
-	if len(tx.AssetCode) < 1 || len(tx.AssetCode) > 12 {
+
+	switch tx.TransactionType {
+	case TransactionTypePayment:
+		if err := tx.Payment.validate(); err != nil {
+			return fmt.Errorf("validating payment transaction: %w", err)
+		}
+	case TransactionTypeWalletCreation:
+		if err := tx.WalletCreation.validate(); err != nil {
+			return fmt.Errorf("validating wallet creation transaction: %w", err)
+		}
+	default:
+		return fmt.Errorf("invalid transaction type %q", tx.TransactionType)
+	}
+
+	return nil
+}
+
+// validateWalletCreation checks if the transaction fields are valid and can be added to the DB.
+func (wc *WalletCreation) validate() error {
+	if wc.CredentialID == "" {
+		return fmt.Errorf("credential ID is required")
+	}
+	if wc.PublicKey == "" {
+		return fmt.Errorf("public key is required")
+	}
+	if wc.WasmHash == "" {
+		return fmt.Errorf("wasm hash is required")
+	}
+
+	return nil
+}
+
+// validatePayment checks if the transaction fields are valid and can be added to the DB.
+func (p *Payment) validate() error {
+	if len(p.AssetCode) < 1 || len(p.AssetCode) > 12 {
 		return fmt.Errorf("asset code must have between 1 and 12 characters")
 	}
-	if strings.ToLower(tx.AssetCode) != "xlm" {
-		if tx.AssetIssuer == "" {
+	if strings.ToLower(p.AssetCode) != "xlm" {
+		if p.AssetIssuer == "" {
 			return fmt.Errorf("asset issuer is required")
 		}
 
-		if !strkey.IsValidEd25519PublicKey(tx.AssetIssuer) {
-			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", tx.AssetIssuer)
+		if !strkey.IsValidEd25519PublicKey(p.AssetIssuer) {
+			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", p.AssetIssuer)
 		}
 	}
-	if tx.Amount <= 0 {
+	if p.Amount <= 0 {
 		return fmt.Errorf("amount must be positive")
 	}
-	if !strkey.IsValidEd25519PublicKey(tx.Destination) && !strkey.IsValidContractAddress(tx.Destination) {
-		return fmt.Errorf("destination %q is not a valid ed25519 public key or contract address", tx.Destination)
-	}
-	if tx.TenantID == "" {
-		return fmt.Errorf("tenant ID is required")
+	if !strkey.IsValidEd25519PublicKey(p.Destination) && !strkey.IsValidContractAddress(p.Destination) {
+		return fmt.Errorf("destination %q is not a valid ed25519 public key or contract address", p.Destination)
 	}
 	return nil
 }
@@ -116,16 +169,12 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 		ResultAlias:    resultAlias,
 		RawColumns: []string{
 			"id",
-			"external_id",
 			"tenant_id",
 			"distribution_account",
-			"asset_code",
-			"asset_issuer",
-			"amount",
-			"destination",
 			"status",
 			"status_message",
 			"status_history",
+			"transaction_type",
 			"attempts_count",
 			"stellar_transaction_hash",
 			"xdr_sent",
@@ -139,9 +188,19 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"locked_at",
 			"locked_until_ledger_number",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
+			"external_id",
+			"asset_code",
+			"asset_issuer",
+			"destination",
+			"credential_id",
+			"public_key",
+			"wasm_hash",
 			"memo",
 			"memo_type::text",
+		},
+		CoalesceFloat64Columns: []string{
+			"amount",
 		},
 	}.Build()
 
@@ -165,7 +224,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination, tenant_id, memo, memo_type) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, credential_id, public_key, wasm_hash, tenant_id, memo, memo_type) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
 	valueArgs := make([]interface{}, 0, len(transactions)*6)
 
@@ -173,13 +232,17 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
-			transaction.ExternalID,
-			transaction.AssetCode,
-			transaction.AssetIssuer,
-			transaction.Amount,
-			transaction.Destination,
+			transaction.TransactionType,
+			sdpUtils.SQLNullString(transaction.ExternalID),
+			sdpUtils.SQLNullString(transaction.AssetCode),
+			sdpUtils.SQLNullString(transaction.AssetIssuer),
+			sdpUtils.SQLNullFloat64(transaction.Amount),
+			sdpUtils.SQLNullString(transaction.Destination),
+			sdpUtils.SQLNullString(transaction.CredentialID),
+			sdpUtils.SQLNullString(transaction.PublicKey),
+			sdpUtils.SQLNullString(transaction.WasmHash),
 			transaction.TenantID,
 			sdpUtils.SQLNullString(transaction.Memo),
 			sdpUtils.SQLNullString(string(transaction.MemoType)),
@@ -360,7 +423,7 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 }
 
 // GetTransactionBatchForUpdate returns a batch of transactions that are ready to be synced. Locks the rows for update.
-func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*Transaction, error) {
+func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string, transactionType string) ([]*Transaction, error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
@@ -379,14 +442,15 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 		    status IN ('SUCCESS', 'ERROR')
 		    AND synced_at IS NULL
 		    AND tenant_id = $1
+			AND transaction_type = $2
 		ORDER BY 
 		    completed_at ASC
 		LIMIT 
-		    $2
+		    $3
 		FOR UPDATE SKIP LOCKED
 		`
 
-	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, batchSize)
+	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, transactionType, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("getting transactions: %w", err)
 	}
