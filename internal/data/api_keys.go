@@ -375,6 +375,10 @@ func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, perms AP
 		return nil, fmt.Errorf("update api key: %w", err)
 	}
 
+	if key.AllowedIPs == nil {
+		key.AllowedIPs = IPList{}
+	}
+
 	return &key, nil
 }
 
