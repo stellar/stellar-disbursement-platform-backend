@@ -21,13 +21,13 @@ pub(crate) const ENCODED_CHALLENGE_LEN: u32 = 43;
 ///
 /// - `type`: ~20 bytes (`"type":"webauthn.get"`).
 ///
-/// - `challenge`: ~43 bytes (`"challenge":"<base64url_32_byte_challenge>",`).
+/// - `challenge`: ~58 bytes (`"challenge":"<base64url_32_byte_challenge>",`).
 ///
 /// - `origin`: ~100-200 bytes (`"origin":"https://example.com",`)
 ///
 /// - `crossOrigin`: ~20 bytes (`"crossOrigin":false,`).
 ///
-/// Total length: ~283 bytes.
+/// Total length: ~298 bytes.
 ///
 /// This is a conservative estimate, as the actual length may vary based on the specific values used.
 /// The maximum length is set to 1024 bytes to accommodate any additional fields or whitespace.

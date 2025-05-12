@@ -295,6 +295,51 @@ fn test_webauthn_invalid_challenge_content() {
 }
 
 #[test]
+fn test_webauthn_invalid_challenge_length_in_client_data() {
+    let env = Env::default();
+
+    let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
+
+    let admin = Address::generate(&env);
+    let args = (admin, public_key.clone());
+    let contract_address = env.register(AccountContract {}, args);
+
+    let payload: BytesN<32> = BytesN::random(&env);
+    let payload_hash = env.crypto().sha256(&payload.clone().into());
+
+    let mut credential = sign(env.clone(), &payload_hash.to_array(), &mut signing_key);
+
+    let original_challenge_str = {
+        let mut temp_challenge_buf = [0u8; ENCODED_CHALLENGE_LEN as usize];
+        base64_url::encode(&mut temp_challenge_buf, &payload_hash.to_array());
+        std::str::from_utf8(&temp_challenge_buf)
+            .unwrap()
+            .to_string()
+    };
+
+    let truncated_challenge_str = &original_challenge_str[0..(ENCODED_CHALLENGE_LEN - 1) as usize];
+    let bad_client_data_json_str = std::format!(
+        r#"{{"type":"webauthn.get","challenge":"{}","origin":"https://example.com"}}"#,
+        truncated_challenge_str
+    );
+    std::dbg!(&bad_client_data_json_str);
+
+    credential.client_data_json = Bytes::from_slice(&env, bad_client_data_json_str.as_bytes());
+
+    let result = env.try_invoke_contract_check_auth::<AccountContractError>(
+        &contract_address,
+        &BytesN::from_array(&env, &payload_hash.to_array()),
+        credential.into_val(&env),
+        &vec![&env],
+    );
+
+    assert_eq!(
+        result,
+        Err(Ok(AccountContractError::WebAuthnInvalidChallenge))
+    );
+}
+
+#[test]
 fn test_webauthn_tampered_signature() {
     let env = Env::default();
 
