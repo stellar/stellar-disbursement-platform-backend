@@ -34,13 +34,6 @@ if ! pg_isready -h localhost -p 5432 -U postgres &>/dev/null; then
     sleep 5
 fi
 
-# Create databases
-print_status "Creating databases..."
-psql -h localhost -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'sdp'" | grep -q 1 || psql -h localhost -U postgres -c "CREATE DATABASE sdp"
-psql -h localhost -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'sdp_auth'" | grep -q 1 || psql -h localhost -U postgres -c "CREATE DATABASE sdp_auth"
-psql -h localhost -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'sdp_tss'" | grep -q 1 || psql -h localhost -U postgres -c "CREATE DATABASE sdp_tss"
-psql -h localhost -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'sdp_admin'" | grep -q 1 || psql -h localhost -U postgres -c "CREATE DATABASE sdp_admin"
-
 # Set SDP environment variables from docker-compose
 export BASE_URL="http://localhost:8000"
 export DATABASE_URL="postgres://postgres@localhost:5432/sdp?sslmode=disable"

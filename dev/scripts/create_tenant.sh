@@ -29,12 +29,12 @@ TENANT_UI_BASE_URL="http://localhost:3000"
 TENANT_EXISTS=$(curl -s -u 'SDP-admin:api_key_1234567890' http://localhost:8003/tenants | jq -r '.[] | select(.name == "'$TENANT_NAME'") | .id')
 
 if [ -z "$TENANT_EXISTS" ]; then
-  # Create tenant
-  echo "Creating tenant: $TENANT_NAME"
-  curl -X POST http://localhost:8003/tenants \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Basic $(echo -n 'SDP-admin:api_key_1234567890' | base64)" \
-    -d "{
+    # Create tenant
+    echo "Creating tenant: $TENANT_NAME"
+    curl -X POST http://localhost:8003/tenants \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Basic $(echo -n 'SDP-admin:api_key_1234567890' | base64)" \
+        -d "{
       \"name\": \"$TENANT_NAME\",
       \"organization_name\": \"$TENANT_ORG_NAME\",
       \"owner_first_name\": \"Admin\",
@@ -44,13 +44,13 @@ if [ -z "$TENANT_EXISTS" ]; then
       \"base_url\": \"$TENANT_BASE_URL\",
       \"sdp_ui_base_url\": \"$TENANT_UI_BASE_URL\"
     }"
-  echo "Tenant created successfully."
+    echo "Tenant created successfully."
 else
-  echo "Tenant $TENANT_NAME already exists."
+    echo "Tenant $TENANT_NAME already exists."
 fi
 
 # Add a user with password
 echo "Adding user for tenant: $TENANT_NAME"
 echo "Password123!" | go run ../main.go auth add-user "owner@${TENANT_NAME}.local" "Admin" "User" --password --owner --roles "owner" --tenant-id "$TENANT_EXISTS"
 
-echo "User added successfully." 
+echo "User added successfully."
