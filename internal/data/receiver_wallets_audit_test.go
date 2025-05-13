@@ -87,6 +87,8 @@ func getLastReceiverWalletsAuditEntry(
 	db db.DBConnectionPool,
 	receiverWalletID string,
 ) receiverWalletsAuditEntry {
+	t.Helper()
+
 	query := `
 		SELECT operation, changed_at,
 			` + ReceiverWalletColumnNames("rw", "") + `,
