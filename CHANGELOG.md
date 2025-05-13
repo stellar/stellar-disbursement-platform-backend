@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - Add API keys management endpoints [#677](https://github.com/stellar/stellar-disbursement-platform-backend/pull/677)
+- Added a new endpoint to unregister a receiver wallet `PATCH /receivers/wallets/:id/status`. [#675](https://github.com/stellar/stellar-disbursement-platform-backend/pull/675)
 - Allow the serviceaccount to be set for the ap deployment in the helm chart [#679](https://github.com/stellar/stellar-disbursement-platform-backend/pull/679)
 
 ## [3.7.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
@@ -18,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Update integration test to wait for the payment to be processed by TSS/Circle with a retry mechanism. [#585](https://github.com/stellar/stellar-disbursement-platform-backend/pull/585)
+- Update integration tests to wait for the payment to be processed by TSS/Circle with a retry mechanism. [#585](https://github.com/stellar/stellar-disbursement-platform-backend/pull/585)
 - Add Circle Payouts API to the e2e integration test. [#586](https://github.com/stellar/stellar-disbursement-platform-backend/pull/586)
 - A React app for the SEP-24 interactive deposit flow. This app is served by the backend and is accessible at `/wallet-registration/start`. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
 - A new endpoint `GET /sep24-interactive-deposit/info` to kick off the SEP-24 interactive deposit flow. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)

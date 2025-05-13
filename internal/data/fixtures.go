@@ -382,12 +382,11 @@ func DeleteAllReceiverVerificationFixtures(t *testing.T, ctx context.Context, sq
 }
 
 func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, receiverID, walletID string, status ReceiversWalletStatus) *ReceiverWallet {
-	var stellarAddress, stellarMemo, stellarMemoType, anchorPlatformTransactionID string
+	var stellarAddress, stellarMemo, stellarMemoType, anchorPlatformTransactionID, otp, otpConfirmedWith string
+	var otpConfirmedAt, otpCreatedAt, invitationSentAt time.Time
 
 	if status != DraftReceiversWalletStatus && status != ReadyReceiversWalletStatus {
-		kp, err := keypair.Random()
-		require.NoError(t, err)
-		stellarAddress = kp.Address()
+		stellarAddress = keypair.MustRandom().Address()
 
 		randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
 		require.NoError(t, err)
@@ -397,14 +396,20 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 
 		anchorPlatformTransactionID, err = utils.RandomString(10)
 		require.NoError(t, err)
+
+		otp = randNumber.String()
+		otpConfirmedWith = "user@example.com"
+		invitationSentAt, otpConfirmedAt, otpCreatedAt = time.Now(), time.Now(), time.Now()
 	}
 
 	query := `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
-				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, anchor_platform_transaction_id)
+				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history,
+otp, otp_confirmed_with, otp_confirmed_at, otp_created_at,anchor_platform_transaction_id, invitation_sent_at)
 			VALUES
-				($1, $2, $3, $4, $5, $6, ARRAY[create_receiver_wallet_status_history(now(), $6)], $7)
+				($1, $2, $3, $4, $5, $6, ARRAY[create_receiver_wallet_status_history(now(), $6, '')], 
+$7, $8, $9, $10 ,$11, $12)
 			RETURNING
 				*
 		)
@@ -419,9 +424,10 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, utils.SQLNullString(stellarMemo), utils.SQLNullString(stellarMemoType), status, anchorPlatformTransactionID)
-	require.NoError(t, err)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, utils.SQLNullString(stellarMemo), utils.SQLNullString(stellarMemoType), status,
+		utils.SQLNullString(otp), utils.SQLNullString(otpConfirmedWith), utils.SQLNullTime(otpConfirmedAt), utils.SQLNullTime(otpCreatedAt), anchorPlatformTransactionID, utils.SQLNullTime(invitationSentAt))
 
+	require.NoError(t, err)
 	return &receiverWallet
 }
 
