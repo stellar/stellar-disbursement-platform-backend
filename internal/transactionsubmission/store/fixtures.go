@@ -36,11 +36,14 @@ func CreateTransactionFixturesNew(t *testing.T,
 
 type TransactionFixture struct {
 	ExternalID          string
+	TransactionType     TransactionType
 	AssetCode           string
 	AssetIssuer         string
 	DestinationAddress  string
-	Status              TransactionStatus
 	Amount              float64
+	PublicKey           string
+	WasmHash            string
+	Status              TransactionStatus
 	TenantID            string
 	DistributionAccount string
 }
@@ -69,20 +72,23 @@ func CreateTransactionFixtureNew(
 
 	query := `
 		INSERT INTO submitter_transactions
-			(external_id, status, asset_code, asset_issuer, amount, destination, tenant_id, completed_at, started_at)
+			(external_id, transaction_type, status, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, tenant_id, completed_at, started_at)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 		RETURNING
 			` + TransactionColumnNames("", "")
 
 	tx := Transaction{}
 	err := sqlExec.GetContext(ctx, &tx, query,
 		txFixture.ExternalID,
+		txFixture.TransactionType,
 		string(txFixture.Status),
 		txFixture.AssetCode,
 		txFixture.AssetIssuer,
 		txFixture.Amount,
 		txFixture.DestinationAddress,
+		txFixture.PublicKey,
+		txFixture.WasmHash,
 		txFixture.TenantID,
 		completedAt,
 	)

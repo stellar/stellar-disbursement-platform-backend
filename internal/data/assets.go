@@ -32,10 +32,10 @@ func AssetColumnNames(tableReference, resultAlias string, includeDates bool) str
 	}
 
 	columns := SQLColumnConfig{
-		TableReference:  tableReference,
-		ResultAlias:     resultAlias,
-		RawColumns:      cols,
-		CoalesceColumns: []string{"issuer"},
+		TableReference:        tableReference,
+		ResultAlias:           resultAlias,
+		RawColumns:            cols,
+		CoalesceStringColumns: []string{"issuer"},
 	}.Build()
 
 	return strings.Join(columns, ",\n")

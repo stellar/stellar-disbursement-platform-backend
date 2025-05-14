@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,13 @@ import (
 
 var ErrRecordNotFound = errors.New("record not found")
 
+type TransactionType string
+
+const (
+	TransactionTypePayment        TransactionType = "PAYMENT"
+	TransactionTypeWalletCreation TransactionType = "WALLET_CREATION"
+)
+
 type Transaction struct {
 	ID string `db:"id"`
 	// ExternalID contains an external ID for the transaction. This is used for reconciliation.
@@ -31,12 +39,10 @@ type Transaction struct {
 	Status        TransactionStatus        `db:"status"`
 	StatusMessage sql.NullString           `db:"status_message"`
 	StatusHistory TransactionStatusHistory `db:"status_history"`
-	AssetCode     string                   `db:"asset_code"`
-	AssetIssuer   string                   `db:"asset_issuer"`
-	Amount        float64                  `db:"amount"`
-	Destination   string                   `db:"destination"`
-	Memo          string                   `db:"memo"`
-	MemoType      schema.MemoType          `db:"memo_type"`
+
+	TransactionType TransactionType `db:"transaction_type"`
+	Payment
+	WalletCreation
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
@@ -65,7 +71,25 @@ type Transaction struct {
 	LockedUntilLedgerNumber sql.NullInt32 `db:"locked_until_ledger_number"`
 }
 
+type Payment struct {
+	AssetCode   string          `db:"asset_code"`
+	AssetIssuer string          `db:"asset_issuer"`
+	Amount      float64         `db:"amount"`
+	Destination string          `db:"destination"`
+	Memo        string          `db:"memo"`
+	MemoType    schema.MemoType `db:"memo_type"`
+}
+
+type WalletCreation struct {
+	PublicKey string `db:"public_key"`
+	WasmHash  string `db:"wasm_hash"`
+}
+
 func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
+	if tx.TransactionType != TransactionTypePayment {
+		return nil, fmt.Errorf("transaction type %q does not support memo", tx.TransactionType)
+	}
+
 	return schema.NewMemo(tx.MemoType, tx.Memo)
 }
 
@@ -78,26 +102,66 @@ func (tx *Transaction) validate() error {
 	if tx.ExternalID == "" {
 		return fmt.Errorf("external ID is required")
 	}
-	if len(tx.AssetCode) < 1 || len(tx.AssetCode) > 12 {
+
+	if tx.TenantID == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
+
+	switch tx.TransactionType {
+	case TransactionTypePayment:
+		if err := tx.Payment.validate(); err != nil {
+			return fmt.Errorf("validating payment transaction: %w", err)
+		}
+	case TransactionTypeWalletCreation:
+		if err := tx.WalletCreation.validate(); err != nil {
+			return fmt.Errorf("validating wallet creation transaction: %w", err)
+		}
+	default:
+		return fmt.Errorf("invalid transaction type %q", tx.TransactionType)
+	}
+	return nil
+}
+
+// validateWalletCreation checks if the transaction fields are valid and can be added to the DB.
+func (wc *WalletCreation) validate() error {
+	if wc.PublicKey == "" {
+		return fmt.Errorf("public key is required")
+	} else {
+		_, err := hex.DecodeString(wc.PublicKey)
+		if err != nil {
+			return fmt.Errorf("public key %q is not a valid hex string: %w", wc.PublicKey, err)
+		}
+	}
+	if wc.WasmHash == "" {
+		return fmt.Errorf("wasm hash is required")
+	} else {
+		_, err := hex.DecodeString(wc.WasmHash)
+		if err != nil {
+			return fmt.Errorf("wasm hash %q is not a valid hex string: %w", wc.WasmHash, err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Payment) validate() error {
+	if len(p.AssetCode) < 1 || len(p.AssetCode) > 12 {
 		return fmt.Errorf("asset code must have between 1 and 12 characters")
 	}
-	if strings.ToLower(tx.AssetCode) != "xlm" {
-		if tx.AssetIssuer == "" {
+	if strings.ToLower(p.AssetCode) != "xlm" {
+		if p.AssetIssuer == "" {
 			return fmt.Errorf("asset issuer is required")
 		}
 
-		if !strkey.IsValidEd25519PublicKey(tx.AssetIssuer) {
-			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", tx.AssetIssuer)
+		if !strkey.IsValidEd25519PublicKey(p.AssetIssuer) {
+			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", p.AssetIssuer)
 		}
 	}
-	if tx.Amount <= 0 {
+	if p.Amount <= 0 {
 		return fmt.Errorf("amount must be positive")
 	}
-	if !strkey.IsValidEd25519PublicKey(tx.Destination) && !strkey.IsValidContractAddress(tx.Destination) {
-		return fmt.Errorf("destination %q is not a valid ed25519 public key or contract address", tx.Destination)
-	}
-	if tx.TenantID == "" {
-		return fmt.Errorf("tenant ID is required")
+	if !strkey.IsValidEd25519PublicKey(p.Destination) && !strkey.IsValidContractAddress(p.Destination) {
+		return fmt.Errorf("destination %q is not a valid ed25519 public key or contract address", p.Destination)
 	}
 	return nil
 }
@@ -118,11 +182,8 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"id",
 			"external_id",
 			"tenant_id",
+			"transaction_type",
 			"distribution_account",
-			"asset_code",
-			"asset_issuer",
-			"amount",
-			"destination",
 			"status",
 			"status_message",
 			"status_history",
@@ -139,9 +200,17 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"locked_at",
 			"locked_until_ledger_number",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
+			"asset_code",
+			"asset_issuer",
+			"destination",
+			"public_key",
+			"wasm_hash",
 			"memo",
 			"memo_type::text",
+		},
+		CoalesceFloat64Columns: []string{
+			"amount",
 		},
 	}.Build()
 
@@ -165,7 +234,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination, tenant_id, memo, memo_type) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, tenant_id, memo, memo_type) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
 	valueArgs := make([]interface{}, 0, len(transactions)*6)
 
@@ -173,13 +242,16 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
+			transaction.TransactionType,
 			transaction.ExternalID,
-			transaction.AssetCode,
-			transaction.AssetIssuer,
-			transaction.Amount,
-			transaction.Destination,
+			sdpUtils.SQLNullString(transaction.AssetCode),
+			sdpUtils.SQLNullString(transaction.AssetIssuer),
+			sdpUtils.SQLNullFloat64(transaction.Amount),
+			sdpUtils.SQLNullString(transaction.Destination),
+			sdpUtils.SQLNullString(transaction.PublicKey),
+			sdpUtils.SQLNullString(transaction.WasmHash),
 			transaction.TenantID,
 			sdpUtils.SQLNullString(transaction.Memo),
 			sdpUtils.SQLNullString(string(transaction.MemoType)),
