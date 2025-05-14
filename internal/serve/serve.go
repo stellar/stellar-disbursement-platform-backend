@@ -228,7 +228,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Authenticated Routes
 	authManager := o.authManager
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.AuthenticateMiddleware(authManager, o.tenantManager))
+		r.Use(middleware.APIKeyOrJWTAuthenticate(o.Models.APIKeys, middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
 		r.Use(middleware.EnsureTenantMiddleware)
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole)).Route("/api-keys", func(r chi.Router) {
@@ -242,10 +242,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
-			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
-			r.Get("/", statisticsHandler.GetStatistics)
-			r.Get("/{id}", statisticsHandler.GetStatisticsByDisbursement)
+		r.With(middleware.RequirePermission(data.ReadStatistics, middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...))).Route("/statistics", func(r chi.Router) {
+			h := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
+			r.Get("/", h.GetStatistics)
+			r.Get("/{id}", h.GetStatisticsByDisbursement)
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).Route("/users", func(r chi.Router) {

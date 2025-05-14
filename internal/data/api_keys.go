@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/hex"
@@ -14,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -253,7 +253,6 @@ func (m *APIKeyModel) Insert(
 		keyHash := hex.EncodeToString(h.Sum(nil))
 
 		candidate := &APIKey{
-			ID:          uuid.New().String(),
 			Name:        name,
 			KeyHash:     keyHash,
 			Salt:        salt,
@@ -266,19 +265,19 @@ func (m *APIKeyModel) Insert(
 
 		const q = `
             INSERT INTO api_keys (
-                id, name, key_hash, salt,
+                name, key_hash, salt,
                 expiry_date, permissions, allowed_ips,
                 created_by, updated_by
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-            RETURNING created_at, updated_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            RETURNING id, created_at, updated_at
         `
 
 		row := m.dbConnectionPool.QueryRowxContext(ctx, q,
-			candidate.ID, candidate.Name, candidate.KeyHash, candidate.Salt,
+			candidate.Name, candidate.KeyHash, candidate.Salt,
 			candidate.ExpiryDate, candidate.Permissions, candidate.AllowedIPs,
 			candidate.CreatedBy, candidate.UpdatedBy,
 		)
-		if err := row.Scan(&candidate.CreatedAt, &candidate.UpdatedAt); err != nil {
+		if err := row.Scan(&candidate.ID, &candidate.CreatedAt, &candidate.UpdatedAt); err != nil {
 			var pgErr *pq.Error
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" && attempt < maxAttempts {
 				// hash collision (unique violation) - retry
@@ -287,7 +286,8 @@ func (m *APIKeyModel) Insert(
 			return nil, fmt.Errorf("insert API key: %w", err)
 		}
 
-		candidate.Key = APIKeyPrefix + secret
+		//return formatted key to the user SDP_<APIKey.ID>.<secret>
+		candidate.Key = APIKeyPrefix + candidate.ID + "." + secret
 		apiKey = candidate
 		break
 	}
@@ -349,6 +349,63 @@ func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string) (*APIKe
 		return nil, fmt.Errorf("get api key by id: %w", err)
 	}
 	return &key, nil
+}
+
+// ValidateRawKey parses and verifyies a raw SDP_ key
+func (m *APIKeyModel) ValidateRawKey(ctx context.Context, raw string) (*APIKey, error) {
+	if !strings.HasPrefix(raw, APIKeyPrefix) {
+		return nil, fmt.Errorf("invalid API key prefix")
+	}
+
+	// 1) Strip prefix and split into "<id>.<secret>"
+	payload := raw[len(APIKeyPrefix):]
+	parts := strings.SplitN(payload, ".", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid API key format")
+	}
+	id, secret := parts[0], parts[1]
+
+	// 2) Fetch data if available
+	const q = `
+      SELECT
+        id,
+        key_hash,
+        salt,
+        expiry_date,
+        permissions,
+        allowed_ips,
+		created_by
+      FROM api_keys
+      WHERE id = $1
+      LIMIT 1
+    `
+	var a APIKey
+	if err := m.dbConnectionPool.GetContext(ctx, &a, q, id); err != nil {
+		return nil, fmt.Errorf("lookup API key: %w", err)
+	}
+
+	// 3) Verify hash
+	h := sha256.New()
+	h.Write([]byte(a.Salt))
+	h.Write([]byte(secret))
+	computed := hex.EncodeToString(h.Sum(nil))
+	if subtle.ConstantTimeCompare([]byte(computed), []byte(a.KeyHash)) != 1 {
+		return nil, fmt.Errorf("invalid API key")
+	}
+
+	// 4) Check expiry
+	if a.ExpiryDate != nil && time.Now().UTC().After(*a.ExpiryDate) {
+		return nil, fmt.Errorf("API key expired")
+	}
+
+	return &a, nil
+}
+
+// UpdateLastUsed stamps the API key’s last_used_at
+func (m *APIKeyModel) UpdateLastUsed(ctx context.Context, id string) error {
+	const q = `UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`
+	_, err := m.dbConnectionPool.ExecContext(ctx, q, id)
+	return err
 }
 
 func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, perms APIKeyPermissions, ips []string) (*APIKey, error) {
