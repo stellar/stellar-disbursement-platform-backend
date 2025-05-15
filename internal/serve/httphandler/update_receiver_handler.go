@@ -59,20 +59,14 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	ctx := req.Context()
 
 	// Grab token and user
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
-	userID, err := h.AuthManager.GetUserID(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
-		return
-	}
 
 	var reqBody validators.UpdateReceiverRequest
-	err = httpdecode.DecodeJSON(req, &reqBody)
-	if err != nil {
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
@@ -89,7 +83,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	}
 
 	receiverID := chi.URLParam(req, "id")
-	_, err = h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
+	_, err := h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("Receiver not found", err, nil).Render(rw)
