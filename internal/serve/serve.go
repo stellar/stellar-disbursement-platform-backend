@@ -372,6 +372,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			})
 
 			// Write operations
+			updateReceiverHandler := httphandler.UpdateReceiverHandler{
+				Models:           o.Models,
+				DBConnectionPool: o.MtnDBConnectionPool,
+				AuthManager:      authManager,
+			}
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
 				Models:             o.Models,
 				CrashTrackerClient: o.CrashTrackerClient,
@@ -382,6 +387,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				data.WriteReceivers,
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
 			)).Group(func(r chi.Router) {
+				r.Patch("/{id}", updateReceiverHandler.UpdateReceiver)
 				r.Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 				r.Patch("/wallets/{receiver_wallet_id}/status", receiverWalletHandler.PatchReceiverWalletStatus)
 			})
