@@ -82,7 +82,7 @@ func Test_Transaction_BuildMemo(t *testing.T) {
 			emojiPrefix = "🔴"
 		}
 		t.Run(fmt.Sprintf("%s%s(%s)", emojiPrefix, tc.memoType, tc.memoValue), func(t *testing.T) {
-			tx := &Transaction{MemoType: tc.memoType, Memo: tc.memoValue}
+			tx := &Transaction{TransactionType: TransactionTypePayment, Payment: Payment{MemoType: tc.memoType, Memo: tc.memoValue}}
 			gotMemo, err := tx.BuildMemo()
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
@@ -93,6 +93,13 @@ func Test_Transaction_BuildMemo(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("returns an error if the transaction type is not payment", func(t *testing.T) {
+		tx := &Transaction{TransactionType: TransactionTypeWalletCreation, WalletCreation: WalletCreation{}}
+		gotMemo, err := tx.BuildMemo()
+		require.ErrorContains(t, err, "transaction type \"WALLET_CREATION\" does not support memo")
+		require.Nil(t, gotMemo)
+	})
 }
 
 func Test_Transaction_IsLocked(t *testing.T) {
@@ -139,20 +146,23 @@ func Test_TransactionModel_Insert(t *testing.T) {
 	txModel := NewTransactionModel(dbConnectionPool)
 
 	t.Run("return an error if the input parameters are invalid", func(t *testing.T) {
-		tx, err := txModel.Insert(ctx, Transaction{ExternalID: "external-id-1", TenantID: uuid.NewString()})
+		tx, err := txModel.Insert(ctx, Transaction{ExternalID: "external-id-1", TransactionType: TransactionTypePayment, TenantID: uuid.NewString()})
 		require.Error(t, err)
-		assert.EqualError(t, err, "inserting single transaction: validating transaction for insertion: asset code must have between 1 and 12 characters")
+		assert.EqualError(t, err, "inserting single transaction: validating transaction for insertion: validating payment transaction: asset code must have between 1 and 12 characters")
 		assert.Nil(t, tx)
 	})
 
-	t.Run("🎉 successfully insert a new Transaction", func(t *testing.T) {
+	t.Run("🎉 successfully insert a new Payment Transaction", func(t *testing.T) {
 		transaction, err := txModel.Insert(ctx, Transaction{
-			ExternalID:  "external-id-1",
-			AssetCode:   "USDC",
-			AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-			Amount:      1,
-			Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-			TenantID:    "tenant-id-1",
+			ExternalID:      "external-id-1",
+			TransactionType: TransactionTypePayment,
+			Payment: Payment{
+				AssetCode:   "USDC",
+				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+				Amount:      1,
+				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+			},
+			TenantID: "tenant-id-1",
 		})
 		require.NoError(t, err)
 		require.NotNil(t, transaction)
@@ -162,12 +172,38 @@ func Test_TransactionModel_Insert(t *testing.T) {
 		assert.Equal(t, transaction, refreshedTx)
 
 		assert.Equal(t, "external-id-1", refreshedTx.ExternalID)
+		assert.Equal(t, TransactionTypePayment, refreshedTx.TransactionType)
 		assert.Equal(t, "USDC", refreshedTx.AssetCode)
 		assert.Equal(t, "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", refreshedTx.AssetIssuer)
 		assert.Equal(t, float64(1), refreshedTx.Amount)
 		assert.Equal(t, "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y", refreshedTx.Destination)
 		assert.Equal(t, TransactionStatusPending, refreshedTx.Status)
 		assert.Equal(t, "tenant-id-1", refreshedTx.TenantID)
+	})
+
+	t.Run("🎉 successfully insert a new Wallet Creation Transaction", func(t *testing.T) {
+		transaction, err := txModel.Insert(ctx, Transaction{
+			ExternalID:      "external-id-2",
+			TransactionType: TransactionTypeWalletCreation,
+			WalletCreation: WalletCreation{
+				PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+				WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+			},
+			TenantID: "tenant-id-2",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, transaction)
+
+		refreshedTx, err := txModel.Get(ctx, transaction.ID)
+		require.NoError(t, err)
+		assert.Equal(t, transaction, refreshedTx)
+
+		assert.Equal(t, "external-id-2", refreshedTx.ExternalID)
+		assert.Equal(t, TransactionTypeWalletCreation, refreshedTx.TransactionType)
+		assert.Equal(t, "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", refreshedTx.PublicKey)
+		assert.Equal(t, "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50", refreshedTx.WasmHash)
+		assert.Equal(t, TransactionStatusPending, refreshedTx.Status)
+		assert.Equal(t, "tenant-id-2", refreshedTx.TenantID)
 	})
 }
 
@@ -198,46 +234,64 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 		transactionsToInsert := []Transaction{{ExternalID: "external-id-1"}}
 		insertedTransactions, err := txModel.BulkInsert(ctx, dbConnectionPool, transactionsToInsert)
 		require.Error(t, err)
-		assert.EqualError(t, err, "validating transaction for insertion: asset code must have between 1 and 12 characters")
+		assert.EqualError(t, err, "validating transaction for insertion: tenant ID is required")
 		assert.Nil(t, insertedTransactions)
 	})
 
 	t.Run("🎉 successfully inserts the transactions successfully", func(t *testing.T) {
 		incomingTx1 := Transaction{
-			ExternalID:  "external-id-1",
-			AssetCode:   "USDC",
-			AssetIssuer: keypair.MustRandom().Address(),
-			// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
-			Amount:      0.0000001,
-			Destination: keypair.MustRandom().Address(),
-			TenantID:    uuid.NewString(),
+			ExternalID:      "external-id-1",
+			TransactionType: TransactionTypePayment,
+			Payment: Payment{
+				AssetCode:   "USDC",
+				AssetIssuer: keypair.MustRandom().Address(),
+				// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+				Amount:      0.0000001,
+				Destination: keypair.MustRandom().Address(),
+			},
+			TenantID: uuid.NewString(),
 		}
 		incomingTx2 := Transaction{
-			ExternalID:  "external-id-2",
-			AssetCode:   "USDC",
-			AssetIssuer: keypair.MustRandom().Address(),
-			// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
-			Amount:      922337203685.4775807,
-			Destination: keypair.MustRandom().Address(),
-			TenantID:    uuid.NewString(),
+			ExternalID:      "external-id-2",
+			TransactionType: TransactionTypePayment,
+			Payment: Payment{
+				AssetCode:   "USDC",
+				AssetIssuer: keypair.MustRandom().Address(),
+				// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+				Amount:      922337203685.4775807,
+				Destination: keypair.MustRandom().Address(),
+			},
+			TenantID: uuid.NewString(),
 		}
-		insertedTransactions, err := txModel.BulkInsert(ctx, dbConnectionPool, []Transaction{incomingTx1, incomingTx2})
+		incomingTx3 := Transaction{
+			ExternalID:      "external-id-3",
+			TransactionType: TransactionTypeWalletCreation,
+			WalletCreation: WalletCreation{
+				PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+				WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+			},
+			TenantID: uuid.NewString(),
+		}
+		insertedTransactions, err := txModel.BulkInsert(ctx, dbConnectionPool, []Transaction{incomingTx1, incomingTx2, incomingTx3})
 		require.NoError(t, err)
 		assert.NotNil(t, insertedTransactions)
-		assert.Len(t, insertedTransactions, 2)
+		assert.Len(t, insertedTransactions, 3)
 
-		var insertedTx1, insertedTx2 Transaction
+		var insertedTx1, insertedTx2, insertedTx3 Transaction
 		for _, tx := range insertedTransactions {
 			if tx.ExternalID == incomingTx1.ExternalID {
 				insertedTx1 = tx
 			} else if tx.ExternalID == incomingTx2.ExternalID {
 				insertedTx2 = tx
+			} else if tx.ExternalID == incomingTx3.ExternalID {
+				insertedTx3 = tx
 			} else {
 				require.FailNow(t, "unexpected transaction: %v", tx)
 			}
 		}
 
 		assert.Equal(t, incomingTx1.ExternalID, insertedTx1.ExternalID)
+		assert.Equal(t, incomingTx1.TransactionType, insertedTx1.TransactionType)
 		assert.Equal(t, incomingTx1.AssetCode, insertedTx1.AssetCode)
 		assert.Equal(t, incomingTx1.AssetIssuer, insertedTx1.AssetIssuer)
 		assert.Equal(t, incomingTx1.Amount, insertedTx1.Amount)
@@ -245,11 +299,18 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 		assert.Equal(t, TransactionStatusPending, insertedTx1.Status)
 
 		assert.Equal(t, incomingTx2.ExternalID, insertedTx2.ExternalID)
+		assert.Equal(t, incomingTx2.TransactionType, insertedTx2.TransactionType)
 		assert.Equal(t, incomingTx2.AssetCode, insertedTx2.AssetCode)
 		assert.Equal(t, incomingTx2.AssetIssuer, insertedTx2.AssetIssuer)
 		assert.Equal(t, incomingTx2.Amount, insertedTx2.Amount)
 		assert.Equal(t, incomingTx2.Destination, insertedTx2.Destination)
 		assert.Equal(t, TransactionStatusPending, insertedTx2.Status)
+
+		assert.Equal(t, incomingTx3.ExternalID, insertedTx3.ExternalID)
+		assert.Equal(t, incomingTx3.TransactionType, insertedTx3.TransactionType)
+		assert.Equal(t, incomingTx3.PublicKey, insertedTx3.PublicKey)
+		assert.Equal(t, incomingTx3.WasmHash, insertedTx3.WasmHash)
+		assert.Equal(t, TransactionStatusPending, insertedTx3.Status)
 	})
 }
 
@@ -289,8 +350,9 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		},
 	}
 
-	unphazedTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx1 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:         uuid.NewString(),
+		TransactionType:    TransactionTypePayment,
 		AssetCode:          "USDC",
 		AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 		DestinationAddress: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -299,10 +361,20 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		TenantID:           uuid.NewString(),
 	})
 
+	unphazedTx2 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		ExternalID:      uuid.NewString(),
+		TransactionType: TransactionTypeWalletCreation,
+		PublicKey:       "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+		WasmHash:        "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+		Status:          TransactionStatusPending,
+		TenantID:        uuid.NewString(),
+	})
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
+				TransactionType:    TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 				DestinationAddress: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -333,10 +405,15 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 				assert.Equal(t, tx, updatedTx)
 			}
 
-			// verify the unphazed transaction was not updated
-			refreshedUnphazedTx, err := txModel.Get(ctx, unphazedTx.ID)
+			// verify the unphazed payment transaction was not updated
+			refreshUnphazedTx1, err := txModel.Get(ctx, unphazedTx1.ID)
 			require.NoError(t, err)
-			assert.Equal(t, unphazedTx, refreshedUnphazedTx)
+			assert.Equal(t, unphazedTx1, refreshUnphazedTx1)
+
+			// verify the unphazed wallet creation transaction was not updated
+			refreshedUnphazedTx2, err := txModel.Get(ctx, unphazedTx2.ID)
+			require.NoError(t, err)
+			assert.Equal(t, unphazedTx2, refreshedUnphazedTx2)
 		})
 	}
 }
@@ -377,8 +454,9 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		},
 	}
 
-	unphazedTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx1 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:         uuid.NewString(),
+		TransactionType:    TransactionTypePayment,
 		AssetCode:          "USDC",
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -387,10 +465,20 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		TenantID:           uuid.NewString(),
 	})
 
+	unphazedTx2 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		ExternalID:      uuid.NewString(),
+		TransactionType: TransactionTypeWalletCreation,
+		PublicKey:       "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+		WasmHash:        "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+		Status:          TransactionStatusPending,
+		TenantID:        uuid.NewString(),
+	})
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
+				TransactionType:    TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -424,10 +512,15 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 				assert.Equal(t, tx, updatedTx)
 			}
 
-			// verify the unphazed transaction was not updated
-			refreshedUnphazedTx, err := txModel.Get(ctx, unphazedTx.ID)
+			// verify the unphazed payment transaction was not updated
+			refreshedUnphazedTx1, err := txModel.Get(ctx, unphazedTx1.ID)
 			require.NoError(t, err)
-			assert.Equal(t, unphazedTx, refreshedUnphazedTx)
+			assert.Equal(t, unphazedTx1, refreshedUnphazedTx1)
+
+			// verify the unphazed wallet creation transaction was not updated
+			refreshedUnphazedTx2, err := txModel.Get(ctx, unphazedTx2.ID)
+			require.NoError(t, err)
+			assert.Equal(t, unphazedTx2, refreshedUnphazedTx2)
 		})
 	}
 }
@@ -486,12 +579,15 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			// create a new transaction
 			tx, err := txModel.Insert(ctx, Transaction{
-				ExternalID:  uuid.NewString(),
-				AssetCode:   "USDC",
-				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-				Amount:      1,
-				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-				TenantID:    uuid.NewString(),
+				ExternalID:      uuid.NewString(),
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+					Amount:      1,
+					Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+				},
+				TenantID: uuid.NewString(),
 			})
 			require.NoError(t, err)
 			require.NotNil(t, tx)
@@ -594,12 +690,15 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// create a new transaction
 			tx, err := txModel.Insert(ctx, Transaction{
-				ExternalID:  uuid.NewString(),
-				AssetCode:   "USDC",
-				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-				Amount:      1,
-				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-				TenantID:    uuid.NewString(),
+				ExternalID:      uuid.NewString(),
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+					Amount:      1,
+					Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+				},
+				TenantID: uuid.NewString(),
 			})
 			require.NoError(t, err)
 			require.NotNil(t, tx)
@@ -626,7 +725,7 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 	}
 }
 
-func Test_Transaction_validate(t *testing.T) {
+func Test_Transaction_validate_payment(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -640,71 +739,98 @@ func Test_Transaction_validate(t *testing.T) {
 		wantErrContains string
 	}{
 		{
-			name:            "validate ExternalID",
-			transaction:     Transaction{},
+			name: "validate ExternalID",
+			transaction: Transaction{
+				TransactionType: TransactionTypePayment,
+			},
 			wantErrContains: "external ID is required",
 		},
 		{
 			name: "validate AssetCode (min size)",
 			transaction: Transaction{
-				ExternalID: "123",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				TenantID:        "tenant-id",
 			},
 			wantErrContains: "asset code must have between 1 and 12 characters",
 		},
 		{
 			name: "validate AssetCode (max size)",
 			transaction: Transaction{
-				ExternalID: "123",
-				AssetCode:  "1234567890123",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode: "1234567890123",
+				},
+				TenantID: "tenant-id",
 			},
 			wantErrContains: "asset code must have between 1 and 12 characters",
 		},
 		{
 			name: "validate AssetIssuer (cannot be nil)",
 			transaction: Transaction{
-				ExternalID: "123",
-				AssetCode:  "USDC",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode: "USDC",
+				},
+				TenantID: "tenant-id",
 			},
 			wantErrContains: "asset issuer is required",
 		},
 		{
 			name: "validate AssetIssuer (not a valid public key)",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "invalid-issuer",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "invalid-issuer",
+				},
+				TenantID: "tenant-id",
 			},
 			wantErrContains: `asset issuer "invalid-issuer" is not a valid ed25519 public key`,
 		},
 		{
 			name: "validate Amount",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				},
+				TenantID: "tenant-id",
 			},
 			wantErrContains: "amount must be positive",
 		},
 		{
 			name: "validate Destination",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100.0,
-				Destination: "invalid-destination",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					Amount:      100.0,
+					Destination: "invalid-destination",
+				},
+				TenantID: "tenant-id",
 			},
 			wantErrContains: `destination "invalid-destination" is not a valid ed25519 public key`,
 		},
 		{
 			name: "validate tenant ID",
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100.0,
-				Destination: "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG",
-				TenantID:    "",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					Amount:      100.0,
+					Destination: "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG",
+				},
+				TenantID: "",
 			},
 			wantErrContains: `tenant ID is required`,
 		},
@@ -723,11 +849,14 @@ func Test_Transaction_validate(t *testing.T) {
 		}{
 			name: fmt.Sprintf("🎉 successfully validate XLM transaction with (%c) destination", address[0]),
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "XLM",
-				Amount:      100.0,
-				Destination: address,
-				TenantID:    "tenant-id",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "XLM",
+					Amount:      100.0,
+					Destination: address,
+				},
+				TenantID: "tenant-id",
 			},
 		})
 
@@ -738,14 +867,100 @@ func Test_Transaction_validate(t *testing.T) {
 		}{
 			name: fmt.Sprintf("🎉 successfully validate USDC transaction with (%c) destination", address[0]),
 			transaction: Transaction{
-				ExternalID:  "123",
-				AssetCode:   "USDC",
-				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100.0,
-				Destination: address,
-				TenantID:    "tenant-id",
+				ExternalID:      "123",
+				TransactionType: TransactionTypePayment,
+				Payment: Payment{
+					AssetCode:   "USDC",
+					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					Amount:      100.0,
+					Destination: address,
+				},
+				TenantID: "tenant-id",
 			},
 		})
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.transaction.validate()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func Test_Transaction_validate_wallet_creation(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name            string
+		transaction     Transaction
+		wantErrContains string
+	}{
+		{
+			name: "validate ExternalID",
+			transaction: Transaction{
+				TransactionType: TransactionTypeWalletCreation,
+			},
+			wantErrContains: "external ID is required",
+		},
+		{
+			name: "validate PublicKey",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeWalletCreation,
+				TenantID:        "tenant-id",
+			},
+			wantErrContains: "public key is required",
+		},
+		{
+			name: "validate PublicKey (not a valid public key)",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeWalletCreation,
+				WalletCreation: WalletCreation{
+					PublicKey: "invalid-public-key",
+					WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: `public key "invalid-public-key" is not a valid hex string`,
+		},
+		{
+			name: "validate WasmHash",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeWalletCreation,
+				WalletCreation: WalletCreation{
+					PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+					WasmHash:  "",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: "wasm hash is required",
+		},
+		{
+			name: "validate WasmHash (not a valid hash)",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeWalletCreation,
+				WalletCreation: WalletCreation{
+					PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+					WasmHash:  "invalid-wasm-hash",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: `wasm hash "invalid-wasm-hash" is not a valid hex string`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -831,6 +1046,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 			var transactions []*Transaction
 			if tc.transactionStatus != "" {
 				transactions = CreateTransactionFixturesNew(t, ctx, dbTx, txCount, TransactionFixture{
+					TransactionType:    TransactionTypePayment,
 					AssetCode:          "USDC",
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -927,6 +1143,7 @@ func Test_TransactionModel_GetTransactionPendingUpdateByID(t *testing.T) {
 			var tx Transaction
 			if tc.transactionStatus != "" {
 				tx = *CreateTransactionFixtureNew(t, ctx, dbTx, TransactionFixture{
+					TransactionType:    TransactionTypePayment,
 					AssetCode:          "USDC",
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -1014,6 +1231,7 @@ func Test_TransactionModel_UpdateSyncedTransactions(t *testing.T) {
 				txIDs = []string{"invalid-id"}
 			} else {
 				transactions := CreateTransactionFixturesNew(t, ctx, dbTx, txCount, TransactionFixture{
+					TransactionType:    TransactionTypePayment,
 					AssetCode:          "USDC",
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -1141,8 +1359,8 @@ func Test_TransactionModel_Lock(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
-				ExternalID:         uuid.NewString(),
 				AssetCode:          "USDC",
+				TransactionType:    TransactionTypePayment,
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 				Status:             tc.initialStatus,
@@ -1232,6 +1450,7 @@ func Test_TransactionModel_Unlock(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
+				TransactionType:    TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
@@ -1311,6 +1530,7 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 			// create and prepare the transaction:
 			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
+				TransactionType:    TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
