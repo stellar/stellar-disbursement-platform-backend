@@ -720,11 +720,16 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	return nil
 }
 
-var ErrWalletNotRegistered = errors.New("receiver wallet not registered")
+var (
+	ErrWalletNotRegistered         = errors.New("receiver wallet not registered")
+	ErrPaymentsInProgressForWallet = errors.New("receiver wallet has payments in progress")
+	ErrUnregisterUserManagedWallet = errors.New("user managed wallet cannot be unregistered")
+)
 
 // UpdateStatusToReady updates the status of a receiver wallet to "READY" and clears the stellar address and memo.
 func (rw *ReceiverWalletModel) UpdateStatusToReady(ctx context.Context, id string) error {
 	return db.RunInTransaction(ctx, rw.dbConnectionPool, nil, func(tx db.DBTransaction) error {
+		// 1. Check if the receiver-wallet is in "REGISTERED" status
 		receiverWallet, err := rw.GetByID(ctx, tx, id)
 		if err != nil {
 			return fmt.Errorf("getting receiver wallet with ID %q: %w", id, err)
@@ -732,6 +737,20 @@ func (rw *ReceiverWalletModel) UpdateStatusToReady(ctx context.Context, id strin
 
 		if receiverWallet.Status != RegisteredReceiversWalletStatus {
 			return ErrWalletNotRegistered
+		}
+
+		// 2. Check if the wallet is user managed
+		if receiverWallet.Wallet.UserManaged {
+			return ErrUnregisterUserManagedWallet
+		}
+
+		// 3. Check if there are payments in progress
+		paymentsInProgress, err := rw.HasPaymentsInProgress(ctx, tx, id)
+		if err != nil {
+			return fmt.Errorf("checking payments in progress for receiver wallet %s: %w", id, err)
+		}
+		if paymentsInProgress {
+			return ErrPaymentsInProgressForWallet
 		}
 
 		// Record wallet id and memo in status message.
@@ -758,4 +777,22 @@ func (rw *ReceiverWalletModel) UpdateStatusToReady(ctx context.Context, id strin
 		}
 		return nil
 	})
+}
+
+// HasPaymentsInProgress checks if there are any payments in progress for the given receiver wallet ID.
+func (rw *ReceiverWalletModel) HasPaymentsInProgress(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (bool, error) {
+	const q = `
+        SELECT EXISTS (
+            SELECT 1
+              FROM payments
+             WHERE receiver_wallet_id = $1
+               AND status = ANY($2)
+        )
+    `
+
+	var exists bool
+	if err := sqlExec.GetContext(ctx, &exists, q, receiverWalletID, pq.Array(PaymentInProgressStatuses())); err != nil {
+		return false, fmt.Errorf("checking payments in progress for receiver wallet: %w", err)
+	}
+	return exists, nil
 }
