@@ -372,21 +372,19 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			})
 
 			// Write operations
-			updateReceiverHandler := httphandler.UpdateReceiverHandler{
-				Models:           o.Models,
-				DBConnectionPool: o.MtnDBConnectionPool,
-				AuthManager:      authManager,
-			}
-
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
 				Models:             o.Models,
 				CrashTrackerClient: o.CrashTrackerClient,
 				EventProducer:      o.EventProducer,
 			}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Patch("/wallets/{receiver_wallet_id}/status", receiverWalletHandler.PatchReceiverWalletStatus)
+
+			r.With(middleware.RequirePermission(
+				data.WriteReceivers,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+			)).Group(func(r chi.Router) {
+				r.Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
+				r.Patch("/wallets/{receiver_wallet_id}/status", receiverWalletHandler.PatchReceiverWalletStatus)
+			})
 		})
 
 		r.With(middleware.RequirePermission(
@@ -428,7 +426,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 			)).Get("/", walletsHandler.GetWallets)
 
-			// Write operations with different role permissions
+			// Write operations
 			r.With(middleware.RequirePermission(
 				data.WriteWallets,
 				middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole),
