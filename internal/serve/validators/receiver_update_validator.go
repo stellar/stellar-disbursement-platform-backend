@@ -44,19 +44,23 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	externalID := strings.TrimSpace(updateReceiverRequest.ExternalID)
 
 	if dateOfBirth != "" {
-		ur.CheckError(utils.ValidateDateOfBirthVerification(dateOfBirth), "date_of_birth", "")
+		_, validationErr := utils.ValidateDateOfBirthVerification(dateOfBirth)
+		ur.CheckError(validationErr, "date_of_birth", "")
 	}
 
 	if yearMonth != "" {
-		ur.CheckError(utils.ValidateYearMonthVerification(yearMonth), "year_month", "")
+		_, validationErr := utils.ValidateYearMonthVerification(yearMonth)
+		ur.CheckError(validationErr, "year_month", "")
 	}
 
 	if updateReceiverRequest.Pin != "" {
-		ur.CheckError(utils.ValidatePinVerification(pin), "pin", "")
+		_, validationErr := utils.ValidatePinVerification(pin)
+		ur.CheckError(validationErr, "pin", "")
 	}
 
 	if updateReceiverRequest.NationalID != "" {
-		ur.CheckError(utils.ValidateNationalIDVerification(nationalID), "national_id", "")
+		_, validationErr := utils.ValidateNationalIDVerification(nationalID)
+		ur.CheckError(validationErr, "national_id", "")
 	}
 
 	if updateReceiverRequest.Email != "" {

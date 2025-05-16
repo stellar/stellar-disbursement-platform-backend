@@ -46,3 +46,17 @@ func (status ReceiversWalletStatus) Validate() error {
 		return fmt.Errorf("invalid receiver wallet status %q", status)
 	}
 }
+
+// ToReceiversWalletStatus converts a string to a ReceiversWalletStatus.
+func ToReceiversWalletStatus(s string) (ReceiversWalletStatus, error) {
+	err := ReceiversWalletStatus(s).Validate()
+	if err != nil {
+		return "", fmt.Errorf("invalid status: %w", err)
+	}
+	return ReceiversWalletStatus(strings.ToUpper(s)), nil
+}
+
+// ReceiversWalletStatuses returns a list of all possible receiver wallet statuses
+func ReceiversWalletStatuses() []ReceiversWalletStatus {
+	return []ReceiversWalletStatus{DraftReceiversWalletStatus, ReadyReceiversWalletStatus, RegisteredReceiversWalletStatus, FlaggedReceiversWalletStatus}
+}

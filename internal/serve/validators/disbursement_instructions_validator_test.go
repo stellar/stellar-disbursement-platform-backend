@@ -504,3 +504,113 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 		})
 	}
 }
+
+func Test_DisbursementInstructionsValidator_CheckForDuplicateContacts(t *testing.T) {
+	type TestCase struct {
+		name           string
+		contactType    data.RegistrationContactType
+		instructions   []*data.DisbursementInstruction
+		expectedErrors map[string]interface{}
+	}
+
+	tests := []TestCase{
+		{
+			name:        "🟢 no duplicates (email)",
+			contactType: data.RegistrationContactTypeEmail,
+			instructions: []*data.DisbursementInstruction{
+				{Email: "user1@example.com"},
+				{Email: "user2@example.com"},
+			},
+			expectedErrors: map[string]interface{}{},
+		},
+		{
+			name:        "🟢 no duplicates (phone)",
+			contactType: data.RegistrationContactTypePhone,
+			instructions: []*data.DisbursementInstruction{
+				{Phone: "+12345678901"},
+				{Phone: "+12345678902"},
+			},
+			expectedErrors: map[string]interface{}{},
+		},
+		{
+			name:        "🔴 duplicate emails",
+			contactType: data.RegistrationContactTypeEmail,
+			instructions: []*data.DisbursementInstruction{
+				{Email: "user@example.com"},
+				{Email: "user@example.com"},
+			},
+			expectedErrors: map[string]interface{}{
+				"line 3 - contact info": "duplicate contact information. Also found on line 2",
+			},
+		},
+		{
+			name:        "🔴 multiple duplicate emails",
+			contactType: data.RegistrationContactTypeEmail,
+			instructions: []*data.DisbursementInstruction{
+				{Email: "user@example.com"},
+				{Email: "user@example.com"},
+				{Email: "user@example.com"},
+			},
+			expectedErrors: map[string]interface{}{
+				"line 3 - contact info": "duplicate contact information. Also found on line 2",
+				"line 4 - contact info": "duplicate contact information. Also found on line 2",
+			},
+		},
+		{
+			name:        "🔴 duplicate phone numbers",
+			contactType: data.RegistrationContactTypePhone,
+			instructions: []*data.DisbursementInstruction{
+				{Phone: "+12345678901"},
+				{Phone: "+12345678901"},
+			},
+			expectedErrors: map[string]interface{}{
+				"line 3 - contact info": "duplicate contact information. Also found on line 2",
+			},
+		},
+		{
+			name:        "🔴 empty email",
+			contactType: data.RegistrationContactTypeEmail,
+			instructions: []*data.DisbursementInstruction{
+				{Email: ""},
+			},
+			expectedErrors: map[string]interface{}{
+				"line 2 - contact info": "invalid contact information",
+			},
+		},
+		{
+			name:        "🔴 empty phone",
+			contactType: data.RegistrationContactTypePhone,
+			instructions: []*data.DisbursementInstruction{
+				{Phone: ""},
+			},
+			expectedErrors: map[string]interface{}{
+				"line 2 - contact info": "invalid contact information",
+			},
+		},
+		{
+			name:        "🔴 multiple duplicates and missing",
+			contactType: data.RegistrationContactTypeEmail,
+			instructions: []*data.DisbursementInstruction{
+				{Email: "user1@example.com"},
+				{Email: "user2@example.com"},
+				{Email: "user1@example.com"},
+				{Email: ""},
+				{Email: ""},
+			},
+			expectedErrors: map[string]interface{}{
+				"line 4 - contact info": "duplicate contact information. Also found on line 2",
+				"line 5 - contact info": "invalid contact information",
+				"line 6 - contact info": "invalid contact information",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			iv := NewDisbursementInstructionsValidator(tt.contactType, data.VerificationTypeDateOfBirth)
+			iv.CheckForDuplicateContacts(tt.instructions)
+
+			assert.Equal(t, tt.expectedErrors, iv.Errors)
+		})
+	}
+}
