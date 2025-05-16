@@ -102,8 +102,9 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 	validator.ValidateReceiver(&receiverRegistrationRequest)
 	if validator.HasErrors() {
 		err = fmt.Errorf("request invalid: %s", validator.Errors)
-		// TODO: how to manage these extras?
-		return reqObj, nil, httperror.BadRequest("", err, validator.Errors).WithErrorCode(httperror.Code400_0)
+		return reqObj, nil, httperror.BadRequest("", err, validator.Errors).
+			WithErrorCode(httperror.Code400_0).
+			WithExtrasCodes(validator.ErrorCodes)
 	}
 
 	return receiverRegistrationRequest, sep24Claims, nil
@@ -176,15 +177,13 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	}
 
 	// STEP 4: update the receiver verification row with the confirmation that the value was successfully validated
-	if receiverVerification.ConfirmedAt == nil {
-		rvu.ConfirmedAt = &now
-		rvu.ConfirmedByID = receiver.ID
-		rvu.ConfirmedByType = data.ConfirmedByTypeReceiver
+	rvu.ConfirmedAt = &now
+	rvu.ConfirmedByID = receiver.ID
+	rvu.ConfirmedByType = data.ConfirmedByTypeReceiver
 
-		err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, dbTx)
-		if err != nil {
-			return fmt.Errorf("updating successfully verified user: %w", err)
-		}
+	err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, dbTx)
+	if err != nil {
+		return fmt.Errorf("updating successfully verified user: %w", err)
 	}
 
 	return nil
