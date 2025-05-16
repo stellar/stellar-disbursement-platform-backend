@@ -243,6 +243,14 @@ func (am *AuthManagerMock) GetUsersByID(ctx context.Context, userIDs []string, a
 	return args.Get(0).([]*User), args.Error(1)
 }
 
+func (am *AuthManagerMock) GetUserByID(ctx context.Context, userID string) (*User, error) {
+	args := am.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*User), args.Error(1)
+}
+
 func (am *AuthManagerMock) GetUserID(ctx context.Context, userID string) (string, error) {
 	args := am.Called(ctx, userID)
 	return args.Get(0).(string), args.Error(1)
