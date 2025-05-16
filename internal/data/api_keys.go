@@ -286,7 +286,7 @@ func (m *APIKeyModel) Insert(
 			return nil, fmt.Errorf("insert API key: %w", err)
 		}
 
-		//return formatted key to the user SDP_<APIKey.ID>.<secret>
+		// return formatted key to the user SDP_<APIKey.ID>.<secret>
 		candidate.Key = APIKeyPrefix + candidate.ID + "." + secret
 		apiKey = candidate
 		break

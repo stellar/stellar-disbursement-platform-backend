@@ -106,7 +106,7 @@ func Test_APIKeyOrJWTAuthenticate_JWTFallback(t *testing.T) {
 	// handler echoes the user ID from context
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Context().Value(UserIDContextKey).(string)
-		w.Write([]byte(id))
+		_, _ = w.Write([]byte(id))
 	})
 
 	// JWT path sets id to 'jwt-user'
