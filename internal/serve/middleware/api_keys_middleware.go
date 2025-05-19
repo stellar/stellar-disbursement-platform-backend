@@ -19,10 +19,21 @@ const APIKeyContextKey ctxKey = "api_key"
 func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			auth := r.Header.Get("Authorization")
-			if strings.HasPrefix(auth, data.APIKeyPrefix) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				jwtAuth(next).ServeHTTP(w, r)
+				return
+			}
+
+			token := authHeader
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 {
+				token = parts[1]
+			}
+
+			if strings.HasPrefix(token, data.APIKeyPrefix) {
 				// 1) Validate and fetch APIKey
-				apiKey, err := apiKeyModel.ValidateRawKey(r.Context(), auth)
+				apiKey, err := apiKeyModel.ValidateRawKey(r.Context(), token)
 				if err != nil {
 					httperror.Unauthorized("Invalid API key", nil, nil).Render(w)
 					return
