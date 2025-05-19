@@ -9,10 +9,14 @@
             "type": "go",
             "request": "attach",
             "mode": "remote",
-            "remotePath": "/app/github.com/stellar/stellar-disbursement-platform",
-            "localRoot": "/${workspaceFolder}/stellar-disbursement-platform-backend", 
             "port": 2345,
-            "host": "127.0.0.1"
+            "host": "127.0.0.1",
+            "substitutePath": [
+                {
+                    "from": "<absolute path to the project root goes here>",
+                    "to": "/app/github.com/stellar/stellar-disbursement-platform"
+                }
+            ]
         }
     ]
 }
