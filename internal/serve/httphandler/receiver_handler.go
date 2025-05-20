@@ -1,11 +1,15 @@
 package httphandler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -13,6 +17,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type ReceiverHandler struct {
@@ -24,6 +30,92 @@ type GetReceiverResponse struct {
 	data.Receiver
 	Wallets       []data.ReceiverWallet       `json:"wallets"`
 	Verifications []data.ReceiverVerification `json:"verifications,omitempty"`
+}
+
+type CreateReceiverRequest struct {
+	Email         string                `json:"email"`
+	PhoneNumber   string                `json:"phone_number"`
+	ExternalID    string                `json:"external_id"`
+	Verifications []VerificationRequest `json:"verifications"`
+	Wallets       []WalletRequest       `json:"wallets"`
+}
+
+type VerificationRequest struct {
+	Type  data.VerificationType `json:"type"`
+	Value string                `json:"value"`
+}
+
+type WalletRequest struct {
+	Address string `json:"address"`
+	Memo    string `json:"memo,omitempty"`
+}
+
+func (r *CreateReceiverRequest) Validate() error {
+	if r.Email == "" && r.PhoneNumber == "" {
+		return errors.New("either email or phone_number must be provided")
+	}
+
+	if r.Email != "" {
+		if err := utils.ValidateEmail(r.Email); err != nil {
+			return err
+		}
+	}
+
+	if r.PhoneNumber != "" {
+		if err := utils.ValidatePhoneNumber(r.PhoneNumber); err != nil {
+			return fmt.Errorf("invalid phone_number: %w", err)
+		}
+	}
+
+	if r.ExternalID == "" {
+		return errors.New("external_id is required")
+	}
+
+	if len(r.Verifications) == 0 && len(r.Wallets) == 0 {
+		return errors.New("either verifications or wallets must be provided")
+	}
+
+	for i, v := range r.Verifications {
+		if v.Type == "" {
+			return fmt.Errorf("verification[%d].type is required", i)
+		}
+		if v.Value == "" {
+			return fmt.Errorf("verification[%d].value is required", i)
+		}
+
+		switch v.Type {
+		case data.VerificationTypeDateOfBirth:
+			if _, err := time.Parse("2006-01-02", v.Value); err != nil {
+				return fmt.Errorf("invalid date of birth format for verification[%d]: must be YYYY-MM-DD", i)
+			}
+		case data.VerificationTypePin:
+			if len(v.Value) < 4 || len(v.Value) > 8 {
+				return fmt.Errorf("invalid PIN for verification[%d]: must be between 4 and 8 characters", i)
+			}
+		case data.VerificationTypeNationalID:
+			if len(v.Value) > 50 {
+				return fmt.Errorf("invalid national ID for verification[%d]: must be at most 50 characters", i)
+			}
+		case data.VerificationTypeYearMonth:
+			if _, err := time.Parse("2006-01", v.Value); err != nil {
+				return fmt.Errorf("invalid year-month format for verification[%d]: must be YYYY-MM", i)
+			}
+		default:
+			return fmt.Errorf("invalid verification type for verification[%d]: %s", i, v.Type)
+		}
+	}
+
+	for i, w := range r.Wallets {
+		if w.Address == "" {
+			return fmt.Errorf("wallet[%d].address is required", i)
+		}
+
+		if !strkey.IsValidEd25519PublicKey(w.Address) {
+			return fmt.Errorf("invalid stellar address for wallet[%d]", i)
+		}
+	}
+
+	return nil
 }
 
 func (rh ReceiverHandler) buildReceiversResponse(receivers []data.Receiver, receiversWallets []data.ReceiverWallet) []GetReceiverResponse {
@@ -138,4 +230,117 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 // GetReceiverVerification returns a list of verification types
 func (rh ReceiverHandler) GetReceiverVerificationTypes(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, data.GetAllVerificationTypes(), httpjson.JSON)
+}
+
+func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req CreateReceiverRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		httperror.BadRequest("validation error", err, nil).Render(w)
+		return
+	}
+
+	response, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {
+		receiverInsert := data.ReceiverInsert{
+			Email:       &req.Email,
+			PhoneNumber: &req.PhoneNumber,
+			ExternalId:  &req.ExternalID,
+		}
+
+		if req.Email == "" {
+			receiverInsert.Email = nil
+		}
+
+		if req.PhoneNumber == "" {
+			receiverInsert.PhoneNumber = nil
+		}
+
+		receiver, err := rh.Models.Receiver.Insert(ctx, dbTx, receiverInsert)
+		if err != nil {
+			return nil, fmt.Errorf("creating receiver: %w", err)
+		}
+
+		// Process verifications
+		for _, v := range req.Verifications {
+			if _, err := rh.Models.ReceiverVerification.Insert(ctx, dbTx, data.ReceiverVerificationInsert{
+				ReceiverID:        receiver.ID,
+				VerificationField: v.Type,
+				VerificationValue: v.Value,
+			}); err != nil {
+				return nil, fmt.Errorf("creating verification: %w", err)
+			}
+		}
+
+		wallets := []data.ReceiverWallet{}
+
+		if len(req.Wallets) > 0 {
+			userManagedWallets, err := rh.Models.Wallets.FindWallets(ctx, data.Filter{
+				Key:   data.FilterUserManaged,
+				Value: true,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("finding user managed wallet: %w", err)
+			}
+
+			if len(userManagedWallets) == 0 {
+				return nil, fmt.Errorf("no user managed wallet found")
+			}
+
+			userManagedWallet := userManagedWallets[0]
+
+			for _, w := range req.Wallets {
+				walletInsert := data.ReceiverWalletInsert{
+					ReceiverID: receiver.ID,
+					WalletID:   userManagedWallet.ID,
+				}
+
+				receiverWalletID, err := rh.Models.ReceiverWallet.Insert(ctx, dbTx, walletInsert)
+				if err != nil {
+					return nil, fmt.Errorf("creating receiver wallet: %w", err)
+				}
+
+				memoType := schema.MemoTypeID
+				walletUpdate := data.ReceiverWalletUpdate{
+					Status:          data.ReadyReceiversWalletStatus,
+					StellarAddress:  w.Address,
+					StellarMemo:     &w.Memo,
+					StellarMemoType: &memoType,
+				}
+
+				if err := rh.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); err != nil {
+					return nil, fmt.Errorf("updating receiver wallet: %w", err)
+				}
+
+				receiverWallet, err := rh.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
+				if err != nil {
+					return nil, fmt.Errorf("getting created receiver wallet: %w", err)
+				}
+
+				wallets = append(wallets, *receiverWallet)
+			}
+		}
+
+		receiverVerifications, err := rh.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiver.ID)
+		if err != nil {
+			return nil, fmt.Errorf("getting receiver verifications: %w", err)
+		}
+
+		return &GetReceiverResponse{
+			Receiver:      *receiver,
+			Wallets:       wallets,
+			Verifications: receiverVerifications,
+		}, nil
+	})
+	if err != nil {
+		httperror.InternalError(ctx, "Error creating receiver", err, nil).Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusCreated, response, httpjson.JSON)
 }
