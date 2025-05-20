@@ -234,19 +234,23 @@ func (rh ReceiverHandler) GetReceiverVerificationTypes(w http.ResponseWriter, r 
 
 func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	var err error
 
 	var req CreateReceiverRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)
 		return
 	}
 
-	if err := req.Validate(); err != nil {
+	if err = req.Validate(); err != nil {
 		httperror.BadRequest("validation error", err, nil).Render(w)
 		return
 	}
 
-	response, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {
+	var response *GetReceiverResponse
+	response, err = db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {
+		var txErr error
+
 		receiverInsert := data.ReceiverInsert{
 			Email:       &req.Email,
 			PhoneNumber: &req.PhoneNumber,
@@ -261,31 +265,31 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 			receiverInsert.PhoneNumber = nil
 		}
 
-		receiver, err := rh.Models.Receiver.Insert(ctx, dbTx, receiverInsert)
-		if err != nil {
-			return nil, fmt.Errorf("creating receiver: %w", err)
+		var receiver *data.Receiver
+		if receiver, txErr = rh.Models.Receiver.Insert(ctx, dbTx, receiverInsert); txErr != nil {
+			return nil, fmt.Errorf("creating receiver: %w", txErr)
 		}
 
-		// Process verifications
 		for _, v := range req.Verifications {
-			if _, err := rh.Models.ReceiverVerification.Insert(ctx, dbTx, data.ReceiverVerificationInsert{
+			var insErr error
+			if _, insErr = rh.Models.ReceiverVerification.Insert(ctx, dbTx, data.ReceiverVerificationInsert{
 				ReceiverID:        receiver.ID,
 				VerificationField: v.Type,
 				VerificationValue: v.Value,
-			}); err != nil {
-				return nil, fmt.Errorf("creating verification: %w", err)
+			}); insErr != nil {
+				return nil, fmt.Errorf("creating verification: %w", insErr)
 			}
 		}
 
 		wallets := []data.ReceiverWallet{}
 
 		if len(req.Wallets) > 0 {
-			userManagedWallets, err := rh.Models.Wallets.FindWallets(ctx, data.Filter{
+			var userManagedWallets []data.Wallet
+			if userManagedWallets, txErr = rh.Models.Wallets.FindWallets(ctx, data.Filter{
 				Key:   data.FilterUserManaged,
 				Value: true,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("finding user managed wallet: %w", err)
+			}); txErr != nil {
+				return nil, fmt.Errorf("finding user managed wallet: %w", txErr)
 			}
 
 			if len(userManagedWallets) == 0 {
@@ -300,9 +304,9 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 					WalletID:   userManagedWallet.ID,
 				}
 
-				receiverWalletID, err := rh.Models.ReceiverWallet.Insert(ctx, dbTx, walletInsert)
-				if err != nil {
-					return nil, fmt.Errorf("creating receiver wallet: %w", err)
+				var receiverWalletID string
+				if receiverWalletID, txErr = rh.Models.ReceiverWallet.Insert(ctx, dbTx, walletInsert); txErr != nil {
+					return nil, fmt.Errorf("creating receiver wallet: %w", txErr)
 				}
 
 				memoType := schema.MemoTypeID
@@ -313,22 +317,22 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 					StellarMemoType: &memoType,
 				}
 
-				if err := rh.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); err != nil {
-					return nil, fmt.Errorf("updating receiver wallet: %w", err)
+				if updErr := rh.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); updErr != nil {
+					return nil, fmt.Errorf("updating receiver wallet: %w", updErr)
 				}
 
-				receiverWallet, err := rh.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
-				if err != nil {
-					return nil, fmt.Errorf("getting created receiver wallet: %w", err)
+				var receiverWallet *data.ReceiverWallet
+				if receiverWallet, txErr = rh.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID); txErr != nil {
+					return nil, fmt.Errorf("getting created receiver wallet: %w", txErr)
 				}
 
 				wallets = append(wallets, *receiverWallet)
 			}
 		}
 
-		receiverVerifications, err := rh.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiver.ID)
-		if err != nil {
-			return nil, fmt.Errorf("getting receiver verifications: %w", err)
+		var receiverVerifications []data.ReceiverVerification
+		if receiverVerifications, txErr = rh.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiver.ID); txErr != nil {
+			return nil, fmt.Errorf("getting receiver verifications: %w", txErr)
 		}
 
 		return &GetReceiverResponse{
