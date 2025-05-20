@@ -51,7 +51,7 @@ type EmbeddedWalletModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
-func EmbeddWalletColumnNames(tableReference, resultAlias string) string {
+func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 	columns := SQLColumnConfig{
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
@@ -78,7 +78,7 @@ func (ew *EmbeddedWalletModel) GetByToken(ctx context.Context, sqlExec db.SQLExe
         FROM embedded_wallets ew
         WHERE
             ew.token = $1
-        `, EmbeddWalletColumnNames("ew", ""))
+        `, EmbeddedWalletColumnNames("ew", ""))
 
 	var wallet EmbeddedWallet
 	err := sqlExec.GetContext(ctx, &wallet, query, token)

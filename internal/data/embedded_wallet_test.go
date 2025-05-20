@@ -61,7 +61,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(testCaseNameForScanText(t, tc.tableReference, tc.resultAlias), func(t *testing.T) {
-			actual := EmbeddWalletColumnNames(tc.tableReference, tc.resultAlias)
+			actual := EmbeddedWalletColumnNames(tc.tableReference, tc.resultAlias)
 			assert.Equal(t, tc.expected, actual)
 		})
 	}
