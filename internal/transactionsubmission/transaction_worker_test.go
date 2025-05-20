@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
@@ -49,9 +47,77 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
+type MockTransactionHandler struct {
+	mock.Mock
+}
+
+func (m *MockTransactionHandler) BuildInnerTransaction(ctx context.Context, txJob *TxJob, sequenceNumber int64, distributionAccount string) (*txnbuild.Transaction, error) {
+	args := m.Called(ctx, txJob, sequenceNumber, distributionAccount)
+	if tx := args.Get(0); tx != nil {
+		return tx.(*txnbuild.Transaction), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error) {
+	args := m.Called(ctx, txJob)
+	if msg := args.Get(0); msg != nil {
+		return msg.(*events.Message), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, hErr *utils.HorizonErrorWrapper) (*events.Message, error) {
+	args := m.Called(ctx, txJob, hErr)
+	if msg := args.Get(0); msg != nil {
+		return msg.(*events.Message), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockTransactionHandler) AddContextLoggerFields(transaction *store.Transaction) map[string]interface{} {
+	args := m.Called(transaction)
+	if fields := args.Get(0); fields != nil {
+		return fields.(map[string]interface{})
+	}
+	return nil
+}
+
+func (m *MockTransactionHandler) MonitorTransactionProcessingStarted(ctx context.Context, txJob *TxJob, jobUUID string) {
+	m.Called(ctx, txJob, jobUUID)
+}
+
+func (m *MockTransactionHandler) MonitorTransactionProcessingSuccess(ctx context.Context, txJob *TxJob, jobUUID string) {
+	m.Called(ctx, txJob, jobUUID)
+}
+
+func (m *MockTransactionHandler) MonitorTransactionProcessingFailed(ctx context.Context, txJob *TxJob, jobUUID string, isRetryable bool, errStack string) {
+	m.Called(ctx, txJob, jobUUID, isRetryable, errStack)
+}
+
+func (m *MockTransactionHandler) MonitorTransactionReconciliationSuccess(ctx context.Context, txJob *TxJob, jobUUID string, successType ReconcileSuccessType) {
+	m.Called(ctx, txJob, jobUUID, successType)
+}
+
+func (m *MockTransactionHandler) MonitorTransactionReconciliationFailure(ctx context.Context, txJob *TxJob, jobUUID string, isHorizonErr bool, errStack string) {
+	m.Called(ctx, txJob, jobUUID, isHorizonErr, errStack)
+}
+
+type MockTransactionHandlerFactory struct {
+	mock.Mock
+}
+
+func (m *MockTransactionHandlerFactory) GetHandler(tx *store.Transaction) (TransactionHandlerInterface, error) {
+	args := m.Called(tx)
+	if handler := args.Get(0); handler != nil {
+		return handler.(TransactionHandlerInterface), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 // getTransactionWorkerInstance is used to create a valid instance of the class TransactionWorker, which is needed in
 // many tests in this file.
-func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnectionPool) TransactionWorker {
+func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnectionPool, transactionHandler TransactionHandlerInterface) TransactionWorker {
 	t.Helper()
 
 	txModel := store.NewTransactionModel(dbConnectionPool)
@@ -92,6 +158,9 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		MaxBaseFee:          100,
 	}
 
+	handlerFactory := &MockTransactionHandlerFactory{}
+	handlerFactory.On("GetHandler", mock.Anything).Return(transactionHandler, nil)
+
 	return TransactionWorker{
 		dbConnectionPool:   dbConnectionPool,
 		txModel:            txModel,
@@ -99,6 +168,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		engine:             &submitterEngine,
 		crashTrackerClient: &crashtracker.MockCrashTrackerClient{},
 		eventProducer:      &events.MockProducer{},
+		handlerFactory:     handlerFactory,
 	}
 }
 
@@ -196,6 +266,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		txProcessingLimiter: wantTxProcessingLimiter,
 		monitorSvc:          tssMonitorSvc,
 		eventProducer:       &events.MockProducer{},
+		handlerFactory:      &MockTransactionHandlerFactory{},
 	}
 
 	testCases := []struct {
@@ -210,6 +281,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		txProcessingLimiter engine.TransactionProcessingLimiter
 		monitorSvc          tssMonitor.TSSMonitorService
 		eventProducer       events.Producer
+		handlerFactory      TransactionHandlerFactoryInterface
 		wantError           error
 	}{
 		{
@@ -295,6 +367,29 @@ func Test_NewTransactionWorker(t *testing.T) {
 			wantError:          fmt.Errorf("txProcessingLimiter cannot be nil"),
 		},
 		{
+			name:                "validate monitorSvc",
+			dbConnectionPool:    dbConnectionPool,
+			txModel:             txModel,
+			chAccModel:          chAccModel,
+			engine:              &wantSubmitterEngine,
+			sigService:          wantSigService,
+			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
+			txProcessingLimiter: wantTxProcessingLimiter,
+			wantError:           fmt.Errorf("monitorSvc cannot be nil"),
+		},
+		{
+			name:                "validate handlerFactory",
+			dbConnectionPool:    dbConnectionPool,
+			txModel:             txModel,
+			chAccModel:          chAccModel,
+			engine:              &wantSubmitterEngine,
+			sigService:          wantSigService,
+			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
+			txProcessingLimiter: wantTxProcessingLimiter,
+			monitorSvc:          tssMonitorSvc,
+			wantError:           fmt.Errorf("handlerFactory cannot be nil"),
+		},
+		{
 			name:                "🎉 successfully returns a new transaction worker",
 			dbConnectionPool:    dbConnectionPool,
 			txModel:             txModel,
@@ -305,6 +400,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 			txProcessingLimiter: wantTxProcessingLimiter,
 			monitorSvc:          tssMonitorSvc,
 			eventProducer:       &events.MockProducer{},
+			handlerFactory:      &MockTransactionHandlerFactory{},
 		},
 	}
 
@@ -319,6 +415,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 				tc.txProcessingLimiter,
 				tc.monitorSvc,
 				tc.eventProducer,
+				tc.handlerFactory,
 			)
 
 			if tc.wantError != nil {
@@ -383,7 +480,12 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 			require.NoError(t, err)
 			defer dbConnectionPool.Close()
 
-			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+			transactionHandler := &MockTransactionHandler{}
+			transactionHandler.On("AddContextLoggerFields", mock.Anything).Return(map[string]interface{}{
+				"handler": "mock",
+			})
+
+			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, transactionHandler)
 			transactionWorker.monitorSvc = tssMonitor.TSSMonitorService{
 				GitCommitHash: "gitCommitHash0x",
 				Version:       "version123",
@@ -419,16 +521,15 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 
 			// Assert log data:
 			wantLogData := logrus.Fields{
-				"app_version":         "version123",
-				"asset":               txJob.Transaction.AssetCode,
-				"channel_account":     txJob.ChannelAccount.PublicKey,
-				"created_at":          txJob.Transaction.CreatedAt.String(),
-				"destination_account": txJob.Transaction.Destination,
-				"event_id":            transactionWorker.jobUUID,
-				"git_commit_hash":     "gitCommitHash0x",
-				"tenant_id":           txJob.Transaction.TenantID,
-				"tx_id":               txJob.Transaction.ID,
-				"updated_at":          txJob.Transaction.UpdatedAt.String(),
+				"app_version":     "version123",
+				"channel_account": txJob.ChannelAccount.PublicKey,
+				"created_at":      txJob.Transaction.CreatedAt.String(),
+				"event_id":        transactionWorker.jobUUID,
+				"git_commit_hash": "gitCommitHash0x",
+				"tenant_id":       txJob.Transaction.TenantID,
+				"tx_id":           txJob.Transaction.ID,
+				"updated_at":      txJob.Transaction.UpdatedAt.String(),
+				"handler":         "mock",
 			}
 			for k, v := range tc.additionalLogrusFields {
 				wantLogData[k] = v
@@ -488,6 +589,23 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 					Client:        mMonitorClient,
 				}
 				tw.monitorSvc = tssMonitorService
+
+				transactionHandler := &MockTransactionHandler{}
+				transactionHandler.
+					On("MonitorTransactionProcessingFailed",
+						mock.Anything, txJob, mock.Anything, true, mock.Anything).
+					Run(func(args mock.Arguments) {
+						mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+					}).
+					Return()
+
+				handlerFactory := &MockTransactionHandlerFactory{}
+				handlerFactory.
+					On("GetHandler", mock.Anything).
+					Return(transactionHandler, nil).
+					Once()
+
+				tw.handlerFactory = handlerFactory
 			},
 			errContains: []string{"saving response XDR", "updating XDRReceived", "txModel error in UpdateStellarTransactionXDRReceived"},
 		},
@@ -532,6 +650,23 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 					Client:        mMonitorClient,
 				}
 				tw.monitorSvc = tssMonitorService
+
+				transactionHandler := &MockTransactionHandler{}
+				transactionHandler.
+					On("MonitorTransactionProcessingFailed",
+						mock.Anything, txJob, mock.Anything, true, mock.Anything).
+					Run(func(args mock.Arguments) {
+						mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+					}).
+					Return()
+
+				handlerFactory := &MockTransactionHandlerFactory{}
+				handlerFactory.
+					On("GetHandler", mock.Anything).
+					Return(transactionHandler, nil).
+					Once()
+
+				tw.handlerFactory = handlerFactory
 			},
 			errContains: []string{"unlocking job", "unlocking channel account", "chAccModel error in Unlock"},
 		},
@@ -543,7 +678,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, nil)
 			transactionWorker.jobUUID = uuid.NewString()
 			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
 			require.NotEmpty(t, txJob)
@@ -602,7 +737,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
 			tw.jobUUID = uuid.NewString()
 			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
 			require.NotEmpty(t, txJob)
@@ -654,6 +789,23 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 				Client:        mMonitorClient,
 			}
 			tw.monitorSvc = tssMonitorService
+
+			transactionHandler := &MockTransactionHandler{}
+			transactionHandler.
+				On("MonitorTransactionProcessingFailed",
+					mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+				}).
+				Return()
+
+			handlerFactory := &MockTransactionHandlerFactory{}
+			handlerFactory.
+				On("GetHandler", mock.Anything).
+				Return(transactionHandler, nil).
+				Once()
+
+			tw.handlerFactory = handlerFactory
 
 			// Run test:
 			hTransaction := horizon.Transaction{
@@ -749,7 +901,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
 			tw.jobUUID = uuid.NewString()
 
 			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
@@ -828,6 +980,42 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			}
 			tw.monitorSvc = tssMonitorService
 
+			transactionHandler := &MockTransactionHandler{}
+			transactionHandler.
+				On("MonitorTransactionProcessingFailed",
+					ctx, &txJob, mock.Anything, false, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+				}).
+				Return()
+
+			transactionHandler.
+				On("BuildFailureEvent",
+					ctx, &txJob, hErr).
+				Return(&events.Message{
+					Topic:    events.PaymentCompletedTopic,
+					Key:      txJob.Transaction.ExternalID,
+					Type:     events.PaymentCompletedErrorType,
+					TenantID: txJob.Transaction.TenantID,
+					Data: schemas.EventPaymentCompletedData{
+						PaymentID:            txJob.Transaction.ExternalID,
+						TransactionID:        txJob.Transaction.ID,
+						PaymentStatus:        string(data.FailedPaymentStatus),
+						PaymentStatusMessage: hErr.Error(),
+						PaymentCompletedAt:   time.Now(),
+						StellarTransactionID: txJob.Transaction.StellarTransactionHash.String,
+					},
+				}, nil).
+				Once()
+
+			handlerFactory := &MockTransactionHandlerFactory{}
+			handlerFactory.
+				On("GetHandler", mock.Anything).
+				Return(transactionHandler, nil).
+				Once()
+
+			tw.handlerFactory = handlerFactory
+
 			// Run test:
 			hTransaction := horizon.Transaction{
 				ID:          txHash,
@@ -858,7 +1046,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 	defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 	defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-	tw := getTransactionWorkerInstance(t, dbConnectionPool)
+	tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
 	tw.jobUUID = uuid.NewString()
 
 	txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
@@ -906,6 +1094,23 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		Client:        mMonitorClient,
 	}
 	tw.monitorSvc = tssMonitorService
+
+	transactionHandler := &MockTransactionHandler{}
+	transactionHandler.
+		On("MonitorTransactionProcessingFailed",
+			ctx, mock.Anything, mock.Anything, true, hErr.Error()).
+		Run(func(args mock.Arguments) {
+			mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+		}).
+		Return()
+
+	handlerFactory := &MockTransactionHandlerFactory{}
+	handlerFactory.
+		On("GetHandler", mock.Anything).
+		Return(transactionHandler, nil).
+		Once()
+
+	tw.handlerFactory = handlerFactory
 
 	// Run test:
 	hTransaction := horizon.Transaction{
@@ -971,7 +1176,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
 			tw.jobUUID = uuid.NewString()
 
 			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
@@ -1003,6 +1208,23 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 				Client:        mMonitorClient,
 			}
 			tw.monitorSvc = tssMonitorService
+
+			transactionHandler := &MockTransactionHandler{}
+			transactionHandler.
+				On("MonitorTransactionProcessingFailed",
+					ctx, &txJob, mock.Anything, true, tc.hErr.Error()).
+				Run(func(args mock.Arguments) {
+					mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+				}).
+				Return()
+
+			handlerFactory := &MockTransactionHandlerFactory{}
+			handlerFactory.
+				On("GetHandler", mock.Anything).
+				Return(transactionHandler, nil).
+				Once()
+
+			tw.handlerFactory = handlerFactory
 
 			// Run test:
 			hTransaction := horizon.Transaction{
@@ -1041,7 +1263,11 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+		transactionHandler := &MockTransactionHandler{}
+		transactionHandler.On("BuildSuccessEvent",
+			ctx, mock.Anything).Return(&events.Message{}, nil).Once()
+
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, transactionHandler)
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
@@ -1071,10 +1297,29 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
+		transactionHandler := &MockTransactionHandler{}
+		transactionHandler.On("BuildSuccessEvent",
+			ctx, &txJob).
+			Return(&events.Message{
+				Topic:    events.PaymentCompletedTopic,
+				Key:      txJob.Transaction.ExternalID,
+				Type:     events.PaymentCompletedSuccessType,
+				TenantID: txJob.Transaction.TenantID,
+				Data: schemas.EventPaymentCompletedData{
+					PaymentID:            txJob.Transaction.ExternalID,
+					TransactionID:        txJob.Transaction.ID,
+					PaymentStatus:        string(data.SuccessPaymentStatus),
+					PaymentStatusMessage: "",
+					PaymentCompletedAt:   time.Now(),
+					StellarTransactionID: "",
+				},
+			}, nil).
+			Once()
+
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, transactionHandler)
 		// mock UpdateStatusToSuccess ✅
 		txJob.Transaction.Status = store.TransactionStatusSuccess
 		mockTxStore := &storeMocks.MockTransactionStore{}
@@ -1120,7 +1365,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		// Run test:
 		expectedError := fmt.Sprintf(
-			"producing payment completed event Status %s - Job %v: writing messages [Message{Topic: %s, Key: %s, Type: %s, TenantID: %s",
+			"producing completed event Status %s - Job %v: writing messages [Message{Topic: %s, Key: %s, Type: %s, TenantID: %s",
 			store.TransactionStatusSuccess,
 			txJob,
 			events.PaymentCompletedTopic,
@@ -1139,8 +1384,28 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+
+		transactionHandler := &MockTransactionHandler{}
+		transactionHandler.On("BuildSuccessEvent",
+			ctx, mock.Anything).
+			Return(&events.Message{
+				Topic:    events.PaymentCompletedTopic,
+				Key:      txJob.Transaction.ExternalID,
+				Type:     events.PaymentCompletedSuccessType,
+				TenantID: txJob.Transaction.TenantID,
+				Data: schemas.EventPaymentCompletedData{
+					PaymentID:            txJob.Transaction.ExternalID,
+					TransactionID:        txJob.Transaction.ID,
+					PaymentStatus:        string(data.SuccessPaymentStatus),
+					PaymentStatusMessage: "",
+					PaymentCompletedAt:   time.Now(),
+					StellarTransactionID: "",
+				},
+			}, nil).
+			Once()
+
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, transactionHandler)
 		require.NotEmpty(t, txJob)
 
 		// mock UpdateStatusToSuccess ✅
@@ -1207,8 +1472,28 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+
+		transactionHandler := &MockTransactionHandler{}
+		transactionHandler.On("BuildSuccessEvent",
+			mock.Anything, mock.Anything).
+			Return(&events.Message{
+				Topic:    events.PaymentCompletedTopic,
+				Key:      txJob.Transaction.ExternalID,
+				Type:     events.PaymentCompletedSuccessType,
+				TenantID: txJob.Transaction.TenantID,
+				Data: schemas.EventPaymentCompletedData{
+					PaymentID:            txJob.Transaction.ExternalID,
+					TransactionID:        txJob.Transaction.ID,
+					PaymentStatus:        string(data.SuccessPaymentStatus),
+					PaymentStatusMessage: "",
+					PaymentCompletedAt:   time.Now(),
+					StellarTransactionID: "",
+				},
+			}, nil).
+			Once()
+
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, transactionHandler)
 		require.NotEmpty(t, txJob)
 
 		// mock UpdateStatusToSuccess ✅
@@ -1281,10 +1566,35 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+
+		transactionHandler := &MockTransactionHandler{}
+		transactionHandler.On("BuildSuccessEvent",
+			ctx, &txJob).
+			Return(&events.Message{
+				Topic:    events.PaymentCompletedTopic,
+				Key:      txJob.Transaction.ExternalID,
+				Type:     events.PaymentCompletedSuccessType,
+				TenantID: txJob.Transaction.TenantID,
+				Data: schemas.EventPaymentCompletedData{
+					PaymentID:            txJob.Transaction.ExternalID,
+					TransactionID:        txJob.Transaction.ID,
+					PaymentStatus:        string(data.SuccessPaymentStatus),
+					PaymentStatusMessage: "",
+					PaymentCompletedAt:   time.Now(),
+					StellarTransactionID: "",
+				},
+			}, nil).
+			Once()
+
+		transactionHandler.On("MonitorTransactionProcessingSuccess",
+			mock.Anything, mock.Anything, mock.Anything).
+			Return().
+			Once()
+
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, transactionHandler)
 		require.NotEmpty(t, transactionWorker)
 
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
 		// mock eventProducer WriteMessages ✅
@@ -1340,7 +1650,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
 		require.NotEmpty(t, transactionWorker)
 
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
@@ -1377,7 +1687,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 	const lockedToLedger = 2
 	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
 
-	transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+	transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, nil)
 	require.NotEmpty(t, transactionWorker)
 
 	testCases := []struct {
@@ -1462,6 +1772,45 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 					Once()
 			}
 			transactionWorker.eventProducer = mockEventProducer
+
+			tranasctionHandler := &MockTransactionHandler{}
+			if tc.horizonTxResponse.Successful {
+				tranasctionHandler.On("BuildSuccessEvent",
+					ctx, &txJob).
+					Return(&events.Message{
+						Topic:    events.PaymentCompletedTopic,
+						Key:      txJob.Transaction.ExternalID,
+						Type:     events.PaymentCompletedSuccessType,
+						TenantID: txJob.Transaction.TenantID,
+						Data: schemas.EventPaymentCompletedData{
+							PaymentID:            txJob.Transaction.ExternalID,
+							TransactionID:        txJob.Transaction.ID,
+							PaymentStatus:        string(data.SuccessPaymentStatus),
+							PaymentStatusMessage: "",
+							PaymentCompletedAt:   time.Now(),
+							StellarTransactionID: txHash,
+						},
+					}, nil)
+
+				tranasctionHandler.On("MonitorTransactionProcessingSuccess",
+					ctx, &txJob, mock.Anything).
+					Return()
+
+				tranasctionHandler.On("MonitorTransactionReconciliationSuccess",
+					ctx, mock.Anything, mock.Anything, mock.Anything).
+					Return()
+
+				tranasctionHandler.On("MonitorTransactionReconciliationFailure",
+					ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+					Return()
+
+				handlerFactory := &MockTransactionHandlerFactory{}
+				handlerFactory.
+					On("GetHandler", mock.Anything).
+					Return(tranasctionHandler, nil)
+
+				transactionWorker.handlerFactory = handlerFactory
+			}
 
 			// Run test:
 			err = transactionWorker.reconcileSubmittedTransaction(ctx, &txJob)
@@ -1664,205 +2013,91 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	testCases := []struct {
-		name                    string
-		assetCode               string
-		assetIssuer             string
-		getAccountResponseObj   horizon.Account
-		getAccountResponseError *horizonclient.Error
-		wantErrorContains       string
-		destinationAddress      string
-		memoType                schema.MemoType
-		memoValue               string
-		wantMemo                txnbuild.Memo
-	}{
-		{
-			name:              "returns an error if the asset code is empty",
-			wantErrorContains: "asset code cannot be empty",
-		},
-		{
-			name:              "returns an error if the asset code is not XLM and the issuer is not valid",
-			assetCode:         "USDC",
-			assetIssuer:       "FOOBAR",
-			wantErrorContains: "invalid asset issuer: FOOBAR",
-		},
-		{
-			name:                    "return an error if the AccountDetail call fails",
-			assetCode:               "USDC",
-			assetIssuer:             "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-			getAccountResponseObj:   horizon.Account{},
-			getAccountResponseError: &horizonclient.Error{Problem: problem.P{Status: http.StatusTooManyRequests}},
-			wantErrorContains:       "horizon response error: ",
-		},
-		{
-			name:                  "returns an error if memo is present for C destination",
-			assetCode:             "USDC",
-			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
-			destinationAddress:    "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
-			memoType:              schema.MemoTypeText,
-			memoValue:             "HelloWorld!",
-			wantErrorContains:     "memo is not supported for contract destination",
-		},
-		{
-			name:                  "🎉 successfully build and sign a payment transaction for G destination",
-			assetCode:             "USDC",
-			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-			destinationAddress:    "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
-		},
-		{
-			name:                  "🎉 successfully build and sign a payment transaction with native asset for G destination",
-			assetCode:             "XLM",
-			assetIssuer:           "",
-			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
-			destinationAddress:    "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-		},
-		{
-			name:                  "🎉 successfully build and sign a payment transaction with memo for G destination",
-			assetCode:             "USDC",
-			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
-			destinationAddress:    "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-			memoType:              schema.MemoTypeText,
-			memoValue:             "HelloWorld!",
-			wantMemo:              txnbuild.MemoText("HelloWorld!"),
-		},
-		{
-			name:                  "🎉 successfully build and sign a SAC transfer transaction for C destination",
-			assetCode:             "USDC",
-			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-			destinationAddress:    "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
-			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
-			wantMemo:              nil,
-		},
-		{
-			name:                  "🎉 successfully build and sign a SAC transfer transaction with native asset for C destination",
-			assetCode:             "XLM",
-			assetIssuer:           "",
-			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
-			destinationAddress:    "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
-			wantMemo:              nil,
-		},
+	defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+	defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+	defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+
+	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
+	txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
+
+	// mock horizon
+	mockHorizon := &horizonclient.MockClient{}
+	mockHorizon.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).
+		Return(horizon.Account{Sequence: accountSequence}, nil).
+		Once()
+	mockStore := &storeMocks.MockChannelAccountStore{}
+	mockStore.
+		On("Get", ctx, mock.Anything, txJob.ChannelAccount.PublicKey, 0).
+		Return(txJob.ChannelAccount, nil)
+
+	// Create a transaction worker:
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	submitterEngine := &engine.SubmitterEngine{
+		HorizonClient:       mockHorizon,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		SignatureService:    sigService,
+		MaxBaseFee:          100,
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
-			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
-			defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+	innerTx, _ := txnbuild.NewTransaction(
+		txnbuild.TransactionParams{
+			SourceAccount: &txnbuild.SimpleAccount{
+				AccountID: txJob.ChannelAccount.PublicKey,
+				Sequence:  accountSequence,
+			},
+			Operations: []txnbuild.Operation{
+				&txnbuild.Payment{
+					SourceAccount: distributionKP.Address(),
+					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32),
+					Destination:   txJob.Transaction.Destination,
+					Asset:         &txnbuild.CreditAsset{Code: txJob.Transaction.AssetCode, Issuer: txJob.Transaction.AssetIssuer},
+				},
+			},
+			BaseFee: int64(submitterEngine.MaxBaseFee),
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds:   txnbuild.NewTimeout(300),
+				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
+			},
+			IncrementSequenceNum: true,
+		},
+	)
 
-			tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
-			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
-			txJob.Transaction.AssetCode = tc.assetCode
-			txJob.Transaction.AssetIssuer = tc.assetIssuer
-			txJob.Transaction.Destination = tc.destinationAddress
-			txJob.Transaction.Memo = tc.memoValue
-			txJob.Transaction.MemoType = tc.memoType
+	handler := &MockTransactionHandler{}
+	handler.On("BuildInnerTransaction",
+		ctx, &txJob, int64(accountSequence), distAccount.Address).
+		Return(innerTx, nil)
 
-			// mock horizon
-			mockHorizon := &horizonclient.MockClient{}
-			if !sdpUtils.IsEmpty(tc.getAccountResponseObj) || !sdpUtils.IsEmpty(tc.getAccountResponseError) {
-				var hErr error
-				if tc.getAccountResponseError != nil {
-					hErr = tc.getAccountResponseError
-				}
-				mockHorizon.On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).Return(tc.getAccountResponseObj, hErr).Once()
-			}
-			mockStore := &storeMocks.MockChannelAccountStore{}
-			mockStore.On("Get", ctx, mock.Anything, txJob.ChannelAccount.PublicKey, 0).Return(txJob.ChannelAccount, nil)
+	handlerFactory := &MockTransactionHandlerFactory{}
+	handlerFactory.On("GetHandler", mock.Anything).Return(handler, nil)
 
-			// Create a transaction worker:
-			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-			submitterEngine := &engine.SubmitterEngine{
-				HorizonClient:       mockHorizon,
-				LedgerNumberTracker: mLedgerNumberTracker,
-				SignatureService:    sigService,
-				MaxBaseFee:          100,
-			}
-			transactionWorker := &TransactionWorker{
-				engine:     submitterEngine,
-				txModel:    store.NewTransactionModel(dbConnectionPool),
-				chAccModel: store.NewChannelAccountModel(dbConnectionPool),
-			}
-
-			// Run test:
-			gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(context.Background(), &txJob)
-			if tc.wantErrorContains != "" {
-				require.Error(t, err)
-				assert.ErrorContains(t, err, tc.wantErrorContains)
-				assert.Nil(t, gotFeeBumpTx)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, gotFeeBumpTx)
-
-				// Check that the transaction was built correctly:
-				var wantAsset txnbuild.Asset = txnbuild.NativeAsset{}
-				if strings.ToUpper(txJob.Transaction.AssetCode) != "XLM" {
-					wantAsset = txnbuild.CreditAsset{
-						Code:   txJob.Transaction.AssetCode,
-						Issuer: txJob.Transaction.AssetIssuer,
-					}
-				}
-
-				var operation txnbuild.Operation
-				amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
-				if strkey.IsValidEd25519PublicKey(tc.destinationAddress) {
-					operation = &txnbuild.Payment{
-						SourceAccount: distributionKP.Address(),
-						Amount:        amount,
-						Destination:   txJob.Transaction.Destination,
-						Asset:         wantAsset,
-					}
-				} else if strkey.IsValidContractAddress(tc.destinationAddress) {
-					params := txnbuild.PaymentToContractParams{
-						NetworkPassphrase: network.TestNetworkPassphrase,
-						Destination:       txJob.Transaction.Destination,
-						Amount:            amount,
-						Asset:             wantAsset,
-						SourceAccount:     distributionKP.Address(),
-					}
-					op, _ := txnbuild.NewPaymentToContract(params)
-					operation = &op
-				}
-
-				wantInnerTx, err := txnbuild.NewTransaction(
-					txnbuild.TransactionParams{
-						SourceAccount: &txnbuild.SimpleAccount{
-							AccountID: txJob.ChannelAccount.PublicKey,
-							Sequence:  accountSequence,
-						},
-						Memo:       tc.wantMemo,
-						Operations: []txnbuild.Operation{operation},
-						BaseFee:    int64(transactionWorker.engine.MaxBaseFee),
-						Preconditions: txnbuild.Preconditions{
-							TimeBounds:   txnbuild.NewTimeout(300),
-							LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
-						},
-						IncrementSequenceNum: true,
-					},
-				)
-				require.NoError(t, err)
-				chAccount := schema.NewDefaultChannelAccount(txJob.ChannelAccount.PublicKey)
-				wantInnerTx, err = sigService.SignerRouter.SignStellarTransaction(ctx, wantInnerTx, chAccount, distAccount)
-				require.NoError(t, err)
-
-				wantFeeBumpTx, err := txnbuild.NewFeeBumpTransaction(
-					txnbuild.FeeBumpTransactionParams{
-						Inner:      wantInnerTx,
-						FeeAccount: distributionKP.Address(),
-						BaseFee:    int64(transactionWorker.engine.MaxBaseFee),
-					},
-				)
-				require.NoError(t, err)
-				wantFeeBumpTx, err = sigService.SignerRouter.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distAccount)
-				require.NoError(t, err)
-				assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
-			}
-
-			mockHorizon.AssertExpectations(t)
-		})
+	transactionWorker := &TransactionWorker{
+		engine:         submitterEngine,
+		txModel:        store.NewTransactionModel(dbConnectionPool),
+		chAccModel:     store.NewChannelAccountModel(dbConnectionPool),
+		handlerFactory: handlerFactory,
 	}
+
+	gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(context.Background(), &txJob)
+	require.NoError(t, err)
+	require.NotNil(t, gotFeeBumpTx)
+
+	chAccount := schema.NewDefaultChannelAccount(txJob.ChannelAccount.PublicKey)
+	wantInnerTx, err := sigService.SignerRouter.SignStellarTransaction(ctx, innerTx, chAccount, distAccount)
+	require.NoError(t, err)
+
+	wantFeeBumpTx, err := txnbuild.NewFeeBumpTransaction(
+		txnbuild.FeeBumpTransactionParams{
+			Inner:      wantInnerTx,
+			FeeAccount: distributionKP.Address(),
+			BaseFee:    int64(transactionWorker.engine.MaxBaseFee),
+		},
+	)
+
+	require.NoError(t, err)
+	wantFeeBumpTx, err = sigService.SignerRouter.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distAccount)
+	require.NoError(t, err)
+	assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
 }
 
 func Test_TransactionWorker_submit(t *testing.T) {
@@ -1987,6 +2222,65 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				On("SubmitFeeBumpTransactionWithOptions", feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 				Return(tc.horizonResponse, tc.horizonError).
 				Once()
+
+			transactionHandler := &MockTransactionHandler{}
+			transactionHandler.On("BuildInnerTransaction",
+				ctx, txJob, mock.Anything, mock.Anything).
+				Return(&txnbuild.Transaction{}, nil).
+				Once()
+
+			transactionHandler.
+				On("BuildFailureEvent", ctx, &txJob, mock.Anything).
+				Return(&events.Message{
+					Topic:    events.PaymentCompletedTopic,
+					Key:      txJob.Transaction.ExternalID,
+					Type:     events.PaymentCompletedErrorType,
+					TenantID: txJob.Transaction.TenantID,
+					Data: schemas.EventPaymentCompletedData{
+						PaymentID:            txJob.Transaction.ExternalID,
+						TransactionID:        txJob.Transaction.ID,
+						PaymentStatus:        string(data.FailedPaymentStatus),
+						PaymentStatusMessage: utils.NewHorizonErrorWrapper(horizonError).Error(),
+						PaymentCompletedAt:   time.Now(),
+						StellarTransactionID: "",
+					},
+				}, nil).
+				Once()
+
+			transactionHandler.
+				On("MonitorTransactionProcessingFailed", ctx, &txJob, mock.Anything, mock.Anything, mock.Anything).
+				Return().
+				Once()
+
+			transactionHandler.On("BuildSuccessEvent",
+				ctx, &txJob).
+				Return(&events.Message{
+					Topic:    events.PaymentCompletedTopic,
+					Key:      txJob.Transaction.ExternalID,
+					Type:     events.PaymentCompletedSuccessType,
+					TenantID: txJob.Transaction.TenantID,
+					Data: schemas.EventPaymentCompletedData{
+						PaymentID:            txJob.Transaction.ExternalID,
+						TransactionID:        txJob.Transaction.ID,
+						PaymentStatus:        string(data.SuccessPaymentStatus),
+						PaymentStatusMessage: "",
+						PaymentCompletedAt:   time.Now(),
+						StellarTransactionID: "",
+					},
+				}, nil).
+				Once()
+
+			// Add MonitorTransactionProcessingSuccess mock expectation
+			transactionHandler.On("MonitorTransactionProcessingSuccess",
+				ctx, &txJob, mock.Anything).
+				Return().
+				Once()
+
+			handlerFactory := &MockTransactionHandlerFactory{}
+			handlerFactory.
+				On("GetHandler", mock.Anything).
+				Return(transactionHandler, nil)
+
 			transactionWorker := TransactionWorker{
 				dbConnectionPool: dbConnectionPool,
 				txModel:          txModel,
@@ -1997,6 +2291,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				crashTrackerClient:  mockCrashTrackerClient,
 				txProcessingLimiter: txProcessingLimiter,
 				eventProducer:       mockEventProducer,
+				handlerFactory:      handlerFactory,
 			}
 
 			// make sure the tx's initial status is PROCESSING:
@@ -2024,73 +2319,4 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			mockEventProducer.AssertExpectations(t)
 		})
 	}
-}
-
-func Test_TransactionWorker_buildPaymentCompletedEvent(t *testing.T) {
-	transactionWorker := TransactionWorker{}
-
-	t.Run("returns error when an unexpected payment status is passed", func(t *testing.T) {
-		msg, err := transactionWorker.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &store.Transaction{}, data.PendingPaymentStatus, "")
-		assert.EqualError(t, err, "invalid payment status to produce payment completed event")
-		assert.Nil(t, msg)
-	})
-
-	t.Run("🎉 successfully builds sync payment event of type=ERROR", func(t *testing.T) {
-		tx := store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "payment-id",
-			TenantID:               "tenant-id",
-			StellarTransactionHash: sql.NullString{},
-		}
-
-		msg, err := transactionWorker.buildPaymentCompletedEvent(events.PaymentCompletedErrorType, &tx, data.FailedPaymentStatus, "error status message")
-		assert.NoError(t, err)
-
-		gotPaymentCompletedAt := msg.Data.(schemas.EventPaymentCompletedData).PaymentCompletedAt
-		assert.WithinDuration(t, time.Now(), gotPaymentCompletedAt, time.Millisecond*100)
-		wantMsg := &events.Message{
-			Topic:    events.PaymentCompletedTopic,
-			Key:      tx.ExternalID,
-			TenantID: tx.TenantID,
-			Type:     events.PaymentCompletedErrorType,
-			Data: schemas.EventPaymentCompletedData{
-				TransactionID:        tx.ID,
-				PaymentID:            tx.ExternalID,
-				PaymentStatus:        string(data.FailedPaymentStatus),
-				PaymentStatusMessage: "error status message",
-				PaymentCompletedAt:   gotPaymentCompletedAt,
-				StellarTransactionID: tx.StellarTransactionHash.String,
-			},
-		}
-		assert.Equal(t, wantMsg, msg)
-	})
-
-	t.Run("🎉 successfully builds sync payment event of type=SUCCESS", func(t *testing.T) {
-		tx := store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "payment-id",
-			TenantID:               "tenant-id",
-			StellarTransactionHash: sql.NullString{},
-		}
-
-		msg, err := transactionWorker.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &tx, data.SuccessPaymentStatus, "")
-		assert.NoError(t, err)
-
-		gotPaymentCompletedAt := msg.Data.(schemas.EventPaymentCompletedData).PaymentCompletedAt
-		assert.WithinDuration(t, time.Now(), gotPaymentCompletedAt, time.Millisecond*100)
-		wantMsg := &events.Message{
-			Topic:    events.PaymentCompletedTopic,
-			Key:      tx.ExternalID,
-			TenantID: tx.TenantID,
-			Type:     events.PaymentCompletedSuccessType,
-			Data: schemas.EventPaymentCompletedData{
-				TransactionID:        tx.ID,
-				PaymentID:            tx.ExternalID,
-				PaymentStatus:        string(data.SuccessPaymentStatus),
-				PaymentCompletedAt:   gotPaymentCompletedAt,
-				StellarTransactionID: tx.StellarTransactionHash.String,
-			},
-		}
-		assert.Equal(t, wantMsg, msg)
-	})
 }
