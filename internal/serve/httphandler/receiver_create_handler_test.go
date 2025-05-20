@@ -1,4 +1,3 @@
-// internal/serve/httphandler/receiver_create_handler_test.go
 package httphandler
 
 import (
