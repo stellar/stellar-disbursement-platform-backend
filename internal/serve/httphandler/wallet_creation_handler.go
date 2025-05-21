@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -44,14 +45,6 @@ type WalletResponse struct {
 	Status          data.EmbeddedWalletStatus `json:"status"`
 }
 
-func (h WalletCreationHandler) getTenantFromContext(ctx http.Request) (*tenant.Tenant, *httperror.HTTPError) {
-	currentTenant, err := tenant.GetTenantFromContext(ctx.Context())
-	if err != nil || currentTenant == nil {
-		return nil, httperror.InternalError(ctx.Context(), "Failed to load tenant from context", err, nil)
-	}
-	return currentTenant, nil
-}
-
 func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
@@ -66,20 +59,19 @@ func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	currentTenant, httpErr := h.getTenantFromContext(*req)
-	if httpErr != nil {
-		httpErr.Render(rw)
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
 		return
 	}
 
-	err := h.embeddedWalletService.CreateWallet(ctx, currentTenant.ID, reqBody.Token, reqBody.PublicKey)
+	err = h.embeddedWalletService.CreateWallet(ctx, currentTenant.ID, reqBody.Token, reqBody.PublicKey)
 	if err != nil {
-		switch err {
-		case services.ErrCreateWalletInvalidToken:
+		if errors.Is(err, services.ErrInvalidToken) {
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)
-		case services.ErrCreateWalletInvalidStatus:
+		} else if errors.Is(err, services.ErrCreateWalletInvalidStatus) {
 			httperror.BadRequest("Wallet status is not pending for token", err, nil).Render(rw)
-		default:
+		} else {
 			httperror.InternalError(ctx, "Failed to create wallet", err, nil).Render(rw)
 		}
 		return
@@ -88,26 +80,30 @@ func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Re
 	resp := WalletResponse{
 		Status: data.PendingWalletStatus,
 	}
-	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
+	httpjson.Render(rw, resp, httpjson.JSON)
 }
 
 func (h WalletCreationHandler) GetWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	token := strings.TrimSpace(req.URL.Query().Get("token"))
+	if len(token) == 0 {
+		httperror.BadRequest("Token is required", nil, nil).Render(rw)
+		return
+	}
 
-	currentTenant, httpErr := h.getTenantFromContext(*req)
-	if httpErr != nil {
-		httpErr.Render(rw)
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
 		return
 	}
 
 	wallet, err := h.embeddedWalletService.GetWallet(ctx, currentTenant.ID, token)
 	if err != nil {
-		if err == services.ErrGetWalletInvalidToken {
+		if errors.Is(err, services.ErrInvalidToken) {
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)
-			return
+		} else {
+			httperror.InternalError(ctx, "Failed to get wallet", err, nil).Render(rw)
 		}
-		httperror.InternalError(ctx, "Failed to get wallet", err, nil).Render(rw)
 		return
 	}
 
@@ -115,5 +111,5 @@ func (h WalletCreationHandler) GetWallet(rw http.ResponseWriter, req *http.Reque
 		ContractAddress: wallet.ContractAddress,
 		Status:          wallet.WalletStatus,
 	}
-	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
+	httpjson.Render(rw, resp, httpjson.JSON)
 }

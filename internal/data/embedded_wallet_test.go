@@ -241,5 +241,6 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 		assert.Equal(t, newWasmHash, updatedWallet.WasmHash)
 		assert.Equal(t, newContractAddress, updatedWallet.ContractAddress)
 		assert.Equal(t, newStatus, updatedWallet.WalletStatus)
+		assert.True(t, updatedWallet.UpdatedAt.After(*updatedWallet.CreatedAt))
 	})
 }

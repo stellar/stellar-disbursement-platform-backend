@@ -10,10 +10,9 @@ import (
 )
 
 var (
-	ErrCreateWalletInvalidToken  = fmt.Errorf("invalid wallet token")
 	ErrCreateWalletInvalidStatus = fmt.Errorf("wallet status is not pending for token")
-	ErrGetWalletInvalidToken     = fmt.Errorf("invalid wallet token")
 	ErrGetWalletMismatchedTenant = fmt.Errorf("tenant ID does not match the wallet's tenant ID")
+	ErrInvalidToken              = fmt.Errorf("token does not exist")
 	ErrMissingToken              = fmt.Errorf("token is required")
 	ErrMissingPublicKey          = fmt.Errorf("public key is required")
 )
@@ -49,17 +48,9 @@ type EmbeddedWalletServiceOptions struct {
 	WasmHash            string
 }
 
-func validateToken(token string) error {
+func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, token, publicKey string) error {
 	if token == "" {
 		return ErrMissingToken
-	}
-	return nil
-}
-
-func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, token, publicKey string) error {
-	// Validate inputs
-	if err := validateToken(token); err != nil {
-		return err
 	}
 	if publicKey == "" {
 		return ErrMissingPublicKey
@@ -69,7 +60,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, toke
 		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
 		if err != nil {
 			if err == data.ErrRecordNotFound {
-				return ErrCreateWalletInvalidToken
+				return ErrInvalidToken
 			}
 			return fmt.Errorf("getting wallet by token %s: %w", token, err)
 		}
@@ -94,15 +85,15 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, toke
 }
 
 func (e *EmbeddedWalletService) GetWallet(ctx context.Context, tenantID, token string) (*data.EmbeddedWallet, error) {
-	if err := validateToken(token); err != nil {
-		return nil, err
+	if token == "" {
+		return nil, ErrMissingToken
 	}
 
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.EmbeddedWallet, error) {
 		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
 		if err != nil {
 			if err == data.ErrRecordNotFound {
-				return nil, ErrGetWalletInvalidToken
+				return nil, ErrInvalidToken
 			}
 			return nil, fmt.Errorf("getting wallet by token %s: %w", token, err)
 		}

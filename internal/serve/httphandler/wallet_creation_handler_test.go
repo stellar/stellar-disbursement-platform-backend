@@ -145,7 +145,7 @@ func Test_WalletCreationHandler_CreateWallet_InvalidToken(t *testing.T) {
 		ID: "test-tenant-id",
 	})
 
-	walletService.On("CreateWallet", ctx, "test-tenant-id", "123", "04f5").Return(services.ErrCreateWalletInvalidToken)
+	walletService.On("CreateWallet", ctx, "test-tenant-id", "123", "04f5").Return(services.ErrInvalidToken)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -224,6 +224,24 @@ func Test_WalletCreationHandler_GetWallet(t *testing.T) {
 	assert.Equal(t, data.PendingWalletStatus, respBody.Status)
 }
 
+func Test_WalletCreationHandler_GetWallet_MissingToken(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		embeddedWalletService: walletService,
+	}
+
+	rr := httptest.NewRecorder()
+	ctx := context.Background()
+	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
+		ID: "test-tenant-id",
+	})
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status", nil)
+	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+}
+
 func Test_WalletCreationHandler_GetWallet_InvalidToken(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
@@ -236,7 +254,7 @@ func Test_WalletCreationHandler_GetWallet_InvalidToken(t *testing.T) {
 		ID: "test-tenant-id",
 	})
 
-	walletService.On("GetWallet", ctx, "test-tenant-id", "123").Return(nil, services.ErrGetWalletInvalidToken)
+	walletService.On("GetWallet", ctx, "test-tenant-id", "123").Return(nil, services.ErrInvalidToken)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
 	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)

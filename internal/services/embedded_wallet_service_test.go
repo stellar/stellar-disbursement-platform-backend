@@ -59,13 +59,13 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		assert.EqualError(t, err, "public key is required")
 	})
 
-	t.Run("returns error if GetByID fails (wallet not found)", func(t *testing.T) {
+	t.Run("returns error if GetByToken fails (wallet not found)", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
-		nonExistentID := "non-existent-id"
-		err := service.CreateWallet(ctx, defaultTenantID, nonExistentID, defaultPublicKey)
+		nonExistentToken := "non-existent-token"
+		err := service.CreateWallet(ctx, defaultTenantID, nonExistentToken, defaultPublicKey)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrCreateWalletInvalidToken)
-		assert.Contains(t, err.Error(), "transaction execution error: invalid wallet token")
+		assert.ErrorIs(t, err, ErrInvalidToken)
+		assert.Contains(t, err.Error(), "transaction execution error: token does not exist")
 	})
 
 	t.Run("returns error if wallet status is not pending", func(t *testing.T) {
@@ -121,13 +121,13 @@ func Test_EmbeddedWalletService_GetWallet(t *testing.T) {
 		assert.EqualError(t, err, "token is required")
 	})
 
-	t.Run("returns error if GetByID fails (wallet not found)", func(t *testing.T) {
+	t.Run("returns error if GetByToken fails (wallet not found)", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
-		nonExistentID := "non-existent-id"
-		_, err := service.GetWallet(ctx, defaultTenantID, nonExistentID)
+		nonExistentToken := "non-existent-token"
+		_, err := service.GetWallet(ctx, defaultTenantID, nonExistentToken)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrGetWalletInvalidToken)
-		assert.Contains(t, err.Error(), "invalid wallet token")
+		assert.ErrorIs(t, err, ErrInvalidToken)
+		assert.Contains(t, err.Error(), "token does not exist")
 	})
 
 	t.Run("returns error if tenant ID does not match the wallet's tenant ID", func(t *testing.T) {

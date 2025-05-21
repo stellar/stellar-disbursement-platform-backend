@@ -93,9 +93,9 @@ func (ew *EmbeddedWalletModel) GetByToken(ctx context.Context, sqlExec db.SQLExe
 }
 
 type EmbeddedWalletUpdate struct {
-	WasmHash        string
-	ContractAddress string
-	WalletStatus    EmbeddedWalletStatus
+	WasmHash        string               `db:"wasm_hash"`
+	ContractAddress string               `db:"contract_address"`
+	WalletStatus    EmbeddedWalletStatus `db:"wallet_status"`
 }
 
 func (ewu EmbeddedWalletUpdate) Validate() error {
@@ -130,31 +130,20 @@ func (ew *EmbeddedWalletModel) Update(ctx context.Context, sqlExec db.SQLExecute
 		return fmt.Errorf("validating embedded wallet update: %w", err)
 	}
 
-	fields := []string{}
-	args := []any{}
-
-	if update.WasmHash != "" {
-		fields = append(fields, "wasm_hash = ?")
-		args = append(args, update.WasmHash)
-	}
-	if update.ContractAddress != "" {
-		fields = append(fields, "contract_address = ?")
-		args = append(args, update.ContractAddress)
-	}
-	if update.WalletStatus != "" {
-		fields = append(fields, "wallet_status = ?")
-		args = append(args, update.WalletStatus)
+	setClause, params := BuildSetClause(update)
+	if setClause == "" {
+		return fmt.Errorf("no fields to update")
 	}
 
-	args = append(args, token)
 	query := fmt.Sprintf(`
 				UPDATE embedded_wallets
 				SET %s
 				WHERE token = ?
-		`, strings.Join(fields, ", "))
-
+		`, setClause)
+	params = append(params, token)
 	query = sqlExec.Rebind(query)
-	result, err := sqlExec.ExecContext(ctx, query, args...)
+
+	result, err := sqlExec.ExecContext(ctx, query, params...)
 	if err != nil {
 		return fmt.Errorf("updating embedded wallet: %w", err)
 	}
