@@ -24,11 +24,13 @@ type Models struct {
 	ReceiverVerification        *ReceiverVerificationModel
 	ReceiverRegistrationAttempt *ReceiverRegistrationAttemptModel
 	ReceiverWallet              *ReceiverWalletModel
+	EmbeddedWallets             *EmbeddedWalletModel
 	DisbursementReceivers       *DisbursementReceiverModel
 	Message                     *MessageModel
 	CircleTransferRequests      *CircleTransferRequestModel
 	CircleRecipient             *CircleRecipientModel
 	URLShortener                *URLShortenerModel
+	APIKeys                     *APIKeyModel
 	DBConnectionPool            db.DBConnectionPool
 }
 
@@ -46,11 +48,13 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		DisbursementInstructions:    NewDisbursementInstructionModel(dbConnectionPool),
 		ReceiverVerification:        &ReceiverVerificationModel{dbConnectionPool: dbConnectionPool},
 		ReceiverWallet:              &ReceiverWalletModel{dbConnectionPool: dbConnectionPool},
+		EmbeddedWallets:             &EmbeddedWalletModel{dbConnectionPool: dbConnectionPool},
 		ReceiverRegistrationAttempt: &ReceiverRegistrationAttemptModel{dbConnectionPool: dbConnectionPool},
 		DisbursementReceivers:       &DisbursementReceiverModel{dbConnectionPool: dbConnectionPool},
 		Message:                     &MessageModel{dbConnectionPool: dbConnectionPool},
 		CircleTransferRequests:      &CircleTransferRequestModel{dbConnectionPool: dbConnectionPool},
 		CircleRecipient:             &CircleRecipientModel{dbConnectionPool: dbConnectionPool},
+		APIKeys:                     &APIKeyModel{dbConnectionPool: dbConnectionPool},
 		URLShortener:                NewURLShortenerModel(dbConnectionPool),
 		DBConnectionPool:            dbConnectionPool,
 	}, nil

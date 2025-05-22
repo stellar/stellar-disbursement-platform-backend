@@ -350,12 +350,14 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"circle_recipients",
 			"circle_transfer_requests",
 			"disbursements",
+			"embedded_wallets",
 			"messages",
 			"organizations",
 			"payments",
 			"receiver_verifications",
 			"receiver_verifications_audit",
 			"receiver_wallets",
+			"receiver_wallets_audit",
 			"receivers",
 			"receivers_audit",
 			"sdp_migrations",
@@ -363,6 +365,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"wallets",
 			"wallets_assets",
 			"receiver_registration_attempts",
+			"api_keys",
+			"api_keys_audit",
 		}
 		tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, expectedSchema)
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, expectedSchema, expectedTablesAfterMigrationsApplied)

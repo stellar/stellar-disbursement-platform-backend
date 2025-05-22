@@ -193,7 +193,6 @@ ul {
   &__content {
     padding: pxToRem(10px) pxToRem(10px) 0;
     flex: 1;
-    overflow-x: auto;
 
     &__box {
       min-height: 100%;
@@ -201,6 +200,13 @@ ul {
 
     &__button {
       flex: 1;
+    }
+
+    // Safari fix for inputs without placeholder (the height is too small)
+    .Input--lg {
+      input {
+        min-height: pxToRem(42px);
+      }
     }
   }
 

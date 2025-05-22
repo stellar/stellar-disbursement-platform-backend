@@ -59,6 +59,12 @@
     "500_6": "Unexpected contact info.",
     "500_7": "Cannot generate OTP for receiver wallet.",
     "500_8": "Cannot update OTP for receiver wallet.",
-    "500_9": "Failed to send OTP message."
+    "500_9": "Failed to send OTP message.",
+    "EXTRA_1": "OTP: Invalid OTP format. Needs to be a 6 digit value.",
+    "EXTRA_2": "Verification: Invalid date of birth format. Correct format: 1990-01-30.",
+    "EXTRA_3": "Verification: Invalid year/month format. Correct format: 1990-12.",
+    "EXTRA_4": "Verification: Date cannot be in the future.",
+    "EXTRA_5": "Verification: Invalid pin length. Cannot have less than 4 or more than 8 characters in pin",
+    "EXTRA_6": "Verification: Invalid national id. Cannot have more than 50 characters in national id."
   }
 }

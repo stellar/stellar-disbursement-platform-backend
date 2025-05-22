@@ -15,6 +15,7 @@ export type ApiError = {
   error: string;
   error_code?: string;
   extras?: { [key: string]: string };
+  extras_codes?: string[];
 };
 
 export type Sep24DepositInitResponse = {

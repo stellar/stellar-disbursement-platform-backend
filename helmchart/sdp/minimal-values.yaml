@@ -23,6 +23,9 @@ sdp:
   kubeSecrets:
     secretName: sdp
     create: true
+  ## Using edge for development. It is recommended to use a fixed version for production.
+  image:
+    tag: "edge"
 
 # =========================== START Anchor ========================
 anchorPlatform:
@@ -49,6 +52,9 @@ dashboard:
   route:
     schema: "http"
     domain: "dashboard.local"
+  ## Using edge for development. It is recommended to use a fixed version for production.
+  image:
+    fullName: stellar/stellar-disbursement-platform-frontend:edge
   ## Disable the TLS for the Dashboard ingress
   ingress:
     tls: []

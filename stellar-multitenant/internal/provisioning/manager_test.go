@@ -457,12 +457,14 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"circle_recipients",
 		"circle_transfer_requests",
 		"disbursements",
+		"embedded_wallets",
 		"messages",
 		"organizations",
 		"payments",
 		"receiver_verifications",
 		"receiver_verifications_audit",
 		"receiver_wallets",
+		"receiver_wallets_audit",
 		"receivers",
 		"receivers_audit",
 		"sdp_migrations",
@@ -470,6 +472,8 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"wallets",
 		"wallets_assets",
 		"receiver_registration_attempts",
+		"api_keys",
+		"api_keys_audit",
 	}
 }
 

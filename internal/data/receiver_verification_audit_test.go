@@ -128,6 +128,8 @@ func getLastReceiverVerificationsAuditEntry(
 	receiverID string,
 	verificationField VerificationType,
 ) receiverVerificationAuditEntry {
+	t.Helper()
+
 	const query = `
 		SELECT *, operation, changed_at 
 		FROM receiver_verifications_audit 
