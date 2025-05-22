@@ -66,7 +66,7 @@ func ReceiverColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"phone_number",
 			"email",
 		},

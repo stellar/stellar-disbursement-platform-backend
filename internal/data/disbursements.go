@@ -128,7 +128,7 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 			"registration_contact_type",
 			"receiver_registration_message_template",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"verification_field::text",
 			"file_name",
 			"receiver_registration_message_template",
