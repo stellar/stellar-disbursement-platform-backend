@@ -74,6 +74,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet1.com", "wallet1://sdp")
 	wallet2 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "www.wallet2.com", "wallet2://sdp")
 
+	walletEmbedded := data.CreateWalletFixture(t, ctx, dbConnectionPool, "EmbeddedWallet", "https://ignored.link", "www.ignored.link", tenantBaseURL)
+	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, walletEmbedded.ID)
+
 	asset1 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
 	asset2 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "FOO2", "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
 
@@ -96,6 +99,12 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		Wallet: wallet2,
 		Status: data.ReadyDisbursementStatus,
 		Asset:  asset2,
+	})
+
+	disbursementEmbedded := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Wallet: walletEmbedded,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset1,
 	})
 
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
@@ -377,6 +386,86 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
 		assert.Equal(t, titleWallet2, msg.TitleEncrypted)
 		assert.Equal(t, contentWallet2, msg.TextEncrypted)
+		assert.Len(t, msg.StatusHistory, 2)
+		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
+		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
+		assert.Nil(t, msg.AssetID)
+	})
+
+	t.Run("send invite successfully with embedded wallet deep link", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		recRW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverPhoneOnly.ID, walletEmbedded.ID, data.ReadyReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursementEmbedded,
+			Asset:          *asset1,
+			ReceiverWallet: recRW,
+			Amount:         "1",
+		})
+
+		walletDeepLink := WalletDeepLink{
+			DeepLink:         walletEmbedded.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
+			Token:            "123",
+			Route:            "wallet",
+		}
+		deepLink, err := walletDeepLink.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+		contentWallet := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink)
+
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, message.Message{
+				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
+				Body:          contentWallet,
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioSMS, nil).
+			Once()
+
+		reqs := []schemas.EventReceiverWalletInvitationData{
+			{
+				ReceiverWalletID: recRW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, walletEmbedded.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, recRW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+
+		q := `
+			SELECT
+				type, status, receiver_id, wallet_id, receiver_wallet_id,
+				title_encrypted, text_encrypted, status_history
+			FROM
+				messages
+			WHERE
+				receiver_id = $1 AND wallet_id = $2 AND receiver_wallet_id = $3
+		`
+		var msg data.Message
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiverPhoneOnly.ID, walletEmbedded.ID, recRW.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
+		assert.Equal(t, receiverPhoneOnly.ID, msg.ReceiverID)
+		assert.Equal(t, walletEmbedded.ID, msg.WalletID)
+		assert.Equal(t, recRW.ID, *msg.ReceiverWalletID)
+		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
+		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, contentWallet, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
 		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
@@ -1612,6 +1701,19 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 			},
 			wantResult: "https://test.com?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar%3A8000&name=Foo+Bar+Org",
+		},
+		{
+			name: "🎉 successful for embedded wallet",
+			walletDeepLink: WalletDeepLink{
+				DeepLink:         "http://foo.bar:8000",
+				TenantBaseURL:    "http://foo.bar:8000",
+				Route:            "wallet",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "FOO",
+				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+				Token:            "123",
+			},
+			wantResult: "http://foo.bar:8000/wallet?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&token=123",
 		},
 	}
 

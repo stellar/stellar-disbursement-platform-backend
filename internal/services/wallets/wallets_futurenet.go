@@ -21,4 +21,16 @@ var FuturenetWallets = []data.Wallet{
 		Assets:      assets.AllAssetsTestnet,
 		UserManaged: true,
 	},
+	{
+		Name:     "SDP Embedded Wallet",
+		Assets:   assets.AllAssetsTestnet,
+		Embedded: true,
+	},
+	{
+		Name:           "SDP Embedded Wallet",
+		DeepLinkSchema: "https://stellar.org",
+		Homepage:       "https://stellar.org",
+		Assets:         assets.AllAssetsTestnet,
+		Embedded:       true,
+	},
 }

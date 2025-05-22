@@ -29,6 +29,7 @@ type Wallet struct {
 	DeepLinkSchema    string       `json:"deep_link_schema,omitempty" csv:"-" db:"deep_link_schema"`
 	Enabled           bool         `json:"enabled" csv:"-" db:"enabled"`
 	UserManaged       bool         `json:"user_managed,omitempty" csv:"-" db:"user_managed"`
+	Embedded          bool         `json:"embedded,omitempty" csv:"-" db:"embedded"`
 	Assets            WalletAssets `json:"assets,omitempty" csv:"-" db:"assets"`
 	CreatedAt         *time.Time   `json:"created_at,omitempty" csv:"-" db:"created_at"`
 	UpdatedAt         *time.Time   `json:"updated_at,omitempty" csv:"-" db:"updated_at"`
@@ -75,6 +76,7 @@ func WalletColumnNames(tableReference, resultAlias string, includeDates bool) st
 		"enabled",
 		"deep_link_schema",
 		"user_managed",
+		"embedded",
 	}
 	if includeDates {
 		colNames = append(colNames, "created_at", "updated_at", "deleted_at")

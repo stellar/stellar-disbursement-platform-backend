@@ -122,6 +122,13 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			TenantBaseURL:    *currentTenant.BaseURL,
 		}
 
+		if wallet.Embedded {
+			if err := s.updateDeepLink(&wdl); err != nil {
+				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
+				continue
+			}
+		}
+
 		registrationLink, err := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
 		if err != nil {
 			log.Ctx(ctx).Errorf("getting registration link for receiver wallet ID %s: %v", rwa.ReceiverWallet.ID, err)
@@ -205,6 +212,14 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		return nil
 	})
+}
+
+func (s SendReceiverWalletInviteService) updateDeepLink(wdl *WalletDeepLink) error {
+	wdl.DeepLink = wdl.TenantBaseURL
+	wdl.Route = "wallet"
+	wdl.Token = "123" // TODO: this should be a unique token for the receiver wallet invitation
+
+	return nil
 }
 
 func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context, wdl WalletDeepLink, isLinkShortenerEnabled bool) (string, error) {
@@ -333,6 +348,8 @@ type WalletDeepLink struct {
 	AssetIssuer string
 	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
 	TenantBaseURL string
+	// A unique token to that identifies the receiver wallet invitation. This is only relevant for embedded wallets.
+	Token string
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
@@ -458,9 +475,15 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	}
 
 	q := u.Query()
-	q.Add("domain", tomlFileDomain)
-	q.Add("name", wdl.OrganizationName)
+
 	q.Add("asset", wdl.assetName())
+
+	if wdl.Token == "" {
+		q.Add("domain", tomlFileDomain)
+		q.Add("name", wdl.OrganizationName)
+	} else {
+		q.Add("token", wdl.Token)
+	}
 
 	u.RawQuery = q.Encode()
 
