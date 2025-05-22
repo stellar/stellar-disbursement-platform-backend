@@ -75,6 +75,8 @@ type Manager struct {
 	crashTrackerClient crashtracker.CrashTrackerClient
 	// event producer:
 	eventProducer events.Producer
+	// transaction handler:
+	handlerFactory TransactionHandlerFactoryInterface
 }
 
 func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err error) {
@@ -119,6 +121,13 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 
 	txProcessingLimiter := engine.NewTransactionProcessingLimiter(opts.NumChannelAccounts)
 
+	handlerFactory := NewTransactionHandlerFactory(
+		&opts.SubmitterEngine,
+		txModel,
+		opts.EventProducer,
+		opts.MonitorService,
+	)
+
 	return &Manager{
 		dbConnectionPool: opts.DBConnectionPool,
 		chAccModel:       chAccModel,
@@ -134,6 +143,8 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		monitorService:     opts.MonitorService,
 
 		eventProducer: opts.EventProducer,
+
+		handlerFactory: handlerFactory,
 	}, nil
 }
 
@@ -185,6 +196,7 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.txProcessingLimiter,
 					m.monitorService,
 					m.eventProducer,
+					m.handlerFactory,
 				)
 				if err != nil {
 					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
