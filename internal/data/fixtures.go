@@ -662,6 +662,39 @@ func DeleteAllDisbursementFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
+func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, tenantID, wasmHash, contractAddress string, status EmbeddedWalletStatus) *EmbeddedWallet {
+	t.Helper()
+
+	if token == "" {
+		randomToken, err := utils.RandomString(32)
+		require.NoError(t, err)
+		token = randomToken
+	}
+	if tenantID == "" {
+		randomTenantID, err := utils.RandomString(32)
+		require.NoError(t, err)
+		tenantID = randomTenantID
+	}
+
+	q := `
+		INSERT INTO embedded_wallets
+			(token, tenant_id, wasm_hash, contract_address, wallet_status)
+		VALUES
+			($1, $2, $3, $4, $5)
+		RETURNING *
+	`
+	wallet := EmbeddedWallet{}
+	err := sqlExec.GetContext(ctx, &wallet, q, token, tenantID, wasmHash, contractAddress, status)
+	require.NoError(t, err)
+	return &wallet
+}
+
+func DeleteAllEmbeddedWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM embedded_wallets")
+	require.NoError(t, err)
+}
+
 func CreateMessageFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, m *Message) *Message {
 	if m.TextEncrypted == "" {
 		m.TextEncrypted = "text encrypted"
@@ -823,6 +856,7 @@ func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter
 	DeleteAllReceiverWalletsFixtures(t, ctx, sqlExec)
 	DeleteAllReceiversFixtures(t, ctx, sqlExec)
 	DeleteAllDisbursementFixtures(t, ctx, sqlExec)
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, sqlExec)
 	DeleteAllWalletFixtures(t, ctx, sqlExec)
 	DeleteAllAssetFixtures(t, ctx, sqlExec)
 	DeleteAllCircleRecipientsFixtures(t, ctx, sqlExec)
