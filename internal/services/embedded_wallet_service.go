@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -59,7 +60,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, toke
 	return db.RunInTransaction(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
 		if err != nil {
-			if err == data.ErrRecordNotFound {
+			if errors.Is(err, data.ErrRecordNotFound) {
 				return ErrInvalidToken
 			}
 			return fmt.Errorf("getting wallet by token %s: %w", token, err)
@@ -92,7 +93,7 @@ func (e *EmbeddedWalletService) GetWallet(ctx context.Context, tenantID, token s
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.EmbeddedWallet, error) {
 		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
 		if err != nil {
-			if err == data.ErrRecordNotFound {
+			if errors.Is(err, data.ErrRecordNotFound) {
 				return nil, ErrInvalidToken
 			}
 			return nil, fmt.Errorf("getting wallet by token %s: %w", token, err)

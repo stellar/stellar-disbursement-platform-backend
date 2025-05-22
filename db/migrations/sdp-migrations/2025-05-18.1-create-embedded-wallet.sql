@@ -17,11 +17,11 @@ CREATE TABLE embedded_wallets (
     wallet_status embedded_wallet_status NOT NULL DEFAULT 'PENDING'::embedded_wallet_status
 );
 
-CREATE TRIGGER refresh_wallets_updated_at BEFORE UPDATE ON embedded_wallets FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
+CREATE TRIGGER refresh_embedded_wallets_updated_at BEFORE UPDATE ON embedded_wallets FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 
 -- +migrate Down
 
-DROP TRIGGER refresh_wallets_updated_at ON embedded_wallets;
+DROP TRIGGER refresh_embedded_wallets_updated_at ON embedded_wallets;
 
 DROP TABLE embedded_wallets CASCADE;
 
