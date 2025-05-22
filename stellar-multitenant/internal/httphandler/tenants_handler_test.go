@@ -383,7 +383,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			fmt.Sprintf("%s:", assets.XLMAssetCode),
 		},
 		)
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"User Managed Wallet", "Demo Wallet", "Vibrant Assist"})
+		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"User Managed Wallet", "Demo Wallet", "Vibrant Assist", "SDP Embedded Wallet"})
 		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
 	}
 
