@@ -329,6 +329,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/verification-types", receiversHandler.GetReceiverVerificationTypes)
 
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+				Post("/", receiversHandler.CreateReceiver)
+
 			updateReceiverHandler := httphandler.UpdateReceiverHandler{
 				Models:           o.Models,
 				DBConnectionPool: o.MtnDBConnectionPool,
