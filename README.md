@@ -8,7 +8,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/stellar/stellar-disbursement-platform-backend?logo=docker)](https://hub.docker.com/r/stellar/stellar-disbursement-platform-backend/tags)
 [![Release](https://img.shields.io/github/release/stellar/stellar-disbursement-platform-backend.svg)](https://github.com/stellar/stellar-disbursement-platform-backend/releases/latest)
 
-> Note: you can find a more thorough and user-friendly documentation of this project at [Stelar Docs](https://docs.stellar.org/category/use-the-stellar-disbursement-platform).
+> Note: you can find a more thorough and user-friendly documentation of this project at [Stellar Docs](https://docs.stellar.org/category/use-the-stellar-disbursement-platform).
 
 ## Table of Contents
 
