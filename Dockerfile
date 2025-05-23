@@ -3,7 +3,7 @@
 # To push:
 #    make docker-push
 
-FROM golang:1.24.2-bullseye AS build
+FROM golang:1.24.2-alpine AS build
 ARG GIT_COMMIT
 
 WORKDIR /src/stellar-disbursement-platform
@@ -13,9 +13,9 @@ ADD . ./
 RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 
 
-FROM ubuntu:24.04
+FROM alpine:3.19
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
+RUN apk add --no-cache ca-certificates
 # ADD migrations/ /app/migrations/
 COPY --from=build /bin/stellar-disbursement-platform /app/
 EXPOSE 8001
