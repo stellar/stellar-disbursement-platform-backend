@@ -1,0 +1,1172 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Stellar Disbursement Platform ECS Deployment Template'
+
+Parameters:
+  env:
+    Type: String
+    Default: "dev"
+
+  DomainName:
+    Type: String
+  
+  HostedZoneId:
+    Type: String
+
+  FrontendImage:
+    Type: String
+    Default: "stellar/stellar-disbursement-platform-frontend:3.0.0"
+
+  BackendImage:
+    Type: String
+
+  AnchorImage:
+    Type: String
+    Default: "stellar/anchor-platform:2.6.0"
+    
+  EmailSenderType:
+    Type: String
+    Default: "AWS_EMAIL"
+    AllowedValues:
+      - AWS_EMAIL
+      - TWILLIO_EMAIL
+      - DRY_RUN
+  
+  SmsSenderType:
+    Type: String
+    Default: "DRY_RUN"
+    AllowedValues:
+      - AWS_SMS
+      - TWILLIO_SMS
+      - DRY_RUN
+      
+  KeysStackName:
+    Type: String
+    Description: "Name of the stack containing the secrets/keys"
+    Default: "sdp-keys"
+    
+  DatabaseStackName:
+    Type: String
+    Description: "Name of the stack containing the database"
+    Default: "sdp-database"
+    
+  NetworkStackName:
+    Type: String
+    Description: "Name of the stack containing the network resources"
+    Default: "sdp-network"
+
+Resources:
+  # Listener Rules
+  AnchorSepListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-https-listener-arn"
+      Priority: 5
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub "anchor.${DomainName}"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref AnchorSepTargetGroup
+  
+  AnchorPlatformListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-private-https-listener-arn"
+      Priority: 6
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub "anchor-platform.${DomainName}"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref AnchorPlatformTargetGroup
+
+  TenantListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-private-https-listener-arn"
+      Priority: 8
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub admin.${DomainName}
+        - Field: path-pattern
+          Values:
+            - "/tenants/*"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TenantTargetGroup
+
+  SDPListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-https-listener-arn"
+      Priority: 10  
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub "sdp-backend.${DomainName}"  
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SDPTargetGroup
+  
+  WalletRegistrationRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-https-listener-arn"
+      Priority: 25
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub sdp-backend.${DomainName}
+        - Field: path-pattern
+          Values:
+            - "/wallet-registration/*"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SDPTargetGroup
+
+  TomlRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-https-listener-arn"
+      Priority: 26
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub "*.${DomainName}"
+        - Field: path-pattern
+          Values:
+            - "/.well-known/*"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SDPTargetGroup
+  
+  SepListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-https-listener-arn"
+      Priority: 29
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub "*.${DomainName}"
+        - Field: path-pattern
+          Values:
+            - "/sep24/*"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref AnchorSepTargetGroup
+  
+  FrontendListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-https-listener-arn"
+      Priority: 40
+      Conditions:
+        - Field: host-header
+          Values: 
+            - !Sub "*.${DomainName}"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref FrontendTargetGroup
+
+  # Target Groups
+  SDPTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-vpc-id"
+      Port: 8000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-sdp-tg
+
+  TenantTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-vpc-id"
+      Port: 8003   
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-tenant-tg
+  
+  AnchorPlatformTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-vpc-id"
+      Port: 8085
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health?checks=config
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 60
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckPort: 8080
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: slow_start.duration_seconds
+          Value: '60'
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-anchor-platform-tg
+
+  AnchorSepTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-vpc-id"
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health?checks=config
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 60
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckPort: 8080
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: slow_start.duration_seconds
+          Value: '60'
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-anchor-sep-tg
+
+  FrontendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-vpc-id"
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckEnabled: true        
+      HealthCheckPath: /      
+      HealthCheckIntervalSeconds: 30  
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-frontend-tg
+          
+  # ECS Cluster and IAM Roles
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${env}-${AWS::StackName}-cluster
+      CapacityProviders:
+        - FARGATE
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      Tags:
+        - Key: Name
+          Value: !Sub ${env}-${AWS::StackName}-cluster
+
+  ECSTaskExecutionRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${env}-${AWS::StackName}-task-execution-role-policy
+      Roles: [!Ref ECSTaskExecutionRole]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - "secretsmanager:GetSecretValue"
+            Resource: 
+              - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/*"
+          - Effect: Allow
+            Action: 
+              - "ssm:GetParameters"
+              - "ssm:GetParameter"
+              - "ssm:GetParametersByPath"
+            Resource: 
+              - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sdp/*"
+              - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sdp/${env}/*"
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${env}-${AWS::StackName}*"
+          - Effect: Allow
+            Action:
+              - "ecr:GetAuthorizationToken"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+            Resource: !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/sdp-dev"
+          - Effect: Allow
+            Action:
+              - "ecr:GetAuthorizationToken"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: 
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${env}-${AWS::StackName}/tss:*"
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${env}-${AWS::StackName}/backend:*"
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess
+      Policies:
+        - PolicyName: SESSendEmailPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail 
+                Resource: '*'
+
+  # Log Groups
+  TSSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${env}-${AWS::StackName}/tss
+      RetentionInDays: 7
+
+  SDPLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${env}-${AWS::StackName}/backend
+      RetentionInDays: 7
+      
+  FrontendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${env}-${AWS::StackName}
+      RetentionInDays: 7
+      
+  AnchorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${env}-${AWS::StackName}/anchor
+      RetentionInDays: 7
+
+# Task Definitions
+  FrontendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${env}-${AWS::StackName}-frontend
+      Cpu: 1024
+      Memory: 3072
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: frontend
+          Image: !Ref FrontendImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - Name: API_URL
+              Value: !Sub https://sdp-backend.${DomainName}
+            - Name: STELLAR_EXPERT_URL
+              Value: https://stellar.expert/explorer/testnet
+            - Name: HORIZON_URL
+              Value: https://horizon-testnet.stellar.org
+            - Name: USDC_ASSET_ISSUER
+              Value: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+            - Name: SINGLE_TENANT_MODE
+              Value: "false"
+            - Name: PUBLIC_ALB_DNS
+              Value: 
+                Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-dns"
+          Secrets:
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/RECAPTCHA_SITE_KEY"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: 'true'
+              awslogs-group: !Sub /ecs/${env}-${AWS::StackName}
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: frontend
+          EntryPoint:
+            - /bin/sh
+            - -c
+          Command:
+            - |
+              cat /usr/share/nginx/html/index.html && \
+              mkdir -p /usr/share/nginx/html/settings && \
+              echo "window._env_ = {
+                API_URL: \"$API_URL\",
+                RECAPTCHA_SITE_KEY: \"$RECAPTCHA_SITE_KEY\",
+                HORIZON_URL: \"$HORIZON_URL\",
+                STELLAR_EXPERT_URL: \"$STELLAR_EXPERT_URL\",
+                SINGLE_TENANT_MODE: $SINGLE_TENANT_MODE
+              };" > /usr/share/nginx/html/settings/env-config.js &&
+              exec nginx -g 'daemon off;'
+  
+  TSSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${env}-${AWS::StackName}-tss
+      Cpu: 1024
+      Memory: 3072
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: tss
+          Image: !Ref BackendImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 9000
+              Protocol: tcp
+            - ContainerPort: 9002
+              Protocol: tcp
+          EntryPoint:
+            - /bin/bash
+            - -c
+          Command:
+            - |
+              set -e
+              echo "Starting TSS initialization..."
+              
+              # Wait for database to be ready
+              sleep 10
+              
+              echo "Verifying and managing channel accounts..."
+              # First verify and cleanup invalid accounts
+              ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts
+              
+              # Ensure we have the required number of channel accounts
+              ./stellar-disbursement-platform channel-accounts ensure 3
+              
+              echo "Starting TSS server..."
+              # Start the TSS server
+              exec ./stellar-disbursement-platform tss
+          Environment:
+            - Name: LOG_LEVEL
+              Value: info 
+            - Name: NETWORK_PASSPHRASE
+              Value: "Test SDF Network ; September 2015"
+            - Name: HORIZON_URL
+              Value: "https://horizon-testnet.stellar.org"
+            - Name: NUM_CHANNEL_ACCOUNTS
+              Value: "3"
+            - Name: MAX_BASE_FEE
+              Value: "100"
+            - Name: TSS_METRICS_PORT
+              Value: "9002"
+            - Name: TSS_METRICS_TYPE
+              Value: "TSS_PROMETHEUS"
+            - Name: EVENT_BROKER_TYPE
+              Value: "NONE"
+            - Name: BROKER_URLS 
+              Value: "kafka:9092"
+            - Name: CONSUMER_GROUP_ID
+              Value: "group-id"
+            - Name: KAFKA_SECURITY_PROTOCOL
+              Value: "PLAINTEXT"
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - pgrep -f "stellar-disbursement-platform tss" || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 180
+          Secrets:
+            - Name: DISTRIBUTION_PUBLIC_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/DISTRIBUTION_PUBLIC_KEY"
+            - Name: DISTRIBUTION_SEED
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/DISTRIBUTION_SEED"
+            - Name: DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
+            - Name: CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
+            - Name: DATABASE_URL
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/db/url:DATABASE_URL::"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: 'true'
+              awslogs-group: !Sub /ecs/${env}-${AWS::StackName}/tss
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: tss
+              awslogs-multiline-pattern: '^\d{4}-\d{2}-\d{2}'
+              awslogs-datetime-format: '%Y-%m-%d %H:%M:%S'
+          LinuxParameters:
+            InitProcessEnabled: true
+
+  SDPTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - SESUserAccessKey
+    Properties:
+      Family: !Sub ${env}-${AWS::StackName}-sdp
+      Cpu: 1024
+      Memory: 3072
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: sdp
+          Image: !Ref BackendImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+            - ContainerPort: 8002
+              Protocol: tcp
+            - ContainerPort: 8003
+              Protocol: tcp
+            - ContainerPort: 2345
+              Protocol: tcp
+          EntryPoint:
+            - /bin/bash
+            - -c
+          Command:
+            - |
+              ./stellar-disbursement-platform db admin migrate up && \
+              ./stellar-disbursement-platform db tss migrate up && \
+              ./stellar-disbursement-platform db auth migrate up --all && \
+              ./stellar-disbursement-platform db sdp migrate up --all && \
+              ./stellar-disbursement-platform serve
+          LinuxParameters:
+            Capabilities:
+              Add:
+                - SYS_PTRACE
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: BASE_URL
+              Value: !Sub https://sdp-backend.${DomainName}
+            - Name: SDP_UI_BASE_URL
+              Value: !Sub https://sdp-frontend.${DomainName}
+            - Name: DISABLE_RECAPTCHA
+              Value: 'true'
+            - Name: ENVIRONMENT
+              Value: !Ref env
+            - Name: SMS_SENDER_TYPE
+              Value: !Ref SmsSenderType
+            - Name: ENABLE_MFA
+              Value: 'false'
+            - Name: NETWORK_PASSPHRASE
+              Value: Test SDF Network ; September 2015
+            - Name: LOG_LEVEL
+              Value: info
+            - Name: HORIZON_URL
+              Value: https://horizon-testnet.stellar.org
+            - Name: INSTANCE_NAME
+              Value: "Stellar Disbursement Platform"
+            - Name: CORS_ALLOWED_ORIGINS
+              Value: "*"
+            - Name: ANCHOR_PLATFORM_BASE_PLATFORM_URL
+              Value: !Sub https://anchor-platform.${DomainName}
+            - Name: ANCHOR_PLATFORM_BASE_SEP_URL
+              Value: !Sub https://anchor.${DomainName}
+            - Name: EVENT_BROKER_TYPE
+              Value: "NONE"
+            - Name: BROKER_URLS
+              Value: "kafka:9092"
+            - Name: CONSUMER_GROUP_ID
+              Value: "group-id"
+            - Name: KAFKA_SECURITY_PROTOCOL
+              Value: "PLAINTEXT"
+            - Name: ENABLE_SCHEDULER
+              Value: "true"
+            - Name: SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS
+              Value: "10"
+            - Name: SCHEDULER_PAYMENT_JOB_SECONDS
+              Value: "10"
+            - Name: METRICS_PORT
+              Value: "8002"
+            - Name: METRICS_TYPE
+              Value: "PROMETHEUS"
+            - Name: EMAIL_SENDER_TYPE
+              Value: !Ref EmailSenderType
+            - Name: AWS_SES_SENDER_ID
+              Value: !Sub "noreply@${DomainName}"
+            - Name: ADMIN_ACCOUNT
+              Value: "admin"
+          Secrets:
+            - Name: EC256_PRIVATE_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/EC256_PRIVATE_KEY"
+            - Name: EC256_PUBLIC_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/EC256_PUBLIC_KEY"
+            - Name: SEP10_SIGNING_PRIVATE_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SEP10_SIGNING_PRIVATE_KEY"
+            - Name: SEP10_SIGNING_PUBLIC_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SEP10_SIGNING_PUBLIC_KEY"
+            - Name: DISTRIBUTION_SEED
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/DISTRIBUTION_SEED"
+            - Name: DISTRIBUTION_PUBLIC_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/DISTRIBUTION_PUBLIC_KEY"
+            - Name: DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
+            - Name: CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
+            - Name: DATABASE_URL
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/db/url:DATABASE_URL::"
+            - Name: RECAPTCHA_SITE_SECRET_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/RECAPTCHA_SITE_SECRET_KEY"
+            - Name: AWS_ACCESS_KEY_ID
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/AWS_ACCESS_KEY_ID"
+            - Name: AWS_SECRET_ACCESS_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/AWS_SECRET_ACCESS_KEY"
+            - Name: SEP24_JWT_SECRET
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SEP24_JWT_SECRET"
+            - Name: ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/ANCHOR_PLATFORM_OUTGOING_JWT_SECRET"
+            - Name: ADMIN_API_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/ADMIN_API_KEY"
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/RECAPTCHA_SITE_KEY"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: 'true'
+              awslogs-group: !Sub /ecs/${env}-${AWS::StackName}/backend
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: sdp
+              awslogs-multiline-pattern: '^\d{4}-\d{2}-\d{2}'
+              awslogs-datetime-format: '%Y-%m-%d %H:%M:%S'
+
+# Anchor Platform Task Definition
+  AnchorTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${env}-${AWS::StackName}-anchor
+      Cpu: 1024
+      Memory: 3072
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: anchorplatform
+          Image: !Ref AnchorImage
+          Essential: true     
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+              Name: sep-server
+              AppProtocol: http
+            - ContainerPort: 8085
+              Protocol: tcp
+              Name: platform-server
+              AppProtocol: http
+            - ContainerPort: 8082
+              Protocol: tcp
+              Name: metrics
+              AppProtocol: http
+          Command:
+            - "--sep-server"
+            - "--platform-server"
+            - "--platform"
+            - "linux/amd64"
+          Environment:
+            - Name: HOST_URL
+              Value: !Sub https://anchor.${DomainName}
+            - Name: SEP_SERVER_PORT
+              Value: "8080"
+            - Name: CALLBACK_API_BASE_URL
+              Value: !Sub https://sdp-backend.${DomainName}
+            - Name: CALLBACK_API_AUTH_TYPE
+              Value: "none"
+            - Name: PLATFORM_SERVER_AUTH_TYPE
+              Value: "JWT"
+            - Name: APP_LOGGING_LEVEL
+              Value: "INFO"
+            - Name: DATA_TYPE
+              Value: "postgres"
+            - Name: DATA_DATABASE
+              Value: "postgres"
+            - Name: DATA_FLYWAY_ENABLED
+              Value: "true"
+            - Name: DATA_DDL_AUTO
+              Value: "update"
+            - Name: METRICS_ENABLED
+              Value: "false"
+            - Name: METRICS_EXTRAS_ENABLED
+              Value: "false"
+            - Name: EVENT_BROKER_TYPE
+              Value: "NONE"
+            - Name: SEP10_ENABLED
+              Value: "true"
+            - Name: SEP10_WEB_AUTH_DOMAIN
+              Value: !Sub anchor.${DomainName}
+            - Name: SEP10_HOME_DOMAINS
+              Value: !Sub "*.${DomainName}"
+            - Name: SEP24_ENABLED
+              Value: "true"
+            - Name: SEP24_INTERACTIVE_URL_BASE_URL
+              Value: !Sub https://sdp-backend.${DomainName}/wallet-registration/start
+            - Name: SEP24_INTERACTIVE_URL_JWT_EXPIRATION
+              Value: "1800"
+            - Name: SEP24_MORE_INFO_URL_BASE_URL
+              Value: !Sub https://sdp-backend.${DomainName}/wallet-registration/start
+            - Name: SEP1_ENABLED
+              Value: "true"
+            - Name: SEP1_TOML_TYPE
+              Value: "url"
+            - Name: SEP1_TOML_VALUE
+              Value: !Sub https://sdp-backend.${DomainName}/.well-known/stellar.toml
+            - Name: ASSETS_TYPE
+              Value: "json"
+            - Name: ASSETS_VALUE
+              Value: !Sub 
+                - |
+                  {
+                    "assets": [
+                      {
+                        "sep24_enabled": true,
+                        "schema": "stellar",
+                        "code": "USDC",
+                        "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+                        "distribution_account": "${distributionAccount}",
+                        "significant_decimals": 7,
+                        "deposit": {
+                          "enabled": true,
+                          "fee_minimum": 0,
+                          "fee_percent": 0,
+                          "min_amount": 1,
+                          "max_amount": 10000
+                        },
+                        "withdraw": {"enabled": false}
+                      },
+                      {
+                        "sep24_enabled": true,
+                        "schema": "stellar",
+                        "code": "native",
+                        "issuer": "",
+                        "distribution_account": "${distributionAccount}",
+                        "significant_decimals": 7,
+                        "deposit": {
+                          "enabled": true,
+                          "fee_minimum": 0,
+                          "fee_percent": 0,
+                          "min_amount": 1,
+                          "max_amount": 10000
+                        },
+                        "withdraw": {"enabled": false}
+                      }
+                    ]
+                  }
+                - distributionAccount: 
+                    Fn::Sub: "{{resolve:secretsmanager:/sdp/${env}/DISTRIBUTION_PUBLIC_KEY:SecretString}}"
+          Secrets:
+            - Name: SECRET_DATA_USERNAME
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/db/credentials:username::"
+            - Name: SECRET_DATA_PASSWORD
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/db/credentials:password::"
+            - Name: DATA_SERVER
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/db/host"
+            - Name: SECRET_SEP10_SIGNING_SEED
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SEP10_SIGNING_PRIVATE_KEY"
+            - Name: DISTRIBUTION_PUBLIC_KEY
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/DISTRIBUTION_PUBLIC_KEY"
+            - Name: SECRET_PLATFORM_API_AUTH_SECRET
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SECRET_PLATFORM_API_AUTH_SECRET"
+            - Name: SECRET_SEP10_JWT_SECRET
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SECRET_SEP10_JWT_SECRET"
+            - Name: SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET"
+            - Name: SECRET_SEP24_MORE_INFO_URL_JWT_SECRET
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/${env}/SECRET_SEP24_MORE_INFO_URL_JWT_SECRET"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: 'true'
+              awslogs-group: !Sub /ecs/${env}-${AWS::StackName}/anchor
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: anchor
+
+  # ECS Services
+  FrontendService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - FrontendListenerRule
+      - FrontendLogGroup
+    Properties:
+      ServiceName: !Sub ${env}-${AWS::StackName}-frontend
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref FrontendTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-ecs-services-sg"
+          Subnets:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-1"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-2"
+      LoadBalancers:
+        - ContainerName: frontend
+          ContainerPort: 80
+          TargetGroupArn: !Ref FrontendTargetGroup
+      HealthCheckGracePeriodSeconds: 300
+
+  TSSService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - TSSLogGroup
+    Properties:
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: false
+          Rollback: false
+        MaximumPercent: 100
+        MinimumHealthyPercent: 0
+      ServiceName: !Sub ${env}-${AWS::StackName}-tss
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TSSTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-ecs-services-sg"
+          Subnets:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-1"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-2"
+
+  SDPService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - SDPListenerRule
+      - TenantListenerRule
+      - SDPTargetGroup
+      - TenantTargetGroup
+      - SDPLogGroup
+    Properties:
+      ServiceName: !Sub ${env}-${AWS::StackName}-sdp
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref SDPTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-ecs-services-sg"
+          Subnets:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-1"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-2"
+      LoadBalancers:
+        - ContainerName: sdp
+          ContainerPort: 8000
+          TargetGroupArn: !Ref SDPTargetGroup
+        - ContainerName: sdp  
+          ContainerPort: 8003 
+          TargetGroupArn: !Ref TenantTargetGroup
+      HealthCheckGracePeriodSeconds: 300
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true 
+          Rollback: true
+
+  AnchorService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AnchorSepListenerRule
+      - AnchorLogGroup
+    Properties:
+      ServiceName: !Sub ${env}-${AWS::StackName}-anchor
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref AnchorTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-ecs-services-sg"
+          Subnets:
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-1"
+            - Fn::ImportValue: !Sub "${NetworkStackName}-private-subnet-2"
+      LoadBalancers:
+        - ContainerName: anchorplatform
+          ContainerPort: 8080
+          TargetGroupArn: !Ref AnchorSepTargetGroup
+        - ContainerName: anchorplatform
+          ContainerPort: 8085
+          TargetGroupArn: !Ref AnchorPlatformTargetGroup
+      HealthCheckGracePeriodSeconds: 300
+
+  BaseDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName:
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-dns"
+        HostedZoneId:
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-hosted-zone"
+        EvaluateTargetHealth: true
+
+  FrontendDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      Name: !Sub sdp-frontend.${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName:
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-dns"
+        HostedZoneId:
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-hosted-zone"
+        EvaluateTargetHealth: true
+
+  BackendDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      Name: !Sub sdp-backend.${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName: 
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-dns"
+        HostedZoneId:
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-hosted-zone"
+        EvaluateTargetHealth: true
+
+  AnchorDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      Name: !Sub anchor.${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName: 
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-dns"
+        HostedZoneId:
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-hosted-zone"
+        EvaluateTargetHealth: true
+  
+  AnchorPlatformPrivateDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      Name: !Sub anchor-platform.${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName: 
+          Fn::ImportValue: !Sub "${NetworkStackName}-private-alb-dns"
+        HostedZoneId:
+          Fn::ImportValue: !Sub "${NetworkStackName}-private-alb-hosted-zone"
+        EvaluateTargetHealth: true
+
+  AdminDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      Name: !Sub admin.${DomainName}.
+      Type: A
+      AliasTarget:
+        DNSName: 
+          Fn::ImportValue: !Sub "${NetworkStackName}-private-alb-dns"
+        HostedZoneId:
+          Fn::ImportValue: !Sub "${NetworkStackName}-private-alb-hosted-zone"
+        EvaluateTargetHealth: true
+  
+  WildcardDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Sub ${DomainName}.
+      Name: !Sub "*.${DomainName}."
+      Type: A
+      AliasTarget:
+        DNSName: 
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-dns"
+        HostedZoneId: 
+          Fn::ImportValue: !Sub "${NetworkStackName}-public-alb-hosted-zone"
+        EvaluateTargetHealth: true
+
+  # Email Configuration
+  EmailDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref DomainName
+      DkimAttributes:
+        SigningEnabled: true
+      ConfigurationSetAttributes:
+        ConfigurationSetName: !Ref EmailConfigurationSet
+
+  DkimRecord1:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt EmailDomainIdentity.DkimDNSTokenName1
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt EmailDomainIdentity.DkimDNSTokenValue1
+
+  DkimRecord2:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt EmailDomainIdentity.DkimDNSTokenName2
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt EmailDomainIdentity.DkimDNSTokenValue2
+
+  DkimRecord3:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt EmailDomainIdentity.DkimDNSTokenName3
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt EmailDomainIdentity.DkimDNSTokenValue3
+
+  EmailConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: !Sub "${env}-${AWS::StackName}-config-set"
+      DeliveryOptions:
+        TlsPolicy: REQUIRE
+      ReputationOptions:
+        ReputationMetricsEnabled: true
+      SendingOptions:
+        SendingEnabled: true
+      SuppressionOptions:
+        SuppressedReasons:
+          - BOUNCE
+          - COMPLAINT
+
+  SESUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "${env}-${AWS::StackName}-ses-smtp"
+      Policies:
+        - PolicyName: SESSendEmail
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendRawEmail
+                  - ses:SendEmail
+                Resource: "*"
+
+  SESUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref SESUser
+  
+  AwsAccessKeyIdSm:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/AWS_ACCESS_KEY_ID
+      Description: "AWS Access Key ID for SES"
+      SecretString: !Ref SESUserAccessKey  # Changed from GetAtt to Ref
+
+  AwsSecretAccessKeySm:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /sdp/${env}/AWS_SECRET_ACCESS_KEY
+      Description: "AWS Secret Access Key for SES"
+      SecretString: !GetAtt SESUserAccessKey.SecretAccessKey  
+
+Outputs:
+  StackName:
+    Description: "The name of this stack"
+    Value: !Ref AWS::StackName
+  FrontendURL:
+    Value: !Sub https://sdp-frontend.${DomainName}
+    Export:
+      Name: !Sub ${AWS::StackName}-sdp-frontend-url
+  
+  BackendURL:
+    Value: !Sub https://sdp-backend.${DomainName}
+    Export:
+      Name: !Sub ${AWS::StackName}-sdp-backend-url
+      
+  AnchorURL:
+    Value: !Sub https://anchor.${DomainName}
+    Export:
+      Name: !Sub ${AWS::StackName}-anchor-url
+      
+  AnchorPlatformURL:
+    Value: !Sub https://anchor-platform.${DomainName}
+    Export:
+      Name: !Sub ${AWS::StackName}-anchor-platform-url
+  
+  DomainName:
+    Value: !Ref DomainName
+    Export:
+      Name: !Sub ${AWS::StackName}-domain-name
+  
