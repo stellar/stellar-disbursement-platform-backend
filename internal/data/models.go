@@ -21,6 +21,7 @@ type Models struct {
 	Payment                     *PaymentModel
 	Receiver                    *ReceiverModel
 	DisbursementInstructions    *DisbursementInstructionModel
+	DirectPayment               *DirectPaymentModel
 	ReceiverVerification        *ReceiverVerificationModel
 	ReceiverRegistrationAttempt *ReceiverRegistrationAttemptModel
 	ReceiverWallet              *ReceiverWalletModel
@@ -45,6 +46,7 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		Payment:                     &PaymentModel{dbConnectionPool: dbConnectionPool},
 		Receiver:                    &ReceiverModel{},
 		DisbursementInstructions:    NewDisbursementInstructionModel(dbConnectionPool),
+		DirectPayment:               &DirectPaymentModel{dbConnectionPool: dbConnectionPool},
 		ReceiverVerification:        &ReceiverVerificationModel{dbConnectionPool: dbConnectionPool},
 		ReceiverWallet:              &ReceiverWalletModel{dbConnectionPool: dbConnectionPool},
 		ReceiverRegistrationAttempt: &ReceiverRegistrationAttemptModel{dbConnectionPool: dbConnectionPool},

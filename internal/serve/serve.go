@@ -311,8 +311,14 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				DirectPaymentService: &services.DirectPaymentService{
+					Models:                     o.Models,
+					EventProducer:              o.EventProducer,
+					DistributionAccountService: o.DistributionAccountService,
+				},
 			}
 			r.Get("/", paymentsHandler.GetPayments)
+			r.Post("/", paymentsHandler.PostPayment)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
