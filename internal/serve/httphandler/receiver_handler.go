@@ -57,13 +57,13 @@ func (r *CreateReceiverRequest) Validate() error {
 
 	if r.Email != "" {
 		if err := utils.ValidateEmail(r.Email); err != nil {
-			return err
+			return fmt.Errorf("validating email: %w", err)
 		}
 	}
 
 	if r.PhoneNumber != "" {
 		if err := utils.ValidatePhoneNumber(r.PhoneNumber); err != nil {
-			return fmt.Errorf("invalid phone_number: %w", err)
+			return fmt.Errorf("validating phone_number: %w", err)
 		}
 	}
 
@@ -73,6 +73,10 @@ func (r *CreateReceiverRequest) Validate() error {
 
 	if len(r.Verifications) == 0 && len(r.Wallets) == 0 {
 		return errors.New("either verifications or wallets must be provided")
+	}
+
+	if len(r.Wallets) > 1 {
+		return errors.New("only one wallet is allowed per receiver")
 	}
 
 	for i, v := range r.Verifications {
@@ -251,6 +255,7 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 	response, err = db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {
 		var txErr error
 
+		// Step 1: Prepare the receiver data for insertion into the database
 		receiverInsert := data.ReceiverInsert{
 			Email:       &req.Email,
 			PhoneNumber: &req.PhoneNumber,
@@ -265,14 +270,15 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 			receiverInsert.PhoneNumber = nil
 		}
 
+		// Step 2: Insert the receiver record
 		var receiver *data.Receiver
 		if receiver, txErr = rh.Models.Receiver.Insert(ctx, dbTx, receiverInsert); txErr != nil {
 			return nil, fmt.Errorf("creating receiver: %w", txErr)
 		}
 
+		// Step 3: Process verification requirements
 		for _, v := range req.Verifications {
-			var insErr error
-			if _, insErr = rh.Models.ReceiverVerification.Insert(ctx, dbTx, data.ReceiverVerificationInsert{
+			if _, insErr := rh.Models.ReceiverVerification.Insert(ctx, dbTx, data.ReceiverVerificationInsert{
 				ReceiverID:        receiver.ID,
 				VerificationField: v.Type,
 				VerificationValue: v.Value,
@@ -281,9 +287,11 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 			}
 		}
 
+		// Step 4: Handle wallet assignments
 		wallets := []data.ReceiverWallet{}
 
 		if len(req.Wallets) > 0 {
+			// Find the user-managed wallet
 			var userManagedWallets []data.Wallet
 			if userManagedWallets, txErr = rh.Models.Wallets.FindWallets(ctx, data.Filter{
 				Key:   data.FilterUserManaged,
@@ -298,6 +306,7 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 
 			userManagedWallet := userManagedWallets[0]
 
+			// Create receiver wallet associations
 			for _, w := range req.Wallets {
 				walletInsert := data.ReceiverWalletInsert{
 					ReceiverID: receiver.ID,
@@ -309,12 +318,17 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 					return nil, fmt.Errorf("creating receiver wallet: %w", txErr)
 				}
 
-				memoType := schema.MemoTypeID
+				// Update wallet with Stellar address and memo details
 				walletUpdate := data.ReceiverWalletUpdate{
-					Status:          data.ReadyReceiversWalletStatus,
-					StellarAddress:  w.Address,
-					StellarMemo:     &w.Memo,
-					StellarMemoType: &memoType,
+					Status:         data.ReadyReceiversWalletStatus,
+					StellarAddress: w.Address,
+				}
+
+				// Only set memo and memo type if memo is provided
+				if w.Memo != "" {
+					memoType := schema.MemoTypeID
+					walletUpdate.StellarMemo = &w.Memo
+					walletUpdate.StellarMemoType = &memoType
 				}
 
 				if updErr := rh.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); updErr != nil {
@@ -330,6 +344,7 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 			}
 		}
 
+		// Step 5: Retrieve verification records for response
 		var receiverVerifications []data.ReceiverVerification
 		if receiverVerifications, txErr = rh.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiver.ID); txErr != nil {
 			return nil, fmt.Errorf("getting receiver verifications: %w", txErr)
