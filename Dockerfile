@@ -10,7 +10,7 @@ ENV CGO_ENABLED=0 GOOS=linux
 WORKDIR /src/stellar-disbursement-platform
 ADD go.mod go.sum ./
 RUN go mod download
-ADD . ./
+COPY . ./
 RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 
 
