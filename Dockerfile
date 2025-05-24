@@ -6,6 +6,7 @@
 FROM golang:1.24.2-alpine AS build
 ARG GIT_COMMIT
 
+ENV CGO_ENABLED=0 GOOS=linux
 WORKDIR /src/stellar-disbursement-platform
 ADD go.mod go.sum ./
 RUN go mod download
