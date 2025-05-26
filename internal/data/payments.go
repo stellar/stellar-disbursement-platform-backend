@@ -191,17 +191,20 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 
 var basePaymentQuery = `
 SELECT
-	` + PaymentColumnNames("p", "") + `,
-	` + DisbursementColumnNames("d", "disbursement") + `,
-	` + AssetColumnNames("a", "asset", false) + `,
-	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
-	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
+    ` + PaymentColumnNames("p", "") + `,
+    ` + DisbursementColumnNames("d", "disbursement") + `,
+    ` + AssetColumnNames("a", "asset", false) + `,
+    ` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+    ` + ReceiverColumnNames("r", "receiver_wallet.receiver") + `,
+    ` + WalletColumnNames("COALESCE(dw.id, rww.id)", "receiver_wallet.wallet", false) + `
 FROM
-	payments p
-	LEFT JOIN disbursements d ON p.disbursement_id = d.id
-	JOIN assets a ON p.asset_id = a.id
-	JOIN wallets w on d.wallet_id = w.id
-	JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+    payments p
+    LEFT JOIN disbursements d ON p.disbursement_id = d.id
+    JOIN assets a ON p.asset_id = a.id
+    LEFT JOIN wallets dw ON d.wallet_id = dw.id
+    JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+    JOIN receivers r ON r.id = rw.receiver_id
+    JOIN wallets rww ON rww.id = rw.wallet_id
 `
 
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
@@ -721,9 +724,6 @@ func (p *PaymentModel) UpdateStatus(
 }
 
 func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLExecuter, insert PaymentInsert) (string, error) {
-	insert.PaymentType = PaymentTypeDirect
-	insert.DisbursementID = nil
-
 	if err := insert.Validate(); err != nil {
 		return "", fmt.Errorf("validating payment: %w", err)
 	}
@@ -745,17 +745,20 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
         RETURNING id
     `
 
+	insert.PaymentType = PaymentTypeDirect
+	insert.DisbursementID = nil
+
 	var paymentID string
-	err := sqlExec.GetContext(ctx, &paymentID, query,
+	if err := sqlExec.GetContext(ctx, &paymentID, query,
 		insert.Amount,
 		insert.AssetID,
 		insert.ReceiverID,
 		insert.DisbursementID, // Will be NULL
+		insert.ReceiverWalletID,
 		insert.ExternalPaymentID,
 		insert.PaymentType,
 		DraftPaymentStatus,
-	)
-	if err != nil {
+	); err != nil {
 		return "", fmt.Errorf("inserting direct payment: %w", err)
 	}
 

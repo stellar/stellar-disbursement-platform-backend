@@ -12,9 +12,6 @@ CHECK (
 
 CREATE INDEX idx_payments_direct ON payments(id) WHERE payment_type = 'DIRECT';
 CREATE INDEX idx_payments_disbursement ON payments(disbursement_id) WHERE payment_type = 'DISBURSEMENT';
-
--- Add comment for documentation
-COMMENT ON COLUMN payments.disbursement_id IS 'Reference to disbursement. NULL for direct payments, required for disbursement payments';
 -- +migrate StatementEnd
 
 -- +migrate Down
@@ -30,7 +27,4 @@ DELETE FROM payments WHERE disbursement_id IS NULL;
 -- Make disbursement_id NOT NULL again
 ALTER TABLE payments 
 ALTER COLUMN disbursement_id SET NOT NULL;
-
--- Remove comment
-COMMENT ON COLUMN payments.disbursement_id IS NULL;
 -- +migrate StatementEnd
