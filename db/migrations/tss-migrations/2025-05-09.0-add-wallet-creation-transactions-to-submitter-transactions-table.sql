@@ -18,7 +18,7 @@ ALTER TABLE submitter_transactions
         CASE
             WHEN transaction_type = 'PAYMENT' THEN
                 asset_code IS NOT NULL AND
-                asset_issuer IS NOT NULL AND
+                (asset_issuer IS NOT NULL OR asset_code = 'XLM') AND
                 amount IS NOT NULL AND
                 destination IS NOT NULL
             WHEN transaction_type = 'WALLET_CREATION' THEN
@@ -30,6 +30,9 @@ ALTER TABLE submitter_transactions
 -- +migrate Down
 
 ALTER TABLE submitter_transactions
+    DROP CONSTRAINT submitter_transactions_type_constraints;
+
+ALTER TABLE submitter_transactions
     DROP COLUMN public_key,
     DROP COLUMN wasm_hash,
     DROP COLUMN transaction_type;
@@ -39,8 +42,5 @@ ALTER TABLE submitter_transactions
     ALTER COLUMN asset_issuer SET NOT NULL,
     ALTER COLUMN amount SET NOT NULL,
     ALTER COLUMN destination SET NOT NULL;
-
-ALTER TABLE submitter_transactions
-    DROP CONSTRAINT submitter_transactions_type_constraints;
 
 DROP TYPE transaction_type;
