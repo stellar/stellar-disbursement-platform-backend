@@ -359,7 +359,7 @@ func (m *APIKeyModel) ValidateRawKey(ctx context.Context, raw string) (*APIKey, 
 
 	// 1) Strip prefix and split into "<id>.<secret>"
 	payload := raw[len(APIKeyPrefix):]
-	parts := strings.SplitN(payload, ".", 2)
+	parts := strings.Split(payload, ".")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid API key format")
 	}

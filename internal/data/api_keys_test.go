@@ -465,13 +465,13 @@ func Test_APIKeyModel_ValidateRawKey(t *testing.T) {
 		},
 		{
 			name:   "invalid format",
-			raw:    APIKeyPrefix + valid.ID + strings.TrimPrefix(valid.Key, APIKeyPrefix),
+			raw:    APIKeyPrefix + "." + strings.TrimPrefix(valid.Key, APIKeyPrefix),
 			errMsg: "invalid API key format",
 		},
 		{
 			name:   "non-existent ID",
 			raw:    fmt.Sprintf("%s%s.%s", APIKeyPrefix, "00000000-0000-0000-0000-000000000000", "anykey"),
-			errMsg: "lookup API key:",
+			errMsg: "no rows in result set",
 		},
 		{
 			name:   "wrong secret",
