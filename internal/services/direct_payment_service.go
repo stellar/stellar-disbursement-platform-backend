@@ -8,17 +8,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 // DirectPaymentRequest represents service-level request for creating direct payment
-type DirectPaymentRequest struct {
-	AssetRef          AssetReference
-	ReceiverRef       ReceiverReference
-	WalletRef         WalletReference
-	Amount            string
-	ExternalPaymentID *string
+type CreateDirectPaymentRequest struct {
+	Amount            string            `json:"amount" validate:"required"`
+	Asset             AssetReference    `json:"asset" validate:"required"`
+	Receiver          ReceiverReference `json:"receiver" validate:"required"`
+	Wallet            WalletReference   `json:"wallet" validate:"required"`
+	ExternalPaymentID *string           `json:"external_payment_id,omitempty"`
 }
 
 type DirectPaymentService struct {
@@ -45,153 +46,233 @@ type ResolvedPaymentComponents struct {
 	ReceiverWallet *data.ReceiverWallet
 }
 
-// CreateDirectPayment creates a new direct payment
 func (s *DirectPaymentService) CreateDirectPayment(
 	ctx context.Context,
-	req *DirectPaymentRequest,
+	req CreateDirectPaymentRequest,
 	user *auth.User,
 	distributionAccount *schema.TransactionAccount,
 ) (*data.Payment, error) {
-	return db.RunInTransactionWithResult(ctx, s.DBConnectionPool, nil, func(tx db.DBTransaction) (*data.Payment, error) {
-		// 1. Resolve all components
-		components, err := s.resolvePaymentComponents(ctx, tx, req)
-		if err != nil {
-			return nil, fmt.Errorf("resolving payment components: %w", err)
-		}
+	var payment *data.Payment
 
-		if err := s.validateBalanceForPayment(ctx, distributionAccount, components.Asset, req.Amount); err != nil {
-			return nil, err
-		}
-
-		// 2. Create the direct payment using data model
-		directPaymentInsert := data.DirectPaymentInsert{
-			ReceiverID:        components.Receiver.ID,
-			Amount:            req.Amount,
-			AssetID:           components.Asset.ID,
-			ReceiverWalletID:  components.ReceiverWallet.ID,
-			ExternalPaymentID: req.ExternalPaymentID,
-		}
-
-		paymentID, err := s.Models.DirectPayment.Insert(ctx, tx, directPaymentInsert)
-		if err != nil {
-			return nil, fmt.Errorf("inserting direct payment: %w", err)
-		}
-
-		// 3. Get the created payment with all relations
-		payment, err := s.Models.Payment.Get(ctx, paymentID, tx)
-		if err != nil {
-			return nil, fmt.Errorf("getting created payment: %w", err)
-		}
-
-		return payment, nil
-	})
-}
-
-// resolvePaymentComponents resolves asset, receiver, and receiver wallet from the request
-func (s *DirectPaymentService) resolvePaymentComponents(ctx context.Context, sqlExec db.SQLExecuter, req *DirectPaymentRequest) (*ResolvedPaymentComponents, error) {
-	asset, err := s.Resolvers.Asset().Resolve(ctx, sqlExec, req.AssetRef)
-	if err != nil {
-		return nil, fmt.Errorf("resolving asset: %w", err)
-	}
-
-	receiver, err := s.Resolvers.Receiver().Resolve(ctx, sqlExec, req.ReceiverRef)
-	if err != nil {
-		return nil, fmt.Errorf("resolving receiver: %w", err)
-	}
-
-	wallet, err := s.Resolvers.Wallet().Resolve(ctx, sqlExec, req.WalletRef)
-	if err != nil {
-		return nil, fmt.Errorf("resolving wallet: %w", err)
-	}
-
-	receiverWallet, err := s.getReceiverWallet(ctx, sqlExec, receiver.ID, wallet.ID, req.WalletRef)
-	if err != nil {
-		return nil, fmt.Errorf("getting or creating receiver wallet: %w", err)
-	}
-
-	return &ResolvedPaymentComponents{
-		Asset:          asset,
-		Receiver:       receiver,
-		ReceiverWallet: receiverWallet,
-	}, nil
-}
-
-func (s *DirectPaymentService) getReceiverWallet(ctx context.Context, sqlExec db.SQLExecuter, receiverID, walletID string, walletRef WalletReference) (*data.ReceiverWallet, error) {
-	existingReceiverWallets, err := s.Models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, sqlExec, []string{receiverID}, walletID)
-	if err != nil {
-		return nil, fmt.Errorf("checking existing receiver wallets: %w", err)
-	}
-
-	if len(existingReceiverWallets) > 0 {
-		rw := existingReceiverWallets[0]
-
-		if walletRef.ID != nil {
-			// Wallet by ID rules
-			switch rw.Status {
-			case data.RegisteredReceiversWalletStatus:
-				// Issue payment directly to that wallet
-				return rw, nil
-			case data.ReadyReceiversWalletStatus:
-				// Send a new invitation (for now, just proceed with payment)
-				return rw, nil
-			default:
-				return nil, fmt.Errorf("receiver wallet in unexpected status: %s", rw.Status)
+	opts := db.TransactionOptions{
+		DBConnectionPool: s.Models.DBConnectionPool,
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
+			// 1. Resolve entities
+			asset, err := s.Resolvers.Asset().Resolve(ctx, dbTx, req.Asset)
+			if err != nil {
+				return nil, fmt.Errorf("resolving asset: %w", err)
 			}
-		} else if walletRef.Address != nil {
-			// Wallet by address rules (UserManagedWallet)
-			// TODO: Check if it has the same address as requested
-			return rw, nil
-		}
 
-		return rw, nil
+			receiver, err := s.Resolvers.Receiver().Resolve(ctx, dbTx, req.Receiver)
+			if err != nil {
+				return nil, fmt.Errorf("resolving receiver: %w", err)
+			}
+
+			wallet, err := s.Resolvers.Wallet().Resolve(ctx, dbTx, req.Wallet)
+			if err != nil {
+				return nil, fmt.Errorf("resolving wallet: %w", err)
+			}
+
+			// 2. Validate wallet is enabled
+			if !wallet.Enabled {
+				return nil, fmt.Errorf("wallet %s is not enabled", wallet.Name)
+			}
+
+			// 3. Get or create receiver wallet
+			receiverWallet, err := s.getOrCreateReceiverWallet(ctx, dbTx, receiver.ID, wallet.ID, req.Wallet.Address)
+			if err != nil {
+				return nil, fmt.Errorf("getting or creating receiver wallet: %w", err)
+			}
+
+			// 4. Validate balance
+			err = s.validateBalance(ctx, dbTx, distributionAccount, asset, req.Amount)
+			if err != nil {
+				return nil, err
+			}
+
+			// 5. Create payment
+			paymentInsert := data.PaymentInsert{
+				ReceiverID:        receiver.ID,
+				Amount:            req.Amount,
+				AssetID:           asset.ID,
+				ReceiverWalletID:  receiverWallet.ID,
+				ExternalPaymentID: req.ExternalPaymentID,
+			}
+
+			paymentID, err := s.Models.Payment.CreateDirectPayment(ctx, dbTx, paymentInsert)
+			if err != nil {
+				return nil, fmt.Errorf("creating payment: %w", err)
+			}
+
+			// 6. Update payment status based on receiver wallet status
+			if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
+				err = s.Models.Payment.UpdateStatus(ctx, dbTx, paymentID, data.ReadyPaymentStatus, nil, "")
+				if err != nil {
+					return nil, fmt.Errorf("updating payment status to ready: %w", err)
+				}
+			}
+
+			// 7. Get the created payment
+			payment, err = s.Models.Payment.Get(ctx, paymentID, dbTx)
+			if err != nil {
+				return nil, fmt.Errorf("getting created payment: %w", err)
+			}
+
+			// 8. Prepare post-commit events
+			msgs := make([]*events.Message, 0)
+
+			// Send invitation if receiver wallet needs registration
+			if receiverWallet.Status == data.ReadyReceiversWalletStatus {
+				eventData := []schemas.EventReceiverWalletInvitationData{
+					{ReceiverWalletID: receiverWallet.ID},
+				}
+
+				inviteMsg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic,
+					paymentID, events.BatchReceiverWalletInvitationType, eventData)
+				if err != nil {
+					return nil, fmt.Errorf("creating invitation message: %w", err)
+				}
+				msgs = append(msgs, inviteMsg)
+			}
+
+			// Send payment for processing if ready
+			if payment.Status == data.ReadyPaymentStatus {
+				paymentMsg, err := events.NewPaymentReadyToPayMessage(ctx,
+					distributionAccount.Type.Platform(), paymentID, events.PaymentReadyToPayDirectPayment)
+				if err != nil {
+					return nil, fmt.Errorf("creating payment message: %w", err)
+				}
+
+				paymentData := schemas.EventPaymentsReadyToPayData{
+					TenantID: paymentMsg.TenantID,
+					Payments: []schemas.PaymentReadyToPay{{ID: payment.ID}},
+				}
+				paymentMsg.Data = paymentData
+				msgs = append(msgs, paymentMsg)
+			}
+
+			if len(msgs) > 0 {
+				postCommitFn = func() error {
+					return events.ProduceEvents(ctx, s.EventProducer, msgs...)
+				}
+			}
+
+			return postCommitFn, nil
+		},
 	}
 
-	// Create new receiver wallet if it doesn't exist
-	receiverWalletInsert := data.ReceiverWalletInsert{
+	err := db.RunInTransactionWithPostCommit(ctx, &opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return payment, nil
+}
+
+func (s *DirectPaymentService) getOrCreateReceiverWallet(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	receiverID, walletID string,
+	walletAddress *string,
+) (*data.ReceiverWallet, error) {
+	// Check if receiver wallet exists
+	receiverWallets, err := s.Models.ReceiverWallet.GetByReceiverIDsAndWalletID(
+		ctx, dbTx, []string{receiverID}, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(receiverWallets) > 0 {
+		return receiverWallets[0], nil
+	}
+
+	// Create new receiver wallet
+	newID, err := s.Models.ReceiverWallet.Insert(ctx, dbTx, data.ReceiverWalletInsert{
 		ReceiverID: receiverID,
 		WalletID:   walletID,
-	}
-
-	newReceiverWalletID, err := s.Models.ReceiverWallet.Insert(ctx, sqlExec, receiverWalletInsert)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("creating receiver wallet: %w", err)
+		return nil, err
 	}
 
-	// Get the created receiver wallet
-	receiverWallet, err := s.Models.ReceiverWallet.GetByID(ctx, sqlExec, newReceiverWalletID)
-	if err != nil {
-		return nil, fmt.Errorf("getting created receiver wallet: %w", err)
+	// If wallet address provided (user-managed wallet), update it
+	if walletAddress != nil && *walletAddress != "" {
+		err = s.Models.ReceiverWallet.Update(ctx, newID, data.ReceiverWalletUpdate{
+			Status:         data.RegisteredReceiversWalletStatus,
+			StellarAddress: *walletAddress,
+		}, dbTx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return receiverWallet, nil
+	return s.Models.ReceiverWallet.GetByID(ctx, dbTx, newID)
 }
 
-func (s *DirectPaymentService) validateBalanceForPayment(
+func (s *DirectPaymentService) validateBalance(
 	ctx context.Context,
+	dbTx db.DBTransaction,
 	distributionAccount *schema.TransactionAccount,
 	asset *data.Asset,
 	amount string,
 ) error {
+	amountFloat, err := strconv.ParseFloat(amount, 64)
+	if err != nil {
+		return fmt.Errorf("parsing amount: %w", err)
+	}
+
 	availableBalance, err := s.DistributionAccountService.GetBalance(ctx, distributionAccount, *asset)
 	if err != nil {
 		return fmt.Errorf("getting balance: %w", err)
 	}
 
-	totalPendingAmount, err := strconv.ParseFloat(amount, 64)
+	// Calculate pending payments for this asset
+	totalPending := 0.0
+	pendingPayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
+		Filters: map[data.FilterKey]interface{}{
+			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+		},
+	}, dbTx, data.QueryTypeSelectAll)
 	if err != nil {
-		return fmt.Errorf("parsing amount: %w", err)
+		return fmt.Errorf("getting pending payments: %w", err)
 	}
 
-	if (availableBalance - totalPendingAmount) < 0 {
-		return InsufficientBalanceError{
-			DistributionAddress: distributionAccount.ID(),
-			DisbursementID:      "direct-payment",
-			DisbursementAsset:   *asset,
-			AvailableBalance:    availableBalance,
-			DisbursementAmount:  totalPendingAmount,
-			TotalPendingAmount:  totalPendingAmount,
+	for _, p := range pendingPayments {
+		if p.Asset.Equals(*asset) {
+			pAmount, _ := strconv.ParseFloat(p.Amount, 64)
+			totalPending += pAmount
+		}
+	}
+
+	if availableBalance < (amountFloat + totalPending) {
+		return InsufficientBalanceForDirectPaymentError{
+			Asset:              *asset,
+			RequestedAmount:    amountFloat,
+			AvailableBalance:   availableBalance,
+			TotalPendingAmount: totalPending,
 		}
 	}
 
 	return nil
+}
+
+// InsufficientBalanceForDirectPaymentError represents insufficient balance for direct payment
+type InsufficientBalanceForDirectPaymentError struct {
+	Asset              data.Asset
+	RequestedAmount    float64
+	AvailableBalance   float64
+	TotalPendingAmount float64
+}
+
+func (e InsufficientBalanceForDirectPaymentError) Error() string {
+	shortfall := (e.RequestedAmount + e.TotalPendingAmount) - e.AvailableBalance
+	return fmt.Sprintf(
+		"insufficient balance for direct payment: requested %.2f %s, but only %.2f available (%.2f in pending payments). Need %.2f more %s",
+		e.RequestedAmount,
+		e.Asset.Code,
+		e.AvailableBalance,
+		e.TotalPendingAmount,
+		shortfall,
+		e.Asset.Code,
+	)
 }

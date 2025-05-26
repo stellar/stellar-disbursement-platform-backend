@@ -343,7 +343,7 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var req *services.DirectPaymentRequest
+	var req services.CreateDirectPaymentRequest
 	if err := httpdecode.DecodeJSON(r, &req); err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)
 		return
@@ -375,21 +375,21 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create payment
-    payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, req, user, &distAccount)
-    if err != nil {
-        // Handle specific errors
-        var balanceErr services.InsufficientBalanceError
-        switch {
-        case errors.Is(err, data.ErrRecordNotFound):
-            httperror.NotFound("receiver not found", err, nil).Render(w)
-        case errors.As(err, &balanceErr):
-            log.Ctx(ctx).Error(balanceErr)
-            httperror.Conflict(balanceErr.Error(), err, nil).Render(w)
-        default:
-            httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
-        }
-        return
-    }
+	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, req, user, &distAccount)
+	if err != nil {
+		// Handle specific errors
+		var balanceErr services.InsufficientBalanceError
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			httperror.NotFound("receiver not found", err, nil).Render(w)
+		case errors.As(err, &balanceErr):
+			log.Ctx(ctx).Error(balanceErr)
+			httperror.Conflict(balanceErr.Error(), err, nil).Render(w)
+		default:
+			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
+		}
+		return
+	}
 
 	// Build response matching the expected format
 	response := map[string]any{

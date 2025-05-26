@@ -24,6 +24,7 @@ type Payment struct {
 	StellarOperationID      string               `json:"stellar_operation_id" db:"stellar_operation_id"`
 	Status                  PaymentStatus        `json:"status" db:"status"`
 	StatusHistory           PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	PaymentType             PaymentType          `json:"payment_type" db:"payment_type"`
 	Disbursement            *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
 	Asset                   Asset                `json:"asset"`
 	ReceiverWallet          *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
@@ -31,6 +32,22 @@ type Payment struct {
 	UpdatedAt               time.Time            `json:"updated_at" db:"updated_at"`
 	ExternalPaymentID       string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
 	CircleTransferRequestID *string              `json:"circle_transfer_request_id,omitempty"`
+}
+
+type PaymentType string
+
+const (
+	PaymentTypeDisbursement PaymentType = "DISBURSEMENT"
+	PaymentTypeDirect       PaymentType = "DIRECT"
+)
+
+func (pt PaymentType) Validate() error {
+	switch pt {
+	case PaymentTypeDisbursement, PaymentTypeDirect:
+		return nil
+	default:
+		return fmt.Errorf("invalid payment type: %s", pt)
+	}
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -51,12 +68,13 @@ var (
 )
 
 type PaymentInsert struct {
-	ReceiverID        string  `db:"receiver_id"`
-	DisbursementID    string  `db:"disbursement_id"`
-	Amount            string  `db:"amount"`
-	AssetID           string  `db:"asset_id"`
-	ReceiverWalletID  string  `db:"receiver_wallet_id"`
-	ExternalPaymentID *string `db:"external_payment_id"`
+	ReceiverID        string      `db:"receiver_id"`
+	DisbursementID    *string     `db:"disbursement_id"`
+	PaymentType       PaymentType `db:"payment_type"`
+	Amount            string      `db:"amount"`
+	AssetID           string      `db:"asset_id"`
+	ReceiverWalletID  string      `db:"receiver_wallet_id"`
+	ExternalPaymentID *string     `db:"external_payment_id"`
 }
 
 type PaymentUpdate struct {
@@ -109,8 +127,16 @@ func (p *PaymentInsert) Validate() error {
 		return fmt.Errorf("receiver_id is required")
 	}
 
-	if strings.TrimSpace(p.DisbursementID) == "" {
-		return fmt.Errorf("disbursement_id is required")
+	if err := p.PaymentType.Validate(); err != nil {
+		return fmt.Errorf("payment_type is invalid: %w", err)
+	}
+
+	if p.PaymentType == PaymentTypeDisbursement && (p.DisbursementID == nil || *p.DisbursementID == "") {
+		return fmt.Errorf("disbursement_id is required for disbursement payments")
+	}
+
+	if p.PaymentType == PaymentTypeDirect && p.DisbursementID != nil {
+		return fmt.Errorf("disbursement_id must be null for direct payments")
 	}
 
 	if err := utils.ValidateAmount(p.Amount); err != nil {
@@ -148,10 +174,12 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"amount",
 			"status",
 			"status_history",
+			"payment_type",
 			"created_at",
 			"updated_at",
 		},
 		CoalesceColumns: []string{
+			"disbursement_id",
 			"stellar_transaction_id",
 			"stellar_operation_id",
 			"external_payment_id",
@@ -170,7 +198,7 @@ SELECT
 	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
 FROM
 	payments p
-	JOIN disbursements d ON p.disbursement_id = d.id
+	LEFT JOIN disbursements d ON p.disbursement_id = d.id
 	JOIN assets a ON p.asset_id = a.id
 	JOIN wallets w on d.wallet_id = w.id
 	JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
@@ -690,4 +718,46 @@ func (p *PaymentModel) UpdateStatus(
 	}
 
 	return nil
+}
+
+func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLExecuter, insert PaymentInsert) (string, error) {
+	insert.PaymentType = PaymentTypeDirect
+	insert.DisbursementID = nil
+
+	if err := insert.Validate(); err != nil {
+		return "", fmt.Errorf("validating payment: %w", err)
+	}
+
+	query := `
+        INSERT INTO payments (
+            amount,
+            asset_id,
+            receiver_id,
+            disbursement_id,
+            external_payment_id,
+            payment_type,
+            status,
+            status_history
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            ARRAY[create_payment_status_history(NOW(), $8::payment_status, NULL)]
+        )
+        RETURNING id
+    `
+
+	var paymentID string
+	err := sqlExec.GetContext(ctx, &paymentID, query,
+		insert.Amount,
+		insert.AssetID,
+		insert.ReceiverID,
+		insert.DisbursementID, // Will be NULL
+		insert.ExternalPaymentID,
+		insert.PaymentType,
+		DraftPaymentStatus,
+	)
+	if err != nil {
+		return "", fmt.Errorf("inserting direct payment: %w", err)
+	}
+
+	return paymentID, nil
 }
