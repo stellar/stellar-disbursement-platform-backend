@@ -129,11 +129,13 @@ func createPaymentTransactions(ctx context.Context, txModel *store.TransactionMo
 	for i := 0; i < paymentCount; i++ {
 		externalID := fmt.Sprintf("external-id-%d", i)
 		transactions = append(transactions, store.Transaction{
-			ExternalID:  externalID,
-			AssetCode:   assetCode,
-			AssetIssuer: assetIssuer,
-			Amount:      0.1,
-			Destination: destination,
+			ExternalID: externalID,
+			Payment: store.Payment{
+				AssetCode:   assetCode,
+				AssetIssuer: assetIssuer,
+				Amount:      0.1,
+				Destination: destination,
+			},
 		})
 	}
 	insertedTransactions, err := txModel.BulkInsert(ctx, txModel.DBConnectionPool, transactions)

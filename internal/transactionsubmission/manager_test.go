@@ -439,6 +439,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			// Create transactions to be used by the tx submitter
 			tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
 			transactions := store.CreateTransactionFixturesNew(t, ctx, dbConnectionPool, 10, store.TransactionFixture{
+				TransactionType:    store.TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: keypair.MustRandom().Address(),
