@@ -13,6 +13,20 @@ ALTER TABLE submitter_transactions
     ALTER COLUMN amount DROP NOT NULL,
     ALTER COLUMN destination DROP NOT NULL;
 
+ALTER TABLE submitter_transactions
+    ADD CONSTRAINT submitter_transactions_type_constraints CHECK (
+        CASE
+            WHEN transaction_type = 'PAYMENT' THEN
+                asset_code IS NOT NULL AND
+                asset_issuer IS NOT NULL AND
+                amount IS NOT NULL AND
+                destination IS NOT NULL
+            WHEN transaction_type = 'WALLET_CREATION' THEN
+                public_key IS NOT NULL AND
+                wasm_hash IS NOT NULL
+        END
+    );
+
 -- +migrate Down
 
 ALTER TABLE submitter_transactions
@@ -25,5 +39,8 @@ ALTER TABLE submitter_transactions
     ALTER COLUMN asset_issuer SET NOT NULL,
     ALTER COLUMN amount SET NOT NULL,
     ALTER COLUMN destination SET NOT NULL;
+
+ALTER TABLE submitter_transactions
+    DROP CONSTRAINT submitter_transactions_type_constraints;
 
 DROP TYPE transaction_type;

@@ -22,7 +22,7 @@ type SQLColumnConfig struct {
 type ColumnType int
 
 const (
-	String = iota
+	String ColumnType = iota
 	Float64
 )
 
