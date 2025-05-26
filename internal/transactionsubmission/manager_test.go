@@ -351,7 +351,7 @@ func Test_NewManager(t *testing.T) {
 
 					eventProducer: wantEventProducer,
 
-					handlerFactory: gotManager.handlerFactory,
+					txHandlerFactory: gotManager.txHandlerFactory,
 				}
 				assert.Equal(t, wantManager, gotManager)
 
@@ -522,7 +522,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 				eventProducer: mockEventProducer,
 
-				handlerFactory: handlerFactory,
+				txHandlerFactory: handlerFactory,
 			}
 
 			go manager.ProcessTransactions(ctx)

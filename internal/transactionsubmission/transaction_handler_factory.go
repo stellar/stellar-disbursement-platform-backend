@@ -30,7 +30,7 @@ func NewTransactionHandlerFactory(
 	}
 }
 
-func (f *TransactionHandlerFactory) GetHandler(tx *store.Transaction) (TransactionHandlerInterface, error) {
+func (f *TransactionHandlerFactory) GetTransactionHandler(tx *store.Transaction) (TransactionHandlerInterface, error) {
 	paymentWorker, err := NewPaymentTransactionHandler(f.engine, f.monitorSvc)
 	if err != nil {
 		return nil, err

@@ -47,74 +47,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-type MockTransactionHandler struct {
-	mock.Mock
-}
-
-func (m *MockTransactionHandler) BuildInnerTransaction(ctx context.Context, txJob *TxJob, sequenceNumber int64, distributionAccount string) (*txnbuild.Transaction, error) {
-	args := m.Called(ctx, txJob, sequenceNumber, distributionAccount)
-	if tx := args.Get(0); tx != nil {
-		return tx.(*txnbuild.Transaction), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *MockTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error) {
-	args := m.Called(ctx, txJob)
-	if msg := args.Get(0); msg != nil {
-		return msg.(*events.Message), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *MockTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, hErr *utils.HorizonErrorWrapper) (*events.Message, error) {
-	args := m.Called(ctx, txJob, hErr)
-	if msg := args.Get(0); msg != nil {
-		return msg.(*events.Message), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *MockTransactionHandler) AddContextLoggerFields(transaction *store.Transaction) map[string]interface{} {
-	args := m.Called(transaction)
-	if fields := args.Get(0); fields != nil {
-		return fields.(map[string]interface{})
-	}
-	return nil
-}
-
-func (m *MockTransactionHandler) MonitorTransactionProcessingStarted(ctx context.Context, txJob *TxJob, jobUUID string) {
-	m.Called(ctx, txJob, jobUUID)
-}
-
-func (m *MockTransactionHandler) MonitorTransactionProcessingSuccess(ctx context.Context, txJob *TxJob, jobUUID string) {
-	m.Called(ctx, txJob, jobUUID)
-}
-
-func (m *MockTransactionHandler) MonitorTransactionProcessingFailed(ctx context.Context, txJob *TxJob, jobUUID string, isRetryable bool, errStack string) {
-	m.Called(ctx, txJob, jobUUID, isRetryable, errStack)
-}
-
-func (m *MockTransactionHandler) MonitorTransactionReconciliationSuccess(ctx context.Context, txJob *TxJob, jobUUID string, successType ReconcileSuccessType) {
-	m.Called(ctx, txJob, jobUUID, successType)
-}
-
-func (m *MockTransactionHandler) MonitorTransactionReconciliationFailure(ctx context.Context, txJob *TxJob, jobUUID string, isHorizonErr bool, errStack string) {
-	m.Called(ctx, txJob, jobUUID, isHorizonErr, errStack)
-}
-
-type MockTransactionHandlerFactory struct {
-	mock.Mock
-}
-
-func (m *MockTransactionHandlerFactory) GetHandler(tx *store.Transaction) (TransactionHandlerInterface, error) {
-	args := m.Called(tx)
-	if handler := args.Get(0); handler != nil {
-		return handler.(TransactionHandlerInterface), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
 // getTransactionWorkerInstance is used to create a valid instance of the class TransactionWorker, which is needed in
 // many tests in this file.
 func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnectionPool, transactionHandler TransactionHandlerInterface) TransactionWorker {
@@ -158,9 +90,6 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		MaxBaseFee:          100,
 	}
 
-	handlerFactory := &MockTransactionHandlerFactory{}
-	handlerFactory.On("GetHandler", mock.Anything).Return(transactionHandler, nil)
-
 	return TransactionWorker{
 		dbConnectionPool:   dbConnectionPool,
 		txModel:            txModel,
@@ -168,7 +97,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		engine:             &submitterEngine,
 		crashTrackerClient: &crashtracker.MockCrashTrackerClient{},
 		eventProducer:      &events.MockProducer{},
-		handlerFactory:     handlerFactory,
+		txHandler:          transactionHandler,
 	}
 }
 
@@ -267,7 +196,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		txProcessingLimiter: wantTxProcessingLimiter,
 		monitorSvc:          tssMonitorSvc,
 		eventProducer:       &events.MockProducer{},
-		handlerFactory:      &MockTransactionHandlerFactory{},
+		txHandler:           &MockTransactionHandler{},
 	}
 
 	testCases := []struct {
@@ -282,7 +211,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		txProcessingLimiter engine.TransactionProcessingLimiter
 		monitorSvc          tssMonitor.TSSMonitorService
 		eventProducer       events.Producer
-		handlerFactory      TransactionHandlerFactoryInterface
+		txHandler           TransactionHandlerInterface
 		wantError           error
 	}{
 		{
@@ -379,7 +308,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 			wantError:           fmt.Errorf("monitorSvc cannot be nil"),
 		},
 		{
-			name:                "validate handlerFactory",
+			name:                "validate txHandler",
 			dbConnectionPool:    dbConnectionPool,
 			txModel:             txModel,
 			chAccModel:          chAccModel,
@@ -388,7 +317,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 			txProcessingLimiter: wantTxProcessingLimiter,
 			monitorSvc:          tssMonitorSvc,
-			wantError:           fmt.Errorf("handlerFactory cannot be nil"),
+			wantError:           fmt.Errorf("txHandler cannot be nil"),
 		},
 		{
 			name:                "🎉 successfully returns a new transaction worker",
@@ -401,7 +330,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 			txProcessingLimiter: wantTxProcessingLimiter,
 			monitorSvc:          tssMonitorSvc,
 			eventProducer:       &events.MockProducer{},
-			handlerFactory:      &MockTransactionHandlerFactory{},
+			txHandler:           &MockTransactionHandler{},
 		},
 	}
 
@@ -416,7 +345,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 				tc.txProcessingLimiter,
 				tc.monitorSvc,
 				tc.eventProducer,
-				tc.handlerFactory,
+				tc.txHandler,
 			)
 
 			if tc.wantError != nil {
@@ -600,13 +529,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 					}).
 					Return()
 
-				handlerFactory := &MockTransactionHandlerFactory{}
-				handlerFactory.
-					On("GetHandler", mock.Anything).
-					Return(transactionHandler, nil).
-					Once()
-
-				tw.handlerFactory = handlerFactory
+				tw.txHandler = transactionHandler
 			},
 			errContains: []string{"saving response XDR", "updating XDRReceived", "txModel error in UpdateStellarTransactionXDRReceived"},
 		},
@@ -661,13 +584,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 					}).
 					Return()
 
-				handlerFactory := &MockTransactionHandlerFactory{}
-				handlerFactory.
-					On("GetHandler", mock.Anything).
-					Return(transactionHandler, nil).
-					Once()
-
-				tw.handlerFactory = handlerFactory
+				tw.txHandler = transactionHandler
 			},
 			errContains: []string{"unlocking job", "unlocking channel account", "chAccModel error in Unlock"},
 		},
@@ -800,13 +717,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 				}).
 				Return()
 
-			handlerFactory := &MockTransactionHandlerFactory{}
-			handlerFactory.
-				On("GetHandler", mock.Anything).
-				Return(transactionHandler, nil).
-				Once()
-
-			tw.handlerFactory = handlerFactory
+			tw.txHandler = transactionHandler
 
 			// Run test:
 			hTransaction := horizon.Transaction{
@@ -1009,13 +920,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				}, nil).
 				Once()
 
-			handlerFactory := &MockTransactionHandlerFactory{}
-			handlerFactory.
-				On("GetHandler", mock.Anything).
-				Return(transactionHandler, nil).
-				Once()
-
-			tw.handlerFactory = handlerFactory
+			tw.txHandler = transactionHandler
 
 			// Run test:
 			hTransaction := horizon.Transaction{
@@ -1105,13 +1010,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		}).
 		Return()
 
-	handlerFactory := &MockTransactionHandlerFactory{}
-	handlerFactory.
-		On("GetHandler", mock.Anything).
-		Return(transactionHandler, nil).
-		Once()
-
-	tw.handlerFactory = handlerFactory
+	tw.txHandler = transactionHandler
 
 	// Run test:
 	hTransaction := horizon.Transaction{
@@ -1219,13 +1118,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 				}).
 				Return()
 
-			handlerFactory := &MockTransactionHandlerFactory{}
-			handlerFactory.
-				On("GetHandler", mock.Anything).
-				Return(transactionHandler, nil).
-				Once()
-
-			tw.handlerFactory = handlerFactory
+			tw.txHandler = transactionHandler
 
 			// Run test:
 			hTransaction := horizon.Transaction{
@@ -1805,12 +1698,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 					ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 					Return()
 
-				handlerFactory := &MockTransactionHandlerFactory{}
-				handlerFactory.
-					On("GetHandler", mock.Anything).
-					Return(tranasctionHandler, nil)
-
-				transactionWorker.handlerFactory = handlerFactory
+				transactionWorker.txHandler = tranasctionHandler
 			}
 
 			// Run test:
@@ -2069,14 +1957,11 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		ctx, &txJob, int64(accountSequence), distAccount.Address).
 		Return(innerTx, nil)
 
-	handlerFactory := &MockTransactionHandlerFactory{}
-	handlerFactory.On("GetHandler", mock.Anything).Return(handler, nil)
-
 	transactionWorker := &TransactionWorker{
-		engine:         submitterEngine,
-		txModel:        store.NewTransactionModel(dbConnectionPool),
-		chAccModel:     store.NewChannelAccountModel(dbConnectionPool),
-		handlerFactory: handlerFactory,
+		engine:     submitterEngine,
+		txModel:    store.NewTransactionModel(dbConnectionPool),
+		chAccModel: store.NewChannelAccountModel(dbConnectionPool),
+		txHandler:  handler,
 	}
 
 	gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(context.Background(), &txJob)
@@ -2277,11 +2162,6 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				Return().
 				Once()
 
-			handlerFactory := &MockTransactionHandlerFactory{}
-			handlerFactory.
-				On("GetHandler", mock.Anything).
-				Return(transactionHandler, nil)
-
 			transactionWorker := TransactionWorker{
 				dbConnectionPool: dbConnectionPool,
 				txModel:          txModel,
@@ -2292,7 +2172,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				crashTrackerClient:  mockCrashTrackerClient,
 				txProcessingLimiter: txProcessingLimiter,
 				eventProducer:       mockEventProducer,
-				handlerFactory:      handlerFactory,
+				txHandler:           transactionHandler,
 			}
 
 			// make sure the tx's initial status is PROCESSING:

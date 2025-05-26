@@ -76,7 +76,7 @@ type Manager struct {
 	// event producer:
 	eventProducer events.Producer
 	// transaction handler:
-	handlerFactory TransactionHandlerFactoryInterface
+	txHandlerFactory TransactionHandlerFactoryInterface
 }
 
 func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err error) {
@@ -121,7 +121,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 
 	txProcessingLimiter := engine.NewTransactionProcessingLimiter(opts.NumChannelAccounts)
 
-	handlerFactory := NewTransactionHandlerFactory(
+	txHandlerFactory := NewTransactionHandlerFactory(
 		&opts.SubmitterEngine,
 		txModel,
 		opts.EventProducer,
@@ -144,7 +144,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 
 		eventProducer: opts.EventProducer,
 
-		handlerFactory: handlerFactory,
+		txHandlerFactory: txHandlerFactory,
 	}, nil
 }
 
@@ -187,6 +187,14 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 			log.Ctx(ctx).Debugf("Loaded '%d' transactions from database", len(jobs))
 
 			for _, job := range jobs {
+				txJob := TxJob(*job)
+				txHandler, err := m.txHandlerFactory.GetTransactionHandler(&txJob.Transaction)
+				if err != nil {
+					err = fmt.Errorf("getting transaction handler for transaction '%s': %w", txJob.Transaction.ID, err)
+					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
+					continue
+				}
+
 				worker, err := NewTransactionWorker(
 					m.dbConnectionPool,
 					m.txModel,
@@ -196,14 +204,13 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.txProcessingLimiter,
 					m.monitorService,
 					m.eventProducer,
-					m.handlerFactory,
+					txHandler,
 				)
 				if err != nil {
 					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
 					continue
 				}
 
-				txJob := TxJob(*job)
 				go worker.Run(ctx, &txJob)
 			}
 		}

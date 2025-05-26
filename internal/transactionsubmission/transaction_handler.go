@@ -49,5 +49,5 @@ type TransactionHandlerInterface interface {
 
 // TransactionHandlerFactoryInterface creates appropriate transaction handlers based on transaction type
 type TransactionHandlerFactoryInterface interface {
-	GetHandler(tx *store.Transaction) (TransactionHandlerInterface, error)
+	GetTransactionHandler(tx *store.Transaction) (TransactionHandlerInterface, error)
 }

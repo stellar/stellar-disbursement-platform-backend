@@ -2,7 +2,6 @@ package transactionsubmission
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -39,7 +38,7 @@ type TransactionWorker struct {
 	monitorSvc          tssMonitor.TSSMonitorService
 	eventProducer       events.Producer
 	jobUUID             string
-	handlerFactory      TransactionHandlerFactoryInterface
+	txHandler           TransactionHandlerInterface
 }
 
 func NewTransactionWorker(
@@ -51,7 +50,7 @@ func NewTransactionWorker(
 	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
 	eventProducer events.Producer,
-	handlerFactory TransactionHandlerFactoryInterface,
+	txHandler TransactionHandlerInterface,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -84,8 +83,8 @@ func NewTransactionWorker(
 		return TransactionWorker{}, fmt.Errorf("monitorSvc cannot be nil")
 	}
 
-	if handlerFactory == nil {
-		return TransactionWorker{}, fmt.Errorf("handlerFactory cannot be nil")
+	if txHandler == nil {
+		return TransactionWorker{}, fmt.Errorf("txHandler cannot be nil")
 	}
 
 	return TransactionWorker{
@@ -98,19 +97,13 @@ func NewTransactionWorker(
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
 		eventProducer:       eventProducer,
-		handlerFactory:      handlerFactory,
+		txHandler:           txHandler,
 	}, nil
 }
 
 // updateContextLogger will update the context logger with the transaction job details.
 func (tw *TransactionWorker) updateContextLogger(ctx context.Context, job *TxJob) context.Context {
 	tx := job.Transaction
-
-	handler, err := tw.handlerFactory.GetHandler(&tx)
-	if err != nil {
-		log.Ctx(ctx).Errorf("Error getting transaction handler: %v", err)
-		return ctx
-	}
 
 	// Common fields for all transaction types
 	labels := map[string]interface{}{
@@ -128,11 +121,9 @@ func (tw *TransactionWorker) updateContextLogger(ctx context.Context, job *TxJob
 	}
 
 	// Add handler-specific fields if we have a handler
-	if handler != nil {
-		handlerFields := handler.AddContextLoggerFields(&tx)
-		for k, v := range handlerFields {
-			labels[k] = v
-		}
+	handlerFields := tw.txHandler.AddContextLoggerFields(&tx)
+	for k, v := range handlerFields {
+		labels[k] = v
 	}
 
 	if tx.XDRSent.Valid {
@@ -192,52 +183,44 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
 
-	handler, err := tw.handlerFactory.GetHandler(&txJob.Transaction)
-	if err != nil {
-		return fmt.Errorf("getting transaction handler: %w", err)
-	}
-
 	isRetryable := !(hErr.IsHorizonError() && hErr.ShouldMarkAsError())
-	defer handler.MonitorTransactionProcessingFailed(ctx, txJob, tw.jobUUID, isRetryable, hErr.Error())
+	defer tw.txHandler.MonitorTransactionProcessingFailed(ctx, txJob, tw.jobUUID, isRetryable, hErr.Error())
 
-	err = tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
+	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
 		return fmt.Errorf("saving response XDR: %w", err)
 	}
 
-	var hErrWrapper *utils.HorizonErrorWrapper
-	if errors.As(hErr, &hErrWrapper) {
-		if hErrWrapper.IsHorizonError() {
-			tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
+	if hErr.IsHorizonError() {
+		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErr)
 
-			if hErr.IsHorizonError() && hErr.ShouldMarkAsError() {
-				// Building the completed event before updating the transaction status. This way, if the message
-				// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
-				// will be re-tried.
-				eventMsg, eventErr := handler.BuildFailureEvent(ctx, txJob, hErrWrapper)
-				if eventErr != nil {
-					return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, eventErr)
-				}
-
-				updatedTx, txErr := tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
-				if txErr != nil {
-					return fmt.Errorf("updating transaction status to error: %w", err)
-				}
-				txJob.Transaction = *updatedTx
-
-				// Publishing a new event on the event producer
-				err = events.ProduceEvents(ctx, tw.eventProducer, eventMsg)
-				if err != nil {
-					return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-				}
-
-				// report any terminal errors, excluding those caused by the external account not being valid
-				if !hErrWrapper.IsDestinationAccountNotReady() {
-					tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
-				}
-			} else if hErrWrapper.IsBadSequence() {
-				tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "tx_bad_seq detected!")
+		if hErr.ShouldMarkAsError() {
+			// Building the completed event before updating the transaction status. This way, if the message
+			// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
+			// will be re-tried.
+			eventMsg, eventErr := tw.txHandler.BuildFailureEvent(ctx, txJob, hErr)
+			if eventErr != nil {
+				return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, eventErr)
 			}
+
+			updatedTx, txErr := tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErr.Error())
+			if txErr != nil {
+				return fmt.Errorf("updating transaction status to error: %w", err)
+			}
+			txJob.Transaction = *updatedTx
+
+			// Publishing a new event on the event producer
+			err = events.ProduceEvents(ctx, tw.eventProducer, eventMsg)
+			if err != nil {
+				return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+			}
+
+			// report any terminal errors, excluding those caused by the external account not being valid
+			if !hErr.IsDestinationAccountNotReady() {
+				tw.crashTrackerClient.LogAndReportErrors(ctx, hErr, "transaction error - cannot be retried")
+			}
+		} else if hErr.IsBadSequence() {
+			tw.crashTrackerClient.LogAndReportErrors(ctx, hErr, "tx_bad_seq detected!")
 		}
 	}
 
@@ -278,14 +261,9 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("transaction was not successful for some reason")
 	}
 
-	handler, err := tw.handlerFactory.GetHandler(&txJob.Transaction)
-	if err != nil {
-		return fmt.Errorf("getting transaction handler: %w", err)
-	}
-
 	// Building the completed event before updating the transaction status. This way, if the message fails to be
 	// built, the transaction will be marked for reprocessing -> reconciliation and the event will be re-tried.
-	eventMsg, err := handler.BuildSuccessEvent(ctx, txJob)
+	eventMsg, err := tw.txHandler.BuildSuccessEvent(ctx, txJob)
 	if err != nil {
 		return fmt.Errorf("building completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 	}
@@ -307,7 +285,7 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("unlocking job: %w", err)
 	}
 
-	handler.MonitorTransactionProcessingSuccess(ctx, txJob, tw.jobUUID)
+	tw.txHandler.MonitorTransactionProcessingSuccess(ctx, txJob, tw.jobUUID)
 
 	log.Ctx(ctx).Infof("🎉 Successfully processed transaction job %v", txJob)
 
@@ -320,12 +298,7 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🔍 Reconciling previously submitted transaction %v...", txJob)
 
-	handler, err := tw.handlerFactory.GetHandler(&txJob.Transaction)
-	if err != nil {
-		return fmt.Errorf("getting transaction handler: %w", err)
-	}
-
-	err = tw.validateJob(txJob)
+	err := tw.validateJob(txJob)
 	if err != nil {
 		return fmt.Errorf("validating bundle: %w", err)
 	}
@@ -337,16 +310,16 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
-			handler.MonitorTransactionReconciliationFailure(ctx, txJob, tw.jobUUID, false, err.Error())
+			tw.txHandler.MonitorTransactionReconciliationFailure(ctx, txJob, tw.jobUUID, false, err.Error())
 			return fmt.Errorf("handling successful transaction: %w", err)
 		}
 
-		handler.MonitorTransactionReconciliationSuccess(ctx, txJob, tw.jobUUID, ReconcileSuccess)
+		tw.txHandler.MonitorTransactionReconciliationSuccess(ctx, txJob, tw.jobUUID, ReconcileSuccess)
 		return nil
 	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
 		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
 
-		handler.MonitorTransactionReconciliationFailure(ctx, txJob, tw.jobUUID, true, hWrapperErr.Error())
+		tw.txHandler.MonitorTransactionReconciliationFailure(ctx, txJob, tw.jobUUID, true, hWrapperErr.Error())
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
@@ -362,7 +335,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unlocking job: %w", err)
 	}
 
-	handler.MonitorTransactionReconciliationSuccess(ctx, txJob, tw.jobUUID, ReconcileReprocessing)
+	tw.txHandler.MonitorTransactionReconciliationSuccess(ctx, txJob, tw.jobUUID, ReconcileReprocessing)
 
 	return nil
 }
@@ -370,15 +343,10 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
-	handler, err := tw.handlerFactory.GetHandler(&txJob.Transaction)
-	if err != nil {
-		return fmt.Errorf("getting transaction handler: %w", err)
-	}
-
-	handler.MonitorTransactionProcessingStarted(ctx, txJob, tw.jobUUID)
+	tw.txHandler.MonitorTransactionProcessingStarted(ctx, txJob, tw.jobUUID)
 
 	// STEP 1: validate bundle
-	err = tw.validateJob(txJob)
+	err := tw.validateJob(txJob)
 	if err != nil {
 		return fmt.Errorf("validating bundle: %w", err)
 	}
@@ -454,11 +422,6 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 }
 
 func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
-	handler, err := tw.handlerFactory.GetHandler(&txJob.Transaction)
-	if err != nil {
-		return nil, fmt.Errorf("getting transaction handler: %w", err)
-	}
-
 	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
 	if err != nil {
 		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
@@ -472,7 +435,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 
-	innerTx, err := handler.BuildInnerTransaction(ctx, txJob, horizonAccount.Sequence, distributionAccount.Address)
+	innerTx, err := tw.txHandler.BuildInnerTransaction(ctx, txJob, horizonAccount.Sequence, distributionAccount.Address)
 	if err != nil {
 		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
 	}
