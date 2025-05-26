@@ -58,7 +58,6 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	// Grab token and user
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
 		httperror.Unauthorized("", nil, nil).Render(rw)

@@ -86,10 +86,9 @@ type PatchDisbursementStatusRequest struct {
 func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Grab token and user
-	user, ctxErr := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
-	if ctxErr != nil {
-		ctxErr.Render(w)
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
 		return
 	}
 
@@ -279,9 +278,10 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	disbursementID := chi.URLParam(r, "id")
 	ctx := r.Context()
 
-	user, ctxErr := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
-	if ctxErr != nil {
-		ctxErr.Render(w)
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
+	if err != nil {
+		msg := fmt.Sprintf("Cannot get user from context token when processing instructions for disbursement with ID %s", disbursementID)
+		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
 	}
 

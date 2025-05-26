@@ -448,17 +448,41 @@ func Test_APIKeyModel_ValidateRawKey(t *testing.T) {
 	)
 
 	tests := []struct {
-		name    string
-		raw     string
-		wantErr bool
-		wantID  string
+		name   string
+		raw    string
+		wantID string
+		errMsg string
 	}{
-		{"valid future key", valid.Key, false, valid.ID},
-		{"invalid prefix", "CHS_" + strings.TrimPrefix(valid.Key, APIKeyPrefix), true, ""},
-		{"invalid format", APIKeyPrefix + valid.ID + strings.TrimPrefix(valid.Key, APIKeyPrefix), true, ""},
-		{"non-existent ID", fmt.Sprintf("%s%s.%s", APIKeyPrefix, "00000000-0000-0000-0000-000000000000", "anykey"), true, ""},
-		{"wrong secret", fmt.Sprintf("%s%s.%s", APIKeyPrefix, valid.ID, "WrongSecret"), true, ""},
-		{"expired key", expired.Key, true, ""},
+		{
+			name:   "valid future key",
+			raw:    valid.Key,
+			wantID: valid.ID,
+		},
+		{
+			name:   "invalid prefix",
+			raw:    "CHS_" + strings.TrimPrefix(valid.Key, APIKeyPrefix),
+			errMsg: "invalid API key prefix",
+		},
+		{
+			name:   "invalid format",
+			raw:    APIKeyPrefix + valid.ID + strings.TrimPrefix(valid.Key, APIKeyPrefix),
+			errMsg: "invalid API key format",
+		},
+		{
+			name:   "non-existent ID",
+			raw:    fmt.Sprintf("%s%s.%s", APIKeyPrefix, "00000000-0000-0000-0000-000000000000", "anykey"),
+			errMsg: "lookup API key:",
+		},
+		{
+			name:   "wrong secret",
+			raw:    fmt.Sprintf("%s%s.%s", APIKeyPrefix, valid.ID, "WrongSecret"),
+			errMsg: "invalid API key",
+		},
+		{
+			name:   "expired key",
+			raw:    expired.Key,
+			errMsg: "API key expired",
+		},
 	}
 
 	for _, tc := range tests {
@@ -466,8 +490,9 @@ func Test_APIKeyModel_ValidateRawKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := models.APIKeys.ValidateRawKey(ctx, tc.raw)
-			if tc.wantErr {
+			if tc.errMsg != "" {
 				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errMsg)
 				return
 			}
 			require.NoError(t, err)

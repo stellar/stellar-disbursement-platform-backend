@@ -559,11 +559,8 @@ func createTestAPIKey(t *testing.T, db db.DBConnectionPool, name string, perms [
 	require.NoError(t, err)
 
 	var expiry *time.Time
-	if expiryDays > 0 {
+	if expiryDays != 0 {
 		exp := time.Now().AddDate(0, 0, expiryDays)
-		expiry = &exp
-	} else if expiryDays < 0 {
-		exp := time.Now().AddDate(0, 0, expiryDays) // Past date for expired keys
 		expiry = &exp
 	}
 

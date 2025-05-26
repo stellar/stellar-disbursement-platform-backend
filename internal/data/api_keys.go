@@ -374,7 +374,7 @@ func (m *APIKeyModel) ValidateRawKey(ctx context.Context, raw string) (*APIKey, 
         expiry_date,
         permissions,
         allowed_ips,
-		created_by
+        created_by
       FROM api_keys
       WHERE id = $1
       LIMIT 1

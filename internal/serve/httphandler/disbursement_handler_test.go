@@ -386,7 +386,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mAuthManager := &auth.AuthManagerMock{}
 			mAuthManager.
-				On("GetUserByID", mock.Anything, mock.Anything).
+				On("GetUserByID", mock.Anything, "user-id").
 				Return(user, nil)
 			mMonitorService := monitorMocks.NewMockMonitorService(t)
 			if tc.prepareMocksFn != nil {

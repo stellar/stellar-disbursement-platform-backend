@@ -3,24 +3,24 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-func GetUserFromContext(ctx context.Context, authManager auth.AuthManager) (*auth.User, *httperror.HTTPError) {
+func GetUserFromContext(ctx context.Context, authManager auth.AuthManager) (*auth.User, error) {
 	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok || userID == "" {
-		return nil, httperror.Unauthorized("User ID not found in context", nil, nil)
+		return nil, errors.New("user ID not found in context")
 	}
 
 	user, err := authManager.GetUserByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
-			return nil, httperror.BadRequest("User not found", err, nil)
+			return nil, fmt.Errorf("user not found with id %s", userID)
 		}
-		return nil, httperror.InternalError(ctx, "Cannot get user", err, nil)
+		return nil, fmt.Errorf("cannot get user %w", err)
 	}
 
 	return user, nil
