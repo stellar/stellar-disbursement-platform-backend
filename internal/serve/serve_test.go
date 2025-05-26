@@ -414,6 +414,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/payments/1234/status"},
 		// Receivers
 		{http.MethodGet, "/receivers"},
+		{http.MethodPost, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/wallets/1234"},

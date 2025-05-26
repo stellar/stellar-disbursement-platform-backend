@@ -387,6 +387,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				data.WriteReceivers,
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
 			)).Group(func(r chi.Router) {
+				r.Post("/", receiversHandler.CreateReceiver)
 				r.Patch("/{id}", updateReceiverHandler.UpdateReceiver)
 				r.Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 				r.Patch("/wallets/{receiver_wallet_id}/status", receiverWalletHandler.PatchReceiverWalletStatus)
