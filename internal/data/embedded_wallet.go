@@ -62,7 +62,7 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"updated_at",
 			"wallet_status",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"wasm_hash",
 			"contract_address",
 		},
