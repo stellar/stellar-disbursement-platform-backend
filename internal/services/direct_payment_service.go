@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -75,28 +76,35 @@ func (s *DirectPaymentService) CreateDirectPayment(
 
 			// 2. Validate wallet is enabled
 			if !wallet.Enabled {
-				return nil, fmt.Errorf("wallet %s is not enabled", wallet.Name)
+				return nil, WalletNotEnabledError{WalletName: wallet.Name}
 			}
 
-			// 3. Get or create receiver wallet
+			// 3. Validate asset is supported by wallet
+			err = s.validateAssetWalletCompatibility(ctx, asset, wallet)
+			if err != nil {
+				return nil, err
+			}
+
+			// 4. Get or create receiver wallet
 			receiverWallet, err := s.getOrCreateReceiverWallet(ctx, dbTx, receiver.ID, wallet.ID, req.Wallet.Address)
 			if err != nil {
 				return nil, fmt.Errorf("getting or creating receiver wallet: %w", err)
 			}
 
-			// 4. Validate balance
+			// 5. Validate balance
 			err = s.validateBalance(ctx, dbTx, distributionAccount, asset, req.Amount)
 			if err != nil {
 				return nil, err
 			}
 
-			// 5. Create payment
+			// 6. Create payment
 			paymentInsert := data.PaymentInsert{
 				ReceiverID:        receiver.ID,
 				Amount:            req.Amount,
 				AssetID:           asset.ID,
 				ReceiverWalletID:  receiverWallet.ID,
 				ExternalPaymentID: req.ExternalPaymentID,
+				PaymentType:       data.PaymentTypeDirect,
 			}
 
 			paymentID, err := s.Models.Payment.CreateDirectPayment(ctx, dbTx, paymentInsert)
@@ -104,7 +112,7 @@ func (s *DirectPaymentService) CreateDirectPayment(
 				return nil, fmt.Errorf("creating payment: %w", err)
 			}
 
-			// 6. Update payment status based on receiver wallet status
+			// 7. Update payment status based on receiver wallet status
 			if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
 				err = s.Models.Payment.UpdateStatus(ctx, dbTx, paymentID, data.ReadyPaymentStatus, nil, "")
 				if err != nil {
@@ -112,13 +120,13 @@ func (s *DirectPaymentService) CreateDirectPayment(
 				}
 			}
 
-			// 7. Get the created payment
+			// 8. Get the created payment
 			payment, err = s.Models.Payment.Get(ctx, paymentID, dbTx)
 			if err != nil {
 				return nil, fmt.Errorf("getting created payment: %w", err)
 			}
 
-			// 8. Prepare post-commit events
+			// 9. Prepare post-commit events (same as before)
 			msgs := make([]*events.Message, 0)
 
 			// Send invitation if receiver wallet needs registration
@@ -161,12 +169,33 @@ func (s *DirectPaymentService) CreateDirectPayment(
 		},
 	}
 
-	err := db.RunInTransactionWithPostCommit(ctx, &opts)
-	if err != nil {
+	if err := db.RunInTransactionWithPostCommit(ctx, &opts); err != nil {
 		return nil, err
 	}
 
 	return payment, nil
+}
+
+func (s *DirectPaymentService) validateAssetWalletCompatibility(ctx context.Context, asset *data.Asset, wallet *data.Wallet) error {
+	if wallet.UserManaged {
+		return nil
+	}
+
+	walletAssets, err := s.Models.Wallets.GetAssets(ctx, wallet.ID)
+	if err != nil {
+		return fmt.Errorf("getting wallet assets: %w", err)
+	}
+
+	for _, walletAsset := range walletAssets {
+		if walletAsset.Equals(*asset) {
+			return nil
+		}
+	}
+
+	return AssetNotSupportedByWalletError{
+		AssetCode:  asset.Code,
+		WalletName: wallet.Name,
+	}
 }
 
 func (s *DirectPaymentService) getOrCreateReceiverWallet(
@@ -221,29 +250,24 @@ func (s *DirectPaymentService) validateBalance(
 		return fmt.Errorf("parsing amount: %w", err)
 	}
 
+	// Skip balance validation for user-managed wallets since they manage their own balance
+	if distributionAccount.Type != schema.DistributionAccountStellarDBVault {
+		return nil
+	}
+
+	// Get available balance for vault-managed accounts
 	availableBalance, err := s.DistributionAccountService.GetBalance(ctx, distributionAccount, *asset)
 	if err != nil {
 		return fmt.Errorf("getting balance: %w", err)
 	}
 
-	// Calculate pending payments for this asset
-	totalPending := 0.0
-	pendingPayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
-		Filters: map[data.FilterKey]interface{}{
-			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
-		},
-	}, dbTx, data.QueryTypeSelectAll)
+	// Calculate total pending amount for this specific asset
+	totalPending, err := s.calculatePendingAmountForAsset(ctx, dbTx, *asset)
 	if err != nil {
-		return fmt.Errorf("getting pending payments: %w", err)
+		return fmt.Errorf("calculating pending amounts: %w", err)
 	}
 
-	for _, p := range pendingPayments {
-		if p.Asset.Equals(*asset) {
-			pAmount, _ := strconv.ParseFloat(p.Amount, 64)
-			totalPending += pAmount
-		}
-	}
-
+	// Check if we have sufficient balance
 	if availableBalance < (amountFloat + totalPending) {
 		return InsufficientBalanceForDirectPaymentError{
 			Asset:              *asset,
@@ -256,7 +280,36 @@ func (s *DirectPaymentService) validateBalance(
 	return nil
 }
 
-// InsufficientBalanceForDirectPaymentError represents insufficient balance for direct payment
+func (s *DirectPaymentService) calculatePendingAmountForAsset(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	targetAsset data.Asset,
+) (float64, error) {
+	pendingPayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
+		Filters: map[data.FilterKey]any{
+			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+		},
+	}, dbTx, data.QueryTypeSelectAll)
+	if err != nil {
+		return 0, fmt.Errorf("getting pending payments: %w", err)
+	}
+
+	totalPending := 0.0
+	for _, payment := range pendingPayments {
+		if payment.Asset.Equals(targetAsset) {
+			amount, parseErr := strconv.ParseFloat(payment.Amount, 64)
+			if parseErr != nil {
+				log.Ctx(ctx).Warnf("Failed to parse payment amount %s for payment %s: %v",
+					payment.Amount, payment.ID, parseErr)
+				continue
+			}
+			totalPending += amount
+		}
+	}
+
+	return totalPending, nil
+}
+
 type InsufficientBalanceForDirectPaymentError struct {
 	Asset              data.Asset
 	RequestedAmount    float64
@@ -275,4 +328,21 @@ func (e InsufficientBalanceForDirectPaymentError) Error() string {
 		shortfall,
 		e.Asset.Code,
 	)
+}
+
+type WalletNotEnabledError struct {
+	WalletName string
+}
+
+func (e WalletNotEnabledError) Error() string {
+	return fmt.Sprintf("wallet '%s' is not enabled for payments", e.WalletName)
+}
+
+type AssetNotSupportedByWalletError struct {
+	AssetCode  string
+	WalletName string
+}
+
+func (e AssetNotSupportedByWalletError) Error() string {
+	return fmt.Sprintf("asset '%s' is not supported by wallet '%s'", e.AssetCode, e.WalletName)
 }

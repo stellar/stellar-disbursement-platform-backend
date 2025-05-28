@@ -12,7 +12,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-// EntityResolver defines a generic interface for resolving entities from references
 type EntityResolver[T any, R any] interface {
 	Resolve(ctx context.Context, sqlExec db.SQLExecuter, ref R) (*T, error)
 	Validate(ref R) error
@@ -52,7 +51,6 @@ type AssetReference struct {
 	ContractID *string `json:"contract_id,omitempty"` // For future implementation
 }
 
-// ReceiverReference represents the different ways a receiver can be referenced in the API
 type ReceiverReference struct {
 	ID            *string `json:"id,omitempty"`
 	Email         *string `json:"email,omitempty"`
@@ -60,18 +58,15 @@ type ReceiverReference struct {
 	WalletAddress *string `json:"wallet_address,omitempty"`
 }
 
-// WalletReference represents the different ways a wallet can be referenced in the API
 type WalletReference struct {
 	ID      *string `json:"id,omitempty"`
 	Address *string `json:"address,omitempty"`
 }
 
-// AssetResolver resolves AssetReference to Asset entities
 type AssetResolver struct {
 	models *data.Models
 }
 
-// NewAssetResolver creates a new AssetResolver instance
 func NewAssetResolver(models *data.Models) *AssetResolver {
 	return &AssetResolver{models: models}
 }
@@ -98,7 +93,6 @@ func (ar *AssetResolver) Validate(ref AssetReference) error {
 			return fmt.Errorf("invalid asset type: %s", *ref.Type)
 		}
 
-		// Validate type-specific requirements
 		switch *ref.Type {
 		case "classic":
 			if ref.Code == nil || strings.TrimSpace(*ref.Code) == "" {
@@ -129,24 +123,20 @@ func (ar *AssetResolver) Validate(ref AssetReference) error {
 	return nil
 }
 
-// Resolve resolves an asset reference to an Asset entity
 func (ar *AssetResolver) Resolve(ctx context.Context, _ db.SQLExecuter, ref AssetReference) (*data.Asset, error) {
 	if err := ar.Validate(ref); err != nil {
 		return nil, fmt.Errorf("validating asset reference: %w", err)
 	}
 
-	// If asset ID is provided, get by ID
 	if ref.ID != nil {
 		return ar.models.Assets.Get(ctx, *ref.ID)
 	}
 
-	// If asset type is provided, resolve by type
 	if ref.Type != nil {
 		switch *ref.Type {
 		case "native":
 			return ar.models.Assets.GetByCodeAndIssuer(ctx, "XLM", "")
 		case "classic":
-			// Validation already ensures these are not nil
 			return ar.models.Assets.GetByCodeAndIssuer(ctx, *ref.Code, *ref.Issuer)
 		case "contract":
 			// TODO: Implement contract asset resolution
@@ -162,20 +152,16 @@ func (ar *AssetResolver) Resolve(ctx context.Context, _ db.SQLExecuter, ref Asse
 	return nil, fmt.Errorf("asset must be specified by id or type")
 }
 
-// Ensure AssetResolver implements EntityResolver
 var _ EntityResolver[data.Asset, AssetReference] = (*AssetResolver)(nil)
 
-// ReceiverResolver resolves ReceiverReference to Receiver entities
 type ReceiverResolver struct {
 	models *data.Models
 }
 
-// NewReceiverResolver creates a new ReceiverResolver instance
 func NewReceiverResolver(models *data.Models) *ReceiverResolver {
 	return &ReceiverResolver{models: models}
 }
 
-// Validate checks if the receiver reference is valid before attempting resolution
 func (r *ReceiverResolver) Validate(ref ReceiverReference) error {
 	referenceCount := 0
 
@@ -196,7 +182,9 @@ func (r *ReceiverResolver) Validate(ref ReceiverReference) error {
 	}
 	if ref.WalletAddress != nil && strings.TrimSpace(*ref.WalletAddress) != "" {
 		referenceCount++
-		// TODO: Add wallet address validation
+		if !strkey.IsValidEd25519PublicKey(*ref.WalletAddress) {
+			return fmt.Errorf("invalid stellar wallet address format: %s", *ref.WalletAddress)
+		}
 	}
 
 	if referenceCount == 0 {
@@ -210,18 +198,15 @@ func (r *ReceiverResolver) Validate(ref ReceiverReference) error {
 	return nil
 }
 
-// Resolve resolves a ReceiverReference into a Receiver entity
 func (r *ReceiverResolver) Resolve(ctx context.Context, sqlExec db.SQLExecuter, ref ReceiverReference) (*data.Receiver, error) {
 	if err := r.Validate(ref); err != nil {
 		return nil, fmt.Errorf("validating receiver reference: %w", err)
 	}
 
-	// If receiver ID is provided, get by ID
 	if ref.ID != nil {
 		return r.models.Receiver.Get(ctx, sqlExec, *ref.ID)
 	}
 
-	// If contact info is provided, search by contact
 	contactInfo := ref.GetContactInfo()
 	if contactInfo != "" {
 		receivers, err := r.models.Receiver.GetByContacts(ctx, sqlExec, contactInfo)
@@ -253,17 +238,14 @@ func (r *ReceiverResolver) Resolve(ctx context.Context, sqlExec db.SQLExecuter, 
 
 var _ EntityResolver[data.Receiver, ReceiverReference] = (*ReceiverResolver)(nil)
 
-// WalletResolver resolves WalletReference to Wallet entities
 type WalletResolver struct {
 	models *data.Models
 }
 
-// NewWalletResolver creates a new WalletResolver instance
 func NewWalletResolver(models *data.Models) *WalletResolver {
 	return &WalletResolver{models: models}
 }
 
-// Validate checks if the wallet reference is valid before attempting resolution
 func (r *WalletResolver) Validate(ref WalletReference) error {
 	referenceCount := 0
 
@@ -288,18 +270,15 @@ func (r *WalletResolver) Validate(ref WalletReference) error {
 	return nil
 }
 
-// Resolve resolves a WalletReference into a Wallet entity
 func (r *WalletResolver) Resolve(ctx context.Context, dbTx db.SQLExecuter, ref WalletReference) (*data.Wallet, error) {
 	if err := r.Validate(ref); err != nil {
 		return nil, fmt.Errorf("validating wallet reference: %w", err)
 	}
 
-	// If wallet ID is provided, get by ID
 	if ref.ID != nil {
 		return r.models.Wallets.Get(ctx, *ref.ID)
 	}
 
-	// If wallet address is provided, find UserManagedWallet
 	if ref.Address != nil {
 
 		// Find the UserManagedWallet

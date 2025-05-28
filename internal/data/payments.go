@@ -179,7 +179,6 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"updated_at",
 		},
 		CoalesceColumns: []string{
-			"disbursement_id",
 			"stellar_transaction_id",
 			"stellar_operation_id",
 			"external_payment_id",
@@ -196,15 +195,14 @@ SELECT
     ` + AssetColumnNames("a", "asset", false) + `,
     ` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
     ` + ReceiverColumnNames("r", "receiver_wallet.receiver") + `,
-    ` + WalletColumnNames("COALESCE(dw.id, rww.id)", "receiver_wallet.wallet", false) + `
+    ` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
 FROM
     payments p
     LEFT JOIN disbursements d ON p.disbursement_id = d.id
     JOIN assets a ON p.asset_id = a.id
-    LEFT JOIN wallets dw ON d.wallet_id = dw.id
     JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
     JOIN receivers r ON r.id = rw.receiver_id
-    JOIN wallets rww ON rww.id = rw.wallet_id
+    JOIN wallets w ON w.id = rw.wallet_id
 `
 
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
@@ -216,7 +214,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 			AND rw.anchor_platform_transaction_synced_at IS NULL
 		ORDER BY
 			p.created_at
-		FOR UPDATE SKIP LOCKED
+		FOR UPDATE OF p, rw SKIP LOCKED
 	`
 
 	payments := make([]Payment, 0)
@@ -252,7 +250,7 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
 	}
 
 	query := getReadyPaymentsBaseQuery + `
-		ORDER BY p.disbursement_id ASC, p.updated_at ASC
+		ORDER BY p.payment_type ASC, COALESCE(p.disbursement_id, '') ASC, p.updated_at ASC
 		LIMIT $4
 		FOR UPDATE SKIP LOCKED`
 
@@ -272,10 +270,11 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 			count(*)
 		FROM
 			payments p
-		JOIN disbursements d on p.disbursement_id = d.id
-		JOIN assets a on p.asset_id = a.id
-		JOIN wallets w on d.wallet_id = w.id
-		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+			LEFT JOIN disbursements d ON p.disbursement_id = d.id
+			JOIN assets a ON p.asset_id = a.id
+            JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+			JOIN receivers r ON r.id = rw.receiver_id
+ 			JOIN wallets w ON w.id = rw.wallet_id
 		`
 
 	query, params := newPaymentQuery(baseQuery, queryParams, sqlExec, QueryTypeSingle)
@@ -339,19 +338,21 @@ func (p *PaymentModel) InsertAll(ctx context.Context, sqlExec db.SQLExecuter, in
 			receiver_id,
 			disbursement_id,
 		    receiver_wallet_id,
-			external_payment_id
+			external_payment_id,
+			payment_type
 		) VALUES (
 			$1,
 			$2,
 			$3,
 			$4,
 			$5,
-			$6
+			$6,
+			$7
 		)
 		`
 
 	for _, payment := range inserts {
-		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID, payment.ExternalPaymentID)
+		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID, payment.ExternalPaymentID, payment.PaymentType)
 		if err != nil {
 			return fmt.Errorf("error inserting payment: %w", err)
 		}
@@ -605,7 +606,7 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Query != "" {
 		q := "%" + queryParams.Query + "%"
-		qb.AddCondition("(p.id ILIKE ? OR p.external_payment_id ILIKE ? OR rw.stellar_address ILIKE ? OR d.name ILIKE ?)", q, q, q, q)
+		qb.AddCondition("(p.id ILIKE ? OR p.external_payment_id ILIKE ? OR rw.stellar_address ILIKE ? OR COALESCE(d.name, '') ILIKE ?)", q, q, q, q)
 	}
 	if queryParams.Filters[FilterKeyID] != nil {
 		addArrayOrSingleCondition[string](qb, "p.id", queryParams.Filters[FilterKeyID])
@@ -734,6 +735,7 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
             asset_id,
             receiver_id,
             disbursement_id,
+			receiver_wallet_id,
             external_payment_id,
             payment_type,
             status,
@@ -744,9 +746,6 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
         )
         RETURNING id
     `
-
-	insert.PaymentType = PaymentTypeDirect
-	insert.DisbursementID = nil
 
 	var paymentID string
 	if err := sqlExec.GetContext(ctx, &paymentID, query,

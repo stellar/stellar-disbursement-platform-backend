@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -355,14 +356,14 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get distribution account to check if direct payments are supported
+	// Get distribution account
 	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
 		httperror.InternalError(ctx, "resolving distribution account", err, nil).Render(w)
 		return
 	}
 
-	// TODO: when api keys auth will be merged, refactor to use context user id instead
+	// Get user from context
 	token, ok := ctx.Value(middleware.TokenContextKey).(string)
 	if !ok {
 		httperror.Unauthorized("", nil, nil).Render(w)
@@ -377,32 +378,30 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 	// Create payment
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, req, user, &distAccount)
 	if err != nil {
-		// Handle specific errors
-		var balanceErr services.InsufficientBalanceError
+		var (
+			balanceErr        services.InsufficientBalanceForDirectPaymentError
+			walletNotEnabled  services.WalletNotEnabledError
+			assetNotSupported services.AssetNotSupportedByWalletError
+		)
+
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
-			httperror.NotFound("receiver not found", err, nil).Render(w)
+			httperror.NotFound("resource not found", err, nil).Render(w)
 		case errors.As(err, &balanceErr):
 			log.Ctx(ctx).Error(balanceErr)
 			httperror.Conflict(balanceErr.Error(), err, nil).Render(w)
+		case errors.As(err, &walletNotEnabled):
+			httperror.BadRequest(walletNotEnabled.Error(), err, nil).Render(w)
+		case errors.As(err, &assetNotSupported):
+			httperror.BadRequest(assetNotSupported.Error(), err, nil).Render(w)
+		case strings.Contains(err.Error(), "resolving"):
+			httperror.BadRequest("invalid reference in request", err, nil).Render(w)
 		default:
 			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
 		}
 		return
 	}
 
-	// Build response matching the expected format
-	response := map[string]any{
-		"id":                  payment.ID,
-		"amount":              payment.Amount,
-		"status":              payment.Status,
-		"status_history":      payment.StatusHistory,
-		"asset":               payment.Asset,
-		"receiver_wallet":     payment.ReceiverWallet,
-		"created_at":          payment.CreatedAt,
-		"updated_at":          payment.UpdatedAt,
-		"external_payment_id": payment.ExternalPaymentID,
-	}
-
-	httpjson.RenderStatus(w, http.StatusCreated, response, httpjson.JSON)
+	// Return the payment directly - it has proper JSON tags
+	httpjson.RenderStatus(w, http.StatusCreated, payment, httpjson.JSON)
 }
