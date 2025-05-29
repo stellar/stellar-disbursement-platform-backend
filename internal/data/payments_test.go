@@ -13,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -38,7 +39,7 @@ func Test_PaymentsModelGet(t *testing.T) {
 		Status:    DraftDisbursementStatus,
 		Asset:     asset,
 		Wallet:    wallet1,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
@@ -468,12 +469,13 @@ func Test_PaymentModel_GetByIDs(t *testing.T) {
 	receiverWallet2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, DraftReceiversWalletStatus)
 
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
+	d := time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)
 	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &Disbursement{
 		Name:      "disbursement 1",
 		Status:    DraftDisbursementStatus,
 		Asset:     asset,
 		Wallet:    wallet1,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: &d,
 	})
 
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}

@@ -28,8 +28,8 @@ type Disbursement struct {
 	ReceiverRegistrationMessageTemplate string                    `json:"receiver_registration_message_template" csv:"-" db:"receiver_registration_message_template"`
 	FileName                            string                    `json:"file_name,omitempty" csv:"-" db:"file_name"`
 	FileContent                         []byte                    `json:"-" csv:"-" db:"file_content"`
-	CreatedAt                           time.Time                 `json:"created_at" db:"created_at"`
-	UpdatedAt                           time.Time                 `json:"updated_at" db:"updated_at"`
+	CreatedAt                           *time.Time                `json:"created_at" db:"created_at"`
+	UpdatedAt                           *time.Time                `json:"updated_at" db:"updated_at"`
 	RegistrationContactType             RegistrationContactType   `json:"registration_contact_type,omitempty" db:"registration_contact_type"`
 	*DisbursementStats
 }
@@ -118,17 +118,16 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 		TableReference: tableReference,
 		ResultAlias:    resultAlias,
 		RawColumns: []string{
-			"id",
-			"name",
-			"status",
 			"status_history",
 			"file_content",
 			"created_at",
 			"updated_at",
 			"registration_contact_type",
-			"receiver_registration_message_template",
 		},
 		CoalesceColumns: []string{
+			"id",
+			"name",
+			"status::text",
 			"verification_field::text",
 			"file_name",
 			"receiver_registration_message_template",

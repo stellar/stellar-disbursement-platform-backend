@@ -32,6 +32,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -618,7 +619,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:          "disbursement 2",
@@ -626,7 +627,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC)),
 	})
 	disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:          "disbursement 3",
@@ -634,7 +635,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: startedStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC)),
 	})
 	disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:          "disbursement 4",
@@ -642,7 +643,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	tests := []struct {
@@ -966,7 +967,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 		Name:      "disbursement 1",
 		Status:    data.StartedDisbursementStatus,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	maxCSVRecords := [][]string{
@@ -1322,7 +1323,7 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 				UserID: startedByUser.ID,
 			},
 		},
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	response := services.DisbursementWithUserMetadata{

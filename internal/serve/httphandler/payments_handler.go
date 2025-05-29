@@ -350,20 +350,18 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate amount
 	if err := utils.ValidateAmount(req.Amount); err != nil {
 		httperror.BadRequest("invalid amount", err, nil).Render(w)
 		return
 	}
 
-	// Get distribution account
 	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
 		httperror.InternalError(ctx, "resolving distribution account", err, nil).Render(w)
 		return
 	}
 
-	// Get user from context
+	// TODO: remove and use GetUserByID when api keys PR will be merged
 	token, ok := ctx.Value(middleware.TokenContextKey).(string)
 	if !ok {
 		httperror.Unauthorized("", nil, nil).Render(w)
@@ -375,7 +373,6 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create payment
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, req, user, &distAccount)
 	if err != nil {
 		var (
@@ -402,6 +399,5 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the payment directly - it has proper JSON tags
 	httpjson.RenderStatus(w, http.StatusCreated, payment, httpjson.JSON)
 }

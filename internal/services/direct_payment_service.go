@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -21,6 +22,43 @@ type CreateDirectPaymentRequest struct {
 	Receiver          ReceiverReference `json:"receiver" validate:"required"`
 	Wallet            WalletReference   `json:"wallet" validate:"required"`
 	ExternalPaymentID *string           `json:"external_payment_id,omitempty"`
+}
+
+type WalletNotEnabledError struct {
+	WalletName string
+}
+
+func (e WalletNotEnabledError) Error() string {
+	return fmt.Sprintf("wallet '%s' is not enabled for payments", e.WalletName)
+}
+
+type AssetNotSupportedByWalletError struct {
+	AssetCode  string
+	WalletName string
+}
+
+func (e AssetNotSupportedByWalletError) Error() string {
+	return fmt.Sprintf("asset '%s' is not supported by wallet '%s'", e.AssetCode, e.WalletName)
+}
+
+type InsufficientBalanceForDirectPaymentError struct {
+	Asset              data.Asset
+	RequestedAmount    float64
+	AvailableBalance   float64
+	TotalPendingAmount float64
+}
+
+func (e InsufficientBalanceForDirectPaymentError) Error() string {
+	shortfall := (e.RequestedAmount + e.TotalPendingAmount) - e.AvailableBalance
+	return fmt.Sprintf(
+		"insufficient balance for direct payment: requested %.2f %s, but only %.2f available (%.2f in pending payments). Need %.2f more %s",
+		e.RequestedAmount,
+		e.Asset.Code,
+		e.AvailableBalance,
+		e.TotalPendingAmount,
+		shortfall,
+		e.Asset.Code,
+	)
 }
 
 type DirectPaymentService struct {
@@ -80,20 +118,18 @@ func (s *DirectPaymentService) CreateDirectPayment(
 			}
 
 			// 3. Validate asset is supported by wallet
-			err = s.validateAssetWalletCompatibility(ctx, asset, wallet)
-			if err != nil {
+			if err = s.validateAssetWalletCompatibility(ctx, asset, wallet); err != nil {
 				return nil, err
 			}
 
-			// 4. Get or create receiver wallet
-			receiverWallet, err := s.getOrCreateReceiverWallet(ctx, dbTx, receiver.ID, wallet.ID, req.Wallet.Address)
+			// 4. Get receiver wallet
+			receiverWallet, err := s.getReceiverWallet(ctx, dbTx, receiver.ID, wallet.ID, req.Wallet.Address)
 			if err != nil {
 				return nil, fmt.Errorf("getting or creating receiver wallet: %w", err)
 			}
 
 			// 5. Validate balance
-			err = s.validateBalance(ctx, dbTx, distributionAccount, asset, req.Amount)
-			if err != nil {
+			if err = s.validateBalance(ctx, dbTx, distributionAccount, asset, req.Amount); err != nil {
 				return nil, err
 			}
 
@@ -125,6 +161,9 @@ func (s *DirectPaymentService) CreateDirectPayment(
 			if err != nil {
 				return nil, fmt.Errorf("getting created payment: %w", err)
 			}
+
+			// disbursment is an empty struct for the direct payments, set it to nil
+			payment.Disbursement = nil
 
 			// 9. Prepare post-commit events (same as before)
 			msgs := make([]*events.Message, 0)
@@ -198,7 +237,7 @@ func (s *DirectPaymentService) validateAssetWalletCompatibility(ctx context.Cont
 	}
 }
 
-func (s *DirectPaymentService) getOrCreateReceiverWallet(
+func (s *DirectPaymentService) getReceiverWallet(
 	ctx context.Context,
 	dbTx db.DBTransaction,
 	receiverID, walletID string,
@@ -208,34 +247,22 @@ func (s *DirectPaymentService) getOrCreateReceiverWallet(
 	receiverWallets, err := s.Models.ReceiverWallet.GetByReceiverIDsAndWalletID(
 		ctx, dbTx, []string{receiverID}, walletID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("checking for existing receiver wallet: %w", err)
 	}
 
-	if len(receiverWallets) > 0 {
-		return receiverWallets[0], nil
+	if len(receiverWallets) == 0 {
+		return nil, fmt.Errorf("receiver wallet not found - receiver must be registered with this wallet to receive direct payments")
 	}
 
-	// Create new receiver wallet
-	newID, err := s.Models.ReceiverWallet.Insert(ctx, dbTx, data.ReceiverWalletInsert{
-		ReceiverID: receiverID,
-		WalletID:   walletID,
-	})
-	if err != nil {
-		return nil, err
-	}
+	receiverWallet := receiverWallets[0]
 
-	// If wallet address provided (user-managed wallet), update it
 	if walletAddress != nil && *walletAddress != "" {
-		err = s.Models.ReceiverWallet.Update(ctx, newID, data.ReceiverWalletUpdate{
-			Status:         data.RegisteredReceiversWalletStatus,
-			StellarAddress: *walletAddress,
-		}, dbTx)
-		if err != nil {
-			return nil, err
+		if receiverWallet.StellarAddress != *walletAddress {
+			return nil, fmt.Errorf("wallet address mismatch - receiver is registered with a different address for this wallet")
 		}
 	}
 
-	return s.Models.ReceiverWallet.GetByID(ctx, dbTx, newID)
+	return receiverWallet, nil
 }
 
 func (s *DirectPaymentService) validateBalance(
@@ -308,41 +335,4 @@ func (s *DirectPaymentService) calculatePendingAmountForAsset(
 	}
 
 	return totalPending, nil
-}
-
-type InsufficientBalanceForDirectPaymentError struct {
-	Asset              data.Asset
-	RequestedAmount    float64
-	AvailableBalance   float64
-	TotalPendingAmount float64
-}
-
-func (e InsufficientBalanceForDirectPaymentError) Error() string {
-	shortfall := (e.RequestedAmount + e.TotalPendingAmount) - e.AvailableBalance
-	return fmt.Sprintf(
-		"insufficient balance for direct payment: requested %.2f %s, but only %.2f available (%.2f in pending payments). Need %.2f more %s",
-		e.RequestedAmount,
-		e.Asset.Code,
-		e.AvailableBalance,
-		e.TotalPendingAmount,
-		shortfall,
-		e.Asset.Code,
-	)
-}
-
-type WalletNotEnabledError struct {
-	WalletName string
-}
-
-func (e WalletNotEnabledError) Error() string {
-	return fmt.Sprintf("wallet '%s' is not enabled for payments", e.WalletName)
-}
-
-type AssetNotSupportedByWalletError struct {
-	AssetCode  string
-	WalletName string
-}
-
-func (e AssetNotSupportedByWalletError) Error() string {
-	return fmt.Sprintf("asset '%s' is not supported by wallet '%s'", e.AssetCode, e.WalletName)
 }

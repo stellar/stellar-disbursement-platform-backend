@@ -556,6 +556,16 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 		d.RegistrationContactType = RegistrationContactTypePhone
 	}
 
+	if d.CreatedAt == nil {
+		now := time.Now()
+		d.CreatedAt = &now
+	}
+
+	if d.UpdatedAt == nil {
+		now := time.Now()
+		d.UpdatedAt = &now
+	}
+
 	// insert disbursement
 	if d.StatusHistory == nil {
 		d.StatusHistory = []DisbursementStatusHistoryEntry{{
