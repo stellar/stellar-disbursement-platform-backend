@@ -63,7 +63,7 @@ type PaymentModel struct {
 var (
 	DefaultPaymentSortField = SortFieldUpdatedAt
 	DefaultPaymentSortOrder = SortOrderDESC
-	AllowedPaymentFilters   = []FilterKey{FilterKeyStatus, FilterKeyCreatedAtAfter, FilterKeyCreatedAtBefore, FilterKeyReceiverID}
+	AllowedPaymentFilters   = []FilterKey{FilterKeyStatus, FilterKeyCreatedAtAfter, FilterKeyCreatedAtBefore, FilterKeyReceiverID, FilterKeyPaymentType}
 	AllowedPaymentSorts     = []SortField{SortFieldCreatedAt, SortFieldUpdatedAt}
 )
 
@@ -602,7 +602,7 @@ func addArrayOrSingleCondition[T any](qb *QueryBuilder, fieldName string, value 
 }
 
 // newPaymentQuery generates the full query and parameters for a payment search query.
-func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
+func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []any) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Query != "" {
 		q := "%" + queryParams.Query + "%"
@@ -622,6 +622,9 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 	}
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("p.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
+	}
+	if queryParams.Filters[FilterKeyPaymentType] != nil {
+		addArrayOrSingleCondition[PaymentType](qb, "p.payment_type", queryParams.Filters[FilterKeyPaymentType])
 	}
 
 	switch queryType {

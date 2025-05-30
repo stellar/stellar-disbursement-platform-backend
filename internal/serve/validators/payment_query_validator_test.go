@@ -89,3 +89,80 @@ func Test_PaymentQueryValidator_ValidateAndGetPaymentStatus(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("invalid parameter. valid values are: %v", data.PaymentStatuses()), validator.Errors["status"])
 	})
 }
+
+func TestPaymentQueryValidator_PaymentTypeFilter(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		paymentType   string
+		expectedType  data.PaymentType
+		expectedError bool
+		errorField    string
+	}{
+		{
+			name:         "valid direct type",
+			paymentType:  "DIRECT",
+			expectedType: data.PaymentTypeDirect,
+		},
+		{
+			name:         "valid disbursement type",
+			paymentType:  "DISBURSEMENT",
+			expectedType: data.PaymentTypeDisbursement,
+		},
+		{
+			name:         "case insensitive - DIRECT",
+			paymentType:  "DIRECT",
+			expectedType: data.PaymentTypeDirect,
+		},
+		{
+			name:         "case insensitive - DISBURSEMENT",
+			paymentType:  "DISBURSEMENT",
+			expectedType: data.PaymentTypeDisbursement,
+		},
+		{
+			name:         "mixed case - DiReCt",
+			paymentType:  "DiReCt",
+			expectedType: data.PaymentTypeDirect,
+		},
+		{
+			name:          "invalid type - chaos",
+			paymentType:   "chaos",
+			expectedError: true,
+			errorField:    "payment_type",
+		},
+		{
+			name:          "invalid type - empty",
+			paymentType:   "",
+			expectedError: true,
+			errorField:    "payment_type",
+		},
+		{
+			name:          "invalid type - numbers",
+			paymentType:   "123",
+			expectedError: true,
+			errorField:    "payment_type",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			validator := NewPaymentQueryValidator()
+
+			filters := map[data.FilterKey]any{
+				data.FilterKeyPaymentType: tc.paymentType,
+			}
+
+			validatedFilters := validator.ValidateAndGetPaymentFilters(filters)
+
+			if tc.expectedError {
+				assert.True(t, validator.HasErrors())
+				assert.Contains(t, validator.Errors, tc.errorField)
+			} else {
+				assert.False(t, validator.HasErrors())
+				assert.Equal(t, tc.expectedType, validatedFilters[data.FilterKeyPaymentType])
+			}
+		})
+	}
+}

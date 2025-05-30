@@ -1609,6 +1609,214 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 	})
 }
 
+func Test_PaymentHandler_GetPayments_PaymentTypeFilter(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistributionAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+		Maybe()
+
+	handler := &PaymentsHandler{
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionAccountResolver: mDistributionAccountResolver,
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
+	defer ts.Close()
+
+	ctx := context.Background()
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "BOLT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "krieg_wallet", "https://www.krieg.com", "www.krieg.com", "krieg://")
+
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
+		wallet.ID, asset.ID)
+	require.NoError(t, err)
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email: "colonel@krieg.imperium",
+	})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name:   "siege_of_vraks",
+		Status: data.StartedDisbursementStatus,
+		Asset:  asset,
+		Wallet: wallet,
+	})
+
+	disbursementPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet:    receiverWallet,
+		Disbursement:      disbursement,
+		Asset:             *asset,
+		Amount:            "100.00",
+		Status:            data.ReadyPaymentStatus,
+		ExternalPaymentID: "VRAKS-001",
+	})
+
+	directPaymentInsert := data.PaymentInsert{
+		ReceiverID:        receiver.ID,
+		Amount:            "200.00",
+		AssetID:           asset.ID,
+		ReceiverWalletID:  receiverWallet.ID,
+		ExternalPaymentID: utils.StringPtr("DIRECT-001"),
+		PaymentType:       data.PaymentTypeDirect,
+	}
+
+	directPaymentID, err := models.Payment.CreateDirectPayment(ctx, dbConnectionPool, directPaymentInsert)
+	require.NoError(t, err)
+
+	err = models.Payment.UpdateStatus(ctx, dbConnectionPool, directPaymentID, data.ReadyPaymentStatus, nil, "")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name               string
+		queryParams        map[string]string
+		expectedStatusCode int
+		expectedTotal      int
+		expectedPaymentIDs []string
+		expectedErrorField string
+	}{
+		{
+			name: "filter by direct payments",
+			queryParams: map[string]string{
+				"type": "direct",
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedTotal:      1,
+			expectedPaymentIDs: []string{directPaymentID},
+		},
+		{
+			name: "filter by disbursement payments",
+			queryParams: map[string]string{
+				"type": "disbursement",
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedTotal:      1,
+			expectedPaymentIDs: []string{disbursementPayment.ID},
+		},
+		{
+			name: "case insensitive - DIRECT",
+			queryParams: map[string]string{
+				"type": "DIRECT",
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedTotal:      1,
+			expectedPaymentIDs: []string{directPaymentID},
+		},
+		{
+			name: "case insensitive - Disbursement",
+			queryParams: map[string]string{
+				"type": "Disbursement",
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedTotal:      1,
+			expectedPaymentIDs: []string{disbursementPayment.ID},
+		},
+		{
+			name:               "no type filter - returns all payments",
+			queryParams:        map[string]string{},
+			expectedStatusCode: http.StatusOK,
+			expectedTotal:      2,
+			expectedPaymentIDs: []string{disbursementPayment.ID, directPaymentID},
+		},
+		{
+			name: "combine with status filter",
+			queryParams: map[string]string{
+				"type":   "direct",
+				"status": "READY",
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedTotal:      1,
+			expectedPaymentIDs: []string{directPaymentID},
+		},
+		{
+			name: "combine with receiver filter",
+			queryParams: map[string]string{
+				"type":        "disbursement",
+				"receiver_id": receiver.ID,
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedTotal:      1,
+			expectedPaymentIDs: []string{disbursementPayment.ID},
+		},
+		{
+			name: "invalid payment type",
+			queryParams: map[string]string{
+				"type": "chaos",
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErrorField: "payment_type",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			url := buildURLWithQueryParams(ts.URL, "/payments", tc.queryParams)
+			resp, err := http.Get(url)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			assert.Equal(t, tc.expectedStatusCode, resp.StatusCode)
+
+			if tc.expectedStatusCode == http.StatusOK {
+				var actualResponse httpresponse.PaginatedResponse
+				err = json.NewDecoder(resp.Body).Decode(&actualResponse)
+				require.NoError(t, err)
+
+				assert.Equal(t, tc.expectedTotal, actualResponse.Pagination.Total)
+
+				var payments []data.Payment
+				err = json.Unmarshal(actualResponse.Data, &payments)
+				require.NoError(t, err)
+
+				actualIDs := make([]string, len(payments))
+				for i, payment := range payments {
+					actualIDs[i] = payment.ID
+				}
+
+				if len(tc.expectedPaymentIDs) > 1 {
+					assert.ElementsMatch(t, tc.expectedPaymentIDs, actualIDs)
+				} else {
+					assert.Equal(t, tc.expectedPaymentIDs, actualIDs)
+				}
+
+				for _, payment := range payments {
+					switch tc.queryParams["type"] {
+					case "direct", "DIRECT":
+						assert.Equal(t, data.PaymentTypeDirect, payment.PaymentType)
+					case "disbursement", "Disbursement":
+						assert.Equal(t, data.PaymentTypeDisbursement, payment.PaymentType)
+					}
+				}
+			} else {
+				respBody, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+
+				var errorResponse map[string]any
+				err = json.Unmarshal(respBody, &errorResponse)
+				require.NoError(t, err)
+
+				if tc.expectedErrorField != "" {
+					extras, ok := errorResponse["extras"].(map[string]any)
+					require.True(t, ok, "Expected extras field in error response")
+					assert.Contains(t, extras, tc.expectedErrorField)
+				}
+			}
+		})
+	}
+
+	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+}
+
 func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
