@@ -441,7 +441,8 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 			tx, err := dbConnectionPool.BeginTxx(ctx, nil)
 			t.Cleanup(func() {
 				data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-				tx.Rollback()
+				err = tx.Rollback()
+				require.NoError(t, err)
 			})
 
 			for _, p := range tc.payments {
