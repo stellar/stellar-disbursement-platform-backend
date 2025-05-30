@@ -62,7 +62,7 @@ func Test_NewSignerRouter(t *testing.T) {
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
 		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
-	wantDistAccStelarEnvSigner := &AccountEnvSignatureClient{
+	wantDistAccStellarEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   networkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
@@ -147,7 +147,7 @@ func Test_NewSignerRouter(t *testing.T) {
 			opts:         validOptions,
 			wantSignerRouter: &SignerRouterImpl{
 				strategies: map[schema.AccountType]SignatureClient{
-					schema.DistributionAccountStellarEnv: wantDistAccStelarEnvSigner,
+					schema.DistributionAccountStellarEnv: wantDistAccStellarEnvSigner,
 				},
 				networkPassphrase: networkPassphrase,
 			},
@@ -176,7 +176,7 @@ func Test_NewSignerRouter(t *testing.T) {
 				strategies: map[schema.AccountType]SignatureClient{
 					schema.HostStellarEnv:                    wantHostAccStellarEnvSigner,
 					schema.ChannelAccountStellarDB:           wantChAccStellarDBSigner,
-					schema.DistributionAccountStellarEnv:     wantDistAccStelarEnvSigner,
+					schema.DistributionAccountStellarEnv:     wantDistAccStellarEnvSigner,
 					schema.DistributionAccountStellarDBVault: wantDistAccStellarDBVaultSigner,
 				},
 				networkPassphrase: networkPassphrase,
@@ -189,7 +189,7 @@ func Test_NewSignerRouter(t *testing.T) {
 				strategies: map[schema.AccountType]SignatureClient{
 					schema.HostStellarEnv:                    wantHostAccStellarEnvSigner,
 					schema.ChannelAccountStellarDB:           wantChAccStellarDBSigner,
-					schema.DistributionAccountStellarEnv:     wantDistAccStelarEnvSigner,
+					schema.DistributionAccountStellarEnv:     wantDistAccStellarEnvSigner,
 					schema.DistributionAccountStellarDBVault: wantDistAccStellarDBVaultSigner,
 				},
 				networkPassphrase: networkPassphrase,
