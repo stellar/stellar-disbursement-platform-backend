@@ -375,26 +375,40 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, req, user, &distAccount)
 	if err != nil {
-		var (
-			balanceErr        services.InsufficientBalanceForDirectPaymentError
-			walletNotEnabled  services.WalletNotEnabledError
-			assetNotSupported services.AssetNotSupportedByWalletError
-		)
+		// Unwrap transaction errors to check for specific error types
+		errToMatch := errors.Unwrap(err)
+		if errToMatch == nil {
+			errToMatch = err
+		}
 
-		switch {
-		case errors.Is(err, data.ErrRecordNotFound):
-			httperror.NotFound("resource not found", err, nil).Render(w)
-		case errors.As(err, &balanceErr):
-			log.Ctx(ctx).Error(balanceErr)
-			httperror.Conflict(balanceErr.Error(), err, nil).Render(w)
-		case errors.As(err, &walletNotEnabled):
-			httperror.BadRequest(walletNotEnabled.Error(), err, nil).Render(w)
-		case errors.As(err, &assetNotSupported):
-			httperror.BadRequest(assetNotSupported.Error(), err, nil).Render(w)
-		case strings.Contains(err.Error(), "resolving"):
+		switch e := errToMatch.(type) {
+		case services.ValidationError:
 			httperror.BadRequest("invalid reference in request", err, nil).Render(w)
+
+		case services.NotFoundError:
+			httperror.NotFound("resource not found", err, nil).Render(w)
+
+		case services.UnsupportedError:
+			httperror.BadRequest(e.Error(), err, nil).Render(w)
+
+		case services.AmbiguousReferenceError:
+			httperror.BadRequest("ambiguous reference in request", err, nil).Render(w)
+
+		case services.InsufficientBalanceForDirectPaymentError:
+			log.Ctx(ctx).Error(e)
+			httperror.BadRequest(e.Error(), err, nil).Render(w)
+
+		case services.WalletNotEnabledError, services.AssetNotSupportedByWalletError:
+			httperror.BadRequest(e.Error(), err, nil).Render(w)
+
 		default:
-			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
+			if strings.Contains(err.Error(), "receiver wallet not found") {
+				httperror.BadRequest(
+					"receiver must be registered with this wallet", err, nil,
+				).Render(w)
+			} else {
+				httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
+			}
 		}
 		return
 	}

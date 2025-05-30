@@ -99,17 +99,17 @@ func (s *DirectPaymentService) CreateDirectPayment(
 			// 1. Resolve entities
 			asset, err := s.Resolvers.Asset().Resolve(ctx, dbTx, req.Asset)
 			if err != nil {
-				return nil, fmt.Errorf("resolving asset: %w", err)
+				return nil, err
 			}
 
 			receiver, err := s.Resolvers.Receiver().Resolve(ctx, dbTx, req.Receiver)
 			if err != nil {
-				return nil, fmt.Errorf("resolving receiver: %w", err)
+				return nil, err
 			}
 
 			wallet, err := s.Resolvers.Wallet().Resolve(ctx, dbTx, req.Wallet)
 			if err != nil {
-				return nil, fmt.Errorf("resolving wallet: %w", err)
+				return nil, err
 			}
 
 			// 2. Validate wallet is enabled
@@ -125,7 +125,7 @@ func (s *DirectPaymentService) CreateDirectPayment(
 			// 4. Get receiver wallet
 			receiverWallet, err := s.getReceiverWallet(ctx, dbTx, receiver.ID, wallet.ID, req.Wallet.Address)
 			if err != nil {
-				return nil, fmt.Errorf("getting or creating receiver wallet: %w", err)
+				return nil, fmt.Errorf("getting receiver wallet: %w", err)
 			}
 
 			// 5. Validate balance

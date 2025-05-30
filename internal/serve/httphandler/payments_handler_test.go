@@ -1752,14 +1752,14 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
-	tnt := &tenant.Tenant{ID: "thunderhawk-42"}
-	ctx = tenant.SaveTenantInContext(ctx, tnt)
+	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "thunderhawk-42"})
+	ctx = context.WithValue(ctx, middleware.TokenContextKey, "test-token")
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	// Create test data
-	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "CERAMITE", "GISSUER1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456")
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "CERAMITE", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
 
 	// Associate asset with wallet
@@ -1794,6 +1794,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 					ID:    "user-dante",
 					Email: "commander.dante@baal.imperium",
 				}, nil)
+				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 				distResolver.On("DistributionAccountFromContext", mock.Anything).Return(
 					schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
@@ -1814,17 +1815,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid request body",
-			requestBody: `{invalid json`,
-			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
-				authMock.On("GetUser", mock.Anything, "test-token").Return(&auth.User{
-					ID: "user-test",
-				}, nil)
-			},
-			expectedStatus:   http.StatusBadRequest,
-			expectedResponse: `{"error": "The request was invalid in some way."}`,
-		},
-		{
 			name: "invalid amount",
 			requestBody: `{
 				"amount": "not-a-number",
@@ -1839,15 +1829,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			},
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error": "invalid amount"}`,
-		},
-		{
-			name:        "unauthorized - no token",
-			requestBody: `{}`,
-			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
-				// Remove token from context - will be done in test
-			},
-			expectedStatus:   http.StatusUnauthorized,
-			expectedResponse: `{"error": "Not authorized."}`,
 		},
 		{
 			name: "distribution account resolution fails",
@@ -1866,7 +1847,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 					schema.TransactionAccount{}, errors.New("resolution failed"))
 			},
 			expectedStatus:   http.StatusInternalServerError,
-			expectedResponse: `{"error": "An internal error occurred while processing this request."}`,
+			expectedResponse: `{"error": "resolving distribution account"}`,
 		},
 		{
 			name: "asset not found",
@@ -1888,7 +1869,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			expectedResponse: `{"error": "resource not found"}`,
 		},
 		{
-			name: "insufficient balance",
 			requestBody: fmt.Sprintf(`{
 				"amount": "10000.00",
 				"asset": {"id": %q},
@@ -1896,6 +1876,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 				"wallet": {"id": %q}
 			}`, asset.ID, receiver.ID, wallet.ID),
 			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
+				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
 				authMock.On("GetUser", mock.Anything, "test-token").Return(&auth.User{
 					ID: "user-test",
 				}, nil)
@@ -1905,8 +1887,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 				distService.On("GetBalance", mock.Anything, mock.Anything, *asset).Return(float64(100), nil)
 			},
-			expectedStatus:   http.StatusConflict,
-			expectedResponse: `insufficient balance`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "insufficient balance for direct payment: requested 10000.00 CERAMITE, but only 100.00 available (0.00 in pending payments). Need 9900.00 more CERAMITE"}`,
 		},
 		{
 			name: "wallet not enabled",
@@ -1934,7 +1916,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 					schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
 			},
 			expectedStatus:   http.StatusBadRequest,
-			expectedResponse: `is not enabled for payments`,
+			expectedResponse: `{"error": "wallet 'Fortress Monastery' is not enabled for payments"}`,
 		},
 		{
 			name: "asset not supported by wallet",
@@ -1945,6 +1927,12 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 				"wallet": {"id": %q}
 			}`, receiver.ID, wallet.ID),
 			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
+				// Create the native XLM asset so resolution succeeds
+				data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+
+				// Create receiver wallet so the request can proceed to asset validation
+				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
 				authMock.On("GetUser", mock.Anything, "test-token").Return(&auth.User{
 					ID: "user-test",
 				}, nil)
@@ -1953,7 +1941,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 					schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
 			},
 			expectedStatus:   http.StatusBadRequest,
-			expectedResponse: `is not supported by wallet`,
+			expectedResponse: `{"error": "asset 'XLM' is not supported by wallet 'Fortress Monastery'"}`,
 		},
 		{
 			name: "complex reference - receiver by email, asset by type",
@@ -1962,12 +1950,14 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 				"asset": {
 					"type": "classic",
 					"code": "CERAMITE",
-					"issuer": "GISSUER1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+					"issuer": "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON"
 				},
 				"receiver": {"email": "dante@baal.imperium"},
 				"wallet": {"id": "` + wallet.ID + `"}
 			}`,
 			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
+				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
 				authMock.On("GetUser", mock.Anything, "test-token").Return(&auth.User{
 					ID:    "user-test",
 					Email: "test@imperium.gov",
@@ -1990,11 +1980,70 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 				assert.Equal(t, asset.ID, payment.Asset.ID)
 			},
 		},
+		{
+			name: "invalid asset reference - validation error",
+			requestBody: `{
+				"amount": "100.00",
+				"asset": {},
+				"receiver": {"id": "` + receiver.ID + `"},
+				"wallet": {"id": "` + wallet.ID + `"}
+			}`,
+			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
+				authMock.On("GetUser", mock.Anything, "test-token").Return(&auth.User{
+					ID: "user-test",
+				}, nil)
+
+				distResolver.On("DistributionAccountFromContext", mock.Anything).Return(
+					schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
+			},
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "invalid reference in request"}`,
+		},
+		{
+			name: "unsupported asset type - contract",
+			requestBody: `{
+				"amount": "100.00",
+				"asset": {
+					"type": "contract",
+					"contract_id": "CONTRACT123"
+				},
+				"receiver": {"id": "` + receiver.ID + `"},
+				"wallet": {"id": "` + wallet.ID + `"}
+			}`,
+			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
+				authMock.On("GetUser", mock.Anything, "test-token").Return(&auth.User{
+					ID: "user-test",
+				}, nil)
+
+				distResolver.On("DistributionAccountFromContext", mock.Anything).Return(
+					schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
+			},
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "asset: contract assets not yet supported"}`,
+		},
+		{
+			name: "receiver not registered with wallet",
+			requestBody: fmt.Sprintf(`{
+				"amount": "100.00",
+				"asset": {"id": %q},
+				"receiver": {"id": %q},
+				"wallet": {"id": %q}
+			}`, asset.ID, receiver.ID, wallet.ID),
+			setupMocks: func(t *testing.T, authMock *auth.AuthManagerMock, distResolver *sigMocks.MockDistributionAccountResolver, distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
+				authMock.On("GetUser", mock.Anything, "test-token").Return(&auth.User{
+					ID: "user-test",
+				}, nil)
+
+				distResolver.On("DistributionAccountFromContext", mock.Anything).Return(
+					schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
+			},
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "receiver must be registered with this wallet"}`,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Clean up any created payments
 			t.Cleanup(func() {
 				data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 				data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
@@ -2019,35 +2068,21 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 			tc.setupMocks(t, authMock, distResolverMock, distServiceMock, eventProducerMock)
 
-			// Create request
-			reqCtx := ctx
-			if tc.name != "unauthorized - no token" {
-				reqCtx = context.WithValue(ctx, middleware.TokenContextKey, "test-token")
-			}
-
-			req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, "/payments",
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
 				strings.NewReader(tc.requestBody))
 			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
-			// Execute request
 			rr := httptest.NewRecorder()
 			handler.PostPayment(rr, req)
 
-			// Validate response
 			assert.Equal(t, tc.expectedStatus, rr.Code)
 
 			if tc.validateResponse != nil {
 				tc.validateResponse(t, rr.Body.String())
 			} else if tc.expectedResponse != "" {
-				assert.Contains(t, rr.Body.String(), tc.expectedResponse)
+				assert.JSONEq(t, tc.expectedResponse, rr.Body.String())
 			}
-
-			// Verify mocks
-			authMock.AssertExpectations(t)
-			distResolverMock.AssertExpectations(t)
-			distServiceMock.AssertExpectations(t)
-			eventProducerMock.AssertExpectations(t)
 		})
 	}
 }

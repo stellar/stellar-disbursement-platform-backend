@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/stellar/go/strkey"
@@ -11,6 +12,35 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+)
+
+// Entity type constants
+const (
+	EntityTypeAsset    = "asset"
+	EntityTypeReceiver = "receiver"
+	EntityTypeWallet   = "wallet"
+)
+
+// Field name constants
+const (
+	FieldReference     = "reference"
+	FieldType          = "type"
+	FieldCode          = "code"
+	FieldIssuer        = "issuer"
+	FieldContractID    = "contract_id"
+	FieldEmail         = "email"
+	FieldPhoneNumber   = "phone_number"
+	FieldWalletAddress = "wallet_address"
+	FieldAddress       = "address"
+	FieldID            = "id"
+)
+
+// Asset type constants
+const (
+	AssetTypeNative   = "native"
+	AssetTypeClassic  = "classic"
+	AssetTypeContract = "contract"
+	AssetTypeFiat     = "fiat"
 )
 
 type EntityResolver[T any, R any] interface {
@@ -42,6 +72,48 @@ func (rf *ResolverFactory) Receiver() *ReceiverResolver {
 
 func (rf *ResolverFactory) Wallet() *WalletResolver {
 	return rf.walletResolver
+}
+
+type ValidationError struct {
+	EntityType string
+	Field      string
+	Message    string
+}
+
+func (e ValidationError) Error() string {
+	return fmt.Sprintf("validation error for %s.%s: %s", e.EntityType, e.Field, e.Message)
+}
+
+type NotFoundError struct {
+	EntityType string
+	Reference  string
+	Message    string
+}
+
+func (e NotFoundError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("%s not found: %s", e.EntityType, e.Message)
+	}
+	return fmt.Sprintf("%s not found with reference: %s", e.EntityType, e.Reference)
+}
+
+type UnsupportedError struct {
+	EntityType string
+	Feature    string
+}
+
+func (e UnsupportedError) Error() string {
+	return fmt.Sprintf("%s: %s not yet supported", e.EntityType, e.Feature)
+}
+
+type AmbiguousReferenceError struct {
+	EntityType string
+	Reference  string
+	Count      int
+}
+
+func (e AmbiguousReferenceError) Error() string {
+	return fmt.Sprintf("ambiguous %s reference %s: found %d matches", e.EntityType, e.Reference, e.Count)
 }
 
 type AssetReference struct {
@@ -81,44 +153,65 @@ func (ar *AssetResolver) Validate(ref AssetReference) error {
 
 	if ref.Type != nil && strings.TrimSpace(*ref.Type) != "" {
 		referenceCount++
-		// Validate asset type
-		validTypes := []string{"native", "classic", "contract", "fiat"}
-		found := false
-		for _, validType := range validTypes {
-			if *ref.Type == validType {
-				found = true
-				break
-			}
-		}
+		validTypes := []string{AssetTypeNative, AssetTypeClassic, AssetTypeContract, AssetTypeFiat}
+		found := slices.Contains(validTypes, *ref.Type)
 		if !found {
-			return fmt.Errorf("invalid asset type: %s", *ref.Type)
+			return ValidationError{
+				EntityType: "asset",
+				Field:      "type",
+				Message:    fmt.Sprintf("invalid type '%s', must be one of: %s", *ref.Type, strings.Join(validTypes, ", ")),
+			}
 		}
 
 		switch *ref.Type {
-		case "classic":
+		case AssetTypeClassic:
 			if ref.Code == nil || strings.TrimSpace(*ref.Code) == "" {
-				return fmt.Errorf("code is required for classic asset")
+				return ValidationError{
+					EntityType: EntityTypeAsset,
+					Field:      FieldCode,
+					Message:    "required for classic asset",
+				}
 			}
 			if ref.Issuer == nil || strings.TrimSpace(*ref.Issuer) == "" {
-				return fmt.Errorf("issuer is required for classic asset")
+				return ValidationError{
+					EntityType: EntityTypeAsset,
+					Field:      FieldIssuer,
+					Message:    "required for classic asset",
+				}
 			}
-		case "contract":
+		case AssetTypeContract:
 			if ref.ContractID == nil || strings.TrimSpace(*ref.ContractID) == "" {
-				return fmt.Errorf("contract_id is required for contract asset")
+				return ValidationError{
+					EntityType: EntityTypeAsset,
+					Field:      FieldContractID,
+					Message:    "required for contract asset",
+				}
 			}
-		case "fiat":
+		case AssetTypeFiat:
 			if ref.Code == nil || strings.TrimSpace(*ref.Code) == "" {
-				return fmt.Errorf("code is required for fiat asset")
+				return ValidationError{
+					EntityType: EntityTypeAsset,
+					Field:      FieldCode,
+					Message:    "required for fiat asset",
+				}
 			}
 		}
 	}
 
 	if referenceCount == 0 {
-		return fmt.Errorf("asset must be specified by id or type")
+		return ValidationError{
+			EntityType: EntityTypeAsset,
+			Field:      FieldReference,
+			Message:    "must be specified by id or type",
+		}
 	}
 
 	if referenceCount > 1 {
-		return fmt.Errorf("asset must be specified by either id or type, not both")
+		return ValidationError{
+			EntityType: EntityTypeAsset,
+			Field:      FieldReference,
+			Message:    "must be specified by either id or type, not both",
+		}
 	}
 
 	return nil
@@ -126,31 +219,67 @@ func (ar *AssetResolver) Validate(ref AssetReference) error {
 
 func (ar *AssetResolver) Resolve(ctx context.Context, _ db.SQLExecuter, ref AssetReference) (*data.Asset, error) {
 	if err := ar.Validate(ref); err != nil {
-		return nil, fmt.Errorf("validating asset reference: %w", err)
+		return nil, err
 	}
 
 	if ref.ID != nil {
-		return ar.models.Assets.Get(ctx, *ref.ID)
+		asset, err := ar.models.Assets.Get(ctx, *ref.ID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return nil, NotFoundError{
+					EntityType: EntityTypeAsset,
+					Reference:  *ref.ID,
+				}
+			}
+			return nil, fmt.Errorf("getting asset by ID: %w", err)
+		}
+		return asset, nil
 	}
 
 	if ref.Type != nil {
 		switch *ref.Type {
-		case "native":
-			return ar.models.Assets.GetByCodeAndIssuer(ctx, "XLM", "")
-		case "classic":
-			return ar.models.Assets.GetByCodeAndIssuer(ctx, *ref.Code, *ref.Issuer)
-		case "contract":
-			// TODO: Implement contract asset resolution
-			return nil, fmt.Errorf("contract assets not yet supported")
-		case "fiat":
-			// TODO: Implement fiat asset resolution
-			return nil, fmt.Errorf("fiat assets not yet supported")
-		default:
-			return nil, fmt.Errorf("unsupported asset type: %s", *ref.Type)
+		case AssetTypeNative:
+			asset, err := ar.models.Assets.GetByCodeAndIssuer(ctx, "XLM", "")
+			if err != nil {
+				if errors.Is(err, data.ErrRecordNotFound) {
+					return nil, NotFoundError{
+						EntityType: EntityTypeAsset,
+						Message:    "native XLM asset not found",
+					}
+				}
+				return nil, fmt.Errorf("getting native asset: %w", err)
+			}
+			return asset, nil
+		case AssetTypeClassic:
+			asset, err := ar.models.Assets.GetByCodeAndIssuer(ctx, *ref.Code, *ref.Issuer)
+			if err != nil {
+				if errors.Is(err, data.ErrRecordNotFound) {
+					return nil, NotFoundError{
+						EntityType: EntityTypeAsset,
+						Reference:  fmt.Sprintf("%s:%s", *ref.Code, *ref.Issuer),
+					}
+				}
+				return nil, fmt.Errorf("getting classic asset: %w", err)
+			}
+			return asset, nil
+		case AssetTypeContract:
+			return nil, UnsupportedError{
+				EntityType: EntityTypeAsset,
+				Feature:    "contract assets",
+			}
+		case AssetTypeFiat:
+			return nil, UnsupportedError{
+				EntityType: EntityTypeAsset,
+				Feature:    "fiat assets",
+			}
 		}
 	}
 
-	return nil, fmt.Errorf("asset must be specified by id or type")
+	return nil, ValidationError{
+		EntityType: EntityTypeAsset,
+		Field:      FieldReference,
+		Message:    "must be specified by id or type",
+	}
 }
 
 var _ EntityResolver[data.Asset, AssetReference] = (*AssetResolver)(nil)
@@ -172,28 +301,48 @@ func (r *ReceiverResolver) Validate(ref ReceiverReference) error {
 	if ref.Email != nil && strings.TrimSpace(*ref.Email) != "" {
 		referenceCount++
 		if err := utils.ValidateEmail(*ref.Email); err != nil {
-			return fmt.Errorf("invalid email: %w", err)
+			return ValidationError{
+				EntityType: EntityTypeReceiver,
+				Field:      FieldEmail,
+				Message:    fmt.Sprintf("invalid format: %s", *ref.Email),
+			}
 		}
 	}
 	if ref.PhoneNumber != nil && strings.TrimSpace(*ref.PhoneNumber) != "" {
 		referenceCount++
 		if err := utils.ValidatePhoneNumber(*ref.PhoneNumber); err != nil {
-			return fmt.Errorf("invalid phone number: %w", err)
+			return ValidationError{
+				EntityType: EntityTypeReceiver,
+				Field:      FieldPhoneNumber,
+				Message:    fmt.Sprintf("invalid format: %s", *ref.PhoneNumber),
+			}
 		}
 	}
 	if ref.WalletAddress != nil && strings.TrimSpace(*ref.WalletAddress) != "" {
 		referenceCount++
 		if !strkey.IsValidEd25519PublicKey(*ref.WalletAddress) {
-			return fmt.Errorf("invalid stellar wallet address format: %s", *ref.WalletAddress)
+			return ValidationError{
+				EntityType: EntityTypeReceiver,
+				Field:      FieldWalletAddress,
+				Message:    fmt.Sprintf("invalid stellar address format: %s", *ref.WalletAddress),
+			}
 		}
 	}
 
 	if referenceCount == 0 {
-		return fmt.Errorf("receiver must be specified by id, email, phone_number, or wallet_address")
+		return ValidationError{
+			EntityType: EntityTypeReceiver,
+			Field:      FieldReference,
+			Message:    "must be specified by id, email, phone_number, or wallet_address",
+		}
 	}
 
 	if referenceCount > 1 {
-		return fmt.Errorf("receiver must be specified by only one identifier")
+		return ValidationError{
+			EntityType: EntityTypeReceiver,
+			Field:      FieldReference,
+			Message:    "must be specified by only one identifier",
+		}
 	}
 
 	return nil
@@ -201,11 +350,21 @@ func (r *ReceiverResolver) Validate(ref ReceiverReference) error {
 
 func (r *ReceiverResolver) Resolve(ctx context.Context, sqlExec db.SQLExecuter, ref ReceiverReference) (*data.Receiver, error) {
 	if err := r.Validate(ref); err != nil {
-		return nil, fmt.Errorf("validating receiver reference: %w", err)
+		return nil, err
 	}
 
 	if ref.ID != nil {
-		return r.models.Receiver.Get(ctx, sqlExec, *ref.ID)
+		receiver, err := r.models.Receiver.Get(ctx, sqlExec, *ref.ID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return nil, NotFoundError{
+					EntityType: EntityTypeReceiver,
+					Reference:  *ref.ID,
+				}
+			}
+			return nil, fmt.Errorf("getting receiver by ID: %w", err)
+		}
+		return receiver, nil
 	}
 
 	contactInfo := ref.GetContactInfo()
@@ -215,10 +374,17 @@ func (r *ReceiverResolver) Resolve(ctx context.Context, sqlExec db.SQLExecuter, 
 			return nil, fmt.Errorf("getting receiver by contact: %w", err)
 		}
 		if len(receivers) == 0 {
-			return nil, fmt.Errorf("no receiver found with contact info")
+			return nil, NotFoundError{
+				EntityType: EntityTypeReceiver,
+				Message:    fmt.Sprintf("no receiver found with contact info: %s", contactInfo),
+			}
 		}
 		if len(receivers) > 1 {
-			return nil, fmt.Errorf("multiple receivers found with contact info")
+			return nil, AmbiguousReferenceError{
+				EntityType: EntityTypeReceiver,
+				Reference:  contactInfo,
+				Count:      len(receivers),
+			}
 		}
 		return receivers[0], nil
 	}
@@ -227,14 +393,21 @@ func (r *ReceiverResolver) Resolve(ctx context.Context, sqlExec db.SQLExecuter, 
 		receiver, err := r.models.Receiver.GetByWalletAddress(ctx, sqlExec, *ref.WalletAddress)
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
-				return nil, fmt.Errorf("no receiver found with wallet address %s", *ref.WalletAddress)
+				return nil, NotFoundError{
+					EntityType: EntityTypeReceiver,
+					Message:    fmt.Sprintf("no receiver found with wallet address: %s", *ref.WalletAddress),
+				}
 			}
 			return nil, fmt.Errorf("getting receiver by wallet address: %w", err)
 		}
 		return receiver, nil
 	}
 
-	return nil, fmt.Errorf("receiver must be specified by id, email, or phone number")
+	return nil, ValidationError{
+		EntityType: EntityTypeReceiver,
+		Field:      FieldReference,
+		Message:    "must be specified by id, email, phone_number, or wallet_address",
+	}
 }
 
 var _ EntityResolver[data.Receiver, ReceiverReference] = (*ReceiverResolver)(nil)
@@ -256,16 +429,28 @@ func (r *WalletResolver) Validate(ref WalletReference) error {
 	if ref.Address != nil && strings.TrimSpace(*ref.Address) != "" {
 		referenceCount++
 		if !strkey.IsValidEd25519PublicKey(*ref.Address) {
-			return fmt.Errorf("invalid stellar address format")
+			return ValidationError{
+				EntityType: EntityTypeWallet,
+				Field:      FieldAddress,
+				Message:    fmt.Sprintf("invalid stellar address format: %s", *ref.Address),
+			}
 		}
 	}
 
 	if referenceCount == 0 {
-		return fmt.Errorf("wallet must be specified by id or address")
+		return ValidationError{
+			EntityType: EntityTypeWallet,
+			Field:      FieldReference,
+			Message:    "must be specified by id or address",
+		}
 	}
 
 	if referenceCount > 1 {
-		return fmt.Errorf("wallet must be specified by either id or address, not both")
+		return ValidationError{
+			EntityType: EntityTypeWallet,
+			Field:      FieldReference,
+			Message:    "must be specified by either id or address, not both",
+		}
 	}
 
 	return nil
@@ -273,16 +458,24 @@ func (r *WalletResolver) Validate(ref WalletReference) error {
 
 func (r *WalletResolver) Resolve(ctx context.Context, dbTx db.SQLExecuter, ref WalletReference) (*data.Wallet, error) {
 	if err := r.Validate(ref); err != nil {
-		return nil, fmt.Errorf("validating wallet reference: %w", err)
+		return nil, err
 	}
 
 	if ref.ID != nil {
-		return r.models.Wallets.Get(ctx, *ref.ID)
+		wallet, err := r.models.Wallets.Get(ctx, *ref.ID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return nil, NotFoundError{
+					EntityType: EntityTypeWallet,
+					Reference:  *ref.ID,
+				}
+			}
+			return nil, fmt.Errorf("getting wallet by ID: %w", err)
+		}
+		return wallet, nil
 	}
 
 	if ref.Address != nil {
-
-		// Find the UserManagedWallet
 		wallets, err := r.models.Wallets.FindWallets(ctx,
 			data.NewFilter(data.FilterUserManaged, true),
 			data.NewFilter(data.FilterEnabledWallets, true))
@@ -290,17 +483,21 @@ func (r *WalletResolver) Resolve(ctx context.Context, dbTx db.SQLExecuter, ref W
 			return nil, fmt.Errorf("finding user managed wallets: %w", err)
 		}
 
-		// Since user-managed wallets don't store addresses in the wallet table,
-		// we return the user-managed wallet and the address will be used
-		// when creating/updating the receiver_wallet record
 		if len(wallets) == 0 {
-			return nil, fmt.Errorf("no user managed wallet found")
+			return nil, NotFoundError{
+				EntityType: EntityTypeWallet,
+				Message:    "no user managed wallet found",
+			}
 		}
 
 		return &wallets[0], nil
 	}
 
-	return nil, fmt.Errorf("wallet must be specified by id or address")
+	return nil, ValidationError{
+		EntityType: EntityTypeWallet,
+		Field:      FieldReference,
+		Message:    "must be specified by id or address",
+	}
 }
 
 var _ EntityResolver[data.Wallet, WalletReference] = (*WalletResolver)(nil)

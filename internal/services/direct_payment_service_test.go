@@ -187,7 +187,12 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
 			assertResult: func(t *testing.T, payment *data.Payment, err error) {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), "asset must be specified")
+				err = unwrapTransactionError(err)
+				var validationErr ValidationError
+				assert.True(t, errors.As(err, &validationErr))
+				assert.Equal(t, EntityTypeAsset, validationErr.EntityType)
+				assert.Equal(t, FieldReference, validationErr.Field)
+				assert.Contains(t, validationErr.Message, "must be specified by id or type")
 			},
 		},
 		{
@@ -205,7 +210,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
 			assertResult: func(t *testing.T, payment *data.Payment, err error) {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), "record not found")
+				err = unwrapTransactionError(err)
+				var notFoundErr NotFoundError
+				assert.True(t, errors.As(err, &notFoundErr))
+				assert.Equal(t, EntityTypeReceiver, notFoundErr.EntityType)
+				assert.Equal(t, "chaos-marine-001", notFoundErr.Reference)
 			},
 		},
 		{
@@ -287,7 +296,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
 			assertResult: func(t *testing.T, payment *data.Payment, err error) {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), "no receiver found with contact info")
+				err = unwrapTransactionError(err)
+				var notFoundErr NotFoundError
+				assert.True(t, errors.As(err, &notFoundErr))
+				assert.Equal(t, EntityTypeReceiver, notFoundErr.EntityType)
+				assert.Contains(t, notFoundErr.Message, "no receiver found with contact info")
 			},
 		},
 	}
