@@ -78,13 +78,6 @@ func NewDirectPaymentService(models *data.Models, dbConnectionPool db.DBConnecti
 	}
 }
 
-// ResolvedPaymentComponents holds the resolved components for creating a direct payment
-type ResolvedPaymentComponents struct {
-	Asset          *data.Asset
-	Receiver       *data.Receiver
-	ReceiverWallet *data.ReceiverWallet
-}
-
 func (s *DirectPaymentService) CreateDirectPayment(
 	ctx context.Context,
 	req CreateDirectPaymentRequest,

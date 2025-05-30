@@ -32,7 +32,6 @@ const (
 	FieldPhoneNumber   = "phone_number"
 	FieldWalletAddress = "wallet_address"
 	FieldAddress       = "address"
-	FieldID            = "id"
 )
 
 // Asset type constants

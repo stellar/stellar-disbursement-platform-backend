@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Added a new endpoint to unregister a receiver wallet `PATCH /receivers/wallets/:id/status`. [#675](https://github.com/stellar/stellar-disbursement-platform-backend/pull/675)
 - Allow the serviceaccount to be set for the ap deployment in the helm chart [#679](https://github.com/stellar/stellar-disbursement-platform-backend/pull/679)
 - Add badges to the README.md file. [#691](https://github.com/stellar/stellar-disbursement-platform-backend/pull/691)
+- Add endpoint for the direct payments [#693](https://github.com/stellar/stellar-disbursement-platform-backend/pull/693)
 
 ### Security and Dependencies
 
