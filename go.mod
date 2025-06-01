@@ -31,13 +31,13 @@ require (
 	github.com/rubenv/sql-migrate v1.8.0
 	github.com/segmentio/kafka-go v0.4.48
 	github.com/sendgrid/rest v2.6.9+incompatible
-	github.com/sendgrid/sendgrid-go v3.16.0+incompatible
+	github.com/sendgrid/sendgrid-go v3.16.1+incompatible
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/stellar/go v0.0.0-20250311234916-385ac5aca1a4
 	github.com/stretchr/testify v1.10.0
-	github.com/twilio/twilio-go v1.26.1
+	github.com/twilio/twilio-go v1.26.2
 	golang.org/x/crypto v0.38.0
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 	golang.org/x/net v0.40.0
