@@ -13,9 +13,18 @@ type SQLColumnConfig struct {
 	ResultAlias string
 	// RawColumns is the list of column names to process
 	RawColumns []string
-	// CoalesceColumns indicates which columns should be wrapped in COALESCE(col, '')
-	CoalesceColumns []string
+	// CoalesceStringColumns indicates which columns should be wrapped in COALESCE(col, '')
+	CoalesceStringColumns []string
+	// CoalesceFloat64Columns indicates which columns should be wrapped in COALESCE(col, 0.0)
+	CoalesceFloat64Columns []string
 }
+
+type ColumnType int
+
+const (
+	String ColumnType = iota
+	Float64
+)
 
 // Build creates a slice of SQL column expressions based on the provided configuration.
 // It handles table aliases, column prefixes, and COALESCE wrapping as specified in the config.
@@ -29,14 +38,19 @@ func (c SQLColumnConfig) Build() []string {
 
 	// Process all columns with their respective COALESCE settings
 	var completeColumnNames []string
-	processColumn := func(column string, shouldCoalesce bool) {
+	processColumn := func(column string, shouldCoalesce bool, columnType ColumnType) {
 		columnNameAndAlias := strings.SplitN(column, " AS ", 2)
 		columnNameAndParser := strings.SplitN(column, "::", 2)
 
 		// Apply COALESCE if needed
 		expr := fmt.Sprintf("%s%s", c.TableReference, columnNameAndAlias[0])
 		if shouldCoalesce {
-			expr = fmt.Sprintf("COALESCE(%s, '')", expr)
+			switch columnType {
+			case String:
+				expr = fmt.Sprintf("COALESCE(%s, '')", expr)
+			case Float64:
+				expr = fmt.Sprintf("COALESCE(%s, 0.0)", expr)
+			}
 		}
 
 		// Apply alias if needed
@@ -56,12 +70,16 @@ func (c SQLColumnConfig) Build() []string {
 
 	// Process raw columns
 	for _, col := range c.RawColumns {
-		processColumn(col, false)
+		processColumn(col, false, String)
 	}
 
 	// Process coalesce columns
-	for _, col := range c.CoalesceColumns {
-		processColumn(col, true)
+	for _, col := range c.CoalesceStringColumns {
+		processColumn(col, true, String)
+	}
+
+	for _, col := range c.CoalesceFloat64Columns {
+		processColumn(col, true, Float64)
 	}
 
 	return completeColumnNames
