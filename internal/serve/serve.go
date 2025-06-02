@@ -311,11 +311,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
-				DirectPaymentService: &services.DirectPaymentService{
-					Models:                     o.Models,
-					EventProducer:              o.EventProducer,
-					DistributionAccountService: o.DistributionAccountService,
-				},
+				DirectPaymentService:        services.NewDirectPaymentService(o.Models, o.EventProducer, o.DistributionAccountService),
 			}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Post("/", paymentsHandler.PostPayment)

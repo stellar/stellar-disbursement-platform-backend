@@ -316,7 +316,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 				}
 			})
 
-			service := NewDirectPaymentService(models, dbConnectionPool)
+			service := NewDirectPaymentService(models, nil, nil)
 
 			mockDistService := &mocks.MockDistributionAccountService{}
 			mockEventProducer := events.NewMockProducer(t)
@@ -354,7 +354,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
-	service := NewDirectPaymentService(models, dbConnectionPool)
+	service := NewDirectPaymentService(models, nil, nil)
 
 	type payment struct {
 		asset  *data.Asset
@@ -484,7 +484,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 		Type: schema.DistributionAccountStellarDBVault,
 	}
 
-	service := NewDirectPaymentService(models, dbConnectionPool)
+	service := NewDirectPaymentService(models, nil, nil)
 
 	mockDistService := &mocks.MockDistributionAccountService{}
 	mockDistService.On("GetBalance", mock.Anything, distributionAccount, *asset).Return(100.0, nil)

@@ -2054,7 +2054,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			distServiceMock := &mocks.MockDistributionAccountService{}
 			eventProducerMock := events.NewMockProducer(t)
 
-			directPaymentService := services.NewDirectPaymentService(models, dbConnectionPool)
+			directPaymentService := services.NewDirectPaymentService(models, eventProducerMock, distServiceMock)
 			directPaymentService.DistributionAccountService = distServiceMock
 			directPaymentService.EventProducer = eventProducerMock
 
