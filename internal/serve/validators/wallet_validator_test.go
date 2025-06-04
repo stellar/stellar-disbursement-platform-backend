@@ -436,8 +436,8 @@ func TestWalletValidator_ValidateCreateWalletRequest_WithAssets(t *testing.T) {
 			},
 			enforceHTTPS: true,
 			expectedError: map[string]string{
-				"assets[0]": "contract assets are not implemented yet",
-				"assets[1]": "fiat assets are not implemented yet",
+				"assets[0]": "assets are not implemented yet",
+				"assets[1]": "assets are not implemented yet",
 			},
 			expectedBody: nil,
 		},

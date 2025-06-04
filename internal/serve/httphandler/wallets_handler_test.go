@@ -534,26 +534,7 @@ func Test_WalletsHandlerPostWallets_WithNewAssetFormat(t *testing.T) {
 			expectedBody: `{
 				"error": "invalid request body",
 				"extras": {
-					"assets[0]": "contract assets are not implemented yet"
-				}
-			}`,
-		},
-		{
-			name: "🔴 fails with fiat asset (not implemented)",
-			payload: `{
-				"name": "Fiat Asset Wallet",
-				"homepage": "https://fiat.com",
-				"deep_link_schema": "fiat://sdp",
-				"sep_10_client_domain": "fiat.com",
-				"assets": [
-					{"type": "fiat", "code": "USD"}
-				]
-			}`,
-			expectedStatus: http.StatusBadRequest,
-			expectedBody: `{
-				"error": "invalid request body",
-				"extras": {
-					"assets[0]": "fiat assets are not implemented yet"
+					"assets[0]": "assets are not implemented yet"
 				}
 			}`,
 		},
