@@ -40,6 +40,7 @@ type WalletInsert struct {
 	Homepage          string   `db:"homepage"`
 	SEP10ClientDomain string   `db:"sep_10_client_domain"`
 	DeepLinkSchema    string   `db:"deep_link_schema"`
+	Enabled           bool     `db:"enabled"`
 	AssetsIDs         []string `db:"assets_ids"`
 }
 
@@ -62,6 +63,12 @@ func (wa *WalletAssets) Scan(src interface{}) error {
 
 type WalletModel struct {
 	dbConnectionPool db.DBConnectionPool
+}
+
+func NewWalletModel(dbConnectionPool db.DBConnectionPool) *WalletModel {
+	return &WalletModel{
+		dbConnectionPool: dbConnectionPool,
+	}
 }
 
 // WalletColumnNames returns a comma-separated string of wallet column names for SQL queries. It includes optional date
@@ -163,13 +170,13 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 		const query = `
 			WITH new_wallet AS (
 				INSERT INTO wallets
-					(name, homepage, deep_link_schema, sep_10_client_domain)
+					(name, homepage, deep_link_schema, sep_10_client_domain, enabled)
 				VALUES
-					($1, $2, $3, $4)
+					($1, $2, $3, $4, $5)
 				RETURNING
 					*
 			), assets_cte AS (
-				SELECT UNNEST($5::text[]) id
+				SELECT UNNEST($6::text[]) id
 			), new_wallet_assets AS (
 				INSERT INTO wallets_assets
 					(wallet_id, asset_id)
@@ -183,12 +190,11 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 		`
 
 		var w Wallet
-		err := dbTx.GetContext(
+		if err := dbTx.GetContext(
 			ctx, &w, query,
-			newWallet.Name, newWallet.Homepage, newWallet.DeepLinkSchema, newWallet.SEP10ClientDomain,
+			newWallet.Name, newWallet.Homepage, newWallet.DeepLinkSchema, newWallet.SEP10ClientDomain, newWallet.Enabled,
 			pq.Array(newWallet.AssetsIDs),
-		)
-		if err != nil {
+		); err != nil {
 			if pqError, ok := err.(*pq.Error); ok {
 				constraintErrMap := map[string]error{
 					"wallets_assets_asset_id_fkey": ErrInvalidAssetID,

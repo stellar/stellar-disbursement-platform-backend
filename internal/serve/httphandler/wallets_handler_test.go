@@ -18,15 +18,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_WalletsHandlerGetWallets(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getDBConnectionPool(t)
 
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
@@ -172,17 +170,14 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 }
 
 func Test_WalletsHandlerPostWallets(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	handler := &WalletsHandler{Models: models}
+	assetResolver := services.NewAssetResolver(models.Assets)
+	handler := &WalletsHandler{Models: models, AssetResolver: assetResolver}
 
 	// Fixture setup
 	wallet := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
@@ -212,7 +207,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 					"homepage": "homepage is required",
 					"deep_link_schema": "deep_link_schema is required",
 					"sep_10_client_domain": "sep_10_client_domain is required",
-					"assets_ids": "provide at least one asset ID"
+					"assets": "provide at least one 'assets_ids' or 'assets'"
 				}
 			}`,
 		},
@@ -228,7 +223,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 			expectedBody: `{
 				"error": "invalid request body",
 				"extras": {
-					"assets_ids": "provide at least one asset ID"
+					"assets": "provide at least one 'assets_ids' or 'assets'"
 				}
 			}`,
 		},
@@ -339,6 +334,254 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				assert.Equal(t, "newwallet://deeplink/sdp", wallet.DeepLinkSchema)
 				assert.Equal(t, "newwallet.com", wallet.SEP10ClientDomain)
 				assert.Len(t, walletAssets, 1)
+			}
+		})
+	}
+}
+
+func Test_WalletsHandlerPostWallets_WithNewAssetFormat(t *testing.T) {
+	dbConnectionPool := getDBConnectionPool(t)
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	assetResolver := services.NewAssetResolver(models.Assets)
+
+	handler := &WalletsHandler{
+		Models:        models,
+		NetworkType:   utils.PubnetNetworkType,
+		AssetResolver: assetResolver,
+	}
+
+	xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.XLMAssetCode, "")
+	usdc, err := models.Assets.GetOrCreate(ctx, assets.USDCAssetCode, "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name           string
+		payload        string
+		expectedStatus int
+		expectedBody   string
+		validateResult func(t *testing.T, wallet *data.Wallet)
+	}{
+		{
+			name: "🟢 successfully creates wallet with new assets format - ID reference",
+			payload: fmt.Sprintf(`{
+				"name": "New Format Wallet ID",
+				"homepage": "https://newformat-id.com",
+				"deep_link_schema": "newformat-id://sdp",
+				"sep_10_client_domain": "newformat-id.com",
+				"assets": [
+					{"id": %q},
+					{"id": %q}
+				]
+			}`, xlm.ID, usdc.ID),
+			expectedStatus: http.StatusCreated,
+			validateResult: func(t *testing.T, wallet *data.Wallet) {
+				assert.Equal(t, "New Format Wallet ID", wallet.Name)
+				assert.Len(t, wallet.Assets, 2)
+
+				assetCodes := []string{wallet.Assets[0].Code, wallet.Assets[1].Code}
+				assert.Contains(t, assetCodes, assets.XLMAssetCode)
+				assert.Contains(t, assetCodes, assets.USDCAssetCode)
+			},
+		},
+		{
+			name: "🟢 successfully creates wallet with native asset reference",
+			payload: `{
+				"name": "Native Asset Wallet",
+				"homepage": "https://native-wallet.com",
+				"deep_link_schema": "native://sdp",
+				"sep_10_client_domain": "native-wallet.com",
+				"assets": [
+					{"type": "native"}
+				]
+			}`,
+			expectedStatus: http.StatusCreated,
+			validateResult: func(t *testing.T, wallet *data.Wallet) {
+				assert.Len(t, wallet.Assets, 1)
+				assert.Equal(t, assets.XLMAssetCode, wallet.Assets[0].Code)
+				assert.Equal(t, "", wallet.Assets[0].Issuer)
+			},
+		},
+		{
+			name: "🟢 successfully creates wallet with classic asset reference",
+			payload: `{
+				"name": "Classic Asset Wallet",
+				"homepage": "https://classic-wallet.com",
+				"deep_link_schema": "classic://sdp",
+				"sep_10_client_domain": "classic-wallet.com",
+				"assets": [
+					{
+						"type": "classic",
+						"code": "USDC",
+						"issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+					}
+				]
+			}`,
+			expectedStatus: http.StatusCreated,
+			validateResult: func(t *testing.T, wallet *data.Wallet) {
+				assert.Len(t, wallet.Assets, 1)
+				assert.Equal(t, assets.USDCAssetCode, wallet.Assets[0].Code)
+				assert.Equal(t, "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", wallet.Assets[0].Issuer)
+			},
+		},
+		{
+			name: "🟢 successfully creates wallet with mixed asset references",
+			payload: fmt.Sprintf(`{
+				"name": "Mixed Assets Wallet",
+				"homepage": "https://mixed-wallet.com",
+				"deep_link_schema": "mixed://sdp",
+				"sep_10_client_domain": "mixed-wallet.com",
+				"assets": [
+					{"id": %q},
+					{"type": "native"}
+				]
+			}`, usdc.ID),
+			expectedStatus: http.StatusCreated,
+			validateResult: func(t *testing.T, wallet *data.Wallet) {
+				assert.Len(t, wallet.Assets, 2)
+
+				assetMap := make(map[string]string)
+				for _, asset := range wallet.Assets {
+					assetMap[asset.Code] = asset.Issuer
+				}
+
+				assert.Equal(t, "", assetMap[assets.XLMAssetCode])
+				assert.Equal(t, "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", assetMap["USDC"])
+			},
+		},
+		{
+			name: "🟢 successfully creates wallet with enabled=false",
+			payload: fmt.Sprintf(`{
+				"name": "Disabled Wallet",
+				"homepage": "https://disabled-wallet.com",
+				"deep_link_schema": "disabled://sdp",
+				"sep_10_client_domain": "disabled-wallet.com",
+				"assets": [{"id": %q}],
+				"enabled": false
+			}`, xlm.ID),
+			expectedStatus: http.StatusCreated,
+			validateResult: func(t *testing.T, wallet *data.Wallet) {
+				assert.False(t, wallet.Enabled)
+			},
+		},
+		{
+			name: "🔴 fails when mixing assets_ids and assets",
+			payload: fmt.Sprintf(`{
+				"name": "Mixed Format Wallet",
+				"homepage": "https://mixed-format.com",
+				"deep_link_schema": "mixed-format://sdp",
+				"sep_10_client_domain": "mixed-format.com",
+				"assets_ids": [%q],
+				"assets": [{"type": "native"}]
+			}`, xlm.ID),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "invalid request body",
+				"extras": {
+					"assets": "cannot use both 'assets_ids' and 'assets' fields simultaneously"
+				}
+			}`,
+		},
+		{
+			name: "🔴 fails with invalid asset reference",
+			payload: `{
+				"name": "Invalid Asset Wallet",
+				"homepage": "https://invalid-asset.com",
+				"deep_link_schema": "invalid-asset://sdp",
+				"sep_10_client_domain": "invalid-asset.com",
+				"assets": [
+					{"type": "classic", "code": "MISSING_ISSUER"}
+				]
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "invalid request body",
+				"extras": {
+					"assets[0]": "'issuer' is required for classic asset"
+				}
+			}`,
+		},
+		{
+			name: "🔴 fails with non-existent asset ID",
+			payload: `{
+				"name": "Non-existent Asset Wallet",
+				"homepage": "https://nonexistent.com",
+				"deep_link_schema": "nonexistent://sdp",
+				"sep_10_client_domain": "nonexistent.com",
+				"assets": [
+					{"id": "non-existent-id"}
+				]
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error": "failed to resolve asset references"}`,
+		},
+		{
+			name: "🔴 fails with contract asset (not implemented)",
+			payload: `{
+				"name": "Contract Asset Wallet",
+				"homepage": "https://contract.com",
+				"deep_link_schema": "contract://sdp",
+				"sep_10_client_domain": "contract.com",
+				"assets": [
+					{"type": "contract", "code": "USDC", "contract_id": "CA..."}
+				]
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "invalid request body",
+				"extras": {
+					"assets[0]": "contract assets are not implemented yet"
+				}
+			}`,
+		},
+		{
+			name: "🔴 fails with fiat asset (not implemented)",
+			payload: `{
+				"name": "Fiat Asset Wallet",
+				"homepage": "https://fiat.com",
+				"deep_link_schema": "fiat://sdp",
+				"sep_10_client_domain": "fiat.com",
+				"assets": [
+					{"type": "fiat", "code": "USD"}
+				]
+			}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "invalid request body",
+				"extras": {
+					"assets[0]": "fiat assets are not implemented yet"
+				}
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(tc.payload))
+			require.NoError(t, err)
+
+			http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+
+			if tc.expectedBody != "" {
+				assert.JSONEq(t, tc.expectedBody, string(respBody))
+			} else if tc.expectedStatus == http.StatusCreated && tc.validateResult != nil {
+				var wallet data.Wallet
+				err = json.Unmarshal(respBody, &wallet)
+				require.NoError(t, err)
+
+				tc.validateResult(t, &wallet)
 			}
 		})
 	}

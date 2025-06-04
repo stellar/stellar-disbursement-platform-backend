@@ -9,6 +9,7 @@ import (
 )
 
 func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -31,7 +32,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 				"homepage":             "homepage is required",
 				"name":                 "name is required",
 				"sep_10_client_domain": "sep_10_client_domain is required",
-				"assets_ids":           "provide at least one asset ID",
+				"assets":               "provide at least one 'assets_ids' or 'assets'",
 			},
 		},
 		{
@@ -101,7 +102,9 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			wv := NewWalletValidator()
 			reqBody := wv.ValidateCreateWalletRequest(ctx, tc.reqBody, tc.enforceHTTPS)
 
@@ -120,9 +123,11 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 }
 
 func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	t.Run("returns error when request body is empty", func(t *testing.T) {
+		t.Parallel()
 		wv := NewWalletValidator()
 		wv.ValidateCreateWalletRequest(ctx, nil, false)
 		assert.True(t, wv.HasErrors())
@@ -130,6 +135,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 	})
 
 	t.Run("returns error when body has empty fields", func(t *testing.T) {
+		t.Parallel()
 		wv := NewWalletValidator()
 		reqBody := &PatchWalletRequest{}
 
@@ -141,6 +147,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 	})
 
 	t.Run("validates successfully", func(t *testing.T) {
+		t.Parallel()
 		wv := NewWalletValidator()
 
 		e := new(bool)
@@ -163,4 +170,350 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 		assert.False(t, wv.HasErrors())
 		assert.Empty(t, wv.Errors)
 	})
+}
+
+func TestAssetReference_Validate(t *testing.T) {
+	testCases := []struct {
+		name          string
+		assetRef      AssetReference
+		expectedError string
+	}{
+		{
+			name: "valid ID reference",
+			assetRef: AssetReference{
+				ID: "ef262966-1cbb-4fdb-9f6f-cc335e954dd1",
+			},
+			expectedError: "",
+		},
+		{
+			name: "ID reference with other fields should fail",
+			assetRef: AssetReference{
+				ID:   "ef262966-1cbb-4fdb-9f6f-cc335e954dd1",
+				Type: "classic",
+				Code: "USDC",
+			},
+			expectedError: "when 'id' is provided, other fields should not be present",
+		},
+
+		{
+			name: "valid classic asset",
+			assetRef: AssetReference{
+				Type:   "classic",
+				Code:   "USDC",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+			expectedError: "",
+		},
+		{
+			name: "classic asset missing code",
+			assetRef: AssetReference{
+				Type:   "classic",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+			expectedError: "'code' is required for classic asset",
+		},
+		{
+			name: "classic asset missing issuer",
+			assetRef: AssetReference{
+				Type: "classic",
+				Code: "USDC",
+			},
+			expectedError: "'issuer' is required for classic asset",
+		},
+		{
+			name: "classic asset with invalid issuer format",
+			assetRef: AssetReference{
+				Type:   "classic",
+				Code:   "USDC",
+				Issuer: "invalid-issuer",
+			},
+			expectedError: "invalid issuer address format",
+		},
+		{
+			name: "classic asset with issuer starting with wrong character",
+			assetRef: AssetReference{
+				Type:   "classic",
+				Code:   "USDC",
+				Issuer: "ABBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+			expectedError: "invalid issuer address format",
+		},
+
+		{
+			name: "valid native asset",
+			assetRef: AssetReference{
+				Type: "native",
+			},
+			expectedError: "",
+		},
+		{
+			name: "native asset with code should fail",
+			assetRef: AssetReference{
+				Type: "native",
+				Code: "XLM",
+			},
+			expectedError: "native asset should not have code, issuer, or contract_id",
+		},
+		{
+			name: "native asset with issuer should fail",
+			assetRef: AssetReference{
+				Type:   "native",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+			expectedError: "native asset should not have code, issuer, or contract_id",
+		},
+
+		// Invalid cases
+		{
+			name:          "empty reference",
+			assetRef:      AssetReference{},
+			expectedError: "either 'id' or 'type' must be provided",
+		},
+		{
+			name: "invalid asset type",
+			assetRef: AssetReference{
+				Type: "invalid-type",
+			},
+			expectedError: "invalid asset type: invalid-type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.assetRef.Validate()
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			}
+		})
+	}
+}
+
+func TestWalletValidator_ValidateCreateWalletRequest_WithAssets(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name          string
+		reqBody       *WalletRequest
+		enforceHTTPS  bool
+		expectedError map[string]string
+		expectedBody  *WalletRequest
+	}{
+		{
+			name: "valid request with legacy assets_ids",
+			reqBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				AssetsIDs:         []string{"asset-id-1", "asset-id-2"},
+			},
+			enforceHTTPS:  true,
+			expectedError: nil,
+			expectedBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				AssetsIDs:         []string{"asset-id-1", "asset-id-2"},
+				Assets:            nil,
+				Enabled:           boolToPtr(true),
+			},
+		},
+		{
+			name: "valid request with new assets format",
+			reqBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				Assets: []AssetReference{
+					{ID: "asset-id-1"},
+					{Type: "native"},
+					{Type: "classic", Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+				},
+			},
+			enforceHTTPS:  true,
+			expectedError: nil,
+			expectedBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				AssetsIDs:         nil,
+				Assets: []AssetReference{
+					{ID: "asset-id-1"},
+					{Type: "native"},
+					{Type: "classic", Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+				},
+				Enabled: boolToPtr(true),
+			},
+		},
+		{
+			name: "request with enabled field",
+			reqBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				AssetsIDs:         []string{"asset-id-1"},
+				Enabled:           &[]bool{true}[0],
+			},
+			enforceHTTPS:  true,
+			expectedError: nil,
+			expectedBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				AssetsIDs:         []string{"asset-id-1"},
+				Assets:            nil,
+				Enabled:           &[]bool{true}[0],
+			},
+		},
+		{
+			name: "error when both assets_ids and assets are provided",
+			reqBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				AssetsIDs:         []string{"asset-id-1"},
+				Assets: []AssetReference{
+					{ID: "asset-id-2"},
+				},
+			},
+			enforceHTTPS: true,
+			expectedError: map[string]string{
+				"assets": "cannot use both 'assets_ids' and 'assets' fields simultaneously",
+			},
+			expectedBody: nil,
+		},
+		{
+			name: "error when no assets provided",
+			reqBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+			},
+			enforceHTTPS: true,
+			expectedError: map[string]string{
+				"assets": "provide at least one 'assets_ids' or 'assets'",
+			},
+			expectedBody: nil,
+		},
+		{
+			name: "error with invalid asset reference",
+			reqBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				Assets: []AssetReference{
+					{Type: "classic", Code: "USDC"},
+				},
+			},
+			enforceHTTPS: true,
+			expectedError: map[string]string{
+				"assets[0]": "'issuer' is required for classic asset",
+			},
+			expectedBody: nil,
+		},
+		{
+			name: "error with multiple invalid asset references",
+			reqBody: &WalletRequest{
+				Name:              "Test Wallet",
+				Homepage:          "https://testwallet.com",
+				DeepLinkSchema:    "testwallet://sdp",
+				SEP10ClientDomain: "testwallet.com",
+				Assets: []AssetReference{
+					{Type: "contract", Code: "USDC", ContractID: "CA..."},
+					{Type: "fiat", Code: "USD"},
+				},
+			},
+			enforceHTTPS: true,
+			expectedError: map[string]string{
+				"assets[0]": "contract assets are not implemented yet",
+				"assets[1]": "fiat assets are not implemented yet",
+			},
+			expectedBody: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := NewWalletValidator()
+			result := validator.ValidateCreateWalletRequest(ctx, tc.reqBody, tc.enforceHTTPS)
+
+			if tc.expectedError != nil {
+				require.True(t, validator.HasErrors())
+				require.Nil(t, result)
+
+				for field, expectedMsg := range tc.expectedError {
+					actualErrors, ok := validator.Errors[field]
+					require.True(t, ok, "Expected error for field %s not found", field)
+					require.Contains(t, actualErrors, expectedMsg)
+				}
+			} else {
+				require.False(t, validator.HasErrors())
+				require.NotNil(t, result)
+				assert.Equal(t, tc.expectedBody, result)
+			}
+		})
+	}
+}
+
+func TestWalletValidator_BackwardCompatibility(t *testing.T) {
+	ctx := context.Background()
+
+	legacyRequest := &WalletRequest{
+		Name:              "Legacy Wallet",
+		Homepage:          "https://legacy.com",
+		DeepLinkSchema:    "legacy://sdp",
+		SEP10ClientDomain: "legacy.com",
+		AssetsIDs:         []string{"id-1", "id-2", "id-3"},
+	}
+
+	validator := NewWalletValidator()
+	result := validator.ValidateCreateWalletRequest(ctx, legacyRequest, true)
+
+	require.False(t, validator.HasErrors())
+	require.NotNil(t, result)
+	assert.Equal(t, []string{"id-1", "id-2", "id-3"}, result.AssetsIDs)
+	assert.Nil(t, result.Assets)
+}
+
+func TestWalletValidator_AssetReferenceValidation(t *testing.T) {
+	ctx := context.Background()
+
+	request := &WalletRequest{
+		Name:              "Multi Asset Wallet",
+		Homepage:          "https://multi.com",
+		DeepLinkSchema:    "multi://sdp",
+		SEP10ClientDomain: "multi.com",
+		Assets: []AssetReference{
+			{ID: "existing-id"},
+			{Type: "native"},
+			{Type: "classic", Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+
+			{Type: "classic", Code: "BAD"},
+		},
+	}
+
+	validator := NewWalletValidator()
+	result := validator.ValidateCreateWalletRequest(ctx, request, true)
+
+	require.True(t, validator.HasErrors())
+	require.Nil(t, result)
+
+	errors, ok := validator.Errors["assets[3]"]
+	require.True(t, ok)
+	assert.Contains(t, errors, "'issuer' is required for classic asset")
+}
+
+func boolToPtr(b bool) *bool {
+	return &b
 }

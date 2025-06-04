@@ -39,7 +39,7 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 	}
 	return &Models{
 		Disbursements:               &DisbursementModel{dbConnectionPool: dbConnectionPool},
-		Wallets:                     &WalletModel{dbConnectionPool: dbConnectionPool},
+		Wallets:                     NewWalletModel(dbConnectionPool),
 		Assets:                      &AssetModel{dbConnectionPool: dbConnectionPool},
 		Organizations:               &OrganizationModel{dbConnectionPool: dbConnectionPool},
 		Payment:                     &PaymentModel{dbConnectionPool: dbConnectionPool},
