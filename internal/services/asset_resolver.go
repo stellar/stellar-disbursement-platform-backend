@@ -55,10 +55,8 @@ func (ar *AssetResolver) resolveAssetReference(ctx context.Context, ref validato
 			return "", fmt.Errorf("failed to get or create native asset: %w", err)
 		}
 		return asset.ID, nil
-	case validators.AssetReferenceTypeContract:
-		return "", fmt.Errorf("contract assets are not implemented yet")
-	case validators.AssetReferenceTypeFiat:
-		return "", fmt.Errorf("fiat assets are not implemented yet")
+	case validators.AssetReferenceTypeContract, validators.AssetReferenceTypeFiat:
+		return "", fmt.Errorf("assets are not implemented yet")
 	default:
 		return "", fmt.Errorf("unknown asset reference type")
 	}

@@ -146,6 +146,35 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 	return modifiedReq
 }
 
+func (wv *WalletValidator) inferAssetType(asset AssetReference) AssetReference {
+	// If ID is provided, no inference needed
+	if asset.ID != "" {
+		return asset
+	}
+
+	// If type is already specified, no inference needed
+	if asset.Type != "" {
+		return asset
+	}
+
+	// Inference logic for backward compatibility
+	result := asset
+
+	if strings.ToUpper(asset.Code) == assets.XLMAssetCode && asset.Issuer == "" {
+		result.Type = string(AssetReferenceTypeNative)
+		result.Code = ""
+		return result
+	}
+
+	// Classic asset detection: has both code and issuer
+	if asset.Code != "" && asset.Issuer != "" {
+		result.Type = string(AssetReferenceTypeClassic)
+		return result
+	}
+
+	return result
+}
+
 func (wv *WalletValidator) ValidatePatchWalletRequest(reqBody *PatchWalletRequest) {
 	wv.Check(reqBody != nil, "body", "request body is empty")
 	if wv.HasErrors() {
@@ -178,18 +207,12 @@ func (ar AssetReference) Validate() error {
 		if !strkey.IsValidEd25519PublicKey(ar.Issuer) {
 			return fmt.Errorf("invalid issuer address format")
 		}
-
 	case AssetReferenceTypeNative:
 		if ar.Code != "" || ar.Issuer != "" || ar.ContractID != "" {
 			return fmt.Errorf("native asset should not have code, issuer, or contract_id")
 		}
-
-	case AssetReferenceTypeContract:
-		return fmt.Errorf("contract assets are not implemented yet")
-
-	case AssetReferenceTypeFiat:
-		return fmt.Errorf("fiat assets are not implemented yet")
-
+	case AssetReferenceTypeContract, AssetReferenceTypeFiat:
+		return fmt.Errorf("assets are not implemented yet")
 	default:
 		return fmt.Errorf("invalid asset type: %s", ar.Type)
 	}
@@ -202,33 +225,4 @@ func (ar AssetReference) GetReferenceType() AssetReferenceType {
 		return AssetReferenceTypeID
 	}
 	return AssetReferenceType(ar.Type)
-}
-
-func (wv *WalletValidator) inferAssetType(asset AssetReference) AssetReference {
-	// If ID is provided, no inference needed
-	if asset.ID != "" {
-		return asset
-	}
-
-	// If type is already specified, no inference needed
-	if asset.Type != "" {
-		return asset
-	}
-
-	// Inference logic for backward compatibility
-	result := asset
-
-	if strings.ToUpper(asset.Code) == assets.XLMAssetCode && asset.Issuer == "" {
-		result.Type = string(AssetReferenceTypeNative)
-		result.Code = ""
-		return result
-	}
-
-	// Classic asset detection: has both code and issuer
-	if asset.Code != "" && asset.Issuer != "" {
-		result.Type = string(AssetReferenceTypeClassic)
-		return result
-	}
-
-	return result
 }

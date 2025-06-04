@@ -65,12 +65,6 @@ type WalletModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
-func NewWalletModel(dbConnectionPool db.DBConnectionPool) *WalletModel {
-	return &WalletModel{
-		dbConnectionPool: dbConnectionPool,
-	}
-}
-
 // WalletColumnNames returns a comma-separated string of wallet column names for SQL queries. It includes optional date
 // fields based on the provided parameter.
 func WalletColumnNames(tableReference, resultAlias string, includeDates bool) string {
