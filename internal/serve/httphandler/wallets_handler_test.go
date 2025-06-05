@@ -14,8 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -569,12 +567,7 @@ func Test_WalletsHandlerPostWallets_WithNewAssetFormat(t *testing.T) {
 }
 
 func Test_WalletsHandlerDeleteWallet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -647,106 +640,306 @@ func Test_WalletsHandlerDeleteWallet(t *testing.T) {
 	})
 }
 
-func Test_WalletsHandlerPatchWallet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
+	dbConnectionPool := getDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
+	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+
+	xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+	usdc := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+	eurc := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
 	handler := &WalletsHandler{
-		Models: models,
+		Models:        models,
+		NetworkType:   utils.TestnetNetworkType,
+		AssetResolver: services.NewAssetResolver(models.Assets),
 	}
 
 	r := chi.NewRouter()
 	r.Patch("/wallets/{id}", handler.PatchWallets)
 
-	t.Run("returns BadRequest when payload is invalid", func(t *testing.T) {
-		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://mywallet.com", "mywallet.com", "mywallet://")
+	testCases := []struct {
+		name           string
+		setupFn        func(t *testing.T) *data.Wallet
+		payload        string
+		walletIDFn     func(wallet *data.Wallet) string
+		expectedStatus int
+		expectedBody   string
+		validateResult func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet)
+	}{
+		{
+			name: "🟢 updates all fields successfully",
+			setupFn: func(t *testing.T) *data.Wallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Lion El'Jonson's Vault",
+					"https://caliban.treasury",
+					"caliban.treasury",
+					"darkangels://")
+				data.CreateWalletAssets(t, ctx, dbConnectionPool, wallet.ID, []string{xlm.ID})
+				return wallet
+			},
+			payload: fmt.Sprintf(`{
+				"name": "Roboute's Treasury",
+				"homepage": "https://macragge.funds",
+				"deep_link_schema": "ultramarines://sdp",
+				"sep_10_client_domain": "macragge.funds",
+				"enabled": false,
+				"assets": [
+					{"id": %q},
+					{"type": "native"}
+				]
+			}`, usdc.ID),
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet) {
+				assert.Equal(t, "Roboute's Treasury", wallet.Name)
+				assert.Equal(t, "https://macragge.funds", wallet.Homepage)
+				assert.Equal(t, "ultramarines://sdp", wallet.DeepLinkSchema)
+				assert.Equal(t, "macragge.funds", wallet.SEP10ClientDomain)
+				assert.False(t, wallet.Enabled)
+				assert.Len(t, wallet.Assets, 2)
 
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/wallets/%s", wallet.ID), strings.NewReader(`{}`))
-		require.NoError(t, err)
+				assetCodes := make([]string, 0, len(wallet.Assets))
+				for _, asset := range wallet.Assets {
+					assetCodes = append(assetCodes, asset.Code)
+				}
+				assert.Contains(t, assetCodes, "USDC")
+				assert.Contains(t, assetCodes, "XLM")
+			},
+		},
+		{
+			name: "🟢 updates only name",
+			setupFn: func(t *testing.T) *data.Wallet {
+				return data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Jaghatai Khan's Wallet",
+					"https://chogoris.speed",
+					"chogoris.speed",
+					"whitescars://")
+			},
+			payload: `{
+				"name": "Vulkan's Forge-Vault"
+			}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet) {
+				assert.Equal(t, "Vulkan's Forge-Vault", wallet.Name)
+				assert.Equal(t, originalWallet.Homepage, wallet.Homepage)
+				assert.Equal(t, originalWallet.DeepLinkSchema, wallet.DeepLinkSchema)
+				assert.Equal(t, originalWallet.SEP10ClientDomain, wallet.SEP10ClientDomain)
+				assert.Equal(t, originalWallet.Enabled, wallet.Enabled)
+			},
+		},
+		{
+			name: "🟢 updates only enabled status",
+			setupFn: func(t *testing.T) *data.Wallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Magnus' Library Fund",
+					"https://prospero.knowledge",
+					"prospero.knowledge",
+					"thousandsons://")
+				assert.True(t, wallet.Enabled)
+				return wallet
+			},
+			payload: `{
+				"enabled": false
+			}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet) {
+				assert.False(t, wallet.Enabled)
+				assert.Equal(t, originalWallet.Name, wallet.Name)
+				assert.Equal(t, originalWallet.Homepage, wallet.Homepage)
+			},
+		},
+		{
+			name: "🟢 replaces assets with new list",
+			setupFn: func(t *testing.T) *data.Wallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Perturabo's War Chest",
+					"https://olympia.siege",
+					"olympia.siege",
+					"ironwarriors://")
+				data.CreateWalletAssets(t, ctx, dbConnectionPool, wallet.ID, []string{xlm.ID, usdc.ID})
+				return wallet
+			},
+			payload: fmt.Sprintf(`{
+				"assets": [
+					{"id": %q},
+					{"type": "classic", "code": "USDC", "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"}
+				]
+			}`, eurc.ID),
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet) {
+				assert.Len(t, wallet.Assets, 2)
 
-		r.ServeHTTP(rr, req)
+				assetCodes := make([]string, 0, len(wallet.Assets))
+				for _, asset := range wallet.Assets {
+					assetCodes = append(assetCodes, asset.Code)
+				}
+				assert.Contains(t, assetCodes, "EURC")
+				assert.Contains(t, assetCodes, "USDC")
+				assert.NotContains(t, assetCodes, "XLM")
+			},
+		},
+		{
+			name: "🟢 clears assets with empty array",
+			setupFn: func(t *testing.T) *data.Wallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Mortarion's Plague Purse",
+					"https://barbarus.decay",
+					"barbarus.decay",
+					"deathguard://")
+				data.CreateWalletAssets(t, ctx, dbConnectionPool, wallet.ID, []string{xlm.ID, usdc.ID})
+				return wallet
+			},
+			payload: `{
+				"assets": []
+			}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet) {
+				assert.Len(t, wallet.Assets, 0)
+			},
+		},
+		{
+			name: "🟢 preserves assets when not specified",
+			setupFn: func(t *testing.T) *data.Wallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Fulgrim's Art Fund",
+					"https://chemos.perfection",
+					"chemos.perfection",
+					"emperorschildren://")
+				data.CreateWalletAssets(t, ctx, dbConnectionPool, wallet.ID, []string{xlm.ID, usdc.ID})
+				return wallet
+			},
+			payload: `{
+				"name": "Rylanor's Memorial Fund"
+			}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet) {
+				assert.Equal(t, "Rylanor's Memorial Fund", wallet.Name)
+				assert.Len(t, wallet.Assets, 2)
+			},
+		},
+		{
+			name: "🔴 fails when no fields provided",
+			setupFn: func(t *testing.T) *data.Wallet {
+				return data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Angron's Rage Budget",
+					"https://nuceria.anger",
+					"nuceria.anger",
+					"worldeaters://")
+			},
+			payload:        `{}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "invalid request body",
+				"extras": {
+					"body": "at least one field must be provided for update"
+				}
+			}`,
+		},
+		{
+			name: "🔴 fails with invalid asset reference",
+			setupFn: func(t *testing.T) *data.Wallet {
+				return data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Konrad's Justice Fund",
+					"https://nostramo.fear",
+					"nostramo.fear",
+					"nightlords://")
+			},
+			payload: `{
+				"assets": [
+					{"type": "contract", "code": "CHAOS", "contract_id": "test"}
+				]
+			}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "invalid request body",
+				"extras": {
+					"assets[0]": "assets are not implemented yet"
+				}
+			}`,
+		},
+		{
+			name: "🔴 returns not found for non-existent wallet",
+			setupFn: func(t *testing.T) *data.Wallet {
+				return nil
+			},
+			payload: `{
+				"enabled": false
+			}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return "lost-primarch" },
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   `{"error": "Resource not found."}`,
+		},
+		{
+			name: "🔴 fails with duplicate wallet name",
+			setupFn: func(t *testing.T) *data.Wallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Lorgar's Word Bearer Fund",
+					"https://colchis.faith",
+					"colchis.faith",
+					"wordbearers://")
 
-		resp := rr.Result()
+				data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Erebus' Corruption Account",
+					"https://calth.betrayal",
+					"calth.betrayal",
+					"chaosundivided://")
 
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+				return wallet
+			},
+			payload: `{
+				"name": "Erebus' Corruption Account"
+			}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusConflict,
+			expectedBody:   `{"error": "a wallet with this name already exists"}`,
+		},
+	}
 
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "invalid request body", "extras": {"enabled": "enabled is required"}}`, string(respBody))
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var wallet *data.Wallet
+			if tc.setupFn != nil {
+				wallet = tc.setupFn(t)
+			}
 
-	t.Run("returns NotFound when wallet doesn't exist", func(t *testing.T) {
-		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+			walletID := tc.walletIDFn(wallet)
 
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/wallets/unknown", strings.NewReader(`{"enabled": true}`))
-		require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+				fmt.Sprintf("/wallets/%s", walletID),
+				strings.NewReader(tc.payload))
+			require.NoError(t, err)
 
-		r.ServeHTTP(rr, req)
+			r.ServeHTTP(rr, req)
 
-		resp := rr.Result()
+			resp := rr.Result()
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
 
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
 
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Resource not found."}`, string(respBody))
-	})
-
-	t.Run("updates wallet successfully", func(t *testing.T) {
-		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://mywallet.com", "mywallet.com", "mywallet://")
-		assert.True(t, wallet.Enabled)
-
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/wallets/%s", wallet.ID), strings.NewReader(`{"enabled": false}`))
-		require.NoError(t, err)
-
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "wallet updated successfully"}`, string(respBody))
-
-		wallet, err = models.Wallets.Get(ctx, wallet.ID)
-		require.NoError(t, err)
-		assert.False(t, wallet.Enabled)
-
-		rr = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/wallets/%s", wallet.ID), strings.NewReader(`{"enabled": true}`))
-		require.NoError(t, err)
-
-		r.ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "wallet updated successfully"}`, string(respBody))
-
-		wallet, err = models.Wallets.Get(ctx, wallet.ID)
-		require.NoError(t, err)
-		assert.True(t, wallet.Enabled)
-	})
+			if tc.expectedBody != "" {
+				assert.JSONEq(t, tc.expectedBody, string(respBody))
+			} else if tc.validateResult != nil {
+				var updatedWallet data.Wallet
+				err = json.Unmarshal(respBody, &updatedWallet)
+				require.NoError(t, err)
+				tc.validateResult(t, &updatedWallet, wallet)
+			}
+		})
+	}
 }

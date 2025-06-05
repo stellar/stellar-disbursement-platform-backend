@@ -44,7 +44,12 @@ type WalletRequest struct {
 }
 
 type PatchWalletRequest struct {
-	Enabled *bool `json:"enabled"`
+	Name              *string           `json:"name,omitempty"`
+	Homepage          *string           `json:"homepage,omitempty"`
+	DeepLinkSchema    *string           `json:"deep_link_schema,omitempty"`
+	SEP10ClientDomain *string           `json:"sep_10_client_domain,omitempty"`
+	Enabled           *bool             `json:"enabled,omitempty"`
+	Assets            *[]AssetReference `json:"assets,omitempty"`
 }
 
 type WalletValidator struct {
@@ -146,6 +151,110 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 	return modifiedReq
 }
 
+func (wv *WalletValidator) ValidatePatchWalletRequest(ctx context.Context, reqBody *PatchWalletRequest, enforceHTTPS bool) *PatchWalletRequest {
+	wv.Check(reqBody != nil, "body", "request body is empty")
+	if wv.HasErrors() {
+		return nil
+	}
+
+	hasField := reqBody.Name != nil || reqBody.Homepage != nil ||
+		reqBody.DeepLinkSchema != nil || reqBody.SEP10ClientDomain != nil ||
+		reqBody.Enabled != nil || reqBody.Assets != nil
+
+	wv.Check(hasField, "body", "at least one field must be provided for update")
+	if wv.HasErrors() {
+		return nil
+	}
+
+	modifiedReq := &PatchWalletRequest{
+		Enabled: reqBody.Enabled,
+	}
+
+	// Validate and process name
+	if reqBody.Name != nil {
+		name := strings.TrimSpace(*reqBody.Name)
+		wv.Check(name != "", "name", "name cannot be empty")
+		modifiedReq.Name = &name
+	}
+
+	// Validate and process homepage
+	if reqBody.Homepage != nil {
+		homepage := strings.TrimSpace(*reqBody.Homepage)
+		wv.Check(homepage != "", "homepage", "homepage cannot be empty")
+
+		homepageURL, err := url.ParseRequestURI(homepage)
+		if err != nil {
+			log.Ctx(ctx).Errorf("parsing homepage URL: %v", err)
+			wv.Check(false, "homepage", "invalid homepage URL provided")
+		} else {
+			schemes := []string{"https"}
+			if !enforceHTTPS {
+				schemes = append(schemes, "http")
+			}
+			wv.CheckError(utils.ValidateURLScheme(homepage, schemes...), "homepage", "")
+			if !wv.HasErrors() {
+				validatedHomepage := homepageURL.String()
+				modifiedReq.Homepage = &validatedHomepage
+			}
+		}
+	}
+
+	if reqBody.DeepLinkSchema != nil {
+		deepLinkSchema := strings.TrimSpace(*reqBody.DeepLinkSchema)
+		wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema cannot be empty")
+
+		deepLinkSchemaURL, err := url.ParseRequestURI(deepLinkSchema)
+		if err != nil {
+			log.Ctx(ctx).Errorf("parsing deep link schema: %v", err)
+			wv.Check(false, "deep_link_schema", "invalid deep link schema provided")
+		} else {
+			validatedDeepLink := deepLinkSchemaURL.String()
+			modifiedReq.DeepLinkSchema = &validatedDeepLink
+		}
+	}
+
+	if reqBody.SEP10ClientDomain != nil {
+		sep10ClientDomain := strings.TrimSpace(*reqBody.SEP10ClientDomain)
+		wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain cannot be empty")
+
+		sep10URL, err := url.Parse(sep10ClientDomain)
+		if err != nil {
+			log.Ctx(ctx).Errorf("parsing SEP-10 client domain URL: %v", err)
+			wv.Check(false, "sep_10_client_domain", "invalid SEP-10 client domain URL provided")
+		} else {
+			sep10Host := sep10URL.Host
+			if sep10Host == "" {
+				sep10Host = sep10URL.String()
+			}
+			if err := utils.ValidateDNS(sep10Host); err != nil {
+				log.Ctx(ctx).Errorf("validating SEP-10 client domain: %v", err)
+				wv.Check(false, "sep_10_client_domain", "invalid SEP-10 client domain provided")
+			} else {
+				modifiedReq.SEP10ClientDomain = &sep10Host
+			}
+		}
+	}
+
+	if reqBody.Assets != nil {
+		var processedAssets []AssetReference
+		for i, asset := range *reqBody.Assets {
+			inferredAsset := wv.inferAssetType(asset)
+			if err := inferredAsset.Validate(); err != nil {
+				wv.Check(false, fmt.Sprintf("assets[%d]", i), err.Error())
+				continue
+			}
+			processedAssets = append(processedAssets, inferredAsset)
+		}
+		modifiedReq.Assets = &processedAssets
+	}
+
+	if wv.HasErrors() {
+		return nil
+	}
+
+	return modifiedReq
+}
+
 func (wv *WalletValidator) inferAssetType(asset AssetReference) AssetReference {
 	// If ID is provided, no inference needed
 	if asset.ID != "" {
@@ -173,14 +282,6 @@ func (wv *WalletValidator) inferAssetType(asset AssetReference) AssetReference {
 	}
 
 	return result
-}
-
-func (wv *WalletValidator) ValidatePatchWalletRequest(reqBody *PatchWalletRequest) {
-	wv.Check(reqBody != nil, "body", "request body is empty")
-	if wv.HasErrors() {
-		return
-	}
-	wv.Check(reqBody.Enabled != nil, "enabled", "enabled is required")
 }
 
 func (ar AssetReference) Validate() error {

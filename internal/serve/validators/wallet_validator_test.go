@@ -131,7 +131,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 		wv := NewWalletValidator()
 		wv.ValidateCreateWalletRequest(ctx, nil, false)
 		assert.True(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, wv.Errors)
+		assert.Equal(t, map[string]any{"body": "request body is empty"}, wv.Errors)
 	})
 
 	t.Run("returns error when body has empty fields", func(t *testing.T) {
@@ -139,10 +139,10 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 		wv := NewWalletValidator()
 		reqBody := &PatchWalletRequest{}
 
-		wv.ValidatePatchWalletRequest(reqBody)
+		wv.ValidatePatchWalletRequest(ctx, reqBody, false)
 		assert.True(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{
-			"enabled": "enabled is required",
+		assert.Equal(t, map[string]any{
+			"body": "at least one field must be provided for update",
 		}, wv.Errors)
 	})
 
@@ -156,7 +156,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 			Enabled: e,
 		}
 
-		wv.ValidatePatchWalletRequest(reqBody)
+		wv.ValidatePatchWalletRequest(ctx, reqBody, false)
 		assert.False(t, wv.HasErrors())
 		assert.Empty(t, wv.Errors)
 
@@ -166,7 +166,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 			Enabled: e,
 		}
 
-		wv.ValidatePatchWalletRequest(reqBody)
+		wv.ValidatePatchWalletRequest(ctx, reqBody, false)
 		assert.False(t, wv.HasErrors())
 		assert.Empty(t, wv.Errors)
 	})
