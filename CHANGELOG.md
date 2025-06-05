@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Added a new endpoint to unregister a receiver wallet `PATCH /receivers/wallets/:id/status`. [#675](https://github.com/stellar/stellar-disbursement-platform-backend/pull/675)
 - Allow the serviceaccount to be set for the ap deployment in the helm chart [#679](https://github.com/stellar/stellar-disbursement-platform-backend/pull/679)
 - Add badges to the README.md file. [#691](https://github.com/stellar/stellar-disbursement-platform-backend/pull/691)
+- Update wallet POST to allow accept new asset references [#696](https://github.com/stellar/stellar-disbursement-platform-backend/pull/696)
+- Update PATCH endpoint to extend update capabilities [#697](https://github.com/stellar/stellar-disbursement-platform-backend/pull/697)
 
 ### Security and Dependencies
 
@@ -60,7 +62,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Bump golang.org/x/net from 0.37.0 to 0.38.0 in the go_modules group [#622](https://github.com/stellar/stellar-disbursement-platform-backend/pull/622)
 - Bump docker/build-push-action in the all-actions group [#642](https://github.com/stellar/stellar-disbursement-platform-backend/pull/642)
 - Bump the minor-and-patch group across 1 directory with 14 updates [#632](https://github.com/stellar/stellar-disbursement-platform-backend/pull/632)
-
 
 ## [3.6.2](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.6.2) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.1...3.6.2))
 
