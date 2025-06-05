@@ -262,8 +262,6 @@ func TestAssetReference_Validate(t *testing.T) {
 			},
 			expectedError: "native asset should not have code, issuer, or contract_id",
 		},
-
-		// Invalid cases
 		{
 			name:          "empty reference",
 			assetRef:      AssetReference{},

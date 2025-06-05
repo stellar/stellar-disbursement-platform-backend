@@ -643,7 +643,6 @@ func Test_WalletModelUpdate(t *testing.T) {
 	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
 	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-	// Create test assets
 	xlm := CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 	usdc := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
 
