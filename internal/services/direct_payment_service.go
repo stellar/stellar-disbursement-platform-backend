@@ -63,18 +63,18 @@ func (e InsufficientBalanceForDirectPaymentError) Error() string {
 
 type DirectPaymentService struct {
 	Models                     *data.Models
-	DBConnectionPool           db.DBConnectionPool
 	EventProducer              events.Producer
 	DistributionAccountService DistributionAccountServiceInterface
 	Resolvers                  *ResolverFactory
 }
 
 // NewDirectPaymentService creates a new DirectPaymentService with resolvers
-func NewDirectPaymentService(models *data.Models, dbConnectionPool db.DBConnectionPool) *DirectPaymentService {
+func NewDirectPaymentService(models *data.Models, eventProducer events.Producer, distributionAccount DistributionAccountServiceInterface) *DirectPaymentService {
 	return &DirectPaymentService{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
-		Resolvers:        NewResolverFactory(models),
+		Models:                     models,
+		EventProducer:              eventProducer,
+		DistributionAccountService: distributionAccount,
+		Resolvers:                  NewResolverFactory(models),
 	}
 }
 
