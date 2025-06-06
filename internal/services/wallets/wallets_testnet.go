@@ -32,7 +32,7 @@ var TestnetWallets = []data.Wallet{
 	},
 	{
 		Name:           "SDP Embedded Wallet",
-		DeepLinkSchema: "https://stellar.org",
+		DeepLinkSchema: "SELF",
 		Homepage:       "https://stellar.org",
 		Assets:         assets.AllAssetsTestnet,
 		Embedded:       true,

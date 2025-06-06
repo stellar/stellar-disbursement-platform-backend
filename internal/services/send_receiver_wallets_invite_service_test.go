@@ -74,7 +74,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet1.com", "wallet1://sdp")
 	wallet2 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "www.wallet2.com", "wallet2://sdp")
 
-	walletEmbedded := data.CreateWalletFixture(t, ctx, dbConnectionPool, "EmbeddedWallet", "https://ignored.link", "www.ignored.link", tenantBaseURL)
+	walletEmbedded := data.CreateWalletFixture(t, ctx, dbConnectionPool, "EmbeddedWallet", tenantBaseURL, tenantBaseURL, "SELF")
 	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, walletEmbedded.ID)
 
 	asset1 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
@@ -411,13 +411,14 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		})
 
 		walletDeepLink := WalletDeepLink{
-			DeepLink:         walletEmbedded.DeepLinkSchema,
+			DeepLink:         tenantBaseURL,
 			TenantBaseURL:    tenantBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
 			Token:            "123",
 			Route:            "wallet",
+			Dynamic:          true,
 		}
 		deepLink, err := walletDeepLink.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -1703,7 +1704,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			wantResult: "https://test.com?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar%3A8000&name=Foo+Bar+Org",
 		},
 		{
-			name: "🎉 successful for embedded wallet",
+			name: "🎉 successful for embedded wallet hosted by SDP",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "http://foo.bar:8000",
 				TenantBaseURL:    "http://foo.bar:8000",
@@ -1712,8 +1713,21 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				AssetCode:        "FOO",
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 				Token:            "123",
+				Dynamic:          true,
 			},
 			wantResult: "http://foo.bar:8000/wallet?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&token=123",
+		},
+		{
+			name: "🎉 successful for embedded wallet hosted elsewhere",
+			walletDeepLink: WalletDeepLink{
+				DeepLink:         "https://test.com",
+				TenantBaseURL:    "http://foo.bar:8000",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "FOO",
+				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+				Token:            "123",
+			},
+			wantResult: "https://test.com?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar%3A8000&name=Foo+Bar+Org&token=123",
 		},
 	}
 
