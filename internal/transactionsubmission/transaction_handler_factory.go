@@ -1,6 +1,8 @@
 package transactionsubmission
 
 import (
+	"fmt"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -31,10 +33,21 @@ func NewTransactionHandlerFactory(
 }
 
 func (f *TransactionHandlerFactory) GetTransactionHandler(tx *store.Transaction) (TransactionHandlerInterface, error) {
-	paymentWorker, err := NewPaymentTransactionHandler(f.engine, f.monitorSvc)
-	if err != nil {
-		return nil, err
+	switch tx.TransactionType {
+	case store.TransactionTypePayment:
+		paymentHandler, err := NewPaymentTransactionHandler(f.engine, f.monitorSvc)
+		if err != nil {
+			return nil, fmt.Errorf("creating payment transaction handler: %w", err)
+		}
+		return paymentHandler, nil
+	case store.TransactionTypeWalletCreation:
+		// TODO: RPC client will be properly injected in a separate PR
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(f.engine, nil, f.monitorSvc)
+		if err != nil {
+			return nil, fmt.Errorf("creating wallet creation transaction handler: %w", err)
+		}
+		return walletCreationHandler, nil
+	default:
+		return nil, fmt.Errorf("unsupported transaction type: %s", tx.TransactionType)
 	}
-
-	return paymentWorker, nil
 }

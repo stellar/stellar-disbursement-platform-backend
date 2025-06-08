@@ -70,16 +70,30 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, toke
 			return ErrCreateWalletInvalidStatus
 		}
 
+		// Create the wallet transaction in TSS DB first
+		tssTransaction := &store.Transaction{
+			ExternalID:      fmt.Sprintf("wallet_%s", embeddedWallet.Token),
+			TransactionType: store.TransactionTypeWalletCreation,
+			TenantID:        tenantID,
+			WalletCreation: store.WalletCreation{
+				PublicKey: publicKey,
+				WasmHash:  e.wasmHash,
+			},
+		}
+
+		_, err = e.tssModel.Insert(ctx, *tssTransaction)
+		if err != nil {
+			return fmt.Errorf("creating wallet transaction in TSS: %w", err)
+		}
+
 		embeddedWalletUpdate := data.EmbeddedWalletUpdate{
 			WasmHash:     e.wasmHash,
-			WalletStatus: data.SuccessWalletStatus,
+			WalletStatus: data.ProcessingWalletStatus,
 		}
 
 		if err := e.sdpModels.EmbeddedWallets.Update(ctx, dbTx, embeddedWallet.Token, embeddedWalletUpdate); err != nil {
 			return fmt.Errorf("updating embedded wallet %s: %w", embeddedWallet.Token, err)
 		}
-
-		// TODO: Create the wallet transaction in TSS DB
 
 		return nil
 	})
