@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.0...3.7.1))
+
+### Fixed
+
+- Fix stellar.expert pubnet URL configuration in helm chart. [#700](https://github.com/stellar/stellar-disbursement-platform-backend/pull/700)
+
 ## [3.7.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
 
 > [!WARNING]

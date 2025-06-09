@@ -18,7 +18,7 @@ data:
     {{- $config := dict }}
     {{- if eq (include "isPubnet" .) "true" }}
     {{- $_ := set $config "HORIZON_URL" "https://horizon.stellar.org" }}
-    {{- $_ := set $config "STELLAR_EXPERT_URL" "https://stellar.expert/explorer/pubnet" }}
+    {{- $_ := set $config "STELLAR_EXPERT_URL" "https://stellar.expert/explorer/public" }}
     {{- else }}
     {{- $_ := set $config "HORIZON_URL" "https://horizon-testnet.stellar.org" }}
     {{- $_ := set $config "STELLAR_EXPERT_URL" "https://stellar.expert/explorer/testnet" }}
