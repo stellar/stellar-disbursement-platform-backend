@@ -1869,6 +1869,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			expectedResponse: `{"error": "resource not found"}`,
 		},
 		{
+			name: "insufficient balance",
 			requestBody: fmt.Sprintf(`{
 				"amount": "10000.00",
 				"asset": {"id": %q},
