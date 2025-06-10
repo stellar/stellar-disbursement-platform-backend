@@ -206,7 +206,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 		assert.Equal(t, "tenant-id-2", refreshedTx.TenantID)
 	})
 
-	t.Run("succesfully insert a new Sponsored Transaction", func(t *testing.T) {
+	t.Run("successfully insert a new Sponsored Transaction", func(t *testing.T) {
 		transaction, err := txModel.Insert(ctx, Transaction{
 			ExternalID:      "external-id-3",
 			TransactionType: TransactionTypeSponsored,
