@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -361,13 +360,12 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: remove and use GetUserByID when api keys PR will be merged
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
 	if !ok {
 		httperror.Unauthorized("", nil, nil).Render(w)
 		return
 	}
-	user, err := p.AuthManager.GetUser(ctx, token)
+	user, err := p.AuthManager.GetUserByID(ctx, userID)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
 		return
@@ -375,41 +373,38 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, req, user, &distAccount)
 	if err != nil {
-		// Unwrap transaction errors to check for specific error types
-		errToMatch := errors.Unwrap(err)
-		if errToMatch == nil {
-			errToMatch = err
-		}
+		var (
+			validationErr        services.ValidationError
+			notFoundErr          services.NotFoundError
+			unsupportedErr       services.UnsupportedError
+			ambiguousErr         services.AmbiguousReferenceError
+			insufficientFundsErr services.InsufficientBalanceForDirectPaymentError
+			walletDisabledErr    services.WalletNotEnabledError
+			assetNotSupportedErr services.AssetNotSupportedByWalletError
+			recvErr              services.ErrReceiverWalletNotFound
+		)
 
-		switch e := errToMatch.(type) {
-		case services.ValidationError:
+		switch {
+		case errors.As(err, &validationErr):
 			httperror.BadRequest("invalid reference in request", err, nil).Render(w)
-
-		case services.NotFoundError:
+		case errors.As(err, &notFoundErr):
 			httperror.NotFound("resource not found", err, nil).Render(w)
-
-		case services.UnsupportedError:
-			httperror.BadRequest(e.Error(), err, nil).Render(w)
-
-		case services.AmbiguousReferenceError:
+		case errors.As(err, &unsupportedErr):
+			httperror.BadRequest(unsupportedErr.Error(), err, nil).Render(w)
+		case errors.As(err, &ambiguousErr):
 			httperror.BadRequest("ambiguous reference in request", err, nil).Render(w)
-
-		case services.InsufficientBalanceForDirectPaymentError:
-			log.Ctx(ctx).Error(e)
-			httperror.BadRequest(e.Error(), err, nil).Render(w)
-
-		case services.WalletNotEnabledError, services.AssetNotSupportedByWalletError:
-			httperror.BadRequest(e.Error(), err, nil).Render(w)
+		case errors.As(err, &insufficientFundsErr):
+			log.Ctx(ctx).Error(insufficientFundsErr)
+			httperror.BadRequest(insufficientFundsErr.Error(), err, nil).Render(w)
+		case errors.As(err, &walletDisabledErr), errors.As(err, &assetNotSupportedErr):
+			httperror.BadRequest(err.Error(), err, nil).Render(w)
+		case errors.As(err, &recvErr):
+			httperror.BadRequest("receiver must be registered with this wallet", err, nil).Render(w)
 
 		default:
-			if strings.Contains(err.Error(), "receiver wallet not found") {
-				httperror.BadRequest(
-					"receiver must be registered with this wallet", err, nil,
-				).Render(w)
-			} else {
-				httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
-			}
+			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
 		}
+
 		return
 	}
 

@@ -734,15 +734,14 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
             amount,
             asset_id,
             receiver_id,
-            disbursement_id,
-			receiver_wallet_id,
+            receiver_wallet_id,
             external_payment_id,
             payment_type,
             status,
             status_history
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8,
-            ARRAY[create_payment_status_history(NOW(), $8::payment_status, NULL)]
+            $1, $2, $3, $4, $5, $6, $7,
+            ARRAY[create_payment_status_history(NOW(), $7::payment_status, NULL)]
         )
         RETURNING id
     `
@@ -752,7 +751,6 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 		insert.Amount,
 		insert.AssetID,
 		insert.ReceiverID,
-		insert.DisbursementID, // Will be NULL
 		insert.ReceiverWalletID,
 		insert.ExternalPaymentID,
 		insert.PaymentType,

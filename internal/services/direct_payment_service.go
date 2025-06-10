@@ -15,7 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// DirectPaymentRequest represents service-level request for creating direct payment
+// CreateDirectPaymentRequest represents service-level request for creating direct payment
 type CreateDirectPaymentRequest struct {
 	Amount            string            `json:"amount" validate:"required"`
 	Asset             AssetReference    `json:"asset" validate:"required"`
@@ -30,6 +30,15 @@ type WalletNotEnabledError struct {
 
 func (e WalletNotEnabledError) Error() string {
 	return fmt.Sprintf("wallet '%s' is not enabled for payments", e.WalletName)
+}
+
+type ErrReceiverWalletNotFound struct {
+	ReceiverID string
+	WalletID   string
+}
+
+func (e ErrReceiverWalletNotFound) Error() string {
+	return fmt.Sprintf("no receiver wallet: receiver=%s wallet=%s", e.ReceiverID, e.WalletID)
 }
 
 type AssetNotSupportedByWalletError struct {
@@ -244,7 +253,10 @@ func (s *DirectPaymentService) getReceiverWallet(
 	}
 
 	if len(receiverWallets) == 0 {
-		return nil, fmt.Errorf("receiver wallet not found - receiver must be registered with this wallet to receive direct payments")
+		return nil, &ErrReceiverWalletNotFound{
+			ReceiverID: receiverID,
+			WalletID:   walletID,
+		}
 	}
 
 	receiverWallet := receiverWallets[0]

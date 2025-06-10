@@ -426,7 +426,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			walletsHandler := httphandler.WalletsHandler{
 				Models:        o.Models,
 				NetworkType:   o.NetworkType,
-				AssetResolver: services.NewAssetResolver(o.Models.Assets),
+				WalletAssetResolver: services.NewWalletAssetResolver(o.Models.Assets),
 			}
 
 			// Read operations

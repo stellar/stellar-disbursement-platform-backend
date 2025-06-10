@@ -176,8 +176,8 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	assetResolver := services.NewAssetResolver(models.Assets)
-	handler := &WalletsHandler{Models: models, AssetResolver: assetResolver}
+	assetResolver := services.NewWalletAssetResolver(models.Assets)
+	handler := &WalletsHandler{Models: models, WalletAssetResolver: assetResolver}
 
 	// Fixture setup
 	wallet := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
@@ -347,12 +347,12 @@ func Test_WalletsHandlerPostWallets_WithNewAssetFormat(t *testing.T) {
 
 	ctx := context.Background()
 
-	assetResolver := services.NewAssetResolver(models.Assets)
+	assetResolver := services.NewWalletAssetResolver(models.Assets)
 
 	handler := &WalletsHandler{
 		Models:        models,
 		NetworkType:   utils.PubnetNetworkType,
-		AssetResolver: assetResolver,
+		WalletAssetResolver: assetResolver,
 	}
 
 	xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.XLMAssetCode, "")
