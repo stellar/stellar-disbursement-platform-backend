@@ -94,7 +94,6 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("rolls back wallet update if TSS transaction creation fails", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		// Create a service with an invalid WASM hash to force TSS transaction failure
 		invalidService := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes")
 
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", defaultTenantID, "", "", data.PendingWalletStatus)
@@ -104,11 +103,10 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "creating wallet transaction in TSS")
 
-		// Verify the wallet status was not changed due to rollback
 		unchangedWallet, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, walletIDForTest)
 		require.NoError(t, err)
 		assert.Equal(t, data.PendingWalletStatus, unchangedWallet.WalletStatus)
-		assert.Empty(t, unchangedWallet.WasmHash) // Should still be empty
+		assert.Empty(t, unchangedWallet.WasmHash)
 	})
 }
 

@@ -15,7 +15,7 @@ import (
 
 func TestTransactionHandlerFactory_GetTransactionHandler(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
-	txModel := &store.TransactionModel{} // Use the actual model for testing
+	txModel := &store.TransactionModel{}
 	eventProducer := &events.NoopProducer{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},

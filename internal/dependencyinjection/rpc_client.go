@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-rpc/client"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
@@ -31,6 +32,8 @@ func NewRpcClient(ctx context.Context, opts stellar.RPCOptions) (*client.Client,
 		return nil, fmt.Errorf("error trying to cast rpc client instance")
 	}
 
+	log.Ctx(ctx).Info("⚙️ Setting up RPC Client")
+
 	httpClient := http.DefaultClient
 	if opts.RPCRequestHeaderKey != "" && opts.RPCRequestHeaderValue != "" {
 		transport := &headerTransport{
@@ -44,6 +47,8 @@ func NewRpcClient(ctx context.Context, opts stellar.RPCOptions) (*client.Client,
 	}
 
 	rpcClient := client.NewClient(opts.RPCUrl, httpClient)
+
+	SetInstance(RpcClientInstanceName, rpcClient)
 
 	return rpcClient, nil
 }
