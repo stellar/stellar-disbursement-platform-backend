@@ -10,13 +10,13 @@ import (
 
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
-	"github.com/stellar/stellar-rpc/client"
 	"github.com/stellar/stellar-rpc/protocol"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -26,7 +26,7 @@ import (
 
 type WalletCreationTransactionHandler struct {
 	engine     *engine.SubmitterEngine
-	rpcClient  *client.Client
+	rpcClient  stellar.RPCClient
 	monitorSvc tssMonitor.TSSMonitorService
 }
 
@@ -34,11 +34,14 @@ var _ TransactionHandlerInterface = &WalletCreationTransactionHandler{}
 
 func NewWalletCreationTransactionHandler(
 	engine *engine.SubmitterEngine,
-	rpcClient *client.Client,
+	rpcClient stellar.RPCClient,
 	monitorSvc tssMonitor.TSSMonitorService,
 ) (*WalletCreationTransactionHandler, error) {
 	if engine == nil {
 		return nil, fmt.Errorf("engine cannot be nil")
+	}
+	if rpcClient == nil {
+		return nil, fmt.Errorf("rpc client cannot be nil")
 	}
 	if tssUtils.IsEmpty(monitorSvc) {
 		return nil, fmt.Errorf("monitor service cannot be nil")
@@ -52,10 +55,6 @@ func NewWalletCreationTransactionHandler(
 }
 
 func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Context, txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string) (*txnbuild.Transaction, error) {
-	if h.rpcClient == nil {
-		return nil, fmt.Errorf("RPC client is required for wallet creation transactions")
-	}
-
 	if txJob.Transaction.WalletCreation.PublicKey == "" {
 		return nil, fmt.Errorf("public key cannot be empty")
 	}

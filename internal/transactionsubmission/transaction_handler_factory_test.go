@@ -7,6 +7,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -19,8 +20,9 @@ func TestTransactionHandlerFactory_GetTransactionHandler(t *testing.T) {
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
+	rpcClient := &stellar.MockRPCClient{}
 
-	factory := NewTransactionHandlerFactory(engine, txModel, eventProducer, monitorSvc)
+	factory := NewTransactionHandlerFactory(engine, txModel, eventProducer, monitorSvc, rpcClient)
 
 	testCases := []struct {
 		name          string

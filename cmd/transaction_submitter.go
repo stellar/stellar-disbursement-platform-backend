@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -128,6 +129,10 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
+	// rpc options
+	rpcOptions := stellar.RPCOptions{}
+	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&rpcOptions)...)
+
 	cmd := &cobra.Command{
 		Use:   "tss",
 		Short: "Run the Transaction Submission Service",
@@ -187,6 +192,15 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
 			tssOpts.SubmitterEngine = submitterEngine
+
+			// Initializing the RPC Client
+			if rpcOptions.RPCUrl != "" {
+				rpcClient, rpcClientErr := di.NewRpcClient(ctx, rpcOptions)
+				if rpcClientErr != nil {
+					log.Ctx(ctx).Fatalf("error creating RPC client: %s", rpcClientErr.Error())
+				}
+				tssOpts.RPCClient = rpcClient
+			}
 
 			// Initializing the CrashTrackerClient
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions) // parses globalOptions relevant to the crash crash tracker

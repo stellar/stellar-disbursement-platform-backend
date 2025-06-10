@@ -76,7 +76,7 @@ type ServeOptions struct {
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
 	Sep45ContractId                 string
-	RpcConfig                       stellar.RpcOptions
+	RpcConfig                       stellar.RPCOptions
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
@@ -165,20 +165,20 @@ func (opts *ServeOptions) ValidateSecurity() error {
 
 // ValidateRpc validates the RPC options.
 func (opts *ServeOptions) ValidateRpc() error {
-	if opts.RpcConfig.RpcURL == "" && (opts.RpcConfig.RpcRequestHeaderKey != "" || opts.RpcConfig.RpcRequestHeaderValue != "") {
+	if opts.RpcConfig.RPCUrl == "" && (opts.RpcConfig.RPCRequestHeaderKey != "" || opts.RpcConfig.RPCRequestHeaderValue != "") {
 		return fmt.Errorf("RPC URL must be set when RPC request header key or value is set")
 	}
 
-	if opts.RpcConfig.RpcRequestHeaderKey != "" && opts.RpcConfig.RpcRequestHeaderValue == "" {
+	if opts.RpcConfig.RPCRequestHeaderKey != "" && opts.RpcConfig.RPCRequestHeaderValue == "" {
 		return fmt.Errorf("RPC request header value must be set when RPC request header key is set")
 	}
 
-	if opts.RpcConfig.RpcRequestHeaderKey == "" && opts.RpcConfig.RpcRequestHeaderValue != "" {
+	if opts.RpcConfig.RPCRequestHeaderKey == "" && opts.RpcConfig.RPCRequestHeaderValue != "" {
 		return fmt.Errorf("RPC request header key must be set when RPC request header value is set")
 	}
 
 	// Feature specific validation
-	if opts.Sep45ContractId != "" && opts.RpcConfig.RpcURL == "" {
+	if opts.Sep45ContractId != "" && opts.RpcConfig.RPCUrl == "" {
 		return fmt.Errorf("RPC URL must be set when SEP-45 contract ID is set")
 	}
 

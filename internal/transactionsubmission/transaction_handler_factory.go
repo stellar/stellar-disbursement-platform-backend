@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -14,6 +15,7 @@ type TransactionHandlerFactory struct {
 	txModel       store.TransactionStore
 	eventProducer events.Producer
 	monitorSvc    tssMonitor.TSSMonitorService
+	rpcClient     stellar.RPCClient
 }
 
 var _ TransactionHandlerFactoryInterface = &TransactionHandlerFactory{}
@@ -23,12 +25,14 @@ func NewTransactionHandlerFactory(
 	txModel store.TransactionStore,
 	eventProducer events.Producer,
 	monitorSvc tssMonitor.TSSMonitorService,
+	rpcClient stellar.RPCClient,
 ) *TransactionHandlerFactory {
 	return &TransactionHandlerFactory{
 		engine:        engine,
 		txModel:       txModel,
 		eventProducer: eventProducer,
 		monitorSvc:    monitorSvc,
+		rpcClient:     rpcClient,
 	}
 }
 
@@ -41,8 +45,10 @@ func (f *TransactionHandlerFactory) GetTransactionHandler(tx *store.Transaction)
 		}
 		return paymentHandler, nil
 	case store.TransactionTypeWalletCreation:
-		// TODO: RPC client will be properly injected in a separate PR
-		walletCreationHandler, err := NewWalletCreationTransactionHandler(f.engine, nil, f.monitorSvc)
+		if f.rpcClient == nil {
+			return nil, fmt.Errorf("rpc client is required for wallet creation transaction handler")
+		}
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(f.engine, f.rpcClient, f.monitorSvc)
 		if err != nil {
 			return nil, fmt.Errorf("creating wallet creation transaction handler: %w", err)
 		}

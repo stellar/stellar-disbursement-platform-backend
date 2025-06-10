@@ -4,12 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/stellar-rpc/client"
 	"github.com/stellar/stellar-rpc/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -19,18 +17,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-func createMockRPCClient() *client.Client {
-	return client.NewClient("http://localhost:8000", &http.Client{})
-}
-
 func Test_NewWalletCreationTransactionHandler(t *testing.T) {
-	rpcClient := createMockRPCClient()
+	rpcClient := &stellar.MockRPCClient{}
 	tssMonitorSvc := tssMonitor.TSSMonitorService{
 		GitCommitHash: "gitCommitHash0x",
 		Version:       "version123",
@@ -40,7 +35,7 @@ func Test_NewWalletCreationTransactionHandler(t *testing.T) {
 	testCases := []struct {
 		name          string
 		engine        *engine.SubmitterEngine
-		rpcClient     *client.Client
+		rpcClient     stellar.RPCClient
 		tssMonitorSvc tssMonitor.TSSMonitorService
 		wantError     string
 	}{
@@ -49,6 +44,12 @@ func Test_NewWalletCreationTransactionHandler(t *testing.T) {
 			rpcClient:     rpcClient,
 			tssMonitorSvc: tssMonitorSvc,
 			wantError:     "engine cannot be nil",
+		},
+		{
+			name:          "validate rpcClient",
+			engine:        &engine.SubmitterEngine{},
+			tssMonitorSvc: tssMonitorSvc,
+			wantError:     "rpc client cannot be nil",
 		},
 		{
 			name:      "validate tssMonitorSvc",
@@ -60,12 +61,6 @@ func Test_NewWalletCreationTransactionHandler(t *testing.T) {
 			name:          "🎉 successfully returns a new wallet creation handler",
 			engine:        &engine.SubmitterEngine{},
 			rpcClient:     rpcClient,
-			tssMonitorSvc: tssMonitorSvc,
-		},
-		{
-			name:          "🎉 successfully returns a new wallet creation handler with nil RPC client",
-			engine:        &engine.SubmitterEngine{},
-			rpcClient:     nil,
 			tssMonitorSvc: tssMonitorSvc,
 		},
 	}
@@ -95,54 +90,11 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 	publicKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
 	wasmHashHex := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 
-	t.Run("validation errors (no RPC client)", func(t *testing.T) {
+	t.Run("input validation", func(t *testing.T) {
 		engine := &engine.SubmitterEngine{
 			MaxBaseFee: 100,
 		}
-		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
-		}
-		handler, err := NewWalletCreationTransactionHandler(engine, nil, monitorSvc)
-		require.NoError(t, err)
-
-		testCases := []struct {
-			name          string
-			txJob         *TxJob
-			expectedError string
-		}{
-			{
-				name: "fails when RPC client is nil",
-				txJob: &TxJob{
-					Transaction: store.Transaction{
-						WalletCreation: store.WalletCreation{
-							PublicKey: publicKeyHex,
-							WasmHash:  wasmHashHex,
-						},
-					},
-					ChannelAccount: store.ChannelAccount{
-						PublicKey: channelAccount,
-					},
-					LockedUntilLedgerNumber: 12345,
-				},
-				expectedError: "RPC client is required for wallet creation transactions",
-			},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				tx, err := handler.BuildInnerTransaction(ctx, tc.txJob, 100, distributionAccount)
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tc.expectedError)
-				assert.Nil(t, tx)
-			})
-		}
-	})
-
-	t.Run("input validation (with RPC client)", func(t *testing.T) {
-		engine := &engine.SubmitterEngine{
-			MaxBaseFee: 100,
-		}
-		rpcClient := createMockRPCClient()
+		rpcClient := &stellar.MockRPCClient{}
 		monitorSvc := tssMonitor.TSSMonitorService{
 			Client: &sdpMonitorMocks.MockMonitorClient{},
 		}
@@ -266,11 +218,11 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 func Test_WalletCreationTransactionHandler_BuildSuccessEvent(t *testing.T) {
 	ctx := context.Background()
 	engine := &engine.SubmitterEngine{}
-	rpcClient := createMockRPCClient()
+	rpcClient := stellar.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
-	handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+	handler, err := NewWalletCreationTransactionHandler(engine, &rpcClient, monitorSvc)
 	require.NoError(t, err)
 
 	txJob := &TxJob{
@@ -307,7 +259,7 @@ func Test_WalletCreationTransactionHandler_BuildSuccessEvent(t *testing.T) {
 func Test_WalletCreationTransactionHandler_BuildFailureEvent(t *testing.T) {
 	ctx := context.Background()
 	engine := &engine.SubmitterEngine{}
-	rpcClient := createMockRPCClient()
+	rpcClient := &stellar.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
@@ -512,7 +464,7 @@ func Test_WalletCreationTransactionHandler_MonitorTransactionReconciliationFailu
 
 func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
-	rpcClient := createMockRPCClient()
+	rpcClient := &stellar.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
@@ -538,7 +490,7 @@ func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) 
 
 func Test_WalletCreationTransactionHandler_HelperMethods(t *testing.T) {
 	engine := &engine.SubmitterEngine{MaxBaseFee: 100}
-	rpcClient := createMockRPCClient()
+	rpcClient := &stellar.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}

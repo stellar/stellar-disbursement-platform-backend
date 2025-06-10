@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
 	"github.com/stellar/go/clients/horizonclient"
@@ -495,11 +496,14 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				Version:       "version123",
 			}
 
+			mockRpcClient := &stellar.MockRPCClient{}
+
 			handlerFactory := NewTransactionHandlerFactory(
 				submitterEngine,
 				store.NewTransactionModel(dbConnectionPool),
 				mockEventProducer,
 				monitorService,
+				mockRpcClient,
 			)
 
 			manager := &Manager{

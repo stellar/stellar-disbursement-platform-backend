@@ -349,28 +349,28 @@ func HorizonURL(targetPointer interface{}) *config.ConfigOption {
 	}
 }
 
-func RpcConfigOptions(opts *stellar.RpcOptions) []*config.ConfigOption {
+func RPCConfigOptions(opts *stellar.RPCOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{
 		{
 			Name:           "rpc-url",
 			Usage:          "The URL of the Stellar RPC server where this application will communicate with.",
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionURLString,
-			ConfigKey:      &opts.RpcURL,
+			ConfigKey:      &opts.RPCUrl,
 			Required:       false,
 		},
 		{
 			Name:      "rpc-request-header-key",
 			Usage:     "The key of the request header to be used for authentication with the RPC server.",
 			OptType:   types.String,
-			ConfigKey: &opts.RpcRequestHeaderKey,
+			ConfigKey: &opts.RPCRequestHeaderKey,
 			Required:  false,
 		},
 		{
 			Name:      "rpc-request-header-value",
 			Usage:     "The value of the request header to be used for authentication with the RPC server.",
 			OptType:   types.String,
-			ConfigKey: &opts.RpcRequestHeaderValue,
+			ConfigKey: &opts.RPCRequestHeaderValue,
 			Required:  false,
 		},
 	}
