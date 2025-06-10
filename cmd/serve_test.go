@@ -156,6 +156,7 @@ func Test_serve(t *testing.T) {
 		MonitorService:                  mMonitorService,
 		AdminDBConnectionPool:           dbConnectionPool,
 		MtnDBConnectionPool:             dbConnectionPool,
+		TSSDBConnectionPool:             dbConnectionPool,
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
 		SEP24JWTSecret:                  "jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4",
