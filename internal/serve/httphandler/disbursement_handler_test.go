@@ -190,8 +190,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
 	user := &auth.User{
 		ID:    "user-id",
 		Email: "email@email.com",
@@ -388,7 +387,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mAuthManager := &auth.AuthManagerMock{}
 			mAuthManager.
-				On("GetUser", mock.Anything, token).
+				On("GetUserByID", mock.Anything, "user-id").
 				Return(user, nil)
 			mMonitorService := monitorMocks.NewMockMonitorService(t)
 			if tc.prepareMocksFn != nil {
@@ -909,21 +908,18 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
-	user := &auth.User{
-		ID:    "user-id",
-		Email: "email@email.com",
-	}
+	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUser", mock.Anything, token).
-		Return(user, nil).
+		On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&auth.User{
+			ID:    "user-id",
+			Email: "email@email.com",
+		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
-			val := mockCtx.Value(middleware.TokenContextKey)
-			assert.Equal(t, token, val)
+			val := mockCtx.Value(middleware.UserIDContextKey)
+			assert.Equal(t, "user-id", val)
 		})
 
 	handler := &DisbursementHandler{
@@ -2158,8 +2154,7 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
 
 	// Setup fixtures
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
@@ -2180,15 +2175,15 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	// Setup Mocks
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUser", mock.Anything, token).
+		On("GetUserByID", mock.Anything, mock.Anything).
 		Return(&auth.User{
 			ID:    "user-id",
 			Email: "email@email.com",
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
-			val := mockCtx.Value(middleware.TokenContextKey)
-			assert.Equal(t, token, val)
+			val := mockCtx.Value(middleware.UserIDContextKey)
+			assert.Equal(t, "user-id", val)
 		})
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)

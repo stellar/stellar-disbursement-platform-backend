@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -415,6 +417,89 @@ func Test_APIKeyModel_Update(t *testing.T) {
 			// Verify timestamps - UpdatedAt should be more recent than CreatedAt
 			assert.True(t, updated.UpdatedAt.After(updated.CreatedAt) ||
 				updated.UpdatedAt.Equal(updated.CreatedAt))
+		})
+	}
+}
+
+func Test_APIKeyModel_ValidateRawKey(t *testing.T) {
+	t.Parallel()
+
+	pool := getConnectionPool(t)
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	creator := "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+	otherUser := "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+
+	expiryFut := time.Now().Add(1 * time.Hour)
+	valid := createAPIKeyFixture(
+		t, ctx, pool,
+		"Ahriman", []APIKeyPermission{ReadStatistics},
+		[]string{"127.0.0.1"}, &expiryFut, creator,
+	)
+
+	expiryPast := time.Now().Add(-1 * time.Hour)
+	expired := createAPIKeyFixture(
+		t, ctx, pool,
+		"Vulkan", []APIKeyPermission{ReadStatistics},
+		nil, &expiryPast, otherUser,
+	)
+
+	tests := []struct {
+		name   string
+		raw    string
+		wantID string
+		errMsg string
+	}{
+		{
+			name:   "valid future key",
+			raw:    valid.Key,
+			wantID: valid.ID,
+		},
+		{
+			name:   "invalid prefix",
+			raw:    "CHS_" + strings.TrimPrefix(valid.Key, APIKeyPrefix),
+			errMsg: "invalid API key prefix",
+		},
+		{
+			name:   "invalid format",
+			raw:    APIKeyPrefix + "." + strings.TrimPrefix(valid.Key, APIKeyPrefix),
+			errMsg: "invalid API key format",
+		},
+		{
+			name:   "non-existent ID",
+			raw:    fmt.Sprintf("%s%s.%s", APIKeyPrefix, "00000000-0000-0000-0000-000000000000", "anykey"),
+			errMsg: "no rows in result set",
+		},
+		{
+			name:   "wrong secret",
+			raw:    fmt.Sprintf("%s%s.%s", APIKeyPrefix, valid.ID, "WrongSecret"),
+			errMsg: "invalid API key",
+		},
+		{
+			name:   "expired key",
+			raw:    expired.Key,
+			errMsg: "API key expired",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := models.APIKeys.ValidateRawKey(ctx, tc.raw)
+			if tc.errMsg != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errMsg)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantID, got.ID)
+			assert.ElementsMatch(t, valid.Permissions, got.Permissions)
+			assert.ElementsMatch(t, valid.AllowedIPs, got.AllowedIPs)
+			assert.WithinDuration(t, *valid.ExpiryDate, *got.ExpiryDate, time.Second)
 		})
 	}
 }
