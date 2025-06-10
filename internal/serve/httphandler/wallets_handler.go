@@ -196,18 +196,3 @@ func (h WalletsHandler) handleWalletError(ctx context.Context, rw http.ResponseW
 		httperror.InternalError(ctx, defaultMsg, err, nil).Render(rw)
 	}
 }
-
-func (h WalletsHandler) handleWalletCreationError(ctx context.Context, rw http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, data.ErrInvalidAssetID):
-		httperror.BadRequest(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
-	case errors.Is(err, data.ErrWalletNameAlreadyExists):
-		httperror.Conflict(data.ErrWalletNameAlreadyExists.Error(), err, nil).Render(rw)
-	case errors.Is(err, data.ErrWalletHomepageAlreadyExists):
-		httperror.Conflict(data.ErrWalletHomepageAlreadyExists.Error(), err, nil).Render(rw)
-	case errors.Is(err, data.ErrWalletDeepLinkSchemaAlreadyExists):
-		httperror.Conflict(data.ErrWalletDeepLinkSchemaAlreadyExists.Error(), err, nil).Render(rw)
-	default:
-		httperror.InternalError(ctx, "failed to create wallet", err, nil).Render(rw)
-	}
-}
