@@ -25,10 +25,10 @@ type EventPaymentsReadyToPayData struct {
 }
 
 type EventWalletCreationCompletedData struct {
-	TransactionID             string    `json:"transaction_id"`
-	WalletCreationID          string    `json:"wallet_creation_id"` // TODO(philip): rename this
-	WalletCreationStatus      string    `json:"wallet_creation_status"`
-	WalletCreationMessage     string    `json:"wallet_creation_message"`
-	WalletCreationCompletedAt time.Time `json:"completed_at"`
-	StellarTransactionID      string    `json:"stellar_transaction_id"`
+	TransactionID               string    `json:"transaction_id"`
+	WalletCreationID            string    `json:"wallet_creation_id"`
+	WalletCreationStatus        string    `json:"wallet_creation_status"`
+	WalletCreationStatusMessage string    `json:"wallet_creation_status_message"`
+	WalletCreationCompletedAt   time.Time `json:"completed_at"`
+	StellarTransactionID        string    `json:"stellar_transaction_id"`
 }

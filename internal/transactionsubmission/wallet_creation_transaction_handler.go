@@ -87,17 +87,16 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 		Type:      xdr.ScAddressTypeScAddressTypeAccount,
 		AccountId: &distributionAccountId,
 	}
-
-	publicKeyScBytes := xdr.ScBytes(publicKeyBytes)
-	argCredentialId := xdr.ScVal{
-		Type:  xdr.ScValTypeScvBytes,
-		Bytes: &publicKeyScBytes,
-	}
-	argPk := xdr.ScVal{
+	argAdmin := xdr.ScVal{
 		Type:    xdr.ScValTypeScvAddress,
 		Address: &distributionScAddress,
 	}
 
+	publicKeyScBytes := xdr.ScBytes(publicKeyBytes)
+	argPublicKey := xdr.ScVal{
+		Type:  xdr.ScValTypeScvBytes,
+		Bytes: &publicKeyScBytes,
+	}
 	hostFunction := xdr.HostFunction{
 		Type: xdr.HostFunctionTypeHostFunctionTypeCreateContractV2,
 		CreateContractV2: &xdr.CreateContractArgsV2{
@@ -112,7 +111,7 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 				Type:     xdr.ContractExecutableTypeContractExecutableWasm,
 				WasmHash: &wasmHash,
 			},
-			ConstructorArgs: []xdr.ScVal{argCredentialId, argPk},
+			ConstructorArgs: []xdr.ScVal{argAdmin, argPublicKey},
 		},
 	}
 
@@ -147,8 +146,7 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	}
 
 	simulationResponse, err := h.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{
-		Transaction:    txEnvelope,
-		ResourceConfig: &protocol.ResourceConfig{InstructionLeeway: protocol.DefaultInstructionLeeway},
+		Transaction: txEnvelope,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("simulating transaction: %w", err)
@@ -157,33 +155,38 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 		return nil, fmt.Errorf("simulation error: %s", simulationResponse.Error)
 	}
 
-	operation.Auth = h.extractAuthEntries(simulationResponse)
+	operation.Auth, err = h.extractAuthEntries(simulationResponse)
+	if err != nil {
+		return nil, err
+	}
+
 	if applyErr := h.applyTransactionData(operation, simulationResponse); applyErr != nil {
 		return nil, applyErr
 	}
 
 	txParams.BaseFee = h.calculateAdjustedBaseFee(simulationResponse)
-	txParams.Operations = []txnbuild.Operation{operation}
 
-	finalTx, err := txnbuild.NewTransaction(txParams)
+	preparedTx, err := txnbuild.NewTransaction(txParams)
 	if err != nil {
 		return nil, fmt.Errorf("building final transaction: %w", err)
 	}
 
-	return finalTx, nil
+	return preparedTx, nil
 }
 
-func (h *WalletCreationTransactionHandler) extractAuthEntries(simulationResponse protocol.SimulateTransactionResponse) []xdr.SorobanAuthorizationEntry {
+func (h *WalletCreationTransactionHandler) extractAuthEntries(simulationResponse protocol.SimulateTransactionResponse) ([]xdr.SorobanAuthorizationEntry, error) {
 	var auth []xdr.SorobanAuthorizationEntry
 	if len(simulationResponse.Results) > 0 && simulationResponse.Results[0].AuthXDR != nil {
 		for _, b64 := range *simulationResponse.Results[0].AuthXDR {
 			var a xdr.SorobanAuthorizationEntry
-			if err := xdr.SafeUnmarshalBase64(b64, &a); err == nil {
-				auth = append(auth, a)
+			err := xdr.SafeUnmarshalBase64(b64, &a)
+			if err != nil {
+				return nil, fmt.Errorf("unmarshalling authorization entry: %w", err)
 			}
+			auth = append(auth, a)
 		}
 	}
-	return auth
+	return auth, nil
 }
 
 func (h *WalletCreationTransactionHandler) applyTransactionData(operation *txnbuild.InvokeHostFunction, simulationResponse protocol.SimulateTransactionResponse) error {
@@ -221,12 +224,12 @@ func (h *WalletCreationTransactionHandler) BuildSuccessEvent(ctx context.Context
 		TenantID: txJob.Transaction.TenantID,
 		Type:     events.WalletCreationCompletedSuccessType,
 		Data: schemas.EventWalletCreationCompletedData{
-			TransactionID:             txJob.Transaction.ID,
-			WalletCreationID:          txJob.Transaction.ExternalID,
-			WalletCreationStatus:      string(data.SuccessWalletStatus),
-			WalletCreationMessage:     "",
-			WalletCreationCompletedAt: time.Now(),
-			StellarTransactionID:      txJob.Transaction.StellarTransactionHash.String,
+			TransactionID:               txJob.Transaction.ID,
+			WalletCreationID:            txJob.Transaction.ExternalID,
+			WalletCreationStatus:        string(data.SuccessWalletStatus),
+			WalletCreationStatusMessage: "",
+			WalletCreationCompletedAt:   time.Now(),
+			StellarTransactionID:        txJob.Transaction.StellarTransactionHash.String,
 		},
 	}
 
@@ -245,12 +248,12 @@ func (h *WalletCreationTransactionHandler) BuildFailureEvent(ctx context.Context
 		TenantID: txJob.Transaction.TenantID,
 		Type:     events.WalletCreationCompletedErrorType,
 		Data: schemas.EventWalletCreationCompletedData{
-			TransactionID:             txJob.Transaction.ID,
-			WalletCreationID:          txJob.Transaction.ExternalID,
-			WalletCreationStatus:      string(data.FailedWalletStatus),
-			WalletCreationMessage:     hErr.Error(),
-			WalletCreationCompletedAt: time.Now(),
-			StellarTransactionID:      txJob.Transaction.StellarTransactionHash.String,
+			TransactionID:               txJob.Transaction.ID,
+			WalletCreationID:            txJob.Transaction.ExternalID,
+			WalletCreationStatus:        string(data.FailedWalletStatus),
+			WalletCreationStatusMessage: hErr.Error(),
+			WalletCreationCompletedAt:   time.Now(),
+			StellarTransactionID:        txJob.Transaction.StellarTransactionHash.String,
 		},
 	}
 

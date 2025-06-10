@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-rpc/client"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 )
 
 const RpcClientInstanceName = "rpc_client_instance"

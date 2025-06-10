@@ -3,16 +3,19 @@ package transactionsubmission
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -98,7 +101,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		monitorSvc := tssMonitor.TSSMonitorService{
 			Client: &sdpMonitorMocks.MockMonitorClient{},
 		}
-		handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
 
 		testCases := []struct {
@@ -107,7 +110,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			expectedError string
 		}{
 			{
-				name: "fails when public key is empty",
+				name: "returns an error if public key is empty",
 				txJob: &TxJob{
 					Transaction: store.Transaction{
 						WalletCreation: store.WalletCreation{
@@ -123,7 +126,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				expectedError: "public key cannot be empty",
 			},
 			{
-				name: "fails when wasm hash is empty",
+				name: "returns an error if wasm hash is empty",
 				txJob: &TxJob{
 					Transaction: store.Transaction{
 						WalletCreation: store.WalletCreation{
@@ -139,7 +142,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				expectedError: "wasm hash cannot be empty",
 			},
 			{
-				name: "fails when public key is invalid hex",
+				name: "returns an error if public key is invalid hex",
 				txJob: &TxJob{
 					Transaction: store.Transaction{
 						WalletCreation: store.WalletCreation{
@@ -155,7 +158,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				expectedError: "decoding public key",
 			},
 			{
-				name: "fails when wasm hash is invalid hex",
+				name: "returns an error if wasm hash is invalid hex",
 				txJob: &TxJob{
 					Transaction: store.Transaction{
 						WalletCreation: store.WalletCreation{
@@ -171,12 +174,12 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				expectedError: "decoding wasm hash",
 			},
 			{
-				name: "fails when wasm hash is not 32 bytes",
+				name: "returns an error if wasm hash is not 32 bytes",
 				txJob: &TxJob{
 					Transaction: store.Transaction{
 						WalletCreation: store.WalletCreation{
 							PublicKey: publicKeyHex,
-							WasmHash:  "abcdef", // Too short - only 3 bytes
+							WasmHash:  "abcdef",
 						},
 					},
 					ChannelAccount: store.ChannelAccount{
@@ -187,11 +190,11 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				expectedError: "wasm hash must be 32 bytes",
 			},
 			{
-				name: "fails when public key is not 65 bytes",
+				name: "returns an error if public key is not 65 bytes",
 				txJob: &TxJob{
 					Transaction: store.Transaction{
 						WalletCreation: store.WalletCreation{
-							PublicKey: "0123456789abcdef", // Too short - only 8 bytes
+							PublicKey: "0123456789abcdef",
 							WasmHash:  wasmHashHex,
 						},
 					},
@@ -206,108 +209,268 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				tx, err := handler.BuildInnerTransaction(ctx, tc.txJob, 100, distributionAccount)
+				tx, err := walletCreationHandler.BuildInnerTransaction(ctx, tc.txJob, 100, distributionAccount)
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError)
 				assert.Nil(t, tx)
 			})
 		}
 	})
+
+	t.Run("🎉 successfully build a transaction", func(t *testing.T) {
+		engine := &engine.SubmitterEngine{
+			MaxBaseFee: 100,
+		}
+
+		authXDR := []string{"AAAAAQAAAAHw6CVqzY+dCq3myVJBo1kb3nEGE7oO6obmJeUNvYQ0ukNc84Ms0ZvgAAAAAAAAAAEAAAAAAAAAAeA7wfSg10yaQYZDRmQeyqsepsS/Mb0rbMQxRgDoSVdWAAAAD3dlYl9hdXRoX3ZlcmlmeQAAAAAGAAAADgAAADhDRFlPUUpMS1pXSFoyQ1ZONDNFVkVRTkRMRU41NDRJR0NPNUE1MlVHNFlTNktETjVRUTJMVVdLWQAAAA4AAAADMTIzAAAAAA4AAAAcaHR0cDovL2xvY2FsaG9zdDo4MDgwL2MvYXV0aAAAAA4AAAAObG9jYWxob3N0OjgwODAAAAAAAA4AAAALZXhhbXBsZS5jb20AAAAAAQAAAAA="}
+		simulationResponse := protocol.SimulateTransactionResponse{
+			Error: "",
+			Results: []protocol.SimulateHostFunctionResult{
+				{
+					AuthXDR: &authXDR,
+				},
+			},
+			TransactionDataXDR: "AAAAAAAAAAUAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAABgAAAAFDEqQxRKsWsubOpgtPPKXSsdhcWDpfu/jRwXKpUugxhQAAABQAAAABAAAABgAAAAGBhvDmuHDARIUDYKVFokPXfBrz+6tx3N4D7hMpL1AiBwAAABQAAAABAAAAB1uPeA45/uPdYS9GdAZXx37bjezG+3vn4JqEwlyjIRGmAAAAB9nC+GOHmV4+xAZQ4T0I434wH3LKi+db6CM9hlRZhRZgAAAAAgAAAAYAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAAFXCHgz/4M7a3AAAAAAAAAAYAAAABQxKkMUSrFrLmzqYLTzyl0rHYXFg6X7v40cFyqVLoMYUAAAAVNIwhp30FbW4AAAAAAB8NxwAAEgAAAACUAAAAAAAY7m4=",
+			MinResourceFee:     50,
+		}
+
+		rpcClient := &stellar.MockRPCClient{}
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
+
+		monitorSvc := tssMonitor.TSSMonitorService{
+			Client: &sdpMonitorMocks.MockMonitorClient{},
+		}
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+		require.NoError(t, err)
+
+		txJob := &TxJob{
+			Transaction: store.Transaction{
+				WalletCreation: store.WalletCreation{
+					PublicKey: publicKeyHex,
+					WasmHash:  wasmHashHex,
+				},
+			},
+			ChannelAccount: store.ChannelAccount{
+				PublicKey: channelAccount,
+			},
+			LockedUntilLedgerNumber: 12345,
+		}
+
+		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+		require.NoError(t, err)
+		require.NotNil(t, tx)
+
+		// Verify transaction structure
+		assert.Equal(t, channelAccount, tx.SourceAccount().AccountID)
+		assert.Len(t, tx.Operations(), 1)
+
+		// Verify it's an InvokeHostFunction operation
+		operation, ok := tx.Operations()[0].(*txnbuild.InvokeHostFunction)
+		require.True(t, ok)
+		assert.Equal(t, distributionAccount, operation.SourceAccount)
+
+		// Verify that auth entries were processed (should have 1 auth entry)
+		assert.Len(t, operation.Auth, 1)
+
+		// Verify that transaction data was applied
+		assert.Equal(t, 1, int(operation.Ext.V))
+		assert.NotNil(t, operation.Ext.SorobanData)
+
+		// Verify the contract invocation has correct arguments
+		require.Equal(t, operation.HostFunction.Type, xdr.HostFunctionTypeHostFunctionTypeCreateContractV2)
+		require.NotNil(t, operation.HostFunction.CreateContractV2)
+
+		// Verify constructor arguments are in the correct order: [argAdmin, argPublicKey]
+		constructorArgs := operation.HostFunction.CreateContractV2.ConstructorArgs
+		require.Len(t, constructorArgs, 2)
+
+		// First argument should be argAdmin (distribution account address)
+		argAdmin := constructorArgs[0]
+		assert.Equal(t, xdr.ScValTypeScvAddress, argAdmin.Type)
+		require.NotNil(t, argAdmin.Address)
+		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, argAdmin.Address.Type)
+		require.NotNil(t, argAdmin.Address.AccountId)
+		distributionAccountId := xdr.MustAddress(distributionAccount)
+		assert.Equal(t, distributionAccountId, *argAdmin.Address.AccountId)
+
+		// Second argument should be argPublicKey (public key bytes)
+		argPublicKey := constructorArgs[1]
+		assert.Equal(t, xdr.ScValTypeScvBytes, argPublicKey.Type)
+		require.NotNil(t, argPublicKey.Bytes)
+
+		// Verify the public key bytes match the expected decoded hex
+		expectedPublicKeyBytes, err := hex.DecodeString(publicKeyHex)
+		require.NoError(t, err)
+		assert.Equal(t, expectedPublicKeyBytes, []byte(*argPublicKey.Bytes))
+
+		// Verify the WASM hash is correctly set
+		require.NotNil(t, operation.HostFunction.CreateContractV2.Executable.WasmHash)
+		expectedWasmHashBytes, err := hex.DecodeString(wasmHashHex)
+		require.NoError(t, err)
+		assert.Equal(t, expectedWasmHashBytes, (*operation.HostFunction.CreateContractV2.Executable.WasmHash)[:])
+
+		// Verify the contract ID preimage is correctly configured
+		contractIdPreimage := operation.HostFunction.CreateContractV2.ContractIdPreimage
+		assert.Equal(t, xdr.ContractIdPreimageTypeContractIdPreimageFromAddress, contractIdPreimage.Type)
+		require.NotNil(t, contractIdPreimage.FromAddress)
+
+		// Verify the address in the preimage matches the distribution account
+		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, contractIdPreimage.FromAddress.Address.Type)
+		require.NotNil(t, contractIdPreimage.FromAddress.Address.AccountId)
+		assert.Equal(t, distributionAccountId, *contractIdPreimage.FromAddress.Address.AccountId)
+	})
+
+	t.Run("simulation error handling", func(t *testing.T) {
+		engine := &engine.SubmitterEngine{
+			MaxBaseFee: 100,
+		}
+
+		simulationResponse := protocol.SimulateTransactionResponse{
+			Error: "contract execution failed",
+		}
+
+		rpcClient := &stellar.MockRPCClient{}
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
+
+		monitorSvc := tssMonitor.TSSMonitorService{
+			Client: &sdpMonitorMocks.MockMonitorClient{},
+		}
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+		require.NoError(t, err)
+
+		txJob := &TxJob{
+			Transaction: store.Transaction{
+				WalletCreation: store.WalletCreation{
+					PublicKey: publicKeyHex,
+					WasmHash:  wasmHashHex,
+				},
+			},
+			ChannelAccount: store.ChannelAccount{
+				PublicKey: channelAccount,
+			},
+			LockedUntilLedgerNumber: 12345,
+		}
+
+		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "simulation error: contract execution failed")
+		assert.Nil(t, tx)
+
+		rpcClient.AssertExpectations(t)
+	})
+
+	t.Run("rpc client error handling", func(t *testing.T) {
+		engine := &engine.SubmitterEngine{
+			MaxBaseFee: 100,
+		}
+
+		rpcClient := &stellar.MockRPCClient{}
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(protocol.SimulateTransactionResponse{}, fmt.Errorf("rpc error"))
+
+		monitorSvc := tssMonitor.TSSMonitorService{
+			Client: &sdpMonitorMocks.MockMonitorClient{},
+		}
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+		require.NoError(t, err)
+
+		txJob := &TxJob{
+			Transaction: store.Transaction{
+				WalletCreation: store.WalletCreation{
+					PublicKey: publicKeyHex,
+					WasmHash:  wasmHashHex,
+				},
+			},
+			ChannelAccount: store.ChannelAccount{
+				PublicKey: channelAccount,
+			},
+			LockedUntilLedgerNumber: 12345,
+		}
+
+		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "simulating transaction: rpc error")
+		assert.Nil(t, tx)
+
+		rpcClient.AssertExpectations(t)
+	})
 }
 
 func Test_WalletCreationTransactionHandler_BuildSuccessEvent(t *testing.T) {
-	ctx := context.Background()
-	engine := &engine.SubmitterEngine{}
-	rpcClient := stellar.MockRPCClient{}
-	monitorSvc := tssMonitor.TSSMonitorService{
-		Client: &sdpMonitorMocks.MockMonitorClient{},
-	}
-	handler, err := NewWalletCreationTransactionHandler(engine, &rpcClient, monitorSvc)
-	require.NoError(t, err)
+	walletCreationHandler := &WalletCreationTransactionHandler{}
 
+	ctx := context.Background()
 	txJob := &TxJob{
 		Transaction: store.Transaction{
-			ID:         "tx-123",
-			ExternalID: "wallet_token_abc",
-			TenantID:   "tenant-1",
-			StellarTransactionHash: sql.NullString{
-				String: "stellar-hash-123",
-				Valid:  true,
-			},
+			ID:                     "tx-id",
+			ExternalID:             "wallet-creation-id",
+			TenantID:               "tenant-id",
+			StellarTransactionHash: sql.NullString{},
 		},
 	}
 
-	message, err := handler.BuildSuccessEvent(ctx, txJob)
+	msg, err := walletCreationHandler.BuildSuccessEvent(ctx, txJob)
 	require.NoError(t, err)
-	require.NotNil(t, message)
 
-	assert.Equal(t, events.WalletCreationCompletedTopic, message.Topic)
-	assert.Equal(t, "wallet_token_abc", message.Key)
-	assert.Equal(t, "tenant-1", message.TenantID)
-	assert.Equal(t, events.WalletCreationCompletedSuccessType, message.Type)
-
-	data, ok := message.Data.(schemas.EventWalletCreationCompletedData)
-	require.True(t, ok)
-	assert.Equal(t, "tx-123", data.TransactionID)
-	assert.Equal(t, "wallet_token_abc", data.WalletCreationID)
-	assert.Equal(t, "SUCCESS", data.WalletCreationStatus)
-	assert.Empty(t, data.WalletCreationMessage)
-	assert.Equal(t, "stellar-hash-123", data.StellarTransactionID)
-	assert.WithinDuration(t, time.Now(), data.WalletCreationCompletedAt, time.Second)
+	gotWalletCreationCompletedAt := msg.Data.(schemas.EventWalletCreationCompletedData).WalletCreationCompletedAt
+	assert.WithinDuration(t, time.Now(), gotWalletCreationCompletedAt, time.Millisecond*100)
+	wantMsg := &events.Message{
+		Topic:    events.WalletCreationCompletedTopic,
+		Key:      txJob.Transaction.ExternalID,
+		TenantID: txJob.Transaction.TenantID,
+		Type:     events.WalletCreationCompletedSuccessType,
+		Data: schemas.EventWalletCreationCompletedData{
+			TransactionID:             txJob.Transaction.ID,
+			WalletCreationID:          txJob.Transaction.ExternalID,
+			WalletCreationStatus:      string(data.SuccessWalletStatus),
+			WalletCreationCompletedAt: gotWalletCreationCompletedAt,
+			StellarTransactionID:      txJob.Transaction.StellarTransactionHash.String,
+		},
+	}
+	assert.Equal(t, wantMsg, msg)
 }
 
 func Test_WalletCreationTransactionHandler_BuildFailureEvent(t *testing.T) {
-	ctx := context.Background()
-	engine := &engine.SubmitterEngine{}
-	rpcClient := &stellar.MockRPCClient{}
-	monitorSvc := tssMonitor.TSSMonitorService{
-		Client: &sdpMonitorMocks.MockMonitorClient{},
-	}
-	handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
-	require.NoError(t, err)
+	walletCreationHandler := &WalletCreationTransactionHandler{}
 
+	ctx := context.Background()
 	txJob := &TxJob{
 		Transaction: store.Transaction{
-			ID:         "tx-123",
-			ExternalID: "wallet_token_abc",
-			TenantID:   "tenant-1",
-			StellarTransactionHash: sql.NullString{
-				String: "stellar-hash-123",
-				Valid:  true,
-			},
+			ID:                     "tx-123",
+			ExternalID:             "wallet_token_abc",
+			TenantID:               "tenant-1",
+			StellarTransactionHash: sql.NullString{},
 		},
 	}
-
-	horizonErr := &utils.HorizonErrorWrapper{
+	hErr := &utils.HorizonErrorWrapper{
 		Err: fmt.Errorf("test error"),
 	}
 
-	message, err := handler.BuildFailureEvent(ctx, txJob, horizonErr)
+	msg, err := walletCreationHandler.BuildFailureEvent(ctx, txJob, hErr)
 	require.NoError(t, err)
-	require.NotNil(t, message)
 
-	assert.Equal(t, events.WalletCreationCompletedTopic, message.Topic)
-	assert.Equal(t, "wallet_token_abc", message.Key)
-	assert.Equal(t, "tenant-1", message.TenantID)
-	assert.Equal(t, events.WalletCreationCompletedErrorType, message.Type)
-
-	data, ok := message.Data.(schemas.EventWalletCreationCompletedData)
-	require.True(t, ok)
-	assert.Equal(t, "tx-123", data.TransactionID)
-	assert.Equal(t, "wallet_token_abc", data.WalletCreationID)
-	assert.Equal(t, "FAILED", data.WalletCreationStatus)
-	assert.Contains(t, data.WalletCreationMessage, "test error")
-	assert.Equal(t, "stellar-hash-123", data.StellarTransactionID)
-	assert.WithinDuration(t, time.Now(), data.WalletCreationCompletedAt, time.Second)
+	gotWalletCreationCompletedAt := msg.Data.(schemas.EventWalletCreationCompletedData).WalletCreationCompletedAt
+	assert.WithinDuration(t, time.Now(), gotWalletCreationCompletedAt, time.Millisecond*100)
+	wantMsg := &events.Message{
+		Topic:    events.WalletCreationCompletedTopic,
+		Key:      txJob.Transaction.ExternalID,
+		TenantID: txJob.Transaction.TenantID,
+		Type:     events.WalletCreationCompletedErrorType,
+		Data: schemas.EventWalletCreationCompletedData{
+			TransactionID:               txJob.Transaction.ID,
+			WalletCreationID:            txJob.Transaction.ExternalID,
+			WalletCreationStatus:        string(data.FailedWalletStatus),
+			WalletCreationStatusMessage: hErr.Error(),
+			WalletCreationCompletedAt:   gotWalletCreationCompletedAt,
+			StellarTransactionID:        txJob.Transaction.StellarTransactionHash.String,
+		},
+	}
+	assert.Equal(t, wantMsg, msg)
 }
 
 func Test_WalletCreationTransactionHandler_MonitorTransactionProcessingStarted(t *testing.T) {
 	ctx := context.Background()
 	txJob := TxJob{
 		Transaction: store.Transaction{},
-		ChannelAccount: store.ChannelAccount{
-			PublicKey: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-		},
 	}
 	jobUUID := "job-uuid"
 
@@ -321,11 +484,11 @@ func Test_WalletCreationTransactionHandler_MonitorTransactionProcessingStarted(t
 		GitCommitHash: "0xABC",
 		Client:        mMonitorClient,
 	}
-	handler := &WalletCreationTransactionHandler{
+	walletCreationHandler := &WalletCreationTransactionHandler{
 		monitorSvc: tssMonitorService,
 	}
 
-	handler.MonitorTransactionProcessingStarted(ctx, &txJob, jobUUID)
+	walletCreationHandler.MonitorTransactionProcessingStarted(ctx, &txJob, jobUUID)
 }
 
 func Test_WalletCreationTransactionHandler_MonitorTransactionProcessingSuccess(t *testing.T) {
@@ -354,11 +517,11 @@ func Test_WalletCreationTransactionHandler_MonitorTransactionProcessingSuccess(t
 		GitCommitHash: "0xABC",
 		Client:        mMonitorClient,
 	}
-	handler := &WalletCreationTransactionHandler{
+	walletCreationHandler := &WalletCreationTransactionHandler{
 		monitorSvc: tssMonitorService,
 	}
 
-	handler.MonitorTransactionProcessingSuccess(ctx, &txJob, jobUUID)
+	walletCreationHandler.MonitorTransactionProcessingSuccess(ctx, &txJob, jobUUID)
 }
 
 func Test_WalletCreationTransactionHandler_MonitorTransactionProcessingFailed(t *testing.T) {
@@ -389,11 +552,11 @@ func Test_WalletCreationTransactionHandler_MonitorTransactionProcessingFailed(t 
 		GitCommitHash: "0xABC",
 		Client:        mMonitorClient,
 	}
-	handler := &WalletCreationTransactionHandler{
+	walletCreationHandler := &WalletCreationTransactionHandler{
 		monitorSvc: tssMonitorService,
 	}
 
-	handler.MonitorTransactionProcessingFailed(ctx, &txJob, jobUUID, isRetryable, errStack)
+	walletCreationHandler.MonitorTransactionProcessingFailed(ctx, &txJob, jobUUID, isRetryable, errStack)
 }
 
 func Test_WalletCreationTransactionHandler_MonitorTransactionReconciliationSuccess(t *testing.T) {
@@ -421,11 +584,11 @@ func Test_WalletCreationTransactionHandler_MonitorTransactionReconciliationSucce
 		GitCommitHash: "0xABC",
 		Client:        mMonitorClient,
 	}
-	handler := &WalletCreationTransactionHandler{
+	walletCreationHandler := &WalletCreationTransactionHandler{
 		monitorSvc: tssMonitorService,
 	}
 
-	handler.MonitorTransactionReconciliationSuccess(ctx, &txJob, jobUUID, ReconcileSuccess)
+	walletCreationHandler.MonitorTransactionReconciliationSuccess(ctx, &txJob, jobUUID, ReconcileSuccess)
 }
 
 func Test_WalletCreationTransactionHandler_MonitorTransactionReconciliationFailure(t *testing.T) {
@@ -455,11 +618,11 @@ func Test_WalletCreationTransactionHandler_MonitorTransactionReconciliationFailu
 		GitCommitHash: "0xABC",
 		Client:        mMonitorClient,
 	}
-	handler := &WalletCreationTransactionHandler{
+	walletCreationHandler := &WalletCreationTransactionHandler{
 		monitorSvc: tssMonitorService,
 	}
 
-	handler.MonitorTransactionReconciliationFailure(ctx, &txJob, jobUUID, isHorizonErr, errStack)
+	walletCreationHandler.MonitorTransactionReconciliationFailure(ctx, &txJob, jobUUID, isHorizonErr, errStack)
 }
 
 func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) {
@@ -468,7 +631,7 @@ func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) 
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
-	handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+	walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
 	require.NoError(t, err)
 
 	publicKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
@@ -481,14 +644,14 @@ func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) 
 		},
 	}
 
-	fields := handler.AddContextLoggerFields(transaction)
+	fields := walletCreationHandler.AddContextLoggerFields(transaction)
 
 	assert.Equal(t, publicKeyHex, fields["public_key"])
 	assert.Equal(t, wasmHashHex, fields["wasm_hash"])
 	assert.Len(t, fields, 2)
 }
 
-func Test_WalletCreationTransactionHandler_HelperMethods(t *testing.T) {
+func Test_WalletCreationTransactionHandler_CalculateAdjustedBaseFee(t *testing.T) {
 	engine := &engine.SubmitterEngine{MaxBaseFee: 100}
 	rpcClient := &stellar.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
@@ -497,33 +660,28 @@ func Test_WalletCreationTransactionHandler_HelperMethods(t *testing.T) {
 	handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
 	require.NoError(t, err)
 
-	t.Run("calculateAdjustedBaseFee", func(t *testing.T) {
-		t.Run("zero min resource fee", func(t *testing.T) {
-			resp := protocol.SimulateTransactionResponse{
-				MinResourceFee: 0,
-			}
-			fee := handler.calculateAdjustedBaseFee(resp)
-			assert.Equal(t, int64(100), fee)
-		})
+	t.Run("zero min resource fee", func(t *testing.T) {
+		resp := protocol.SimulateTransactionResponse{
+			MinResourceFee: 0,
+		}
+		fee := handler.calculateAdjustedBaseFee(resp)
+		assert.Equal(t, int64(100), fee)
+	})
 
-		t.Run("with resource fee within max", func(t *testing.T) {
-			resp := protocol.SimulateTransactionResponse{
-				MinResourceFee: 50,
-			}
-			fee := handler.calculateAdjustedBaseFee(resp)
-			// 100 - 50 = 50, math.Max(50, MinBaseFee) = math.Max(50, 100) = 100
-			// MinBaseFee is 100, so math.Max(50, 100) = 100
-			assert.Equal(t, int64(100), fee)
-		})
+	t.Run("with resource fee within max", func(t *testing.T) {
+		resp := protocol.SimulateTransactionResponse{
+			MinResourceFee: 50,
+		}
+		fee := handler.calculateAdjustedBaseFee(resp)
+		assert.Equal(t, int64(100), fee)
+	})
 
-		t.Run("with resource fee exceeding max", func(t *testing.T) {
-			resp := protocol.SimulateTransactionResponse{
-				MinResourceFee: 200,
-			}
-			fee := handler.calculateAdjustedBaseFee(resp)
-			// 100 - 200 = -100, math.Max(-100, MinBaseFee) = MinBaseFee
-			assert.Equal(t, int64(txnbuild.MinBaseFee), fee)
-		})
+	t.Run("with resource fee exceeding max", func(t *testing.T) {
+		resp := protocol.SimulateTransactionResponse{
+			MinResourceFee: 200,
+		}
+		fee := handler.calculateAdjustedBaseFee(resp)
+		assert.Equal(t, int64(txnbuild.MinBaseFee), fee)
 	})
 }
 
@@ -531,7 +689,7 @@ func Test_WalletCreationTransactionHandler_MonitoringBehavior(t *testing.T) {
 	ctx := context.Background()
 	txJob := &TxJob{
 		Transaction: store.Transaction{
-			AttemptsCount: 2, // Test reprocessing path
+			AttemptsCount: 2,
 		},
 		ChannelAccount: store.ChannelAccount{
 			PublicKey: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
@@ -539,7 +697,7 @@ func Test_WalletCreationTransactionHandler_MonitoringBehavior(t *testing.T) {
 	}
 	jobUUID := "job-uuid"
 
-	t.Run("MonitorTransactionProcessingSuccess with reprocessing", func(t *testing.T) {
+	t.Run("MonitorTransactionProcessingSuccess", func(t *testing.T) {
 		mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
 		mMonitorClient.
 			On("MonitorCounters", sdpMonitor.WalletCreationTransactionSuccessfulTag, mock.Anything).
@@ -549,12 +707,11 @@ func Test_WalletCreationTransactionHandler_MonitoringBehavior(t *testing.T) {
 		tssMonitorService := tssMonitor.TSSMonitorService{
 			Client: mMonitorClient,
 		}
-		handler := &WalletCreationTransactionHandler{
+		walletCreationHandler := &WalletCreationTransactionHandler{
 			monitorSvc: tssMonitorService,
 		}
 
-		handler.MonitorTransactionProcessingSuccess(ctx, txJob, jobUUID)
-		mMonitorClient.AssertExpectations(t)
+		walletCreationHandler.MonitorTransactionProcessingSuccess(ctx, txJob, jobUUID)
 	})
 
 	t.Run("MonitorTransactionProcessingFailed with retryable error", func(t *testing.T) {
@@ -567,12 +724,11 @@ func Test_WalletCreationTransactionHandler_MonitoringBehavior(t *testing.T) {
 		tssMonitorService := tssMonitor.TSSMonitorService{
 			Client: mMonitorClient,
 		}
-		handler := &WalletCreationTransactionHandler{
+		walletCreationHandler := &WalletCreationTransactionHandler{
 			monitorSvc: tssMonitorService,
 		}
 
-		handler.MonitorTransactionProcessingFailed(ctx, txJob, jobUUID, true, "retryable error")
-		mMonitorClient.AssertExpectations(t)
+		walletCreationHandler.MonitorTransactionProcessingFailed(ctx, txJob, jobUUID, true, "retryable error")
 	})
 
 	t.Run("MonitorTransactionReconciliationSuccess with reprocessing type", func(t *testing.T) {
@@ -585,11 +741,121 @@ func Test_WalletCreationTransactionHandler_MonitoringBehavior(t *testing.T) {
 		tssMonitorService := tssMonitor.TSSMonitorService{
 			Client: mMonitorClient,
 		}
-		handler := &WalletCreationTransactionHandler{
+		walletCreationHandler := &WalletCreationTransactionHandler{
 			monitorSvc: tssMonitorService,
 		}
 
-		handler.MonitorTransactionReconciliationSuccess(ctx, txJob, jobUUID, ReconcileReprocessing)
-		mMonitorClient.AssertExpectations(t)
+		walletCreationHandler.MonitorTransactionReconciliationSuccess(ctx, txJob, jobUUID, ReconcileReprocessing)
+	})
+}
+
+func Test_WalletCreationTransactionHandler_ExtractAuthEntries(t *testing.T) {
+	engine := &engine.SubmitterEngine{}
+	rpcClient := &stellar.MockRPCClient{}
+	monitorSvc := tssMonitor.TSSMonitorService{
+		Client: &sdpMonitorMocks.MockMonitorClient{},
+	}
+	handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+	require.NoError(t, err)
+
+	t.Run("empty results", func(t *testing.T) {
+		response := protocol.SimulateTransactionResponse{
+			Results: []protocol.SimulateHostFunctionResult{},
+		}
+
+		auth, err := handler.extractAuthEntries(response)
+		require.NoError(t, err)
+		assert.Empty(t, auth)
+	})
+
+	t.Run("no auth XDR", func(t *testing.T) {
+		response := protocol.SimulateTransactionResponse{
+			Results: []protocol.SimulateHostFunctionResult{
+				{
+					AuthXDR: nil,
+				},
+			},
+		}
+
+		auth, err := handler.extractAuthEntries(response)
+		require.NoError(t, err)
+		assert.Empty(t, auth)
+	})
+
+	t.Run("valid auth entries", func(t *testing.T) {
+		authXDR := []string{"AAAAAQAAAAHw6CVqzY+dCq3myVJBo1kb3nEGE7oO6obmJeUNvYQ0ukNc84Ms0ZvgAAAAAAAAAAEAAAAAAAAAAeA7wfSg10yaQYZDRmQeyqsepsS/Mb0rbMQxRgDoSVdWAAAAD3dlYl9hdXRoX3ZlcmlmeQAAAAAGAAAADgAAADhDRFlPUUpMS1pXSFoyQ1ZONDNFVkVRTkRMRU41NDRJR0NPNUE1MlVHNFlTNktETjVRUTJMVVdLWQAAAA4AAAADMTIzAAAAAA4AAAAcaHR0cDovL2xvY2FsaG9zdDo4MDgwL2MvYXV0aAAAAA4AAAAObG9jYWxob3N0OjgwODAAAAAAAA4AAAALZXhhbXBsZS5jb20AAAAAAQAAAAA="}
+		response := protocol.SimulateTransactionResponse{
+			Results: []protocol.SimulateHostFunctionResult{
+				{
+					AuthXDR: &authXDR,
+				},
+			},
+		}
+
+		auth, err := handler.extractAuthEntries(response)
+		require.NoError(t, err)
+		assert.Len(t, auth, 1)
+	})
+
+	t.Run("invalid auth XDR", func(t *testing.T) {
+		authXDR := []string{"invalid-base64"}
+		response := protocol.SimulateTransactionResponse{
+			Results: []protocol.SimulateHostFunctionResult{
+				{
+					AuthXDR: &authXDR,
+				},
+			},
+		}
+
+		auth, err := handler.extractAuthEntries(response)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unmarshalling authorization entry")
+		assert.Nil(t, auth)
+	})
+}
+
+func Test_WalletCreationTransactionHandler_ApplyTransactionData(t *testing.T) {
+	engine := &engine.SubmitterEngine{}
+	rpcClient := &stellar.MockRPCClient{}
+	monitorSvc := tssMonitor.TSSMonitorService{
+		Client: &sdpMonitorMocks.MockMonitorClient{},
+	}
+	handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+	require.NoError(t, err)
+
+	t.Run("empty transaction data", func(t *testing.T) {
+		operation := &txnbuild.InvokeHostFunction{}
+		response := protocol.SimulateTransactionResponse{
+			TransactionDataXDR: "",
+		}
+
+		err := handler.applyTransactionData(operation, response)
+		require.NoError(t, err)
+
+		assert.Equal(t, 0, int(operation.Ext.V))
+	})
+
+	t.Run("valid transaction data", func(t *testing.T) {
+		operation := &txnbuild.InvokeHostFunction{}
+		response := protocol.SimulateTransactionResponse{
+			TransactionDataXDR: "AAAAAAAAAAUAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAABgAAAAFDEqQxRKsWsubOpgtPPKXSsdhcWDpfu/jRwXKpUugxhQAAABQAAAABAAAABgAAAAGBhvDmuHDARIUDYKVFokPXfBrz+6tx3N4D7hMpL1AiBwAAABQAAAABAAAAB1uPeA45/uPdYS9GdAZXx37bjezG+3vn4JqEwlyjIRGmAAAAB9nC+GOHmV4+xAZQ4T0I434wH3LKi+db6CM9hlRZhRZgAAAAAgAAAAYAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAAFXCHgz/4M7a3AAAAAAAAAAYAAAABQxKkMUSrFrLmzqYLTzyl0rHYXFg6X7v40cFyqVLoMYUAAAAVNIwhp30FbW4AAAAAAB8NxwAAEgAAAACUAAAAAAAY7m4=",
+		}
+
+		err := handler.applyTransactionData(operation, response)
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, int(operation.Ext.V))
+		assert.NotNil(t, operation.Ext.SorobanData)
+	})
+
+	t.Run("invalid transaction data XDR", func(t *testing.T) {
+		operation := &txnbuild.InvokeHostFunction{}
+		response := protocol.SimulateTransactionResponse{
+			TransactionDataXDR: "invalid-base64",
+		}
+
+		err := handler.applyTransactionData(operation, response)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unmarshaling transaction data")
 	})
 }
