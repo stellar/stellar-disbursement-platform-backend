@@ -2,20 +2,45 @@ package validators
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+type AssetReferenceType string
+
+const (
+	AssetReferenceTypeID       AssetReferenceType = "id"
+	AssetReferenceTypeClassic  AssetReferenceType = "classic"
+	AssetReferenceTypeNative   AssetReferenceType = "native"
+	AssetReferenceTypeContract AssetReferenceType = "contract"
+	AssetReferenceTypeFiat     AssetReferenceType = "fiat"
+)
+
+type AssetReference struct {
+	// For ID-based reference
+	ID string `json:"id,omitempty"`
+
+	Type       string `json:"type,omitempty"`
+	Code       string `json:"code,omitempty"`
+	Issuer     string `json:"issuer,omitempty"`
+	ContractID string `json:"contract_id,omitempty"`
+}
+
 type WalletRequest struct {
-	Name              string   `json:"name"`
-	Homepage          string   `json:"homepage"`
-	DeepLinkSchema    string   `json:"deep_link_schema"`
-	SEP10ClientDomain string   `json:"sep_10_client_domain"`
-	AssetsIDs         []string `json:"assets_ids"`
+	Name              string           `json:"name"`
+	Homepage          string           `json:"homepage"`
+	DeepLinkSchema    string           `json:"deep_link_schema"`
+	SEP10ClientDomain string           `json:"sep_10_client_domain"`
+	Enabled           *bool            `json:"enabled,omitempty"`
+	Assets            []AssetReference `json:"assets,omitempty"`
+	AssetsIDs         []string         `json:"assets_ids,omitempty"` // Legacy support
 }
 
 type PatchWalletRequest struct {
@@ -47,7 +72,20 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 	wv.Check(homepage != "", "homepage", "homepage is required")
 	wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema is required")
 	wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain is required")
-	wv.Check(len(reqBody.AssetsIDs) != 0, "assets_ids", "provide at least one asset ID")
+	wv.Check(len(reqBody.AssetsIDs) != 0 || len(reqBody.Assets) != 0, "assets", "provide at least one 'assets_ids' or 'assets'")
+	wv.Check(len(reqBody.AssetsIDs) == 0 || len(reqBody.Assets) == 0, "assets", "cannot use both 'assets_ids' and 'assets' fields simultaneously")
+	var processedAssets []AssetReference
+	if len(reqBody.Assets) != 0 {
+		for i, asset := range reqBody.Assets {
+			inferredAsset := wv.inferAssetType(asset)
+			if err := inferredAsset.Validate(); err != nil {
+				wv.Check(false, fmt.Sprintf("assets[%d]", i), err.Error())
+				continue
+			}
+			processedAssets = append(processedAssets, inferredAsset)
+		}
+	}
+
 	if wv.HasErrors() {
 		return nil
 	}
@@ -86,6 +124,11 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 		wv.Check(false, "sep_10_client_domain", "invalid SEP-10 client domain provided")
 	}
 
+	if reqBody.Enabled == nil {
+		defEnabled := true
+		reqBody.Enabled = &defEnabled
+	}
+
 	if wv.HasErrors() {
 		return nil
 	}
@@ -95,10 +138,41 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 		Homepage:          homepageURL.String(),
 		DeepLinkSchema:    deepLinkSchemaURL.String(),
 		SEP10ClientDomain: sep10Host,
+		Assets:            processedAssets,
 		AssetsIDs:         reqBody.AssetsIDs,
+		Enabled:           reqBody.Enabled,
 	}
 
 	return modifiedReq
+}
+
+func (wv *WalletValidator) inferAssetType(asset AssetReference) AssetReference {
+	// If ID is provided, no inference needed
+	if asset.ID != "" {
+		return asset
+	}
+
+	// If type is already specified, no inference needed
+	if asset.Type != "" {
+		return asset
+	}
+
+	// Inference logic for backward compatibility
+	result := asset
+
+	if strings.ToUpper(asset.Code) == assets.XLMAssetCode && asset.Issuer == "" {
+		result.Type = string(AssetReferenceTypeNative)
+		result.Code = ""
+		return result
+	}
+
+	// Classic asset detection: has both code and issuer
+	if asset.Code != "" && asset.Issuer != "" {
+		result.Type = string(AssetReferenceTypeClassic)
+		return result
+	}
+
+	return result
 }
 
 func (wv *WalletValidator) ValidatePatchWalletRequest(reqBody *PatchWalletRequest) {
@@ -107,4 +181,48 @@ func (wv *WalletValidator) ValidatePatchWalletRequest(reqBody *PatchWalletReques
 		return
 	}
 	wv.Check(reqBody.Enabled != nil, "enabled", "enabled is required")
+}
+
+func (ar AssetReference) Validate() error {
+	if ar.ID != "" {
+		if ar.Type != "" || ar.Code != "" || ar.Issuer != "" || ar.ContractID != "" {
+			return fmt.Errorf("when 'id' is provided, other fields should not be present")
+		}
+		return nil
+	}
+
+	if ar.Type == "" {
+		return fmt.Errorf("either 'id' or 'type' must be provided")
+	}
+
+	switch AssetReferenceType(ar.Type) {
+	case AssetReferenceTypeClassic:
+		if ar.Code == "" {
+			return fmt.Errorf("'code' is required for classic asset")
+		}
+		if ar.Issuer == "" {
+			return fmt.Errorf("'issuer' is required for classic asset")
+		}
+
+		if !strkey.IsValidEd25519PublicKey(ar.Issuer) {
+			return fmt.Errorf("invalid issuer address format")
+		}
+	case AssetReferenceTypeNative:
+		if ar.Code != "" || ar.Issuer != "" || ar.ContractID != "" {
+			return fmt.Errorf("native asset should not have code, issuer, or contract_id")
+		}
+	case AssetReferenceTypeContract, AssetReferenceTypeFiat:
+		return fmt.Errorf("assets are not implemented yet")
+	default:
+		return fmt.Errorf("invalid asset type: %s", ar.Type)
+	}
+
+	return nil
+}
+
+func (ar AssetReference) GetReferenceType() AssetReferenceType {
+	if ar.ID != "" {
+		return AssetReferenceTypeID
+	}
+	return AssetReferenceType(ar.Type)
 }
