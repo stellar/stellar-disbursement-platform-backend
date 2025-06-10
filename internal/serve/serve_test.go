@@ -435,9 +435,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/payments/1234/status"},
 		// Receivers
 		{http.MethodGet, "/receivers"},
+		{http.MethodPost, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/wallets/1234"},
+		{http.MethodPatch, "/receivers/wallets/1234/status"},
 		{http.MethodGet, "/receivers/verification-types"},
 		// Receiver Contact Types
 		{http.MethodGet, "/registration-contact-types"},
@@ -470,6 +472,12 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/sep24-interactive-deposit/info"},
 		{http.MethodPost, "/sep24-interactive-deposit/otp"},
 		{http.MethodPost, "/sep24-interactive-deposit/verification"},
+		// api-keys
+		{http.MethodPost, "/api-keys"},
+		{http.MethodGet, "/api-keys"},
+		{http.MethodGet, "/api-keys/12345"},
+		{http.MethodPatch, "/api-keys/12345"},
+		{http.MethodDelete, "/api-keys/12345"},
 	}
 
 	// Expect 401 as a response:

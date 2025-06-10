@@ -1,0 +1,210 @@
+global:
+  isPubnet: false
+  ephemeralDatabase: false
+  eventBroker:
+    type: "NONE"
+
+sdp:
+  route:
+    domain: sdp-backend.example.org
+    mtnDomain: "*.sdp-backend.example.org"
+  deployment:
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "sdp.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 1
+  serviceAccount:
+    create: true
+    name: sdp-service-account
+    annotations:
+      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
+  # =========================== START sdp.kubeSecrets ===========================
+  kubeSecrets:
+    secretName: sdp-secrets
+    create: false
+    data:
+      EC256_PRIVATE_KEY: "/sdp/dev/EC256_PRIVATE_KEY"
+      EC256_PUBLIC_KEY: "/sdp/dev/EC256_PUBLIC_KEY"
+      SEP10_SIGNING_PRIVATE_KEY: "/sdp/dev/SEP10_SIGNING_PRIVATE_KEY"
+      SEP10_SIGNING_PUBLIC_KEY: "/sdp/dev/SEP10_SIGNING_PUBLIC_KEY"
+      SEP24_JWT_SECRET: "/sdp/dev/SEP24_JWT_SECRET"
+      DISTRIBUTION_SEED: "/sdp/dev/DISTRIBUTION_SEED"
+      DISTRIBUTION_PUBLIC_KEY: "/sdp/dev/DISTRIBUTION_PUBLIC_KEY"
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/channel-encryption-passphrase"
+      DATABASE_URL: "/sdp/dev/DATABASE_URL"
+      RECAPTCHA_SITE_KEY: "/sdp/dev/RECAPTCHA_SITE_KEY"
+      RECAPTCHA_SITE_SECRET_KEY: "/sdp/dev/RECAPTCHA_SITE_SECRET_KEY"
+  # =========================== START sdp.configMap ===========================
+  configMap:
+    data:
+      INSTANCE_NAME: "SDP-dev"
+      ADMIN_ACCOUNT: "admin@mystellarsdpdomain.com"
+      ENVIRONMENT: "dev"
+      ENABLE_SCHEDULER: "true"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      SDP_UI_BASE_URL: "https://dashboard.example.org"
+  # =========================== START sdp.ingress ===========================
+  ingress:
+    enabled: true
+    className: "ingress-public"
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - hosts:
+          - 'sdp-backend.example.org'
+          - '*.sdp-backend.example.org'
+        secretName: sdp-backend-cert
+# ============================= anchorPlatform ===================================
+anchorPlatform:
+  route:
+    domain: ap-sdp-backend.example.org
+  deployment:
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "sdp.ap.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 1
+  kubeSecrets:
+    create: false
+    secretName: sdp-secrets
+    data:
+      SECRET_DATA_USERNAME: "/sdp/dev/SECRET_DATA_USERNAME"
+      SECRET_DATA_PASSWORD: "/sdp/dev/SECRET_DATA_PASSWORD"
+      DATA_SERVER: "/sdp/dev/DATA_SERVER"
+      SECRET_SEP10_SIGNING_SEED: "/sdp/dev/SEP10_SIGNING_PRIVATE_KEY"
+      SECRET_PLATFORM_API_AUTH_SECRET: "/sdp/dev/SECRET_PLATFORM_API_AUTH_SECRET"
+      SECRET_SEP10_JWT_SECRET: "/sdp/dev/SECRET_SEP10_JWT_SECRET"
+      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: "/sdp/dev/SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET"
+      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: "/sdp/dev/SECRET_SEP24_MORE_INFO_URL_JWT_SECRET"
+      DISTRIBUTION_PUBLIC_KEY: "/sdp/dev/DISTRIBUTION_PUBLIC_KEY"
+  serviceAccount:
+    create: true
+    name: anchor-service-account
+    annotations:
+      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
+  configMap:
+    data:
+      APP_LOGGING_LEVEL: "INFO"
+      DATA_DATABASE: "sdp_dev"
+      DATA_DDL_AUTO: "update"
+      METRICS_ENABLED: "true"
+      METRICS_EXTRAS_ENABLED: "true"
+      ASSETS_VALUE: |
+        {
+          "assets": [
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "USDC",
+              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+              "distribution_account": "NOT_APPLICABLE",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            },
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "native",
+              "distribution_account": "NOT_APPLICABLE",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            }
+          ]
+        }
+  ingress:
+    enabled: true
+    className: "ingress-public"
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - hosts:
+          - 'ap-sdp-backend.example.org'
+        secretName: sdp-ap-cert
+
+# ============================= tss ===================================
+tss:
+  deployment:
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "tss.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    strategy:
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 1
+  kubeSecrets:
+    create: false
+    secretName: sdp-secrets
+    data:
+      DISTRIBUTION_PUBLIC_KEY: "/sdp/dev/DISTRIBUTION_PUBLIC_KEY"
+      DISTRIBUTION_SEED: "/sdp/dev/DISTRIBUTION_SEED"
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
+      DATABASE_URL: "/sdp/dev/DATABASE_URL"
+  serviceAccount:
+    create: true
+    name: tss-service-account
+    annotations:
+      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
+  configMap:
+    data:
+      NUM_CHANNEL_ACCOUNTS: "3"
+      MAX_BASE_FEE: "100"
+# ============================= dashboard ===================================
+dashboard:
+  enabled: true
+  route:
+    domain: "dashboard.example.org"
+    mtnDomain: "*.dashboard.example.org"
+  deployment:
+    strategy:
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+    env:
+      - name: RECAPTCHA_SITE_KEY
+        valueFrom:
+          secretKeyRef:
+            name: sdp-secrets
+            key: RECAPTCHA_SITE_KEY
+  configMap:
+    data:
+      RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+  ingress:
+    enabled: true
+    className: "ingress-public"
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - hosts:
+          - 'dashboard.example.org'
+          - '*.dashboard.example.org'
+        secretName: sdp-dashboard-cert

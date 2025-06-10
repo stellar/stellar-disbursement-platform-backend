@@ -420,7 +420,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 					PhoneNumber: tc.receiverSendOTPRequest.PhoneNumber,
 					Email:       tc.receiverSendOTPRequest.Email,
 				})
-				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 				data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 					ReceiverID:        receiver.ID,
 					VerificationField: tc.verificationField,
@@ -793,7 +793,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 					VerificationField: data.VerificationTypePin,
 					VerificationValue: "123456",
 				})
-				_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithWallet.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+				_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithWallet.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
 				getEntries := log.DefaultLogger.StartTest(logrus.DebugLevel)
 
