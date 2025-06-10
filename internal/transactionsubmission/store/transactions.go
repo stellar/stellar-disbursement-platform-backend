@@ -29,6 +29,7 @@ type TransactionType string
 const (
 	TransactionTypePayment        TransactionType = "PAYMENT"
 	TransactionTypeWalletCreation TransactionType = "WALLET_CREATION"
+	TransactionTypeSponsored      TransactionType = "SPONSORED"
 )
 
 type Transaction struct {
@@ -43,6 +44,7 @@ type Transaction struct {
 	TransactionType TransactionType `db:"transaction_type"`
 	Payment
 	WalletCreation
+	Sponsored
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
@@ -85,6 +87,11 @@ type WalletCreation struct {
 	WasmHash  string `db:"wasm_hash"`
 }
 
+type Sponsored struct {
+	Account        string `db:"account"`
+	TransactionXDR string `db:"transaction_xdr"`
+}
+
 func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
 	if tx.TransactionType != TransactionTypePayment {
 		return nil, fmt.Errorf("transaction type %q does not support memo", tx.TransactionType)
@@ -115,6 +122,10 @@ func (tx *Transaction) validate() error {
 	case TransactionTypeWalletCreation:
 		if err := tx.WalletCreation.validate(); err != nil {
 			return fmt.Errorf("validating wallet creation transaction: %w", err)
+		}
+	case TransactionTypeSponsored:
+		if err := tx.Sponsored.validate(); err != nil {
+			return fmt.Errorf("validating sponsored transaction: %w", err)
 		}
 	default:
 		return fmt.Errorf("invalid transaction type %q", tx.TransactionType)
@@ -166,6 +177,24 @@ func (p *Payment) validate() error {
 	return nil
 }
 
+func (s *Sponsored) validate() error {
+	if s.Account == "" {
+		return fmt.Errorf("account is required")
+	}
+	if !strkey.IsValidContractAddress(s.Account) {
+		return fmt.Errorf("account %q is not a valid contract address", s.Account)
+	}
+
+	if s.TransactionXDR == "" {
+		return fmt.Errorf("transaction XDR is required")
+	}
+	var txEnvelope xdr.TransactionEnvelope
+	if err := xdr.SafeUnmarshalBase64(s.TransactionXDR, &txEnvelope); err != nil {
+		return fmt.Errorf("invalid transaction XDR %q: %w", s.TransactionXDR, err)
+	}
+	return nil
+}
+
 type TransactionModel struct {
 	DBConnectionPool db.DBConnectionPool
 }
@@ -206,6 +235,8 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"destination",
 			"public_key",
 			"wasm_hash",
+			"account",
+			"transaction_xdr",
 			"memo",
 			"memo_type::text",
 		},
@@ -234,15 +265,15 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, tenant_id, memo, memo_type) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, account, transaction_xdr, tenant_id, memo, memo_type) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
-	valueArgs := make([]interface{}, 0, len(transactions)*6)
+	valueArgs := make([]interface{}, 0, len(transactions)*13)
 
 	for _, transaction := range transactions {
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
 			transaction.TransactionType,
 			transaction.ExternalID,
@@ -252,6 +283,8 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 			sdpUtils.SQLNullString(transaction.Destination),
 			sdpUtils.SQLNullString(transaction.PublicKey),
 			sdpUtils.SQLNullString(transaction.WasmHash),
+			sdpUtils.SQLNullString(transaction.Account),
+			sdpUtils.SQLNullString(transaction.TransactionXDR),
 			transaction.TenantID,
 			sdpUtils.SQLNullString(transaction.Memo),
 			sdpUtils.SQLNullString(string(transaction.MemoType)),

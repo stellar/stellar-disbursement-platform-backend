@@ -1,11 +1,15 @@
 -- +migrate Up
 
-CREATE TYPE transaction_type AS ENUM ('PAYMENT', 'WALLET_CREATION');
+CREATE TYPE transaction_type AS ENUM ('PAYMENT', 'WALLET_CREATION', 'SPONSORED');
 
 ALTER TABLE submitter_transactions
+    ADD COLUMN transaction_type VARCHAR(32) NOT NULL DEFAULT 'PAYMENT'::transaction_type,
+    -- Add new columns for wallet creation transactions
     ADD COLUMN public_key VARCHAR(256),
     ADD COLUMN wasm_hash VARCHAR(64),
-    ADD COLUMN transaction_type VARCHAR(32) NOT NULL DEFAULT 'PAYMENT'::transaction_type;
+    -- Add new columns for sponsored transactions
+    ADD COLUMN account VARCHAR(56),
+    ADD COLUMN transaction_xdr TEXT;
 
 ALTER TABLE submitter_transactions
     ALTER COLUMN asset_code DROP NOT NULL,
@@ -24,6 +28,9 @@ ALTER TABLE submitter_transactions
             WHEN transaction_type = 'WALLET_CREATION' THEN
                 public_key IS NOT NULL AND
                 wasm_hash IS NOT NULL
+            WHEN transaction_type = 'SPONSORED' THEN
+                account IS NOT NULL AND
+                transaction_xdr IS NOT NULL
         END
     );
 
@@ -35,7 +42,9 @@ ALTER TABLE submitter_transactions
 ALTER TABLE submitter_transactions
     DROP COLUMN public_key,
     DROP COLUMN wasm_hash,
-    DROP COLUMN transaction_type;
+    DROP COLUMN transaction_type,
+    DROP COLUMN account,
+    DROP COLUMN transaction_xdr;
 
 ALTER TABLE submitter_transactions
     ALTER COLUMN asset_code SET NOT NULL,

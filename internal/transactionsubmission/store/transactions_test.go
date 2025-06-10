@@ -205,6 +205,31 @@ func Test_TransactionModel_Insert(t *testing.T) {
 		assert.Equal(t, TransactionStatusPending, refreshedTx.Status)
 		assert.Equal(t, "tenant-id-2", refreshedTx.TenantID)
 	})
+
+	t.Run("succesfully insert a new Sponsored Transaction", func(t *testing.T) {
+		transaction, err := txModel.Insert(ctx, Transaction{
+			ExternalID:      "external-id-3",
+			TransactionType: TransactionTypeSponsored,
+			Sponsored: Sponsored{
+				Account:        "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
+				TransactionXDR: "AAAAAgAAAADSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQACywMAAAfhAAAGugAAAAEAAAAAAAAAAAAAAABoSGeWAAAAAAAAAAEAAAABAAAAANKw4wpgrtrVoAuJ7zcXgZAOgF0etbzpRfZJhXKBED5VAAAAGAAAAAAAAAAB542/zq43Jmbx2PIPe+0FykEDwNgdm5Kb2MegCDjmxIUAAAAIdHJhbnNmZXIAAAADAAAAEgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABIAAAAAAAAAAFvGtEMyXcvbioU2IKCSomxahpl7lUyef7ftEPxWcD4bAAAACgAAAAAAAAAAAAAAAACYloAAAAABAAAAAQAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nH0ObdiOTpYlABXcfAAAABAAAAABAAAAAQAAABEAAAABAAAAAgAAAA8AAAAKcHVibGljX2tleQAAAAAADQAAACDSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQAAAA8AAAAJc2lnbmF0dXJlAAAAAAAADQAAAEAQ7ioNcH2wRZxLNA2ssu0tNx2K9DBRsh6u0tVrwkkj0sqwsxvYdrm072z5UE9sUSmcbd5s9CHK+MxSRsrc+gUHAAAAAAAAAAHnjb/OrjcmZvHY8g977QXKQQPA2B2bkpvYx6AIOObEhQAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAEgAAAAAAAAAAW8a0QzJdy9uKhTYgoJKibFqGmXuVTJ5/t+0Q/FZwPhsAAAAKAAAAAAAAAAAAAAAAAJiWgAAAAAAAAAABAAAAAAAAAAMAAAAGAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAFAAAAAEAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAFAAAAAEAAAAHURIgc/sBvxJigzDM+JHIxvPBqRHTG9KFFsMC7294utoAAAADAAAAAQAAAABbxrRDMl3L24qFNiCgkqJsWoaZe5VMnn+37RD8VnA+GwAAAAFVU0RDAAAAAODia2IsqMlWCuY6k734V/dcCafJwfI1Qq7+/0qEd68AAAAABgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABV9Dm3Yjk6WJQAAAAAAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAEAAAAAEAAAACAAAADwAAAAdCYWxhbmNlAAAAABIAAAABMXx6BpvcLPv+Ys0+pKSVYuT5yS/rba13ZMWowRmb+pwAAAABABlJmAAADWAAAAGcAAAAAAACyp8AAAABgRA+VQAAAEAVqZBB44AhyhyYi3QN51aEvkGw62m+2D2lSGt0bO4lcUNIL10dN1acoBituE9F1Ypxb+mAyqZFhYLg8vn5n5sP",
+			},
+			TenantID: "tenant-id-3",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, transaction)
+
+		refreshedTx, err := txModel.Get(ctx, transaction.ID)
+		require.NoError(t, err)
+		assert.Equal(t, transaction, refreshedTx)
+
+		assert.Equal(t, "external-id-3", refreshedTx.ExternalID)
+		assert.Equal(t, TransactionTypeSponsored, refreshedTx.TransactionType)
+		assert.Equal(t, "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT", refreshedTx.Sponsored.Account)
+		assert.Equal(t, "AAAAAgAAAADSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQACywMAAAfhAAAGugAAAAEAAAAAAAAAAAAAAABoSGeWAAAAAAAAAAEAAAABAAAAANKw4wpgrtrVoAuJ7zcXgZAOgF0etbzpRfZJhXKBED5VAAAAGAAAAAAAAAAB542/zq43Jmbx2PIPe+0FykEDwNgdm5Kb2MegCDjmxIUAAAAIdHJhbnNmZXIAAAADAAAAEgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABIAAAAAAAAAAFvGtEMyXcvbioU2IKCSomxahpl7lUyef7ftEPxWcD4bAAAACgAAAAAAAAAAAAAAAACYloAAAAABAAAAAQAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nH0ObdiOTpYlABXcfAAAABAAAAABAAAAAQAAABEAAAABAAAAAgAAAA8AAAAKcHVibGljX2tleQAAAAAADQAAACDSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQAAAA8AAAAJc2lnbmF0dXJlAAAAAAAADQAAAEAQ7ioNcH2wRZxLNA2ssu0tNx2K9DBRsh6u0tVrwkkj0sqwsxvYdrm072z5UE9sUSmcbd5s9CHK+MxSRsrc+gUHAAAAAAAAAAHnjb/OrjcmZvHY8g977QXKQQPA2B2bkpvYx6AIOObEhQAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAEgAAAAAAAAAAW8a0QzJdy9uKhTYgoJKibFqGmXuVTJ5/t+0Q/FZwPhsAAAAKAAAAAAAAAAAAAAAAAJiWgAAAAAAAAAABAAAAAAAAAAMAAAAGAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAFAAAAAEAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAFAAAAAEAAAAHURIgc/sBvxJigzDM+JHIxvPBqRHTG9KFFsMC7294utoAAAADAAAAAQAAAABbxrRDMl3L24qFNiCgkqJsWoaZe5VMnn+37RD8VnA+GwAAAAFVU0RDAAAAAODia2IsqMlWCuY6k734V/dcCafJwfI1Qq7+/0qEd68AAAAABgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABV9Dm3Yjk6WJQAAAAAAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAEAAAAAEAAAACAAAADwAAAAdCYWxhbmNlAAAAABIAAAABMXx6BpvcLPv+Ys0+pKSVYuT5yS/rba13ZMWowRmb+pwAAAABABlJmAAADWAAAAGcAAAAAAACyp8AAAABgRA+VQAAAEAVqZBB44AhyhyYi3QN51aEvkGw62m+2D2lSGt0bO4lcUNIL10dN1acoBituE9F1Ypxb+mAyqZFhYLg8vn5n5sP", refreshedTx.Sponsored.TransactionXDR)
+		assert.Equal(t, TransactionStatusPending, refreshedTx.Status)
+		assert.Equal(t, "tenant-id-3", refreshedTx.TenantID)
+	})
 }
 
 func Test_TransactionModel_BulkInsert(t *testing.T) {
@@ -272,12 +297,21 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 			},
 			TenantID: uuid.NewString(),
 		}
-		insertedTransactions, err := txModel.BulkInsert(ctx, dbConnectionPool, []Transaction{incomingTx1, incomingTx2, incomingTx3})
+		incomingTx4 := Transaction{
+			ExternalID:      "external-id-4",
+			TransactionType: TransactionTypeSponsored,
+			Sponsored: Sponsored{
+				Account:        "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
+				TransactionXDR: "AAAAAgAAAADSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQACywMAAAfhAAAGugAAAAEAAAAAAAAAAAAAAABoSGeWAAAAAAAAAAEAAAABAAAAANKw4wpgrtrVoAuJ7zcXgZAOgF0etbzpRfZJhXKBED5VAAAAGAAAAAAAAAAB542/zq43Jmbx2PIPe+0FykEDwNgdm5Kb2MegCDjmxIUAAAAIdHJhbnNmZXIAAAADAAAAEgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABIAAAAAAAAAAFvGtEMyXcvbioU2IKCSomxahpl7lUyef7ftEPxWcD4bAAAACgAAAAAAAAAAAAAAAACYloAAAAABAAAAAQAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nH0ObdiOTpYlABXcfAAAABAAAAABAAAAAQAAABEAAAABAAAAAgAAAA8AAAAKcHVibGljX2tleQAAAAAADQAAACDSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQAAAA8AAAAJc2lnbmF0dXJlAAAAAAAADQAAAEAQ7ioNcH2wRZxLNA2ssu0tNx2K9DBRsh6u0tVrwkkj0sqwsxvYdrm072z5UE9sUSmcbd5s9CHK+MxSRsrc+gUHAAAAAAAAAAHnjb/OrjcmZvHY8g977QXKQQPA2B2bkpvYx6AIOObEhQAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAEgAAAAAAAAAAW8a0QzJdy9uKhTYgoJKibFqGmXuVTJ5/t+0Q/FZwPhsAAAAKAAAAAAAAAAAAAAAAAJiWgAAAAAAAAAABAAAAAAAAAAMAAAAGAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAFAAAAAEAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAFAAAAAEAAAAHURIgc/sBvxJigzDM+JHIxvPBqRHTG9KFFsMC7294utoAAAADAAAAAQAAAABbxrRDMl3L24qFNiCgkqJsWoaZe5VMnn+37RD8VnA+GwAAAAFVU0RDAAAAAODia2IsqMlWCuY6k734V/dcCafJwfI1Qq7+/0qEd68AAAAABgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABV9Dm3Yjk6WJQAAAAAAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAEAAAAAEAAAACAAAADwAAAAdCYWxhbmNlAAAAABIAAAABMXx6BpvcLPv+Ys0+pKSVYuT5yS/rba13ZMWowRmb+pwAAAABABlJmAAADWAAAAGcAAAAAAACyp8AAAABgRA+VQAAAEAVqZBB44AhyhyYi3QN51aEvkGw62m+2D2lSGt0bO4lcUNIL10dN1acoBituE9F1Ypxb+mAyqZFhYLg8vn5n5sP",
+			},
+			TenantID: uuid.NewString(),
+		}
+		insertedTransactions, err := txModel.BulkInsert(ctx, dbConnectionPool, []Transaction{incomingTx1, incomingTx2, incomingTx3, incomingTx4})
 		require.NoError(t, err)
 		assert.NotNil(t, insertedTransactions)
-		assert.Len(t, insertedTransactions, 3)
+		assert.Len(t, insertedTransactions, 4)
 
-		var insertedTx1, insertedTx2, insertedTx3 Transaction
+		var insertedTx1, insertedTx2, insertedTx3, insertedTx4 Transaction
 		for _, tx := range insertedTransactions {
 			if tx.ExternalID == incomingTx1.ExternalID {
 				insertedTx1 = tx
@@ -285,6 +319,8 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 				insertedTx2 = tx
 			} else if tx.ExternalID == incomingTx3.ExternalID {
 				insertedTx3 = tx
+			} else if tx.ExternalID == incomingTx4.ExternalID {
+				insertedTx4 = tx
 			} else {
 				require.FailNow(t, "unexpected transaction: %v", tx)
 			}
@@ -311,6 +347,12 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 		assert.Equal(t, incomingTx3.PublicKey, insertedTx3.PublicKey)
 		assert.Equal(t, incomingTx3.WasmHash, insertedTx3.WasmHash)
 		assert.Equal(t, TransactionStatusPending, insertedTx3.Status)
+
+		assert.Equal(t, incomingTx4.ExternalID, insertedTx4.ExternalID)
+		assert.Equal(t, incomingTx4.TransactionType, insertedTx4.TransactionType)
+		assert.Equal(t, incomingTx4.Account, insertedTx4.Account)
+		assert.Equal(t, incomingTx4.TransactionXDR, insertedTx4.TransactionXDR)
+		assert.Equal(t, TransactionStatusPending, insertedTx4.Status)
 	})
 }
 
@@ -370,6 +412,15 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		TenantID:        uuid.NewString(),
 	})
 
+	unphazedTx3 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		ExternalID:      uuid.NewString(),
+		TransactionType: TransactionTypeSponsored,
+		Account:         "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
+		TransactionXDR:  "AAAAAgAAAADSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQACywMAAAfhAAAGugAAAAEAAAAAAAAAAAAAAABoSGeWAAAAAAAAAAEAAAABAAAAANKw4wpgrtrVoAuJ7zcXgZAOgF0etbzpRfZJhXKBED5VAAAAGAAAAAAAAAAB542/zq43Jmbx2PIPe+0FykEDwNgdm5Kb2MegCDjmxIUAAAAIdHJhbnNmZXIAAAADAAAAEgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABIAAAAAAAAAAFvGtEMyXcvbioU2IKCSomxahpl7lUyef7ftEPxWcD4bAAAACgAAAAAAAAAAAAAAAACYloAAAAABAAAAAQAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nH0ObdiOTpYlABXcfAAAABAAAAABAAAAAQAAABEAAAABAAAAAgAAAA8AAAAKcHVibGljX2tleQAAAAAADQAAACDSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQAAAA8AAAAJc2lnbmF0dXJlAAAAAAAADQAAAEAQ7ioNcH2wRZxLNA2ssu0tNx2K9DBRsh6u0tVrwkkj0sqwsxvYdrm072z5UE9sUSmcbd5s9CHK+MxSRsrc+gUHAAAAAAAAAAHnjb/OrjcmZvHY8g977QXKQQPA2B2bkpvYx6AIOObEhQAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAEgAAAAAAAAAAW8a0QzJdy9uKhTYgoJKibFqGmXuVTJ5/t+0Q/FZwPhsAAAAKAAAAAAAAAAAAAAAAAJiWgAAAAAAAAAABAAAAAAAAAAMAAAAGAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAFAAAAAEAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAFAAAAAEAAAAHURIgc/sBvxJigzDM+JHIxvPBqRHTG9KFFsMC7294utoAAAADAAAAAQAAAABbxrRDMl3L24qFNiCgkqJsWoaZe5VMnn+37RD8VnA+GwAAAAFVU0RDAAAAAODia2IsqMlWCuY6k734V/dcCafJwfI1Qq7+/0qEd68AAAAABgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABV9Dm3Yjk6WJQAAAAAAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAEAAAAAEAAAACAAAADwAAAAdCYWxhbmNlAAAAABIAAAABMXx6BpvcLPv+Ys0+pKSVYuT5yS/rba13ZMWowRmb+pwAAAABABlJmAAADWAAAAGcAAAAAAACyp8AAAABgRA+VQAAAEAVqZBB44AhyhyYi3QN51aEvkGw62m+2D2lSGt0bO4lcUNIL10dN1acoBituE9F1Ypxb+mAyqZFhYLg8vn5n5sP",
+		Status:          TransactionStatusPending,
+		TenantID:        uuid.NewString(),
+	})
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
@@ -414,6 +465,11 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 			refreshedUnphazedTx2, err := txModel.Get(ctx, unphazedTx2.ID)
 			require.NoError(t, err)
 			assert.Equal(t, unphazedTx2, refreshedUnphazedTx2)
+
+			// verify the unphazed sponsored transaction was not updated
+			refreshedUnphazedTx3, err := txModel.Get(ctx, unphazedTx3.ID)
+			require.NoError(t, err)
+			assert.Equal(t, unphazedTx3, refreshedUnphazedTx3)
 		})
 	}
 }
@@ -474,6 +530,15 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		TenantID:        uuid.NewString(),
 	})
 
+	unphazedTx3 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		ExternalID:      uuid.NewString(),
+		TransactionType: TransactionTypeSponsored,
+		Account:         "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
+		TransactionXDR:  "AAAAAgAAAADSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQACywMAAAfhAAAGugAAAAEAAAAAAAAAAAAAAABoSGeWAAAAAAAAAAEAAAABAAAAANKw4wpgrtrVoAuJ7zcXgZAOgF0etbzpRfZJhXKBED5VAAAAGAAAAAAAAAAB542/zq43Jmbx2PIPe+0FykEDwNgdm5Kb2MegCDjmxIUAAAAIdHJhbnNmZXIAAAADAAAAEgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABIAAAAAAAAAAFvGtEMyXcvbioU2IKCSomxahpl7lUyef7ftEPxWcD4bAAAACgAAAAAAAAAAAAAAAACYloAAAAABAAAAAQAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nH0ObdiOTpYlABXcfAAAABAAAAABAAAAAQAAABEAAAABAAAAAgAAAA8AAAAKcHVibGljX2tleQAAAAAADQAAACDSsOMKYK7a1aALie83F4GQDoBdHrW86UX2SYVygRA+VQAAAA8AAAAJc2lnbmF0dXJlAAAAAAAADQAAAEAQ7ioNcH2wRZxLNA2ssu0tNx2K9DBRsh6u0tVrwkkj0sqwsxvYdrm072z5UE9sUSmcbd5s9CHK+MxSRsrc+gUHAAAAAAAAAAHnjb/OrjcmZvHY8g977QXKQQPA2B2bkpvYx6AIOObEhQAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAEgAAAAAAAAAAW8a0QzJdy9uKhTYgoJKibFqGmXuVTJ5/t+0Q/FZwPhsAAAAKAAAAAAAAAAAAAAAAAJiWgAAAAAAAAAABAAAAAAAAAAMAAAAGAAAAATF8egab3Cz7/mLNPqSklWLk+ckv622td2TFqMEZm/qcAAAAFAAAAAEAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAFAAAAAEAAAAHURIgc/sBvxJigzDM+JHIxvPBqRHTG9KFFsMC7294utoAAAADAAAAAQAAAABbxrRDMl3L24qFNiCgkqJsWoaZe5VMnn+37RD8VnA+GwAAAAFVU0RDAAAAAODia2IsqMlWCuY6k734V/dcCafJwfI1Qq7+/0qEd68AAAAABgAAAAExfHoGm9ws+/5izT6kpJVi5PnJL+ttrXdkxajBGZv6nAAAABV9Dm3Yjk6WJQAAAAAAAAAGAAAAAeeNv86uNyZm8djyD3vtBcpBA8DYHZuSm9jHoAg45sSFAAAAEAAAAAEAAAACAAAADwAAAAdCYWxhbmNlAAAAABIAAAABMXx6BpvcLPv+Ys0+pKSVYuT5yS/rba13ZMWowRmb+pwAAAABABlJmAAADWAAAAGcAAAAAAACyp8AAAABgRA+VQAAAEAVqZBB44AhyhyYi3QN51aEvkGw62m+2D2lSGt0bO4lcUNIL10dN1acoBituE9F1Ypxb+mAyqZFhYLg8vn5n5sP",
+		Status:          TransactionStatusPending,
+		TenantID:        uuid.NewString(),
+	})
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
@@ -521,6 +586,11 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 			refreshedUnphazedTx2, err := txModel.Get(ctx, unphazedTx2.ID)
 			require.NoError(t, err)
 			assert.Equal(t, unphazedTx2, refreshedUnphazedTx2)
+
+			// verify the unphazed sponsored transaction was not updated
+			refreshedUnphazedTx3, err := txModel.Get(ctx, unphazedTx3.ID)
+			require.NoError(t, err)
+			assert.Equal(t, unphazedTx3, refreshedUnphazedTx3)
 		})
 	}
 }
@@ -960,6 +1030,87 @@ func Test_Transaction_validate_wallet_creation(t *testing.T) {
 				TenantID: "tenant-id",
 			},
 			wantErrContains: `wasm hash "invalid-wasm-hash" is not a valid hex string`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.transaction.validate()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func Test_Transaction_validate_sponsored(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name            string
+		transaction     Transaction
+		wantErrContains string
+	}{
+		{
+			name: "validate ExternalID",
+			transaction: Transaction{
+				TransactionType: TransactionTypeSponsored,
+			},
+			wantErrContains: "external ID is required",
+		},
+		{
+			name: "validate Account",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeSponsored,
+				TenantID:        "tenant-id",
+			},
+			wantErrContains: "account is required",
+		},
+		{
+			name: "validate Account (not a contract address)",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeSponsored,
+				Sponsored: Sponsored{
+					Account: "invalid-account",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: `account "invalid-account" is not a valid contract address`,
+		},
+		{
+			name: "validate TransactionXDR",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeSponsored,
+				Sponsored: Sponsored{
+					Account: "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: "transaction XDR is required",
+		},
+		{
+			name: "validate TransactionXDR (not a valid hash)",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeSponsored,
+				Sponsored: Sponsored{
+					Account:        "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
+					TransactionXDR: "invalid-transaction-xdr",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: `transaction XDR "invalid-transaction-xdr"`,
 		},
 	}
 

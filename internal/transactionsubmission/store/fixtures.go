@@ -43,6 +43,8 @@ type TransactionFixture struct {
 	Amount              float64
 	PublicKey           string
 	WasmHash            string
+	Account             string
+	TransactionXDR      string
 	Status              TransactionStatus
 	TenantID            string
 	DistributionAccount string
@@ -72,9 +74,9 @@ func CreateTransactionFixtureNew(
 
 	query := `
 		INSERT INTO submitter_transactions
-			(external_id, transaction_type, status, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, tenant_id, completed_at, started_at)
+			(external_id, transaction_type, status, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, account, transaction_xdr, tenant_id, completed_at, started_at)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
 		RETURNING
 			` + TransactionColumnNames("", "")
 
@@ -89,6 +91,8 @@ func CreateTransactionFixtureNew(
 		txFixture.DestinationAddress,
 		txFixture.PublicKey,
 		txFixture.WasmHash,
+		txFixture.Account,
+		txFixture.TransactionXDR,
 		txFixture.TenantID,
 		completedAt,
 	)
