@@ -53,7 +53,10 @@ var SummaryTSSVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 
 var CounterTSSMetrics = map[MetricTag]prometheus.Counter{}
 
-var paymentLabelNames = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
+var (
+	paymentLabelNames        = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
+	walletCreationLabelNames = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
+)
 
 var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 	TransactionProcessedCounterTag: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -112,5 +115,46 @@ var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 			Help:      "Count of payments that have failed onchain",
 		},
 		paymentLabelNames,
+	),
+
+	WalletCreationProcessingStartedTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(WalletCreationProcessingStartedTag),
+			Help:      "Count of wallet creations that are starting to process",
+		},
+		walletCreationLabelNames,
+	),
+	WalletCreationTransactionSuccessfulTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(WalletCreationTransactionSuccessfulTag),
+			Help:      "Count of wallet creations that have processed successfully",
+		},
+		walletCreationLabelNames,
+	),
+	WalletCreationReconciliationSuccessfulTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(WalletCreationReconciliationSuccessfulTag),
+			Help:      "Count of wallet creations that have completed reconciliation successfully",
+		},
+		walletCreationLabelNames,
+	),
+	WalletCreationReconciliationFailureTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(WalletCreationReconciliationFailureTag),
+			Help:      "Count of wallet creations that have failed reconciliation",
+		},
+		walletCreationLabelNames,
+	),
+	WalletCreationErrorTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(WalletCreationErrorTag),
+			Help:      "Count of wallet creations that have failed onchain",
+		},
+		walletCreationLabelNames,
 	),
 }

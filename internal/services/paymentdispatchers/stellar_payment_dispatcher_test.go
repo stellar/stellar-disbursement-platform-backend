@@ -226,7 +226,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 			assert.Equal(t, data.PendingPaymentStatus, p.Status)
 
 			// Transaction should be created with the correct values
-			transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{p.ID})
+			transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{p.ID})
 			require.NoError(t, err)
 			require.Len(t, transactions, 1)
 			tx := transactions[0]

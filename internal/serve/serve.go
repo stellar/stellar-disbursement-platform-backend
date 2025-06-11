@@ -81,7 +81,7 @@ type ServeOptions struct {
 	EmbeddedWalletsWasmHash         string
 	EnableSep45                     bool
 	Sep45ContractId                 string
-	RpcConfig                       stellar.RpcOptions
+	RpcConfig                       stellar.RPCOptions
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
@@ -183,21 +183,21 @@ func (opts *ServeOptions) ValidateSecurity() error {
 
 // ValidateRpc validates the RPC options.
 func (opts *ServeOptions) ValidateRpc() error {
-	if opts.RpcConfig.RpcURL == "" && (opts.RpcConfig.RpcRequestHeaderKey != "" || opts.RpcConfig.RpcRequestHeaderValue != "") {
+	if opts.RpcConfig.RPCUrl == "" && (opts.RpcConfig.RPCRequestAuthHeaderKey != "" || opts.RpcConfig.RPCRequestAuthHeaderValue != "") {
 		return fmt.Errorf("RPC URL must be set when RPC request header key or value is set")
 	}
 
-	if opts.RpcConfig.RpcRequestHeaderKey != "" && opts.RpcConfig.RpcRequestHeaderValue == "" {
+	if opts.RpcConfig.RPCRequestAuthHeaderKey != "" && opts.RpcConfig.RPCRequestAuthHeaderValue == "" {
 		return fmt.Errorf("RPC request header value must be set when RPC request header key is set")
 	}
 
-	if opts.RpcConfig.RpcRequestHeaderKey == "" && opts.RpcConfig.RpcRequestHeaderValue != "" {
+	if opts.RpcConfig.RPCRequestAuthHeaderKey == "" && opts.RpcConfig.RPCRequestAuthHeaderValue != "" {
 		return fmt.Errorf("RPC request header key must be set when RPC request header value is set")
 	}
 
 	// RPC-dependent feature validation
 	hasRpcFeatures := opts.EnableEmbeddedWallets || opts.EnableSep45
-	if hasRpcFeatures && opts.RpcConfig.RpcURL == "" {
+	if hasRpcFeatures && opts.RpcConfig.RPCUrl == "" {
 		return fmt.Errorf("RPC URL must be set when RPC-dependent features are enabled")
 	}
 

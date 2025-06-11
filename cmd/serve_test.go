@@ -167,7 +167,7 @@ func Test_serve(t *testing.T) {
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		Sep10SigningPrivateKey:          "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
 		Sep45ContractId:                 "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-		RpcConfig:                       stellar.RpcOptions{RpcURL: "https://soroban-testnet.stellar.org"},
+		RpcConfig:                       stellar.RPCOptions{RPCUrl: "https://soroban-testnet.stellar.org"},
 		AnchorPlatformBaseSepURL:        "localhost:8080",
 		AnchorPlatformBasePlatformURL:   "localhost:8085",
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
@@ -300,7 +300,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("SEP10_SIGNING_PUBLIC_KEY", serveOpts.Sep10SigningPublicKey)
 	t.Setenv("SEP10_SIGNING_PRIVATE_KEY", serveOpts.Sep10SigningPrivateKey)
 	t.Setenv("SEP45_CONTRACT_ID", serveOpts.Sep45ContractId)
-	t.Setenv("RPC_URL", serveOpts.RpcConfig.RpcURL)
+	t.Setenv("RPC_URL", serveOpts.RpcConfig.RPCUrl)
 	t.Setenv("ANCHOR_PLATFORM_BASE_SEP_URL", serveOpts.AnchorPlatformBaseSepURL)
 	t.Setenv("ANCHOR_PLATFORM_BASE_PLATFORM_URL", serveOpts.AnchorPlatformBasePlatformURL)
 	t.Setenv("ANCHOR_PLATFORM_OUTGOING_JWT_SECRET", serveOpts.AnchorPlatformOutgoingJWTSecret)

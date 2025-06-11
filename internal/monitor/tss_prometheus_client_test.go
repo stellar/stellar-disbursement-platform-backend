@@ -116,6 +116,8 @@ func Test_TSSPrometheusClient_MonitorCounters(t *testing.T) {
 	metricsRegistry := prometheus.NewRegistry()
 	metricsRegistry.MustRegister(CounterTSSVecMetrics[TransactionProcessedCounterTag])
 	metricsRegistry.MustRegister(CounterTSSVecMetrics[HorizonErrorCounterTag])
+	metricsRegistry.MustRegister(CounterTSSVecMetrics[PaymentProcessingStartedTag])
+	metricsRegistry.MustRegister(CounterTSSVecMetrics[WalletCreationProcessingStartedTag])
 
 	mTSSPrometheusClient.httpHandler = promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
 

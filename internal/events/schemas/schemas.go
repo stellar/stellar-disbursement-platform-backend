@@ -23,3 +23,12 @@ type EventPaymentsReadyToPayData struct {
 	TenantID string              `json:"tenant_id"`
 	Payments []PaymentReadyToPay `json:"payments"`
 }
+
+type EventWalletCreationCompletedData struct {
+	TransactionID               string    `json:"transaction_id"`
+	WalletCreationID            string    `json:"wallet_creation_id"`
+	WalletCreationStatus        string    `json:"wallet_creation_status"`
+	WalletCreationStatusMessage string    `json:"wallet_creation_status_message"`
+	WalletCreationCompletedAt   time.Time `json:"completed_at"`
+	StellarTransactionID        string    `json:"stellar_transaction_id"`
+}

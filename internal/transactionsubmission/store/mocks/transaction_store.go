@@ -76,21 +76,21 @@ func (_m *MockTransactionStore) Get(ctx context.Context, txID string) (*store.Tr
 	return r0, r1
 }
 
-// GetAllByPaymentIDs provides a mock function with given fields: ctx, paymentIDs
-func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentIDs []string) ([]*store.Transaction, error) {
-	ret := _m.Called(ctx, paymentIDs)
+// GetAllByExternalIDs provides a mock function with given fields: ctx, externalIDs
+func (_m *MockTransactionStore) GetAllByExternalIDs(ctx context.Context, externalIDs []string) ([]*store.Transaction, error) {
+	ret := _m.Called(ctx, externalIDs)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetAllByPaymentIDs")
+		panic("no return value specified for GetAllByExternalIDs")
 	}
 
 	var r0 []*store.Transaction
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, []string) ([]*store.Transaction, error)); ok {
-		return rf(ctx, paymentIDs)
+		return rf(ctx, externalIDs)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, []string) []*store.Transaction); ok {
-		r0 = rf(ctx, paymentIDs)
+		r0 = rf(ctx, externalIDs)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*store.Transaction)
@@ -98,7 +98,7 @@ func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentI
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, []string) error); ok {
-		r1 = rf(ctx, paymentIDs)
+		r1 = rf(ctx, externalIDs)
 	} else {
 		r1 = ret.Error(1)
 	}

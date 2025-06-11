@@ -407,7 +407,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 	}
 	// rpc options
-	configOpts = append(configOpts, cmdUtils.RpcConfigOptions(&serveOpts.RpcConfig)...)
+	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&serveOpts.RpcConfig)...)
 
 	// crash tracker options
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
