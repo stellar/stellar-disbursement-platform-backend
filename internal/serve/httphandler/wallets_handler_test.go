@@ -239,7 +239,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				"error": "invalid request body",
 				"extras": {
 					"deep_link_schema": "invalid deep link schema provided",
-					"homepage": "invalid homepage URL provided"
+					"homepage": "invalid URL format"
 				}
 			}`,
 		},

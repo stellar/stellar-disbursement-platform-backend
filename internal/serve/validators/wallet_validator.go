@@ -179,7 +179,7 @@ func (wv *WalletValidator) ValidatePatchWalletRequest(ctx context.Context, reqBo
 		homepageURL, err := url.ParseRequestURI(homepage)
 		if err != nil {
 			log.Ctx(ctx).Errorf("parsing homepage URL: %v", err)
-			wv.Check(false, "homepage", "invalid homepage URL provided")
+			wv.Check(false, "homepage", "invalid URL format")
 		} else {
 			schemes := []string{"https"}
 			if !enforceHTTPS {
