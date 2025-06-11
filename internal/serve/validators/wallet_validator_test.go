@@ -15,19 +15,19 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 	testCases := []struct {
 		name            string
 		reqBody         *WalletRequest
-		expectedErrs    map[string]interface{}
+		expectedErrs    map[string]any
 		updateRequestFn func(wr *WalletRequest)
 		enforceHTTPS    bool
 	}{
 		{
 			name:         "🔴 error when request body is empty",
 			reqBody:      nil,
-			expectedErrs: map[string]interface{}{"body": "request body is empty"},
+			expectedErrs: map[string]any{"body": "request body is empty"},
 		},
 		{
 			name:    "🔴 error when request body has empty fields",
 			reqBody: &WalletRequest{},
-			expectedErrs: map[string]interface{}{
+			expectedErrs: map[string]any{
 				"deep_link_schema":     "deep_link_schema is required",
 				"homepage":             "homepage is required",
 				"name":                 "name is required",
@@ -44,8 +44,8 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 				SEP10ClientDomain: "-invaliddomain",
 				AssetsIDs:         []string{"asset-id"},
 			},
-			expectedErrs: map[string]interface{}{
-				"homepage":             "invalid homepage URL provided",
+			expectedErrs: map[string]any{
+				"homepage":             "invalid URL format",
 				"deep_link_schema":     "invalid deep link schema provided",
 				"sep_10_client_domain": "invalid SEP-10 client domain provided",
 			},
@@ -59,7 +59,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 				SEP10ClientDomain: "sep-10-client-domain.com",
 				AssetsIDs:         []string{"asset-id"},
 			},
-			expectedErrs: map[string]interface{}{},
+			expectedErrs: map[string]any{},
 		},
 		{
 			name: "🟢 successfully validates the homepage,deep-link,client-domain with query params",
@@ -70,7 +70,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 				SEP10ClientDomain: "sep-10-client-domain.com",
 				AssetsIDs:         []string{"asset-id"},
 			},
-			expectedErrs: map[string]interface{}{},
+			expectedErrs: map[string]any{},
 		},
 		{
 			name: "🔴 fails if enforceHttps=true && homepage=http://...",
@@ -81,7 +81,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 				SEP10ClientDomain: "sep-10-client-domain.com",
 				AssetsIDs:         []string{"asset-id"},
 			},
-			expectedErrs: map[string]interface{}{
+			expectedErrs: map[string]any{
 				"homepage": "invalid URL scheme is not part of [https]",
 			},
 			enforceHTTPS: true,
@@ -131,7 +131,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 		wv := NewWalletValidator()
 		wv.ValidateCreateWalletRequest(ctx, nil, false)
 		assert.True(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, wv.Errors)
+		assert.Equal(t, map[string]any{"body": "request body is empty"}, wv.Errors)
 	})
 
 	t.Run("returns error when body has empty fields", func(t *testing.T) {
@@ -139,10 +139,10 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 		wv := NewWalletValidator()
 		reqBody := &PatchWalletRequest{}
 
-		wv.ValidatePatchWalletRequest(reqBody)
+		wv.ValidatePatchWalletRequest(ctx, reqBody, false)
 		assert.True(t, wv.HasErrors())
-		assert.Equal(t, map[string]interface{}{
-			"enabled": "enabled is required",
+		assert.Equal(t, map[string]any{
+			"body": "at least one field must be provided for update",
 		}, wv.Errors)
 	})
 
@@ -156,7 +156,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 			Enabled: e,
 		}
 
-		wv.ValidatePatchWalletRequest(reqBody)
+		wv.ValidatePatchWalletRequest(ctx, reqBody, false)
 		assert.False(t, wv.HasErrors())
 		assert.Empty(t, wv.Errors)
 
@@ -166,7 +166,7 @@ func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
 			Enabled: e,
 		}
 
-		wv.ValidatePatchWalletRequest(reqBody)
+		wv.ValidatePatchWalletRequest(ctx, reqBody, false)
 		assert.False(t, wv.HasErrors())
 		assert.Empty(t, wv.Errors)
 	})
@@ -262,8 +262,6 @@ func TestAssetReference_Validate(t *testing.T) {
 			},
 			expectedError: "native asset should not have code, issuer, or contract_id",
 		},
-
-		// Invalid cases
 		{
 			name:          "empty reference",
 			assetRef:      AssetReference{},
