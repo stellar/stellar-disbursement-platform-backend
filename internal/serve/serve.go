@@ -331,7 +331,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
-				DirectPaymentService:        services.NewDirectPaymentService(o.Models, o.EventProducer, o.DistributionAccountService),
+				DirectPaymentService: services.NewDirectPaymentService(
+					o.Models,
+					o.EventProducer,
+					o.DistributionAccountService,
+					o.SubmitterEngine,
+				),
 			}
 
 			// Read operations
@@ -424,8 +429,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{
-				Models:        o.Models,
-				NetworkType:   o.NetworkType,
+				Models:              o.Models,
+				NetworkType:         o.NetworkType,
 				WalletAssetResolver: services.NewWalletAssetResolver(o.Models.Assets),
 			}
 

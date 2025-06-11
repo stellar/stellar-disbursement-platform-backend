@@ -18,8 +18,8 @@ import (
 )
 
 type WalletsHandler struct {
-	Models        *data.Models
-	NetworkType   utils.NetworkType
+	Models              *data.Models
+	NetworkType         utils.NetworkType
 	WalletAssetResolver *services.WalletAssetResolver
 }
 

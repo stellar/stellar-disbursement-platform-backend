@@ -350,8 +350,8 @@ func Test_WalletsHandlerPostWallets_WithNewAssetFormat(t *testing.T) {
 	assetResolver := services.NewWalletAssetResolver(models.Assets)
 
 	handler := &WalletsHandler{
-		Models:        models,
-		NetworkType:   utils.PubnetNetworkType,
+		Models:              models,
+		NetworkType:         utils.PubnetNetworkType,
 		WalletAssetResolver: assetResolver,
 	}
 
