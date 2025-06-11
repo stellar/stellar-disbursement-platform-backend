@@ -120,6 +120,14 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			AssetCode:        rwa.Asset.Code,
 			AssetIssuer:      rwa.Asset.Issuer,
 			TenantBaseURL:    *currentTenant.BaseURL,
+			SelfHosted:       wallet.IsSelfHosted(),
+		}
+
+		if wallet.Embedded {
+			if err := s.updateDeepLink(&wdl); err != nil {
+				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
+				continue
+			}
 		}
 
 		registrationLink, err := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
@@ -205,6 +213,20 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		return nil
 	})
+}
+
+func (s SendReceiverWalletInviteService) updateDeepLink(wdl *WalletDeepLink) error {
+	if wdl == nil {
+		return fmt.Errorf("wallet deep link cannot be nil")
+	}
+
+	if wdl.SelfHosted {
+		wdl.DeepLink = wdl.TenantBaseURL
+		wdl.Route = "wallet"
+	}
+	wdl.Token = "123" // TODO: this should be a unique token for the receiver wallet invitation
+
+	return nil
 }
 
 func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context, wdl WalletDeepLink, isLinkShortenerEnabled bool) (string, error) {
@@ -333,6 +355,10 @@ type WalletDeepLink struct {
 	AssetIssuer string
 	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
 	TenantBaseURL string
+	// Token is a unique token that identifies identifies a receiver wallet creation request.
+	Token string
+	// SelfHosted is set to true when the deep link should be set to the tenant base URL, which is the case only for embedded wallets.
+	SelfHosted bool
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
@@ -458,9 +484,16 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	}
 
 	q := u.Query()
-	q.Add("domain", tomlFileDomain)
-	q.Add("name", wdl.OrganizationName)
+
 	q.Add("asset", wdl.assetName())
+
+	if !wdl.SelfHosted {
+		q.Add("domain", tomlFileDomain)
+		q.Add("name", wdl.OrganizationName)
+	}
+	if wdl.Token != "" {
+		q.Add("token", wdl.Token)
+	}
 
 	u.RawQuery = q.Encode()
 
