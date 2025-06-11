@@ -165,6 +165,7 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 
 			// Transactions(LOCKED)
 			lockedTransactions := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, tc.numberOfTransactionsLocked, TransactionFixture{
+				TransactionType:    TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "",
@@ -179,6 +180,7 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 
 			// Transactions(UNLOCKED)
 			unlockedTransactions := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, tc.numberOfTransactionsUnlocked, TransactionFixture{
+				TransactionType:    TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "",

@@ -35,19 +35,19 @@ func CreateTransactionFixturesNew(t *testing.T,
 }
 
 type TransactionFixture struct {
-	ExternalID          string
-	TransactionType     TransactionType
-	AssetCode           string
-	AssetIssuer         string
-	DestinationAddress  string
-	Amount              float64
-	PublicKey           string
-	WasmHash            string
-	Account             string
-	TransactionXDR      string
-	Status              TransactionStatus
-	TenantID            string
-	DistributionAccount string
+	ExternalID              string
+	TransactionType         TransactionType
+	AssetCode               string
+	AssetIssuer             string
+	DestinationAddress      string
+	Amount                  float64
+	PublicKey               string
+	WasmHash                string
+	SponsoredAccount        string
+	SponsoredTransactionXDR string
+	Status                  TransactionStatus
+	TenantID                string
+	DistributionAccount     string
 }
 
 // CreateTransactionFixture creates a submitter transaction in the database
@@ -74,7 +74,7 @@ func CreateTransactionFixtureNew(
 
 	query := `
 		INSERT INTO submitter_transactions
-			(external_id, transaction_type, status, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, account, transaction_xdr, tenant_id, completed_at, started_at)
+			(external_id, transaction_type, status, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, sponsored_account, sponsored_transaction_xdr, tenant_id, completed_at, started_at)
 		VALUES
 			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
 		RETURNING
@@ -83,7 +83,7 @@ func CreateTransactionFixtureNew(
 	tx := Transaction{}
 	err := sqlExec.GetContext(ctx, &tx, query,
 		txFixture.ExternalID,
-		txFixture.TransactionType,
+		string(txFixture.TransactionType),
 		string(txFixture.Status),
 		txFixture.AssetCode,
 		txFixture.AssetIssuer,
@@ -91,8 +91,8 @@ func CreateTransactionFixtureNew(
 		txFixture.DestinationAddress,
 		txFixture.PublicKey,
 		txFixture.WasmHash,
-		txFixture.Account,
-		txFixture.TransactionXDR,
+		txFixture.SponsoredAccount,
+		txFixture.SponsoredTransactionXDR,
 		txFixture.TenantID,
 		completedAt,
 	)
