@@ -105,7 +105,8 @@ func CreateDefaultWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQ
 	return CreateWalletFixture(t, ctx, sqlExec, "Demo Wallet",
 		"https://demo-wallet.stellar.org",
 		"https://demo-wallet.stellar.org",
-		"demo-wallet-server.stellar.org")
+		"demo-wallet-server.stellar.org",
+	)
 }
 
 func CreateWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name, homepage, sep10ClientDomain, deepLinkSchema string) *Wallet {
@@ -230,6 +231,20 @@ func MakeWalletUserManaged(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 			wallets
 		SET
 			user_managed = true
+		WHERE
+			id = $1
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, walletID)
+	require.NoError(t, err)
+}
+
+func MakeWalletEmbedded(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			embedded = true
 		WHERE
 			id = $1
 	`

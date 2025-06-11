@@ -31,6 +31,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 				"enabled",
 				"deep_link_schema",
 				"user_managed",
+				"embedded",
 			}, ",\n"),
 		},
 		{
@@ -45,6 +46,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 				`enabled AS "wallet.enabled"`,
 				`deep_link_schema AS "wallet.deep_link_schema"`,
 				`user_managed AS "wallet.user_managed"`,
+				`embedded AS "wallet.embedded"`,
 			}, ",\n"),
 		},
 		{
@@ -59,6 +61,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 				"w.enabled",
 				"w.deep_link_schema",
 				"w.user_managed",
+				"w.embedded",
 			}, ",\n"),
 		},
 		{
@@ -73,6 +76,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 				`w.enabled AS "wallet.enabled"`,
 				`w.deep_link_schema AS "wallet.deep_link_schema"`,
 				`w.user_managed AS "wallet.user_managed"`,
+				`w.embedded AS "wallet.embedded"`,
 				`w.created_at AS "wallet.created_at"`,
 				`w.updated_at AS "wallet.updated_at"`,
 				`w.deleted_at AS "wallet.deleted_at"`,
