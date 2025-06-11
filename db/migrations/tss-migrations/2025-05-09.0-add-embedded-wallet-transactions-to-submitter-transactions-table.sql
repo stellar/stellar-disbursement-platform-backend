@@ -18,26 +18,37 @@ ALTER TABLE submitter_transactions
     ALTER COLUMN destination DROP NOT NULL;
 
 ALTER TABLE submitter_transactions
-    ADD CONSTRAINT submitter_transactions_type_constraints CHECK (
-        CASE
-            WHEN transaction_type = 'PAYMENT' THEN
-                asset_code IS NOT NULL AND
-                (asset_issuer IS NOT NULL OR asset_code = 'XLM') AND
-                amount IS NOT NULL AND
-                destination IS NOT NULL
-            WHEN transaction_type = 'WALLET_CREATION' THEN
-                public_key IS NOT NULL AND
-                wasm_hash IS NOT NULL
-            WHEN transaction_type = 'SPONSORED' THEN
-                sponsored_account IS NOT NULL AND
-                sponsored_transaction_xdr IS NOT NULL
-        END
+    ADD CONSTRAINT submitter_transactions_payment_constraints CHECK (
+        transaction_type != 'PAYMENT' OR (
+            asset_code IS NOT NULL AND
+            (asset_issuer IS NOT NULL OR asset_code = 'XLM') AND
+            amount IS NOT NULL AND
+            destination IS NOT NULL
+        )
+    );
+
+ALTER TABLE submitter_transactions
+    ADD CONSTRAINT submitter_transactions_wallet_creation_constraints CHECK (
+        transaction_type != 'WALLET_CREATION' OR (
+            public_key IS NOT NULL AND
+            wasm_hash IS NOT NULL
+        )
+    );
+
+ALTER TABLE submitter_transactions
+    ADD CONSTRAINT submitter_transactions_sponsored_constraints CHECK (
+        transaction_type != 'SPONSORED' OR (
+            sponsored_account IS NOT NULL AND
+            sponsored_transaction_xdr IS NOT NULL
+        )
     );
 
 -- +migrate Down
 
 ALTER TABLE submitter_transactions
-    DROP CONSTRAINT submitter_transactions_type_constraints;
+    DROP CONSTRAINT submitter_transactions_payment_constraints,
+    DROP CONSTRAINT submitter_transactions_wallet_creation_constraints,
+    DROP CONSTRAINT submitter_transactions_sponsored_constraints;
 
 ALTER TABLE submitter_transactions
     DROP COLUMN public_key,
