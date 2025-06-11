@@ -44,6 +44,15 @@ type WalletInsert struct {
 	AssetsIDs         []string `db:"assets_ids"`
 }
 
+type WalletUpdate struct {
+	Name              *string   `db:"name"`
+	Homepage          *string   `db:"homepage"`
+	SEP10ClientDomain *string   `db:"sep_10_client_domain"`
+	DeepLinkSchema    *string   `db:"deep_link_schema"`
+	Enabled           *bool     `db:"enabled"`
+	AssetsIDs         *[]string `db:"assets_ids"`
+}
+
 type WalletAssets []Asset
 
 var _ sql.Scanner = (*WalletAssets)(nil)
@@ -289,24 +298,100 @@ func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet,
 	return &wallet, nil
 }
 
-func (wm *WalletModel) Update(ctx context.Context, walletID string, enabled bool) (*Wallet, error) {
-	const query = `
-		UPDATE
-			wallets
-		SET
-			enabled = $1
-		WHERE
-			id = $2
-		RETURNING *
-	`
-	var wallet Wallet
-	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, enabled, walletID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
+func (wm *WalletModel) Update(ctx context.Context, walletID string, update WalletUpdate) (*Wallet, error) {
+	wallet, err := db.RunInTransactionWithResult(ctx, wm.dbConnectionPool, nil, func(dbTx db.DBTransaction) (*Wallet, error) {
+		var setClauses []string
+		var args []any
+
+		if update.Name != nil {
+			setClauses = append(setClauses, "name = ?")
+			args = append(args, *update.Name)
 		}
-		return nil, fmt.Errorf("updating wallet enabled status: %w", err)
+		if update.Homepage != nil {
+			setClauses = append(setClauses, "homepage = ?")
+			args = append(args, *update.Homepage)
+		}
+		if update.SEP10ClientDomain != nil {
+			setClauses = append(setClauses, "sep_10_client_domain = ?")
+			args = append(args, *update.SEP10ClientDomain)
+		}
+		if update.DeepLinkSchema != nil {
+			setClauses = append(setClauses, "deep_link_schema = ?")
+			args = append(args, *update.DeepLinkSchema)
+		}
+		if update.Enabled != nil {
+			setClauses = append(setClauses, "enabled = ?")
+			args = append(args, *update.Enabled)
+		}
+
+		if len(setClauses) == 0 && update.AssetsIDs == nil {
+			return nil, fmt.Errorf("no fields provided for update")
+		}
+
+		var w Wallet
+		if len(setClauses) > 0 {
+			setClauses = append(setClauses, "updated_at = NOW()")
+			query := dbTx.Rebind(fmt.Sprintf(`
+				UPDATE wallets 
+				SET %s
+				WHERE id = ? AND deleted_at IS NULL
+				RETURNING *
+			`, strings.Join(setClauses, ", ")))
+
+			args = append(args, walletID)
+
+			if err := dbTx.GetContext(ctx, &w, query, args...); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil, ErrRecordNotFound
+				}
+				if pqError, ok := err.(*pq.Error); ok {
+					constraintErrMap := map[string]error{
+						"wallets_name_key":             ErrWalletNameAlreadyExists,
+						"wallets_homepage_key":         ErrWalletHomepageAlreadyExists,
+						"wallets_deep_link_schema_key": ErrWalletDeepLinkSchemaAlreadyExists,
+					}
+
+					if mappedErr, ok := constraintErrMap[pqError.Constraint]; ok {
+						return nil, mappedErr
+					}
+				}
+				return nil, fmt.Errorf("updating wallet: %w", err)
+			}
+		} else {
+			const q = "SELECT * FROM wallets WHERE id = $1 AND deleted_at IS NULL"
+			if err := dbTx.GetContext(ctx, &w, q, walletID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil, ErrRecordNotFound
+				}
+				return nil, fmt.Errorf("getting wallet: %w", err)
+			}
+		}
+
+		if update.AssetsIDs != nil {
+			if _, err := dbTx.ExecContext(ctx, "DELETE FROM wallets_assets WHERE wallet_id = $1", walletID); err != nil {
+				return nil, fmt.Errorf("deleting existing wallet assets: %w", err)
+			}
+
+			if len(*update.AssetsIDs) > 0 {
+				const q = `
+					INSERT INTO wallets_assets (wallet_id, asset_id)
+					SELECT $1, UNNEST($2::text[])
+					ON CONFLICT DO NOTHING
+				`
+				if _, err := dbTx.ExecContext(ctx, q, walletID, pq.Array(*update.AssetsIDs)); err != nil {
+					if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "wallets_assets_asset_id_fkey" {
+						return nil, ErrInvalidAssetID
+					}
+					return nil, fmt.Errorf("inserting new wallet assets: %w", err)
+				}
+			}
+		}
+
+		return &w, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return &wallet, nil
+	return wm.Get(ctx, wallet.ID)
 }
