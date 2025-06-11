@@ -17,6 +17,8 @@ type RPCOptions struct {
 }
 
 // RPCClient is an interface that defines the methods for interacting with Stellar RPC.
+//
+//go:generate mockery --name=RPCClient --case=underscore --structname=MockRPCClient --filename=rpc_client.go
 type RPCClient interface {
 	SimulateTransaction(ctx context.Context, request protocol.SimulateTransactionRequest) (protocol.SimulateTransactionResponse, error)
 }

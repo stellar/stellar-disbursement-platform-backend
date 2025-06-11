@@ -21,6 +21,7 @@ import (
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -28,7 +29,7 @@ import (
 )
 
 func Test_NewWalletCreationTransactionHandler(t *testing.T) {
-	rpcClient := &stellar.MockRPCClient{}
+	rpcClient := &mocks.MockRPCClient{}
 	tssMonitorSvc := tssMonitor.TSSMonitorService{
 		GitCommitHash: "gitCommitHash0x",
 		Version:       "version123",
@@ -97,7 +98,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		engine := &engine.SubmitterEngine{
 			MaxBaseFee: 100,
 		}
-		rpcClient := &stellar.MockRPCClient{}
+		rpcClient := &mocks.MockRPCClient{}
 		monitorSvc := tssMonitor.TSSMonitorService{
 			Client: &sdpMonitorMocks.MockMonitorClient{},
 		}
@@ -234,7 +235,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			MinResourceFee:     50,
 		}
 
-		rpcClient := &stellar.MockRPCClient{}
+		rpcClient := &mocks.MockRPCClient{}
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
 
 		monitorSvc := tssMonitor.TSSMonitorService{
@@ -329,7 +330,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			Error: "contract execution failed",
 		}
 
-		rpcClient := &stellar.MockRPCClient{}
+		rpcClient := &mocks.MockRPCClient{}
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
 
 		monitorSvc := tssMonitor.TSSMonitorService{
@@ -364,7 +365,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			MaxBaseFee: 100,
 		}
 
-		rpcClient := &stellar.MockRPCClient{}
+		rpcClient := &mocks.MockRPCClient{}
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(protocol.SimulateTransactionResponse{}, fmt.Errorf("rpc error"))
 
 		monitorSvc := tssMonitor.TSSMonitorService{
@@ -627,7 +628,7 @@ func Test_WalletCreationTransactionHandler_MonitorTransactionReconciliationFailu
 
 func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
-	rpcClient := &stellar.MockRPCClient{}
+	rpcClient := &mocks.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
@@ -653,7 +654,7 @@ func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) 
 
 func Test_WalletCreationTransactionHandler_CalculateAdjustedBaseFee(t *testing.T) {
 	engine := &engine.SubmitterEngine{MaxBaseFee: 100}
-	rpcClient := &stellar.MockRPCClient{}
+	rpcClient := &mocks.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
@@ -751,7 +752,7 @@ func Test_WalletCreationTransactionHandler_MonitoringBehavior(t *testing.T) {
 
 func Test_WalletCreationTransactionHandler_ExtractAuthEntries(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
-	rpcClient := &stellar.MockRPCClient{}
+	rpcClient := &mocks.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
@@ -816,7 +817,7 @@ func Test_WalletCreationTransactionHandler_ExtractAuthEntries(t *testing.T) {
 
 func Test_WalletCreationTransactionHandler_ApplyTransactionData(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
-	rpcClient := &stellar.MockRPCClient{}
+	rpcClient := &mocks.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
