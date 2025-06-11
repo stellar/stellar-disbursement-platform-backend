@@ -96,17 +96,11 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 	}
 
 	// fields format validation
-	homepageURL, err := url.ParseRequestURI(homepage)
-	if err != nil {
-		log.Ctx(ctx).Errorf("parsing homepage URL: %v", err)
-		wv.Check(false, "homepage", "invalid homepage URL provided")
-	} else {
-		schemes := []string{"https"}
-		if !enforceHTTPS {
-			schemes = append(schemes, "http")
-		}
-		wv.CheckError(utils.ValidateURLScheme(homepage, schemes...), "homepage", "")
+	schemes := []string{"https"}
+	if !enforceHTTPS {
+		schemes = append(schemes, "http")
 	}
+	wv.CheckError(utils.ValidateURLScheme(homepage, schemes...), "homepage", "")
 
 	deepLinkSchemaURL, err := url.ParseRequestURI(deepLinkSchema)
 	if err != nil {
@@ -140,7 +134,7 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqB
 
 	modifiedReq := &WalletRequest{
 		Name:              name,
-		Homepage:          homepageURL.String(),
+		Homepage:          homepage,
 		DeepLinkSchema:    deepLinkSchemaURL.String(),
 		SEP10ClientDomain: sep10Host,
 		Assets:            processedAssets,

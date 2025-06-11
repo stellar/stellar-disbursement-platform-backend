@@ -300,34 +300,28 @@ func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet,
 
 func (wm *WalletModel) Update(ctx context.Context, walletID string, update WalletUpdate) (*Wallet, error) {
 	wallet, err := db.RunInTransactionWithResult(ctx, wm.dbConnectionPool, nil, func(dbTx db.DBTransaction) (*Wallet, error) {
-		setClauses := make([]string, 0, 5)
-		args := make([]any, 0, 6)
-		argCount := 1
+		var setClauses []string
+		var args []any
 
 		if update.Name != nil {
-			setClauses = append(setClauses, fmt.Sprintf("name = $%d", argCount))
+			setClauses = append(setClauses, "name = ?")
 			args = append(args, *update.Name)
-			argCount++
 		}
 		if update.Homepage != nil {
-			setClauses = append(setClauses, fmt.Sprintf("homepage = $%d", argCount))
+			setClauses = append(setClauses, "homepage = ?")
 			args = append(args, *update.Homepage)
-			argCount++
 		}
 		if update.SEP10ClientDomain != nil {
-			setClauses = append(setClauses, fmt.Sprintf("sep_10_client_domain = $%d", argCount))
+			setClauses = append(setClauses, "sep_10_client_domain = ?")
 			args = append(args, *update.SEP10ClientDomain)
-			argCount++
 		}
 		if update.DeepLinkSchema != nil {
-			setClauses = append(setClauses, fmt.Sprintf("deep_link_schema = $%d", argCount))
+			setClauses = append(setClauses, "deep_link_schema = ?")
 			args = append(args, *update.DeepLinkSchema)
-			argCount++
 		}
 		if update.Enabled != nil {
-			setClauses = append(setClauses, fmt.Sprintf("enabled = $%d", argCount))
+			setClauses = append(setClauses, "enabled = ?")
 			args = append(args, *update.Enabled)
-			argCount++
 		}
 
 		if len(setClauses) == 0 && update.AssetsIDs == nil {
@@ -335,15 +329,14 @@ func (wm *WalletModel) Update(ctx context.Context, walletID string, update Walle
 		}
 
 		var w Wallet
-
 		if len(setClauses) > 0 {
 			setClauses = append(setClauses, "updated_at = NOW()")
-			query := fmt.Sprintf(`
+			query := dbTx.Rebind(fmt.Sprintf(`
 				UPDATE wallets 
 				SET %s
-				WHERE id = $%d AND deleted_at IS NULL
+				WHERE id = ? AND deleted_at IS NULL
 				RETURNING *
-			`, strings.Join(setClauses, ", "), argCount)
+			`, strings.Join(setClauses, ", ")))
 
 			args = append(args, walletID)
 
