@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Bump the minor-and-patch group across 1 directory with 6 updates. [#690](https://github.com/stellar/stellar-disbursement-platform-backend/pull/690)
 
+## [3.7.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.0...3.7.1))
+
+### Fixed
+
+- Fix stellar.expert pubnet URL configuration in helm chart. [#700](https://github.com/stellar/stellar-disbursement-platform-backend/pull/700)
+
 ## [3.7.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.6.0...3.7.0))
 
 > [!WARNING]
