@@ -165,15 +165,15 @@ func (opts *ServeOptions) ValidateSecurity() error {
 
 // ValidateRpc validates the RPC options.
 func (opts *ServeOptions) ValidateRpc() error {
-	if opts.RpcConfig.RPCUrl == "" && (opts.RpcConfig.RPCRequestHeaderKey != "" || opts.RpcConfig.RPCRequestHeaderValue != "") {
+	if opts.RpcConfig.RPCUrl == "" && (opts.RpcConfig.RPCRequestAuthHeaderKey != "" || opts.RpcConfig.RPCRequestAuthHeaderValue != "") {
 		return fmt.Errorf("RPC URL must be set when RPC request header key or value is set")
 	}
 
-	if opts.RpcConfig.RPCRequestHeaderKey != "" && opts.RpcConfig.RPCRequestHeaderValue == "" {
+	if opts.RpcConfig.RPCRequestAuthHeaderKey != "" && opts.RpcConfig.RPCRequestAuthHeaderValue == "" {
 		return fmt.Errorf("RPC request header value must be set when RPC request header key is set")
 	}
 
-	if opts.RpcConfig.RPCRequestHeaderKey == "" && opts.RpcConfig.RPCRequestHeaderValue != "" {
+	if opts.RpcConfig.RPCRequestAuthHeaderKey == "" && opts.RpcConfig.RPCRequestAuthHeaderValue != "" {
 		return fmt.Errorf("RPC request header key must be set when RPC request header value is set")
 	}
 

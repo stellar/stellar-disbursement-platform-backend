@@ -35,11 +35,11 @@ func NewRpcClient(ctx context.Context, opts stellar.RPCOptions) (*client.Client,
 	log.Ctx(ctx).Info("⚙️ Setting up RPC Client")
 
 	httpClient := http.DefaultClient
-	if opts.RPCRequestHeaderKey != "" && opts.RPCRequestHeaderValue != "" {
+	if opts.RPCRequestAuthHeaderKey != "" && opts.RPCRequestAuthHeaderValue != "" {
 		transport := &headerTransport{
 			base:  http.DefaultTransport,
-			key:   opts.RPCRequestHeaderKey,
-			value: opts.RPCRequestHeaderValue,
+			key:   opts.RPCRequestAuthHeaderKey,
+			value: opts.RPCRequestAuthHeaderValue,
 		}
 		httpClient = &http.Client{
 			Transport: transport,

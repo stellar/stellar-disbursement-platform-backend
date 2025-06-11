@@ -360,17 +360,17 @@ func RPCConfigOptions(opts *stellar.RPCOptions) []*config.ConfigOption {
 			Required:       false,
 		},
 		{
-			Name:      "rpc-request-header-key",
+			Name:      "rpc-request-auth-header-key",
 			Usage:     "The key of the request header to be used for authentication with the RPC server.",
 			OptType:   types.String,
-			ConfigKey: &opts.RPCRequestHeaderKey,
+			ConfigKey: &opts.RPCRequestAuthHeaderKey,
 			Required:  false,
 		},
 		{
-			Name:      "rpc-request-header-value",
+			Name:      "rpc-request-auth-header-value",
 			Usage:     "The value of the request header to be used for authentication with the RPC server.",
 			OptType:   types.String,
-			ConfigKey: &opts.RPCRequestHeaderValue,
+			ConfigKey: &opts.RPCRequestAuthHeaderValue,
 			Required:  false,
 		},
 	}

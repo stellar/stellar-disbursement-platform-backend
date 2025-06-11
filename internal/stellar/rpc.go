@@ -11,9 +11,9 @@ type RPCOptions struct {
 	// URL of the Stellar RPC server where this application will communicate with.
 	RPCUrl string
 	// The key of the request header to be used for authentication with the RPC server.
-	RPCRequestHeaderKey string
+	RPCRequestAuthHeaderKey string
 	// The value of the request header to be used for authentication with the RPC server.
-	RPCRequestHeaderValue string
+	RPCRequestAuthHeaderValue string
 }
 
 // RPCClient is an interface that defines the methods for interacting with Stellar RPC.
