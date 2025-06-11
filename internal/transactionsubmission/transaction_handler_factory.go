@@ -39,20 +39,12 @@ func NewTransactionHandlerFactory(
 func (f *TransactionHandlerFactory) GetTransactionHandler(tx *store.Transaction) (TransactionHandlerInterface, error) {
 	switch tx.TransactionType {
 	case store.TransactionTypePayment:
-		paymentHandler, err := NewPaymentTransactionHandler(f.engine, f.monitorSvc)
-		if err != nil {
-			return nil, fmt.Errorf("creating payment transaction handler: %w", err)
-		}
-		return paymentHandler, nil
+		return NewPaymentTransactionHandler(f.engine, f.monitorSvc)
 	case store.TransactionTypeWalletCreation:
 		if f.rpcClient == nil {
 			return nil, fmt.Errorf("rpc client is required for wallet creation transaction handler")
 		}
-		walletCreationHandler, err := NewWalletCreationTransactionHandler(f.engine, f.rpcClient, f.monitorSvc)
-		if err != nil {
-			return nil, fmt.Errorf("creating wallet creation transaction handler: %w", err)
-		}
-		return walletCreationHandler, nil
+		return NewWalletCreationTransactionHandler(f.engine, f.rpcClient, f.monitorSvc)
 	default:
 		return nil, fmt.Errorf("unsupported transaction type: %s", tx.TransactionType)
 	}

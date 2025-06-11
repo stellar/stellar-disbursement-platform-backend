@@ -54,6 +54,11 @@ func NewWalletCreationTransactionHandler(
 	}, nil
 }
 
+const (
+	expectedPublicKeyLength = 65
+	expectedWasmHashLength  = 32
+)
+
 func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Context, txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string) (*txnbuild.Transaction, error) {
 	if txJob.Transaction.WalletCreation.PublicKey == "" {
 		return nil, fmt.Errorf("public key cannot be empty")
@@ -66,16 +71,16 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	if err != nil {
 		return nil, fmt.Errorf("decoding public key: %w", err)
 	}
-	if len(publicKeyBytes) != 65 {
-		return nil, fmt.Errorf("public key must be 65 bytes, got %d", len(publicKeyBytes))
+	if len(publicKeyBytes) != expectedPublicKeyLength {
+		return nil, fmt.Errorf("public key must be %d bytes, got %d", expectedPublicKeyLength, len(publicKeyBytes))
 	}
 
 	wasmHashBytes, err := hex.DecodeString(txJob.Transaction.WalletCreation.WasmHash)
 	if err != nil {
 		return nil, fmt.Errorf("decoding wasm hash: %w", err)
 	}
-	if len(wasmHashBytes) != 32 {
-		return nil, fmt.Errorf("wasm hash must be 32 bytes, got %d", len(wasmHashBytes))
+	if len(wasmHashBytes) != expectedWasmHashLength {
+		return nil, fmt.Errorf("wasm hash must be %d bytes, got %d", expectedWasmHashLength, len(wasmHashBytes))
 	}
 
 	wasmHash := xdr.Hash(wasmHashBytes)

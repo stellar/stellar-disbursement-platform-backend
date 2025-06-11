@@ -153,7 +153,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 			payment, paymentErr := testCtx.sdpModel.Payment.Get(ctx, p.ID, dbConnectionPool)
 			require.NoError(t, paymentErr)
 			require.Equal(t, data.SuccessPaymentStatus, payment.Status)
-			txs, txErr := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{p.ID})
+			txs, txErr := testCtx.tssModel.GetAllByExternalIDs(ctx, []string{p.ID})
 			require.NoError(t, txErr)
 			require.Len(t, txs, 1)
 			require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -163,7 +163,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		payment, paymentErr := testCtx.sdpModel.Payment.Get(ctx, payment4.ID, dbConnectionPool)
 		require.NoError(t, paymentErr)
 		require.Equal(t, data.FailedPaymentStatus, payment.Status)
-		txs, txErr := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment4.ID})
+		txs, txErr := testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment4.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 1)
 		require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -174,7 +174,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		payment, paymentErr = testCtx.sdpModel.Payment.Get(ctx, payment5.ID, dbConnectionPool)
 		require.NoError(t, paymentErr)
 		require.Equal(t, data.FailedPaymentStatus, payment.Status)
-		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment5.ID})
+		txs, txErr = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment5.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 1)
 		require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -183,7 +183,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		require.Equal(t, payment.StatusHistory[2].StatusMessage, "another-test-error")
 
 		// validate transactions synced_at is updated.
-		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
+		txs, txErr = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 5)
 
@@ -361,7 +361,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 			payment, paymentErr := testCtx.sdpModel.Payment.Get(ctx, p.ID, dbConnectionPool)
 			require.NoError(t, paymentErr)
 			require.Equal(t, data.SuccessPaymentStatus, payment.Status)
-			txs, txErr := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{p.ID})
+			txs, txErr := testCtx.tssModel.GetAllByExternalIDs(ctx, []string{p.ID})
 			require.NoError(t, txErr)
 			require.Len(t, txs, 1)
 			require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -371,7 +371,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		payment, paymentErr := testCtx.sdpModel.Payment.Get(ctx, payment4.ID, dbConnectionPool)
 		require.NoError(t, paymentErr)
 		require.Equal(t, data.FailedPaymentStatus, payment.Status)
-		txs, txErr := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment4.ID})
+		txs, txErr := testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment4.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 1)
 		require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -382,7 +382,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		payment, paymentErr = testCtx.sdpModel.Payment.Get(ctx, payment5.ID, dbConnectionPool)
 		require.NoError(t, paymentErr)
 		require.Equal(t, data.FailedPaymentStatus, payment.Status)
-		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment5.ID})
+		txs, txErr = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment5.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 1)
 		require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -391,7 +391,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		require.Equal(t, payment.StatusHistory[2].StatusMessage, "another-test-error")
 
 		// validate transactions synced_at is updated.
-		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
+		txs, txErr = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 5)
 
@@ -667,7 +667,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	require.Len(t, transactions, 2)
 
@@ -775,7 +775,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	require.Len(t, transactions, 2)
 

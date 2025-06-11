@@ -199,7 +199,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				if rpcClientErr != nil {
 					log.Ctx(ctx).Fatalf("error creating RPC client: %s", rpcClientErr.Error())
 				}
-				log.Ctx(ctx).Infof("Using RPC client with URL: %s", rpcOptions.RPCUrl)
+				log.Ctx(ctx).Infof("Using RPC client with URL %s", rpcOptions.RPCUrl)
 				tssOpts.RPCClient = rpcClient
 			} else {
 				log.Ctx(ctx).Warn("No RPC client URL provided. Embedded wallet transactions will not be submitted.")

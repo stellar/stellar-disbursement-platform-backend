@@ -58,44 +58,46 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, toke
 	}
 
 	return db.RunInTransaction(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
-		if err != nil {
-			if errors.Is(err, data.ErrRecordNotFound) {
-				return ErrInvalidToken
+		return db.RunInTransaction(ctx, e.tssModel.DBConnectionPool, nil, func(tssTx db.DBTransaction) error {
+			embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
+			if err != nil {
+				if errors.Is(err, data.ErrRecordNotFound) {
+					return ErrInvalidToken
+				}
+				return fmt.Errorf("getting wallet by token %s: %w", token, err)
 			}
-			return fmt.Errorf("getting wallet by token %s: %w", token, err)
-		}
 
-		if embeddedWallet.WalletStatus != data.PendingWalletStatus {
-			return ErrCreateWalletInvalidStatus
-		}
+			if embeddedWallet.WalletStatus != data.PendingWalletStatus {
+				return ErrCreateWalletInvalidStatus
+			}
 
-		// Create the wallet transaction in TSS DB first
-		tssTransaction := &store.Transaction{
-			ExternalID:      fmt.Sprintf("wallet_%s", embeddedWallet.Token),
-			TransactionType: store.TransactionTypeWalletCreation,
-			TenantID:        tenantID,
-			WalletCreation: store.WalletCreation{
-				PublicKey: publicKey,
-				WasmHash:  e.wasmHash,
-			},
-		}
+			// Create the wallet transaction in TSS DB first
+			tssTransaction := &store.Transaction{
+				ExternalID:      fmt.Sprintf("wallet_%s", embeddedWallet.Token),
+				TransactionType: store.TransactionTypeWalletCreation,
+				TenantID:        tenantID,
+				WalletCreation: store.WalletCreation{
+					PublicKey: publicKey,
+					WasmHash:  e.wasmHash,
+				},
+			}
 
-		_, err = e.tssModel.Insert(ctx, *tssTransaction)
-		if err != nil {
-			return fmt.Errorf("creating wallet transaction in TSS: %w", err)
-		}
+			_, err = e.tssModel.Insert(ctx, *tssTransaction)
+			if err != nil {
+				return fmt.Errorf("creating wallet transaction in TSS: %w", err)
+			}
 
-		embeddedWalletUpdate := data.EmbeddedWalletUpdate{
-			WasmHash:     e.wasmHash,
-			WalletStatus: data.ProcessingWalletStatus,
-		}
+			embeddedWalletUpdate := data.EmbeddedWalletUpdate{
+				WasmHash:     e.wasmHash,
+				WalletStatus: data.ProcessingWalletStatus,
+			}
 
-		if err := e.sdpModels.EmbeddedWallets.Update(ctx, dbTx, embeddedWallet.Token, embeddedWalletUpdate); err != nil {
-			return fmt.Errorf("updating embedded wallet %s: %w", embeddedWallet.Token, err)
-		}
+			if err := e.sdpModels.EmbeddedWallets.Update(ctx, dbTx, embeddedWallet.Token, embeddedWalletUpdate); err != nil {
+				return fmt.Errorf("updating embedded wallet %s: %w", embeddedWallet.Token, err)
+			}
 
-		return nil
+			return nil
+		})
 	})
 }
 
