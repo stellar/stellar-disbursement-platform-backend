@@ -1762,8 +1762,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	t.Run("successful direct payment creation", func(t *testing.T) {
 		t.Cleanup(func() {
-			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		})
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "CERAMITE", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
@@ -1847,8 +1846,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			DistributionAccountResolver: distResolverMock,
 			DirectPaymentService:        directPaymentService,
 		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
 			strings.NewReader(requestBody))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -1875,7 +1874,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	t.Run("distribution account resolution fails", func(t *testing.T) {
 		t.Cleanup(func() {
-			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		})
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ADAMANT", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
@@ -1912,8 +1911,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			DistributionAccountResolver: distResolverMock,
 			DirectPaymentService:        directPaymentService,
 		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
 			strings.NewReader(requestBody))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -1927,9 +1926,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	t.Run("asset not found", func(t *testing.T) {
 		t.Cleanup(func() {
-			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		})
-
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Asset Not Found Wallet", "https://fortress.com", "fortress.com", "fortress://")
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
 			Email: "dante.asset.notfound@baal.imperium",
@@ -1963,8 +1961,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			DistributionAccountResolver: distResolverMock,
 			DirectPaymentService:        directPaymentService,
 		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
 			strings.NewReader(requestBody))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -1978,8 +1976,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	t.Run("insufficient balance", func(t *testing.T) {
 		t.Cleanup(func() {
-			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		})
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "POWER", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
@@ -2053,8 +2050,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			DistributionAccountResolver: distResolverMock,
 			DirectPaymentService:        directPaymentService,
 		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
 			strings.NewReader(requestBody))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -2075,7 +2072,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	t.Run("wallet not enabled", func(t *testing.T) {
 		t.Cleanup(func() {
-			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		})
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "STEEL", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
@@ -2084,7 +2081,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			Email: "dante.wallet.disabled@baal.imperium",
 		})
 
-		_, err := dbConnectionPool.ExecContext(ctx,
+		_, err = dbConnectionPool.ExecContext(ctx,
 			"UPDATE wallets SET enabled = false WHERE id = $1", wallet.ID)
 		require.NoError(t, err)
 
@@ -2116,8 +2113,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			DistributionAccountResolver: distResolverMock,
 			DirectPaymentService:        directPaymentService,
 		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
 			strings.NewReader(requestBody))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
@@ -2132,8 +2129,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	t.Run("complex reference - receiver by email, asset by type", func(t *testing.T) {
 		t.Cleanup(func() {
-			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		})
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "PROMETHIUM", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
@@ -2248,7 +2244,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	t.Run("receiver not registered with wallet", func(t *testing.T) {
 		t.Cleanup(func() {
-			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		})
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "AURUM", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")

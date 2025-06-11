@@ -8,9 +8,9 @@ import (
 
 func TestDirectPaymentValidator_ValidateCreateDirectPaymentRequest(t *testing.T) {
 	t.Parallel()
-	
+
 	validStellarAccount := "GCFXHS4GXL6BVUCXBWXGTITROWLVYXQKQLF4YH5O5JT3YZXCYPAFBJZB"
-	
+
 	tests := []struct {
 		name        string
 		reqBody     *CreateDirectPaymentRequest
@@ -20,20 +20,20 @@ func TestDirectPaymentValidator_ValidateCreateDirectPaymentRequest(t *testing.T)
 		{
 			name: "🟢 valid requests - various asset types",
 			reqBody: &CreateDirectPaymentRequest{
-				Amount: "100.50",
-				Asset:  DirectPaymentAsset{ID: testutils.StringPtr("horus-asset-id")},
+				Amount:   "100.50",
+				Asset:    DirectPaymentAsset{ID: testutils.StringPtr("horus-asset-id")},
 				Receiver: DirectPaymentReceiver{ID: testutils.StringPtr("sanguinius-receiver-id")},
-				Wallet: DirectPaymentWallet{ID: testutils.StringPtr("fulgrim-wallet-id")},
+				Wallet:   DirectPaymentWallet{ID: testutils.StringPtr("fulgrim-wallet-id")},
 			},
 			expectValid: true,
 		},
 		{
 			name: "🟢 valid native asset with email receiver",
 			reqBody: &CreateDirectPaymentRequest{
-				Amount: "250.00",
-				Asset:  DirectPaymentAsset{Type: testutils.StringPtr("native")},
+				Amount:   "250.00",
+				Asset:    DirectPaymentAsset{Type: testutils.StringPtr("native")},
 				Receiver: DirectPaymentReceiver{Email: testutils.StringPtr("guilliman@imperium.galaxy")},
-				Wallet: DirectPaymentWallet{Address: testutils.StringPtr(validStellarAccount)},
+				Wallet:   DirectPaymentWallet{Address: testutils.StringPtr(validStellarAccount)},
 			},
 			expectValid: true,
 		},
@@ -47,7 +47,7 @@ func TestDirectPaymentValidator_ValidateCreateDirectPaymentRequest(t *testing.T)
 					Issuer: testutils.StringPtr(validStellarAccount),
 				},
 				Receiver: DirectPaymentReceiver{PhoneNumber: testutils.StringPtr("+14155552671")},
-				Wallet: DirectPaymentWallet{ID: testutils.StringPtr("angron-wallet")},
+				Wallet:   DirectPaymentWallet{ID: testutils.StringPtr("angron-wallet")},
 			},
 			expectValid: true,
 		},
@@ -60,27 +60,27 @@ func TestDirectPaymentValidator_ValidateCreateDirectPaymentRequest(t *testing.T)
 					ContractID: testutils.StringPtr("contract-perturabo-001"),
 				},
 				Receiver: DirectPaymentReceiver{WalletAddress: testutils.StringPtr(validStellarAccount)},
-				Wallet: DirectPaymentWallet{Address: testutils.StringPtr(validStellarAccount)},
+				Wallet:   DirectPaymentWallet{Address: testutils.StringPtr(validStellarAccount)},
 			},
 			expectValid: true,
 		},
 		{
 			name: "🟢 valid fiat asset",
 			reqBody: &CreateDirectPaymentRequest{
-				Amount: "75.99",
-				Asset:  DirectPaymentAsset{Type: testutils.StringPtr("fiat"), Code: testutils.StringPtr("USD")},
+				Amount:   "75.99",
+				Asset:    DirectPaymentAsset{Type: testutils.StringPtr("fiat"), Code: testutils.StringPtr("USD")},
 				Receiver: DirectPaymentReceiver{ID: testutils.StringPtr("mortarion-receiver")},
-				Wallet: DirectPaymentWallet{ID: testutils.StringPtr("lorgar-wallet")},
+				Wallet:   DirectPaymentWallet{ID: testutils.StringPtr("lorgar-wallet")},
 			},
 			expectValid: true,
 		},
 		{
 			name: "🟢 amount with whitespace gets trimmed",
 			reqBody: &CreateDirectPaymentRequest{
-				Amount: "  100.50  ",
-				Asset:  DirectPaymentAsset{ID: testutils.StringPtr("asset-id")},
+				Amount:   "  100.50  ",
+				Asset:    DirectPaymentAsset{ID: testutils.StringPtr("asset-id")},
 				Receiver: DirectPaymentReceiver{ID: testutils.StringPtr("receiver-id")},
-				Wallet: DirectPaymentWallet{ID: testutils.StringPtr("wallet-id")},
+				Wallet:   DirectPaymentWallet{ID: testutils.StringPtr("wallet-id")},
 			},
 			expectValid: true,
 		},
@@ -92,32 +92,32 @@ func TestDirectPaymentValidator_ValidateCreateDirectPaymentRequest(t *testing.T)
 		{
 			name: "🔴 empty amount",
 			reqBody: &CreateDirectPaymentRequest{
-				Amount: "",
-				Asset:  DirectPaymentAsset{ID: testutils.StringPtr("asset-id")},
+				Amount:   "",
+				Asset:    DirectPaymentAsset{ID: testutils.StringPtr("asset-id")},
 				Receiver: DirectPaymentReceiver{ID: testutils.StringPtr("receiver-id")},
-				Wallet: DirectPaymentWallet{ID: testutils.StringPtr("wallet-id")},
+				Wallet:   DirectPaymentWallet{ID: testutils.StringPtr("wallet-id")},
 			},
 			expectError: true,
 		},
 		{
 			name: "🔴 whitespace amount",
 			reqBody: &CreateDirectPaymentRequest{
-				Amount: "   ",
-				Asset:  DirectPaymentAsset{ID: testutils.StringPtr("asset-id")},
+				Amount:   "   ",
+				Asset:    DirectPaymentAsset{ID: testutils.StringPtr("asset-id")},
 				Receiver: DirectPaymentReceiver{ID: testutils.StringPtr("receiver-id")},
-				Wallet: DirectPaymentWallet{ID: testutils.StringPtr("wallet-id")},
+				Wallet:   DirectPaymentWallet{ID: testutils.StringPtr("wallet-id")},
 			},
 			expectError: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			v := NewDirectPaymentValidator()
 			got := v.ValidateCreateDirectPaymentRequest(tt.reqBody)
-			
+
 			if tt.expectError {
 				if got != nil || !v.HasErrors() {
 					t.Errorf("expected validation error, got result: %v, errors: %v", got, v.Errors)
@@ -136,9 +136,9 @@ func TestDirectPaymentValidator_ValidateCreateDirectPaymentRequest(t *testing.T)
 
 func TestDirectPaymentValidator_validateAssetReference(t *testing.T) {
 	t.Parallel()
-	
+
 	validStellarAccount := "GCFXHS4GXL6BVUCXBWXGTITROWLVYXQKQLF4YH5O5JT3YZXCYPAFBJZB"
-	
+
 	tests := []struct {
 		name        string
 		asset       *DirectPaymentAsset
@@ -242,7 +242,7 @@ func TestDirectPaymentValidator_validateAssetReference(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			v := NewDirectPaymentValidator()
 			v.validateAssetReference(tt.asset)
 
@@ -266,9 +266,9 @@ func TestDirectPaymentValidator_validateAssetReference(t *testing.T) {
 
 func TestDirectPaymentValidator_validateReceiverReference(t *testing.T) {
 	t.Parallel()
-	
+
 	validStellarAccount := "GCFXHS4GXL6BVUCXBWXGTITROWLVYXQKQLF4YH5O5JT3YZXCYPAFBJZB"
-	
+
 	tests := []struct {
 		name        string
 		receiver    *DirectPaymentReceiver
@@ -333,7 +333,7 @@ func TestDirectPaymentValidator_validateReceiverReference(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			v := NewDirectPaymentValidator()
 			v.validateReceiverReference(tt.receiver)
 
@@ -357,9 +357,9 @@ func TestDirectPaymentValidator_validateReceiverReference(t *testing.T) {
 
 func TestDirectPaymentValidator_validateWalletReference(t *testing.T) {
 	t.Parallel()
-	
+
 	validStellarAccount := "GCFXHS4GXL6BVUCXBWXGTITROWLVYXQKQLF4YH5O5JT3YZXCYPAFBJZB"
-	
+
 	tests := []struct {
 		name        string
 		wallet      *DirectPaymentWallet
@@ -404,7 +404,7 @@ func TestDirectPaymentValidator_validateWalletReference(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			v := NewDirectPaymentValidator()
 			v.validateWalletReference(tt.wallet)
 

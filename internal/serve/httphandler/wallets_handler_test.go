@@ -655,8 +655,8 @@ func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
 	eurc := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
 	handler := &WalletsHandler{
-		Models:        models,
-		NetworkType:   utils.TestnetNetworkType,
+		Models:              models,
+		NetworkType:         utils.TestnetNetworkType,
 		WalletAssetResolver: services.NewWalletAssetResolver(models.Assets),
 	}
 

@@ -329,7 +329,8 @@ func (s *DirectPaymentService) validateBalance(
 
 	// Step 1a: Stellar account validation
 	if distributionAccount.IsStellar() {
-		exists, err := s.checkTrustlineExists(distributionAccount, *asset)
+		var exists bool
+		exists, err = s.checkTrustlineExists(distributionAccount, *asset)
 		if err != nil {
 			return fmt.Errorf("checking trustline existence: %w", err)
 		}
@@ -343,7 +344,7 @@ func (s *DirectPaymentService) validateBalance(
 
 	// Step 1b: Circle account validation
 	if distributionAccount.IsCircle() {
-		if err := s.validateCircleAccount(distributionAccount); err != nil {
+		if err = s.validateCircleAccount(distributionAccount); err != nil {
 			return err
 		}
 	}
