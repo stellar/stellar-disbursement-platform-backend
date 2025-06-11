@@ -36,7 +36,7 @@ type Wallet struct {
 	DeletedAt         *time.Time   `json:"-" csv:"-" db:"deleted_at"`
 }
 
-func (w *Wallet) IsDynamicDeepLink() bool {
+func (w *Wallet) IsSelfHosted() bool {
 	return w.DeepLinkSchema == "SELF"
 }
 

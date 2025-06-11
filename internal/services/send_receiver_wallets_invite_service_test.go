@@ -418,7 +418,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			AssetIssuer:      asset1.Issuer,
 			Token:            "123",
 			Route:            "wallet",
-			Dynamic:          true,
+			SelfHosted:       true,
 		}
 		deepLink, err := walletDeepLink.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -1713,7 +1713,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				AssetCode:        "FOO",
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 				Token:            "123",
-				Dynamic:          true,
+				SelfHosted:       true,
 			},
 			wantResult: "http://foo.bar:8000/wallet?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&token=123",
 		},

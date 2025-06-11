@@ -120,7 +120,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			AssetCode:        rwa.Asset.Code,
 			AssetIssuer:      rwa.Asset.Issuer,
 			TenantBaseURL:    *currentTenant.BaseURL,
-			Dynamic:          wallet.IsDynamicDeepLink(),
+			SelfHosted:       wallet.IsSelfHosted(),
 		}
 
 		if wallet.Embedded {
@@ -220,7 +220,7 @@ func (s SendReceiverWalletInviteService) updateDeepLink(wdl *WalletDeepLink) err
 		return fmt.Errorf("wallet deep link cannot be nil")
 	}
 
-	if wdl.Dynamic {
+	if wdl.SelfHosted {
 		wdl.DeepLink = wdl.TenantBaseURL
 		wdl.Route = "wallet"
 	}
@@ -357,8 +357,8 @@ type WalletDeepLink struct {
 	TenantBaseURL string
 	// Token is a unique token that identifies identifies a receiver wallet creation request.
 	Token string
-	// Dynamic is set to true when the deep link is set to the tenant base URL, which is the case only for embedded wallets.
-	Dynamic bool
+	// SelfHosted is set to true when the deep link should be set to the tenant base URL, which is the case only for embedded wallets.
+	SelfHosted bool
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
@@ -487,7 +487,7 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 
 	q.Add("asset", wdl.assetName())
 
-	if !wdl.Dynamic {
+	if !wdl.SelfHosted {
 		q.Add("domain", tomlFileDomain)
 		q.Add("name", wdl.OrganizationName)
 	}
