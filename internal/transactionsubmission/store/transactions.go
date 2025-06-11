@@ -324,7 +324,7 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 	return &transaction, err
 }
 
-func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []string) ([]*Transaction, error) {
+func (t *TransactionModel) GetAllByExternalIDs(ctx context.Context, externalIDs []string) ([]*Transaction, error) {
 	var transactions []*Transaction
 	q := `
 		SELECT
@@ -334,7 +334,7 @@ func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []
 		WHERE
 			t.external_id = ANY($1)
 		`
-	err := t.DBConnectionPool.SelectContext(ctx, &transactions, q, pq.Array(paymentIDs))
+	err := t.DBConnectionPool.SelectContext(ctx, &transactions, q, pq.Array(externalIDs))
 	if err != nil {
 		return nil, fmt.Errorf("error querying transactions: %w", err)
 	}
