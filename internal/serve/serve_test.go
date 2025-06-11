@@ -179,9 +179,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcRequestHeaderKey:   "Authorization: Bearer",
-			RpcRequestHeaderValue: "test",
+		rpcOptions := stellar.RPCOptions{
+			RPCRequestAuthHeaderKey:   "Authorization: Bearer",
+			RPCRequestAuthHeaderValue: "test",
 		}
 		serveOptions := ServeOptions{
 			RpcConfig: rpcOptions,
@@ -195,8 +195,8 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcRequestHeaderKey: "Authorization: Bearer",
+		rpcOptions := stellar.RPCOptions{
+			RPCRequestAuthHeaderKey: "Authorization: Bearer",
 		}
 
 		serveOptions := ServeOptions{
@@ -210,8 +210,8 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcRequestHeaderValue: "test",
+		rpcOptions := stellar.RPCOptions{
+			RPCRequestAuthHeaderValue: "test",
 		}
 
 		serveOptions := ServeOptions{
@@ -225,9 +225,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcURL:              "http://localhost:8000",
-			RpcRequestHeaderKey: "Authorization: Bearer",
+		rpcOptions := stellar.RPCOptions{
+			RPCUrl:                  "http://localhost:8000",
+			RPCRequestAuthHeaderKey: "Authorization: Bearer",
 		}
 
 		serveOptions := ServeOptions{
@@ -241,9 +241,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcURL:                "http://localhost:8000",
-			RpcRequestHeaderValue: "test",
+		rpcOptions := stellar.RPCOptions{
+			RPCUrl:                    "http://localhost:8000",
+			RPCRequestAuthHeaderValue: "test",
 		}
 
 		serveOptions := ServeOptions{
@@ -257,8 +257,8 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcURL: "http://localhost:8000",
+		rpcOptions := stellar.RPCOptions{
+			RPCUrl: "http://localhost:8000",
 		}
 
 		serveOptions := ServeOptions{
@@ -272,10 +272,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcURL:                "http://localhost:8000",
-			RpcRequestHeaderKey:   "Authorization: Bearer",
-			RpcRequestHeaderValue: "test",
+		rpcOptions := stellar.RPCOptions{
+			RPCUrl:                    "http://localhost:8000",
+			RPCRequestAuthHeaderKey:   "Authorization: Bearer",
+			RPCRequestAuthHeaderValue: "test",
 		}
 
 		serveOptions := ServeOptions{
@@ -289,7 +289,7 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{}
+		rpcOptions := stellar.RPCOptions{}
 
 		serveOptions := ServeOptions{
 			RpcConfig:       rpcOptions,
@@ -303,8 +303,8 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcURL: "http://localhost:8000",
+		rpcOptions := stellar.RPCOptions{
+			RPCUrl: "http://localhost:8000",
 		}
 
 		serveOptions := ServeOptions{
@@ -319,10 +319,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		rpcOptions := stellar.RpcOptions{
-			RpcURL:                "http://localhost:8000",
-			RpcRequestHeaderKey:   "Authorization: Bearer",
-			RpcRequestHeaderValue: "test",
+		rpcOptions := stellar.RPCOptions{
+			RPCUrl:                    "http://localhost:8000",
+			RPCRequestAuthHeaderKey:   "Authorization: Bearer",
+			RPCRequestAuthHeaderValue: "test",
 		}
 
 		serveOptions := ServeOptions{

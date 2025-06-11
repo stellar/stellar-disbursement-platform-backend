@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -30,6 +31,7 @@ type SubmitterOptions struct {
 	MonitorService       tssMonitor.TSSMonitorService
 	CrashTrackerClient   crashtracker.CrashTrackerClient
 	EventProducer        events.Producer
+	RPCClient            stellar.RPCClient
 
 	SubmitterEngine  engine.SubmitterEngine
 	DBConnectionPool db.DBConnectionPool
@@ -126,6 +128,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		txModel,
 		opts.EventProducer,
 		opts.MonitorService,
+		opts.RPCClient,
 	)
 
 	return &Manager{

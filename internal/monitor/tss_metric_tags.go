@@ -36,6 +36,22 @@ const (
 	PaymentReconciliationUnexpectedErrorLabel       string = "payment_reconciliation_unexpected_error"
 	PaymentMarkedForReprocessingLabel               string = "payment_marked_for_reprocessing"
 	PaymentFailedLabel                              string = "payment_failed"
+
+	// Wallet creation metric tags
+	WalletCreationProcessingStartedTag        MetricTag = "wallet_creation_processing_started"
+	WalletCreationTransactionSuccessfulTag    MetricTag = "wallet_creation_transaction_successful"
+	WalletCreationReconciliationSuccessfulTag MetricTag = "wallet_creation_reconciliation_successful"
+	WalletCreationReconciliationFailureTag    MetricTag = "wallet_creation_reconciliation_failure"
+	WalletCreationErrorTag                    MetricTag = "wallet_creation_error"
+
+	WalletCreationProcessingStartedLabel                   string = "wallet_creation_processing_started"
+	WalletCreationProcessingSuccessfulLabel                string = "wallet_creation_processing_successful"
+	WalletCreationReprocessingSuccessfulLabel              string = "wallet_creation_reprocessing_successful"
+	WalletCreationReconciliationTransactionSuccessfulLabel string = "wallet_creation_reconciliation_transaction_successful"
+	WalletCreationReconciliationMarkedForReprocessingLabel string = "wallet_creation_reconciliation_marked_for_reprocessing"
+	WalletCreationReconciliationUnexpectedErrorLabel       string = "wallet_creation_reconciliation_unexpected_error"
+	WalletCreationMarkedForReprocessingLabel               string = "wallet_creation_marked_for_reprocessing"
+	WalletCreationFailedLabel                              string = "wallet_creation_failed"
 )
 
 func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
@@ -51,5 +67,11 @@ func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
 		PaymentReconciliationSuccessfulTag,
 		PaymentReconciliationFailureTag,
 		PaymentErrorTag,
+
+		WalletCreationProcessingStartedTag,
+		WalletCreationTransactionSuccessfulTag,
+		WalletCreationReconciliationSuccessfulTag,
+		WalletCreationReconciliationFailureTag,
+		WalletCreationErrorTag,
 	}
 }

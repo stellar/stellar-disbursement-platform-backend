@@ -14,6 +14,7 @@ const (
 	PaymentCompletedTopic            = "events.payment.payment_completed"
 	PaymentReadyToPayTopic           = "events.payment.ready_to_pay"
 	CirclePaymentReadyToPayTopic     = "events.payment.circle_ready_to_pay"
+	WalletCreationCompletedTopic     = "events.wallet.creation_completed"
 )
 
 // Type Names
@@ -25,6 +26,8 @@ const (
 	PaymentReadyToPayDisbursementStarted           = "payment-ready-to-pay-disbursement-started"
 	PaymentReadyToPayReceiverVerificationCompleted = "payment-ready-to-pay-receiver-verification-completed"
 	PaymentReadyToPayRetryFailedPayment            = "payment-ready-to-pay-retry-failed-payment"
+	WalletCreationCompletedSuccessType             = "wallet-creation-completed-success"
+	WalletCreationCompletedErrorType               = "wallet-creation-completed-error"
 )
 
 type EventHandler interface {

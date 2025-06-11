@@ -30,7 +30,7 @@ type TransactionStore interface {
 	Insert(ctx context.Context, tx Transaction) (*Transaction, error)
 	BulkInsert(ctx context.Context, sqlExec db.SQLExecuter, transactions []Transaction) ([]Transaction, error)
 	Get(ctx context.Context, txID string) (tx *Transaction, err error)
-	GetAllByPaymentIDs(ctx context.Context, paymentIDs []string) (transactions []*Transaction, err error)
+	GetAllByExternalIDs(ctx context.Context, externalIDs []string) (transactions []*Transaction, err error)
 	// Status & Lock management:
 	UpdateStatusToSuccess(ctx context.Context, tx Transaction) (updatedTx *Transaction, err error)
 	UpdateStatusToError(ctx context.Context, tx Transaction, message string) (updatedTx *Transaction, err error)
