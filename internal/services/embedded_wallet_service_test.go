@@ -13,6 +13,55 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
+func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	tssModel := store.NewTransactionModel(dbConnectionPool)
+	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+
+	service := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	defaultTenantID := "test-tenant-id"
+
+	t.Run("successfully creates unique tokens", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		token1, err := service.CreateInvitationToken(ctx, defaultTenantID)
+		require.NoError(t, err)
+		require.NotNil(t, token1)
+
+		assert.NotEmpty(t, token1)
+
+		wallet, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token1)
+		require.NoError(t, err)
+		assert.Equal(t, token1, wallet.Token)
+
+		token2, err := service.CreateInvitationToken(ctx, defaultTenantID)
+		require.NoError(t, err)
+		require.NotNil(t, token2)
+
+		assert.NotEmpty(t, token2)
+
+		wallet2, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token2)
+		require.NoError(t, err)
+		assert.Equal(t, token2, wallet2.Token)
+
+		assert.NotEqual(t, token1, token2, "should generate unique tokens")
+	})
+
+	t.Run("returns error if tenant ID is empty", func(t *testing.T) {
+		_, err := service.CreateInvitationToken(ctx, "")
+		assert.EqualError(t, err, "tenant ID cannot be empty")
+	})
+}
+
 func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -33,7 +82,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	defaultPublicKey := "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
 
 	t.Run("successfully creates a wallet TSS transaction", func(t *testing.T) {
-		defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", defaultTenantID, "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token

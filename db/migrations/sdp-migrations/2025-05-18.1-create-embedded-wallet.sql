@@ -8,7 +8,7 @@ CREATE TYPE embedded_wallet_status AS ENUM(
 );
 
 CREATE TABLE embedded_wallets (
-    token VARCHAR(36) PRIMARY KEY DEFAULT public.uuid_generate_v4(),
+    token VARCHAR(36) PRIMARY KEY,
     tenant_id VARCHAR(36) NOT NULL,
     wasm_hash VARCHAR(64),
     contract_address VARCHAR(56),

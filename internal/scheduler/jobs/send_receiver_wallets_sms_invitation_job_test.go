@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -108,11 +109,13 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	var maxInvitationSMSResendAttempts int64 = 3
 
 	messageDispatcherMock := message.NewMockMessageDispatcher(t)
+	embeddedWalletServiceMock := &mocks.MockEmbeddedWalletService{}
 	crashTrackerClientMock := &crashtracker.MockCrashTrackerClient{}
 
 	s, err := services.NewSendReceiverWalletInviteService(
 		models,
 		messageDispatcherMock,
+		embeddedWalletServiceMock,
 		stellarSecretKey,
 		maxInvitationSMSResendAttempts,
 		crashTrackerClientMock,

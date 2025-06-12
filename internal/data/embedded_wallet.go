@@ -92,6 +92,66 @@ func (ew *EmbeddedWalletModel) GetByToken(ctx context.Context, sqlExec db.SQLExe
 	return &wallet, nil
 }
 
+type EmbeddedWalletInsert struct {
+	Token        string               `db:"token"`
+	TenantID     string               `db:"tenant_id"`
+	WasmHash     string               `db:"wasm_hash"`
+	WalletStatus EmbeddedWalletStatus `db:"wallet_status"`
+}
+
+func (ewi EmbeddedWalletInsert) Validate() error {
+	if ewi.Token == "" {
+		return fmt.Errorf("token cannot be empty")
+	}
+
+	if ewi.TenantID == "" {
+		return fmt.Errorf("tenant ID cannot be empty")
+	}
+
+	if ewi.WasmHash == "" {
+		return fmt.Errorf("wasm hash cannot be empty")
+	} else {
+		_, err := hex.DecodeString(ewi.WasmHash)
+		if err != nil {
+			return fmt.Errorf("invalid wasm hash")
+		}
+	}
+
+	if err := ewi.WalletStatus.Validate(); err != nil {
+		return fmt.Errorf("validating wallet status: %w", err)
+	}
+
+	return nil
+}
+
+func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, insert EmbeddedWalletInsert) (*EmbeddedWallet, error) {
+	if err := insert.Validate(); err != nil {
+		return nil, fmt.Errorf("validating embedded wallet insert: %w", err)
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO embedded_wallets (
+			token,
+			tenant_id,
+			wasm_hash,
+			wallet_status
+		) VALUES (
+			$1, $2, $3, $4
+		) RETURNING %s`, EmbeddedWalletColumnNames("", ""))
+
+	var wallet EmbeddedWallet
+	err := sqlExec.GetContext(ctx, &wallet, query,
+		insert.Token,
+		insert.TenantID,
+		insert.WasmHash,
+		insert.WalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("inserting embedded wallet: %w", err)
+	}
+
+	return &wallet, nil
+}
+
 type EmbeddedWalletUpdate struct {
 	WasmHash        string               `db:"wasm_hash"`
 	ContractAddress string               `db:"contract_address"`

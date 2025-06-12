@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -20,6 +22,8 @@ var (
 
 //go:generate mockery --name=EmbeddedWalletServiceInterface --case=underscore --structname=MockEmbeddedWalletService --filename=embedded_wallet_service.go
 type EmbeddedWalletServiceInterface interface {
+	// CreateInvitationToken creates a new embedded wallet invitation token
+	CreateInvitationToken(ctx context.Context, tenantID string) (string, error)
 	// CreateWallet creates a new embedded wallet using the provided token and public key
 	CreateWallet(ctx context.Context, tenantID, token, publicKey string) error
 	// GetWallet retrieves an embedded wallet by token
@@ -47,6 +51,30 @@ type EmbeddedWalletServiceOptions struct {
 	MTNDBConnectionPool db.DBConnectionPool
 	TSSDBConnectionPool db.DBConnectionPool
 	WasmHash            string
+}
+
+func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, tenantID string) (string, error) {
+	if tenantID == "" {
+		return "", fmt.Errorf("tenant ID cannot be empty")
+	}
+
+	token := uuid.New().String()
+
+	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
+		insert := data.EmbeddedWalletInsert{
+			Token:        token,
+			TenantID:     tenantID,
+			WasmHash:     e.wasmHash,
+			WalletStatus: data.PendingWalletStatus,
+		}
+
+		embeddedWallet, err := e.sdpModels.EmbeddedWallets.Insert(ctx, e.sdpModels.DBConnectionPool, insert)
+		if err != nil {
+			return "", fmt.Errorf("creating embedded wallet invitation token: %w", err)
+		}
+
+		return embeddedWallet.Token, nil
+	})
 }
 
 func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, token, publicKey string) error {

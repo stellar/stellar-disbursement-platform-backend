@@ -159,6 +159,78 @@ func Test_EmbeddedWalletUpdate_Validate(t *testing.T) {
 	})
 }
 
+func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
+	t.Run("returns error if token is empty", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			TenantID:     "tenant-123",
+			WalletStatus: PendingWalletStatus,
+		}
+		err := insert.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "token cannot be empty")
+	})
+
+	t.Run("returns error if tenant ID is empty", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			Token:        "token-123",
+			WalletStatus: PendingWalletStatus,
+		}
+		err := insert.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "tenant ID cannot be empty")
+	})
+
+	t.Run("returns error if wasm hash is empty", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			Token:        "token-123",
+			TenantID:     "tenant-123",
+			WalletStatus: PendingWalletStatus,
+		}
+		err := insert.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "wasm hash cannot be empty")
+	})
+
+	t.Run("validates wasm hash when provided", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			Token:        "token-123",
+			TenantID:     "tenant-123",
+			WasmHash:     "invalid-hash",
+			WalletStatus: PendingWalletStatus,
+		}
+		err := insert.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "invalid wasm hash")
+	})
+
+	t.Run("validates wallet status", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			Token:        "token-123",
+			TenantID:     "tenant-123",
+			WasmHash:     "abcdef123456",
+			WalletStatus: "INVALID_STATUS",
+		}
+		err := insert.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "validating wallet status: invalid embedded wallet status \"INVALID_STATUS\"")
+
+		insert.WalletStatus = SuccessWalletStatus
+		err = insert.Validate()
+		require.NoError(t, err)
+	})
+
+	t.Run("successfully updates all fields", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			Token:        "token-123",
+			TenantID:     "tenant-123",
+			WasmHash:     "abcdef123456",
+			WalletStatus: SuccessWalletStatus,
+		}
+		err := insert.Validate()
+		require.NoError(t, err)
+	})
+}
+
 func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

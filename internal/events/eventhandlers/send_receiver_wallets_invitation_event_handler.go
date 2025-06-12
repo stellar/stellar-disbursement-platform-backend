@@ -22,6 +22,7 @@ type SendReceiverWalletsInvitationEventHandlerOptions struct {
 	MtnDBConnectionPool         db.DBConnectionPool
 	AnchorPlatformBaseSepURL    string
 	MessageDispatcher           message.MessageDispatcherInterface
+	EmbeddedWalletService       services.EmbeddedWalletServiceInterface
 	MaxInvitationResendAttempts int64
 	Sep10SigningPrivateKey      string
 	CrashTrackerClient          crashtracker.CrashTrackerClient
@@ -46,6 +47,7 @@ func NewSendReceiverWalletsInvitationEventHandler(options SendReceiverWalletsInv
 	s, err := services.NewSendReceiverWalletInviteService(
 		models,
 		options.MessageDispatcher,
+		options.EmbeddedWalletService,
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationResendAttempts,
 		options.CrashTrackerClient,
