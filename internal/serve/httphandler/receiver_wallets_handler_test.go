@@ -317,6 +317,64 @@ func Test_ReceiverWalletsHandler_PatchReceiverWalletStatus(t *testing.T) {
 			expectedJSON:   `{"error":"switching to status \"FLAGGED\" is not supported"}`,
 		},
 		{
+			name: "400 – user-managed wallet cannot be unregistered",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				_, err := dbPool.ExecContext(ctx,
+					`UPDATE wallets SET user_managed = TRUE WHERE id = $1`, wallet.ID)
+				require.NoError(t, err)
+
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.RegisteredReceiversWalletStatus)
+
+				t.Cleanup(func() {
+					data.DeleteAllReceiverWalletsFixtures(t, ctx, dbPool)
+				})
+
+				return models, rw.ID
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"user managed wallet cannot be unregistered"}`,
+		},
+		{
+			name: "400 – wallet has payments in progress",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.RegisteredReceiversWalletStatus)
+
+				disb := data.CreateDisbursementFixture(t, ctx, dbPool,
+					models.Disbursements, &data.Disbursement{})
+
+				data.CreatePaymentFixture(t, ctx, dbPool, models.Payment, &data.Payment{
+					Amount:         "42",
+					Asset:          *disb.Asset,
+					Status:         data.ReadyPaymentStatus,
+					ReceiverWallet: rw,
+					Disbursement:   disb,
+				})
+
+				t.Cleanup(func() {
+					data.DeleteAllPaymentsFixtures(t, ctx, dbPool)
+					data.DeleteAllReceiverWalletsFixtures(t, ctx, dbPool)
+				})
+
+				return models, rw.ID
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"wallet has payments in progress"}`,
+		},
+		{
 			name: "500 – unexpected DB error bubbles up as internal error",
 			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
 				models := data.SetupModels(t)

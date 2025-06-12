@@ -1,6 +1,15 @@
 # Stellar Disbursement Platform Backend
 
-> Note: you can find a more thorough and user-friendly documentation of this project at [Stelar Docs](https://docs.stellar.org/category/use-the-stellar-disbursement-platform).
+[![Swagger Documentation](https://img.shields.io/badge/docs-swagger-blue?logo=swagger)](https://petstore.swagger.io/?url=https://raw.githubusercontent.com/stellar/stellar-docs/refs/heads/main/openapi/stellar-disbursement-platform/bundled.yaml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/stellar/stellar-disbursement-platform-backend)
+[![Stellar Docs](https://img.shields.io/badge/docs-stellar.org-blue?logo=stellar)](https://developers.stellar.org/platforms/stellar-disbursement-platform)
+[![CI](https://img.shields.io/github/check-runs/stellar/stellar-disbursement-platform-backend/develop?logo=github&label=CI)](https://github.com/stellar/stellar-disbursement-platform-backend/actions/workflows/docker_image_public_release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/stellar/stellar-disbursement-platform-backend)](https://goreportcard.com/report/github.com/stellar/stellar-disbursement-platform-backend)
+[![GitHub](https://img.shields.io/github/license/stellar/stellar-disbursement-platform-backend)](https://github.com/stellar/stellar-disbursement-platform-backend/blob/main/LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/stellar/stellar-disbursement-platform-backend?logo=docker)](https://hub.docker.com/r/stellar/stellar-disbursement-platform-backend/tags)
+[![Release](https://img.shields.io/github/release/stellar/stellar-disbursement-platform-backend.svg)](https://github.com/stellar/stellar-disbursement-platform-backend/releases/latest)
+
+> Note: you can find a more thorough and user-friendly documentation of this project at [Stellar Docs](https://docs.stellar.org/category/use-the-stellar-disbursement-platform).
 
 ## Table of Contents
 
