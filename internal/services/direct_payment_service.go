@@ -190,20 +190,12 @@ func (s *DirectPaymentService) CreateDirectPayment(
 				PaymentType:       data.PaymentTypeDirect,
 			}
 
-			paymentID, err := s.Models.Payment.CreateDirectPayment(ctx, dbTx, paymentInsert)
+			paymentID, err := s.Models.Payment.CreateDirectPayment(ctx, dbTx, paymentInsert, user.ID)
 			if err != nil {
 				return nil, fmt.Errorf("creating payment: %w", err)
 			}
 
-			// 7. Update payment status based on receiver wallet status
-			if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
-				err = s.Models.Payment.UpdateStatus(ctx, dbTx, paymentID, data.ReadyPaymentStatus, nil, "")
-				if err != nil {
-					return nil, fmt.Errorf("updating payment status to ready: %w", err)
-				}
-			}
-
-			// 8. Get the created payment
+			// 7. Get the created payment
 			payment, err = s.Models.Payment.Get(ctx, paymentID, dbTx)
 			if err != nil {
 				return nil, fmt.Errorf("getting created payment: %w", err)
@@ -212,7 +204,7 @@ func (s *DirectPaymentService) CreateDirectPayment(
 			// disbursment is an empty struct for the direct payments, set it to nil
 			payment.Disbursement = nil
 
-			// 9. Prepare post-commit events (same as before)
+			// 8. Prepare post-commit events (same as before)
 			msgs := make([]*events.Message, 0)
 
 			// Send invitation if receiver wallet needs registration

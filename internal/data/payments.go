@@ -776,7 +776,7 @@ func (p *PaymentModel) UpdateStatus(
 	return nil
 }
 
-func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLExecuter, insert PaymentInsert) (string, error) {
+func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLExecuter, insert PaymentInsert, userID string) (string, error) {
 	if err := insert.Validate(); err != nil {
 		return "", fmt.Errorf("validating payment: %w", err)
 	}
@@ -793,11 +793,12 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
             status_history
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7,
-            ARRAY[create_payment_status_history(NOW(), $7::payment_status, NULL)]
+            ARRAY[create_payment_status_history(NOW(), $7::payment_status, $8)]
         )
         RETURNING id
     `
 
+	statusMessage := fmt.Sprintf("Payment submitted by user_id %s", userID)
 	var paymentID string
 	if err := sqlExec.GetContext(ctx, &paymentID, query,
 		insert.Amount,
@@ -806,7 +807,8 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 		insert.ReceiverWalletID,
 		insert.ExternalPaymentID,
 		insert.PaymentType,
-		DraftPaymentStatus,
+		ReadyPaymentStatus,
+		statusMessage,
 	); err != nil {
 		return "", fmt.Errorf("inserting direct payment: %w", err)
 	}
