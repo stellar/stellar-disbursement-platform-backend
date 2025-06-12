@@ -106,7 +106,7 @@ func TestPaymentQueryValidator_PaymentTypeFilter(t *testing.T) {
 		},
 		{
 			name:         "valid disbursement type",
-			paymentType:  "disbursment",
+			paymentType:  "disbursement",
 			expectedType: data.PaymentTypeDisbursement,
 		},
 		{
