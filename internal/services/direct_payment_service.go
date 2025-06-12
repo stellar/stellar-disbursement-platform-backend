@@ -20,7 +20,7 @@ import (
 
 // CreateDirectPaymentRequest represents service-level request for creating direct payment
 type CreateDirectPaymentRequest struct {
-	Amount            string            `json:"amount" validate:"required"`
+	Amount            string            `json:"amount"`
 	Asset             AssetReference    `json:"asset" validate:"required"`
 	Receiver          ReceiverReference `json:"receiver" validate:"required"`
 	Wallet            WalletReference   `json:"wallet" validate:"required"`

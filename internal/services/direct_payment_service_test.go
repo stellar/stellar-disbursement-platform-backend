@@ -610,8 +610,10 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset1, "100.00", data.ReadyPaymentStatus},
 				{asset1, "200.00", data.PendingPaymentStatus},
 				{asset1, "300.00", data.PausedPaymentStatus},
-				{asset1, "999.00", data.DraftPaymentStatus},   // ignored
-				{asset1, "888.00", data.SuccessPaymentStatus}, // ignored
+				{asset1, "999.00", data.DraftPaymentStatus},    // ignored
+				{asset1, "888.00", data.SuccessPaymentStatus},  // ignored
+				{asset1, "500.00", data.FailedPaymentStatus},   // ignored
+				{asset1, "600.00", data.CanceledPaymentStatus}, // ignored
 			},
 			targetAsset:    asset1,
 			expectedAmount: 600.00,
@@ -624,18 +626,6 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 			},
 			targetAsset:    asset1,
 			expectedAmount: 50.00,
-		},
-		{
-			name: "terminal and draft statuses ignored",
-			payments: []payment{
-				{asset1, "400.00", data.SuccessPaymentStatus},
-				{asset1, "500.00", data.FailedPaymentStatus},
-				{asset1, "600.00", data.CanceledPaymentStatus},
-				{asset1, "700.00", data.DraftPaymentStatus},
-				{asset1, "777.00", data.PausedPaymentStatus}, // counted
-			},
-			targetAsset:    asset1,
-			expectedAmount: 777.00,
 		},
 		{
 			name:           "zero sum for no in-progress payments",
