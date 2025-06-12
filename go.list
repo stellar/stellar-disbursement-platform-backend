@@ -30,7 +30,7 @@ github.com/andybalholm/brotli v1.0.4
 github.com/armon/go-radix v1.0.0
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 github.com/avast/retry-go/v4 v4.6.1
-github.com/aws/aws-sdk-go v1.45.26
+github.com/aws/aws-sdk-go v1.45.27
 github.com/aws/aws-sdk-go-v2 v1.36.3
 github.com/aws/aws-sdk-go-v2/config v1.29.14
 github.com/aws/aws-sdk-go-v2/credentials v1.17.67
@@ -60,8 +60,8 @@ github.com/chzyer/test v1.0.0
 github.com/cncf/xds/go v0.0.0-20240905190251-b4127c9b8d78
 github.com/containerd/log v0.1.0
 github.com/cpuguy83/go-md2man/v2 v2.0.6
-github.com/creachadair/jrpc2 v1.1.0
-github.com/creachadair/mds v0.0.1
+github.com/creachadair/jrpc2 v1.2.0
+github.com/creachadair/mds v0.13.4
 github.com/creack/pty v1.1.9
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/denisenkom/go-mssqldb v0.9.0
@@ -155,7 +155,7 @@ github.com/mattn/go-isatty v0.0.17
 github.com/mattn/go-oci8 v0.1.1
 github.com/mattn/go-runewidth v0.0.9
 github.com/mattn/go-sqlite3 v1.14.22
-github.com/matttproud/golang_protobuf_extensions v1.0.4
+github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0
 github.com/mitchellh/cli v1.1.5
 github.com/mitchellh/copystructure v1.2.0
 github.com/mitchellh/go-homedir v1.1.0
@@ -204,7 +204,7 @@ github.com/segmentio/go-loggly v0.5.1-0.20171222203950-eb91657e62b2
 github.com/segmentio/kafka-go v0.4.48
 github.com/sendgrid/rest v2.6.9+incompatible
 github.com/sendgrid/sendgrid-go v3.16.0+incompatible
-github.com/sergi/go-diff v1.2.0
+github.com/sergi/go-diff v1.3.1
 github.com/shopspring/decimal v1.3.1
 github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c
 github.com/sirupsen/logrus v1.9.3
@@ -214,8 +214,9 @@ github.com/spf13/cast v1.7.1
 github.com/spf13/cobra v1.9.1
 github.com/spf13/pflag v1.0.6
 github.com/spf13/viper v1.20.1
-github.com/stellar/go v0.0.0-20250311234916-385ac5aca1a4
+github.com/stellar/go v0.0.0-20250606230746-ef10cd0a5920
 github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2
+github.com/stellar/stellar-rpc v0.9.6-0.20250130160539-be7702aa01ba
 github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 github.com/stretchr/objx v0.5.2
 github.com/stretchr/testify v1.10.0
