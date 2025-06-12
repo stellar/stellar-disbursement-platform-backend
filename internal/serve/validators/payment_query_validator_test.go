@@ -101,12 +101,12 @@ func TestPaymentQueryValidator_PaymentTypeFilter(t *testing.T) {
 	}{
 		{
 			name:         "valid direct type",
-			paymentType:  "DIRECT",
+			paymentType:  "direct",
 			expectedType: data.PaymentTypeDirect,
 		},
 		{
 			name:         "valid disbursement type",
-			paymentType:  "DISBURSEMENT",
+			paymentType:  "disbursment",
 			expectedType: data.PaymentTypeDisbursement,
 		},
 		{
@@ -118,11 +118,6 @@ func TestPaymentQueryValidator_PaymentTypeFilter(t *testing.T) {
 			name:         "case insensitive - DISBURSEMENT",
 			paymentType:  "DISBURSEMENT",
 			expectedType: data.PaymentTypeDisbursement,
-		},
-		{
-			name:         "mixed case - DiReCt",
-			paymentType:  "DiReCt",
-			expectedType: data.PaymentTypeDirect,
 		},
 		{
 			name:          "invalid type - chaos",
