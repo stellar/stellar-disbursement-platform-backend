@@ -194,7 +194,7 @@ func (ar *AssetResolver) Validate(ref AssetReference) error {
 					Message:    "required for contract asset",
 				}
 			}
-			if !strkey.IsValidContractAddress(ref.ContractID) {
+			if !strkey.IsValidContractAddress(*ref.ContractID) {
 				return ValidationError{
 					EntityType: EntityTypeAsset,
 					Field:      FieldContractID,

@@ -2382,7 +2382,7 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 				"wallet": {"id": %q}
 			}`, receiver.ID, wallet.ID),
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  `{"error": "asset: contract assets not yet supported"}`,
+			expectedError:  `{"error": "validation error for asset.contract_id: invalid contract format provided"}`,
 		},
 		{
 			name: "unsupported fiat asset",

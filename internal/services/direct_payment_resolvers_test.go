@@ -116,10 +116,15 @@ func TestAssetResolver_Validate(t *testing.T) {
 			},
 		},
 		{
-			name: "valid contract reference",
+			name: "invalid contract reference",
 			ref: AssetReference{
 				Type:       testutils.StringPtr(AssetTypeContract),
 				ContractID: testutils.StringPtr("CONTRACT123"),
+			},
+			expectedError: ValidationError{
+				EntityType: EntityTypeAsset,
+				Field:      FieldContractID,
+				Message:    "invalid contract format provided",
 			},
 		},
 		{
@@ -247,9 +252,10 @@ func TestAssetResolver_Resolve(t *testing.T) {
 				Type:       testutils.StringPtr(AssetTypeContract),
 				ContractID: testutils.StringPtr("CONTRACT123"),
 			},
-			expectedError: UnsupportedError{
+			expectedError: ValidationError{
 				EntityType: EntityTypeAsset,
-				Feature:    "contract assets",
+				Field:      FieldContractID,
+				Message:    "invalid contract format provided",
 			},
 		},
 		{
