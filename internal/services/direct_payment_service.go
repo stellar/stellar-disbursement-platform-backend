@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// DirectPaymentRequest represents service-level request for creating direct payment
+// CreateDirectPaymentRequest represents service-level request for creating direct payment
 type CreateDirectPaymentRequest struct {
 	Amount            string            `json:"amount" validate:"required"`
 	Asset             AssetReference    `json:"asset" validate:"required"`
@@ -24,12 +27,57 @@ type CreateDirectPaymentRequest struct {
 	ExternalPaymentID *string           `json:"external_payment_id,omitempty"`
 }
 
+type TrustlineNotFoundError struct {
+	Asset               data.Asset
+	DistributionAccount string
+}
+
+func (e TrustlineNotFoundError) Error() string {
+	return fmt.Sprintf("distribution account %s does not have a trustline for asset %s:%s",
+		e.DistributionAccount, e.Asset.Code, e.Asset.Issuer)
+}
+
+type AccountNotFoundError struct {
+	Address string
+}
+
+func (e AccountNotFoundError) Error() string {
+	return fmt.Sprintf("distribution account %s not found on the Stellar network", e.Address)
+}
+
+type CircleAccountNotActivatedError struct {
+	AccountType string
+	Status      string
+}
+
+func (e CircleAccountNotActivatedError) Error() string {
+	return fmt.Sprintf("Circle distribution account is in %s state, please complete the %s activation process",
+		e.Status, e.AccountType)
+}
+
+type CircleAssetNotSupportedError struct {
+	Asset data.Asset
+}
+
+func (e CircleAssetNotSupportedError) Error() string {
+	return fmt.Sprintf("asset %s is not supported by Circle for this distribution account", e.Asset.Code)
+}
+
 type WalletNotEnabledError struct {
 	WalletName string
 }
 
 func (e WalletNotEnabledError) Error() string {
 	return fmt.Sprintf("wallet '%s' is not enabled for payments", e.WalletName)
+}
+
+type ErrReceiverWalletNotFound struct {
+	ReceiverID string
+	WalletID   string
+}
+
+func (e ErrReceiverWalletNotFound) Error() string {
+	return fmt.Sprintf("no receiver wallet: receiver=%s wallet=%s", e.ReceiverID, e.WalletID)
 }
 
 type AssetNotSupportedByWalletError struct {
@@ -66,15 +114,21 @@ type DirectPaymentService struct {
 	EventProducer              events.Producer
 	DistributionAccountService DistributionAccountServiceInterface
 	Resolvers                  *ResolverFactory
+	SubmitterEngine            engine.SubmitterEngine
 }
 
-// NewDirectPaymentService creates a new DirectPaymentService with resolvers
-func NewDirectPaymentService(models *data.Models, eventProducer events.Producer, distributionAccount DistributionAccountServiceInterface) *DirectPaymentService {
+func NewDirectPaymentService(
+	models *data.Models,
+	eventProducer events.Producer,
+	distributionAccount DistributionAccountServiceInterface,
+	submitterEngine engine.SubmitterEngine,
+) *DirectPaymentService {
 	return &DirectPaymentService{
 		Models:                     models,
 		EventProducer:              eventProducer,
 		DistributionAccountService: distributionAccount,
 		Resolvers:                  NewResolverFactory(models),
+		SubmitterEngine:            submitterEngine,
 	}
 }
 
@@ -244,7 +298,10 @@ func (s *DirectPaymentService) getReceiverWallet(
 	}
 
 	if len(receiverWallets) == 0 {
-		return nil, fmt.Errorf("receiver wallet not found - receiver must be registered with this wallet to receive direct payments")
+		return nil, &ErrReceiverWalletNotFound{
+			ReceiverID: receiverID,
+			WalletID:   walletID,
+		}
 	}
 
 	receiverWallet := receiverWallets[0]
@@ -270,24 +327,40 @@ func (s *DirectPaymentService) validateBalance(
 		return fmt.Errorf("parsing amount: %w", err)
 	}
 
-	// Skip balance validation for user-managed wallets since they manage their own balance
-	if distributionAccount.Type != schema.DistributionAccountStellarDBVault {
-		return nil
+	// Step 1a: Stellar account validation
+	if distributionAccount.IsStellar() {
+		var exists bool
+		exists, err = s.checkTrustlineExists(distributionAccount, *asset)
+		if err != nil {
+			return fmt.Errorf("checking trustline existence: %w", err)
+		}
+		if !exists {
+			return TrustlineNotFoundError{
+				Asset:               *asset,
+				DistributionAccount: distributionAccount.Address,
+			}
+		}
 	}
 
-	// Get available balance for vault-managed accounts
+	// Step 1b: Circle account validation
+	if distributionAccount.IsCircle() {
+		if err = s.validateCircleAccount(distributionAccount); err != nil {
+			return err
+		}
+	}
+
+	// Step 2: Get balance
 	availableBalance, err := s.DistributionAccountService.GetBalance(ctx, distributionAccount, *asset)
 	if err != nil {
 		return fmt.Errorf("getting balance: %w", err)
 	}
 
-	// Calculate total pending amount for this specific asset
+	// Step 3: Calculate pending amounts and validate sufficient balance
 	totalPending, err := s.calculatePendingAmountForAsset(ctx, dbTx, *asset)
 	if err != nil {
 		return fmt.Errorf("calculating pending amounts: %w", err)
 	}
 
-	// Check if we have sufficient balance
 	if availableBalance < (amountFloat + totalPending) {
 		return InsufficientBalanceForDirectPaymentError{
 			Asset:              *asset,
@@ -328,4 +401,47 @@ func (s *DirectPaymentService) calculatePendingAmountForAsset(
 	}
 
 	return totalPending, nil
+}
+
+func (s *DirectPaymentService) checkTrustlineExists(
+	account *schema.TransactionAccount,
+	asset data.Asset,
+) (bool, error) {
+	if asset.IsNative() {
+		return true, nil
+	}
+
+	client := s.SubmitterEngine.HorizonClient
+
+	acc, err := client.AccountDetail(horizonclient.AccountRequest{
+		AccountID: account.Address,
+	})
+	if err != nil {
+		if horizonErr, ok := err.(*horizonclient.Error); ok {
+			if horizonErr.Response.StatusCode == 404 {
+				return false, AccountNotFoundError{Address: account.Address}
+			}
+		}
+		return false, fmt.Errorf("getting account details from Horizon: %w", err)
+	}
+
+	for _, balance := range acc.Balances {
+		if balance.Asset.Type == validators.AssetTypeNative {
+			continue
+		}
+
+		if balance.Asset.Code == asset.Code && balance.Asset.Issuer == asset.Issuer {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *DirectPaymentService) validateCircleAccount(
+	account *schema.TransactionAccount,
+) error {
+	if account.Status == schema.AccountStatusPendingUserActivation {
+		return CircleAccountNotActivatedError{AccountType: string(account.Type), Status: string(account.Status)}
+	}
+	return nil
 }

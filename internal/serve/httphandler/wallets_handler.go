@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,12 +13,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type WalletsHandler struct {
-	Models      *data.Models
-	NetworkType utils.NetworkType
+	Models              *data.Models
+	NetworkType         utils.NetworkType
+	WalletAssetResolver *services.WalletAssetResolver
 }
 
 // GetWallets returns a list of wallets
@@ -74,30 +77,36 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	wallet, err := h.Models.Wallets.Insert(ctx, data.WalletInsert{
+	// Resolve asset references to IDs
+	var assetIDs []string
+	var err error
+
+	if len(reqBody.Assets) > 0 {
+		assetIDs, err = h.WalletAssetResolver.ResolveAssetReferences(ctx, reqBody.Assets)
+		if err != nil {
+			httperror.BadRequest("failed to resolve asset references", err, nil).Render(rw)
+			return
+		}
+	} else if len(reqBody.AssetsIDs) > 0 {
+		if err = h.WalletAssetResolver.ValidateAssetIDs(ctx, reqBody.AssetsIDs); err != nil {
+			httperror.BadRequest("invalid asset ID", err, nil).Render(rw)
+			return
+		}
+		assetIDs = reqBody.AssetsIDs
+	}
+
+	walletInsert := data.WalletInsert{
 		Name:              reqBody.Name,
 		Homepage:          reqBody.Homepage,
 		SEP10ClientDomain: reqBody.SEP10ClientDomain,
 		DeepLinkSchema:    reqBody.DeepLinkSchema,
-		AssetsIDs:         reqBody.AssetsIDs,
-	})
-	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrInvalidAssetID):
-			httperror.BadRequest(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
-			return
-		case errors.Is(err, data.ErrWalletNameAlreadyExists):
-			httperror.Conflict(data.ErrWalletNameAlreadyExists.Error(), err, nil).Render(rw)
-			return
-		case errors.Is(err, data.ErrWalletHomepageAlreadyExists):
-			httperror.Conflict(data.ErrWalletHomepageAlreadyExists.Error(), err, nil).Render(rw)
-			return
-		case errors.Is(err, data.ErrWalletDeepLinkSchemaAlreadyExists):
-			httperror.Conflict(data.ErrWalletDeepLinkSchemaAlreadyExists.Error(), err, nil).Render(rw)
-			return
-		}
+		AssetsIDs:         assetIDs,
+		Enabled:           *reqBody.Enabled,
+	}
 
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
+	wallet, err := h.Models.Wallets.Insert(ctx, walletInsert)
+	if err != nil {
+		h.handleWalletError(ctx, rw, err, "failed to create wallet")
 		return
 	}
 
@@ -138,7 +147,7 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	validator := validators.NewWalletValidator()
-	validator.ValidatePatchWalletRequest(reqBody)
+	reqBody = validator.ValidatePatchWalletRequest(ctx, reqBody, h.NetworkType.IsPubnet())
 	if validator.HasErrors() {
 		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(rw)
 		return
@@ -146,16 +155,44 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 
 	walletID := chi.URLParam(req, "id")
 
-	_, err := h.Models.Wallets.Update(ctx, walletID, *reqBody.Enabled)
-	if err != nil {
-		if errors.Is(err, data.ErrRecordNotFound) {
-			httperror.NotFound("", err, nil).Render(rw)
+	update := data.WalletUpdate{
+		Name:              reqBody.Name,
+		Homepage:          reqBody.Homepage,
+		SEP10ClientDomain: reqBody.SEP10ClientDomain,
+		DeepLinkSchema:    reqBody.DeepLinkSchema,
+		Enabled:           reqBody.Enabled,
+	}
+
+	if reqBody.Assets != nil {
+		assetIDs, err := h.WalletAssetResolver.ResolveAssetReferences(ctx, *reqBody.Assets)
+		if err != nil {
+			httperror.BadRequest("failed to resolve asset references", err, nil).Render(rw)
 			return
 		}
-		err = fmt.Errorf("updating wallet: %w", err)
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		update.AssetsIDs = &assetIDs
+	}
+	wallet, err := h.Models.Wallets.Update(ctx, walletID, update)
+	if err != nil {
+		h.handleWalletError(ctx, rw, err, "failed to update wallet")
 		return
 	}
 
-	httpjson.Render(rw, map[string]string{"message": "wallet updated successfully"}, httpjson.JSON)
+	httpjson.Render(rw, wallet, httpjson.JSON)
+}
+
+func (h WalletsHandler) handleWalletError(ctx context.Context, rw http.ResponseWriter, err error, defaultMsg string) {
+	switch {
+	case errors.Is(err, data.ErrRecordNotFound):
+		httperror.NotFound("", err, nil).Render(rw)
+	case errors.Is(err, data.ErrInvalidAssetID):
+		httperror.BadRequest(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
+	case errors.Is(err, data.ErrWalletNameAlreadyExists):
+		httperror.Conflict(data.ErrWalletNameAlreadyExists.Error(), err, nil).Render(rw)
+	case errors.Is(err, data.ErrWalletHomepageAlreadyExists):
+		httperror.Conflict(data.ErrWalletHomepageAlreadyExists.Error(), err, nil).Render(rw)
+	case errors.Is(err, data.ErrWalletDeepLinkSchemaAlreadyExists):
+		httperror.Conflict(data.ErrWalletDeepLinkSchemaAlreadyExists.Error(), err, nil).Render(rw)
+	default:
+		httperror.InternalError(ctx, defaultMsg, err, nil).Render(rw)
+	}
 }

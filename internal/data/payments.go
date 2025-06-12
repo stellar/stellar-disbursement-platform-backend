@@ -249,17 +249,50 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
 
-	query := getReadyPaymentsBaseQuery + `
-		ORDER BY p.payment_type ASC, COALESCE(p.disbursement_id, '') ASC, p.updated_at ASC
-		LIMIT $4
-		FOR UPDATE SKIP LOCKED`
+	// Get disbursement payments
+	disbursementQuery := basePaymentQuery + `
+        WHERE
+            p.status = $1 -- 'READY'::payment_status
+            AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+            AND d.status = $3 -- 'STARTED'::disbursement_status
+            AND p.payment_type = 'DISBURSEMENT'
+        ORDER BY p.disbursement_id ASC, p.updated_at ASC
+        FOR UPDATE SKIP LOCKED`
 
-	var payments []*Payment
-	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
+	var disbursementPayments []*Payment
+	err := sqlExec.SelectContext(ctx, &disbursementPayments, disbursementQuery,
+		ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus)
 	if err != nil {
-		return nil, fmt.Errorf("error getting ready payments: %w", err)
+		return nil, fmt.Errorf("getting disbursement payments: %w", err)
 	}
-	return payments, nil
+
+	// Get direct payments
+	directQuery := basePaymentQuery + `
+        WHERE
+            p.status = $1 -- 'READY'::payment_status
+            AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+            AND p.payment_type = 'DIRECT'
+        ORDER BY p.updated_at ASC
+        FOR UPDATE OF p, rw SKIP LOCKED`
+
+	var directPayments []*Payment
+	err = sqlExec.SelectContext(ctx, &directPayments, directQuery,
+		ReadyPaymentStatus, RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("getting direct payments: %w", err)
+	}
+
+	allPayments := make([]*Payment, 0, len(disbursementPayments)+len(directPayments))
+	allPayments = append(allPayments, disbursementPayments...)
+	allPayments = append(allPayments, directPayments...)
+
+	// Apply the batch size limit after combining
+	// we can enhance this feature to make 70%/30% disbursment/direct payments processing if needed instead of straightforward limiting
+	if len(allPayments) > batchSize {
+		allPayments = allPayments[:batchSize]
+	}
+
+	return allPayments, nil
 }
 
 // Count returns the number of payments matching the given query parameters.
@@ -410,11 +443,21 @@ func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.
 }
 
 func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs ...string) ([]*Payment, error) {
-	query := getReadyPaymentsBaseQuery + "AND p.id = ANY($4) ORDER BY p.updated_at ASC"
+	query := basePaymentQuery + `
+        WHERE
+            p.id = ANY($1)
+            AND p.status = $2 -- 'READY'::payment_status
+            AND rw.status = $3 -- 'REGISTERED'::receiver_wallet_status
+            AND (
+                (p.payment_type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
+                OR 
+                (p.payment_type = 'DIRECT')
+            )
+        ORDER BY p.updated_at ASC`
 
 	var payments []*Payment
-	args := append(getReadyPaymentsBaseArgs, pq.Array(paymentIDs))
-	err := sqlExec.SelectContext(ctx, &payments, query, args...)
+	err := sqlExec.SelectContext(ctx, &payments, query,
+		pq.Array(paymentIDs), ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus)
 	if err != nil {
 		return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
 	}
@@ -423,11 +466,20 @@ func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter,
 }
 
 func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) ([]*Payment, error) {
-	query := getReadyPaymentsBaseQuery + "AND rw.id = $4"
+	query := basePaymentQuery + `
+        WHERE
+            rw.id = $1
+            AND p.status = $2 -- 'READY'::payment_status
+            AND rw.status = $3 -- 'REGISTERED'::receiver_wallet_status
+            AND (
+                (p.payment_type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
+                OR 
+                (p.payment_type = 'DIRECT')
+            )`
 
 	var payments []*Payment
-	args := append(getReadyPaymentsBaseArgs, receiverWalletID)
-	err := sqlExec.SelectContext(ctx, &payments, query, args...)
+	err := sqlExec.SelectContext(ctx, &payments, query,
+		receiverWalletID, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus)
 	if err != nil {
 		return nil, fmt.Errorf("getting ready payments by receiver wallet ID %s: %w", receiverWalletID, err)
 	}
@@ -737,15 +789,14 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
             amount,
             asset_id,
             receiver_id,
-            disbursement_id,
-			receiver_wallet_id,
+            receiver_wallet_id,
             external_payment_id,
             payment_type,
             status,
             status_history
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8,
-            ARRAY[create_payment_status_history(NOW(), $8::payment_status, NULL)]
+            $1, $2, $3, $4, $5, $6, $7,
+            ARRAY[create_payment_status_history(NOW(), $7::payment_status, NULL)]
         )
         RETURNING id
     `
@@ -755,7 +806,6 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 		insert.Amount,
 		insert.AssetID,
 		insert.ReceiverID,
-		insert.DisbursementID, // Will be NULL
 		insert.ReceiverWalletID,
 		insert.ExternalPaymentID,
 		insert.PaymentType,

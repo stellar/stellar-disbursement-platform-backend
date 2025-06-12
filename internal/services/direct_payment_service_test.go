@@ -9,11 +9,16 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/protocols/horizon/base"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -21,26 +26,22 @@ import (
 
 func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 	t.Parallel()
-	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := context.Background()
 	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	// Create shared assets and wallets
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "BOLT", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
-	xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
-
+	usdc := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 	enabledWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Macragge Treasury", "https://macragge.com", "macragge.com", "macragge://")
 	disabledWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Calth Reserve", "https://calth.com", "calth.com", "calth://")
 
-	// Disable the wallet
 	_, err = dbConnectionPool.ExecContext(ctx, "UPDATE wallets SET enabled = false WHERE id = $1", disabledWallet.ID)
 	require.NoError(t, err)
 
-	// Associate asset with enabled wallet only
 	_, err = dbConnectionPool.ExecContext(ctx,
 		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
 		enabledWallet.ID, asset.ID)
@@ -48,291 +49,526 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 	user := &auth.User{ID: "user-guilliman", Email: "roboute@imperium.gov"}
 
-	tests := []struct {
-		name                string
-		setupTestData       func() (CreateDirectPaymentRequest, *data.Receiver) // Returns request and receiver for cleanup
-		distributionAccount *schema.TransactionAccount
-		setupMocks          func(*mocks.MockDistributionAccountService, *events.MockProducer)
-		assertResult        func(*testing.T, *data.Payment, error)
-	}{
-		{
-			name: "successful direct payment - receiver wallet exists and is registered",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-					Email: "marneus.calgar@macragge.imperium",
-				})
-				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.RegisteredReceiversWalletStatus)
+	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
+	stellarDistAccountDBVault := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
+	stellarDistAccountEnv := schema.NewStellarEnvTransactionAccount(distributionAccPubKey)
 
-				req := CreateDirectPaymentRequest{
-					Amount:            "100.00",
-					Asset:             AssetReference{ID: &asset.ID},
-					Receiver:          ReceiverReference{ID: &receiver.ID},
-					Wallet:            WalletReference{ID: &enabledWallet.ID},
-					ExternalPaymentID: testutils.StringPtr("ULTRAMAR-001"),
-				}
-				return req, receiver
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks: func(distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
-				distService.On("GetBalance", mock.Anything, mock.Anything, *asset).Return(float64(1000), nil)
-				eventProducer.On("WriteMessages", mock.Anything, mock.MatchedBy(func(msgs []events.Message) bool {
-					return len(msgs) == 1 && msgs[0].Topic == events.PaymentReadyToPayTopic
-				})).Return(nil)
-			},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.NoError(t, err)
-				assert.NotNil(t, payment)
-				assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
-				assert.Equal(t, "100.0000000", payment.Amount)
-				assert.Equal(t, "ULTRAMAR-001", payment.ExternalPaymentID)
-			},
-		},
-		{
-			name: "fails - wallet not enabled",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-					Email: "uriel.ventris@ultramar.imperium",
-				})
-
-				req := CreateDirectPaymentRequest{
-					Amount:   "100.00",
-					Asset:    AssetReference{ID: &asset.ID},
-					Receiver: ReceiverReference{ID: &receiver.ID},
-					Wallet:   WalletReference{ID: &disabledWallet.ID},
-				}
-				return req, receiver
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.Error(t, err)
-				err = unwrapTransactionError(err)
-				var walletErr WalletNotEnabledError
-				assert.True(t, errors.As(err, &walletErr))
-				assert.Contains(t, err.Error(), "Calth Reserve")
-			},
-		},
-		{
-			name: "fails - asset not supported by wallet",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-					Email: "cato.sicarius@ultramar.imperium",
-				})
-
-				req := CreateDirectPaymentRequest{
-					Amount:   "100.00",
-					Asset:    AssetReference{ID: &xlm.ID},
-					Receiver: ReceiverReference{ID: &receiver.ID},
-					Wallet:   WalletReference{ID: &enabledWallet.ID},
-				}
-				return req, receiver
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.Error(t, err)
-				err = unwrapTransactionError(err)
-				var assetErr AssetNotSupportedByWalletError
-				assert.True(t, errors.As(err, &assetErr))
-				assert.Contains(t, err.Error(), "XLM")
-				assert.Contains(t, err.Error(), "Macragge Treasury")
-			},
-		},
-		{
-			name: "fails - insufficient balance",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-					Email: "titus.grael@ultramar.imperium",
-				})
-				data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.RegisteredReceiversWalletStatus)
-
-				req := CreateDirectPaymentRequest{
-					Amount:   "1000.00",
-					Asset:    AssetReference{ID: &asset.ID},
-					Receiver: ReceiverReference{ID: &receiver.ID},
-					Wallet:   WalletReference{ID: &enabledWallet.ID},
-				}
-				return req, receiver
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks: func(distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
-				distService.On("GetBalance", mock.Anything, mock.Anything, *asset).Return(float64(100), nil)
-			},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.Error(t, err)
-				err = unwrapTransactionError(err)
-				var balanceErr InsufficientBalanceForDirectPaymentError
-				assert.True(t, errors.As(err, &balanceErr))
-				assert.Contains(t, err.Error(), "insufficient balance")
-				assert.Contains(t, err.Error(), "1000.00")
-				assert.Contains(t, err.Error(), "100.00 available")
-			},
-		},
-		{
-			name: "fails - invalid asset reference",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-					Email: "cassius.felix@ultramar.imperium",
-				})
-
-				req := CreateDirectPaymentRequest{
-					Amount:   "100.00",
-					Asset:    AssetReference{}, // Empty reference
-					Receiver: ReceiverReference{ID: &receiver.ID},
-					Wallet:   WalletReference{ID: &enabledWallet.ID},
-				}
-				return req, receiver
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.Error(t, err)
-				err = unwrapTransactionError(err)
-				var validationErr ValidationError
-				assert.True(t, errors.As(err, &validationErr))
-				assert.Equal(t, EntityTypeAsset, validationErr.EntityType)
-				assert.Equal(t, FieldReference, validationErr.Field)
-				assert.Contains(t, validationErr.Message, "must be specified by id or type")
-			},
-		},
-		{
-			name: "fails - non-existent receiver",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				req := CreateDirectPaymentRequest{
-					Amount:   "100.00",
-					Asset:    AssetReference{ID: &asset.ID},
-					Receiver: ReceiverReference{ID: testutils.StringPtr("chaos-marine-001")},
-					Wallet:   WalletReference{ID: &enabledWallet.ID},
-				}
-				return req, nil // No receiver to clean up
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.Error(t, err)
-				err = unwrapTransactionError(err)
-				var notFoundErr NotFoundError
-				assert.True(t, errors.As(err, &notFoundErr))
-				assert.Equal(t, EntityTypeReceiver, notFoundErr.EntityType)
-				assert.Equal(t, "chaos-marine-001", notFoundErr.Reference)
-			},
-		},
-		{
-			name: "user-managed wallet - skips balance validation",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-					Email: "varro.tigurius@ultramar.imperium",
-				})
-
-				// Create user-managed wallet
-				userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Wallet", "stellar.org", "stellar.org", "stellar://")
-				data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
-
-				// Create receiver wallet with specific address
-				rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, userManagedWallet.ID, data.RegisteredReceiversWalletStatus)
-
-				// Update with the specific stellar address
-				stellarAddress := "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON"
-				err := models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{
-					StellarAddress: stellarAddress,
-				}, dbConnectionPool)
-				require.NoError(t, err)
-
-				req := CreateDirectPaymentRequest{
-					Amount:   "10000.00",
-					Asset:    AssetReference{ID: &asset.ID},
-					Receiver: ReceiverReference{ID: &receiver.ID},
-					Wallet:   WalletReference{Address: &stellarAddress},
-				}
-				return req, receiver
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv},
-			setupMocks: func(distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {
-				eventProducer.On("WriteMessages", mock.Anything, mock.Anything).Return(nil)
-			},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.NoError(t, err)
-				assert.NotNil(t, payment)
-				assert.Equal(t, "10000.0000000", payment.Amount)
-				assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
-			},
-		},
-		{
-			name: "fails - receiver wallet not found",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-					Email: "severus.agemman@ultramar.imperium",
-				})
-				// Note: NOT creating a receiver wallet
-
-				req := CreateDirectPaymentRequest{
-					Amount:   "100.00",
-					Asset:    AssetReference{ID: &asset.ID},
-					Receiver: ReceiverReference{ID: &receiver.ID},
-					Wallet:   WalletReference{ID: &enabledWallet.ID},
-				}
-				return req, receiver
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks:          func(distService *mocks.MockDistributionAccountService, eventProducer *events.MockProducer) {},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "receiver wallet not found")
-				assert.Contains(t, err.Error(), "receiver must be registered with this wallet")
-			},
-		},
-		{
-			name: "fails - receiver by email not found",
-			setupTestData: func() (CreateDirectPaymentRequest, *data.Receiver) {
-				req := CreateDirectPaymentRequest{
-					Amount:   "100.00",
-					Asset:    AssetReference{ID: &asset.ID},
-					Receiver: ReceiverReference{Email: testutils.StringPtr("chaos@warp.void")},
-					Wallet:   WalletReference{ID: &enabledWallet.ID},
-				}
-				return req, nil // No receiver to clean up
-			},
-			distributionAccount: &schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault},
-			setupMocks:          func(*mocks.MockDistributionAccountService, *events.MockProducer) {},
-			assertResult: func(t *testing.T, payment *data.Payment, err error) {
-				require.Error(t, err)
-				err = unwrapTransactionError(err)
-				var notFoundErr NotFoundError
-				assert.True(t, errors.As(err, &notFoundErr))
-				assert.Equal(t, EntityTypeReceiver, notFoundErr.EntityType)
-				assert.Contains(t, notFoundErr.Message, "no receiver found with contact info")
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			req, receiver := tc.setupTestData()
-
-			t.Cleanup(func() {
-				data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-				if receiver != nil {
-					data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-				}
-			})
-
-			service := NewDirectPaymentService(models, nil, nil)
-
-			mockDistService := &mocks.MockDistributionAccountService{}
-			mockEventProducer := events.NewMockProducer(t)
-
-			service.DistributionAccountService = mockDistService
-			service.EventProducer = mockEventProducer
-
-			tc.setupMocks(mockDistService, mockEventProducer)
-
-			payment, err := service.CreateDirectPayment(ctx, req, user, tc.distributionAccount)
-			tc.assertResult(t, payment, err)
-
-			mockDistService.AssertExpectations(t)
-			mockEventProducer.AssertExpectations(t)
+	t.Run("successful direct payment with registered receiver wallet", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "marneus.calgar@macragge.imperium",
+		})
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.RegisteredReceiversWalletStatus)
+
+		req := CreateDirectPaymentRequest{
+			Amount:            "100.00",
+			Asset:             AssetReference{ID: &asset.ID},
+			Receiver:          ReceiverReference{ID: &receiver.ID},
+			Wallet:            WalletReference{ID: &enabledWallet.ID},
+			ExternalPaymentID: testutils.StringPtr("ULTRAMAR-001"),
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: distributionAccPubKey,
+		}).Return(horizon.Account{
+			AccountID: distributionAccPubKey,
+			Sequence:  123,
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(1000), nil)
+
+		mockEventProducer.On("WriteMessages", mock.Anything, mock.MatchedBy(func(msgs []events.Message) bool {
+			if len(msgs) != 1 {
+				return false
+			}
+			msg := msgs[0]
+			return msg.Topic == events.PaymentReadyToPayTopic &&
+				msg.Type == events.PaymentReadyToPayDirectPayment
+		})).Return(nil)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.NoError(t, err)
+		assert.NotNil(t, payment)
+		assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
+		assert.Equal(t, "100.0000000", payment.Amount)
+		assert.Equal(t, "ULTRAMAR-001", payment.ExternalPaymentID)
+		assert.Nil(t, payment.Disbursement)
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails when wallet is not enabled", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "uriel.ventris@ultramar.imperium",
+		})
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "100.00",
+			Asset:    AssetReference{ID: &asset.ID},
+			Receiver: ReceiverReference{ID: &receiver.ID},
+			Wallet:   WalletReference{ID: &disabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var walletErr WalletNotEnabledError
+		assert.True(t, errors.As(err, &walletErr))
+		assert.Contains(t, err.Error(), "Calth Reserve")
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails when asset is not supported by wallet", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "cato.sicarius@ultramar.imperium",
+		})
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "100.00",
+			Asset:    AssetReference{ID: &usdc.ID}, // USDC not associated with enabled wallet
+			Receiver: ReceiverReference{ID: &receiver.ID},
+			Wallet:   WalletReference{ID: &enabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var assetErr AssetNotSupportedByWalletError
+		assert.True(t, errors.As(err, &assetErr))
+		assert.Contains(t, err.Error(), "USDC")
+		assert.Contains(t, err.Error(), enabledWallet.Name)
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails when balance is insufficient", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "titus.grael@ultramar.imperium",
+		})
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.RegisteredReceiversWalletStatus)
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "1000.00", // More than available balance
+			Asset:    AssetReference{ID: &asset.ID},
+			Receiver: ReceiverReference{ID: &receiver.ID},
+			Wallet:   WalletReference{ID: &enabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: distributionAccPubKey,
+		}).Return(horizon.Account{
+			AccountID: distributionAccPubKey,
+			Sequence:  123,
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(100), nil)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var balanceErr InsufficientBalanceForDirectPaymentError
+		assert.True(t, errors.As(err, &balanceErr))
+		assert.Contains(t, err.Error(), "insufficient balance")
+		assert.Contains(t, err.Error(), "1000.00")
+		assert.Contains(t, err.Error(), "100.00 available")
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails with invalid asset reference", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "cassius.felix@ultramar.imperium",
+		})
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "100.00",
+			Asset:    AssetReference{}, // Empty reference - invalid
+			Receiver: ReceiverReference{ID: &receiver.ID},
+			Wallet:   WalletReference{ID: &enabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var validationErr ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+		assert.Equal(t, EntityTypeAsset, validationErr.EntityType)
+		assert.Equal(t, FieldReference, validationErr.Field)
+		assert.Contains(t, validationErr.Message, "must be specified by id or type")
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails when receiver does not exist", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "100.00",
+			Asset:    AssetReference{ID: &asset.ID},
+			Receiver: ReceiverReference{ID: testutils.StringPtr("chaos-marine-001")}, // Non-existent receiver
+			Wallet:   WalletReference{ID: &enabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var notFoundErr NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+		assert.Equal(t, EntityTypeReceiver, notFoundErr.EntityType)
+		assert.Equal(t, "chaos-marine-001", notFoundErr.Reference)
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("user-managed wallet skips certain validations", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "varro.tigurius@ultramar.imperium",
+		})
+
+		userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Wallet", "stellar.org", "stellar.org", "stellar://")
+		data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
+
+		_, err := dbConnectionPool.ExecContext(ctx,
+			"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
+			userManagedWallet.ID, asset.ID)
+		require.NoError(t, err)
+
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, userManagedWallet.ID, data.RegisteredReceiversWalletStatus)
+
+		stellarAddress := "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON"
+		err = models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}, dbConnectionPool)
+		require.NoError(t, err)
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "10000.00", // Large amount to test balance validation
+			Asset:    AssetReference{ID: &asset.ID},
+			Receiver: ReceiverReference{ID: &receiver.ID},
+			Wallet:   WalletReference{Address: &stellarAddress},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: distributionAccPubKey,
+		}).Return(horizon.Account{
+			AccountID: distributionAccPubKey,
+			Sequence:  123,
+			Balances: []horizon.Balance{
+				{
+					Balance: "100000000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountEnv, *asset).Return(float64(50000), nil)
+
+		mockEventProducer.On("WriteMessages", mock.Anything, mock.MatchedBy(func(msgs []events.Message) bool {
+			if len(msgs) != 1 {
+				return false
+			}
+			msg := msgs[0]
+			return msg.Topic == events.PaymentReadyToPayTopic &&
+				msg.Type == events.PaymentReadyToPayDirectPayment
+		})).Return(nil)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountEnv)
+
+		require.NoError(t, err)
+		assert.NotNil(t, payment)
+		assert.Equal(t, "10000.0000000", payment.Amount)
+		assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails when receiver wallet does not exist", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "severus.agemman@ultramar.imperium",
+		})
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "100.00",
+			Asset:    AssetReference{ID: &asset.ID},
+			Receiver: ReceiverReference{ID: &receiver.ID},
+			Wallet:   WalletReference{ID: &enabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var rwErr *ErrReceiverWalletNotFound
+		assert.True(t, errors.As(err, &rwErr))
+		assert.Contains(t, err.Error(), "no receiver wallet")
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails when receiver by email is not found", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "100.00",
+			Asset:    AssetReference{ID: &asset.ID},
+			Receiver: ReceiverReference{Email: testutils.StringPtr("chaos@warp.void")}, // Non-existent email
+			Wallet:   WalletReference{ID: &enabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var notFoundErr NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+		assert.Equal(t, EntityTypeReceiver, notFoundErr.EntityType)
+		assert.Contains(t, notFoundErr.Message, "no receiver found with contact info")
+
+		mockDistService.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+		horizonClientMock.AssertExpectations(t)
+	})
+}
+
+func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
+	t.Parallel()
+
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	ctx := context.Background()
+	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+
+	t.Cleanup(func() {
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+	})
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURC", "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Test Wallet", "https://testdomain.com", "testdomain.com", "test://")
+
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
+		wallet.ID, asset.ID)
+	require.NoError(t, err)
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email: "perturabo@iron.warriors",
+	})
+	data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	user := &auth.User{ID: "user-dorn", Email: "rogal@imperial.fists"}
+
+	circleDistAccount := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-fortify",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
 	}
+
+	req := CreateDirectPaymentRequest{
+		Amount:            "500.00",
+		Asset:             AssetReference{ID: &asset.ID},
+		Receiver:          ReceiverReference{ID: &receiver.ID},
+		Wallet:            WalletReference{ID: &wallet.ID},
+		ExternalPaymentID: testutils.StringPtr("SIEGE-IRON-001"),
+	}
+
+	mockDistService := &mocks.MockDistributionAccountService{}
+	mockEventProducer := events.NewMockProducer(t)
+	horizonClientMock := &horizonclient.MockClient{}
+
+	mockDistService.On("GetBalance", mock.Anything, &circleDistAccount, *asset).Return(float64(1000), nil)
+
+	mockEventProducer.On("WriteMessages", mock.Anything, mock.MatchedBy(func(msgs []events.Message) bool {
+		if len(msgs) != 1 {
+			return false
+		}
+		msg := msgs[0]
+		return msg.Topic == events.CirclePaymentReadyToPayTopic &&
+			msg.Type == events.PaymentReadyToPayDirectPayment
+	})).Return(nil)
+
+	service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		HorizonClient: horizonClientMock,
+	})
+
+	payment, err := service.CreateDirectPayment(ctx, req, user, &circleDistAccount)
+
+	require.NoError(t, err)
+	assert.NotNil(t, payment)
+	assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
+	assert.Equal(t, "500.0000000", payment.Amount)
+	assert.Equal(t, "SIEGE-IRON-001", payment.ExternalPaymentID)
+	assert.Nil(t, payment.Disbursement)
+
+	mockDistService.AssertExpectations(t)
+	mockEventProducer.AssertExpectations(t)
+	horizonClientMock.AssertExpectations(t)
 }
 
 func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
@@ -354,7 +590,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
-	service := NewDirectPaymentService(models, nil, nil)
+	service := NewDirectPaymentService(models, nil, nil, engine.SubmitterEngine{})
 
 	type payment struct {
 		asset  *data.Asset
@@ -484,7 +720,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 		Type: schema.DistributionAccountStellarDBVault,
 	}
 
-	service := NewDirectPaymentService(models, nil, nil)
+	service := NewDirectPaymentService(models, nil, nil, engine.SubmitterEngine{})
 
 	mockDistService := &mocks.MockDistributionAccountService{}
 	mockDistService.On("GetBalance", mock.Anything, distributionAccount, *asset).Return(100.0, nil)

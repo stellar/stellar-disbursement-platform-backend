@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -344,15 +343,36 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var req services.CreateDirectPaymentRequest
+	var req validators.CreateDirectPaymentRequest
 	if err := httpdecode.DecodeJSON(r, &req); err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)
 		return
 	}
 
-	if err := utils.ValidateAmount(req.Amount); err != nil {
-		httperror.BadRequest("invalid amount", err, nil).Render(w)
+	validator := validators.NewDirectPaymentValidator()
+	validatedReq := validator.ValidateCreateDirectPaymentRequest(&req)
+	if validator.HasErrors() {
+		httperror.BadRequest("request invalid", nil, validator.Errors).Render(w)
 		return
+	}
+
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
+	if !ok {
+		httperror.Unauthorized("", nil, nil).Render(w)
+		return
+	}
+	user, err := p.AuthManager.GetUserByID(ctx, userID)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
+		return
+	}
+
+	serviceReq := services.CreateDirectPaymentRequest{
+		Amount:            validatedReq.Amount,
+		Asset:             convertAssetReference(validatedReq.Asset),
+		Receiver:          convertReceiverReference(validatedReq.Receiver),
+		Wallet:            convertWalletReference(validatedReq.Wallet),
+		ExternalPaymentID: validatedReq.ExternalPaymentID,
 	}
 
 	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
@@ -361,57 +381,85 @@ func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: remove and use GetUserByID when api keys PR will be merged
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		httperror.Unauthorized("", nil, nil).Render(w)
-		return
-	}
-	user, err := p.AuthManager.GetUser(ctx, token)
+	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, serviceReq, user, &distAccount)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
-		return
-	}
+		var (
+			validationErr        services.ValidationError
+			notFoundErr          services.NotFoundError
+			unsupportedErr       services.UnsupportedError
+			ambiguousErr         services.AmbiguousReferenceError
+			insufficientFundsErr services.InsufficientBalanceForDirectPaymentError
+			walletDisabledErr    services.WalletNotEnabledError
+			assetNotSupportedErr services.AssetNotSupportedByWalletError
+			recvErr              services.ErrReceiverWalletNotFound
+			trustErr             services.TrustlineNotFoundError
+			accErr               services.AccountNotFoundError
+			circleAccErr         services.CircleAccountNotActivatedError
+			circleAssetErr       services.CircleAssetNotSupportedError
+		)
 
-	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, req, user, &distAccount)
-	if err != nil {
-		// Unwrap transaction errors to check for specific error types
-		errToMatch := errors.Unwrap(err)
-		if errToMatch == nil {
-			errToMatch = err
-		}
-
-		switch e := errToMatch.(type) {
-		case services.ValidationError:
-			httperror.BadRequest("invalid reference in request", err, nil).Render(w)
-
-		case services.NotFoundError:
-			httperror.NotFound("resource not found", err, nil).Render(w)
-
-		case services.UnsupportedError:
-			httperror.BadRequest(e.Error(), err, nil).Render(w)
-
-		case services.AmbiguousReferenceError:
-			httperror.BadRequest("ambiguous reference in request", err, nil).Render(w)
-
-		case services.InsufficientBalanceForDirectPaymentError:
-			log.Ctx(ctx).Error(e)
-			httperror.BadRequest(e.Error(), err, nil).Render(w)
-
-		case services.WalletNotEnabledError, services.AssetNotSupportedByWalletError:
-			httperror.BadRequest(e.Error(), err, nil).Render(w)
-
+		switch {
+		case errors.As(err, &validationErr):
+			httperror.BadRequest(validationErr.Error(), err, nil).Render(w)
+		case errors.As(err, &notFoundErr):
+			httperror.NotFound(notFoundErr.Error(), err, nil).Render(w)
+		case errors.As(err, &unsupportedErr):
+			httperror.BadRequest(unsupportedErr.Error(), err, nil).Render(w)
+		case errors.As(err, &ambiguousErr):
+			httperror.BadRequest(ambiguousErr.Error(), err, nil).Render(w)
+		case errors.As(err, &insufficientFundsErr):
+			log.Ctx(ctx).Error(insufficientFundsErr)
+			httperror.BadRequest(insufficientFundsErr.Error(), err, nil).Render(w)
+		case errors.As(err, &walletDisabledErr):
+			httperror.BadRequest(walletDisabledErr.Error(), err, nil).Render(w)
+		case errors.As(err, &assetNotSupportedErr):
+			httperror.BadRequest(assetNotSupportedErr.Error(), err, nil).Render(w)
+		case errors.As(err, &recvErr):
+			httperror.BadRequest(err.Error(), err, nil).Render(w)
+		case errors.As(err, &trustErr):
+			errorMsg := fmt.Sprintf("%s. Please add a trustline for this asset to your distribution account, or choose a different asset that already has a trustline.", err.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		case errors.As(err, &circleAccErr):
+			errorMsg := fmt.Sprintf("%s. Please complete the Circle account activation process...", err.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		case errors.As(err, &circleAssetErr):
+			errorMsg := fmt.Sprintf("%s. Please choose a different asset supported by Circle...", err.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		case errors.As(err, &accErr):
+			errorMsg := fmt.Sprintf("%s. Please ensure your distribution account exists and is funded on the Stellar network.", err.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
 		default:
-			if strings.Contains(err.Error(), "receiver wallet not found") {
-				httperror.BadRequest(
-					"receiver must be registered with this wallet", err, nil,
-				).Render(w)
-			} else {
-				httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
-			}
+			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
 		}
+
 		return
 	}
 
 	httpjson.RenderStatus(w, http.StatusCreated, payment, httpjson.JSON)
+}
+
+func convertAssetReference(asset validators.DirectPaymentAsset) services.AssetReference {
+	return services.AssetReference{
+		ID:         asset.ID,
+		Type:       asset.Type,
+		Code:       asset.Code,
+		Issuer:     asset.Issuer,
+		ContractID: asset.ContractID,
+	}
+}
+
+func convertReceiverReference(receiver validators.DirectPaymentReceiver) services.ReceiverReference {
+	return services.ReceiverReference{
+		ID:            receiver.ID,
+		Email:         receiver.Email,
+		PhoneNumber:   receiver.PhoneNumber,
+		WalletAddress: receiver.WalletAddress,
+	}
+}
+
+func convertWalletReference(wallet validators.DirectPaymentWallet) services.WalletReference {
+	return services.WalletReference{
+		ID:      wallet.ID,
+		Address: wallet.Address,
+	}
 }

@@ -1769,6 +1769,7 @@ func Test_PaymentModel_GetBatchForUpdate(t *testing.T) {
 	})
 }
 
+
 func Test_PaymentModel_UpdateStatus(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
