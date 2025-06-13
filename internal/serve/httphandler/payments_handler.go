@@ -340,7 +340,7 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
 
-func (p PaymentsHandler) PostPayment(w http.ResponseWriter, r *http.Request) {
+func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req validators.CreateDirectPaymentRequest

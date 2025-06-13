@@ -352,7 +352,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.RequirePermission(
 				data.WritePayments,
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
-			)).Patch("/retry", paymentsHandler.RetryPayments)
+			)).Group(func(r chi.Router) {
+				r.Post("/", paymentsHandler.PostDirectPayment)
+				r.Patch("/retry", paymentsHandler.RetryPayments)
+			})
 
 			r.With(middleware.RequirePermission(
 				data.WritePayments,

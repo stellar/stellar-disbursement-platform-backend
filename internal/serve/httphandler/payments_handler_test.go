@@ -1853,7 +1853,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
@@ -1918,7 +1918,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
 		assert.JSONEq(t, `{"error": "resolving distribution account"}`, rr.Body.String())
@@ -1968,7 +1968,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 		assert.JSONEq(t, `{"error": "asset not found with reference: non-existent-asset"}`, rr.Body.String())
@@ -2057,7 +2057,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "insufficient balance for direct payment")
@@ -2120,7 +2120,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		errMsg := fmt.Sprintf(`{"error": "wallet '%s' is not enabled for payments"}`, wallet.Name)
@@ -2224,7 +2224,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
@@ -2288,7 +2288,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		errMsg := fmt.Sprintf(`{"error":"asset '%s' is not supported by wallet '%s'"}`, asset.Code, wallet.Name)
@@ -2480,7 +2480,7 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			rr := httptest.NewRecorder()
-			handler.PostPayment(rr, req)
+			handler.PostDirectPayment(rr, req)
 
 			assert.Equal(t, tc.expectedStatus, rr.Code)
 			assert.JSONEq(t, tc.expectedError, rr.Body.String())
