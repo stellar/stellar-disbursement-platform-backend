@@ -218,9 +218,14 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 	`
 
 	payments := make([]Payment, 0)
-	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus); err != nil {
 		return nil, fmt.Errorf("getting payments: %w", err)
+	}
+
+	for i := range payments {
+		if payments[i].PaymentType == PaymentTypeDirect {
+			payments[i].Disbursement = nil
+		}
 	}
 
 	return payments, nil
@@ -292,6 +297,8 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
 		allPayments = allPayments[:batchSize]
 	}
 
+	removeEmptyDisbursementForDirect(allPayments)
+
 	return allPayments, nil
 }
 
@@ -325,9 +332,14 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 
 	query, params := newPaymentQuery(basePaymentQuery, queryParams, sqlExec, queryType)
 
-	err := sqlExec.SelectContext(ctx, &payments, query, params...)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query, params...); err != nil {
 		return nil, fmt.Errorf("selecting payments: %w", err)
+	}
+
+	for i := range payments {
+		if payments[i].PaymentType == PaymentTypeDirect {
+			payments[i].Disbursement = nil
+		}
 	}
 
 	return payments, nil
@@ -434,11 +446,11 @@ func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.
 
 	var payments []*Payment
 	args := append(getReadyPaymentsBaseArgs, disbursementID)
-	err := sqlExec.SelectContext(ctx, &payments, query, args...)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query, args...); err != nil {
 		return nil, fmt.Errorf("getting ready payments for disbursement ID %s: %w", disbursementID, err)
 	}
 
+	removeEmptyDisbursementForDirect(payments)
 	return payments, nil
 }
 
@@ -456,11 +468,12 @@ func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter,
         ORDER BY p.updated_at ASC`
 
 	var payments []*Payment
-	err := sqlExec.SelectContext(ctx, &payments, query,
-		pq.Array(paymentIDs), ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query,
+		pq.Array(paymentIDs), ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus); err != nil {
 		return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
 	}
+
+	removeEmptyDisbursementForDirect(payments)
 
 	return payments, nil
 }
@@ -478,11 +491,12 @@ func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec d
             )`
 
 	var payments []*Payment
-	err := sqlExec.SelectContext(ctx, &payments, query,
-		receiverWalletID, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query,
+		receiverWalletID, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus); err != nil {
 		return nil, fmt.Errorf("getting ready payments by receiver wallet ID %s: %w", receiverWalletID, err)
 	}
+
+	removeEmptyDisbursementForDirect(payments)
 
 	return payments, nil
 }
@@ -814,4 +828,12 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 	}
 
 	return paymentID, nil
+}
+
+func removeEmptyDisbursementForDirect(payments []*Payment) {
+	for i := range payments {
+		if payments[i].PaymentType == PaymentTypeDirect {
+			payments[i].Disbursement = nil
+		}
+	}
 }

@@ -201,9 +201,6 @@ func (s *DirectPaymentService) CreateDirectPayment(
 				return nil, fmt.Errorf("getting created payment: %w", err)
 			}
 
-			// disbursment is an empty struct for the direct payments, set it to nil
-			payment.Disbursement = nil
-
 			// 8. Prepare post-commit events (same as before)
 			msgs := make([]*events.Message, 0)
 
