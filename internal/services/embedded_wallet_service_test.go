@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
@@ -21,7 +22,9 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	ctx := context.Background()
+	defaultTenantID := "test-tenant-id"
+	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: defaultTenantID})
+
 	sdpModels, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	tssModel := store.NewTransactionModel(dbConnectionPool)
@@ -29,16 +32,15 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 
 	service := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
 
-	defaultTenantID := "test-tenant-id"
 	defaultPublicKey := "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
 
 	t.Run("successfully creates a wallet TSS transaction", func(t *testing.T) {
-		defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
-		err := service.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
+		err := service.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
 		require.NoError(t, err)
 
 		updatedWallet, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, walletIDForTest)
@@ -61,19 +63,19 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	})
 
 	t.Run("returns error if token (walletID) is empty", func(t *testing.T) {
-		err := service.CreateWallet(ctx, defaultTenantID, "", defaultPublicKey)
+		err := service.CreateWallet(ctx, "", defaultPublicKey)
 		assert.EqualError(t, err, "token is required")
 	})
 
 	t.Run("returns error if publicKey is empty", func(t *testing.T) {
-		err := service.CreateWallet(ctx, defaultTenantID, "123", "")
+		err := service.CreateWallet(ctx, "123", "")
 		assert.EqualError(t, err, "public key is required")
 	})
 
 	t.Run("returns error if GetByToken fails (wallet not found)", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 		nonExistentToken := "non-existent-token"
-		err := service.CreateWallet(ctx, defaultTenantID, nonExistentToken, defaultPublicKey)
+		err := service.CreateWallet(ctx, nonExistentToken, defaultPublicKey)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidToken)
 		assert.Contains(t, err.Error(), "transaction execution error: token does not exist")
@@ -85,7 +87,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
-		err := service.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
+		err := service.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrCreateWalletInvalidStatus)
 		assert.Contains(t, err.Error(), "transaction execution error: wallet status is not pending for token")
@@ -99,7 +101,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
-		err := invalidService.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
+		err := invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "creating wallet transaction in TSS")
 
@@ -117,7 +119,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
-		err := invalidService.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
+		err := invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "transaction execution error: wallet status is not pending for token")
 
@@ -135,21 +137,22 @@ func Test_EmbeddedWalletService_GetWallet(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	ctx := context.Background()
+	defaultTenantID := "test-tenant-id"
+	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: defaultTenantID})
+
 	sdpModels, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	tssModel := store.NewTransactionModel(dbConnectionPool)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
 	service := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
-	defaultTenantID := "test-tenant-id"
 
 	t.Run("successfully gets a wallet", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", data.SuccessWalletStatus)
 
-		retrievedWallet, err := service.GetWallet(ctx, defaultTenantID, expectedWallet.Token)
+		retrievedWallet, err := service.GetWallet(ctx, expectedWallet.Token)
 		require.NoError(t, err)
 		require.NotNil(t, retrievedWallet)
 
@@ -162,14 +165,14 @@ func Test_EmbeddedWalletService_GetWallet(t *testing.T) {
 	})
 
 	t.Run("returns error if token (walletID) is empty", func(t *testing.T) {
-		_, err := service.GetWallet(ctx, defaultTenantID, "")
+		_, err := service.GetWallet(ctx, "")
 		assert.EqualError(t, err, "token is required")
 	})
 
 	t.Run("returns error if GetByToken fails (wallet not found)", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 		nonExistentToken := "non-existent-token"
-		_, err := service.GetWallet(ctx, defaultTenantID, nonExistentToken)
+		_, err := service.GetWallet(ctx, nonExistentToken)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidToken)
 		assert.Contains(t, err.Error(), "token does not exist")

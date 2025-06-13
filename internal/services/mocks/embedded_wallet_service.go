@@ -14,17 +14,17 @@ type MockEmbeddedWalletService struct {
 	mock.Mock
 }
 
-// CreateWallet provides a mock function with given fields: ctx, tenantID, token, publicKey
-func (_m *MockEmbeddedWalletService) CreateWallet(ctx context.Context, tenantID string, token string, publicKey string) error {
-	ret := _m.Called(ctx, tenantID, token, publicKey)
+// CreateWallet provides a mock function with given fields: ctx, token, publicKey
+func (_m *MockEmbeddedWalletService) CreateWallet(ctx context.Context, token string, publicKey string) error {
+	ret := _m.Called(ctx, token, publicKey)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateWallet")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
-		r0 = rf(ctx, tenantID, token, publicKey)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, token, publicKey)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -32,9 +32,9 @@ func (_m *MockEmbeddedWalletService) CreateWallet(ctx context.Context, tenantID 
 	return r0
 }
 
-// GetWallet provides a mock function with given fields: ctx, tenantID, token
-func (_m *MockEmbeddedWalletService) GetWallet(ctx context.Context, tenantID string, token string) (*data.EmbeddedWallet, error) {
-	ret := _m.Called(ctx, tenantID, token)
+// GetWallet provides a mock function with given fields: ctx, token
+func (_m *MockEmbeddedWalletService) GetWallet(ctx context.Context, token string) (*data.EmbeddedWallet, error) {
+	ret := _m.Called(ctx, token)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetWallet")
@@ -42,19 +42,19 @@ func (_m *MockEmbeddedWalletService) GetWallet(ctx context.Context, tenantID str
 
 	var r0 *data.EmbeddedWallet
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) (*data.EmbeddedWallet, error)); ok {
-		return rf(ctx, tenantID, token)
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*data.EmbeddedWallet, error)); ok {
+		return rf(ctx, token)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) *data.EmbeddedWallet); ok {
-		r0 = rf(ctx, tenantID, token)
+	if rf, ok := ret.Get(0).(func(context.Context, string) *data.EmbeddedWallet); ok {
+		r0 = rf(ctx, token)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*data.EmbeddedWallet)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = rf(ctx, tenantID, token)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, token)
 	} else {
 		r1 = ret.Error(1)
 	}

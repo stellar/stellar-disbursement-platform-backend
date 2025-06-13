@@ -72,7 +72,7 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 func (ew *EmbeddedWalletModel) GetByToken(ctx context.Context, sqlExec db.SQLExecuter, token string) (*EmbeddedWallet, error) {
 	query := fmt.Sprintf(`
         SELECT
-            %s  -- NO COMMA HERE
+            %s
         FROM embedded_wallets ew
         WHERE
             ew.token = $1
