@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_WalletCreationHandler_CreateWallet(t *testing.T) {
@@ -29,13 +28,9 @@ func Test_WalletCreationHandler_CreateWallet(t *testing.T) {
 		Token:     "123",
 		PublicKey: "04f5",
 	})
-
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
-	walletService.On("CreateWallet", ctx, "test-tenant-id", "123", "04f5").Return(nil)
+	walletService.On("CreateWallet", ctx, "123", "04f5").Return(nil)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -114,13 +109,9 @@ func Test_WalletCreationHandler_CreateWallet_InternalError(t *testing.T) {
 		Token:     "123",
 		PublicKey: "04f5",
 	})
-
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
-	walletService.On("CreateWallet", ctx, "test-tenant-id", "123", "04f5").Return(errors.New("foobar"))
+	walletService.On("CreateWallet", ctx, "123", "04f5").Return(errors.New("foobar"))
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -139,13 +130,9 @@ func Test_WalletCreationHandler_CreateWallet_InvalidToken(t *testing.T) {
 		Token:     "123",
 		PublicKey: "04f5",
 	})
-
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
-	walletService.On("CreateWallet", ctx, "test-tenant-id", "123", "04f5").Return(services.ErrInvalidToken)
+	walletService.On("CreateWallet", ctx, "123", "04f5").Return(services.ErrInvalidToken)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -164,36 +151,14 @@ func Test_WalletCreationHandler_CreateWallet_InvalidStatus(t *testing.T) {
 		Token:     "123",
 		PublicKey: "04f5",
 	})
-
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
-	walletService.On("CreateWallet", ctx, "test-tenant-id", "123", "04f5").Return(services.ErrCreateWalletInvalidStatus)
+	walletService.On("CreateWallet", ctx, "123", "04f5").Return(services.ErrCreateWalletInvalidStatus)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
-}
-
-func Test_WalletCreationHandler_CreateWallet_MissingTenant(t *testing.T) {
-	walletService := mocks.NewMockEmbeddedWalletService(t)
-	handler := WalletCreationHandler{
-		EmbeddedWalletService: walletService,
-	}
-
-	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(CreateWalletRequest{
-		Token:     "123",
-		PublicKey: "04f5",
-	})
-
-	req, _ := http.NewRequest(http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
-	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
 }
 
 func Test_WalletCreationHandler_GetWallet(t *testing.T) {
@@ -203,11 +168,8 @@ func Test_WalletCreationHandler_GetWallet(t *testing.T) {
 	}
 	rr := httptest.NewRecorder()
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
-	walletService.On("GetWallet", ctx, "test-tenant-id", "123").Return(&data.EmbeddedWallet{
+	walletService.On("GetWallet", ctx, "123").Return(&data.EmbeddedWallet{
 		ContractAddress: "contract-address",
 		WalletStatus:    data.PendingWalletStatus,
 	}, nil)
@@ -232,9 +194,6 @@ func Test_WalletCreationHandler_GetWallet_MissingToken(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status", nil)
 	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
@@ -250,11 +209,8 @@ func Test_WalletCreationHandler_GetWallet_InvalidToken(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
-	walletService.On("GetWallet", ctx, "test-tenant-id", "123").Return(nil, services.ErrInvalidToken)
+	walletService.On("GetWallet", ctx, "123").Return(nil, services.ErrInvalidToken)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
 	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
@@ -270,27 +226,10 @@ func Test_WalletCreationHandler_GetWallet_InternalError(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{
-		ID: "test-tenant-id",
-	})
 
-	walletService.On("GetWallet", ctx, "test-tenant-id", "123").Return(nil, errors.New("foobar"))
+	walletService.On("GetWallet", ctx, "123").Return(nil, errors.New("foobar"))
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
-}
-
-func Test_WalletCreationHandler_GetWallet_MissingTenant(t *testing.T) {
-	walletService := mocks.NewMockEmbeddedWalletService(t)
-	handler := WalletCreationHandler{
-		EmbeddedWalletService: walletService,
-	}
-
-	rr := httptest.NewRecorder()
-
-	req, _ := http.NewRequest(http.MethodGet, "/embedded-wallet/status?token=123", nil)
 	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)

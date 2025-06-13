@@ -8,11 +8,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 var (
 	ErrCreateWalletInvalidStatus = fmt.Errorf("wallet status is not pending for token")
-	ErrGetWalletMismatchedTenant = fmt.Errorf("tenant ID does not match the wallet's tenant ID")
 	ErrInvalidToken              = fmt.Errorf("token does not exist")
 	ErrMissingToken              = fmt.Errorf("token is required")
 	ErrMissingPublicKey          = fmt.Errorf("public key is required")
@@ -21,9 +21,9 @@ var (
 //go:generate mockery --name=EmbeddedWalletServiceInterface --case=underscore --structname=MockEmbeddedWalletService --filename=embedded_wallet_service.go
 type EmbeddedWalletServiceInterface interface {
 	// CreateWallet creates a new embedded wallet using the provided token and public key
-	CreateWallet(ctx context.Context, tenantID, token, publicKey string) error
+	CreateWallet(ctx context.Context, token, publicKey string) error
 	// GetWallet retrieves an embedded wallet by token
-	GetWallet(ctx context.Context, tenantID, token string) (*data.EmbeddedWallet, error)
+	GetWallet(ctx context.Context, token string) (*data.EmbeddedWallet, error)
 }
 
 var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
@@ -59,12 +59,17 @@ type EmbeddedWalletServiceOptions struct {
 	WasmHash            string
 }
 
-func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, token, publicKey string) error {
+func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicKey string) error {
 	if token == "" {
 		return ErrMissingToken
 	}
 	if publicKey == "" {
 		return ErrMissingPublicKey
+	}
+
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("getting tenant from context: %w", err)
 	}
 
 	return db.RunInTransaction(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
@@ -85,7 +90,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, toke
 			tssTransaction := &store.Transaction{
 				ExternalID:      fmt.Sprintf("wallet_%s", embeddedWallet.Token),
 				TransactionType: store.TransactionTypeWalletCreation,
-				TenantID:        tenantID,
+				TenantID:        currentTenant.ID,
 				WalletCreation: store.WalletCreation{
 					PublicKey: publicKey,
 					WasmHash:  e.wasmHash,
@@ -111,7 +116,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, tenantID, toke
 	})
 }
 
-func (e *EmbeddedWalletService) GetWallet(ctx context.Context, tenantID, token string) (*data.EmbeddedWallet, error) {
+func (e *EmbeddedWalletService) GetWallet(ctx context.Context, token string) (*data.EmbeddedWallet, error) {
 	if token == "" {
 		return nil, ErrMissingToken
 	}
@@ -123,9 +128,6 @@ func (e *EmbeddedWalletService) GetWallet(ctx context.Context, tenantID, token s
 				return nil, ErrInvalidToken
 			}
 			return nil, fmt.Errorf("getting wallet by token %s: %w", token, err)
-		}
-		if embeddedWallet.TenantID != tenantID {
-			return nil, ErrGetWalletMismatchedTenant
 		}
 		return embeddedWallet, nil
 	})
