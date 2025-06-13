@@ -221,6 +221,10 @@ func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl
 		return fmt.Errorf("wallet deep link cannot be nil")
 	}
 
+	if s.embeddedWalletService == nil {
+		return fmt.Errorf("embedded wallet service is not configured - embedded wallets feature is disabled")
+	}
+
 	if wdl.SelfHosted {
 		wdl.DeepLink = wdl.TenantBaseURL
 		wdl.Route = "wallet"

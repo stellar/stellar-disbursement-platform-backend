@@ -473,6 +473,45 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Nil(t, msg.AssetID)
 	})
 
+	t.Run("skips embedded wallet when embedded wallet service is nil", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, nil, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		recRW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverPhoneOnly.ID, walletEmbedded.ID, data.ReadyReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursementEmbedded,
+			Asset:          *asset1,
+			ReceiverWallet: recRW,
+			Amount:         "1",
+		})
+
+		reqs := []schemas.EventReceiverWalletInvitationData{
+			{
+				ReceiverWalletID: recRW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
+		require.NoError(t, err)
+
+		q := `SELECT COUNT(*) FROM messages WHERE receiver_id = $1 AND wallet_id = $2`
+		var messageCount int
+		err = dbConnectionPool.GetContext(ctx, &messageCount, q, receiverPhoneOnly.ID, walletEmbedded.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, messageCount)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, walletEmbedded.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Nil(t, receivers[0].InvitationSentAt)
+	})
+
 	t.Run("send invite successfully with custom invite message", func(t *testing.T) {
 		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)

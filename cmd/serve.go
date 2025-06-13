@@ -120,6 +120,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
 				Models:                      models,
 				MessageDispatcher:           serveOpts.MessageDispatcher,
+				EmbeddedWalletService:       serveOpts.EmbeddedWalletService,
 				MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
 				Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
 				CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
@@ -149,6 +150,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool:       o.ServeOpts.AdminDBConnectionPool,
 			AnchorPlatformBaseSepURL:    o.ServeOpts.AnchorPlatformBasePlatformURL,
 			MessageDispatcher:           o.ServeOpts.MessageDispatcher,
+			EmbeddedWalletService:       o.ServeOpts.EmbeddedWalletService,
 			MaxInvitationResendAttempts: int64(o.ServeOpts.MaxInvitationResendAttempts),
 			Sep10SigningPrivateKey:      o.ServeOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:          o.ServeOpts.CrashTrackerClient.Clone(),
