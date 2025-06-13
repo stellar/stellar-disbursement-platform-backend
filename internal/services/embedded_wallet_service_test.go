@@ -64,6 +64,50 @@ func Test_NewEmbeddedWalletService(t *testing.T) {
 	})
 }
 
+func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	tssModel := store.NewTransactionModel(dbConnectionPool)
+	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	require.NoError(t, err)
+
+	t.Run("successfully creates unique tokens", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		token1, err := service.CreateInvitationToken(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, token1)
+
+		assert.NotEmpty(t, token1)
+
+		wallet, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token1)
+		require.NoError(t, err)
+		assert.Equal(t, token1, wallet.Token)
+
+		token2, err := service.CreateInvitationToken(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, token2)
+
+		assert.NotEmpty(t, token2)
+
+		wallet2, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token2)
+		require.NoError(t, err)
+		assert.Equal(t, token2, wallet2.Token)
+
+		assert.NotEqual(t, token1, token2, "should generate unique tokens")
+	})
+}
+
 func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

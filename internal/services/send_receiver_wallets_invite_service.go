@@ -29,6 +29,7 @@ type SendReceiverWalletInviteServiceInterface interface {
 type SendReceiverWalletInviteService struct {
 	messageDispatcher           message.MessageDispatcherInterface
 	Models                      *data.Models
+	embeddedWalletService       EmbeddedWalletServiceInterface
 	maxInvitationResendAttempts int64
 	sep10SigningPrivateKey      string
 	crashTrackerClient          crashtracker.CrashTrackerClient
@@ -124,7 +125,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		}
 
 		if wallet.Embedded {
-			if err := s.updateDeepLink(&wdl); err != nil {
+			if err := s.updateDeepLink(ctx, &wdl); err != nil {
 				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
 				continue
 			}
@@ -215,16 +216,26 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	})
 }
 
-func (s SendReceiverWalletInviteService) updateDeepLink(wdl *WalletDeepLink) error {
+func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl *WalletDeepLink) error {
 	if wdl == nil {
 		return fmt.Errorf("wallet deep link cannot be nil")
+	}
+
+	if s.embeddedWalletService == nil {
+		return fmt.Errorf("embedded wallet service is not configured - embedded wallets feature is disabled")
 	}
 
 	if wdl.SelfHosted {
 		wdl.DeepLink = wdl.TenantBaseURL
 		wdl.Route = "wallet"
 	}
-	wdl.Token = "123" // TODO: this should be a unique token for the receiver wallet invitation
+
+	token, err := s.embeddedWalletService.CreateInvitationToken(ctx)
+	if err != nil {
+		return fmt.Errorf("creating embedded wallet invitation token: %w", err)
+	}
+
+	wdl.Token = token
 
 	return nil
 }
@@ -326,10 +337,11 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messageDispatcher message.MessageDispatcherInterface, sep10SigningPrivateKey string, maxInvitationResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messageDispatcher message.MessageDispatcherInterface, embeddedWalletService EmbeddedWalletServiceInterface, sep10SigningPrivateKey string, maxInvitationResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messageDispatcher:           messageDispatcher,
 		Models:                      models,
+		embeddedWalletService:       embeddedWalletService,
 		maxInvitationResendAttempts: maxInvitationResendAttempts,
 		sep10SigningPrivateKey:      sep10SigningPrivateKey,
 		crashTrackerClient:          crashTrackerClient,
