@@ -102,22 +102,23 @@ func Test_UpdateReceiverHandler_createVerificationInsert(t *testing.T) {
 }
 
 func Test_UpdateReceiverHandler_400(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
+
+	user := &auth.User{
+		ID:    "my-user-id",
+		Email: "email@email.com",
+	}
 
 	// setup
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
 	authManager := &auth.AuthManagerMock{}
-	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
+	authManager.On("GetUserByID", mock.Anything, "my-token").Return(user, nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -262,21 +263,16 @@ func Test_UpdateReceiverHandler_400(t *testing.T) {
 }
 
 func Test_UpdateReceiverHandler_404(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
-	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -303,21 +299,17 @@ func Test_UpdateReceiverHandler_404(t *testing.T) {
 }
 
 func Test_UpdateReceiverHandler_409(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
-	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
+	authManager.On("GetUserByID", mock.Anything, "my-token").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -386,21 +378,17 @@ func Test_UpdateReceiverHandler_409(t *testing.T) {
 }
 
 func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
-	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
+	authManager.On("GetUserByID", mock.Anything, "my-user-id").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -513,21 +501,17 @@ func (ua upsertAction) shouldPreInsert() bool {
 }
 
 func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, "my-token")
+	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
-	authManager.On("GetUserID", mock.Anything, "my-token").Return("my-user-id", nil)
+	authManager.On("GetUserID", mock.Anything, "my-user-id").Return("my-user-id", nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -658,4 +642,15 @@ func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
 			})
 		}
 	}
+}
+
+func getConnectionPool(t *testing.T) db.DBConnectionPool {
+	t.Helper()
+	dbt := dbtest.Open(t)
+	t.Cleanup(func() { dbt.Close() })
+
+	pool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
+	return pool
 }
