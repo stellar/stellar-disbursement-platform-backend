@@ -549,6 +549,9 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
 		EventProducer:                   producerMock,
+		EnableEmbeddedWallets:           true,
+		EmbeddedWalletsWasmHash:         "abc123",
+		RpcConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -676,6 +679,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/api-keys/12345"},
 		{http.MethodPatch, "/api-keys/12345"},
 		{http.MethodDelete, "/api-keys/12345"},
+		// Embedded Wallets
+		{http.MethodPost, "/embedded-wallets"},
+		{http.MethodGet, "/embedded-wallets/status"},
 	}
 
 	// Expect 401 as a response:

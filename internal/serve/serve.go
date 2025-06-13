@@ -133,8 +133,9 @@ func (opts *ServeOptions) SetupDependencies() error {
 			TSSDBConnectionPool: opts.TSSDBConnectionPool,
 			WasmHash:            opts.EmbeddedWalletsWasmHash,
 		})
+		log.Info("Embedded wallet features enabled")
 		if err != nil {
-			return fmt.Errorf("error creating embedded wallet service: %w", err)
+			return fmt.Errorf("creating embedded wallet service: %w", err)
 		}
 	}
 
