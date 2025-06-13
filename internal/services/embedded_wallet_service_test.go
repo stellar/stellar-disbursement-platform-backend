@@ -35,7 +35,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("successfully creates a wallet TSS transaction", func(t *testing.T) {
 		defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", defaultTenantID, "", "", data.PendingWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := service.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
@@ -82,7 +82,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("returns error if wallet status is not pending", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", defaultTenantID, "", "", data.SuccessWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := service.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
@@ -96,7 +96,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 
 		invalidService := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes")
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", defaultTenantID, "", "", data.PendingWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := invalidService.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
@@ -114,7 +114,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 
 		invalidService := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", defaultTenantID, "", "", data.SuccessWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := invalidService.CreateWallet(ctx, defaultTenantID, walletIDForTest, defaultPublicKey)
@@ -147,14 +147,13 @@ func Test_EmbeddedWalletService_GetWallet(t *testing.T) {
 	t.Run("successfully gets a wallet", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", defaultTenantID, "somehash", "somecontract", data.SuccessWalletStatus)
+		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", data.SuccessWalletStatus)
 
 		retrievedWallet, err := service.GetWallet(ctx, defaultTenantID, expectedWallet.Token)
 		require.NoError(t, err)
 		require.NotNil(t, retrievedWallet)
 
 		assert.Equal(t, expectedWallet.Token, retrievedWallet.Token)
-		assert.Equal(t, expectedWallet.TenantID, retrievedWallet.TenantID)
 		assert.Equal(t, expectedWallet.WasmHash, retrievedWallet.WasmHash)
 		assert.Equal(t, expectedWallet.ContractAddress, retrievedWallet.ContractAddress)
 		assert.Equal(t, expectedWallet.WalletStatus, retrievedWallet.WalletStatus)
@@ -174,16 +173,5 @@ func Test_EmbeddedWalletService_GetWallet(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidToken)
 		assert.Contains(t, err.Error(), "token does not exist")
-	})
-
-	t.Run("returns error if tenant ID does not match the wallet's tenant ID", func(t *testing.T) {
-		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
-
-		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "other-tenant-id", "somehash", "somecontract", data.SuccessWalletStatus)
-
-		_, err := service.GetWallet(ctx, defaultTenantID, expectedWallet.Token)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrGetWalletMismatchedTenant)
-		assert.Contains(t, err.Error(), "tenant ID does not match the wallet's tenant ID")
 	})
 }

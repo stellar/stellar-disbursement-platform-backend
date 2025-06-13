@@ -39,7 +39,6 @@ func (status EmbeddedWalletStatus) Validate() error {
 
 type EmbeddedWallet struct {
 	Token           string               `json:"token" db:"token"`
-	TenantID        string               `json:"tenant_id" db:"tenant_id"`
 	WasmHash        string               `json:"wasm_hash" db:"wasm_hash"`
 	ContractAddress string               `json:"contract_address" db:"contract_address"`
 	CreatedAt       *time.Time           `json:"created_at" db:"created_at"`
@@ -57,7 +56,6 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 		ResultAlias:    resultAlias,
 		RawColumns: []string{
 			"token",
-			"tenant_id",
 			"created_at",
 			"updated_at",
 			"wallet_status",

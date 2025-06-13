@@ -12,7 +12,6 @@ import (
 
 var (
 	ErrCreateWalletInvalidStatus = fmt.Errorf("wallet status is not pending for token")
-	ErrGetWalletMismatchedTenant = fmt.Errorf("tenant ID does not match the wallet's tenant ID")
 	ErrInvalidToken              = fmt.Errorf("token does not exist")
 	ErrMissingToken              = fmt.Errorf("token is required")
 	ErrMissingPublicKey          = fmt.Errorf("public key is required")
@@ -113,9 +112,6 @@ func (e *EmbeddedWalletService) GetWallet(ctx context.Context, tenantID, token s
 				return nil, ErrInvalidToken
 			}
 			return nil, fmt.Errorf("getting wallet by token %s: %w", token, err)
-		}
-		if embeddedWallet.TenantID != tenantID {
-			return nil, ErrGetWalletMismatchedTenant
 		}
 		return embeddedWallet, nil
 	})

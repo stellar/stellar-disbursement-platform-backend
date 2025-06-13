@@ -677,7 +677,7 @@ func DeleteAllDisbursementFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
-func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, tenantID, wasmHash, contractAddress string, status EmbeddedWalletStatus) *EmbeddedWallet {
+func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, wasmHash, contractAddress string, status EmbeddedWalletStatus) *EmbeddedWallet {
 	t.Helper()
 
 	if token == "" {
@@ -685,21 +685,16 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		require.NoError(t, err)
 		token = randomToken
 	}
-	if tenantID == "" {
-		randomTenantID, err := utils.RandomString(32)
-		require.NoError(t, err)
-		tenantID = randomTenantID
-	}
 
 	q := `
 		INSERT INTO embedded_wallets
-			(token, tenant_id, wasm_hash, contract_address, wallet_status)
+			(token, wasm_hash, contract_address, wallet_status)
 		VALUES
-			($1, $2, $3, $4, $5)
+			($1, $2, $3, $4)
 		RETURNING *
 	`
 	wallet := EmbeddedWallet{}
-	err := sqlExec.GetContext(ctx, &wallet, q, token, tenantID, wasmHash, contractAddress, status)
+	err := sqlExec.GetContext(ctx, &wallet, q, token, wasmHash, contractAddress, status)
 	require.NoError(t, err)
 	return &wallet
 }
