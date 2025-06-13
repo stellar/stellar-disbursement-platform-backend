@@ -20,7 +20,7 @@ import (
 func Test_WalletCreationHandler_CreateWallet(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -80,7 +80,7 @@ func Test_WalletCreationHandler_CreateWallet_ValidationErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			walletService := mocks.NewMockEmbeddedWalletService(t)
 			handler := WalletCreationHandler{
-				embeddedWalletService: walletService,
+				EmbeddedWalletService: walletService,
 			}
 
 			rr := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func Test_WalletCreationHandler_CreateWallet_ValidationErrors(t *testing.T) {
 func Test_WalletCreationHandler_CreateWallet_InternalError(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -122,7 +122,7 @@ func Test_WalletCreationHandler_CreateWallet_InternalError(t *testing.T) {
 func Test_WalletCreationHandler_CreateWallet_InvalidToken(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -143,7 +143,7 @@ func Test_WalletCreationHandler_CreateWallet_InvalidToken(t *testing.T) {
 func Test_WalletCreationHandler_CreateWallet_InvalidStatus(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -164,9 +164,8 @@ func Test_WalletCreationHandler_CreateWallet_InvalidStatus(t *testing.T) {
 func Test_WalletCreationHandler_GetWallet(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
-
 	rr := httptest.NewRecorder()
 	ctx := context.Background()
 
@@ -190,7 +189,7 @@ func Test_WalletCreationHandler_GetWallet(t *testing.T) {
 func Test_WalletCreationHandler_GetWallet_MissingToken(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -205,7 +204,7 @@ func Test_WalletCreationHandler_GetWallet_MissingToken(t *testing.T) {
 func Test_WalletCreationHandler_GetWallet_InvalidToken(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -222,7 +221,7 @@ func Test_WalletCreationHandler_GetWallet_InvalidToken(t *testing.T) {
 func Test_WalletCreationHandler_GetWallet_InternalError(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
-		embeddedWalletService: walletService,
+		EmbeddedWalletService: walletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -231,6 +230,20 @@ func Test_WalletCreationHandler_GetWallet_InternalError(t *testing.T) {
 	walletService.On("GetWallet", ctx, "123").Return(nil, errors.New("foobar"))
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
+	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+}
+
+func Test_WalletCreationHandler_GetWallet_MissingTenant(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	rr := httptest.NewRecorder()
+
+	req, _ := http.NewRequest(http.MethodGet, "/embedded-wallet/status?token=123", nil)
 	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)

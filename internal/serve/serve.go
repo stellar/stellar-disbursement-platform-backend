@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -60,6 +61,7 @@ type ServeOptions struct {
 	MonitorService                  monitor.MonitorServiceInterface
 	MtnDBConnectionPool             db.DBConnectionPool
 	AdminDBConnectionPool           db.DBConnectionPool
+	TSSDBConnectionPool             db.DBConnectionPool
 	EC256PrivateKey                 string
 	Models                          *data.Models
 	CorsAllowedOrigins              []string
@@ -75,6 +77,9 @@ type ServeOptions struct {
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
+	EnableEmbeddedWallets           bool
+	EmbeddedWalletsWasmHash         string
+	EnableSep45                     bool
 	Sep45ContractId                 string
 	RpcConfig                       stellar.RPCOptions
 	AnchorPlatformBaseSepURL        string
@@ -96,6 +101,7 @@ type ServeOptions struct {
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
 	CircleAPIType                   circle.APIType
+	EmbeddedWalletService           services.EmbeddedWalletServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -118,6 +124,19 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("error creating models for Serve: %w", err)
+	}
+
+	// Setup Embedded Wallet Service (only if enabled)
+	if opts.EnableEmbeddedWallets {
+		opts.EmbeddedWalletService, err = dependencyinjection.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
+			MTNDBConnectionPool: opts.MtnDBConnectionPool,
+			TSSDBConnectionPool: opts.TSSDBConnectionPool,
+			WasmHash:            opts.EmbeddedWalletsWasmHash,
+		})
+		log.Info("Embedded wallet features enabled")
+		if err != nil {
+			return fmt.Errorf("creating embedded wallet service: %w", err)
+		}
 	}
 
 	// Setup Stellar Auth JWT manager
@@ -177,9 +196,20 @@ func (opts *ServeOptions) ValidateRpc() error {
 		return fmt.Errorf("RPC request header key must be set when RPC request header value is set")
 	}
 
-	// Feature specific validation
-	if opts.Sep45ContractId != "" && opts.RpcConfig.RPCUrl == "" {
-		return fmt.Errorf("RPC URL must be set when SEP-45 contract ID is set")
+	// RPC-dependent feature validation
+	hasRpcFeatures := opts.EnableEmbeddedWallets || opts.EnableSep45
+	if hasRpcFeatures && opts.RpcConfig.RPCUrl == "" {
+		return fmt.Errorf("RPC URL must be set when RPC-dependent features are enabled")
+	}
+
+	// Embedded wallet feature validation
+	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsWasmHash == "" {
+		return fmt.Errorf("embedded wallets WASM hash must be set when embedded wallets are enabled")
+	}
+
+	// SEP-45 feature validation
+	if opts.EnableSep45 && opts.Sep45ContractId == "" {
+		return fmt.Errorf("SEP-45 contract ID must be set when SEP-45 is enabled")
 	}
 
 	return nil
@@ -477,6 +507,17 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
+
+		// Embedded wallet routes (only if feature is enabled)
+		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/embedded-wallets", func(r chi.Router) {
+				walletCreationHandler := httphandler.WalletCreationHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+				}
+				r.Post("/", walletCreationHandler.CreateWallet)
+				r.Get("/status", walletCreationHandler.GetWallet)
+			})
+		}
 
 		profileHandler := httphandler.ProfileHandler{
 			Models:                      o.Models,

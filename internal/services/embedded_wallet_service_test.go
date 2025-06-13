@@ -30,7 +30,8 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	tssModel := store.NewTransactionModel(dbConnectionPool)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	require.NoError(t, err)
 
 	defaultPublicKey := "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
 
@@ -96,12 +97,13 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("rolls back wallet update if TSS transaction creation fails", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		invalidService := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes")
+		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes")
+		require.NoError(t, err)
 
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
-		err := invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
+		err = invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "creating wallet transaction in TSS")
 
@@ -114,12 +116,13 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("rolls back TSS transaction creation if wallet update fails", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		invalidService := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+		require.NoError(t, err)
 
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
-		err := invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
+		err = invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "transaction execution error: wallet status is not pending for token")
 
@@ -145,7 +148,8 @@ func Test_EmbeddedWalletService_GetWallet(t *testing.T) {
 	tssModel := store.NewTransactionModel(dbConnectionPool)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	require.NoError(t, err)
 
 	t.Run("successfully gets a wallet", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)

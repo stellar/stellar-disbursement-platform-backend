@@ -72,6 +72,7 @@ func Test_Serve(t *testing.T) {
 		CrashTrackerClient:              mockCrashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
+		TSSDBConnectionPool:             dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		Environment:                     "test",
 		GitCommit:                       "1234567890abcdef",
@@ -277,18 +278,74 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("SEP-45 contract ID without RPC URL: should return error", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		rpcOptions := stellar.RPCOptions{}
-
+	t.Run("embedded wallets enabled without WASM hash: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
-			RpcConfig:       rpcOptions,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			EnableEmbeddedWallets: true,
+			RpcConfig:             stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
 		err := serveOptions.ValidateRpc()
-		require.EqualError(t, err, "RPC URL must be set when SEP-45 contract ID is set")
+		require.EqualError(t, err, "embedded wallets WASM hash must be set when embedded wallets are enabled")
+	})
+
+	t.Run("SEP-45 enabled without contract ID: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableSep45: true,
+			RpcConfig:   stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "SEP-45 contract ID must be set when SEP-45 is enabled")
+	})
+
+	t.Run("embedded wallets enabled without RPC URL: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableEmbeddedWallets:   true,
+			EmbeddedWalletsWasmHash: "abc123",
+			RpcConfig:               stellar.RPCOptions{},
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
+	})
+
+	t.Run("SEP-45 enabled without RPC URL: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableSep45:     true,
+			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:       stellar.RPCOptions{},
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
+	})
+
+	t.Run("embedded wallets enabled with valid configuration: should not return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableEmbeddedWallets:   true,
+			EmbeddedWalletsWasmHash: "abc123",
+			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
+	})
+
+	t.Run("SEP-45 enabled with valid configuration: should not return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableSep45:     true,
+			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
+	})
+
+	t.Run("both features enabled with valid configuration: should not return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableEmbeddedWallets:   true,
+			EmbeddedWalletsWasmHash: "abc123",
+			EnableSep45:             true,
+			Sep45ContractId:         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
 	})
 
 	t.Run("SEP-45 contract ID with RPC URL: should not return error", func(t *testing.T) {
@@ -477,6 +534,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		CrashTrackerClient:              crashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
+		TSSDBConnectionPool:             dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EmailMessengerClient:            &messengerClientMock,
 		Environment:                     "test",
@@ -491,6 +549,9 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
 		EventProducer:                   producerMock,
+		EnableEmbeddedWallets:           true,
+		EmbeddedWalletsWasmHash:         "abc123",
+		RpcConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -618,6 +679,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/api-keys/12345"},
 		{http.MethodPatch, "/api-keys/12345"},
 		{http.MethodDelete, "/api-keys/12345"},
+		// Embedded Wallets
+		{http.MethodPost, "/embedded-wallets"},
+		{http.MethodGet, "/embedded-wallets/status"},
 	}
 
 	// Expect 401 as a response:

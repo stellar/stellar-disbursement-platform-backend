@@ -282,8 +282,31 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
+			Name:        "enable-embedded-wallets",
+			Usage:       "Enable embedded wallet features that require Stellar RPC integration",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableEmbeddedWallets,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
+			Name:      "embedded-wallets-wasm-hash",
+			Usage:     "The WASM hash of the smart contract for embedded wallets (required when --enable-embedded-wallets is true)",
+			OptType:   types.String,
+			ConfigKey: &serveOpts.EmbeddedWalletsWasmHash,
+			Required:  false,
+		},
+		{
+			Name:        "enable-sep45",
+			Usage:       "Enable SEP-45 web authentication features that require Stellar RPC integration",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableSep45,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
 			Name:           "sep45-contract-id",
-			Usage:          "The ID of the SEP-45 web authentication contract",
+			Usage:          "The ID of the SEP-45 web authentication contract (required when --enable-sep45 is true)",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionStellarContractId,
 			ConfigKey:      &serveOpts.Sep45ContractId,
@@ -579,6 +602,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			defer func() {
 				di.CleanupInstanceByValue(ctx, tssDBConnectionPool)
 			}()
+			serveOpts.TSSDBConnectionPool = tssDBConnectionPool
 
 			// Setup the Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
