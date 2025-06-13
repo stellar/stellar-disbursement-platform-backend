@@ -158,7 +158,6 @@ func Test_EmbeddedWalletUpdate_Validate(t *testing.T) {
 func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 	t.Run("returns error if token is empty", func(t *testing.T) {
 		insert := EmbeddedWalletInsert{
-			TenantID:     "tenant-123",
 			WalletStatus: PendingWalletStatus,
 		}
 		err := insert.Validate()
@@ -166,20 +165,9 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 		assert.EqualError(t, err, "token cannot be empty")
 	})
 
-	t.Run("returns error if tenant ID is empty", func(t *testing.T) {
-		insert := EmbeddedWalletInsert{
-			Token:        "token-123",
-			WalletStatus: PendingWalletStatus,
-		}
-		err := insert.Validate()
-		require.Error(t, err)
-		assert.EqualError(t, err, "tenant ID cannot be empty")
-	})
-
 	t.Run("returns error if wasm hash is empty", func(t *testing.T) {
 		insert := EmbeddedWalletInsert{
 			Token:        "token-123",
-			TenantID:     "tenant-123",
 			WalletStatus: PendingWalletStatus,
 		}
 		err := insert.Validate()
@@ -190,7 +178,6 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 	t.Run("validates wasm hash when provided", func(t *testing.T) {
 		insert := EmbeddedWalletInsert{
 			Token:        "token-123",
-			TenantID:     "tenant-123",
 			WasmHash:     "invalid-hash",
 			WalletStatus: PendingWalletStatus,
 		}
@@ -202,7 +189,6 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 	t.Run("validates wallet status", func(t *testing.T) {
 		insert := EmbeddedWalletInsert{
 			Token:        "token-123",
-			TenantID:     "tenant-123",
 			WasmHash:     "abcdef123456",
 			WalletStatus: "INVALID_STATUS",
 		}
@@ -215,10 +201,9 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("successfully updates all fields", func(t *testing.T) {
+	t.Run("successfully validates all fields", func(t *testing.T) {
 		insert := EmbeddedWalletInsert{
 			Token:        "token-123",
-			TenantID:     "tenant-123",
 			WasmHash:     "abcdef123456",
 			WalletStatus: SuccessWalletStatus,
 		}
