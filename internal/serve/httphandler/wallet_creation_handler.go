@@ -17,7 +17,7 @@ import (
 )
 
 type WalletCreationHandler struct {
-	embeddedWalletService services.EmbeddedWalletServiceInterface
+	EmbeddedWalletService services.EmbeddedWalletServiceInterface
 }
 
 type CreateWalletRequest struct {
@@ -65,7 +65,7 @@ func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	err = h.embeddedWalletService.CreateWallet(ctx, currentTenant.ID, reqBody.Token, reqBody.PublicKey)
+	err = h.EmbeddedWalletService.CreateWallet(ctx, currentTenant.ID, reqBody.Token, reqBody.PublicKey)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidToken) {
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)
@@ -97,7 +97,7 @@ func (h WalletCreationHandler) GetWallet(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	wallet, err := h.embeddedWalletService.GetWallet(ctx, currentTenant.ID, token)
+	wallet, err := h.EmbeddedWalletService.GetWallet(ctx, currentTenant.ID, token)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidToken) {
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)

@@ -61,11 +61,7 @@ Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 )
 
 func Test_Serve(t *testing.T) {
-	dbt := dbtest.OpenWithoutMigrations(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -76,6 +72,7 @@ func Test_Serve(t *testing.T) {
 		CrashTrackerClient:              mockCrashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
+		TSSDBConnectionPool:             dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		Environment:                     "test",
 		GitCommit:                       "1234567890abcdef",
@@ -115,11 +112,7 @@ func Test_Serve(t *testing.T) {
 }
 
 func Test_Serve_callsValidateSecurity(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
@@ -128,7 +121,7 @@ func Test_Serve_callsValidateSecurity(t *testing.T) {
 
 	// Make sure MFA is enforced in pubnet
 	serveOptions.DisableMFA = true
-	err = Serve(serveOptions, &mHTTPServer)
+	err := Serve(serveOptions, &mHTTPServer)
 	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
 }
 
@@ -285,18 +278,74 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("SEP-45 contract ID without RPC URL: should return error", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		rpcOptions := stellar.RPCOptions{}
-
+	t.Run("embedded wallets enabled without WASM hash: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
-			RpcConfig:       rpcOptions,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			EnableEmbeddedWallets: true,
+			RpcConfig:             stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
 		err := serveOptions.ValidateRpc()
-		require.EqualError(t, err, "RPC URL must be set when SEP-45 contract ID is set")
+		require.EqualError(t, err, "embedded wallets WASM hash must be set when embedded wallets are enabled")
+	})
+
+	t.Run("SEP-45 enabled without contract ID: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableSep45: true,
+			RpcConfig:   stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "SEP-45 contract ID must be set when SEP-45 is enabled")
+	})
+
+	t.Run("embedded wallets enabled without RPC URL: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableEmbeddedWallets:   true,
+			EmbeddedWalletsWasmHash: "abc123",
+			RpcConfig:               stellar.RPCOptions{},
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
+	})
+
+	t.Run("SEP-45 enabled without RPC URL: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableSep45:     true,
+			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:       stellar.RPCOptions{},
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
+	})
+
+	t.Run("embedded wallets enabled with valid configuration: should not return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableEmbeddedWallets:   true,
+			EmbeddedWalletsWasmHash: "abc123",
+			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
+	})
+
+	t.Run("SEP-45 enabled with valid configuration: should not return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableSep45:     true,
+			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
+	})
+
+	t.Run("both features enabled with valid configuration: should not return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableEmbeddedWallets:   true,
+			EmbeddedWalletsWasmHash: "abc123",
+			EnableSep45:             true,
+			Sep45ContractId:         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.NoError(t, err)
 	})
 
 	t.Run("SEP-45 contract ID with RPC URL: should not return error", func(t *testing.T) {
@@ -335,11 +384,7 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 }
 
 func Test_handleHTTP_Health(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -437,7 +482,6 @@ func Test_staticFileServer(t *testing.T) {
 }
 
 // getServeOptionsForTests returns an instance of ServeOptions for testing purposes.
-// 🚨 Don't forget to call `defer serveOptions.dbConnectionPool.Close()` in your test 🚨.
 func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool) ServeOptions {
 	t.Helper()
 
@@ -490,6 +534,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		CrashTrackerClient:              crashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
+		TSSDBConnectionPool:             dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EmailMessengerClient:            &messengerClientMock,
 		Environment:                     "test",
@@ -504,6 +549,9 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
 		EventProducer:                   producerMock,
+		EnableEmbeddedWallets:           true,
+		EmbeddedWalletsWasmHash:         "abc123",
+		RpcConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -514,11 +562,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 }
 
 func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 	data.CreateShortURLFixture(t, context.Background(), dbConnectionPool, "123", "https://stellar.org")
@@ -554,11 +598,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 }
 
 func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
@@ -596,6 +636,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/payments/1234/status"},
 		// Receivers
 		{http.MethodGet, "/receivers"},
+		{http.MethodPost, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/wallets/1234"},
@@ -638,6 +679,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/api-keys/12345"},
 		{http.MethodPatch, "/api-keys/12345"},
 		{http.MethodDelete, "/api-keys/12345"},
+		// Embedded Wallets
+		{http.MethodPost, "/embedded-wallets"},
+		{http.MethodGet, "/embedded-wallets/status"},
 	}
 
 	// Expect 401 as a response:
@@ -656,11 +700,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 }
 
 func Test_handleHTTP_rateLimit(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
@@ -693,11 +733,7 @@ func Test_handleHTTP_rateLimit(t *testing.T) {
 }
 
 func Test_createAuthManager(t *testing.T) {
-	dbt := dbtest.OpenWithoutMigrations(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	// creates the expected auth manager
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
@@ -749,4 +785,15 @@ func Test_createAuthManager(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getConnectionPool(t *testing.T) db.DBConnectionPool {
+	t.Helper()
+	dbt := dbtest.Open(t)
+	t.Cleanup(func() { dbt.Close() })
+
+	pool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
+	return pool
 }
