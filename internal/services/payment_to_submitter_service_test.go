@@ -13,13 +13,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -27,11 +26,7 @@ import (
 )
 
 func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	// add tenant to context
 	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
@@ -44,7 +39,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
+	tssModel := txSubStore.NewTransactionModel(dbConnectionPool)
 
 	// Create distribution accounts
 	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
@@ -158,6 +153,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			paymentReady := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwReady,
 				Disbursement:   startedDisbursement,
+				PaymentType:    data.PaymentTypeDisbursement,
 				Asset:          *tc.asset,
 				Amount:         "100",
 				Status:         data.ReadyPaymentStatus,
@@ -175,6 +171,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwRegistered,
 				Disbursement:   startedDisbursement,
+				PaymentType:    data.PaymentTypeDisbursement,
 				Asset:          *tc.asset,
 				Amount:         "100",
 				Status:         data.ReadyPaymentStatus,
@@ -372,6 +369,171 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 	}
 }
 
+func Test_PaymentToSubmitterService_SendMixedPayments(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	tssModel := txSubStore.NewTransactionModel(dbConnectionPool)
+
+	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
+	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
+	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "MixWallet", "https://mix.com", "mix.com", "mix://")
+
+	distAccPubKey := keypair.MustRandom().Address()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distAccPubKey)
+
+	testCases := []struct {
+		name        string
+		invokeBatch bool
+	}{
+		{"SendPaymentsReadyToPay", false},
+		{"SendBatchPayments", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllCircleRecipientsFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+			disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+				Name:   "mix disb",
+				Status: data.StartedDisbursementStatus,
+				Asset:  eurcAsset,
+				Wallet: wallet,
+			})
+			receiverDisb := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+			rwDisb := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverDisb.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+			paymentDisb := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+				ReceiverWallet: rwDisb,
+				Disbursement:   disbursement,
+				PaymentType:    data.PaymentTypeDisbursement,
+				Asset:          *eurcAsset,
+				Amount:         "100",
+				Status:         data.ReadyPaymentStatus,
+			})
+
+			receiverDirect := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+			rwDirect := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverDirect.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+			paymentDirect := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+				ReceiverWallet: rwDirect,
+				PaymentType:    data.PaymentTypeDirect,
+				Asset:          *eurcAsset,
+				Amount:         "200",
+				Status:         data.ReadyPaymentStatus,
+			})
+
+			mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+			mDistAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil).Once()
+			paymentDispatcher := paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccResolver)
+			svc := PaymentToSubmitterService{
+				sdpModels:           models,
+				tssModel:            tssModel,
+				distAccountResolver: mDistAccResolver,
+				paymentDispatcher:   paymentDispatcher,
+			}
+
+			if tc.invokeBatch {
+				require.NoError(t, svc.SendBatchPayments(ctx, 10))
+			} else {
+				paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{
+					TenantID: "tenant-id",
+					Payments: []schemas.PaymentReadyToPay{
+						{ID: paymentDisb.ID},
+						{ID: paymentDirect.ID},
+					},
+				}
+				require.NoError(t, svc.SendPaymentsReadyToPay(ctx, paymentsReadyToPay))
+			}
+
+			p1, err := models.Payment.Get(ctx, paymentDisb.ID, dbConnectionPool)
+			require.NoError(t, err)
+			assert.Equal(t, data.PendingPaymentStatus, p1.Status)
+			p2, err := models.Payment.Get(ctx, paymentDirect.ID, dbConnectionPool)
+			require.NoError(t, err)
+			assert.Equal(t, data.PendingPaymentStatus, p2.Status)
+		})
+	}
+}
+
+func Test_PaymentToSubmitterService_SendDirectPayments(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	tssModel := txSubStore.NewTransactionModel(dbConnectionPool)
+	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
+	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
+	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "DirectWallet", "https://direct.com", "direct.com", "direct://")
+
+	testCases := []struct {
+		name         string
+		methodOption string
+	}{
+		{
+			name:         "Stellar batch",
+			methodOption: "batch",
+		},
+		{
+			name:         "Stellar readyToPay",
+			methodOption: "ready",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+			receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+			rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+			payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+				ReceiverWallet: rw,
+				PaymentType:    data.PaymentTypeDirect,
+				Asset:          *eurcAsset,
+				Amount:         "888",
+				Status:         data.ReadyPaymentStatus,
+			})
+
+			distributionAccount := schema.NewDefaultStellarTransactionAccount(keypair.MustRandom().Address())
+
+			mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+			mDistAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distributionAccount, nil).Once()
+
+			paymentDispatcher := paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccResolver)
+
+			svc := PaymentToSubmitterService{
+				sdpModels:           models,
+				tssModel:            tssModel,
+				distAccountResolver: mDistAccResolver,
+				paymentDispatcher:   paymentDispatcher,
+			}
+
+			switch tc.methodOption {
+			case "batch":
+				require.NoError(t, svc.SendBatchPayments(ctx, 10))
+			case "ready":
+				paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{
+					TenantID: "tenant-id",
+					Payments: []schemas.PaymentReadyToPay{{ID: payment.ID}},
+				}
+				require.NoError(t, svc.SendPaymentsReadyToPay(ctx, paymentsReadyToPay))
+			default:
+				t.Fatal("unknown methodOption")
+			}
+
+			dbPayment, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+			require.NoError(t, err)
+			assert.Equal(t, data.PendingPaymentStatus, dbPayment.Status)
+		})
+	}
+}
+
 func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -379,9 +541,10 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		expectedError string
 	}{
 		{
-			name: "valid payment",
+			name: "valid disbursement payment",
 			payment: &data.Payment{
-				Status: data.ReadyPaymentStatus,
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDisbursement,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status:         data.RegisteredReceiversWalletStatus,
 					StellarAddress: "destination_1",
@@ -399,30 +562,46 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 			expectedError: "",
 		},
 		{
-			name: "invalid payment status",
+			name: "valid direct payment",
 			payment: &data.Payment{
-				ID:     "123",
-				Status: data.PendingPaymentStatus,
-			},
-			expectedError: "payment 123 is not in READY state",
-		},
-		{
-			name: "invalid receiver wallet status",
-			payment: &data.Payment{
-				ID:     "123",
-				Status: data.ReadyPaymentStatus,
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
-					ID:     "321",
-					Status: data.ReadyReceiversWalletStatus,
+					Status:         data.RegisteredReceiversWalletStatus,
+					StellarAddress: "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP",
 				},
+				ID: "direct-1",
+				Asset: data.Asset{
+					Code:   "USDC",
+					Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+				},
+				Amount: "50.0",
 			},
-			expectedError: "receiver wallet 321 for payment 123 is not in REGISTERED state",
+			expectedError: "",
 		},
 		{
-			name: "invalid disbursement status",
+			name: "direct payment with XLM (no issuer)",
 			payment: &data.Payment{
-				ID:     "123",
-				Status: data.ReadyPaymentStatus,
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
+				ReceiverWallet: &data.ReceiverWallet{
+					Status:         data.RegisteredReceiversWalletStatus,
+					StellarAddress: "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP",
+				},
+				ID: "direct-xlm",
+				Asset: data.Asset{
+					Code: "XLM",
+				},
+				Amount: "25.0",
+			},
+			expectedError: "",
+		},
+		{
+			name: "disbursement payment with invalid disbursement status",
+			payment: &data.Payment{
+				ID:          "123",
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDisbursement,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
 				},
@@ -434,14 +613,34 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 			expectedError: "disbursement 321 for payment 123 is not in STARTED state",
 		},
 		{
+			name: "invalid payment status",
+			payment: &data.Payment{
+				ID:          "123",
+				Status:      data.PendingPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
+			},
+			expectedError: "payment 123 is not in READY state",
+		},
+		{
+			name: "invalid receiver wallet status",
+			payment: &data.Payment{
+				ID:          "123",
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
+				ReceiverWallet: &data.ReceiverWallet{
+					ID:     "321",
+					Status: data.ReadyReceiversWalletStatus,
+				},
+			},
+			expectedError: "receiver wallet 321 for payment 123 is not in REGISTERED state",
+		},
+		{
 			name: "payment ID is empty",
 			payment: &data.Payment{
-				Status: data.ReadyPaymentStatus,
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
-				},
-				Disbursement: &data.Disbursement{
-					Status: data.StartedDisbursementStatus,
 				},
 			},
 			expectedError: "payment ID is empty for Payment",
@@ -449,27 +648,23 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment asset code is empty",
 			payment: &data.Payment{
-				ID:     "123",
-				Status: data.ReadyPaymentStatus,
+				ID:          "123",
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
-				},
-				Disbursement: &data.Disbursement{
-					Status: data.StartedDisbursementStatus,
 				},
 			},
 			expectedError: "payment asset code is empty for payment 123",
 		},
 		{
-			name: "payment asset issuer is empty",
+			name: "payment asset issuer is empty for non-XLM",
 			payment: &data.Payment{
-				ID:     "123",
-				Status: data.ReadyPaymentStatus,
+				ID:          "123",
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
-				},
-				Disbursement: &data.Disbursement{
-					Status: data.StartedDisbursementStatus,
 				},
 				Asset: data.Asset{
 					Code: "USDC",
@@ -480,13 +675,11 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment amount is invalid",
 			payment: &data.Payment{
-				ID:     "123",
-				Status: data.ReadyPaymentStatus,
+				ID:          "123",
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
-				},
-				Disbursement: &data.Disbursement{
-					Status: data.StartedDisbursementStatus,
 				},
 				Asset: data.Asset{
 					Code:   "USDC",
@@ -498,13 +691,11 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment receiver wallet stellar address is empty",
 			payment: &data.Payment{
-				ID:     "123",
-				Status: data.ReadyPaymentStatus,
+				ID:          "123",
+				Status:      data.ReadyPaymentStatus,
+				PaymentType: data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
-				},
-				Disbursement: &data.Disbursement{
-					Status: data.StartedDisbursementStatus,
 				},
 				Asset: data.Asset{
 					Code:   "USDC",
@@ -529,11 +720,7 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 }
 
 func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -653,11 +840,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 }
 
 func Test_PaymentToSubmitterService_markPaymentsAsFailed(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
 
