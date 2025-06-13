@@ -13,7 +13,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type WalletCreationHandler struct {
@@ -59,13 +58,7 @@ func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
-		return
-	}
-
-	err = h.EmbeddedWalletService.CreateWallet(ctx, currentTenant.ID, reqBody.Token, reqBody.PublicKey)
+	err := h.EmbeddedWalletService.CreateWallet(ctx, reqBody.Token, reqBody.PublicKey)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidToken) {
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)
@@ -91,13 +84,7 @@ func (h WalletCreationHandler) GetWallet(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
-		return
-	}
-
-	wallet, err := h.EmbeddedWalletService.GetWallet(ctx, currentTenant.ID, token)
+	wallet, err := h.EmbeddedWalletService.GetWallet(ctx, token)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidToken) {
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)

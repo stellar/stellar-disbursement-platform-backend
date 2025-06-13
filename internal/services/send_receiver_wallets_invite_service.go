@@ -230,12 +230,7 @@ func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl
 		wdl.Route = "wallet"
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("getting tenant from context: %w", err)
-	}
-
-	token, err := s.embeddedWalletService.CreateInvitationToken(ctx, currentTenant.ID)
+	token, err := s.embeddedWalletService.CreateInvitationToken(ctx)
 	if err != nil {
 		return fmt.Errorf("creating embedded wallet invitation token: %w", err)
 	}
