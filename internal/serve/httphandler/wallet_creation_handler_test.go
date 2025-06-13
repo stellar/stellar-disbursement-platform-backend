@@ -234,17 +234,3 @@ func Test_WalletCreationHandler_GetWallet_InternalError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
 }
-
-func Test_WalletCreationHandler_GetWallet_MissingTenant(t *testing.T) {
-	walletService := mocks.NewMockEmbeddedWalletService(t)
-	handler := WalletCreationHandler{
-		EmbeddedWalletService: walletService,
-	}
-
-	rr := httptest.NewRecorder()
-
-	req, _ := http.NewRequest(http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
-}

@@ -14,6 +14,56 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
+func Test_NewEmbeddedWalletService(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	wasmHash := "e5da3b"
+
+	t.Run("return an error if sdpModels is nil", func(t *testing.T) {
+		tssModel := store.NewTransactionModel(dbConnectionPool)
+		service, err := NewEmbeddedWalletService(nil, tssModel, wasmHash)
+		assert.Nil(t, service)
+		assert.EqualError(t, err, "sdpModels cannot be nil")
+	})
+
+	t.Run("return an error if tssModel is nil", func(t *testing.T) {
+		sdpModels, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		service, err := NewEmbeddedWalletService(sdpModels, nil, wasmHash)
+		assert.Nil(t, service)
+		assert.EqualError(t, err, "tssModel cannot be nil")
+	})
+
+	t.Run("return an error if wasmHash is empty", func(t *testing.T) {
+		sdpModels, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+		tssModel := store.NewTransactionModel(dbConnectionPool)
+
+		service, err := NewEmbeddedWalletService(sdpModels, tssModel, "")
+		assert.Nil(t, service)
+		assert.EqualError(t, err, "wasmHash cannot be empty")
+	})
+
+	t.Run("🎉 successfully creates a new EmbeddedWalletService instance", func(t *testing.T) {
+		sdpModels, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+		tssModel := store.NewTransactionModel(dbConnectionPool)
+
+		service, err := NewEmbeddedWalletService(sdpModels, tssModel, wasmHash)
+		require.NoError(t, err)
+		require.NotNil(t, service)
+
+		assert.Equal(t, sdpModels, service.sdpModels)
+		assert.Equal(t, tssModel, service.tssModel)
+		assert.Equal(t, wasmHash, service.wasmHash)
+	})
+}
+
 func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
