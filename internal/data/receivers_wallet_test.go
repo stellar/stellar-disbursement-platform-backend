@@ -1821,54 +1821,66 @@ func Test_ReceiverWalletModel_GetByIDs(t *testing.T) {
 }
 
 func Test_ReceiverWalletModel_UpdateStatusToReady(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
-
 	ctx := context.Background()
-	model := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+	models := SetupModels(t)
+	rwModel := models.ReceiverWallet
+	dbcp := models.DBConnectionPool
 
-	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-	wallet := CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+	receiver := CreateReceiverFixture(t, ctx, dbcp, &Receiver{})
+	wallet := CreateDefaultWalletFixture(t, ctx, dbcp) // not user-managed
 
-	t.Run("returns ErrRecordNotFound when wallet does not exist", func(t *testing.T) {
-		err := model.UpdateStatusToReady(ctx, "non-existent-id")
+	t.Run("record not found", func(t *testing.T) {
+		err := rwModel.UpdateStatusToReady(ctx, "non-existent-id")
 		require.ErrorIs(t, err, ErrRecordNotFound)
 	})
 
-	t.Run("returns ErrWalletNotRegistered when status is not REGISTERED", func(t *testing.T) {
-		defer func() {
-			DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		}()
-		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+	t.Run("status not REGISTERED", func(t *testing.T) {
+		rw := CreateReceiverWalletFixture(t, ctx, dbcp, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+		t.Cleanup(func() { DeleteAllReceiverWalletsFixtures(t, ctx, dbcp) })
 
-		err := model.UpdateStatusToReady(ctx, rw.ID)
+		err := rwModel.UpdateStatusToReady(ctx, rw.ID)
 		require.ErrorIs(t, err, ErrWalletNotRegistered)
 	})
 
-	t.Run("successfully transition rw from REGISTERED -> READY", func(t *testing.T) {
-		defer func() {
-			DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		}()
-
-		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
-		assert.NotEmpty(t, rw.StellarAddress)
-		assert.NotEmpty(t, rw.StellarMemo)
-		assert.NotEmpty(t, rw.StellarMemoType)
-		assert.NotEmpty(t, rw.InvitationSentAt)
-		assert.NotEmpty(t, rw.OTP)
-		assert.NotEmpty(t, rw.OTPConfirmedWith)
-		assert.NotEmpty(t, rw.OTPConfirmedAt)
-		assert.NotEmpty(t, rw.OTPCreatedAt)
-		assert.NotEmpty(t, rw.AnchorPlatformTransactionID)
-		assert.Equal(t, RegisteredReceiversWalletStatus, rw.Status)
-
-		err := model.UpdateStatusToReady(ctx, rw.ID)
+	t.Run("user-managed wallet", func(t *testing.T) {
+		userManagedWallet := CreateWalletFixture(t, ctx, dbcp, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
+		_, err := dbcp.ExecContext(ctx, `UPDATE wallets SET user_managed = TRUE WHERE id = $1`, userManagedWallet.ID)
 		require.NoError(t, err)
-		rw, err = model.GetByID(ctx, dbConnectionPool, rw.ID)
+
+		rw := CreateReceiverWalletFixture(t, ctx, dbcp, receiver.ID, userManagedWallet.ID, RegisteredReceiversWalletStatus)
+		t.Cleanup(func() { DeleteAllReceiverWalletsFixtures(t, ctx, dbcp) })
+
+		err = rwModel.UpdateStatusToReady(ctx, rw.ID)
+		require.ErrorIs(t, err, ErrUnregisterUserManagedWallet)
+	})
+
+	t.Run("payments in progress", func(t *testing.T) {
+		rw := CreateReceiverWalletFixture(t, ctx, dbcp, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		dis := CreateDisbursementFixture(t, ctx, dbcp, models.Disbursements, &Disbursement{})
+
+		CreatePaymentFixture(t, ctx, dbcp, models.Payment, &Payment{
+			Amount:         "50",
+			Asset:          *dis.Asset,
+			Status:         ReadyPaymentStatus,
+			ReceiverWallet: rw,
+			Disbursement:   dis,
+		})
+		t.Cleanup(func() {
+			DeleteAllPaymentsFixtures(t, ctx, dbcp)
+			DeleteAllReceiverWalletsFixtures(t, ctx, dbcp)
+		})
+
+		err := rwModel.UpdateStatusToReady(ctx, rw.ID)
+		require.ErrorIs(t, err, ErrPaymentsInProgressForWallet)
+	})
+
+	t.Run("REGISTERED → READY happy-path", func(t *testing.T) {
+		rw := CreateReceiverWalletFixture(t, ctx, dbcp, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		t.Cleanup(func() { DeleteAllReceiverWalletsFixtures(t, ctx, dbcp) })
+
+		require.NoError(t, rwModel.UpdateStatusToReady(ctx, rw.ID))
+
+		rw, err := rwModel.GetByID(ctx, dbcp, rw.ID)
 		require.NoError(t, err)
 		assert.Equal(t, ReadyReceiversWalletStatus, rw.Status)
 		assert.Empty(t, rw.StellarAddress)
@@ -1876,10 +1888,54 @@ func Test_ReceiverWalletModel_UpdateStatusToReady(t *testing.T) {
 		assert.Empty(t, rw.StellarMemoType)
 		assert.Empty(t, rw.InvitationSentAt)
 		assert.Empty(t, rw.OTP)
-		assert.Empty(t, rw.OTPConfirmedWith)
 		assert.Empty(t, rw.OTPConfirmedAt)
+		assert.Empty(t, rw.OTPConfirmedWith)
 		assert.Empty(t, rw.OTPCreatedAt)
 		assert.Empty(t, rw.AnchorPlatformTransactionID)
 		assert.Empty(t, rw.AnchorPlatformTransactionSyncedAt)
 	})
+}
+
+func TestReceiverWalletModel_HasPaymentsInProgress(t *testing.T) {
+	ctx := context.Background()
+	models := SetupModels(t)
+	dbPool := models.DBConnectionPool
+
+	receiver := CreateReceiverFixture(t, ctx, dbPool, &Receiver{})
+	wallet := CreateDefaultWalletFixture(t, ctx, dbPool)
+	rw := CreateReceiverWalletFixture(t, ctx, dbPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+	d := CreateDisbursementFixture(t, ctx, dbPool, models.Disbursements, &Disbursement{})
+
+	cases := []struct {
+		status PaymentStatus
+		want   bool
+	}{
+		{PendingPaymentStatus, true},
+		{ReadyPaymentStatus, true},
+		{PausedPaymentStatus, true},
+		{DraftPaymentStatus, false},
+		{CanceledPaymentStatus, false},
+		{FailedPaymentStatus, false},
+		{SuccessPaymentStatus, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(string(tc.status), func(t *testing.T) {
+			CreatePaymentFixture(t, ctx, dbPool, models.Payment, &Payment{
+				Amount:         "100",
+				Asset:          *d.Asset,
+				Status:         tc.status,
+				ReceiverWallet: rw,
+				Disbursement:   d,
+			})
+
+			t.Cleanup(func() {
+				DeleteAllPaymentsFixtures(t, ctx, dbPool)
+			})
+
+			got, err := models.ReceiverWallet.HasPaymentsInProgress(ctx, dbPool, rw.ID)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
