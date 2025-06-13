@@ -132,6 +132,12 @@ func (h ReceiverWalletsHandler) PatchReceiverWalletStatus(rw http.ResponseWriter
 		} else if errors.Is(err, data.ErrWalletNotRegistered) {
 			httperror.BadRequest("receiver wallet is not registered", err, nil).Render(rw)
 			return
+		} else if errors.Is(err, data.ErrUnregisterUserManagedWallet) {
+			httperror.BadRequest("user managed wallet cannot be unregistered", err, nil).Render(rw)
+			return
+		} else if errors.Is(err, data.ErrPaymentsInProgressForWallet) {
+			httperror.BadRequest("wallet has payments in progress", err, nil).Render(rw)
+			return
 		}
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
