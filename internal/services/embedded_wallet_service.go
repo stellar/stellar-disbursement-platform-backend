@@ -35,12 +35,22 @@ type EmbeddedWalletService struct {
 	wasmHash  string
 }
 
-func NewEmbeddedWalletService(sdpModels *data.Models, tssModel *store.TransactionModel, wasmHash string) *EmbeddedWalletService {
+func NewEmbeddedWalletService(sdpModels *data.Models, tssModel *store.TransactionModel, wasmHash string) (*EmbeddedWalletService, error) {
+	if sdpModels == nil {
+		return nil, fmt.Errorf("sdpModels cannot be nil")
+	}
+	if tssModel == nil {
+		return nil, fmt.Errorf("tssModel cannot be nil")
+	}
+	if wasmHash == "" {
+		return nil, fmt.Errorf("wasmHash cannot be empty")
+	}
+
 	return &EmbeddedWalletService{
 		sdpModels: sdpModels,
 		tssModel:  tssModel,
 		wasmHash:  wasmHash,
-	}
+	}, nil
 }
 
 type EmbeddedWalletServiceOptions struct {
