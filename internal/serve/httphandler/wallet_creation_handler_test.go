@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -166,20 +169,27 @@ func Test_WalletCreationHandler_GetWallet(t *testing.T) {
 	handler := WalletCreationHandler{
 		EmbeddedWalletService: walletService,
 	}
-	rr := httptest.NewRecorder()
+
 	ctx := context.Background()
 
-	walletService.On("GetWallet", ctx, "123").Return(&data.EmbeddedWallet{
+	walletService.On("GetWallet", mock.Anything, "123").Return(&data.EmbeddedWallet{
 		ContractAddress: "contract-address",
 		WalletStatus:    data.PendingWalletStatus,
 	}, nil)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+	r := chi.NewRouter()
+	r.Get("/embedded-wallets/{token}", handler.GetWallet)
+
+	route := fmt.Sprintf("/embedded-wallets/%s", "123")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, route, nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 	var respBody WalletResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 
 	assert.Equal(t, "contract-address", respBody.ContractAddress)
@@ -192,11 +202,17 @@ func Test_WalletCreationHandler_GetWallet_MissingToken(t *testing.T) {
 		EmbeddedWalletService: walletService,
 	}
 
-	rr := httptest.NewRecorder()
 	ctx := context.Background()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+	r := chi.NewRouter()
+	r.Get("/embedded-wallets/{token}", handler.GetWallet)
+
+	route := fmt.Sprintf("/embedded-wallets/%s", "   ")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, route, nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
 }
@@ -207,13 +223,19 @@ func Test_WalletCreationHandler_GetWallet_InvalidToken(t *testing.T) {
 		EmbeddedWalletService: walletService,
 	}
 
-	rr := httptest.NewRecorder()
 	ctx := context.Background()
 
-	walletService.On("GetWallet", ctx, "123").Return(nil, services.ErrInvalidToken)
+	walletService.On("GetWallet", mock.Anything, "123").Return(nil, services.ErrInvalidToken)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+	r := chi.NewRouter()
+	r.Get("/embedded-wallets/{token}", handler.GetWallet)
+
+	route := fmt.Sprintf("/embedded-wallets/%s", "123")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, route, nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
 }
@@ -224,13 +246,19 @@ func Test_WalletCreationHandler_GetWallet_InternalError(t *testing.T) {
 		EmbeddedWalletService: walletService,
 	}
 
-	rr := httptest.NewRecorder()
 	ctx := context.Background()
 
-	walletService.On("GetWallet", ctx, "123").Return(nil, errors.New("foobar"))
+	walletService.On("GetWallet", mock.Anything, "123").Return(nil, errors.New("foobar"))
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+	r := chi.NewRouter()
+	r.Get("/embedded-wallets/{token}", handler.GetWallet)
+
+	route := fmt.Sprintf("/embedded-wallets/%s", "123")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, route, nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
 }

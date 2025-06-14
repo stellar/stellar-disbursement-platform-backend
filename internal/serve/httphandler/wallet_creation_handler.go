@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/render/httpjson"
 
@@ -78,7 +79,7 @@ func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Re
 
 func (h WalletCreationHandler) GetWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	token := strings.TrimSpace(req.URL.Query().Get("token"))
+	token := strings.TrimSpace(chi.URLParam(req, "token"))
 	if len(token) == 0 {
 		httperror.BadRequest("Token is required", nil, nil).Render(rw)
 		return

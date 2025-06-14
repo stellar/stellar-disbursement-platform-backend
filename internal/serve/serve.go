@@ -515,7 +515,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
 				r.Post("/", walletCreationHandler.CreateWallet)
-				r.Get("/status", walletCreationHandler.GetWallet)
+				r.Get("/{token}", walletCreationHandler.GetWallet)
 			})
 		}
 
