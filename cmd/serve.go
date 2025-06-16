@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
@@ -690,6 +691,19 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.DistributionAccountService = distributionAccountService
 			adminServeOpts.DistributionAccountService = distributionAccountService
+
+			// Setup Embedded Wallet Service (only if enabled)
+			if serveOpts.EnableEmbeddedWallets {
+				serveOpts.EmbeddedWalletService, err = dependencyinjection.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
+					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
+					TSSDBConnectionPool: serveOpts.TSSDBConnectionPool,
+					WasmHash:            serveOpts.EmbeddedWalletsWasmHash,
+				})
+				log.Info("Embedded wallet features enabled")
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating embedded wallet service: %v", err)
+				}
+			}
 
 			// Validate the Event Broker Type and Scheduler Jobs
 			if serveOpts.EnableScheduler {
