@@ -194,14 +194,12 @@ SELECT
     ` + DisbursementColumnNames("d", "disbursement") + `,
     ` + AssetColumnNames("a", "asset", false) + `,
     ` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
-    ` + ReceiverColumnNames("r", "receiver_wallet.receiver") + `,
     ` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
 FROM
     payments p
     LEFT JOIN disbursements d ON p.disbursement_id = d.id
     JOIN assets a ON p.asset_id = a.id
     JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
-    JOIN receivers r ON r.id = rw.receiver_id
     JOIN wallets w ON w.id = rw.wallet_id
 `
 
@@ -313,7 +311,6 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 			LEFT JOIN disbursements d ON p.disbursement_id = d.id
 			JOIN assets a ON p.asset_id = a.id
             JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
-			JOIN receivers r ON r.id = rw.receiver_id
  			JOIN wallets w ON w.id = rw.wallet_id
 		`
 

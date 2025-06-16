@@ -151,12 +151,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"receiver_wallet": {
 				"id": "` + receiverWallet.ID + `",
 				"receiver": {
-					"id": "` + receiver.ID + `",
-					"created_at": "` + receiver.CreatedAt.Format(time.RFC3339Nano) + `",
-					"email": "` + receiver.Email + `", 
-					"external_id": "` + receiver.ExternalID + `",
-					"phone_number": "` + receiver.PhoneNumber + `",
-					"updated_at": "` + receiver.UpdatedAt.Format(time.RFC3339Nano) + `"
+					"id": "` + receiver.ID + `"
 				},
 				"wallet": {
 					"id": "` + wallet.ID + `",
