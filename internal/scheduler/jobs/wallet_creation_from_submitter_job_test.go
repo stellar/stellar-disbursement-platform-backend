@@ -15,23 +15,23 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_EmbeddedWalletFromSubmitterJob_GetInterval(t *testing.T) {
+func Test_WalletCreationFromSubmitterJob_GetInterval(t *testing.T) {
 	interval := 5
-	j := NewEmbeddedWalletFromSubmitterJob(interval, &data.Models{}, nil, "Test SDF Network ; September 2015")
+	j := NewWalletCreationFromSubmitterJob(interval, &data.Models{}, nil, "Test SDF Network ; September 2015")
 	require.Equal(t, time.Duration(interval)*time.Second, j.GetInterval())
 }
 
-func Test_EmbeddedWalletFromSubmitterJob_GetName(t *testing.T) {
-	j := NewEmbeddedWalletFromSubmitterJob(5, &data.Models{}, nil, "Test SDF Network ; September 2015")
-	require.Equal(t, embeddedWalletFromSubmitterJobName, j.GetName())
+func Test_WalletCreationFromSubmitterJob_GetName(t *testing.T) {
+	j := NewWalletCreationFromSubmitterJob(5, &data.Models{}, nil, "Test SDF Network ; September 2015")
+	require.Equal(t, walletCreationFromSubmitterJobName, j.GetName())
 }
 
-func Test_EmbeddedWalletFromSubmitterJob_IsJobMultiTenant(t *testing.T) {
-	j := NewEmbeddedWalletFromSubmitterJob(5, &data.Models{}, nil, "Test SDF Network ; September 2015")
+func Test_WalletCreationFromSubmitterJob_IsJobMultiTenant(t *testing.T) {
+	j := NewWalletCreationFromSubmitterJob(5, &data.Models{}, nil, "Test SDF Network ; September 2015")
 	require.Equal(t, true, j.IsJobMultiTenant())
 }
 
-func Test_EmbeddedWalletFromSubmitterJob_Execute(t *testing.T) {
+func Test_WalletCreationFromSubmitterJob_Execute(t *testing.T) {
 	tests := []struct {
 		name                   string
 		tenantDistributionType schema.AccountType
@@ -69,20 +69,20 @@ func Test_EmbeddedWalletFromSubmitterJob_Execute(t *testing.T) {
 			}
 			ctx = tenant.SaveTenantInContext(ctx, tenantInfo)
 
-			mockService := &mocks.MockEmbeddedWalletFromSubmitterService{}
+			mockService := &mocks.MockWalletCreationFromSubmitterService{}
 
 			if tc.expectServiceCall {
-				mockService.On("SyncBatchTransactions", mock.Anything, embeddedWalletFromSubmitterBatchSize, tenantInfo.ID).
-					Return(tc.syncBatchTransactions(nil, embeddedWalletFromSubmitterBatchSize, tenantInfo.ID))
+				mockService.On("SyncBatchTransactions", mock.Anything, walletCreationFromSubmitterBatchSize, tenantInfo.ID).
+					Return(tc.syncBatchTransactions(nil, walletCreationFromSubmitterBatchSize, tenantInfo.ID))
 			}
 
-			j := embeddedWalletFromSubmitterJob{
+			j := walletCreationFromSubmitterJob{
 				service: mockService,
 			}
 
 			err := j.Execute(ctx)
 			if (err != nil) != tc.wantErr {
-				t.Errorf("embeddedWalletFromSubmitterJob.Execute() error = %v, wantErr %v", err, tc.wantErr)
+				t.Errorf("walletCreationFromSubmitterJob.Execute() error = %v, wantErr %v", err, tc.wantErr)
 			}
 
 			mockService.AssertExpectations(t)
@@ -90,12 +90,12 @@ func Test_EmbeddedWalletFromSubmitterJob_Execute(t *testing.T) {
 	}
 }
 
-func Test_EmbeddedWalletFromSubmitterJob_Execute_NoTenantInContext(t *testing.T) {
+func Test_WalletCreationFromSubmitterJob_Execute_NoTenantInContext(t *testing.T) {
 	ctx := context.Background()
 
-	mockService := &mocks.MockEmbeddedWalletFromSubmitterService{}
+	mockService := &mocks.MockWalletCreationFromSubmitterService{}
 
-	j := embeddedWalletFromSubmitterJob{
+	j := walletCreationFromSubmitterJob{
 		service: mockService,
 	}
 

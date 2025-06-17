@@ -17,37 +17,37 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-//go:generate mockery --name=EmbeddedWalletFromSubmitterServiceInterface --case=snake --structname=MockEmbeddedWalletFromSubmitterService
+//go:generate mockery --name=WalletCreationFromSubmitterServiceInterface --case=snake --structname=MockWalletCreationFromSubmitterService
 
-type EmbeddedWalletFromSubmitterServiceInterface interface {
+type WalletCreationFromSubmitterServiceInterface interface {
 	SyncTransaction(ctx context.Context, transactionID string) error
 	SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error
 }
 
-// EmbeddedWalletFromSubmitterService is a service that monitors TSS transactions that were complete and sync their completion
+// WalletCreationFromSubmitterService is a service that monitors TSS wallet creation transactions that were complete and sync their completion
 // state with the SDP embedded wallets.
-type EmbeddedWalletFromSubmitterService struct {
+type WalletCreationFromSubmitterService struct {
 	sdpModels         *data.Models
 	tssModel          *store.TransactionModel
 	networkPassphrase string
 }
 
-var _ EmbeddedWalletFromSubmitterServiceInterface = (*EmbeddedWalletFromSubmitterService)(nil)
+var _ WalletCreationFromSubmitterServiceInterface = (*WalletCreationFromSubmitterService)(nil)
 
-// NewEmbeddedWalletFromSubmitterService creates a new instance of EmbeddedWalletFromSubmitterService.
-func NewEmbeddedWalletFromSubmitterService(
+// NewWalletCreationFromSubmitterService creates a new instance of WalletCreationFromSubmitterService.
+func NewWalletCreationFromSubmitterService(
 	models *data.Models,
 	tssDBConnectionPool db.DBConnectionPool,
 	networkPassphrase string,
-) *EmbeddedWalletFromSubmitterService {
-	return &EmbeddedWalletFromSubmitterService{
+) *WalletCreationFromSubmitterService {
+	return &WalletCreationFromSubmitterService{
 		sdpModels:         models,
 		tssModel:          store.NewTransactionModel(tssDBConnectionPool),
 		networkPassphrase: networkPassphrase,
 	}
 }
 
-func (s *EmbeddedWalletFromSubmitterService) calculateContractAddress(
+func (s *WalletCreationFromSubmitterService) calculateContractAddress(
 	distributionAccount, publicKey string,
 ) (string, error) {
 	publicKeyBytes, err := hex.DecodeString(publicKey)
@@ -106,7 +106,7 @@ func (s *EmbeddedWalletFromSubmitterService) calculateContractAddress(
 }
 
 // SyncTransaction syncs a single completed TSS wallet creation transaction with the embedded wallet table
-func (s *EmbeddedWalletFromSubmitterService) SyncTransaction(ctx context.Context, transactionID string) error {
+func (s *WalletCreationFromSubmitterService) SyncTransaction(ctx context.Context, transactionID string) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
 		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
 			transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, tssDBTx, transactionID, store.TransactionTypeWalletCreation)
@@ -128,7 +128,7 @@ func (s *EmbeddedWalletFromSubmitterService) SyncTransaction(ctx context.Context
 }
 
 // SyncBatchTransactions syncs a batch of completed TSS wallet creation transactions with the embedded wallet table
-func (s *EmbeddedWalletFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error {
+func (s *WalletCreationFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
 		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
 			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize, tenantID, store.TransactionTypeWalletCreation)
@@ -147,9 +147,9 @@ func (s *EmbeddedWalletFromSubmitterService) SyncBatchTransactions(ctx context.C
 
 // syncTransactions synchronizes TSS wallet creation transactions with the embedded wallet table.
 // It should be called within a DB transaction. This method processes multiple transactions efficiently.
-func (s *EmbeddedWalletFromSubmitterService) syncTransactions(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, transactions []*store.Transaction) error {
+func (s *WalletCreationFromSubmitterService) syncTransactions(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, transactions []*store.Transaction) error {
 	if s.sdpModels == nil || s.tssModel == nil {
-		return fmt.Errorf("EmbeddedWalletFromSubmitterService sdpModels and tssModel cannot be nil")
+		return fmt.Errorf("WalletCreationFromSubmitterService sdpModels and tssModel cannot be nil")
 	}
 
 	if len(transactions) == 0 {
@@ -194,7 +194,7 @@ func (s *EmbeddedWalletFromSubmitterService) syncTransactions(ctx context.Contex
 }
 
 // syncEmbeddedWalletWithTransaction updates the embedded wallet based on the transaction status.
-func (s *EmbeddedWalletFromSubmitterService) syncEmbeddedWalletWithTransaction(ctx context.Context, sdpDBTx db.DBTransaction, transaction *store.Transaction) error {
+func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(ctx context.Context, sdpDBTx db.DBTransaction, transaction *store.Transaction) error {
 	embeddedWallet, err := s.sdpModels.EmbeddedWallets.GetByToken(ctx, sdpDBTx, transaction.ExternalID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {

@@ -39,7 +39,7 @@ func setupEmbeddedWalletTestContext(t *testing.T, dbConnectionPool db.DBConnecti
 	}
 }
 
-func Test_EmbeddedWalletFromSubmitterService_SyncTransaction(t *testing.T) {
+func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -50,7 +50,7 @@ func Test_EmbeddedWalletFromSubmitterService_SyncTransaction(t *testing.T) {
 	testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	service := NewEmbeddedWalletFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
+	service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
 
 	walletToken := uuid.NewString()
 	_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
@@ -131,7 +131,7 @@ func Test_EmbeddedWalletFromSubmitterService_SyncTransaction(t *testing.T) {
 	})
 }
 
-func Test_EmbeddedWalletFromSubmitterService_SyncTransaction_errors(t *testing.T) {
+func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -142,7 +142,7 @@ func Test_EmbeddedWalletFromSubmitterService_SyncTransaction_errors(t *testing.T
 	testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	service := NewEmbeddedWalletFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
+	service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
 
 	t.Run("returns error for non-existent transaction", func(t *testing.T) {
 		err := service.SyncTransaction(ctx, "non-existent-tx-id")
@@ -256,7 +256,7 @@ func Test_EmbeddedWalletFromSubmitterService_SyncTransaction_errors(t *testing.T
 	})
 }
 
-func Test_EmbeddedWalletFromSubmitterService_SyncBatchTransactions(t *testing.T) {
+func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -267,7 +267,7 @@ func Test_EmbeddedWalletFromSubmitterService_SyncBatchTransactions(t *testing.T)
 	testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	service := NewEmbeddedWalletFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
+	service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
 
 	// Create test embedded wallets
 	wallet1Token := uuid.NewString()
@@ -434,7 +434,7 @@ func Test_EmbeddedWalletFromSubmitterService_SyncBatchTransactions(t *testing.T)
 	})
 }
 
-func Test_EmbeddedWalletFromSubmitterService_calculateContractAddress(t *testing.T) {
+func Test_WalletCreationFromSubmitterService_calculateContractAddress(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -445,7 +445,7 @@ func Test_EmbeddedWalletFromSubmitterService_calculateContractAddress(t *testing
 	testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
 	networkPassphrase := "Test SDF Network ; September 2015"
 
-	service := NewEmbeddedWalletFromSubmitterService(testCtx.sdpModel, dbConnectionPool, networkPassphrase)
+	service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, networkPassphrase)
 
 	t.Run("successfully calculates contract address", func(t *testing.T) {
 		distributionAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"

@@ -15,33 +15,33 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-type EmbeddedWalletFromSubmitterEventHandlerOptions struct {
+type WalletCreationFromSubmitterEventHandlerOptions struct {
 	AdminDBConnectionPool db.DBConnectionPool
 	MtnDBConnectionPool   db.DBConnectionPool
 	TSSDBConnectionPool   db.DBConnectionPool
 	NetworkPassphrase     string
 }
 
-type EmbeddedWalletFromSubmitterEventHandler struct {
+type WalletCreationFromSubmitterEventHandler struct {
 	tenantManager tenant.ManagerInterface
-	service       services.EmbeddedWalletFromSubmitterServiceInterface
+	service       services.WalletCreationFromSubmitterServiceInterface
 }
 
-var _ events.EventHandler = new(EmbeddedWalletFromSubmitterEventHandler)
+var _ events.EventHandler = new(WalletCreationFromSubmitterEventHandler)
 
-func NewEmbeddedWalletFromSubmitterEventHandler(options EmbeddedWalletFromSubmitterEventHandlerOptions) *EmbeddedWalletFromSubmitterEventHandler {
+func NewWalletCreationFromSubmitterEventHandler(options WalletCreationFromSubmitterEventHandlerOptions) *WalletCreationFromSubmitterEventHandler {
 	models, err := data.NewModels(options.MtnDBConnectionPool)
 	if err != nil {
 		log.Fatalf("error getting models: %s", err.Error())
 	}
 
-	return &EmbeddedWalletFromSubmitterEventHandler{
+	return &WalletCreationFromSubmitterEventHandler{
 		tenantManager: tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool)),
-		service:       services.NewEmbeddedWalletFromSubmitterService(models, options.TSSDBConnectionPool, options.NetworkPassphrase),
+		service:       services.NewWalletCreationFromSubmitterService(models, options.TSSDBConnectionPool, options.NetworkPassphrase),
 	}
 }
 
-func (h *EmbeddedWalletFromSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) error {
+func (h *WalletCreationFromSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) error {
 	tx, err := utils.ConvertType[any, schemas.EventWalletCreationCompletedData](message.Data)
 	if err != nil {
 		return fmt.Errorf("could not convert message data to %T: %w", schemas.EventWalletCreationCompletedData{}, err)
@@ -61,10 +61,10 @@ func (h *EmbeddedWalletFromSubmitterEventHandler) Handle(ctx context.Context, me
 	return nil
 }
 
-func (h *EmbeddedWalletFromSubmitterEventHandler) Name() string {
+func (h *WalletCreationFromSubmitterEventHandler) Name() string {
 	return utils.GetTypeName(h)
 }
 
-func (h *EmbeddedWalletFromSubmitterEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
+func (h *WalletCreationFromSubmitterEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
 	return message.Topic == events.WalletCreationCompletedTopic
 }

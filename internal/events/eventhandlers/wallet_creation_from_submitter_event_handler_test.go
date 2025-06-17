@@ -16,7 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_EmbeddedWalletFromSubmitterEventHandler_Handle(t *testing.T) {
+func Test_WalletCreationFromSubmitterEventHandler_Handle(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -26,9 +26,9 @@ func Test_EmbeddedWalletFromSubmitterEventHandler_Handle(t *testing.T) {
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
-	service := servicesMocks.MockEmbeddedWalletFromSubmitterService{}
+	service := servicesMocks.MockWalletCreationFromSubmitterService{}
 
-	handler := EmbeddedWalletFromSubmitterEventHandler{
+	handler := WalletCreationFromSubmitterEventHandler{
 		tenantManager: tenantManager,
 		service:       &service,
 	}
@@ -101,14 +101,14 @@ func Test_EmbeddedWalletFromSubmitterEventHandler_Handle(t *testing.T) {
 	service.AssertExpectations(t)
 }
 
-func Test_EmbeddedWalletFromSubmitterEventHandler_Name(t *testing.T) {
-	handler := &EmbeddedWalletFromSubmitterEventHandler{}
+func Test_WalletCreationFromSubmitterEventHandler_Name(t *testing.T) {
+	handler := &WalletCreationFromSubmitterEventHandler{}
 	name := handler.Name()
-	assert.Equal(t, "EmbeddedWalletFromSubmitterEventHandler", name)
+	assert.Equal(t, "WalletCreationFromSubmitterEventHandler", name)
 }
 
-func Test_EmbeddedWalletFromSubmitterEventHandler_CanHandleMessage(t *testing.T) {
-	handler := &EmbeddedWalletFromSubmitterEventHandler{}
+func Test_WalletCreationFromSubmitterEventHandler_CanHandleMessage(t *testing.T) {
+	handler := &WalletCreationFromSubmitterEventHandler{}
 	ctx := context.Background()
 
 	tests := []struct {

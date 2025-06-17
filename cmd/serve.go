@@ -129,9 +129,9 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			}),
 		)
 
-		// Add embedded wallet job only if enabled
+		// Add wallet creation sync job only if enabled
 		if serveOpts.EnableEmbeddedWallets {
-			sj = append(sj, scheduler.WithEmbeddedWalletFromSubmitterJobOption(
+			sj = append(sj, scheduler.WithWalletCreationFromSubmitterJobOption(
 				schedulerOptions.PaymentJobIntervalSeconds,
 				models,
 				tssDBConnectionPool,
@@ -224,9 +224,9 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 	}
 
 	var walletCreationCompletedConsumer events.Consumer
-	// Embedded wallet creation completion consumer (only if embedded wallets are enabled)
+	// Wallet creation completion consumer (only if embedded wallets are enabled)
 	if o.ServeOpts.EnableEmbeddedWallets {
-		embeddedWalletHandler := eventhandlers.NewEmbeddedWalletFromSubmitterEventHandler(eventhandlers.EmbeddedWalletFromSubmitterEventHandlerOptions{
+		walletCreationHandler := eventhandlers.NewWalletCreationFromSubmitterEventHandler(eventhandlers.WalletCreationFromSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
@@ -237,7 +237,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			kafkaConfig,
 			events.WalletCreationCompletedTopic,
 			o.EventBrokerOptions.ConsumerGroupID,
-			embeddedWalletHandler,
+			walletCreationHandler,
 		)
 		if err != nil {
 			return fmt.Errorf("creating Wallet Creation Completed Kafka Consumer: %w", err)
