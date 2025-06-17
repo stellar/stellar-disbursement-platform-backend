@@ -174,9 +174,9 @@ func (h *PaymentTransactionHandler) MonitorTransactionProcessingStarted(ctx cont
 		txJob.Transaction,
 		sdpMonitor.PaymentProcessingStartedTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			PaymentEventType: sdpMonitor.PaymentProcessingStartedLabel,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			TransactionEventType: sdpMonitor.PaymentProcessingStartedLabel,
 		},
 	)
 }
@@ -192,10 +192,10 @@ func (h *PaymentTransactionHandler) MonitorTransactionProcessingSuccess(ctx cont
 		txJob.Transaction,
 		sdpMonitor.PaymentTransactionSuccessfulTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     false,
-			PaymentEventType: eventType,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:         false,
+			TransactionEventType: eventType,
 		},
 	)
 }
@@ -211,11 +211,11 @@ func (h *PaymentTransactionHandler) MonitorTransactionProcessingFailed(ctx conte
 		txJob.Transaction,
 		sdpMonitor.PaymentErrorTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     isRetryable,
-			ErrStack:         errStack,
-			PaymentEventType: eventType,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:         isRetryable,
+			ErrStack:             errStack,
+			TransactionEventType: eventType,
 		},
 	)
 }
@@ -231,9 +231,9 @@ func (h *PaymentTransactionHandler) MonitorTransactionReconciliationSuccess(ctx 
 		txJob.Transaction,
 		sdpMonitor.PaymentReconciliationSuccessfulTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			PaymentEventType: paymentEventType,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			TransactionEventType: paymentEventType,
 		},
 	)
 }
@@ -244,11 +244,11 @@ func (h *PaymentTransactionHandler) MonitorTransactionReconciliationFailure(ctx 
 		txJob.Transaction,
 		sdpMonitor.PaymentReconciliationFailureTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     isHorizonErr,
-			ErrStack:         errStack,
-			PaymentEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:         isHorizonErr,
+			ErrStack:             errStack,
+			TransactionEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
 		},
 	)
 }
