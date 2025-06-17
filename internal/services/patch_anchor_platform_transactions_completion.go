@@ -50,9 +50,11 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionForP
 			return fmt.Errorf("getting payment ID %s: %w", tx.PaymentID, err)
 		}
 
-		if payment.Disbursement.RegistrationContactType.IncludesWalletAddress {
-			log.Ctx(ctx).Debugf("skipping patching anchor transaction. Known-wallet ID payment %s wasn't registered with anchor platform", payment.ID)
-			return nil
+		if payment.PaymentType == data.PaymentTypeDisbursement {
+			if payment.Disbursement.RegistrationContactType.IncludesWalletAddress {
+				log.Ctx(ctx).Debugf("skipping patching anchor transaction. Known-wallet ID payment %s wasn't registered with anchor platform", payment.ID)
+				return nil
+			}
 		}
 
 		if payment.ReceiverWallet.AnchorPlatformTransactionSyncedAt != nil && !payment.ReceiverWallet.AnchorPlatformTransactionSyncedAt.IsZero() {

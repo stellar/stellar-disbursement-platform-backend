@@ -99,7 +99,7 @@ type InsufficientBalanceForDirectPaymentError struct {
 func (e InsufficientBalanceForDirectPaymentError) Error() string {
 	shortfall := (e.RequestedAmount + e.TotalPendingAmount) - e.AvailableBalance
 	return fmt.Sprintf(
-		"insufficient balance for direct payment: requested %.2f %s, but only %.2f available (%.2f in pending payments). Need %.2f more %s",
+		"insufficient balance for direct payment: requested %.6f %s, but only %.6f available (%.6f in pending payments). Need %.6f more %s",
 		e.RequestedAmount,
 		e.Asset.Code,
 		e.AvailableBalance,
