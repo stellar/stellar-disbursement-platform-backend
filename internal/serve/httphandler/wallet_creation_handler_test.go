@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -25,17 +27,18 @@ func Test_WalletCreationHandler_CreateWallet(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
-		Token:     "123",
-		PublicKey: "04f5",
+		Token:        "123",
+		PublicKey:    "04f5",
+		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", ctx, "123", "04f5").Return(nil)
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(nil)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
 	var respBody WalletResponse
 	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
@@ -53,26 +56,38 @@ func Test_WalletCreationHandler_CreateWallet_ValidationErrors(t *testing.T) {
 		{
 			name: "empty token",
 			requestBody: CreateWalletRequest{
-				Token:     "",
-				PublicKey: "04f5",
+				Token:        "",
+				PublicKey:    "04f5",
+				CredentialID: "test-credential-id",
 			},
 			expectedField: "token",
 		},
 		{
 			name: "empty public key",
 			requestBody: CreateWalletRequest{
-				Token:     "123",
-				PublicKey: "",
+				Token:        "123",
+				PublicKey:    "",
+				CredentialID: "test-credential-id",
 			},
 			expectedField: "public_key",
 		},
 		{
 			name: "invalid public key",
 			requestBody: CreateWalletRequest{
-				Token:     "123",
-				PublicKey: "invalid_key",
+				Token:        "123",
+				PublicKey:    "invalid_key",
+				CredentialID: "test-credential-id",
 			},
 			expectedField: "public_key",
+		},
+		{
+			name: "empty credential id",
+			requestBody: CreateWalletRequest{
+				Token:        "123",
+				PublicKey:    "04f5",
+				CredentialID: "",
+			},
+			expectedField: "credential_id",
 		},
 	}
 
@@ -106,12 +121,13 @@ func Test_WalletCreationHandler_CreateWallet_InternalError(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
-		Token:     "123",
-		PublicKey: "04f5",
+		Token:        "123",
+		PublicKey:    "04f5",
+		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", ctx, "123", "04f5").Return(errors.New("foobar"))
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(errors.New("foobar"))
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -127,12 +143,13 @@ func Test_WalletCreationHandler_CreateWallet_InvalidToken(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
-		Token:     "123",
-		PublicKey: "04f5",
+		Token:        "123",
+		PublicKey:    "04f5",
+		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", ctx, "123", "04f5").Return(services.ErrInvalidToken)
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(services.ErrInvalidToken)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -148,12 +165,13 @@ func Test_WalletCreationHandler_CreateWallet_InvalidStatus(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
-		Token:     "123",
-		PublicKey: "04f5",
+		Token:        "123",
+		PublicKey:    "04f5",
+		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", ctx, "123", "04f5").Return(services.ErrCreateWalletInvalidStatus)
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(services.ErrCreateWalletInvalidStatus)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -161,76 +179,116 @@ func Test_WalletCreationHandler_CreateWallet_InvalidStatus(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
 }
 
+func Test_WalletCreationHandler_CreateWallet_CredentialIDConflict(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	rr := httptest.NewRecorder()
+	requestBody, _ := json.Marshal(CreateWalletRequest{
+		Token:        "123",
+		PublicKey:    "04f5",
+		CredentialID: "duplicate-credential-id",
+	})
+	ctx := context.Background()
+
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "duplicate-credential-id").Return(services.ErrCredentialIDAlreadyExists)
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusConflict, rr.Result().StatusCode)
+
+	responseBody := rr.Body.String()
+	assert.Contains(t, responseBody, "Credential ID already exists")
+}
+
 func Test_WalletCreationHandler_GetWallet(t *testing.T) {
-	walletService := mocks.NewMockEmbeddedWalletService(t)
-	handler := WalletCreationHandler{
-		EmbeddedWalletService: walletService,
+	testCases := []struct {
+		name             string
+		credentialID     string
+		setupMock        func(*mocks.MockEmbeddedWalletService)
+		expectedStatus   int
+		expectedResponse *WalletResponse
+	}{
+		{
+			name:         "successfully gets wallet",
+			credentialID: "test-credential-id",
+			setupMock: func(walletService *mocks.MockEmbeddedWalletService) {
+				walletService.On("GetWalletByCredentialID", mock.Anything, "test-credential-id").Return(&data.EmbeddedWallet{
+					ContractAddress: "contract-address",
+					WalletStatus:    data.SuccessWalletStatus,
+					CredentialID:    "test-credential-id",
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: &WalletResponse{
+				ContractAddress: "contract-address",
+				Status:          data.SuccessWalletStatus,
+			},
+		},
+		{
+			name:         "returns error for invalid credential ID",
+			credentialID: "invalid-id",
+			setupMock: func(walletService *mocks.MockEmbeddedWalletService) {
+				walletService.On("GetWalletByCredentialID", mock.Anything, "invalid-id").Return(nil, services.ErrInvalidCredentialID)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:         "returns error for internal service error",
+			credentialID: "test-error-id",
+			setupMock: func(walletService *mocks.MockEmbeddedWalletService) {
+				walletService.On("GetWalletByCredentialID", mock.Anything, "test-error-id").Return(nil, errors.New("internal error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
 	}
-	rr := httptest.NewRecorder()
-	ctx := context.Background()
 
-	walletService.On("GetWallet", ctx, "123").Return(&data.EmbeddedWallet{
-		ContractAddress: "contract-address",
-		WalletStatus:    data.PendingWalletStatus,
-	}, nil)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			walletService := mocks.NewMockEmbeddedWalletService(t)
+			handler := WalletCreationHandler{
+				EmbeddedWalletService: walletService,
+			}
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+			tc.setupMock(walletService)
 
-	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
-	var respBody WalletResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
-	require.NoError(t, err)
+			r := chi.NewRouter()
+			r.Get("/embedded-wallets/{credentialID}", handler.GetWallet)
 
-	assert.Equal(t, "contract-address", respBody.ContractAddress)
-	assert.Equal(t, data.PendingWalletStatus, respBody.Status)
+			rr := httptest.NewRecorder()
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/"+tc.credentialID, nil)
+
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Result().StatusCode)
+
+			if tc.expectedResponse != nil {
+				var respBody WalletResponse
+				err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedResponse.ContractAddress, respBody.ContractAddress)
+				assert.Equal(t, tc.expectedResponse.Status, respBody.Status)
+			}
+		})
+	}
 }
 
-func Test_WalletCreationHandler_GetWallet_MissingToken(t *testing.T) {
+func Test_WalletCreationHandler_GetWallet_EmptyCredentialID(t *testing.T) {
 	walletService := mocks.NewMockEmbeddedWalletService(t)
 	handler := WalletCreationHandler{
 		EmbeddedWalletService: walletService,
 	}
 
-	rr := httptest.NewRecorder()
-	ctx := context.Background()
+	r := chi.NewRouter()
+	r.Get("/embedded-wallets/{credentialID}", handler.GetWallet)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
+	rr := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/ ", nil)
+
+	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
-}
-
-func Test_WalletCreationHandler_GetWallet_InvalidToken(t *testing.T) {
-	walletService := mocks.NewMockEmbeddedWalletService(t)
-	handler := WalletCreationHandler{
-		EmbeddedWalletService: walletService,
-	}
-
-	rr := httptest.NewRecorder()
-	ctx := context.Background()
-
-	walletService.On("GetWallet", ctx, "123").Return(nil, services.ErrInvalidToken)
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
-}
-
-func Test_WalletCreationHandler_GetWallet_InternalError(t *testing.T) {
-	walletService := mocks.NewMockEmbeddedWalletService(t)
-	handler := WalletCreationHandler{
-		EmbeddedWalletService: walletService,
-	}
-
-	rr := httptest.NewRecorder()
-	ctx := context.Background()
-
-	walletService.On("GetWallet", ctx, "123").Return(nil, errors.New("foobar"))
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallet/status?token=123", nil)
-	http.HandlerFunc(handler.GetWallet).ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
 }

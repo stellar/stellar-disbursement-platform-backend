@@ -677,7 +677,7 @@ func DeleteAllDisbursementFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
-func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, wasmHash, contractAddress string, status EmbeddedWalletStatus) *EmbeddedWallet {
+func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, wasmHash, contractAddress, credentialID string, status EmbeddedWalletStatus) *EmbeddedWallet {
 	t.Helper()
 
 	if token == "" {
@@ -686,15 +686,33 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		token = randomToken
 	}
 
-	q := `
+	q := fmt.Sprintf(`
 		INSERT INTO embedded_wallets
-			(token, wasm_hash, contract_address, wallet_status)
+			(token, wasm_hash, contract_address, credential_id, wallet_status)
 		VALUES
-			($1, $2, $3, $4)
-		RETURNING *
-	`
+			($1, $2, $3, $4, $5)
+		RETURNING %s
+	`, EmbeddedWalletColumnNames("", ""))
 	wallet := EmbeddedWallet{}
-	err := sqlExec.GetContext(ctx, &wallet, q, token, wasmHash, contractAddress, status)
+
+	var wasmHashParam, contractAddressParam, credIDParam interface{}
+	if wasmHash == "" {
+		wasmHashParam = nil
+	} else {
+		wasmHashParam = wasmHash
+	}
+	if contractAddress == "" {
+		contractAddressParam = nil
+	} else {
+		contractAddressParam = contractAddress
+	}
+	if credentialID == "" {
+		credIDParam = nil
+	} else {
+		credIDParam = credentialID
+	}
+
+	err := sqlExec.GetContext(ctx, &wallet, q, token, wasmHashParam, contractAddressParam, credIDParam, status)
 	require.NoError(t, err)
 	return &wallet
 }

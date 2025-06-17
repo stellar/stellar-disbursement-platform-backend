@@ -616,7 +616,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				}
 				r.Route("/embedded-wallets", func(r chi.Router) {
 					r.Post("/", walletCreationHandler.CreateWallet)
-					r.Get("/status", walletCreationHandler.GetWallet)
+					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
 				})
 			})
 		}
