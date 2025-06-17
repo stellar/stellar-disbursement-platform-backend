@@ -211,12 +211,12 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 			return fmt.Errorf("distribution account is not set for transaction %s", transaction.ID)
 		}
 
-		contractAddress, err := s.calculateContractAddress(
+		contractAddress, calcErr := s.calculateContractAddress(
 			transaction.DistributionAccount.String,
 			transaction.WalletCreation.PublicKey,
 		)
-		if err != nil {
-			return fmt.Errorf("calculating contract address for transaction %s: %w", transaction.ID, err)
+		if calcErr != nil {
+			return fmt.Errorf("calculating contract address for transaction %s: %w", transaction.ID, calcErr)
 		}
 
 		update.ContractAddress = contractAddress
