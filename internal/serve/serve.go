@@ -20,7 +20,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -124,19 +123,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("error creating models for Serve: %w", err)
-	}
-
-	// Setup Embedded Wallet Service (only if enabled)
-	if opts.EnableEmbeddedWallets {
-		opts.EmbeddedWalletService, err = dependencyinjection.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
-			MTNDBConnectionPool: opts.MtnDBConnectionPool,
-			TSSDBConnectionPool: opts.TSSDBConnectionPool,
-			WasmHash:            opts.EmbeddedWalletsWasmHash,
-		})
-		log.Info("Embedded wallet features enabled")
-		if err != nil {
-			return fmt.Errorf("creating embedded wallet service: %w", err)
-		}
 	}
 
 	// Setup Stellar Auth JWT manager
@@ -508,17 +494,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
-		// Embedded wallet routes (only if feature is enabled)
-		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/embedded-wallets", func(r chi.Router) {
-				walletCreationHandler := httphandler.WalletCreationHandler{
-					EmbeddedWalletService: o.EmbeddedWalletService,
-				}
-				r.Post("/", walletCreationHandler.CreateWallet)
-				r.Get("/status", walletCreationHandler.GetWallet)
-			})
-		}
-
 		profileHandler := httphandler.ProfileHandler{
 			Models:                      o.Models,
 			AuthManager:                 authManager,
@@ -632,6 +607,19 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.ServeHTTP)
 
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
+
+		// Embedded wallet routes (only if feature is enabled)
+		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
+			mux.Group(func(r chi.Router) {
+				walletCreationHandler := httphandler.WalletCreationHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+				}
+				r.Route("/embedded-wallets", func(r chi.Router) {
+					r.Post("/", walletCreationHandler.CreateWallet)
+					r.Get("/status", walletCreationHandler.GetWallet)
+				})
+			})
+		}
 	})
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware

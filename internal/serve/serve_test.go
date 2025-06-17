@@ -30,6 +30,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
@@ -530,6 +531,25 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Return(events.KafkaEventBrokerType).
 		Maybe()
 
+	// Setup embedded wallet service mock
+	mEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mEmbeddedWalletService.
+		On("CreateInvitationToken", mock.Anything).
+		Return("mock-token", nil).
+		Maybe()
+	mEmbeddedWalletService.
+		On("CreateWallet", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).
+		Maybe()
+	mEmbeddedWalletService.
+		On("GetWallet", mock.Anything, mock.Anything).
+		Return(&data.EmbeddedWallet{
+			Token:           "mock-token",
+			WalletStatus:    data.PendingWalletStatus,
+			ContractAddress: "mock-contract-address",
+		}, nil).
+		Maybe()
+
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
@@ -551,6 +571,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		EventProducer:                   producerMock,
 		EnableEmbeddedWallets:           true,
 		EmbeddedWalletsWasmHash:         "abc123",
+		EmbeddedWalletService:           mEmbeddedWalletService,
 		RpcConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
 	err = serveOptions.SetupDependencies()
@@ -679,9 +700,6 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/api-keys/12345"},
 		{http.MethodPatch, "/api-keys/12345"},
 		{http.MethodDelete, "/api-keys/12345"},
-		// Embedded Wallets
-		{http.MethodPost, "/embedded-wallets"},
-		{http.MethodGet, "/embedded-wallets/status"},
 	}
 
 	// Expect 401 as a response:
