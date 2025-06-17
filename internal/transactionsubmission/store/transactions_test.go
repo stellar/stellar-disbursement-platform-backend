@@ -650,7 +650,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 			name:                "🎉 successfully validate the tx hash, XDR envelope, distribution account and save them to the DB",
 			txHash:              txHash,
 			xdrSent:             envelopeXDR,
-			distributionAccount: "GCKFBEIYTKP5RDBEJYOR6JKDKYBWB5DBJNXKFRKWKJZKGB3BVGFHBVFS",
+			distributionAccount: "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU",
 		},
 	}
 
@@ -685,7 +685,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 
 			distributionAccount := tc.distributionAccount
 			if distributionAccount == "" {
-				distributionAccount = "GCKFBEIYTKP5RDBEJYOR6JKDKYBWB5DBJNXKFRKWKJZKGB3BVGFHBVFS"
+				distributionAccount = "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
 			}
 			updatedTx, err := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, tc.txHash, tc.xdrSent, distributionAccount)
 			if tc.wantErrContains != "" {
