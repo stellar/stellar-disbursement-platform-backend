@@ -8,6 +8,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
@@ -170,6 +171,16 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	}
 
 	txParams.BaseFee = h.calculateAdjustedBaseFee(simulationResponse)
+
+	channelAccount, err := h.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
+	if err != nil {
+		err = fmt.Errorf("getting account detail: %w", err)
+		return nil, utils.NewHorizonErrorWrapper(err)
+	}
+	txParams.SourceAccount = &txnbuild.SimpleAccount{
+		AccountID: txJob.ChannelAccount.PublicKey,
+		Sequence:  channelAccount.Sequence,
+	}
 
 	preparedTx, err := txnbuild.NewTransaction(txParams)
 	if err != nil {

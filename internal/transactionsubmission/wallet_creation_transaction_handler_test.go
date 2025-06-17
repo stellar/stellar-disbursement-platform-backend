@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
@@ -219,8 +221,17 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 	})
 
 	t.Run("🎉 successfully build a transaction", func(t *testing.T) {
+		mHorizonClient := &horizonclient.MockClient{}
+		mHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(
+			horizon.Account{
+				AccountID: channelAccount,
+				Sequence:  int64(123456789),
+			}, nil,
+		)
+
 		engine := &engine.SubmitterEngine{
-			MaxBaseFee: 100,
+			HorizonClient: mHorizonClient,
+			MaxBaseFee:    100,
 		}
 
 		authXDR := []string{"AAAAAQAAAAHw6CVqzY+dCq3myVJBo1kb3nEGE7oO6obmJeUNvYQ0ukNc84Ms0ZvgAAAAAAAAAAEAAAAAAAAAAeA7wfSg10yaQYZDRmQeyqsepsS/Mb0rbMQxRgDoSVdWAAAAD3dlYl9hdXRoX3ZlcmlmeQAAAAAGAAAADgAAADhDRFlPUUpMS1pXSFoyQ1ZONDNFVkVRTkRMRU41NDRJR0NPNUE1MlVHNFlTNktETjVRUTJMVVdLWQAAAA4AAAADMTIzAAAAAA4AAAAcaHR0cDovL2xvY2FsaG9zdDo4MDgwL2MvYXV0aAAAAA4AAAAObG9jYWxob3N0OjgwODAAAAAAAA4AAAALZXhhbXBsZS5jb20AAAAAAQAAAAA="}
@@ -319,6 +330,10 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, contractIdPreimage.FromAddress.Address.Type)
 		require.NotNil(t, contractIdPreimage.FromAddress.Address.AccountId)
 		assert.Equal(t, distributionAccountId, *contractIdPreimage.FromAddress.Address.AccountId)
+
+		// Verify mocks were called as expected
+		mHorizonClient.AssertExpectations(t)
+		rpcClient.AssertExpectations(t)
 	})
 
 	t.Run("simulation error handling", func(t *testing.T) {
@@ -392,6 +407,63 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		assert.Contains(t, err.Error(), "simulating transaction: rpc error")
 		assert.Nil(t, tx)
 
+		rpcClient.AssertExpectations(t)
+	})
+
+	t.Run("horizon client error handling", func(t *testing.T) {
+		mHorizonClient := &horizonclient.MockClient{}
+		mHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(
+			horizon.Account{}, fmt.Errorf("horizon error"),
+		)
+
+		engine := &engine.SubmitterEngine{
+			HorizonClient: mHorizonClient,
+			MaxBaseFee:    100,
+		}
+
+		authXDR := []string{"AAAAAQAAAAHw6CVqzY+dCq3myVJBo1kb3nEGE7oO6obmJeUNvYQ0ukNc84Ms0ZvgAAAAAAAAAAEAAAAAAAAAAeA7wfSg10yaQYZDRmQeyqsepsS/Mb0rbMQxRgDoSVdWAAAAD3dlYl9hdXRoX3ZlcmlmeQAAAAAGAAAADgAAADhDRFlPUUpMS1pXSFoyQ1ZONDNFVkVRTkRMRU41NDRJR0NPNUE1MlVHNFlTNktETjVRUTJMVVdLWQAAAA4AAAADMTIzAAAAAA4AAAAcaHR0cDovL2xvY2FsaG9zdDo4MDgwL2MvYXV0aAAAAA4AAAAObG9jYWxob3N0OjgwODAAAAAAAA4AAAALZXhhbXBsZS5jb20AAAAAAQAAAAA="}
+		simulationResponse := protocol.SimulateTransactionResponse{
+			Error: "",
+			Results: []protocol.SimulateHostFunctionResult{
+				{
+					AuthXDR: &authXDR,
+				},
+			},
+			TransactionDataXDR: "AAAAAAAAAAUAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAABgAAAAFDEqQxRKsWsubOpgtPPKXSsdhcWDpfu/jRwXKpUugxhQAAABQAAAABAAAABgAAAAGBhvDmuHDARIUDYKVFokPXfBrz+6tx3N4D7hMpL1AiBwAAABQAAAABAAAAB1uPeA45/uPdYS9GdAZXx37bjezG+3vn4JqEwlyjIRGmAAAAB9nC+GOHmV4+xAZQ4T0I434wH3LKi+db6CM9hlRZhRZgAAAAAgAAAAYAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAAFXCHgz/4M7a3AAAAAAAAAAYAAAABQxKkMUSrFrLmzqYLTzyl0rHYXFg6X7v40cFyqVLoMYUAAAAVNIwhp30FbW4AAAAAAB8NxwAAEgAAAACUAAAAAAAY7m4=",
+			MinResourceFee:     50,
+		}
+
+		rpcClient := &mocks.MockRPCClient{}
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
+
+		monitorSvc := tssMonitor.TSSMonitorService{
+			Client: &sdpMonitorMocks.MockMonitorClient{},
+		}
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+		require.NoError(t, err)
+
+		txJob := &TxJob{
+			Transaction: store.Transaction{
+				WalletCreation: store.WalletCreation{
+					PublicKey: publicKeyHex,
+					WasmHash:  wasmHashHex,
+				},
+			},
+			ChannelAccount: store.ChannelAccount{
+				PublicKey: channelAccount,
+			},
+			LockedUntilLedgerNumber: 12345,
+		}
+
+		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "getting account detail: horizon error")
+		assert.Nil(t, tx)
+
+		var horizonErr *utils.HorizonErrorWrapper
+		assert.ErrorAs(t, err, &horizonErr)
+
+		mHorizonClient.AssertExpectations(t)
 		rpcClient.AssertExpectations(t)
 	})
 }
