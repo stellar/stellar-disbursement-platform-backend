@@ -144,7 +144,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		assert.Equal(t, data.ProcessingWalletStatus, updatedWallet.WalletStatus)
 		assert.Equal(t, testWasmHash, updatedWallet.WasmHash)
 
-		expectedExternalID := "wallet_" + walletIDForTest
+		expectedExternalID := walletIDForTest
 		transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{expectedExternalID})
 		require.NoError(t, err)
 		require.Len(t, transactions, 1)
@@ -220,7 +220,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "transaction execution error: wallet status is not pending for token")
 
-		tssTransactions, err := tssModel.GetAllByExternalIDs(ctx, []string{"wallet_" + walletIDForTest})
+		tssTransactions, err := tssModel.GetAllByExternalIDs(ctx, []string{walletIDForTest})
 		require.NoError(t, err)
 		assert.Empty(t, tssTransactions)
 	})
