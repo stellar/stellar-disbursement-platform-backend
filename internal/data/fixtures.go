@@ -487,13 +487,13 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.UpdatedAt = time.Now()
 	}
 
-	//todo this is temp if statement, we should set type explicitly in the tests, will tackle this in next PRs
+	// todo this is temp if statement, we should set type explicitly in the tests, will tackle this in next PRs
 	if p.Disbursement != nil && p.Disbursement.ID != "" {
-		p.PaymentType = PaymentTypeDisbursement
+		p.Type = PaymentTypeDisbursement
 	}
 
 	var disbursementID any
-	if p.PaymentType == PaymentTypeDisbursement {
+	if p.Type == PaymentTypeDisbursement {
 		require.NotNil(t, p.Disbursement, "Disbursement must be set for disbursement payments")
 		disbursementID = p.Disbursement.ID
 	} else {
@@ -503,7 +503,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 	const query = `
 		INSERT INTO payments
 			(receiver_id, disbursement_id, receiver_wallet_id, asset_id, amount, status, status_history,
-			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, payment_type)
+			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type)
 		VALUES
 			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING
@@ -523,7 +523,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.CreatedAt,
 		p.UpdatedAt,
 		p.ExternalPaymentID,
-		p.PaymentType,
+		p.Type,
 	)
 	require.NoError(t, err)
 

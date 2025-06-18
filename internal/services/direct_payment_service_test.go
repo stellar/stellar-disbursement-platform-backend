@@ -254,7 +254,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.True(t, errors.As(err, &balanceErr))
 		assert.Contains(t, err.Error(), "insufficient balance")
 		assert.Contains(t, err.Error(), "1000.00")
-		assert.Contains(t, err.Error(), "100.00 available")
+		assert.Contains(t, err.Error(), "100.000000 available")
 
 		mockDistService.AssertExpectations(t)
 		mockEventProducer.AssertExpectations(t)
@@ -735,7 +735,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, payment)
 	assert.Equal(t, "50.0000000", payment.Amount)
-	assert.Equal(t, data.PaymentTypeDirect, payment.PaymentType)
+	assert.Equal(t, data.PaymentTypeDirect, payment.Type)
 	assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
 	assert.Equal(t, "PAY_HORUS_001", payment.ExternalPaymentID)
 	assert.Nil(t, payment.Disbursement)

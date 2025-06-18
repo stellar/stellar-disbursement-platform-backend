@@ -24,7 +24,7 @@ type Payment struct {
 	StellarOperationID      string               `json:"stellar_operation_id" db:"stellar_operation_id"`
 	Status                  PaymentStatus        `json:"status" db:"status"`
 	StatusHistory           PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	PaymentType             PaymentType          `json:"payment_type" db:"payment_type"`
+	Type                    PaymentType          `json:"type" db:"type"`
 	Disbursement            *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
 	Asset                   Asset                `json:"asset"`
 	ReceiverWallet          *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
@@ -70,7 +70,7 @@ var (
 type PaymentInsert struct {
 	ReceiverID        string      `db:"receiver_id"`
 	DisbursementID    *string     `db:"disbursement_id"`
-	PaymentType       PaymentType `db:"payment_type"`
+	PaymentType       PaymentType `db:"type"`
 	Amount            string      `db:"amount"`
 	AssetID           string      `db:"asset_id"`
 	ReceiverWalletID  string      `db:"receiver_wallet_id"`
@@ -128,7 +128,7 @@ func (p *PaymentInsert) Validate() error {
 	}
 
 	if err := p.PaymentType.Validate(); err != nil {
-		return fmt.Errorf("payment_type is invalid: %w", err)
+		return fmt.Errorf("type is invalid: %w", err)
 	}
 
 	if p.PaymentType == PaymentTypeDisbursement && (p.DisbursementID == nil || *p.DisbursementID == "") {
@@ -174,7 +174,7 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"amount",
 			"status",
 			"status_history",
-			"payment_type",
+			"type",
 			"created_at",
 			"updated_at",
 		},
@@ -221,7 +221,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 	}
 
 	for i := range payments {
-		if payments[i].PaymentType == PaymentTypeDirect {
+		if payments[i].Type == PaymentTypeDirect {
 			payments[i].Disbursement = nil
 		}
 	}
@@ -258,7 +258,7 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
             p.status = $1 -- 'READY'::payment_status
             AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
             AND d.status = $3 -- 'STARTED'::disbursement_status
-            AND p.payment_type = 'DISBURSEMENT'
+            AND p.type = 'DISBURSEMENT'
         ORDER BY p.disbursement_id ASC, p.updated_at ASC
         FOR UPDATE SKIP LOCKED`
 
@@ -274,7 +274,7 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
         WHERE
             p.status = $1 -- 'READY'::payment_status
             AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
-            AND p.payment_type = 'DIRECT'
+            AND p.type = 'DIRECT'
         ORDER BY p.updated_at ASC
         FOR UPDATE OF p, rw SKIP LOCKED`
 
@@ -334,7 +334,7 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	}
 
 	for i := range payments {
-		if payments[i].PaymentType == PaymentTypeDirect {
+		if payments[i].Type == PaymentTypeDirect {
 			payments[i].Disbursement = nil
 		}
 	}
@@ -381,7 +381,7 @@ func (p *PaymentModel) InsertAll(ctx context.Context, sqlExec db.SQLExecuter, in
 			disbursement_id,
 		    receiver_wallet_id,
 			external_payment_id,
-			payment_type
+			type
 		) VALUES (
 			$1,
 			$2,
@@ -458,9 +458,9 @@ func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter,
             AND p.status = $2 -- 'READY'::payment_status
             AND rw.status = $3 -- 'REGISTERED'::receiver_wallet_status
             AND (
-                (p.payment_type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
+                (p.type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
                 OR 
-                (p.payment_type = 'DIRECT')
+                (p.type = 'DIRECT')
             )
         ORDER BY p.updated_at ASC`
 
@@ -482,9 +482,9 @@ func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec d
             AND p.status = $2 -- 'READY'::payment_status
             AND rw.status = $3 -- 'REGISTERED'::receiver_wallet_status
             AND (
-                (p.payment_type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
+                (p.type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
                 OR 
-                (p.payment_type = 'DIRECT')
+                (p.type = 'DIRECT')
             )`
 
 	var payments []*Payment
@@ -799,7 +799,7 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
             receiver_id,
             receiver_wallet_id,
             external_payment_id,
-            payment_type,
+            type,
             status,
             status_history
         ) VALUES (
@@ -829,7 +829,7 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 
 func removeEmptyDisbursementForDirect(payments []*Payment) {
 	for i := range payments {
-		if payments[i].PaymentType == PaymentTypeDirect {
+		if payments[i].Type == PaymentTypeDirect {
 			payments[i].Disbursement = nil
 		}
 	}

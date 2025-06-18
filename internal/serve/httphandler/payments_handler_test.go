@@ -117,7 +117,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"stellar_transaction_id": "` + payment.StellarTransactionID + `",
 			"stellar_operation_id": "` + payment.StellarOperationID + `",
 			"status": "DRAFT",
-			"payment_type": "DISBURSEMENT",
+			"type": "DISBURSEMENT",
 			"status_history": [
 				{
 					"status": "DRAFT",
@@ -1857,7 +1857,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "150.5000000", payment.Amount)
 		assert.Equal(t, "BAAL-CRUSADE-001", payment.ExternalPaymentID)
-		assert.Equal(t, data.PaymentTypeDirect, payment.PaymentType)
+		assert.Equal(t, data.PaymentTypeDirect, payment.Type)
 		assert.Nil(t, payment.Disbursement)
 
 		authMock.AssertExpectations(t)
@@ -2057,7 +2057,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "insufficient balance for direct payment")
 		assert.Contains(t, rr.Body.String(), "10000.00")
-		assert.Contains(t, rr.Body.String(), "100.00 available")
+		assert.Contains(t, rr.Body.String(), "100.000000 available")
 
 		authMock.AssertExpectations(t)
 		distResolverMock.AssertExpectations(t)
@@ -2227,7 +2227,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &payment)
 		require.NoError(t, err)
 		assert.Equal(t, "75.2500000", payment.Amount)
-		assert.Equal(t, data.PaymentTypeDirect, payment.PaymentType)
+		assert.Equal(t, data.PaymentTypeDirect, payment.Type)
 		assert.Equal(t, asset.ID, payment.Asset.ID)
 
 		authMock.AssertExpectations(t)
