@@ -153,7 +153,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			paymentReady := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwReady,
 				Disbursement:   startedDisbursement,
-				PaymentType:    data.PaymentTypeDisbursement,
+				Type:           data.PaymentTypeDisbursement,
 				Asset:          *tc.asset,
 				Amount:         "100",
 				Status:         data.ReadyPaymentStatus,
@@ -171,7 +171,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwRegistered,
 				Disbursement:   startedDisbursement,
-				PaymentType:    data.PaymentTypeDisbursement,
+				Type:           data.PaymentTypeDisbursement,
 				Asset:          *tc.asset,
 				Amount:         "100",
 				Status:         data.ReadyPaymentStatus,
@@ -411,7 +411,7 @@ func Test_PaymentToSubmitterService_SendMixedPayments(t *testing.T) {
 			paymentDisb := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwDisb,
 				Disbursement:   disbursement,
-				PaymentType:    data.PaymentTypeDisbursement,
+				Type:           data.PaymentTypeDisbursement,
 				Asset:          *eurcAsset,
 				Amount:         "100",
 				Status:         data.ReadyPaymentStatus,
@@ -421,7 +421,7 @@ func Test_PaymentToSubmitterService_SendMixedPayments(t *testing.T) {
 			rwDirect := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverDirect.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 			paymentDirect := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rwDirect,
-				PaymentType:    data.PaymentTypeDirect,
+				Type:           data.PaymentTypeDirect,
 				Asset:          *eurcAsset,
 				Amount:         "200",
 				Status:         data.ReadyPaymentStatus,
@@ -494,7 +494,7 @@ func Test_PaymentToSubmitterService_SendDirectPayments(t *testing.T) {
 			rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 			payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rw,
-				PaymentType:    data.PaymentTypeDirect,
+				Type:           data.PaymentTypeDirect,
 				Asset:          *eurcAsset,
 				Amount:         "888",
 				Status:         data.ReadyPaymentStatus,
@@ -543,8 +543,8 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "valid disbursement payment",
 			payment: &data.Payment{
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDisbursement,
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDisbursement,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status:         data.RegisteredReceiversWalletStatus,
 					StellarAddress: "destination_1",
@@ -564,8 +564,8 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "valid direct payment",
 			payment: &data.Payment{
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status:         data.RegisteredReceiversWalletStatus,
 					StellarAddress: "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP",
@@ -582,8 +582,8 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "direct payment with XLM (no issuer)",
 			payment: &data.Payment{
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status:         data.RegisteredReceiversWalletStatus,
 					StellarAddress: "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP",
@@ -599,9 +599,9 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "disbursement payment with invalid disbursement status",
 			payment: &data.Payment{
-				ID:          "123",
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDisbursement,
+				ID:     "123",
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDisbursement,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
 				},
@@ -615,18 +615,18 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "invalid payment status",
 			payment: &data.Payment{
-				ID:          "123",
-				Status:      data.PendingPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				ID:     "123",
+				Status: data.PendingPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 			},
 			expectedError: "payment 123 is not in READY state",
 		},
 		{
 			name: "invalid receiver wallet status",
 			payment: &data.Payment{
-				ID:          "123",
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				ID:     "123",
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					ID:     "321",
 					Status: data.ReadyReceiversWalletStatus,
@@ -637,8 +637,8 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment ID is empty",
 			payment: &data.Payment{
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
 				},
@@ -648,9 +648,9 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment asset code is empty",
 			payment: &data.Payment{
-				ID:          "123",
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				ID:     "123",
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
 				},
@@ -660,9 +660,9 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment asset issuer is empty for non-XLM",
 			payment: &data.Payment{
-				ID:          "123",
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				ID:     "123",
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
 				},
@@ -675,9 +675,9 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment amount is invalid",
 			payment: &data.Payment{
-				ID:          "123",
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				ID:     "123",
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
 				},
@@ -691,9 +691,9 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 		{
 			name: "payment receiver wallet stellar address is empty",
 			payment: &data.Payment{
-				ID:          "123",
-				Status:      data.ReadyPaymentStatus,
-				PaymentType: data.PaymentTypeDirect,
+				ID:     "123",
+				Status: data.ReadyPaymentStatus,
+				Type:   data.PaymentTypeDirect,
 				ReceiverWallet: &data.ReceiverWallet{
 					Status: data.RegisteredReceiversWalletStatus,
 				},
