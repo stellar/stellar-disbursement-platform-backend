@@ -56,7 +56,7 @@ func (j sendReceiverWalletsInvitationJob) Execute(ctx context.Context) error {
 
 func NewSendReceiverWalletsInvitationJob(options SendReceiverWalletsInvitationJobOptions) Job {
 	if options.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", sendReceiverWalletsInvitationJobName)
+		log.Fatalf("job interval for %s is set below the minimum %d. Instantiation failed", sendReceiverWalletsInvitationJobName, DefaultMinimumJobIntervalSeconds)
 	}
 	s, err := services.NewSendReceiverWalletInviteService(
 		options.Models,

@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -47,6 +46,12 @@ func NewWalletCreationFromSubmitterService(
 	}
 }
 
+// calculateContractAddress calculates the contract address for a wallet creation transaction based on the distribution account and public key.
+//
+// Contract addresses can be deterministically derived from the deployer account and an optional salt. In this case, we set the salt to the
+// wallet's public key hash, and the deployer account is the distribution account from the TSS transaction.
+//
+// Read more: https://developers.stellar.org/docs/build/smart-contracts/example-contracts/deployer#how-it-works
 func (s *WalletCreationFromSubmitterService) calculateContractAddress(
 	distributionAccount, publicKey string,
 ) (string, error) {
@@ -55,7 +60,7 @@ func (s *WalletCreationFromSubmitterService) calculateContractAddress(
 		return "", fmt.Errorf("decoding public key: %w", err)
 	}
 
-	publicKeyHash := sha256.Sum256(publicKeyBytes)
+	publicKeyHash := hash.Hash(publicKeyBytes)
 	salt := xdr.Uint256(publicKeyHash)
 
 	rawAddress, err := strkey.Decode(strkey.VersionByteAccountID, distributionAccount)

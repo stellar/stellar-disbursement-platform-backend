@@ -27,7 +27,7 @@ type walletCreationFromSubmitterJob struct {
 
 func NewWalletCreationFromSubmitterJob(walletCreationJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool, networkPassphrase string) Job {
 	if walletCreationJobInterval < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", walletCreationFromSubmitterJobName)
+		log.Fatalf("job interval for %s is set below the minimum %d. Instantiation failed", walletCreationFromSubmitterJobName, DefaultMinimumJobIntervalSeconds)
 	}
 	return &walletCreationFromSubmitterJob{
 		service:            services.NewWalletCreationFromSubmitterService(models, tssDBConnectionPool, networkPassphrase),
