@@ -28,9 +28,9 @@ type CreateWalletRequest struct {
 
 func (r CreateWalletRequest) Validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
-	validator.Check(len(r.Token) > 0, "token", "token should not be empty")
-	validator.Check(len(r.PublicKey) > 0, "public_key", "public_key should not be empty")
-	validator.Check(len(r.CredentialID) > 0, "credential_id", "credential_id should not be empty")
+	validator.Check(len(strings.TrimSpace(r.Token)) > 0, "token", "token should not be empty")
+	validator.Check(len(strings.TrimSpace(r.PublicKey)) > 0, "public_key", "public_key should not be empty")
+	validator.Check(len(strings.TrimSpace(r.CredentialID)) > 0, "credential_id", "credential_id should not be empty")
 	if _, err := hex.DecodeString(r.PublicKey); err != nil {
 		validator.AddError("public_key", "public_key should be a valid hex string")
 	}
