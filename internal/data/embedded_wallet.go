@@ -223,7 +223,8 @@ func (ew *EmbeddedWalletModel) Update(ctx context.Context, sqlExec db.SQLExecute
 
 	result, err := sqlExec.ExecContext(ctx, query, params...)
 	if err != nil {
-		if pqError, ok := err.(*pq.Error); ok {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) {
 			if pqError.Code == "23505" && pqError.Constraint == "embedded_wallets_credential_id_key" {
 				return ErrEmbeddedWalletCredentialIDAlreadyExists
 			}

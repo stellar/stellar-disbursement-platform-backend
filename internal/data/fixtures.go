@@ -695,24 +695,7 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`, EmbeddedWalletColumnNames("", ""))
 	wallet := EmbeddedWallet{}
 
-	var wasmHashParam, contractAddressParam, credIDParam interface{}
-	if wasmHash == "" {
-		wasmHashParam = nil
-	} else {
-		wasmHashParam = wasmHash
-	}
-	if contractAddress == "" {
-		contractAddressParam = nil
-	} else {
-		contractAddressParam = contractAddress
-	}
-	if credentialID == "" {
-		credIDParam = nil
-	} else {
-		credIDParam = credentialID
-	}
-
-	err := sqlExec.GetContext(ctx, &wallet, q, token, wasmHashParam, contractAddressParam, credIDParam, status)
+	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), status)
 	require.NoError(t, err)
 	return &wallet
 }
