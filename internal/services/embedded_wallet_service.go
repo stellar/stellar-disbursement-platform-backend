@@ -18,16 +18,19 @@ var (
 	ErrInvalidToken              = fmt.Errorf("token does not exist")
 	ErrMissingToken              = fmt.Errorf("token is required")
 	ErrMissingPublicKey          = fmt.Errorf("public key is required")
+	ErrMissingCredentialID       = fmt.Errorf("credential ID is required")
+	ErrInvalidCredentialID       = fmt.Errorf("credential ID does not exist")
+	ErrCredentialIDAlreadyExists = fmt.Errorf("credential ID already exists")
 )
 
 //go:generate mockery --name=EmbeddedWalletServiceInterface --case=underscore --structname=MockEmbeddedWalletService --filename=embedded_wallet_service.go
 type EmbeddedWalletServiceInterface interface {
 	// CreateInvitationToken creates a new embedded wallet invitation token
 	CreateInvitationToken(ctx context.Context) (string, error)
-	// CreateWallet creates a new embedded wallet using the provided token and public key
-	CreateWallet(ctx context.Context, token, publicKey string) error
-	// GetWallet retrieves an embedded wallet by token
-	GetWallet(ctx context.Context, token string) (*data.EmbeddedWallet, error)
+	// CreateWallet creates a new embedded wallet using the provided token, public key and credential ID
+	CreateWallet(ctx context.Context, token, publicKey, credentialID string) error
+	// GetWalletByCredentialID retrieves an embedded wallet by credential ID
+	GetWalletByCredentialID(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error)
 }
 
 var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
@@ -82,12 +85,15 @@ func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context) (stri
 	})
 }
 
-func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicKey string) error {
+func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicKey, credentialID string) error {
 	if token == "" {
 		return ErrMissingToken
 	}
 	if publicKey == "" {
 		return ErrMissingPublicKey
+	}
+	if credentialID == "" {
+		return ErrMissingCredentialID
 	}
 
 	currentTenant, err := tenant.GetTenantFromContext(ctx)
@@ -127,10 +133,14 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 
 			embeddedWalletUpdate := data.EmbeddedWalletUpdate{
 				WasmHash:     e.wasmHash,
+				CredentialID: credentialID,
 				WalletStatus: data.ProcessingWalletStatus,
 			}
 
 			if err := e.sdpModels.EmbeddedWallets.Update(ctx, dbTx, embeddedWallet.Token, embeddedWalletUpdate); err != nil {
+				if errors.Is(err, data.ErrEmbeddedWalletCredentialIDAlreadyExists) {
+					return ErrCredentialIDAlreadyExists
+				}
 				return fmt.Errorf("updating embedded wallet %s: %w", embeddedWallet.Token, err)
 			}
 
@@ -139,18 +149,18 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 	})
 }
 
-func (e *EmbeddedWalletService) GetWallet(ctx context.Context, token string) (*data.EmbeddedWallet, error) {
-	if token == "" {
-		return nil, ErrMissingToken
+func (e *EmbeddedWalletService) GetWalletByCredentialID(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error) {
+	if credentialID == "" {
+		return nil, ErrMissingCredentialID
 	}
 
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.EmbeddedWallet, error) {
-		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
+		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByCredentialID(ctx, dbTx, credentialID)
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
-				return nil, ErrInvalidToken
+				return nil, ErrInvalidCredentialID
 			}
-			return nil, fmt.Errorf("getting wallet by token %s: %w", token, err)
+			return nil, fmt.Errorf("getting wallet by credential ID %s: %w", credentialID, err)
 		}
 		return embeddedWallet, nil
 	})

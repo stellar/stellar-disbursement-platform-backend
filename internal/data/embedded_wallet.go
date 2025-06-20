@@ -9,11 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+var ErrEmbeddedWalletCredentialIDAlreadyExists = errors.New("an embedded wallet with this credential ID already exists")
 
 type EmbeddedWalletStatus string
 
@@ -41,6 +44,7 @@ type EmbeddedWallet struct {
 	Token           string               `json:"token" db:"token"`
 	WasmHash        string               `json:"wasm_hash" db:"wasm_hash"`
 	ContractAddress string               `json:"contract_address" db:"contract_address"`
+	CredentialID    string               `json:"credential_id" db:"credential_id"`
 	CreatedAt       *time.Time           `json:"created_at" db:"created_at"`
 	UpdatedAt       *time.Time           `json:"updated_at" db:"updated_at"`
 	WalletStatus    EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
@@ -63,6 +67,7 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 		CoalesceStringColumns: []string{
 			"wasm_hash",
 			"contract_address",
+			"credential_id",
 		},
 	}.Build()
 
@@ -85,6 +90,27 @@ func (ew *EmbeddedWalletModel) GetByToken(ctx context.Context, sqlExec db.SQLExe
 			return nil, ErrRecordNotFound
 		}
 		return nil, fmt.Errorf("querying embedded wallet: %w", err)
+	}
+
+	return &wallet, nil
+}
+
+func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db.SQLExecuter, credentialID string) (*EmbeddedWallet, error) {
+	query := fmt.Sprintf(`
+        SELECT
+            %s
+        FROM embedded_wallets ew
+        WHERE
+            ew.credential_id = $1
+        `, EmbeddedWalletColumnNames("ew", ""))
+
+	var wallet EmbeddedWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, credentialID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying embedded wallet by credential ID: %w", err)
 	}
 
 	return &wallet, nil
@@ -146,6 +172,7 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 type EmbeddedWalletUpdate struct {
 	WasmHash        string               `db:"wasm_hash"`
 	ContractAddress string               `db:"contract_address"`
+	CredentialID    string               `db:"credential_id"`
 	WalletStatus    EmbeddedWalletStatus `db:"wallet_status"`
 }
 
@@ -196,6 +223,12 @@ func (ew *EmbeddedWalletModel) Update(ctx context.Context, sqlExec db.SQLExecute
 
 	result, err := sqlExec.ExecContext(ctx, query, params...)
 	if err != nil {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) {
+			if pqError.Code == "23505" && pqError.Constraint == "embedded_wallets_credential_id_key" {
+				return ErrEmbeddedWalletCredentialIDAlreadyExists
+			}
+		}
 		return fmt.Errorf("updating embedded wallet: %w", err)
 	}
 
