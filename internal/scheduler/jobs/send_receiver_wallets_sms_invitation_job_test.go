@@ -61,7 +61,7 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 				MaxInvitationResendAttempts: 3,
 			}
 			_ = NewSendReceiverWalletsInvitationJob(o)
-		}, "job interval is not set")
+		}, "job interval for send_receiver_wallets_invitation_job is set below the minimum")
 	})
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {

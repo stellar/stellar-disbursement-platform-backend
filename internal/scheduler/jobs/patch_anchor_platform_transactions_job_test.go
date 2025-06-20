@@ -44,7 +44,7 @@ func Test_NewPatchAnchorPlatformTransactionCompletionJob(t *testing.T) {
 	t.Run("exits with status 1 when interval is not set correctly", func(t *testing.T) {
 		utils.AssertFuncExitsWithFatal(t, func() {
 			_ = NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds-1, &anchorplatform.AnchorPlatformAPIService{}, nil)
-		}, "job interval is not set")
+		}, "job interval for patch_anchor_platform_transactions_completion is set below the minimum")
 	})
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {

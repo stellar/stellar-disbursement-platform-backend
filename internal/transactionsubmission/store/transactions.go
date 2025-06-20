@@ -398,9 +398,13 @@ func (t *TransactionModel) UpdateStatusToError(ctx context.Context, tx Transacti
 	return &updatedTx, nil
 }
 
-func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash, txXDRSent string) (*Transaction, error) {
+func (t *TransactionModel) UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, txHash, txXDRSent, distributionAccount string) (*Transaction, error) {
 	if len(txHash) != 64 {
 		return nil, fmt.Errorf("invalid transaction hash %q", txHash)
+	}
+
+	if !strkey.IsValidEd25519PublicKey(distributionAccount) {
+		return nil, fmt.Errorf("distribution account %q is not a valid ed25519 public key", distributionAccount)
 	}
 
 	var txEnvelope xdr.TransactionEnvelope
@@ -415,15 +419,16 @@ func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Co
 		SET 
 			stellar_transaction_hash = $1::text,
 			xdr_sent = $2,
+			distribution_account = $3,
 			sent_at = NOW(),
-			status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), status, 'Updating Stellar Transaction Hash', $1::text, $2, xdr_received)),
+			status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), status, 'Updating Stellar Transaction Hash, XDR Sent and Distribution Account', $1::text, $2, xdr_received)),
 			attempts_count = attempts_count + 1
 		WHERE 
-			id = $3
+			id = $4
 		RETURNING
 			` + TransactionColumnNames("", "")
 	var tx Transaction
-	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, txID)
+	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, distributionAccount, txID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
@@ -465,7 +470,8 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 }
 
 // GetTransactionBatchForUpdate returns a batch of transactions that are ready to be synced. Locks the rows for update.
-func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*Transaction, error) {
+// Only returns transactions of the specified transaction type.
+func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string, transactionType TransactionType) ([]*Transaction, error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
@@ -484,14 +490,15 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 		    status IN ('SUCCESS', 'ERROR')
 		    AND synced_at IS NULL
 		    AND tenant_id = $1
+		    AND transaction_type = $2
 		ORDER BY 
 		    completed_at ASC
 		LIMIT 
-		    $2
+		    $3
 		FOR UPDATE SKIP LOCKED
 		`
 
-	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, batchSize)
+	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, transactionType, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("getting transactions: %w", err)
 	}
@@ -499,7 +506,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 	return transactions, nil
 }
 
-func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
+func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string, expectedTransactionType TransactionType) (*Transaction, error) {
 	query := `
 		SELECT 
 			` + TransactionColumnNames("", "") + `
@@ -509,11 +516,12 @@ func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, 
 			id = $1
 			AND status IN ('SUCCESS', 'ERROR')
 			AND synced_at IS NULL
+			AND transaction_type = $2
 		FOR UPDATE SKIP LOCKED
 	`
 
 	var tx Transaction
-	err := dbTx.GetContext(ctx, &tx, query, txID)
+	err := dbTx.GetContext(ctx, &tx, query, txID, expectedTransactionType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound

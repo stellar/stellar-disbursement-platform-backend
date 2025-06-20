@@ -245,6 +245,75 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1, tenantID)
 		assert.ErrorContains(t, err, fmt.Sprintf("expected exactly 1 payment for the transaction ID %s but found 0", tx.ID))
 	})
+
+	t.Run("skips wallet creation transactions", func(t *testing.T) {
+		prepareTxsForSync(t, testCtx, transactions)
+
+		// Insert a wallet creation transaction that should be ignored
+		walletToken := "wallet-token-123"
+		tenantID := uuid.NewString()
+		walletTx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
+			ExternalID:      walletToken,
+			TransactionType: txSubStore.TransactionTypeWalletCreation,
+			WalletCreation: txSubStore.WalletCreation{
+				PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+				WasmHash:  "a5016f845e76fe452de6d3638ac47523b845a813db56de3d713eb7a49276e254",
+			},
+			TenantID: tenantID,
+		})
+		require.NoError(t, err)
+
+		// Update wallet transaction to SUCCESS
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'wallet_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		err = dbConnectionPool.GetContext(ctx, walletTx, q, txSubStore.TransactionStatusProcessing, walletTx.ID)
+		require.NoError(t, err)
+
+		walletTx, err = testCtx.tssModel.UpdateStatusToSuccess(ctx, *walletTx)
+		require.NoError(t, err)
+
+		// Sync should succeed and skip the wallet creation transaction
+		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1, tenantID)
+		require.NoError(t, err)
+
+		// Verify wallet transaction was NOT marked as synced (since it was skipped)
+		updatedWalletTx, err := testCtx.tssModel.GetTransactionPendingUpdateByID(ctx, dbConnectionPool, walletTx.ID, txSubStore.TransactionTypeWalletCreation)
+		require.NoError(t, err)
+		assert.Equal(t, walletTx.ID, updatedWalletTx.ID, "wallet transaction should still be pending sync")
+	})
+
+	t.Run("batch sync filters and ignores invalid wallet creation transactions", func(t *testing.T) {
+		prepareTxsForSync(t, testCtx, transactions)
+
+		// Insert a wallet creation transaction with INVALID stellar hash and status
+		// The batch sync should ignore this and not fail, but a direct SyncTransaction call would error
+		walletToken := "wallet-token-invalid"
+		tenantID := uuid.NewString()
+		invalidWalletTx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
+			ExternalID:      walletToken,
+			TransactionType: txSubStore.TransactionTypeWalletCreation,
+			WalletCreation: txSubStore.WalletCreation{
+				PublicKey: "0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404",
+				WasmHash:  "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			},
+			TenantID: tenantID,
+		})
+		require.NoError(t, err)
+
+		// Update wallet transaction to SUCCESS but intentionally leave stellar_transaction_hash NULL
+		// This would fail validation for payment transactions, but should be ignored for wallet transactions
+		q := `UPDATE submitter_transactions SET status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		err = dbConnectionPool.GetContext(ctx, invalidWalletTx, q, txSubStore.TransactionStatusSuccess, invalidWalletTx.ID)
+		require.NoError(t, err)
+
+		// Batch sync should succeed by filtering out the wallet creation transaction
+		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1, tenantID)
+		require.NoError(t, err, "Batch sync should filter out and ignore wallet creation transactions")
+
+		// Verify the invalid wallet transaction was NOT marked as synced (correctly ignored)
+		pendingWalletTx, err := testCtx.tssModel.GetTransactionPendingUpdateByID(ctx, dbConnectionPool, invalidWalletTx.ID, txSubStore.TransactionTypeWalletCreation)
+		require.NoError(t, err)
+		assert.Equal(t, invalidWalletTx.ID, pendingWalletTx.ID, "invalid wallet transaction should still be pending since payment batch sync ignores it")
+	})
 }
 
 func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
