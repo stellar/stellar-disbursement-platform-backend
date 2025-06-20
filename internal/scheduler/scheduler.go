@@ -228,6 +228,13 @@ func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Mode
 	}
 }
 
+func WithWalletCreationFromSubmitterJobOption(walletCreationJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool, networkPassphrase string) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewWalletCreationFromSubmitterJob(walletCreationJobInterval, models, tssDBConnectionPool, networkPassphrase)
+		s.addJob(j)
+	}
+}
+
 func WithSendReceiverWalletsInvitationJobOption(o jobs.SendReceiverWalletsInvitationJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewSendReceiverWalletsInvitationJob(o)
