@@ -117,7 +117,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 
 			// Create the wallet transaction in TSS DB first
 			tssTransaction := &store.Transaction{
-				ExternalID:      fmt.Sprintf("wallet_%s", embeddedWallet.Token),
+				ExternalID:      embeddedWallet.Token,
 				TransactionType: store.TransactionTypeWalletCreation,
 				TenantID:        currentTenant.ID,
 				WalletCreation: store.WalletCreation{

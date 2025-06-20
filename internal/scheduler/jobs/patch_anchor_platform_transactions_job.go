@@ -23,7 +23,7 @@ type patchAnchorPlatformTransactionsCompletionJob struct {
 
 func NewPatchAnchorPlatformTransactionsCompletionJob(paymentJobInterval int, apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) Job {
 	if paymentJobInterval < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", patchAnchorPlatformTransactionsCompletionJobName)
+		log.Fatalf("job interval for %s is set below the minimum %d. Instantiation failed", patchAnchorPlatformTransactionsCompletionJobName, DefaultMinimumJobIntervalSeconds)
 	}
 	svc, err := services.NewPatchAnchorPlatformTransactionCompletionService(apAPISvc, models)
 	if err != nil {
