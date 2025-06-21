@@ -35,13 +35,13 @@ type TransactionStore interface {
 	UpdateStatusToSuccess(ctx context.Context, tx Transaction) (updatedTx *Transaction, err error)
 	UpdateStatusToError(ctx context.Context, tx Transaction, message string) (updatedTx *Transaction, err error)
 	UpdateStellarTransactionXDRReceived(ctx context.Context, txID string, xdrReceived string) (*Transaction, error)
-	UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash, txXDRSent string) (*Transaction, error)
+	UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, txHash, txXDRSent, distributionAccount string) (*Transaction, error)
 	Lock(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, currentLedger, nextLedgerLock int32) (*Transaction, error)
 	Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*Transaction, error)
 	// Queue management:
 	PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string) (*Transaction, error)
-	GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) (transactions []*Transaction, err error)
-	GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (transaction *Transaction, err error)
+	GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string, transactionType TransactionType) (transactions []*Transaction, err error)
+	GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string, expectedTransactionType TransactionType) (transaction *Transaction, err error)
 	UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error
 }
 
