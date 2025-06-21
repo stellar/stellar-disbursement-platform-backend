@@ -22,6 +22,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -330,6 +331,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
 		EventProducer:                   producerMock,
+		BridgeService:                   bridge.NewMockService(t),
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -458,6 +460,10 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/api-keys/12345"},
 		{http.MethodPatch, "/api-keys/12345"},
 		{http.MethodDelete, "/api-keys/12345"},
+		// bridge
+		{http.MethodGet, "/bridge-integration"},
+		{http.MethodPatch, "/bridge-integration"},
+		{http.MethodPost, "/bridge-integration/virtual-account"},
 	}
 
 	// Expect 401 as a response:
