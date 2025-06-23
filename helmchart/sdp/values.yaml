@@ -188,6 +188,12 @@ sdp:
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
   ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
   ## @param sdp.configMap.data.CIRCLE_API_TYPE The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".
+  ## @param sdp.configMap.data.ENABLE_EMBEDDED_WALLETS Determines if embedded wallet features are enabled ("true" or "false").
+  ## @extra sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
+  ## @param sdp.configMap.data.ENABLE_SEP45 Determines if SEP-45 web authentication features are enabled ("true" or "false").
+  ## @extra sdp.configMap.data.SEP45_CONTRACT_ID The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true".
+  ## @extra sdp.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".
+  ## @extra sdp.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_VALUE.
   configMap:
     annotations:
     data:
@@ -224,6 +230,18 @@ sdp:
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
       CIRCLE_API_TYPE: "TRANSFERS"
 
+      ## Embedded wallets configuration
+      ENABLE_EMBEDDED_WALLETS: "false"
+#     EMBEDDED_WALLETS_WASM_HASH: #required when ENABLE_EMBEDDED_WALLETS is "true"
+
+      ## SEP-45 configuration
+      ENABLE_SEP45: "false"
+#     SEP45_CONTRACT_ID: #required when ENABLE_SEP45 is "true"
+
+      ## RPC configuration
+#     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true"
+#     RPC_REQUEST_AUTH_HEADER_KEY: #optional
+
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
   ## @param sdp.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
@@ -255,6 +273,7 @@ sdp:
   ## @extra sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
   ## @extra sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   ## @extra sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+  ## @extra sdp.kubeSecrets.data.RPC_REQUEST_AUTH_HEADER_VALUE The value of the HTTP header used for authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_KEY.
   kubeSecrets:
     secretName: "sdp-backend-secret-name"
     create: false
@@ -305,6 +324,9 @@ sdp:
       ## Admin account configuration
 #      ADMIN_ACCOUNT: #required
 #      ADMIN_API_KEY: #required
+
+      ## RPC configuration
+#      RPC_REQUEST_AUTH_HEADER_VALUE: #optional, depends on value of RPC_REQUEST_AUTH_HEADER_KEY
 
       ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
       ## @param sdp.ingress.enabled If true, an ingress controller will be created for the SDP service.
@@ -391,6 +413,9 @@ anchorPlatform:
   ## @param anchorPlatform.configMap.data.METRICS_EXTRAS_ENABLED Determines if additional metrics (beyond the standard set) are enabled for collection.
   ## @param anchorPlatform.configMap.data.SEP10_CLIENT_ATTRIBUTION_REQUIRED When set to `true`, only SEP-10 requests from known clients listed in `SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST` will be accepted.
   ## @param anchorPlatform.configMap.data.SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST The comma-separated list of client domains allowed to make SEP-10 requests.
+  ## @param anchorPlatform.configMap.data.SEP45_ENABLED Determines if SEP-45 web authentication is enabled in Anchor Platform ("true" or "false").
+  ## @extra anchorPlatform.configMap.data.SEP45_WEB_AUTH_CONTRACT_ID The contract address for SEP-45 web authentication. Required when SEP45_ENABLED is "true".
+  ## @extra anchorPlatform.configMap.data.STELLAR_NETWORK_RPC_URL The URL of the Stellar RPC server. Required when SEP45_ENABLED is "true" or for embedded wallets support.
   configMap:
     annotations:
     data:
@@ -400,6 +425,13 @@ anchorPlatform:
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false" # RECOMMENDED value is `true`
       SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "" # RECOMMENDED value is a comma-separated list of client domains allowed to make SEP-10 requests.
+
+      ## SEP-45 configuration
+      SEP45_ENABLED: "false"
+#     SEP45_WEB_AUTH_CONTRACT_ID: #required when SEP45_ENABLED is "true"
+
+      ## RPC configuration
+#     STELLAR_NETWORK_RPC_URL: #required when SEP45_ENABLED is "true" or embedded wallets are enabled
 
   ## @extra anchorPlatform.kubeSecrets secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param anchorPlatform.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
@@ -413,6 +445,7 @@ anchorPlatform:
   ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP10_SIGNING_SEED The seed for the SEP-10 signing process. It's essential for ensuring the security and authenticity of SEP-10 transactions. Required if global.sep10PrivateKey not set.
   ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 interactive URLs. These URLs typically initiate user-interactive processes like deposits and withdrawals. Must be the same as SDP's SEP24_JWT_SECRET.
   ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP24_MORE_INFO_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 'More Info' URLs. These URLs provide users with additional details or steps related to their transactions.
+  ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP45_JWT_SECRET The JWT secret used by the Anchor Platform for SEP-45 web authentication. Required when SEP45_ENABLED is "true".
   kubeSecrets:
     secretName: "anchor-platform-secret-name"
     create: false
@@ -425,6 +458,7 @@ anchorPlatform:
 #      SECRET_SEP10_SIGNING_SEED: #required
 #      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: #required
 #      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: #required
+#      SECRET_SEP45_JWT_SECRET: #required when SEP45_ENABLED is "true"
 
 
       ## @extra anchorPlatform.ingress Configuration for the ingress controller for the Anchor Platform.
@@ -503,6 +537,8 @@ tss:
   ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
   ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
   ## @param tss.configMap.data.QUEUE_POLLING_INTERVAL Specifies the interval (in seconds) at which the TSS should poll the queue.
+  ## @extra tss.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".
+  ## @extra tss.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_VALUE.
   configMap:
     annotations:
     data:
@@ -524,6 +560,10 @@ tss:
       ## Background tasks configuration
       QUEUE_POLLING_INTERVAL: "6"
 
+      ## RPC configuration
+#     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS is "true"
+#     RPC_REQUEST_AUTH_HEADER_KEY: #optional
+
   ## @extra tss.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param tss.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
   ## @param tss.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
@@ -538,6 +578,7 @@ tss:
   ## @extra tss.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   ## @extra tss.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
   ## @extra tss.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
+  ## @extra tss.kubeSecrets.data.RPC_REQUEST_AUTH_HEADER_VALUE The value of the HTTP header used for authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_KEY.
   kubeSecrets:
     secretName: "tss-secret-name"
     create: false
@@ -559,6 +600,9 @@ tss:
 #      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 #      KAFKA_SSL_ACCESS_KEY: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 #      KAFKA_SSL_ACCESS_CERTIFICATE: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+
+      ## RPC configuration
+#      RPC_REQUEST_AUTH_HEADER_VALUE: #optional, depends on value of RPC_REQUEST_AUTH_HEADER_KEY
 
 
       # =========================== START dashboard ===========================
