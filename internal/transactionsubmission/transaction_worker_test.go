@@ -822,7 +822,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 			)
-			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -961,7 +961,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 		envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 	)
-	tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+	tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 	require.NoError(t, err)
 	txJob.Transaction = *tx
 	// declare horizon error
@@ -1085,7 +1085,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 			)
-			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -1623,7 +1623,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
-			tx, err := transactionWorker.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			tx, err := transactionWorker.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -1984,6 +1984,113 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	wantFeeBumpTx, err = sigService.SignerRouter.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distAccount)
 	require.NoError(t, err)
 	assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
+}
+
+func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	const currentLedger = 1
+	const lockedToLedger = 2
+	const accountSequence = 123
+
+	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
+		Return(distAccount, nil)
+
+	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DBConnectionPool:          dbConnectionPool,
+		DistributionPrivateKey:    distributionKP.Seed(),
+		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+
+		DistributionAccountResolver: mDistAccResolver,
+		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
+	})
+	require.NoError(t, err)
+
+	defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+	defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+	defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+
+	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
+	txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
+
+	mockHorizon := &horizonclient.MockClient{}
+	mockHorizon.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).
+		Return(horizon.Account{Sequence: accountSequence}, nil)
+
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	submitterEngine := &engine.SubmitterEngine{
+		HorizonClient:       mockHorizon,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		SignatureService:    sigService,
+		MaxBaseFee:          100,
+	}
+
+	t.Run("BuildInnerTransaction returns HorizonErrorWrapper - should preserve error", func(t *testing.T) {
+		handler := &MockTransactionHandler{}
+		originalHorizonErr := utils.NewHorizonErrorWrapper(fmt.Errorf("horizon timeout error"))
+		handler.On("BuildInnerTransaction",
+			ctx, &txJob, int64(accountSequence), distAccount.Address).
+			Return(nil, originalHorizonErr)
+
+		transactionWorker := &TransactionWorker{
+			engine:     submitterEngine,
+			txModel:    store.NewTransactionModel(dbConnectionPool),
+			chAccModel: store.NewChannelAccountModel(dbConnectionPool),
+			txHandler:  handler,
+		}
+
+		gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
+		require.Error(t, err)
+		require.Nil(t, gotFeeBumpTx)
+
+		var hErr *utils.HorizonErrorWrapper
+		require.ErrorAs(t, err, &hErr)
+		assert.Equal(t, originalHorizonErr, hErr)
+		assert.NotContains(t, err.Error(), "building transaction for job")
+
+		handler.AssertExpectations(t)
+	})
+
+	t.Run("BuildInnerTransaction returns non-Horizon error - should wrap with context", func(t *testing.T) {
+		handler := &MockTransactionHandler{}
+		originalErr := fmt.Errorf("some non-horizon error")
+		handler.On("BuildInnerTransaction",
+			ctx, &txJob, int64(accountSequence), distAccount.Address).
+			Return(nil, originalErr)
+
+		transactionWorker := &TransactionWorker{
+			engine:     submitterEngine,
+			txModel:    store.NewTransactionModel(dbConnectionPool),
+			chAccModel: store.NewChannelAccountModel(dbConnectionPool),
+			txHandler:  handler,
+		}
+
+		gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
+		require.Error(t, err)
+		require.Nil(t, gotFeeBumpTx)
+
+		assert.Contains(t, err.Error(), "building transaction for job")
+		assert.Contains(t, err.Error(), "some non-horizon error")
+
+		var hErr *utils.HorizonErrorWrapper
+		assert.False(t, errors.As(err, &hErr))
+
+		handler.AssertExpectations(t)
+	})
 }
 
 func Test_TransactionWorker_submit(t *testing.T) {

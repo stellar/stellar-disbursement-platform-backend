@@ -174,7 +174,6 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 
 	channelAccount, err := h.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
-		err = fmt.Errorf("getting account detail: %w", err)
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 	txParams.SourceAccount = &txnbuild.SimpleAccount{
@@ -287,9 +286,9 @@ func (h *WalletCreationTransactionHandler) MonitorTransactionProcessingStarted(c
 		txJob.Transaction,
 		sdpMonitor.WalletCreationProcessingStartedTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			PaymentEventType: sdpMonitor.WalletCreationProcessingStartedLabel,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			TransactionEventType: sdpMonitor.WalletCreationProcessingStartedLabel,
 		},
 	)
 }
@@ -305,10 +304,10 @@ func (h *WalletCreationTransactionHandler) MonitorTransactionProcessingSuccess(c
 		txJob.Transaction,
 		sdpMonitor.WalletCreationTransactionSuccessfulTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     false,
-			PaymentEventType: eventType,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:         false,
+			TransactionEventType: eventType,
 		},
 	)
 }
@@ -324,11 +323,11 @@ func (h *WalletCreationTransactionHandler) MonitorTransactionProcessingFailed(ct
 		txJob.Transaction,
 		sdpMonitor.WalletCreationErrorTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     isRetryable,
-			ErrStack:         errStack,
-			PaymentEventType: eventType,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:         isRetryable,
+			ErrStack:             errStack,
+			TransactionEventType: eventType,
 		},
 	)
 }
@@ -344,9 +343,9 @@ func (h *WalletCreationTransactionHandler) MonitorTransactionReconciliationSucce
 		txJob.Transaction,
 		sdpMonitor.WalletCreationReconciliationSuccessfulTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			PaymentEventType: walletCreationEventType,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			TransactionEventType: walletCreationEventType,
 		},
 	)
 }
@@ -357,11 +356,11 @@ func (h *WalletCreationTransactionHandler) MonitorTransactionReconciliationFailu
 		txJob.Transaction,
 		sdpMonitor.WalletCreationReconciliationFailureTag,
 		tssMonitor.TxMetadata{
-			EventID:          jobUUID,
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     isHorizonErr,
-			ErrStack:         errStack,
-			PaymentEventType: sdpMonitor.WalletCreationReconciliationUnexpectedErrorLabel,
+			EventID:              jobUUID,
+			SrcChannelAcc:        txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:         isHorizonErr,
+			ErrStack:             errStack,
+			TransactionEventType: sdpMonitor.WalletCreationReconciliationUnexpectedErrorLabel,
 		},
 	)
 }

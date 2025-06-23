@@ -28,6 +28,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				"wallet_status",
 				`COALESCE(wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(contract_address, '') AS "contract_address"`,
+				`COALESCE(credential_id, '') AS "credential_id"`,
 			}, ", "),
 		},
 		{
@@ -40,6 +41,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				"ew.wallet_status",
 				`COALESCE(ew.wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "contract_address"`,
+				`COALESCE(ew.credential_id, '') AS "credential_id"`,
 			}, ", "),
 		},
 		{
@@ -52,6 +54,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`ew.wallet_status AS "embedded_wallets.wallet_status"`,
 				`COALESCE(ew.wasm_hash, '') AS "embedded_wallets.wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "embedded_wallets.contract_address"`,
+				`COALESCE(ew.credential_id, '') AS "embedded_wallets.credential_id"`,
 			}, ", "),
 		},
 	}
@@ -88,7 +91,7 @@ func Test_EmbeddedWalletModel_GetByToken(t *testing.T) {
 	t.Run("returns wallet when it exists", func(t *testing.T) {
 		expectedWasmHash := "abcdef123456"
 		expectedContractAddress := "CDL5L3XOQRQMFL7J2W76GCQTFRRJUYEXXWGH32XC5UAT6X6H4K6XYZZA"
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", expectedWasmHash, expectedContractAddress, PendingWalletStatus)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", expectedWasmHash, expectedContractAddress, "", PendingWalletStatus)
 
 		wallet, err := embeddedWalletModel.GetByToken(ctx, dbConnectionPool, createdWallet.Token)
 		require.NoError(t, err)
@@ -227,7 +230,7 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 	t.Run("returns error if update validation fails", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", PendingWalletStatus)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", "", PendingWalletStatus)
 		invalidUpdate := EmbeddedWalletUpdate{WasmHash: "invalid"}
 		err := embeddedWalletModel.Update(ctx, dbConnectionPool, createdWallet.Token, invalidUpdate)
 		require.Error(t, err)
@@ -243,7 +246,7 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	})
 
 	t.Run("successfully updates wallet status", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", PendingWalletStatus)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", "", PendingWalletStatus)
 		update := EmbeddedWalletUpdate{WalletStatus: SuccessWalletStatus}
 
 		err := embeddedWalletModel.Update(ctx, dbConnectionPool, createdWallet.Token, update)
@@ -257,7 +260,7 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	})
 
 	t.Run("successfully updates wasm_hash and contract_address", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", PendingWalletStatus)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", PendingWalletStatus)
 		newWasmHash := "00112233aabbccdd"
 		newContractAddress := "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53"
 		update := EmbeddedWalletUpdate{
@@ -276,13 +279,15 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	})
 
 	t.Run("successfully updates all fields", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "old_hash", "old_contract", PendingWalletStatus)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "old_hash", "old_contract", "", PendingWalletStatus)
 		newWasmHash := "ddeeff0011223344"
 		newContractAddress := "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53" // Placeholder
+		newCredentialID := "new-credential-id"
 		newStatus := SuccessWalletStatus
 		update := EmbeddedWalletUpdate{
 			WasmHash:        newWasmHash,
 			ContractAddress: newContractAddress,
+			CredentialID:    newCredentialID,
 			WalletStatus:    newStatus,
 		}
 
@@ -293,7 +298,30 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 		require.NoError(t, getErr)
 		assert.Equal(t, newWasmHash, updatedWallet.WasmHash)
 		assert.Equal(t, newContractAddress, updatedWallet.ContractAddress)
+		assert.Equal(t, newCredentialID, updatedWallet.CredentialID)
 		assert.Equal(t, newStatus, updatedWallet.WalletStatus)
 		assert.True(t, updatedWallet.UpdatedAt.After(*updatedWallet.CreatedAt))
+	})
+
+	t.Run("returns error when updating to duplicate credential_id", func(t *testing.T) {
+		duplicateCredentialID := "duplicate-credential-id"
+
+		createdWallet1 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", duplicateCredentialID, PendingWalletStatus)
+
+		createdWallet2 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash2", "contract2", "", PendingWalletStatus)
+
+		update := EmbeddedWalletUpdate{CredentialID: duplicateCredentialID}
+		err := embeddedWalletModel.Update(ctx, dbConnectionPool, createdWallet2.Token, update)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrEmbeddedWalletCredentialIDAlreadyExists)
+
+		unchangedWallet, getErr := embeddedWalletModel.GetByToken(ctx, dbConnectionPool, createdWallet1.Token)
+		require.NoError(t, getErr)
+		assert.Equal(t, duplicateCredentialID, unchangedWallet.CredentialID)
+
+		unchangedWallet2, getErr := embeddedWalletModel.GetByToken(ctx, dbConnectionPool, createdWallet2.Token)
+		require.NoError(t, getErr)
+		assert.Equal(t, "", unchangedWallet2.CredentialID)
 	})
 }

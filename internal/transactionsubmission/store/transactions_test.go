@@ -595,7 +595,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 	}
 }
 
-func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) {
+func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAccount(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -610,16 +610,24 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
 
 	testCases := []struct {
-		name            string
-		transaction     Transaction
-		txHash          string
-		xdrSent         string
-		wantErrContains string
+		name                string
+		transaction         Transaction
+		txHash              string
+		xdrSent             string
+		distributionAccount string
+		wantErrContains     string
 	}{
 		{
 			name:            "returns an error if the size of the txHash if invalid",
 			txHash:          "invalid-tx-hash",
 			wantErrContains: `invalid transaction hash "invalid-tx-hash"`,
+		},
+		{
+			name:                "returns an error if distribution account is invalid",
+			txHash:              txHash,
+			xdrSent:             envelopeXDR,
+			distributionAccount: "invalid-account",
+			wantErrContains:     `distribution account "invalid-account" is not a valid ed25519 public key`,
 		},
 		{
 			name:            "returns an error if XDR is empty",
@@ -639,9 +647,10 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 			wantErrContains: "invalid XDR envelope: decoding TransactionV0Envelope: decoding TransactionV0: decoding TimeBounds",
 		},
 		{
-			name:    "🎉 successfully validate both the tx hash and the XDR envelope, and save them to the DB",
-			txHash:  txHash,
-			xdrSent: envelopeXDR,
+			name:                "🎉 successfully validate the tx hash, XDR envelope, distribution account and save them to the DB",
+			txHash:              txHash,
+			xdrSent:             envelopeXDR,
+			distributionAccount: "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU",
 		},
 	}
 
@@ -674,7 +683,11 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 			assert.Len(t, originalTx.StatusHistory, 1)
 			initialStatusHistory := originalTx.StatusHistory[0]
 
-			updatedTx, err := txModel.UpdateStellarTransactionHashAndXDRSent(ctx, tx.ID, tc.txHash, tc.xdrSent)
+			distributionAccount := tc.distributionAccount
+			if distributionAccount == "" {
+				distributionAccount = "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
+			}
+			updatedTx, err := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, tc.txHash, tc.xdrSent, distributionAccount)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -686,6 +699,8 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 				assert.Equal(t, envelopeXDR, updatedTx.XDRSent.String)
 				assert.True(t, updatedTx.StellarTransactionHash.Valid)
 				assert.Equal(t, txHash, updatedTx.StellarTransactionHash.String)
+				assert.True(t, updatedTx.DistributionAccount.Valid)
+				assert.Equal(t, distributionAccount, updatedTx.DistributionAccount.String)
 				assert.NotNil(t, updatedTx.SentAt)
 				assert.Equal(t, originalTx.AttemptsCount+1, updatedTx.AttemptsCount)
 
@@ -706,6 +721,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 				// make sure only the expected fields were updated:
 				originalTx.XDRSent = refreshedTx.XDRSent
 				originalTx.StellarTransactionHash = refreshedTx.StellarTransactionHash
+				originalTx.DistributionAccount = refreshedTx.DistributionAccount
 				originalTx.SentAt = refreshedTx.SentAt
 				originalTx.UpdatedAt = refreshedTx.UpdatedAt
 				originalTx.StatusHistory = wantStatusHistory
@@ -1211,7 +1227,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 				txIDs = append(txIDs, tx.ID)
 			}
 
-			foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, tc.batchSize, tenantID)
+			foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, tc.batchSize, tenantID, TransactionTypePayment)
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 			} else {
@@ -1232,6 +1248,90 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 			}
 		})
 	}
+
+	DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+}
+
+func Test_TransactionModel_GetTransactionBatchForUpdate_WithTransactionTypes(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	txModel := NewTransactionModel(dbConnectionPool)
+
+	tenantID := uuid.NewString()
+
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer func() {
+		err = dbTx.Rollback()
+		require.NoError(t, err)
+	}()
+
+	// Create payment transactions
+	paymentTxs := CreateTransactionFixturesNew(t, ctx, dbTx, 2, TransactionFixture{
+		TransactionType:    TransactionTypePayment,
+		AssetCode:          "USDC",
+		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+		Status:             TransactionStatusSuccess,
+		Amount:             1.2,
+		TenantID:           tenantID,
+	})
+
+	// Create wallet creation transactions
+	walletCreationTxs := CreateTransactionFixturesNew(t, ctx, dbTx, 2, TransactionFixture{
+		TransactionType: TransactionTypeWalletCreation,
+		PublicKey:       "deadbeef",
+		WasmHash:        "cafebabe",
+		Status:          TransactionStatusSuccess,
+		TenantID:        tenantID,
+	})
+
+	t.Run("returns only payment transactions when payment type specified", func(t *testing.T) {
+		foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, 10, tenantID, TransactionTypePayment)
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(foundTransactions))
+
+		var foundTxIDs []string
+		for _, tx := range foundTransactions {
+			foundTxIDs = append(foundTxIDs, tx.ID)
+			assert.Equal(t, TransactionTypePayment, tx.TransactionType)
+		}
+
+		var expectedTxIDs []string
+		for _, tx := range paymentTxs {
+			expectedTxIDs = append(expectedTxIDs, tx.ID)
+		}
+		assert.ElementsMatch(t, expectedTxIDs, foundTxIDs)
+	})
+
+	t.Run("returns only wallet creation transactions when wallet creation type specified", func(t *testing.T) {
+		foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, 10, tenantID, TransactionTypeWalletCreation)
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(foundTransactions))
+
+		var foundTxIDs []string
+		for _, tx := range foundTransactions {
+			foundTxIDs = append(foundTxIDs, tx.ID)
+			assert.Equal(t, TransactionTypeWalletCreation, tx.TransactionType)
+		}
+
+		var expectedTxIDs []string
+		for _, tx := range walletCreationTxs {
+			expectedTxIDs = append(expectedTxIDs, tx.ID)
+		}
+		assert.ElementsMatch(t, expectedTxIDs, foundTxIDs)
+	})
+
+	t.Run("returns empty when non-existent transaction type specified", func(t *testing.T) {
+		foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, 10, tenantID, TransactionTypeSponsored)
+		require.NoError(t, err)
+		assert.Equal(t, 0, len(foundTransactions))
+	})
 
 	DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 }
@@ -1305,7 +1405,7 @@ func Test_TransactionModel_GetTransactionPendingUpdateByID(t *testing.T) {
 				defer DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 			}
 
-			foundTransaction, err := txModel.GetTransactionPendingUpdateByID(ctx, dbTx, tx.ID)
+			foundTransaction, err := txModel.GetTransactionPendingUpdateByID(ctx, dbTx, tx.ID, TransactionTypePayment)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 				assert.Equal(t, tx, *foundTransaction)

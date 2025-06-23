@@ -2,6 +2,7 @@ package transactionsubmission
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -399,6 +400,9 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 		return nil, fmt.Errorf("building transaction: %w", err)
 	}
 
+	innerTx := feeBumpTx.InnerTransaction()
+	distributionAccount := innerTx.Operations()[0].GetSourceAccount()
+
 	// Important: We need to save tx hash before submitting a transaction.
 	// If the script/server crashes after transaction is submitted but before the response
 	// is processed, we can easily determine whether tx was sent or not later using tx hash.
@@ -412,7 +416,7 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 		return nil, fmt.Errorf("getting envelopeXDR for job %v: %w", txJob, err)
 	}
 
-	updatedTx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR)
+	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR, distributionAccount)
 	if err != nil {
 		return nil, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
 	}
@@ -431,12 +435,16 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
-		err = fmt.Errorf("getting account detail: %w", err)
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 
 	innerTx, err := tw.txHandler.BuildInnerTransaction(ctx, txJob, horizonAccount.Sequence, distributionAccount.Address)
 	if err != nil {
+		var hErr *utils.HorizonErrorWrapper
+		if errors.As(err, &hErr) {
+			return nil, hErr
+		}
+		// TODO(philip): handle RPC errors
 		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
 	}
 
