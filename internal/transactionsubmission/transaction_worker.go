@@ -2,6 +2,7 @@ package transactionsubmission
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -434,12 +435,16 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
-		err = fmt.Errorf("getting account detail: %w", err)
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 
 	innerTx, err := tw.txHandler.BuildInnerTransaction(ctx, txJob, horizonAccount.Sequence, distributionAccount.Address)
 	if err != nil {
+		var hErr *utils.HorizonErrorWrapper
+		if errors.As(err, &hErr) {
+			return nil, hErr
+		}
+		// TODO(philip): handle RPC errors
 		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
 	}
 

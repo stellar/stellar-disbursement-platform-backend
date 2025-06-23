@@ -174,7 +174,6 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 
 	channelAccount, err := h.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
-		err = fmt.Errorf("getting account detail: %w", err)
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 	txParams.SourceAccount = &txnbuild.SimpleAccount{

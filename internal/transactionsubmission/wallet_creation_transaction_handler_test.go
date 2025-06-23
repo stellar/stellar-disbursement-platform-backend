@@ -457,7 +457,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 
 		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "getting account detail: horizon error")
+		assert.Contains(t, err.Error(), "horizon error")
 		assert.Nil(t, tx)
 
 		var horizonErr *utils.HorizonErrorWrapper
