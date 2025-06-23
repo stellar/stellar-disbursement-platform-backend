@@ -390,7 +390,7 @@ This service is designed to maximize payment throughput, handle queuing, and gra
 | `tss.kubeSecrets.data.KAFKA_SASL_PASSWORD`                        | The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                                |                   |
 | `tss.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY`                       | Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".                                                                              |                   |
 | `tss.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE`               | Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".                                                 |                   |
-| `tss.kubeSecrets.data.RPC_REQUEST_AUTH_HEADER_VALUE`              | The authentication token/API key value sent in the HTTP header specified by RPC_REQUEST_AUTH_HEADER_KEY to authenticate with RPC providers.                          |                   |
+| `tss.kubeSecrets.data.RPC_REQUEST_AUTH_HEADER_VALUE`              | The authentication token/API key value sent in the HTTP header specified by RPC_REQUEST_AUTH_HEADER_KEY to authenticate with RPC providers.                            |                   |
 
 ### Dashboard
 
