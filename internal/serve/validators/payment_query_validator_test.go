@@ -123,19 +123,19 @@ func TestPaymentQueryValidator_PaymentTypeFilter(t *testing.T) {
 			name:          "invalid type - chaos",
 			paymentType:   "chaos",
 			expectedError: true,
-			errorField:    "payment_type",
+			errorField:    "type",
 		},
 		{
 			name:          "invalid type - empty",
 			paymentType:   "",
 			expectedError: true,
-			errorField:    "payment_type",
+			errorField:    "type",
 		},
 		{
 			name:          "invalid type - numbers",
 			paymentType:   "123",
 			expectedError: true,
-			errorField:    "payment_type",
+			errorField:    "type",
 		},
 	}
 
