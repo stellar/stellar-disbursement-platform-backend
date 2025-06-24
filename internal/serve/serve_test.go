@@ -409,6 +409,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodDelete, "/disbursements/1234"},
 		// Payments
 		{http.MethodGet, "/payments"},
+		{http.MethodPost, "/payments/"},
 		{http.MethodGet, "/payments/1234"},
 		{http.MethodPatch, "/payments/retry"},
 		{http.MethodPatch, "/payments/1234/status"},

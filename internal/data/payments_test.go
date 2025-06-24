@@ -13,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -38,7 +39,7 @@ func Test_PaymentsModelGet(t *testing.T) {
 		Status:    DraftDisbursementStatus,
 		Asset:     asset,
 		Wallet:    wallet1,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
@@ -468,12 +469,13 @@ func Test_PaymentModel_GetByIDs(t *testing.T) {
 	receiverWallet2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, DraftReceiversWalletStatus)
 
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
+	d := time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)
 	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &Disbursement{
 		Name:      "disbursement 1",
 		Status:    DraftDisbursementStatus,
 		Asset:     asset,
 		Wallet:    wallet1,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: &d,
 	})
 
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
@@ -573,8 +575,8 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 				Query: "foo-bar",
 			},
 			queryType:      QueryTypeSelectAll,
-			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND (p.id ILIKE $1 OR p.external_payment_id ILIKE $2 OR rw.stellar_address ILIKE $3 OR d.name ILIKE $4)",
-			expectedParams: []interface{}{"%foo-bar%", "%foo-bar%", "%foo-bar%", "%foo-bar%"},
+			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND (p.id ILIKE $1 OR p.external_payment_id ILIKE $2 OR rw.stellar_address ILIKE $3 OR COALESCE(d.name, '') ILIKE $4)",
+			expectedParams: []any{"%foo-bar%", "%foo-bar%", "%foo-bar%", "%foo-bar%"},
 		},
 		{
 			name:      "build payment query with status filter",
@@ -1854,6 +1856,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				"amount",
 				"status",
 				"status_history",
+				"type",
 				"created_at",
 				"updated_at",
 				`COALESCE(stellar_transaction_id, '') AS "stellar_transaction_id"`,
@@ -1869,6 +1872,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				"p.amount",
 				"p.status",
 				"p.status_history",
+				"p.type",
 				"p.created_at",
 				"p.updated_at",
 				`COALESCE(p.stellar_transaction_id, '') AS "stellar_transaction_id"`,
@@ -1884,6 +1888,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				`p.amount AS "payment.amount"`,
 				`p.status AS "payment.status"`,
 				`p.status_history AS "payment.status_history"`,
+				`p.type AS "payment.type"`,
 				`p.created_at AS "payment.created_at"`,
 				`p.updated_at AS "payment.updated_at"`,
 				`COALESCE(p.stellar_transaction_id, '') AS "payment.stellar_transaction_id"`,
