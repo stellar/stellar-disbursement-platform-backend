@@ -80,6 +80,14 @@ func (e ReceiverWalletNotFoundError) Error() string {
 	return fmt.Sprintf("no receiver wallet: receiver=%s wallet=%s", e.ReceiverID, e.WalletID)
 }
 
+type ReceiverWalletNotReadyForPaymentError struct {
+	CurrentStatus data.ReceiversWalletStatus
+}
+
+func (e ReceiverWalletNotReadyForPaymentError) Error() string {
+	return fmt.Sprintf("receiver wallet is not ready for payment, current status is %s", e.CurrentStatus)
+}
+
 type AssetNotSupportedByWalletError struct {
 	AssetCode  string
 	WalletName string
@@ -169,10 +177,13 @@ func (s *DirectPaymentService) CreateDirectPayment(
 				return nil, err
 			}
 
-			// 4. Get receiver wallet
+			// 4. Get and validate receiver wallet
 			receiverWallet, err := s.getReceiverWallet(ctx, dbTx, receiver.ID, wallet.ID, req.Wallet.Address)
 			if err != nil {
 				return nil, fmt.Errorf("getting receiver wallet: %w", err)
+			}
+			if receiverWallet.Status != data.ReadyReceiversWalletStatus && receiverWallet.Status != data.RegisteredReceiversWalletStatus {
+				return nil, ReceiverWalletNotReadyForPaymentError{CurrentStatus: receiverWallet.Status}
 			}
 
 			// 5. Validate balance
@@ -204,22 +215,8 @@ func (s *DirectPaymentService) CreateDirectPayment(
 			// 8. Prepare post-commit events (same as before)
 			msgs := make([]*events.Message, 0)
 
-			// Send invitation if receiver wallet needs registration
-			if receiverWallet.Status == data.ReadyReceiversWalletStatus {
-				eventData := []schemas.EventReceiverWalletInvitationData{
-					{ReceiverWalletID: receiverWallet.ID},
-				}
-
-				inviteMsg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic,
-					paymentID, events.BatchReceiverWalletInvitationType, eventData)
-				if err != nil {
-					return nil, fmt.Errorf("creating invitation message: %w", err)
-				}
-				msgs = append(msgs, inviteMsg)
-			}
-
 			// Send payment for processing if ready
-			if payment.Status == data.ReadyPaymentStatus {
+			if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
 				paymentMsg, err := events.NewPaymentReadyToPayMessage(ctx,
 					distributionAccount.Type.Platform(), paymentID, events.PaymentReadyToPayDirectPayment)
 				if err != nil {
