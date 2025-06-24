@@ -677,7 +677,7 @@ func DeleteAllDisbursementFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
-func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, wasmHash, contractAddress, credentialID string, status EmbeddedWalletStatus) *EmbeddedWallet {
+func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, wasmHash, contractAddress, credentialID, receiverContact, contactType string, status EmbeddedWalletStatus) *EmbeddedWallet {
 	t.Helper()
 
 	if token == "" {
@@ -686,16 +686,24 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		token = randomToken
 	}
 
+	if contactType == "" {
+		contactType = string(ContactTypeEmail)
+	}
+
+	if receiverContact == "" {
+		receiverContact = "test@example.com"
+	}
+
 	q := fmt.Sprintf(`
 		INSERT INTO embedded_wallets
-			(token, wasm_hash, contract_address, credential_id, wallet_status)
+			(token, wasm_hash, contract_address, credential_id, receiver_contact, contact_type, wallet_status)
 		VALUES
-			($1, $2, $3, $4, $5)
+			($1, $2, $3, $4, $5, $6, $7)
 		RETURNING %s
 	`, EmbeddedWalletColumnNames("", ""))
 	wallet := EmbeddedWallet{}
 
-	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), status)
+	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), receiverContact, contactType, status)
 	require.NoError(t, err)
 	return &wallet
 }

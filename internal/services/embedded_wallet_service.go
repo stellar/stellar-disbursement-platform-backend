@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -25,9 +26,10 @@ var (
 
 //go:generate mockery --name=EmbeddedWalletServiceInterface --case=underscore --structname=MockEmbeddedWalletService --filename=embedded_wallet_service.go
 type EmbeddedWalletServiceInterface interface {
-	// CreateInvitationToken creates a new embedded wallet invitation token
-	CreateInvitationToken(ctx context.Context) (string, error)
+	// CreateInvitationToken creates a new embedded wallet invitation token with receiver contact info for salt calculation
+	CreateInvitationToken(ctx context.Context, receiverContact, contactType string) (string, error)
 	// CreateWallet creates a new embedded wallet using the provided token, public key and credential ID
+	// The salt for contract address calculation is automatically derived from the receiver's contact info stored with the token
 	CreateWallet(ctx context.Context, token, publicKey, credentialID string) error
 	// GetWalletByCredentialID retrieves an embedded wallet by credential ID
 	GetWalletByCredentialID(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error)
@@ -66,19 +68,32 @@ type EmbeddedWalletServiceOptions struct {
 	WasmHash            string
 }
 
-func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context) (string, error) {
+func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, receiverContact, contactType string) (string, error) {
+	if receiverContact == "" {
+		return "", fmt.Errorf("receiver contact cannot be empty")
+	}
+	if contactType == "" {
+		return "", fmt.Errorf("contact type cannot be empty")
+	}
+
+	if err := data.ContactType(contactType).Validate(); err != nil {
+		return "", fmt.Errorf("validating contact type: %w", err)
+	}
+
 	token := uuid.New().String()
 
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
 		insert := data.EmbeddedWalletInsert{
-			Token:        token,
-			WasmHash:     e.wasmHash,
-			WalletStatus: data.PendingWalletStatus,
+			Token:           token,
+			WasmHash:        e.wasmHash,
+			ReceiverContact: receiverContact,
+			ContactType:     data.ContactType(contactType),
+			WalletStatus:    data.PendingWalletStatus,
 		}
 
 		embeddedWallet, err := e.sdpModels.EmbeddedWallets.Insert(ctx, e.sdpModels.DBConnectionPool, insert)
 		if err != nil {
-			return "", fmt.Errorf("creating embedded wallet invitation token: %w", err)
+			return "", fmt.Errorf("creating embedded wallet invitation token with contact: %w", err)
 		}
 
 		return embeddedWallet.Token, nil
@@ -115,7 +130,11 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 				return ErrCreateWalletInvalidStatus
 			}
 
-			// Create the wallet transaction in TSS DB first
+			saltHex, err := utils.GenerateSalt(embeddedWallet.ReceiverContact, string(embeddedWallet.ContactType))
+			if err != nil {
+				return fmt.Errorf("generating contract salt from receiver contact: %w", err)
+			}
+
 			tssTransaction := &store.Transaction{
 				ExternalID:      embeddedWallet.Token,
 				TransactionType: store.TransactionTypeWalletCreation,
@@ -123,6 +142,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 				WalletCreation: store.WalletCreation{
 					PublicKey: publicKey,
 					WasmHash:  e.wasmHash,
+					Salt:      saltHex,
 				},
 			}
 

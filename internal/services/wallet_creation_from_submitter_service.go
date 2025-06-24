@@ -46,22 +46,24 @@ func NewWalletCreationFromSubmitterService(
 	}
 }
 
-// calculateContractAddress calculates the contract address for a wallet creation transaction based on the distribution account and public key.
+// calculateContractAddress calculates the contract address for a wallet creation transaction based on the distribution account and salt.
 //
-// Contract addresses can be deterministically derived from the deployer account and an optional salt. In this case, we set the salt to the
-// wallet's public key hash, and the deployer account is the distribution account from the TSS transaction.
+// Contract addresses can be deterministically derived from the deployer account and an optional salt. In this case, we use the salt
+// stored in the TSS transaction, and the deployer account is the distribution account from the TSS transaction.
 //
 // Read more: https://developers.stellar.org/docs/build/smart-contracts/example-contracts/deployer#how-it-works
 func (s *WalletCreationFromSubmitterService) calculateContractAddress(
-	distributionAccount, publicKey string,
+	distributionAccount, saltHex string,
 ) (string, error) {
-	publicKeyBytes, err := hex.DecodeString(publicKey)
+	saltBytes, err := hex.DecodeString(saltHex)
 	if err != nil {
-		return "", fmt.Errorf("decoding public key: %w", err)
+		return "", fmt.Errorf("parsing contract salt: invalid hex salt: %w", err)
 	}
-
-	publicKeyHash := hash.Hash(publicKeyBytes)
-	salt := xdr.Uint256(publicKeyHash)
+	if len(saltBytes) != 32 {
+		return "", fmt.Errorf("parsing contract salt: salt must be 32 bytes, got %d", len(saltBytes))
+	}
+	var salt xdr.Uint256
+	copy(salt[:], saltBytes)
 
 	rawAddress, err := strkey.Decode(strkey.VersionByteAccountID, distributionAccount)
 	if err != nil {
@@ -218,7 +220,7 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 
 		contractAddress, calcErr := s.calculateContractAddress(
 			transaction.DistributionAccount.String,
-			transaction.WalletCreation.PublicKey,
+			transaction.WalletCreation.Salt,
 		)
 		if calcErr != nil {
 			return fmt.Errorf("calculating contract address for transaction %s: %w", transaction.ID, calcErr)

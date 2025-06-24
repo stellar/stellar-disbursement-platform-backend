@@ -188,6 +188,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 			WalletCreation: WalletCreation{
 				PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 				WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+				Salt:      "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 			},
 			TenantID: "tenant-id-2",
 		})
@@ -202,6 +203,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 		assert.Equal(t, TransactionTypeWalletCreation, refreshedTx.TransactionType)
 		assert.Equal(t, "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", refreshedTx.PublicKey)
 		assert.Equal(t, "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50", refreshedTx.WasmHash)
+		assert.Equal(t, "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b", refreshedTx.Salt)
 		assert.Equal(t, TransactionStatusPending, refreshedTx.Status)
 		assert.Equal(t, "tenant-id-2", refreshedTx.TenantID)
 	})
@@ -294,6 +296,7 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 			WalletCreation: WalletCreation{
 				PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 				WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+				Salt:      "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 			},
 			TenantID: uuid.NewString(),
 		}
@@ -408,6 +411,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		TransactionType: TransactionTypeWalletCreation,
 		PublicKey:       "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		WasmHash:        "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+		Salt:            "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 		Status:          TransactionStatusPending,
 		TenantID:        uuid.NewString(),
 	})
@@ -526,6 +530,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		TransactionType: TransactionTypeWalletCreation,
 		PublicKey:       "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		WasmHash:        "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+		Salt:            "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 		Status:          TransactionStatusPending,
 		TenantID:        uuid.NewString(),
 	})
@@ -1042,10 +1047,53 @@ func Test_Transaction_validate_wallet_creation(t *testing.T) {
 				WalletCreation: WalletCreation{
 					PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 					WasmHash:  "invalid-wasm-hash",
+					Salt:      "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 				},
 				TenantID: "tenant-id",
 			},
 			wantErrContains: `wasm hash "invalid-wasm-hash" is not a valid hex string`,
+		},
+		{
+			name: "validate Salt",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeWalletCreation,
+				WalletCreation: WalletCreation{
+					PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+					WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+					Salt:      "",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: "salt is required",
+		},
+		{
+			name: "validate Salt (not a valid hash)",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeWalletCreation,
+				WalletCreation: WalletCreation{
+					PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+					WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+					Salt:      "invalid-salt",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: `salt "invalid-salt" is not a valid hex string`,
+		},
+		{
+			name: "🎉 successfully validates wallet creation transaction",
+			transaction: Transaction{
+				ExternalID:      "123",
+				TransactionType: TransactionTypeWalletCreation,
+				WalletCreation: WalletCreation{
+					PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+					WasmHash:  "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50",
+					Salt:      "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
+				},
+				TenantID: "tenant-id",
+			},
+			wantErrContains: "",
 		},
 	}
 
@@ -1287,6 +1335,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate_WithTransactionTypes(t *
 		TransactionType: TransactionTypeWalletCreation,
 		PublicKey:       "deadbeef",
 		WasmHash:        "cafebabe",
+		Salt:            "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 		Status:          TransactionStatusSuccess,
 		TenantID:        tenantID,
 	})

@@ -85,7 +85,7 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 	t.Run("successfully creates unique tokens", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		token1, err := service.CreateInvitationToken(ctx)
+		token1, err := service.CreateInvitationToken(ctx, "test1@example.com", "EMAIL")
 		require.NoError(t, err)
 		require.NotNil(t, token1)
 
@@ -94,8 +94,10 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 		wallet, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token1)
 		require.NoError(t, err)
 		assert.Equal(t, token1, wallet.Token)
+		assert.Equal(t, "test1@example.com", wallet.ReceiverContact)
+		assert.Equal(t, data.ContactTypeEmail, wallet.ContactType)
 
-		token2, err := service.CreateInvitationToken(ctx)
+		token2, err := service.CreateInvitationToken(ctx, "+15551234567", "PHONE_NUMBER")
 		require.NoError(t, err)
 		require.NotNil(t, token2)
 
@@ -104,8 +106,25 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 		wallet2, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token2)
 		require.NoError(t, err)
 		assert.Equal(t, token2, wallet2.Token)
+		assert.Equal(t, "+15551234567", wallet2.ReceiverContact)
+		assert.Equal(t, data.ContactTypePhoneNumber, wallet2.ContactType)
 
 		assert.NotEqual(t, token1, token2, "should generate unique tokens")
+	})
+
+	t.Run("returns error if receiver contact is empty", func(t *testing.T) {
+		_, err := service.CreateInvitationToken(ctx, "", "EMAIL")
+		assert.EqualError(t, err, "receiver contact cannot be empty")
+	})
+
+	t.Run("returns error if contact type is empty", func(t *testing.T) {
+		_, err := service.CreateInvitationToken(ctx, "test@example.com", "")
+		assert.EqualError(t, err, "contact type cannot be empty")
+	})
+
+	t.Run("returns error if contact type is invalid", func(t *testing.T) {
+		_, err := service.CreateInvitationToken(ctx, "test@example.com", "INVALID")
+		assert.EqualError(t, err, "validating contact type: invalid contact type \"INVALID\"")
 	})
 }
 
@@ -134,7 +153,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("successfully creates a wallet TSS transaction", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := service.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -158,6 +177,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		assert.Equal(t, defaultTenantID, tssTransaction.TenantID)
 		assert.Equal(t, defaultPublicKey, tssTransaction.WalletCreation.PublicKey)
 		assert.Equal(t, testWasmHash, tssTransaction.WalletCreation.WasmHash)
+		assert.NotEmpty(t, tssTransaction.WalletCreation.Salt, "salt should be generated from receiver contact")
 	})
 
 	t.Run("returns error if token (walletID) is empty", func(t *testing.T) {
@@ -187,7 +207,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("returns error if wallet status is not pending", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.SuccessWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := service.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -202,7 +222,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes")
 		require.NoError(t, err)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err = invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -221,7 +241,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
 		require.NoError(t, err)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.SuccessWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err = invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -233,16 +253,60 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		assert.Empty(t, tssTransactions)
 	})
 
+	t.Run("generates consistent salt for same contact info", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.PendingWalletStatus)
+		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.PendingWalletStatus)
+
+		err := service.CreateWallet(ctx, wallet1.Token, defaultPublicKey, "cred1")
+		require.NoError(t, err)
+		err = service.CreateWallet(ctx, wallet2.Token, defaultPublicKey, "cred2")
+		require.NoError(t, err)
+
+		transactions1, err := tssModel.GetAllByExternalIDs(ctx, []string{wallet1.Token})
+		require.NoError(t, err)
+		require.Len(t, transactions1, 1)
+
+		transactions2, err := tssModel.GetAllByExternalIDs(ctx, []string{wallet2.Token})
+		require.NoError(t, err)
+		require.Len(t, transactions2, 1)
+
+		assert.Equal(t, transactions1[0].WalletCreation.Salt, transactions2[0].WalletCreation.Salt)
+	})
+
+	t.Run("generates different salt for different contact types", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		emailWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.PendingWalletStatus)
+		phoneWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "5551234567", "PHONE_NUMBER", data.PendingWalletStatus)
+
+		err := service.CreateWallet(ctx, emailWallet.Token, defaultPublicKey, "cred1")
+		require.NoError(t, err)
+		err = service.CreateWallet(ctx, phoneWallet.Token, defaultPublicKey, "cred2")
+		require.NoError(t, err)
+
+		emailTransactions, err := tssModel.GetAllByExternalIDs(ctx, []string{emailWallet.Token})
+		require.NoError(t, err)
+		require.Len(t, emailTransactions, 1)
+
+		phoneTransactions, err := tssModel.GetAllByExternalIDs(ctx, []string{phoneWallet.Token})
+		require.NoError(t, err)
+		require.Len(t, phoneTransactions, 1)
+
+		assert.NotEqual(t, emailTransactions[0].WalletCreation.Salt, phoneTransactions[0].WalletCreation.Salt)
+	})
+
 	t.Run("returns error when trying to create wallet with duplicate credential ID", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		duplicateCredentialID := "duplicate-credential-id"
 
-		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test1@example.com", "EMAIL", data.PendingWalletStatus)
 		err := service.CreateWallet(ctx, wallet1.Token, defaultPublicKey, duplicateCredentialID)
 		require.NoError(t, err)
 
-		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test2@example.com", "EMAIL", data.PendingWalletStatus)
 		otherPublicKey := "deadbeef"
 		err = service.CreateWallet(ctx, wallet2.Token, otherPublicKey, duplicateCredentialID)
 		require.Error(t, err)
@@ -272,7 +336,7 @@ func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 	t.Run("successfully gets a wallet by credential ID", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", data.SuccessWalletStatus)
+		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", "test@example.com", "EMAIL", data.SuccessWalletStatus)
 
 		retrievedWallet, err := service.GetWalletByCredentialID(ctx, expectedWallet.CredentialID)
 		require.NoError(t, err)

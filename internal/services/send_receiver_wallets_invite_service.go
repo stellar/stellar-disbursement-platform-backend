@@ -125,7 +125,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		}
 
 		if wallet.Embedded {
-			if err := s.updateDeepLink(ctx, &wdl); err != nil {
+			if err := s.updateDeepLink(ctx, &wdl, &rwa.ReceiverWallet.Receiver); err != nil {
 				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
 				continue
 			}
@@ -216,9 +216,12 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	})
 }
 
-func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl *WalletDeepLink) error {
+func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl *WalletDeepLink, receiver *data.Receiver) error {
 	if wdl == nil {
 		return fmt.Errorf("wallet deep link cannot be nil")
+	}
+	if receiver == nil {
+		return fmt.Errorf("receiver cannot be nil")
 	}
 
 	if s.embeddedWalletService == nil {
@@ -230,7 +233,18 @@ func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl
 		wdl.Route = "wallet"
 	}
 
-	token, err := s.embeddedWalletService.CreateInvitationToken(ctx)
+	var receiverContact, contactType string
+	if receiver.Email != "" {
+		receiverContact = receiver.Email
+		contactType = "EMAIL"
+	} else if receiver.PhoneNumber != "" {
+		receiverContact = receiver.PhoneNumber
+		contactType = "PHONE_NUMBER"
+	} else {
+		return fmt.Errorf("receiver must have either email or phone number for embedded wallet creation")
+	}
+
+	token, err := s.embeddedWalletService.CreateInvitationToken(ctx, receiverContact, contactType)
 	if err != nil {
 		return fmt.Errorf("creating embedded wallet invitation token: %w", err)
 	}
