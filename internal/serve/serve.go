@@ -201,6 +201,66 @@ func (opts *ServeOptions) ValidateRpc() error {
 	return nil
 }
 
+// enforceEmbeddedWalletSettings ensures embedded wallets are disabled if --enable-embedded-wallets is false
+func (opts *ServeOptions) enforceEmbeddedWalletSettings() error {
+	if opts.EnableEmbeddedWallets {
+		return nil // Nothing to enforce if the feature is enabled
+	}
+
+	ctx := context.Background()
+
+	var tenants []tenant.Tenant
+	if opts.SingleTenantMode {
+		defaultTenant, err := opts.tenantManager.GetDefault(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get default tenant: %w", err)
+		}
+		tenants = append(tenants, *defaultTenant)
+	} else {
+		allTenants, err := opts.tenantManager.GetAllTenants(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to get all tenants: %w", err)
+		}
+		tenants = allTenants
+	}
+
+	var totalDisabledCount int
+
+	for _, t := range tenants {
+		tenantCtx := tenant.SaveTenantInContext(ctx, &t)
+
+		enabledFilter := data.NewFilter(data.FilterEnabledWallets, true)
+		embeddedWallets, err := opts.Models.Wallets.FindWallets(tenantCtx, enabledFilter)
+		if err != nil {
+			log.Errorf("failed to query wallets for tenant %s: %v", t.ID, err)
+			continue
+		}
+
+		var tenantDisabledCount int
+		for _, wallet := range embeddedWallets {
+			if wallet.Embedded {
+				disabled := false
+				update := data.WalletUpdate{Enabled: &disabled}
+				_, err := opts.Models.Wallets.Update(tenantCtx, wallet.ID, update)
+				if err != nil {
+					log.Errorf("failed to auto-disable embedded wallet '%s' (ID: %s) for tenant %s: %v", wallet.Name, wallet.ID, t.ID, err)
+					continue
+				}
+				tenantDisabledCount++
+				log.Infof("Auto-disabled embedded wallet '%s' for tenant %s because --enable-embedded-wallets is false", wallet.Name, t.ID)
+			}
+		}
+
+		totalDisabledCount += tenantDisabledCount
+	}
+
+	if totalDisabledCount > 0 {
+		log.Infof("Auto-disabled %d embedded wallet provider(s) total across all tenants on startup", totalDisabledCount)
+	}
+
+	return nil
+}
+
 func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 	if err := opts.ValidateSecurity(); err != nil {
 		return fmt.Errorf("validating security options: %w", err)
@@ -212,6 +272,11 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 
 	if err := opts.SetupDependencies(); err != nil {
 		return fmt.Errorf("starting dependencies: %w", err)
+	}
+
+	// Auto-disable embedded wallets if the feature flag is disabled
+	if err := opts.enforceEmbeddedWalletSettings(); err != nil {
+		return fmt.Errorf("enforcing embedded wallet settings: %w", err)
 	}
 
 	// Start the server
@@ -468,9 +533,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{
-				Models:        o.Models,
-				NetworkType:   o.NetworkType,
-				AssetResolver: services.NewAssetResolver(o.Models.Assets),
+				Models:                o.Models,
+				NetworkType:           o.NetworkType,
+				AssetResolver:         services.NewAssetResolver(o.Models.Assets),
+				EnableEmbeddedWallets: o.EnableEmbeddedWallets,
 			}
 
 			// Read operations

@@ -18,9 +18,10 @@ import (
 )
 
 type WalletsHandler struct {
-	Models        *data.Models
-	NetworkType   utils.NetworkType
-	AssetResolver *services.AssetResolver
+	Models                *data.Models
+	NetworkType           utils.NetworkType
+	AssetResolver         *services.AssetResolver
+	EnableEmbeddedWallets bool
 }
 
 // GetWallets returns a list of wallets
@@ -154,6 +155,25 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	walletID := chi.URLParam(req, "id")
+
+	// Check if trying to enable an embedded wallet without the feature flag
+	if reqBody.Enabled != nil && *reqBody.Enabled {
+		wallet, err := h.Models.Wallets.Get(ctx, walletID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				httperror.NotFound("", err, nil).Render(rw)
+				return
+			}
+			httperror.InternalError(ctx, "failed to retrieve wallet", err, nil).Render(rw)
+			return
+		}
+
+		if wallet.Embedded && !h.EnableEmbeddedWallets {
+			extra := map[string]interface{}{"validation_error": "embedded wallets cannot be enabled when --enable-embedded-wallets is false"}
+			httperror.BadRequest("cannot enable embedded wallet provider", nil, extra).Render(rw)
+			return
+		}
+	}
 
 	update := data.WalletUpdate{
 		Name:              reqBody.Name,
