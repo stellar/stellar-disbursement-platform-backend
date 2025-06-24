@@ -99,7 +99,6 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		ReceiverWallet:    receiverWallet,
 		ExternalPaymentID: "mockID",
 	})
-
 	t.Run("successfully returns payment details for given ID", func(t *testing.T) {
 		// test
 		route := fmt.Sprintf("/payments/%s", payment.ID)
@@ -525,6 +524,19 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 		UpdatedAt:            time.Date(2023, 1, 10, 23, 40, 20, 1431, time.UTC),
 	})
 
+	directPaymentReady := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		Amount:               "150",
+		ExternalPaymentID:    uuid.NewString(),
+		StellarTransactionID: stellarTransactionID,
+		StellarOperationID:   stellarOperationID,
+		Status:               data.ReadyPaymentStatus,
+		Asset:                *asset,
+		ReceiverWallet:       receiverWallet2,
+		Type:                 data.PaymentTypeDirect,
+		CreatedAt:            time.Date(2023, 1, 10, 23, 40, 20, 1431, time.UTC),
+		UpdatedAt:            time.Date(2023, 12, 10, 23, 40, 20, 1431, time.UTC),
+	})
+
 	stellarTransactionID, err = utils.RandomString(64)
 	require.NoError(t, err)
 	stellarOperationID, err = utils.RandomString(32)
@@ -608,9 +620,33 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next:  "",
 				Prev:  "",
 				Pages: 1,
+				Total: 8,
+			},
+			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *directPaymentReady, *paymentPaused, *paymentDraft, *paymentPending, *paymentReady}, // correct updated_at DESC order
+		},
+		{
+			name:               "fetch all payments with DISBURSEMENT type filter",
+			queryParams:        map[string]string{"type": "disbursement"},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next:  "",
+				Prev:  "",
+				Pages: 1,
 				Total: 7,
 			},
 			expectedPayments: []data.Payment{*paymentCanceled, *paymentFailed, *paymentSuccess, *paymentPaused, *paymentDraft, *paymentPending, *paymentReady}, // default sorter: (updated_at DESC)
+		},
+		{
+			name:               "fetch all payments with DIRECT type filter",
+			queryParams:        map[string]string{"type": "direct"},
+			expectedStatusCode: http.StatusOK,
+			expectedPagination: httpresponse.PaginationInfo{
+				Next:  "",
+				Prev:  "",
+				Pages: 1,
+				Total: 1,
+			},
+			expectedPayments: []data.Payment{*directPaymentReady},
 		},
 		{
 			name: "fetch first page of payments with limit 1 and sort by created_at",
@@ -624,8 +660,8 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			expectedPagination: httpresponse.PaginationInfo{
 				Next:  "/payments?direction=asc&page=2&page_limit=1&sort=created_at",
 				Prev:  "",
-				Pages: 7,
-				Total: 7,
+				Pages: 8,
+				Total: 8,
 			},
 			expectedPayments: []data.Payment{*paymentDraft},
 		},
@@ -641,15 +677,15 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			expectedPagination: httpresponse.PaginationInfo{
 				Next:  "/payments?direction=asc&page=3&page_limit=1&sort=created_at",
 				Prev:  "/payments?direction=asc&page=1&page_limit=1&sort=created_at",
-				Pages: 7,
-				Total: 7,
+				Pages: 8,
+				Total: 8,
 			},
-			expectedPayments: []data.Payment{*paymentReady},
+			expectedPayments: []data.Payment{*directPaymentReady},
 		},
 		{
 			name: "fetch last page of payments with limit 1 and sort by created_at",
 			queryParams: map[string]string{
-				"page":       "7",
+				"page":       "8",
 				"page_limit": "1",
 				"sort":       "created_at",
 				"direction":  "asc",
@@ -657,9 +693,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 			expectedPagination: httpresponse.PaginationInfo{
 				Next:  "",
-				Prev:  "/payments?direction=asc&page=6&page_limit=1&sort=created_at",
-				Pages: 7,
-				Total: 7,
+				Prev:  "/payments?direction=asc&page=7&page_limit=1&sort=created_at",
+				Pages: 8,
+				Total: 8,
 			},
 			expectedPayments: []data.Payment{*paymentCanceled},
 		},
@@ -687,9 +723,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next:  "",
 				Prev:  "",
 				Pages: 1,
-				Total: 2,
+				Total: 3,
 			},
-			expectedPayments: []data.Payment{*paymentPaused, *paymentReady}, // default sorter: (updated_at DESC)
+			expectedPayments: []data.Payment{*directPaymentReady, *paymentPaused, *paymentReady}, // updated_at DESC order
 		},
 		{
 			name: "returns empty list when receiver_id is not found",
@@ -744,9 +780,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next:  "",
 				Prev:  "",
 				Pages: 1,
-				Total: 2,
+				Total: 3,
 			},
-			expectedPayments: []data.Payment{*paymentPending, *paymentReady}, // default sorter: (updated_at DESC)
+			expectedPayments: []data.Payment{*directPaymentReady, *paymentPending, *paymentReady},
 		},
 		{
 			name: "query[p.id]",
@@ -798,7 +834,15 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 		},
 	}
 
-	for _, payment := range []data.Payment{*paymentDraft, *paymentPending, *paymentReady, *paymentPaused, *paymentSuccess, *paymentFailed, *paymentCanceled} {
+	for _, payment := range []data.Payment{*paymentDraft, *paymentPending, *paymentReady, *paymentPaused, *paymentSuccess, *paymentFailed, *paymentCanceled, *directPaymentReady} {
+		expectedTotal := 1
+		expectedPayments := []data.Payment{payment}
+
+		if payment.Status == data.ReadyPaymentStatus {
+			expectedTotal = 2
+			expectedPayments = []data.Payment{*directPaymentReady, *paymentReady}
+		}
+
 		tests = append(tests, TestCase{
 			name: "fetch payments with status=" + string(payment.Status),
 			queryParams: map[string]string{
@@ -809,9 +853,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 				Next:  "",
 				Prev:  "",
 				Pages: 1,
-				Total: 1,
+				Total: expectedTotal,
 			},
-			expectedPayments: []data.Payment{payment},
+			expectedPayments: expectedPayments,
 		})
 	}
 

@@ -558,7 +558,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 		queryParams    QueryParams
 		queryType      QueryType
 		expectedQuery  string
-		expectedParams []interface{}
+		expectedParams []any
 	}{
 		{
 			name:           "build payment query without params and pagination",
@@ -566,7 +566,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 			queryParams:    QueryParams{},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p",
-			expectedParams: []interface{}{},
+			expectedParams: []any{},
 		},
 		{
 			name:      "build payment query with a query search",
@@ -582,38 +582,38 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 			name:      "build payment query with status filter",
 			baseQuery: "SELECT * FROM payments p",
 			queryParams: QueryParams{
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyStatus: "draft",
 				},
 			},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1",
-			expectedParams: []interface{}{"draft"},
+			expectedParams: []any{"draft"},
 		},
 		{
 			name:      "build payment query with receiver_id filter",
 			baseQuery: "SELECT * FROM payments p",
 			queryParams: QueryParams{
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyReceiverID: "receiver_id",
 				},
 			},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.receiver_id = $1",
-			expectedParams: []interface{}{"receiver_id"},
+			expectedParams: []any{"receiver_id"},
 		},
 		{
 			name:      "build payment query with created_at filters",
 			baseQuery: "SELECT * FROM payments p",
 			queryParams: QueryParams{
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyCreatedAtAfter:  "00-01-01",
 					FilterKeyCreatedAtBefore: "00-01-31",
 				},
 			},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.created_at >= $1 AND p.created_at <= $2",
-			expectedParams: []interface{}{"00-01-01", "00-01-31"},
+			expectedParams: []any{"00-01-01", "00-01-31"},
 		},
 		{
 			name:      "build payment query with pagination",
@@ -626,7 +626,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 			},
 			queryType:      QueryTypeSelectPaginated,
 			expectedQuery:  "SELECT * FROM payments p ORDER BY p.created_at ASC LIMIT $1 OFFSET $2",
-			expectedParams: []interface{}{20, 0},
+			expectedParams: []any{20, 0},
 		},
 		{
 			name:      "build payment query with all filters and pagination",
@@ -636,16 +636,17 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 				PageLimit: 20,
 				SortBy:    "created_at",
 				SortOrder: "ASC",
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyStatus:          "draft",
 					FilterKeyReceiverID:      "receiver_id",
 					FilterKeyCreatedAtAfter:  "00-01-01",
 					FilterKeyCreatedAtBefore: "00-01-31",
+					FilterKeyPaymentType:     "DIRECT",
 				},
 			},
 			queryType:      QueryTypeSelectPaginated,
-			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1 AND p.receiver_id = $2 AND p.created_at >= $3 AND p.created_at <= $4 ORDER BY p.created_at ASC LIMIT $5 OFFSET $6",
-			expectedParams: []interface{}{"draft", "receiver_id", "00-01-01", "00-01-31", 20, 0},
+			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1 AND p.receiver_id = $2 AND p.created_at >= $3 AND p.created_at <= $4 AND p.type = $5 ORDER BY p.created_at ASC LIMIT $6 OFFSET $7",
+			expectedParams: []any{"draft", "receiver_id", "00-01-01", "00-01-31", "DIRECT", 20, 0},
 		},
 	}
 
