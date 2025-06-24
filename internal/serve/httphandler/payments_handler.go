@@ -384,18 +384,19 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, serviceReq, user, &distAccount)
 	if err != nil {
 		var (
-			validationErr        services.ValidationError
-			notFoundErr          services.NotFoundError
-			unsupportedErr       services.UnsupportedError
-			ambiguousErr         services.AmbiguousReferenceError
-			insufficientFundsErr services.InsufficientBalanceForDirectPaymentError
-			walletDisabledErr    services.WalletNotEnabledError
-			assetNotSupportedErr services.AssetNotSupportedByWalletError
-			recvErr              services.ErrReceiverWalletNotFound
-			trustErr             services.TrustlineNotFoundError
-			accErr               services.AccountNotFoundError
-			circleAccErr         services.CircleAccountNotActivatedError
-			circleAssetErr       services.CircleAssetNotSupportedError
+			validationErr         services.ValidationError
+			notFoundErr           services.NotFoundError
+			unsupportedErr        services.UnsupportedError
+			ambiguousErr          services.AmbiguousReferenceError
+			insufficientFundsErr  services.InsufficientBalanceForDirectPaymentError
+			walletDisabledErr     services.WalletNotEnabledError
+			assetNotSupportedErr  services.AssetNotSupportedByWalletError
+			recvErr               services.ReceiverWalletNotFoundError
+			recvWalletNotReadyErr services.ReceiverWalletNotReadyForPaymentError
+			trustErr              services.TrustlineNotFoundError
+			accErr                services.AccountNotFoundError
+			circleAccErr          services.CircleAccountNotActivatedError
+			circleAssetErr        services.CircleAssetNotSupportedError
 		)
 
 		switch {
@@ -414,19 +415,21 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 			httperror.BadRequest(walletDisabledErr.Error(), err, nil).Render(w)
 		case errors.As(err, &assetNotSupportedErr):
 			httperror.BadRequest(assetNotSupportedErr.Error(), err, nil).Render(w)
+		case errors.As(err, &recvWalletNotReadyErr):
+			httperror.BadRequest(recvWalletNotReadyErr.Error(), err, nil).Render(w)
 		case errors.As(err, &recvErr):
-			httperror.BadRequest(err.Error(), err, nil).Render(w)
+			httperror.BadRequest(recvErr.Error(), err, nil).Render(w)
 		case errors.As(err, &trustErr):
-			errorMsg := fmt.Sprintf("%s. Please add a trustline for this asset to your distribution account, or choose a different asset that already has a trustline.", err.Error())
+			errorMsg := fmt.Sprintf("%s. Please add a trustline for this asset to your distribution account, or choose a different asset that already has a trustline.", trustErr.Error())
 			httperror.BadRequest(errorMsg, err, nil).Render(w)
 		case errors.As(err, &circleAccErr):
-			errorMsg := fmt.Sprintf("%s. Please complete the Circle account activation process...", err.Error())
+			errorMsg := fmt.Sprintf("%s. Please complete the Circle account activation process...", circleAccErr.Error())
 			httperror.BadRequest(errorMsg, err, nil).Render(w)
 		case errors.As(err, &circleAssetErr):
-			errorMsg := fmt.Sprintf("%s. Please choose a different asset supported by Circle...", err.Error())
+			errorMsg := fmt.Sprintf("%s. Please choose a different asset supported by Circle...", circleAssetErr.Error())
 			httperror.BadRequest(errorMsg, err, nil).Render(w)
 		case errors.As(err, &accErr):
-			errorMsg := fmt.Sprintf("%s. Please ensure your distribution account exists and is funded on the Stellar network.", err.Error())
+			errorMsg := fmt.Sprintf("%s. Please ensure your distribution account exists and is funded on the Stellar network.", accErr.Error())
 			httperror.BadRequest(errorMsg, err, nil).Render(w)
 		default:
 			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
