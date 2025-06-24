@@ -71,12 +71,12 @@ func (e WalletNotEnabledError) Error() string {
 	return fmt.Sprintf("wallet '%s' is not enabled for payments", e.WalletName)
 }
 
-type ErrReceiverWalletNotFound struct {
+type ReceiverWalletNotFoundError struct {
 	ReceiverID string
 	WalletID   string
 }
 
-func (e ErrReceiverWalletNotFound) Error() string {
+func (e ReceiverWalletNotFoundError) Error() string {
 	return fmt.Sprintf("no receiver wallet: receiver=%s wallet=%s", e.ReceiverID, e.WalletID)
 }
 
@@ -287,7 +287,7 @@ func (s *DirectPaymentService) getReceiverWallet(
 	}
 
 	if len(receiverWallets) == 0 {
-		return nil, &ErrReceiverWalletNotFound{
+		return nil, &ReceiverWalletNotFoundError{
 			ReceiverID: receiverID,
 			WalletID:   walletID,
 		}

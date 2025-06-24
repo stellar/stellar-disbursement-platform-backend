@@ -448,7 +448,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Nil(t, payment)
 
 		err = unwrapTransactionError(err)
-		var rwErr *ErrReceiverWalletNotFound
+		var rwErr *ReceiverWalletNotFoundError
 		assert.True(t, errors.As(err, &rwErr))
 		assert.Contains(t, err.Error(), "no receiver wallet")
 

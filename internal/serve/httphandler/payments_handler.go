@@ -391,7 +391,7 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 			insufficientFundsErr services.InsufficientBalanceForDirectPaymentError
 			walletDisabledErr    services.WalletNotEnabledError
 			assetNotSupportedErr services.AssetNotSupportedByWalletError
-			recvErr              services.ErrReceiverWalletNotFound
+			recvErr              services.ReceiverWalletNotFoundError
 			trustErr             services.TrustlineNotFoundError
 			accErr               services.AccountNotFoundError
 			circleAccErr         services.CircleAccountNotActivatedError
