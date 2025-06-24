@@ -687,7 +687,7 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 		qb.AddCondition("p.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
 	if queryParams.Filters[FilterKeyPaymentType] != nil {
-		addArrayOrSingleCondition[PaymentType](qb, "p.payment_type", queryParams.Filters[FilterKeyPaymentType])
+		addArrayOrSingleCondition[PaymentType](qb, "p.type", queryParams.Filters[FilterKeyPaymentType])
 	}
 
 	switch queryType {
