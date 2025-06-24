@@ -171,6 +171,14 @@ func (ar *AssetResolver) Validate(ref AssetReference) error {
 					Message:    "required for classic asset",
 				}
 			}
+
+			if ref.ContractID != nil {
+				return ValidationError{
+					EntityType: EntityTypeAsset,
+					Field:      FieldContractID,
+					Message:    "field not supported for classic asset",
+				}
+			}
 			if ref.Issuer == nil || strings.TrimSpace(*ref.Issuer) == "" {
 				return ValidationError{
 					EntityType: EntityTypeAsset,
@@ -184,6 +192,13 @@ func (ar *AssetResolver) Validate(ref AssetReference) error {
 					EntityType: EntityTypeAsset,
 					Field:      FieldContractID,
 					Message:    "required for contract asset",
+				}
+			}
+			if !strkey.IsValidContractAddress(*ref.ContractID) {
+				return ValidationError{
+					EntityType: EntityTypeAsset,
+					Field:      FieldContractID,
+					Message:    "invalid contract format provided",
 				}
 			}
 		case AssetTypeFiat:

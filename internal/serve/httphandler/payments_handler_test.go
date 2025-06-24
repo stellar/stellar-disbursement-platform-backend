@@ -117,7 +117,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"stellar_transaction_id": "` + payment.StellarTransactionID + `",
 			"stellar_operation_id": "` + payment.StellarOperationID + `",
 			"status": "DRAFT",
-			"payment_type": "DISBURSEMENT",
+			"type": "DISBURSEMENT",
 			"status_history": [
 				{
 					"status": "DRAFT",
@@ -1613,335 +1613,6 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 	})
 }
 
-func Test_PaymentHandler_GetPayments_PaymentTypeFilter_Success(t *testing.T) {
-	dbConnectionPool := testutils.GetDBConnectionPool(t)
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
-	mDistributionAccountResolver.
-		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-		Maybe()
-
-	handler := &PaymentsHandler{
-		Models:                      models,
-		DBConnectionPool:            dbConnectionPool,
-		DistributionAccountResolver: mDistributionAccountResolver,
-	}
-
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
-	defer ts.Close()
-
-	ctx := context.Background()
-
-	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "BOLT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "krieg_wallet", "https://www.krieg.com", "www.krieg.com", "krieg://")
-
-	_, err = dbConnectionPool.ExecContext(ctx,
-		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
-		wallet.ID, asset.ID)
-	require.NoError(t, err)
-
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email: "colonel@krieg.imperium",
-	})
-	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-
-	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:   "siege_of_vraks",
-		Status: data.StartedDisbursementStatus,
-		Asset:  asset,
-		Wallet: wallet,
-	})
-
-	disbursementPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet:    receiverWallet,
-		Disbursement:      disbursement,
-		Asset:             *asset,
-		Amount:            "100.00",
-		Status:            data.ReadyPaymentStatus,
-		ExternalPaymentID: "VRAKS-001",
-	})
-
-	directPaymentInsert := data.PaymentInsert{
-		ReceiverID:        receiver.ID,
-		Amount:            "200.00",
-		AssetID:           asset.ID,
-		ReceiverWalletID:  receiverWallet.ID,
-		ExternalPaymentID: utils.StringPtr("DIRECT-001"),
-		PaymentType:       data.PaymentTypeDirect,
-	}
-
-	directPaymentID, err := models.Payment.CreateDirectPayment(ctx, dbConnectionPool, directPaymentInsert)
-	require.NoError(t, err)
-
-	err = models.Payment.UpdateStatus(ctx, dbConnectionPool, directPaymentID, data.ReadyPaymentStatus, nil, "")
-	require.NoError(t, err)
-
-	tests := []struct {
-		name               string
-		queryParams        map[string]string
-		expectedTotal      int
-		expectedPaymentIDs []string
-		expectedType       data.PaymentType
-	}{
-		{
-			name:               "filter by direct payments",
-			queryParams:        map[string]string{"type": "direct"},
-			expectedTotal:      1,
-			expectedPaymentIDs: []string{directPaymentID},
-			expectedType:       data.PaymentTypeDirect,
-		},
-		{
-			name:               "filter by disbursement payments",
-			queryParams:        map[string]string{"type": "disbursement"},
-			expectedTotal:      1,
-			expectedPaymentIDs: []string{disbursementPayment.ID},
-			expectedType:       data.PaymentTypeDisbursement,
-		},
-		{
-			name:               "case insensitive - DIRECT",
-			queryParams:        map[string]string{"type": "DIRECT"},
-			expectedTotal:      1,
-			expectedPaymentIDs: []string{directPaymentID},
-			expectedType:       data.PaymentTypeDirect,
-		},
-		{
-			name:               "case insensitive - Disbursement",
-			queryParams:        map[string]string{"type": "Disbursement"},
-			expectedTotal:      1,
-			expectedPaymentIDs: []string{disbursementPayment.ID},
-			expectedType:       data.PaymentTypeDisbursement,
-		},
-		{
-			name:               "no type filter - returns all payments",
-			queryParams:        map[string]string{},
-			expectedTotal:      2,
-			expectedPaymentIDs: []string{disbursementPayment.ID, directPaymentID},
-			expectedType:       "",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			url := buildURLWithQueryParams(ts.URL, "/payments", tc.queryParams)
-			resp, err := http.Get(url)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-			var actualResponse httpresponse.PaginatedResponse
-			err = json.NewDecoder(resp.Body).Decode(&actualResponse)
-			require.NoError(t, err)
-
-			assert.Equal(t, tc.expectedTotal, actualResponse.Pagination.Total)
-
-			var payments []data.Payment
-			err = json.Unmarshal(actualResponse.Data, &payments)
-			require.NoError(t, err)
-
-			actualIDs := make([]string, len(payments))
-			for i, payment := range payments {
-				actualIDs[i] = payment.ID
-			}
-
-			if len(tc.expectedPaymentIDs) > 1 {
-				assert.ElementsMatch(t, tc.expectedPaymentIDs, actualIDs)
-			} else {
-				assert.Equal(t, tc.expectedPaymentIDs, actualIDs)
-			}
-
-			if tc.expectedType != "" {
-				for _, payment := range payments {
-					assert.Equal(t, tc.expectedType, payment.PaymentType)
-				}
-			}
-		})
-	}
-}
-
-func Test_PaymentHandler_GetPayments_PaymentTypeFilter_CombinedFilters(t *testing.T) {
-	dbConnectionPool := testutils.GetDBConnectionPool(t)
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
-	mDistributionAccountResolver.
-		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-		Maybe()
-
-	handler := &PaymentsHandler{
-		Models:                      models,
-		DBConnectionPool:            dbConnectionPool,
-		DistributionAccountResolver: mDistributionAccountResolver,
-	}
-
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
-	defer ts.Close()
-
-	ctx := context.Background()
-
-	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "BOLT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "krieg_wallet", "https://www.krieg.com", "www.krieg.com", "krieg://")
-
-	_, err = dbConnectionPool.ExecContext(ctx,
-		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
-		wallet.ID, asset.ID)
-	require.NoError(t, err)
-
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		Email: "colonel@krieg.imperium",
-	})
-	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-
-	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:   "siege_of_vraks",
-		Status: data.StartedDisbursementStatus,
-		Asset:  asset,
-		Wallet: wallet,
-	})
-
-	disbursementPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet:    receiverWallet,
-		Disbursement:      disbursement,
-		Asset:             *asset,
-		Amount:            "100.00",
-		Status:            data.ReadyPaymentStatus,
-		ExternalPaymentID: "VRAKS-001",
-	})
-
-	directPaymentInsert := data.PaymentInsert{
-		ReceiverID:        receiver.ID,
-		Amount:            "200.00",
-		AssetID:           asset.ID,
-		ReceiverWalletID:  receiverWallet.ID,
-		ExternalPaymentID: utils.StringPtr("DIRECT-001"),
-		PaymentType:       data.PaymentTypeDirect,
-	}
-
-	directPaymentID, err := models.Payment.CreateDirectPayment(ctx, dbConnectionPool, directPaymentInsert)
-	require.NoError(t, err)
-
-	err = models.Payment.UpdateStatus(ctx, dbConnectionPool, directPaymentID, data.ReadyPaymentStatus, nil, "")
-	require.NoError(t, err)
-
-	tests := []struct {
-		name               string
-		queryParams        map[string]string
-		expectedTotal      int
-		expectedPaymentIDs []string
-	}{
-		{
-			name: "combine with status filter",
-			queryParams: map[string]string{
-				"type":   "direct",
-				"status": "READY",
-			},
-			expectedTotal:      1,
-			expectedPaymentIDs: []string{directPaymentID},
-		},
-		{
-			name: "combine with receiver filter",
-			queryParams: map[string]string{
-				"type":        "disbursement",
-				"receiver_id": receiver.ID,
-			},
-			expectedTotal:      1,
-			expectedPaymentIDs: []string{disbursementPayment.ID},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			url := buildURLWithQueryParams(ts.URL, "/payments", tc.queryParams)
-			resp, err := http.Get(url)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-			var actualResponse httpresponse.PaginatedResponse
-			err = json.NewDecoder(resp.Body).Decode(&actualResponse)
-			require.NoError(t, err)
-
-			assert.Equal(t, tc.expectedTotal, actualResponse.Pagination.Total)
-
-			var payments []data.Payment
-			err = json.Unmarshal(actualResponse.Data, &payments)
-			require.NoError(t, err)
-
-			actualIDs := make([]string, len(payments))
-			for i, payment := range payments {
-				actualIDs[i] = payment.ID
-			}
-
-			if len(tc.expectedPaymentIDs) > 1 {
-				assert.ElementsMatch(t, tc.expectedPaymentIDs, actualIDs)
-			} else {
-				assert.Equal(t, tc.expectedPaymentIDs, actualIDs)
-			}
-		})
-	}
-}
-
-func Test_PaymentHandler_GetPayments_PaymentTypeFilter_InvalidInput(t *testing.T) {
-	dbConnectionPool := testutils.GetDBConnectionPool(t)
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
-	mDistributionAccountResolver.
-		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-		Maybe()
-
-	handler := &PaymentsHandler{
-		Models:                      models,
-		DBConnectionPool:            dbConnectionPool,
-		DistributionAccountResolver: mDistributionAccountResolver,
-	}
-
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
-	defer ts.Close()
-
-	tests := []struct {
-		name               string
-		queryParams        map[string]string
-		expectedErrorField string
-	}{
-		{
-			name:               "invalid payment type",
-			queryParams:        map[string]string{"type": "chaos"},
-			expectedErrorField: "payment_type",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			url := buildURLWithQueryParams(ts.URL, "/payments", tc.queryParams)
-			resp, err := http.Get(url)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-
-			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-			respBody, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-
-			var errorResponse map[string]any
-			err = json.Unmarshal(respBody, &errorResponse)
-			require.NoError(t, err)
-
-			extras, ok := errorResponse["extras"].(map[string]any)
-			require.True(t, ok, "Expected extras field in error response")
-			assert.Contains(t, extras, tc.expectedErrorField)
-		})
-	}
-}
-
 func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
@@ -2182,7 +1853,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
@@ -2191,7 +1862,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "150.5000000", payment.Amount)
 		assert.Equal(t, "BAAL-CRUSADE-001", payment.ExternalPaymentID)
-		assert.Equal(t, data.PaymentTypeDirect, payment.PaymentType)
+		assert.Equal(t, data.PaymentTypeDirect, payment.Type)
 		assert.Nil(t, payment.Disbursement)
 
 		authMock.AssertExpectations(t)
@@ -2247,7 +1918,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
 		assert.JSONEq(t, `{"error": "resolving distribution account"}`, rr.Body.String())
@@ -2297,7 +1968,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 		assert.JSONEq(t, `{"error": "asset not found with reference: non-existent-asset"}`, rr.Body.String())
@@ -2386,12 +2057,12 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), "insufficient balance for direct payment")
 		assert.Contains(t, rr.Body.String(), "10000.00")
-		assert.Contains(t, rr.Body.String(), "100.00 available")
+		assert.Contains(t, rr.Body.String(), "100.000000 available")
 
 		authMock.AssertExpectations(t)
 		distResolverMock.AssertExpectations(t)
@@ -2449,7 +2120,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		errMsg := fmt.Sprintf(`{"error": "wallet '%s' is not enabled for payments"}`, wallet.Name)
@@ -2553,7 +2224,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
@@ -2561,7 +2232,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &payment)
 		require.NoError(t, err)
 		assert.Equal(t, "75.2500000", payment.Amount)
-		assert.Equal(t, data.PaymentTypeDirect, payment.PaymentType)
+		assert.Equal(t, data.PaymentTypeDirect, payment.Type)
 		assert.Equal(t, asset.ID, payment.Asset.ID)
 
 		authMock.AssertExpectations(t)
@@ -2617,7 +2288,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()
-		handler.PostPayment(rr, req)
+		handler.PostDirectPayment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		errMsg := fmt.Sprintf(`{"error":"asset '%s' is not supported by wallet '%s'"}`, asset.Code, wallet.Name)
@@ -2711,7 +2382,7 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 				"wallet": {"id": %q}
 			}`, receiver.ID, wallet.ID),
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  `{"error": "asset: contract assets not yet supported"}`,
+			expectedError:  `{"error": "validation error for asset.contract_id: invalid contract format provided"}`,
 		},
 		{
 			name: "unsupported fiat asset",
@@ -2809,7 +2480,7 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			rr := httptest.NewRecorder()
-			handler.PostPayment(rr, req)
+			handler.PostDirectPayment(rr, req)
 
 			assert.Equal(t, tc.expectedStatus, rr.Code)
 			assert.JSONEq(t, tc.expectedError, rr.Body.String())

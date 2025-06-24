@@ -20,7 +20,7 @@ import (
 
 // CreateDirectPaymentRequest represents service-level request for creating direct payment
 type CreateDirectPaymentRequest struct {
-	Amount            string            `json:"amount" validate:"required"`
+	Amount            string            `json:"amount"`
 	Asset             AssetReference    `json:"asset" validate:"required"`
 	Receiver          ReceiverReference `json:"receiver" validate:"required"`
 	Wallet            WalletReference   `json:"wallet" validate:"required"`
@@ -71,13 +71,21 @@ func (e WalletNotEnabledError) Error() string {
 	return fmt.Sprintf("wallet '%s' is not enabled for payments", e.WalletName)
 }
 
-type ErrReceiverWalletNotFound struct {
+type ReceiverWalletNotFoundError struct {
 	ReceiverID string
 	WalletID   string
 }
 
-func (e ErrReceiverWalletNotFound) Error() string {
+func (e ReceiverWalletNotFoundError) Error() string {
 	return fmt.Sprintf("no receiver wallet: receiver=%s wallet=%s", e.ReceiverID, e.WalletID)
+}
+
+type ReceiverWalletNotReadyForPaymentError struct {
+	CurrentStatus data.ReceiversWalletStatus
+}
+
+func (e ReceiverWalletNotReadyForPaymentError) Error() string {
+	return fmt.Sprintf("receiver wallet is not ready for payment, current status is %s", e.CurrentStatus)
 }
 
 type AssetNotSupportedByWalletError struct {
@@ -99,7 +107,7 @@ type InsufficientBalanceForDirectPaymentError struct {
 func (e InsufficientBalanceForDirectPaymentError) Error() string {
 	shortfall := (e.RequestedAmount + e.TotalPendingAmount) - e.AvailableBalance
 	return fmt.Sprintf(
-		"insufficient balance for direct payment: requested %.2f %s, but only %.2f available (%.2f in pending payments). Need %.2f more %s",
+		"insufficient balance for direct payment: requested %.6f %s, but only %.6f available (%.6f in pending payments). Need %.6f more %s",
 		e.RequestedAmount,
 		e.Asset.Code,
 		e.AvailableBalance,
@@ -169,10 +177,13 @@ func (s *DirectPaymentService) CreateDirectPayment(
 				return nil, err
 			}
 
-			// 4. Get receiver wallet
+			// 4. Get and validate receiver wallet
 			receiverWallet, err := s.getReceiverWallet(ctx, dbTx, receiver.ID, wallet.ID, req.Wallet.Address)
 			if err != nil {
 				return nil, fmt.Errorf("getting receiver wallet: %w", err)
+			}
+			if receiverWallet.Status != data.ReadyReceiversWalletStatus && receiverWallet.Status != data.RegisteredReceiversWalletStatus {
+				return nil, ReceiverWalletNotReadyForPaymentError{CurrentStatus: receiverWallet.Status}
 			}
 
 			// 5. Validate balance
@@ -190,47 +201,22 @@ func (s *DirectPaymentService) CreateDirectPayment(
 				PaymentType:       data.PaymentTypeDirect,
 			}
 
-			paymentID, err := s.Models.Payment.CreateDirectPayment(ctx, dbTx, paymentInsert)
+			paymentID, err := s.Models.Payment.CreateDirectPayment(ctx, dbTx, paymentInsert, user.ID)
 			if err != nil {
 				return nil, fmt.Errorf("creating payment: %w", err)
 			}
 
-			// 7. Update payment status based on receiver wallet status
-			if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
-				err = s.Models.Payment.UpdateStatus(ctx, dbTx, paymentID, data.ReadyPaymentStatus, nil, "")
-				if err != nil {
-					return nil, fmt.Errorf("updating payment status to ready: %w", err)
-				}
-			}
-
-			// 8. Get the created payment
+			// 7. Get the created payment
 			payment, err = s.Models.Payment.Get(ctx, paymentID, dbTx)
 			if err != nil {
 				return nil, fmt.Errorf("getting created payment: %w", err)
 			}
 
-			// disbursment is an empty struct for the direct payments, set it to nil
-			payment.Disbursement = nil
-
-			// 9. Prepare post-commit events (same as before)
+			// 8. Prepare post-commit events (same as before)
 			msgs := make([]*events.Message, 0)
 
-			// Send invitation if receiver wallet needs registration
-			if receiverWallet.Status == data.ReadyReceiversWalletStatus {
-				eventData := []schemas.EventReceiverWalletInvitationData{
-					{ReceiverWalletID: receiverWallet.ID},
-				}
-
-				inviteMsg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic,
-					paymentID, events.BatchReceiverWalletInvitationType, eventData)
-				if err != nil {
-					return nil, fmt.Errorf("creating invitation message: %w", err)
-				}
-				msgs = append(msgs, inviteMsg)
-			}
-
 			// Send payment for processing if ready
-			if payment.Status == data.ReadyPaymentStatus {
+			if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
 				paymentMsg, err := events.NewPaymentReadyToPayMessage(ctx,
 					distributionAccount.Type.Platform(), paymentID, events.PaymentReadyToPayDirectPayment)
 				if err != nil {
@@ -298,7 +284,7 @@ func (s *DirectPaymentService) getReceiverWallet(
 	}
 
 	if len(receiverWallets) == 0 {
-		return nil, &ErrReceiverWalletNotFound{
+		return nil, &ReceiverWalletNotFoundError{
 			ReceiverID: receiverID,
 			WalletID:   walletID,
 		}

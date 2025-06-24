@@ -254,11 +254,48 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.True(t, errors.As(err, &balanceErr))
 		assert.Contains(t, err.Error(), "insufficient balance")
 		assert.Contains(t, err.Error(), "1000.00")
-		assert.Contains(t, err.Error(), "100.00 available")
+		assert.Contains(t, err.Error(), "100.000000 available")
 
 		mockDistService.AssertExpectations(t)
 		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("fails when receiver wallet not ready for payment", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "john.doe@example.com",
+		})
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.DraftReceiversWalletStatus)
+
+		req := CreateDirectPaymentRequest{
+			Amount:   "10.00",
+			Asset:    AssetReference{ID: &asset.ID},
+			Receiver: ReceiverReference{ID: &receiver.ID},
+			Wallet:   WalletReference{ID: &enabledWallet.ID},
+		}
+
+		horizonClientMock := &horizonclient.MockClient{}
+		mockDistService := &mocks.MockDistributionAccountService{}
+		mockEventProducer := events.NewMockProducer(t)
+
+		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+			HorizonClient: horizonClientMock,
+		})
+
+		payment, err := service.CreateDirectPayment(ctx, req, user, &stellarDistAccountDBVault)
+
+		require.Error(t, err)
+		assert.Nil(t, payment)
+
+		err = unwrapTransactionError(err)
+		var recvWalletNotReadyErr ReceiverWalletNotReadyForPaymentError
+		assert.True(t, errors.As(err, &recvWalletNotReadyErr))
+		assert.ErrorContains(t, err, "receiver wallet is not ready for payment, current status is DRAFT")
 	})
 
 	t.Run("fails with invalid asset reference", func(t *testing.T) {
@@ -448,7 +485,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Nil(t, payment)
 
 		err = unwrapTransactionError(err)
-		var rwErr *ErrReceiverWalletNotFound
+		var rwErr *ReceiverWalletNotFoundError
 		assert.True(t, errors.As(err, &rwErr))
 		assert.Contains(t, err.Error(), "no receiver wallet")
 
@@ -610,8 +647,10 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset1, "100.00", data.ReadyPaymentStatus},
 				{asset1, "200.00", data.PendingPaymentStatus},
 				{asset1, "300.00", data.PausedPaymentStatus},
-				{asset1, "999.00", data.DraftPaymentStatus},   // ignored
-				{asset1, "888.00", data.SuccessPaymentStatus}, // ignored
+				{asset1, "999.00", data.DraftPaymentStatus},    // ignored
+				{asset1, "888.00", data.SuccessPaymentStatus},  // ignored
+				{asset1, "500.00", data.FailedPaymentStatus},   // ignored
+				{asset1, "600.00", data.CanceledPaymentStatus}, // ignored
 			},
 			targetAsset:    asset1,
 			expectedAmount: 600.00,
@@ -624,18 +663,6 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 			},
 			targetAsset:    asset1,
 			expectedAmount: 50.00,
-		},
-		{
-			name: "terminal and draft statuses ignored",
-			payments: []payment{
-				{asset1, "400.00", data.SuccessPaymentStatus},
-				{asset1, "500.00", data.FailedPaymentStatus},
-				{asset1, "600.00", data.CanceledPaymentStatus},
-				{asset1, "700.00", data.DraftPaymentStatus},
-				{asset1, "777.00", data.PausedPaymentStatus}, // counted
-			},
-			targetAsset:    asset1,
-			expectedAmount: 777.00,
 		},
 		{
 			name:           "zero sum for no in-progress payments",
@@ -745,7 +772,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, payment)
 	assert.Equal(t, "50.0000000", payment.Amount)
-	assert.Equal(t, data.PaymentTypeDirect, payment.PaymentType)
+	assert.Equal(t, data.PaymentTypeDirect, payment.Type)
 	assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
 	assert.Equal(t, "PAY_HORUS_001", payment.ExternalPaymentID)
 	assert.Nil(t, payment.Disbursement)
