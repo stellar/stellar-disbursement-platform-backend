@@ -77,7 +77,7 @@ jobs:
           node-version: 14
 
       - name: Install Helm Readme Generator (@bitnami/readme-generator-for-helm)
-        run: npm install -g @bitnami/readme-generator-for-helm
+        run: npm install -g @bitnami/readme-generator-for-helm@2.7.0
 
       - name: Generate README.md for comparison
         run: readme-generator -v helmchart/sdp/values.yaml -r helmchart/sdp/README.md
