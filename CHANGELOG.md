@@ -13,8 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Added a new authentication middleware to support API keys. [#681](https://github.com/stellar/stellar-disbursement-platform-backend/pull/681)
 - Allow the serviceaccount to be set for the ap deployment in the helm chart [#679](https://github.com/stellar/stellar-disbursement-platform-backend/pull/679)
 - Add badges to the README.md file. [#691](https://github.com/stellar/stellar-disbursement-platform-backend/pull/691)
+- Add endpoint for the direct payments [#693](https://github.com/stellar/stellar-disbursement-platform-backend/pull/693)
 - Update wallet POST to allow accept new asset references [#696](https://github.com/stellar/stellar-disbursement-platform-backend/pull/696)
 - Update PATCH endpoint to extend update capabilities [#697](https://github.com/stellar/stellar-disbursement-platform-backend/pull/697)
+
+### Changed
+
+- Optimize the Dockerfile to reduce the image size. [#692](https://github.com/stellar/stellar-disbursement-platform-backend/pull/692)
 
 ### Security and Dependencies
 

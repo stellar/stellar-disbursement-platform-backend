@@ -18,9 +18,9 @@ import (
 )
 
 type WalletsHandler struct {
-	Models        *data.Models
-	NetworkType   utils.NetworkType
-	AssetResolver *services.AssetResolver
+	Models              *data.Models
+	NetworkType         utils.NetworkType
+	WalletAssetResolver *services.WalletAssetResolver
 }
 
 // GetWallets returns a list of wallets
@@ -82,13 +82,13 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	var err error
 
 	if len(reqBody.Assets) > 0 {
-		assetIDs, err = h.AssetResolver.ResolveAssetReferences(ctx, reqBody.Assets)
+		assetIDs, err = h.WalletAssetResolver.ResolveAssetReferences(ctx, reqBody.Assets)
 		if err != nil {
 			httperror.BadRequest("failed to resolve asset references", err, nil).Render(rw)
 			return
 		}
 	} else if len(reqBody.AssetsIDs) > 0 {
-		if err = h.AssetResolver.ValidateAssetIDs(ctx, reqBody.AssetsIDs); err != nil {
+		if err = h.WalletAssetResolver.ValidateAssetIDs(ctx, reqBody.AssetsIDs); err != nil {
 			httperror.BadRequest("invalid asset ID", err, nil).Render(rw)
 			return
 		}
@@ -164,7 +164,7 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	if reqBody.Assets != nil {
-		assetIDs, err := h.AssetResolver.ResolveAssetReferences(ctx, *reqBody.Assets)
+		assetIDs, err := h.WalletAssetResolver.ResolveAssetReferences(ctx, *reqBody.Assets)
 		if err != nil {
 			httperror.BadRequest("failed to resolve asset references", err, nil).Render(rw)
 			return
