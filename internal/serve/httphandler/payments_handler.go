@@ -35,6 +35,7 @@ type PaymentsHandler struct {
 	EventProducer               events.Producer
 	CrashTrackerClient          crashtracker.CrashTrackerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
+	DirectPaymentService        *services.DirectPaymentService
 }
 
 type RetryPaymentsRequest struct {
@@ -337,4 +338,131 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+}
+
+func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req validators.CreateDirectPaymentRequest
+	if err := httpdecode.DecodeJSON(r, &req); err != nil {
+		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		return
+	}
+
+	validator := validators.NewDirectPaymentValidator()
+	validatedReq := validator.ValidateCreateDirectPaymentRequest(&req)
+	if validator.HasErrors() {
+		httperror.BadRequest("request invalid", nil, validator.Errors).Render(w)
+		return
+	}
+
+	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
+	if !ok {
+		httperror.Unauthorized("", nil, nil).Render(w)
+		return
+	}
+	user, err := p.AuthManager.GetUserByID(ctx, userID)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
+		return
+	}
+
+	serviceReq := services.CreateDirectPaymentRequest{
+		Amount:            validatedReq.Amount,
+		Asset:             convertAssetReference(validatedReq.Asset),
+		Receiver:          convertReceiverReference(validatedReq.Receiver),
+		Wallet:            convertWalletReference(validatedReq.Wallet),
+		ExternalPaymentID: validatedReq.ExternalPaymentID,
+	}
+
+	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "resolving distribution account", err, nil).Render(w)
+		return
+	}
+
+	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, serviceReq, user, &distAccount)
+	if err != nil {
+		var (
+			validationErr         services.ValidationError
+			notFoundErr           services.NotFoundError
+			unsupportedErr        services.UnsupportedError
+			ambiguousErr          services.AmbiguousReferenceError
+			insufficientFundsErr  services.InsufficientBalanceForDirectPaymentError
+			walletDisabledErr     services.WalletNotEnabledError
+			assetNotSupportedErr  services.AssetNotSupportedByWalletError
+			recvErr               services.ReceiverWalletNotFoundError
+			recvWalletNotReadyErr services.ReceiverWalletNotReadyForPaymentError
+			trustErr              services.TrustlineNotFoundError
+			accErr                services.AccountNotFoundError
+			circleAccErr          services.CircleAccountNotActivatedError
+			circleAssetErr        services.CircleAssetNotSupportedError
+		)
+
+		switch {
+		case errors.As(err, &validationErr):
+			httperror.BadRequest(validationErr.Error(), err, nil).Render(w)
+		case errors.As(err, &notFoundErr):
+			httperror.NotFound(notFoundErr.Error(), err, nil).Render(w)
+		case errors.As(err, &unsupportedErr):
+			httperror.BadRequest(unsupportedErr.Error(), err, nil).Render(w)
+		case errors.As(err, &ambiguousErr):
+			httperror.BadRequest(ambiguousErr.Error(), err, nil).Render(w)
+		case errors.As(err, &insufficientFundsErr):
+			log.Ctx(ctx).Error(insufficientFundsErr)
+			httperror.BadRequest(insufficientFundsErr.Error(), err, nil).Render(w)
+		case errors.As(err, &walletDisabledErr):
+			httperror.BadRequest(walletDisabledErr.Error(), err, nil).Render(w)
+		case errors.As(err, &assetNotSupportedErr):
+			httperror.BadRequest(assetNotSupportedErr.Error(), err, nil).Render(w)
+		case errors.As(err, &recvWalletNotReadyErr):
+			httperror.BadRequest(recvWalletNotReadyErr.Error(), err, nil).Render(w)
+		case errors.As(err, &recvErr):
+			httperror.BadRequest(recvErr.Error(), err, nil).Render(w)
+		case errors.As(err, &trustErr):
+			errorMsg := fmt.Sprintf("%s. Please add a trustline for this asset to your distribution account, or choose a different asset that already has a trustline.", trustErr.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		case errors.As(err, &circleAccErr):
+			errorMsg := fmt.Sprintf("%s. Please complete the Circle account activation process...", circleAccErr.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		case errors.As(err, &circleAssetErr):
+			errorMsg := fmt.Sprintf("%s. Please choose a different asset supported by Circle...", circleAssetErr.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		case errors.As(err, &accErr):
+			errorMsg := fmt.Sprintf("%s. Please ensure your distribution account exists and is funded on the Stellar network.", accErr.Error())
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		default:
+			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
+		}
+
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusCreated, payment, httpjson.JSON)
+}
+
+func convertAssetReference(asset validators.DirectPaymentAsset) services.AssetReference {
+	return services.AssetReference{
+		ID:         asset.ID,
+		Type:       asset.Type,
+		Code:       asset.Code,
+		Issuer:     asset.Issuer,
+		ContractID: asset.ContractID,
+	}
+}
+
+func convertReceiverReference(receiver validators.DirectPaymentReceiver) services.ReceiverReference {
+	return services.ReceiverReference{
+		ID:            receiver.ID,
+		Email:         receiver.Email,
+		PhoneNumber:   receiver.PhoneNumber,
+		WalletAddress: receiver.WalletAddress,
+	}
+}
+
+func convertWalletReference(wallet validators.DirectPaymentWallet) services.WalletReference {
+	return services.WalletReference{
+		ID:      wallet.ID,
+		Address: wallet.Address,
+	}
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
 func Test_DisbursementModelInsert(t *testing.T) {
@@ -375,12 +376,12 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 
 		disbursement.Name = "disbursement1"
 		disbursement.Status = DraftDisbursementStatus
-		disbursement.CreatedAt = time.Date(2023, 1, 30, 0, 0, 0, 0, time.UTC)
+		disbursement.CreatedAt = testutils.TimePtr(time.Date(2023, 1, 30, 0, 0, 0, 0, time.UTC))
 		expected1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
 		disbursement.Name = "disbursement2"
 		disbursement.Status = CompletedDisbursementStatus
-		disbursement.CreatedAt = time.Date(2023, 3, 30, 0, 0, 0, 0, time.UTC)
+		disbursement.CreatedAt = testutils.TimePtr(time.Date(2023, 3, 30, 0, 0, 0, 0, time.UTC))
 		expected2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
 
 		filters := map[FilterKey]interface{}{
@@ -784,15 +785,14 @@ func Test_DisbursementColumnNames(t *testing.T) {
 			tableReference: "",
 			resultAlias:    "",
 			expected: strings.Join([]string{
-				"id",
-				"name",
-				"status",
 				"status_history",
 				"file_content",
 				"created_at",
 				"updated_at",
 				"registration_contact_type",
-				"receiver_registration_message_template",
+				`COALESCE(id, '') AS "id"`,
+				`COALESCE(name, '') AS "name"`,
+				`COALESCE(status::text, '') AS "status"`,
 				`COALESCE(verification_field::text, '') AS "verification_field"`,
 				`COALESCE(file_name, '') AS "file_name"`,
 				`COALESCE(receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
@@ -802,15 +802,14 @@ func Test_DisbursementColumnNames(t *testing.T) {
 			tableReference: "d",
 			resultAlias:    "",
 			expected: strings.Join([]string{
-				"d.id",
-				"d.name",
-				"d.status",
 				"d.status_history",
 				"d.file_content",
 				"d.created_at",
 				"d.updated_at",
 				"d.registration_contact_type",
-				"d.receiver_registration_message_template",
+				`COALESCE(d.id, '') AS "id"`,
+				`COALESCE(d.name, '') AS "name"`,
+				`COALESCE(d.status::text, '') AS "status"`,
 				`COALESCE(d.verification_field::text, '') AS "verification_field"`,
 				`COALESCE(d.file_name, '') AS "file_name"`,
 				`COALESCE(d.receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
@@ -820,15 +819,14 @@ func Test_DisbursementColumnNames(t *testing.T) {
 			tableReference: "d",
 			resultAlias:    "disbursement",
 			expected: strings.Join([]string{
-				`d.id AS "disbursement.id"`,
-				`d.name AS "disbursement.name"`,
-				`d.status AS "disbursement.status"`,
 				`d.status_history AS "disbursement.status_history"`,
 				`d.file_content AS "disbursement.file_content"`,
 				`d.created_at AS "disbursement.created_at"`,
 				`d.updated_at AS "disbursement.updated_at"`,
 				`d.registration_contact_type AS "disbursement.registration_contact_type"`,
-				`d.receiver_registration_message_template AS "disbursement.receiver_registration_message_template"`,
+				`COALESCE(d.id, '') AS "disbursement.id"`,
+				`COALESCE(d.name, '') AS "disbursement.name"`,
+				`COALESCE(d.status::text, '') AS "disbursement.status"`,
 				`COALESCE(d.verification_field::text, '') AS "disbursement.verification_field"`,
 				`COALESCE(d.file_name, '') AS "disbursement.file_name"`,
 				`COALESCE(d.receiver_registration_message_template, '') AS "disbursement.receiver_registration_message_template"`,
