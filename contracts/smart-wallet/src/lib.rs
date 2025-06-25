@@ -15,6 +15,7 @@ mod webauthn;
 pub enum DataKey {
     Admin,
     Signer,
+    Recovery,
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -33,9 +34,10 @@ pub struct AccountContract;
 
 #[contractimpl]
 impl AccountContract {
-    pub fn __constructor(env: Env, admin: Address, public_key: BytesN<65>) {
+    pub fn __constructor(env: Env, admin: Address, public_key: BytesN<65>, recovery: Address) {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Signer, &public_key);
+        env.storage().instance().set(&DataKey::Recovery, &recovery);
     }
 
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
@@ -43,6 +45,56 @@ impl AccountContract {
         admin.require_auth();
 
         env.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[contracterror]
+pub enum RecoveryError {
+    RecoveryNotSet = 1000,
+}
+
+pub trait Recovery {
+    fn recovery_address(env: Env) -> Option<Address>;
+    fn remove_recovery(env: Env) -> Result<(), RecoveryError>;
+    fn rotate_signer(env: Env, new_signer: BytesN<65>) -> Result<(), RecoveryError>;
+}
+
+#[contractimpl]
+impl Recovery for AccountContract {
+    fn recovery_address(env: Env) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get::<_, Address>(&DataKey::Recovery)
+    }
+
+    fn remove_recovery(env: Env) -> Result<(), RecoveryError> {
+        env.current_contract_address().require_auth();
+
+        if env
+            .storage()
+            .instance()
+            .get::<_, Address>(&DataKey::Recovery)
+            .is_some()
+        {
+            env.storage().instance().remove(&DataKey::Recovery);
+            Ok(())
+        } else {
+            Err(RecoveryError::RecoveryNotSet)
+        }
+    }
+
+    fn rotate_signer(env: Env, new_signer: BytesN<65>) -> Result<(), RecoveryError> {
+        let recovery = env
+            .storage()
+            .instance()
+            .get::<_, Address>(&DataKey::Admin)
+            .ok_or(RecoveryError::RecoveryNotSet)?;
+        recovery.require_auth();
+
+        env.storage().instance().set(&DataKey::Signer, &new_signer);
+
+        Ok(())
     }
 }
 
