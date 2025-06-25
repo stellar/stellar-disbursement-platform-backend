@@ -29,6 +29,16 @@ pub enum AccountContractError {
     WebAuthnInvalidChallenge = 5,
 }
 
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[contracterror]
+pub enum RecoveryError {
+    RecoveryNotSet = 1000,
+}
+
+pub trait Recovery {
+    fn rotate_signer(env: Env, new_signer: BytesN<65>) -> Result<(), RecoveryError>;
+}
+
 #[contract]
 pub struct AccountContract;
 
@@ -48,47 +58,13 @@ impl AccountContract {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-#[contracterror]
-pub enum RecoveryError {
-    RecoveryNotSet = 1000,
-}
-
-pub trait Recovery {
-    fn recovery_address(env: Env) -> Option<Address>;
-    fn remove_recovery(env: Env) -> Result<(), RecoveryError>;
-    fn rotate_signer(env: Env, new_signer: BytesN<65>) -> Result<(), RecoveryError>;
-}
-
 #[contractimpl]
 impl Recovery for AccountContract {
-    fn recovery_address(env: Env) -> Option<Address> {
-        env.storage()
-            .instance()
-            .get::<_, Address>(&DataKey::Recovery)
-    }
-
-    fn remove_recovery(env: Env) -> Result<(), RecoveryError> {
-        env.current_contract_address().require_auth();
-
-        if env
-            .storage()
-            .instance()
-            .get::<_, Address>(&DataKey::Recovery)
-            .is_some()
-        {
-            env.storage().instance().remove(&DataKey::Recovery);
-            Ok(())
-        } else {
-            Err(RecoveryError::RecoveryNotSet)
-        }
-    }
-
     fn rotate_signer(env: Env, new_signer: BytesN<65>) -> Result<(), RecoveryError> {
         let recovery = env
             .storage()
             .instance()
-            .get::<_, Address>(&DataKey::Admin)
+            .get::<_, Address>(&DataKey::Recovery)
             .ok_or(RecoveryError::RecoveryNotSet)?;
         recovery.require_auth();
 
