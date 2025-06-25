@@ -174,8 +174,8 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	assetResolver := services.NewAssetResolver(models.Assets)
-	handler := &WalletsHandler{Models: models, AssetResolver: assetResolver}
+	assetResolver := services.NewWalletAssetResolver(models.Assets)
+	handler := &WalletsHandler{Models: models, WalletAssetResolver: assetResolver}
 
 	// Fixture setup
 	wallet := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
@@ -345,12 +345,12 @@ func Test_WalletsHandlerPostWallets_WithNewAssetFormat(t *testing.T) {
 
 	ctx := context.Background()
 
-	assetResolver := services.NewAssetResolver(models.Assets)
+	assetResolver := services.NewWalletAssetResolver(models.Assets)
 
 	handler := &WalletsHandler{
-		Models:        models,
-		NetworkType:   utils.PubnetNetworkType,
-		AssetResolver: assetResolver,
+		Models:              models,
+		NetworkType:         utils.PubnetNetworkType,
+		WalletAssetResolver: assetResolver,
 	}
 
 	xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.XLMAssetCode, "")
@@ -655,9 +655,9 @@ func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
 	eurc := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
 	handler := &WalletsHandler{
-		Models:        models,
-		NetworkType:   utils.TestnetNetworkType,
-		AssetResolver: services.NewAssetResolver(models.Assets),
+		Models:              models,
+		NetworkType:         utils.TestnetNetworkType,
+		WalletAssetResolver: services.NewWalletAssetResolver(models.Assets),
 	}
 
 	r := chi.NewRouter()

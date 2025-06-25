@@ -390,10 +390,11 @@ func (di DisbursementInstructionModel) createPayments(ctx context.Context, dbTx 
 		}
 		payment := PaymentInsert{
 			ReceiverID:       receiver.ID,
-			DisbursementID:   disbursement.ID,
+			DisbursementID:   &disbursement.ID,
 			Amount:           instruction.Amount,
 			AssetID:          disbursement.Asset.ID,
 			ReceiverWalletID: receiverIDToReceiverWalletIDMap[receiver.ID],
+			PaymentType:      PaymentTypeDisbursement,
 		}
 		if instruction.ExternalPaymentId != "" {
 			payment.ExternalPaymentID = &instruction.ExternalPaymentId

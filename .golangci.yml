@@ -1,6 +1,10 @@
-  version: "2"
-  linters:
-    enable:
-      - gofmt
-      - gofumpt
-      - govet
+version: "2"
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gofumpt
+
+linters:
+  enable:
+    - govet
