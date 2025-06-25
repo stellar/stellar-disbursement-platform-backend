@@ -283,10 +283,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models: o.Models,
 			}
-			r.Get("/api-keys/{id}", apiKeyHandler.GetApiKeyByID)
+			r.Get("/{id}", apiKeyHandler.GetApiKeyByID)
 			r.Get("/", apiKeyHandler.GetAllApiKeys)
 			r.Post("/", apiKeyHandler.CreateAPIKey)
-			r.Patch("/api-keys/{id}", apiKeyHandler.UpdateKey)
+			r.Patch("/{id}", apiKeyHandler.UpdateKey)
 			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
 		})
 
@@ -376,6 +376,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				DirectPaymentService: services.NewDirectPaymentService(
+					o.Models,
+					o.EventProducer,
+					o.DistributionAccountService,
+					o.SubmitterEngine,
+				),
 			}
 
 			// Read operations
@@ -391,7 +397,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.RequirePermission(
 				data.WritePayments,
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
-			)).Patch("/retry", paymentsHandler.RetryPayments)
+			)).Group(func(r chi.Router) {
+				r.Post("/", paymentsHandler.PostDirectPayment)
+				r.Patch("/retry", paymentsHandler.RetryPayments)
+			})
 
 			r.With(middleware.RequirePermission(
 				data.WritePayments,
@@ -468,9 +477,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{
-				Models:        o.Models,
-				NetworkType:   o.NetworkType,
-				AssetResolver: services.NewAssetResolver(o.Models.Assets),
+				Models:              o.Models,
+				NetworkType:         o.NetworkType,
+				WalletAssetResolver: services.NewWalletAssetResolver(o.Models.Assets),
 			}
 
 			// Read operations

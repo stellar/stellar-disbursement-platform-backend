@@ -24,6 +24,7 @@ type Payment struct {
 	StellarOperationID      string               `json:"stellar_operation_id" db:"stellar_operation_id"`
 	Status                  PaymentStatus        `json:"status" db:"status"`
 	StatusHistory           PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	Type                    PaymentType          `json:"type" db:"type"`
 	Disbursement            *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
 	Asset                   Asset                `json:"asset"`
 	ReceiverWallet          *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
@@ -31,6 +32,22 @@ type Payment struct {
 	UpdatedAt               time.Time            `json:"updated_at" db:"updated_at"`
 	ExternalPaymentID       string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
 	CircleTransferRequestID *string              `json:"circle_transfer_request_id,omitempty"`
+}
+
+type PaymentType string
+
+const (
+	PaymentTypeDisbursement PaymentType = "DISBURSEMENT"
+	PaymentTypeDirect       PaymentType = "DIRECT"
+)
+
+func (pt PaymentType) Validate() error {
+	switch pt {
+	case PaymentTypeDisbursement, PaymentTypeDirect:
+		return nil
+	default:
+		return fmt.Errorf("invalid payment type: %s", pt)
+	}
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -46,17 +63,18 @@ type PaymentModel struct {
 var (
 	DefaultPaymentSortField = SortFieldUpdatedAt
 	DefaultPaymentSortOrder = SortOrderDESC
-	AllowedPaymentFilters   = []FilterKey{FilterKeyStatus, FilterKeyCreatedAtAfter, FilterKeyCreatedAtBefore, FilterKeyReceiverID}
+	AllowedPaymentFilters   = []FilterKey{FilterKeyStatus, FilterKeyCreatedAtAfter, FilterKeyCreatedAtBefore, FilterKeyReceiverID, FilterKeyPaymentType}
 	AllowedPaymentSorts     = []SortField{SortFieldCreatedAt, SortFieldUpdatedAt}
 )
 
 type PaymentInsert struct {
-	ReceiverID        string  `db:"receiver_id"`
-	DisbursementID    string  `db:"disbursement_id"`
-	Amount            string  `db:"amount"`
-	AssetID           string  `db:"asset_id"`
-	ReceiverWalletID  string  `db:"receiver_wallet_id"`
-	ExternalPaymentID *string `db:"external_payment_id"`
+	ReceiverID        string      `db:"receiver_id"`
+	DisbursementID    *string     `db:"disbursement_id"`
+	PaymentType       PaymentType `db:"type"`
+	Amount            string      `db:"amount"`
+	AssetID           string      `db:"asset_id"`
+	ReceiverWalletID  string      `db:"receiver_wallet_id"`
+	ExternalPaymentID *string     `db:"external_payment_id"`
 }
 
 type PaymentUpdate struct {
@@ -109,8 +127,16 @@ func (p *PaymentInsert) Validate() error {
 		return fmt.Errorf("receiver_id is required")
 	}
 
-	if strings.TrimSpace(p.DisbursementID) == "" {
-		return fmt.Errorf("disbursement_id is required")
+	if err := p.PaymentType.Validate(); err != nil {
+		return fmt.Errorf("type is invalid: %w", err)
+	}
+
+	if p.PaymentType == PaymentTypeDisbursement && (p.DisbursementID == nil || *p.DisbursementID == "") {
+		return fmt.Errorf("disbursement_id is required for disbursement payments")
+	}
+
+	if p.PaymentType == PaymentTypeDirect && p.DisbursementID != nil {
+		return fmt.Errorf("disbursement_id must be null for direct payments")
 	}
 
 	if err := utils.ValidateAmount(p.Amount); err != nil {
@@ -148,6 +174,7 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"amount",
 			"status",
 			"status_history",
+			"type",
 			"created_at",
 			"updated_at",
 		},
@@ -163,17 +190,17 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 
 var basePaymentQuery = `
 SELECT
-	` + PaymentColumnNames("p", "") + `,
-	` + DisbursementColumnNames("d", "disbursement") + `,
-	` + AssetColumnNames("a", "asset", false) + `,
-	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
-	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
+    ` + PaymentColumnNames("p", "") + `,
+    ` + DisbursementColumnNames("d", "disbursement") + `,
+    ` + AssetColumnNames("a", "asset", false) + `,
+    ` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+    ` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
 FROM
-	payments p
-	JOIN disbursements d ON p.disbursement_id = d.id
-	JOIN assets a ON p.asset_id = a.id
-	JOIN wallets w on d.wallet_id = w.id
-	JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+    payments p
+    LEFT JOIN disbursements d ON p.disbursement_id = d.id
+    JOIN assets a ON p.asset_id = a.id
+    JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+    JOIN wallets w ON w.id = rw.wallet_id
 `
 
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
@@ -185,13 +212,18 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 			AND rw.anchor_platform_transaction_synced_at IS NULL
 		ORDER BY
 			p.created_at
-		FOR UPDATE SKIP LOCKED
+		FOR UPDATE OF p, rw SKIP LOCKED
 	`
 
 	payments := make([]Payment, 0)
-	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus); err != nil {
 		return nil, fmt.Errorf("getting payments: %w", err)
+	}
+
+	for i := range payments {
+		if payments[i].Type == PaymentTypeDirect {
+			payments[i].Disbursement = nil
+		}
 	}
 
 	return payments, nil
@@ -220,17 +252,52 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExec
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
 
-	query := getReadyPaymentsBaseQuery + `
-		ORDER BY p.disbursement_id ASC, p.updated_at ASC
-		LIMIT $4
-		FOR UPDATE SKIP LOCKED`
+	// Get disbursement payments
+	disbursementQuery := basePaymentQuery + `
+        WHERE
+            p.status = $1 -- 'READY'::payment_status
+            AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+            AND d.status = $3 -- 'STARTED'::disbursement_status
+            AND p.type = 'DISBURSEMENT'
+        ORDER BY p.disbursement_id ASC, p.updated_at ASC
+        FOR UPDATE SKIP LOCKED`
 
-	var payments []*Payment
-	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
+	var disbursementPayments []*Payment
+	err := sqlExec.SelectContext(ctx, &disbursementPayments, disbursementQuery,
+		ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus)
 	if err != nil {
-		return nil, fmt.Errorf("error getting ready payments: %w", err)
+		return nil, fmt.Errorf("getting disbursement payments: %w", err)
 	}
-	return payments, nil
+
+	// Get direct payments
+	directQuery := basePaymentQuery + `
+        WHERE
+            p.status = $1 -- 'READY'::payment_status
+            AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+            AND p.type = 'DIRECT'
+        ORDER BY p.updated_at ASC
+        FOR UPDATE OF p, rw SKIP LOCKED`
+
+	var directPayments []*Payment
+	err = sqlExec.SelectContext(ctx, &directPayments, directQuery,
+		ReadyPaymentStatus, RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("getting direct payments: %w", err)
+	}
+
+	allPayments := make([]*Payment, 0, len(disbursementPayments)+len(directPayments))
+	allPayments = append(allPayments, disbursementPayments...)
+	allPayments = append(allPayments, directPayments...)
+
+	// Apply the batch size limit after combining
+	// we can enhance this feature to make 70%/30% disbursment/direct payments processing if needed instead of straightforward limiting
+	if len(allPayments) > batchSize {
+		allPayments = allPayments[:batchSize]
+	}
+
+	removeEmptyDisbursementForDirect(allPayments)
+
+	return allPayments, nil
 }
 
 // Count returns the number of payments matching the given query parameters.
@@ -241,10 +308,10 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 			count(*)
 		FROM
 			payments p
-		JOIN disbursements d on p.disbursement_id = d.id
-		JOIN assets a on p.asset_id = a.id
-		JOIN wallets w on d.wallet_id = w.id
-		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+			LEFT JOIN disbursements d ON p.disbursement_id = d.id
+			JOIN assets a ON p.asset_id = a.id
+            JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+ 			JOIN wallets w ON w.id = rw.wallet_id
 		`
 
 	query, params := newPaymentQuery(baseQuery, queryParams, sqlExec, QueryTypeSingle)
@@ -262,9 +329,14 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 
 	query, params := newPaymentQuery(basePaymentQuery, queryParams, sqlExec, queryType)
 
-	err := sqlExec.SelectContext(ctx, &payments, query, params...)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query, params...); err != nil {
 		return nil, fmt.Errorf("selecting payments: %w", err)
+	}
+
+	for i := range payments {
+		if payments[i].Type == PaymentTypeDirect {
+			payments[i].Disbursement = nil
+		}
 	}
 
 	return payments, nil
@@ -308,19 +380,21 @@ func (p *PaymentModel) InsertAll(ctx context.Context, sqlExec db.SQLExecuter, in
 			receiver_id,
 			disbursement_id,
 		    receiver_wallet_id,
-			external_payment_id
+			external_payment_id,
+			type
 		) VALUES (
 			$1,
 			$2,
 			$3,
 			$4,
 			$5,
-			$6
+			$6,
+			$7
 		)
 		`
 
 	for _, payment := range inserts {
-		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID, payment.ExternalPaymentID)
+		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID, payment.ExternalPaymentID, payment.PaymentType)
 		if err != nil {
 			return fmt.Errorf("error inserting payment: %w", err)
 		}
@@ -369,36 +443,57 @@ func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.
 
 	var payments []*Payment
 	args := append(getReadyPaymentsBaseArgs, disbursementID)
-	err := sqlExec.SelectContext(ctx, &payments, query, args...)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query, args...); err != nil {
 		return nil, fmt.Errorf("getting ready payments for disbursement ID %s: %w", disbursementID, err)
 	}
 
+	removeEmptyDisbursementForDirect(payments)
 	return payments, nil
 }
 
 func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs ...string) ([]*Payment, error) {
-	query := getReadyPaymentsBaseQuery + "AND p.id = ANY($4) ORDER BY p.updated_at ASC"
+	query := basePaymentQuery + `
+        WHERE
+            p.id = ANY($1)
+            AND p.status = $2 -- 'READY'::payment_status
+            AND rw.status = $3 -- 'REGISTERED'::receiver_wallet_status
+            AND (
+                (p.type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
+                OR 
+                (p.type = 'DIRECT')
+            )
+        ORDER BY p.updated_at ASC`
 
 	var payments []*Payment
-	args := append(getReadyPaymentsBaseArgs, pq.Array(paymentIDs))
-	err := sqlExec.SelectContext(ctx, &payments, query, args...)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query,
+		pq.Array(paymentIDs), ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus); err != nil {
 		return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
 	}
+
+	removeEmptyDisbursementForDirect(payments)
 
 	return payments, nil
 }
 
 func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) ([]*Payment, error) {
-	query := getReadyPaymentsBaseQuery + "AND rw.id = $4"
+	query := basePaymentQuery + `
+        WHERE
+            rw.id = $1
+            AND p.status = $2 -- 'READY'::payment_status
+            AND rw.status = $3 -- 'REGISTERED'::receiver_wallet_status
+            AND (
+                (p.type = 'DISBURSEMENT' AND d.status = $4) -- 'STARTED'::disbursement_status
+                OR 
+                (p.type = 'DIRECT')
+            )`
 
 	var payments []*Payment
-	args := append(getReadyPaymentsBaseArgs, receiverWalletID)
-	err := sqlExec.SelectContext(ctx, &payments, query, args...)
-	if err != nil {
+	if err := sqlExec.SelectContext(ctx, &payments, query,
+		receiverWalletID, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus); err != nil {
 		return nil, fmt.Errorf("getting ready payments by receiver wallet ID %s: %w", receiverWalletID, err)
 	}
+
+	removeEmptyDisbursementForDirect(payments)
 
 	return payments, nil
 }
@@ -570,11 +665,11 @@ func addArrayOrSingleCondition[T any](qb *QueryBuilder, fieldName string, value 
 }
 
 // newPaymentQuery generates the full query and parameters for a payment search query.
-func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
+func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []any) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Query != "" {
 		q := "%" + queryParams.Query + "%"
-		qb.AddCondition("(p.id ILIKE ? OR p.external_payment_id ILIKE ? OR rw.stellar_address ILIKE ? OR d.name ILIKE ?)", q, q, q, q)
+		qb.AddCondition("(p.id ILIKE ? OR p.external_payment_id ILIKE ? OR rw.stellar_address ILIKE ? OR COALESCE(d.name, '') ILIKE ?)", q, q, q, q)
 	}
 	if queryParams.Filters[FilterKeyID] != nil {
 		addArrayOrSingleCondition[string](qb, "p.id", queryParams.Filters[FilterKeyID])
@@ -590,6 +685,9 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 	}
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("p.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
+	}
+	if queryParams.Filters[FilterKeyPaymentType] != nil {
+		addArrayOrSingleCondition[PaymentType](qb, "p.type", queryParams.Filters[FilterKeyPaymentType])
 	}
 
 	switch queryType {
@@ -690,4 +788,52 @@ func (p *PaymentModel) UpdateStatus(
 	}
 
 	return nil
+}
+
+func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLExecuter, insert PaymentInsert, userID string) (string, error) {
+	if err := insert.Validate(); err != nil {
+		return "", fmt.Errorf("validating payment: %w", err)
+	}
+
+	query := `
+        INSERT INTO payments (
+            amount,
+            asset_id,
+            receiver_id,
+            receiver_wallet_id,
+            external_payment_id,
+            type,
+            status,
+            status_history
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7,
+            ARRAY[create_payment_status_history(NOW(), $7::payment_status, $8)]
+        )
+        RETURNING id
+    `
+
+	statusMessage := fmt.Sprintf("Payment submitted by user_id %s", userID)
+	var paymentID string
+	if err := sqlExec.GetContext(ctx, &paymentID, query,
+		insert.Amount,
+		insert.AssetID,
+		insert.ReceiverID,
+		insert.ReceiverWalletID,
+		insert.ExternalPaymentID,
+		insert.PaymentType,
+		ReadyPaymentStatus,
+		statusMessage,
+	); err != nil {
+		return "", fmt.Errorf("inserting direct payment: %w", err)
+	}
+
+	return paymentID, nil
+}
+
+func removeEmptyDisbursementForDirect(payments []*Payment) {
+	for i := range payments {
+		if payments[i].Type == PaymentTypeDirect {
+			payments[i].Disbursement = nil
+		}
+	}
 }

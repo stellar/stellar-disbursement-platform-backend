@@ -13,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -38,7 +39,7 @@ func Test_PaymentsModelGet(t *testing.T) {
 		Status:    DraftDisbursementStatus,
 		Asset:     asset,
 		Wallet:    wallet1,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
@@ -468,12 +469,13 @@ func Test_PaymentModel_GetByIDs(t *testing.T) {
 	receiverWallet2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, DraftReceiversWalletStatus)
 
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
+	d := time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)
 	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &Disbursement{
 		Name:      "disbursement 1",
 		Status:    DraftDisbursementStatus,
 		Asset:     asset,
 		Wallet:    wallet1,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: &d,
 	})
 
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
@@ -556,7 +558,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 		queryParams    QueryParams
 		queryType      QueryType
 		expectedQuery  string
-		expectedParams []interface{}
+		expectedParams []any
 	}{
 		{
 			name:           "build payment query without params and pagination",
@@ -564,7 +566,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 			queryParams:    QueryParams{},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p",
-			expectedParams: []interface{}{},
+			expectedParams: []any{},
 		},
 		{
 			name:      "build payment query with a query search",
@@ -573,45 +575,45 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 				Query: "foo-bar",
 			},
 			queryType:      QueryTypeSelectAll,
-			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND (p.id ILIKE $1 OR p.external_payment_id ILIKE $2 OR rw.stellar_address ILIKE $3 OR d.name ILIKE $4)",
-			expectedParams: []interface{}{"%foo-bar%", "%foo-bar%", "%foo-bar%", "%foo-bar%"},
+			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND (p.id ILIKE $1 OR p.external_payment_id ILIKE $2 OR rw.stellar_address ILIKE $3 OR COALESCE(d.name, '') ILIKE $4)",
+			expectedParams: []any{"%foo-bar%", "%foo-bar%", "%foo-bar%", "%foo-bar%"},
 		},
 		{
 			name:      "build payment query with status filter",
 			baseQuery: "SELECT * FROM payments p",
 			queryParams: QueryParams{
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyStatus: "draft",
 				},
 			},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1",
-			expectedParams: []interface{}{"draft"},
+			expectedParams: []any{"draft"},
 		},
 		{
 			name:      "build payment query with receiver_id filter",
 			baseQuery: "SELECT * FROM payments p",
 			queryParams: QueryParams{
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyReceiverID: "receiver_id",
 				},
 			},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.receiver_id = $1",
-			expectedParams: []interface{}{"receiver_id"},
+			expectedParams: []any{"receiver_id"},
 		},
 		{
 			name:      "build payment query with created_at filters",
 			baseQuery: "SELECT * FROM payments p",
 			queryParams: QueryParams{
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyCreatedAtAfter:  "00-01-01",
 					FilterKeyCreatedAtBefore: "00-01-31",
 				},
 			},
 			queryType:      QueryTypeSelectAll,
 			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.created_at >= $1 AND p.created_at <= $2",
-			expectedParams: []interface{}{"00-01-01", "00-01-31"},
+			expectedParams: []any{"00-01-01", "00-01-31"},
 		},
 		{
 			name:      "build payment query with pagination",
@@ -624,7 +626,7 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 			},
 			queryType:      QueryTypeSelectPaginated,
 			expectedQuery:  "SELECT * FROM payments p ORDER BY p.created_at ASC LIMIT $1 OFFSET $2",
-			expectedParams: []interface{}{20, 0},
+			expectedParams: []any{20, 0},
 		},
 		{
 			name:      "build payment query with all filters and pagination",
@@ -634,16 +636,17 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 				PageLimit: 20,
 				SortBy:    "created_at",
 				SortOrder: "ASC",
-				Filters: map[FilterKey]interface{}{
+				Filters: map[FilterKey]any{
 					FilterKeyStatus:          "draft",
 					FilterKeyReceiverID:      "receiver_id",
 					FilterKeyCreatedAtAfter:  "00-01-01",
 					FilterKeyCreatedAtBefore: "00-01-31",
+					FilterKeyPaymentType:     "DIRECT",
 				},
 			},
 			queryType:      QueryTypeSelectPaginated,
-			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1 AND p.receiver_id = $2 AND p.created_at >= $3 AND p.created_at <= $4 ORDER BY p.created_at ASC LIMIT $5 OFFSET $6",
-			expectedParams: []interface{}{"draft", "receiver_id", "00-01-01", "00-01-31", 20, 0},
+			expectedQuery:  "SELECT * FROM payments p WHERE 1=1 AND p.status = $1 AND p.receiver_id = $2 AND p.created_at >= $3 AND p.created_at <= $4 AND p.type = $5 ORDER BY p.created_at ASC LIMIT $6 OFFSET $7",
+			expectedParams: []any{"draft", "receiver_id", "00-01-01", "00-01-31", "DIRECT", 20, 0},
 		},
 	}
 
@@ -1854,6 +1857,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				"amount",
 				"status",
 				"status_history",
+				"type",
 				"created_at",
 				"updated_at",
 				`COALESCE(stellar_transaction_id, '') AS "stellar_transaction_id"`,
@@ -1869,6 +1873,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				"p.amount",
 				"p.status",
 				"p.status_history",
+				"p.type",
 				"p.created_at",
 				"p.updated_at",
 				`COALESCE(p.stellar_transaction_id, '') AS "stellar_transaction_id"`,
@@ -1884,6 +1889,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				`p.amount AS "payment.amount"`,
 				`p.status AS "payment.status"`,
 				`p.status_history AS "payment.status_history"`,
+				`p.type AS "payment.type"`,
 				`p.created_at AS "payment.created_at"`,
 				`p.updated_at AS "payment.updated_at"`,
 				`COALESCE(p.stellar_transaction_id, '') AS "payment.stellar_transaction_id"`,

@@ -393,6 +393,35 @@ func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecute
 	return receivers, nil
 }
 
+func (r *ReceiverModel) GetByWalletAddress(ctx context.Context, sqlExec db.SQLExecuter, walletAddress string) (*Receiver, error) {
+	query := `
+		SELECT DISTINCT
+			` + ReceiverColumnNames("r", "") + `
+		FROM 
+			receivers r
+			INNER JOIN receiver_wallets rw ON r.id = rw.receiver_id
+		WHERE 
+			rw.stellar_address = $1
+			AND rw.status = $2
+	`
+
+	var receivers []Receiver
+	err := sqlExec.SelectContext(ctx, &receivers, query, walletAddress, RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("querying receiver by wallet address %s: %w", walletAddress, err)
+	}
+
+	if len(receivers) == 0 {
+		return nil, ErrRecordNotFound
+	}
+
+	if len(receivers) > 1 {
+		return nil, fmt.Errorf("multiple receivers found with wallet address %s", walletAddress)
+	}
+
+	return &receivers[0], nil
+}
+
 // DeleteByContactInfo deletes a receiver by phone number or email. It also deletes the associated entries in other
 // tables: messages, payments, receiver_verifications, receiver_wallets, receivers, disbursements,
 // submitter_transactions.
