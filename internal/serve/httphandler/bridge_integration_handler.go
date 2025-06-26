@@ -57,6 +57,7 @@ type PatchRequest struct {
 	Status   data.BridgeIntegrationStatus `json:"status"`
 	Email    string                       `json:"email,omitempty"`
 	FullName string                       `json:"full_name,omitempty"`
+	KYCType  bridge.KYCType               `json:"kyc_type,omitempty"`
 }
 
 var validPatchStatuses = []data.BridgeIntegrationStatus{
@@ -64,22 +65,32 @@ var validPatchStatuses = []data.BridgeIntegrationStatus{
 	data.BridgeIntegrationStatusReadyForDeposit,
 }
 
-// Validate validates the opt-in request
+// Validate validates the opt-in request and returns an error if validation fails.
 func (r PatchRequest) Validate() error {
 	if !slices.Contains(validPatchStatuses, r.Status) {
 		return fmt.Errorf("invalid status %s, must be one of %v", r.Status, validPatchStatuses)
 	}
 
-	if r.Status == data.BridgeIntegrationStatusOptedIn {
-		if r.Email != "" {
-			if err := utils.ValidateEmail(r.Email); err != nil {
-				return fmt.Errorf("invalid email: %w", err)
-			}
-		}
-		if r.FullName != "" && strings.TrimSpace(r.FullName) == "" {
-			return fmt.Errorf("full_name cannot be empty or whitespace only")
+	if r.Status != data.BridgeIntegrationStatusOptedIn {
+		return nil
+	}
+
+	if r.Email != "" {
+		if err := utils.ValidateEmail(r.Email); err != nil {
+			return fmt.Errorf("invalid email: %w", err)
 		}
 	}
+
+	if r.FullName != "" && strings.TrimSpace(r.FullName) == "" {
+		return fmt.Errorf("full_name cannot be empty or whitespace only")
+	}
+
+	if r.KYCType != "" {
+		if err := r.KYCType.Validate(); err != nil {
+			return fmt.Errorf("invalid kyc_type: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -131,16 +142,22 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 	if email == "" {
 		email = user.Email
 	}
-	if err := utils.ValidateEmail(email); err != nil {
-		httperror.BadRequest("Invalid email format", err, nil).Render(w)
-		return
-	}
 
 	fullName := patchRequest.FullName
 	if fullName == "" {
 		firstName := strings.TrimSpace(user.FirstName)
 		lastName := strings.TrimSpace(user.LastName)
 		fullName = fmt.Sprintf("%s %s", firstName, lastName)
+	}
+
+	var kycType bridge.KYCType
+	switch strings.ToLower(string(patchRequest.KYCType)) {
+	case string(bridge.KYCTypeIndividual):
+		kycType = bridge.KYCTypeIndividual
+	case string(bridge.KYCTypeBusiness):
+		kycType = bridge.KYCTypeBusiness
+	default:
+		kycType = bridge.KYCTypeBusiness
 	}
 
 	// Resolve Redirect URI
@@ -151,7 +168,13 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 	}
 
 	// Opt into Bridge integration
-	bridgeInfo, err := h.BridgeService.OptInToBridge(ctx, user.ID, fullName, email, redirectURL.String())
+	bridgeInfo, err := h.BridgeService.OptInToBridge(ctx, bridge.OptInOptions{
+		UserID:      user.ID,
+		Email:       email,
+		FullName:    fullName,
+		KYCType:     kycType,
+		RedirectURL: redirectURL.String(),
+	})
 	if err != nil {
 		var bridgeError bridge.BridgeErrorResponse
 		switch {

@@ -73,8 +73,14 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "", fullName, email, redirectURL)
-		assert.EqualError(t, err, "userID is required to opt into Bridge integration")
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
+		assert.EqualError(t, err, "validating opt-in options: userID is required to opt into Bridge integration")
 		assert.Nil(t, result)
 	})
 
@@ -83,8 +89,14 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", "", email, redirectURL)
-		assert.EqualError(t, err, "fullName is required to opt into Bridge integration")
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    "",
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
+		assert.EqualError(t, err, "validating opt-in options: fullName is required to opt into Bridge integration")
 		assert.Nil(t, result)
 	})
 
@@ -92,8 +104,14 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
-		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, "")
-		assert.EqualError(t, err, "redirectURL is required to opt into Bridge integration")
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: "",
+			KYCType:     KYCTypeBusiness,
+		})
+		assert.EqualError(t, err, "validating opt-in options: redirectURL is required to opt into Bridge integration")
 		assert.Nil(t, result)
 	})
 
@@ -102,8 +120,29 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", fullName, "", redirectURL)
-		assert.EqualError(t, err, "email is required to opt into Bridge integration")
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       "",
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
+		assert.EqualError(t, err, "validating opt-in options: email is required to opt into Bridge integration")
+		assert.Nil(t, result)
+	})
+
+	t.Run("missing KYCType", func(t *testing.T) {
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
+		mockClient := NewMockClient(t)
+		svc := createService(t, mockClient, models)
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     "",
+		})
+		assert.EqualError(t, err, "validating opt-in options: KYCType must be either 'individual' or 'business'")
 		assert.Nil(t, result)
 	})
 
@@ -120,7 +159,13 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, redirectURL)
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
 		assert.EqualError(t, err, ErrBridgeAlreadyOptedIn.Error())
 		assert.Nil(t, result)
 	})
@@ -141,7 +186,13 @@ func Test_Service_OptInToBridge(t *testing.T) {
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, redirectURL)
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
 		assert.EqualError(t, err, "creating KYC link via Bridge API: bridge API error")
 		assert.Nil(t, result)
 	})
@@ -171,7 +222,13 @@ func Test_Service_OptInToBridge(t *testing.T) {
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, redirectURL)
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, data.BridgeIntegrationStatusOptedIn, result.Status)

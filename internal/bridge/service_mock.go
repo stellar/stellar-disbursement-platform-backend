@@ -73,9 +73,9 @@ func (_m *MockService) GetBridgeIntegration(ctx context.Context) (*BridgeIntegra
 	return r0, r1
 }
 
-// OptInToBridge provides a mock function with given fields: ctx, userID, fullName, email, redirectURL
-func (_m *MockService) OptInToBridge(ctx context.Context, userID string, fullName string, email string, redirectURL string) (*BridgeIntegrationInfo, error) {
-	ret := _m.Called(ctx, userID, fullName, email, redirectURL)
+// OptInToBridge provides a mock function with given fields: ctx, opts
+func (_m *MockService) OptInToBridge(ctx context.Context, opts OptInOptions) (*BridgeIntegrationInfo, error) {
+	ret := _m.Called(ctx, opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for OptInToBridge")
@@ -83,19 +83,19 @@ func (_m *MockService) OptInToBridge(ctx context.Context, userID string, fullNam
 
 	var r0 *BridgeIntegrationInfo
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string) (*BridgeIntegrationInfo, error)); ok {
-		return rf(ctx, userID, fullName, email, redirectURL)
+	if rf, ok := ret.Get(0).(func(context.Context, OptInOptions) (*BridgeIntegrationInfo, error)); ok {
+		return rf(ctx, opts)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string) *BridgeIntegrationInfo); ok {
-		r0 = rf(ctx, userID, fullName, email, redirectURL)
+	if rf, ok := ret.Get(0).(func(context.Context, OptInOptions) *BridgeIntegrationInfo); ok {
+		r0 = rf(ctx, opts)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*BridgeIntegrationInfo)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, string) error); ok {
-		r1 = rf(ctx, userID, fullName, email, redirectURL)
+	if rf, ok := ret.Get(1).(func(context.Context, OptInOptions) error); ok {
+		r1 = rf(ctx, opts)
 	} else {
 		r1 = ret.Error(1)
 	}

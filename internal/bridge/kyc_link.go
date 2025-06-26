@@ -1,6 +1,9 @@
 package bridge
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // KYCLinkInfo represents the response from creating a KYC link
 type KYCLinkInfo struct {
@@ -24,6 +27,15 @@ const (
 	KYCTypeIndividual KYCType = "individual"
 	KYCTypeBusiness   KYCType = "business"
 )
+
+func (kycType KYCType) Validate() error {
+	switch KYCType(strings.ToLower(string(kycType))) {
+	case KYCTypeIndividual, KYCTypeBusiness:
+		return nil
+	default:
+		return fmt.Errorf("invalid KYC type %s, must be either 'individual' or 'business'", kycType)
+	}
+}
 
 // KYCStatus represents the status of KYC verification
 type KYCStatus string

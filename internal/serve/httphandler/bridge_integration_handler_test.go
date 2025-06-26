@@ -138,6 +138,13 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 		LastName:  "Doe",
 	}
 
+	optInOptions := bridge.OptInOptions{
+		UserID:      testUser.ID,
+		FullName:    "John Doe",
+		Email:       "user@example.com",
+		RedirectURL: redirectURL,
+		KYCType:     bridge.KYCTypeBusiness,
+	}
 	testCases := []struct {
 		name             string
 		requestBody      interface{}
@@ -217,7 +224,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
+					On("OptInToBridge", mock.Anything, optInOptions).
 					Return(nil, bridge.ErrBridgeAlreadyOptedIn).
 					Once()
 			},
@@ -247,7 +254,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					},
 				}
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
+					On("OptInToBridge", mock.Anything, optInOptions).
 					Return(nil, bridgeError).
 					Once()
 			},
@@ -273,7 +280,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
+					On("OptInToBridge", mock.Anything, optInOptions).
 					Return(nil, errors.New("unexpected error")).
 					Once()
 			},
@@ -297,8 +304,11 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					Status:     data.BridgeIntegrationStatusOptedIn,
 					CustomerID: utils.StringPtr("customer-123"),
 				}
+				customOptInOptions := optInOptions
+				customOptInOptions.Email = "custom@example.com"
+				customOptInOptions.FullName = "Custom Name"
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "Custom Name", "custom@example.com", redirectURL).
+					On("OptInToBridge", mock.Anything, customOptInOptions).
 					Return(bridgeInfo, nil).
 					Once()
 			},
@@ -322,7 +332,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					CustomerID: utils.StringPtr("customer-123"),
 				}
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
+					On("OptInToBridge", mock.Anything, optInOptions).
 					Return(bridgeInfo, nil).
 					Once()
 			},

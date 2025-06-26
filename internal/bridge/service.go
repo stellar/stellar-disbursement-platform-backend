@@ -35,7 +35,7 @@ type BridgeIntegrationInfo struct {
 //
 //go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService --output=. --filename=service_mock.go --inpackage
 type ServiceInterface interface {
-	OptInToBridge(ctx context.Context, userID string, fullName, email, redirectURL string) (*BridgeIntegrationInfo, error)
+	OptInToBridge(ctx context.Context, opts OptInOptions) (*BridgeIntegrationInfo, error)
 	GetBridgeIntegration(ctx context.Context) (*BridgeIntegrationInfo, error)
 	CreateVirtualAccount(ctx context.Context, userID, distributionAccountAddress string) (*BridgeIntegrationInfo, error)
 }
@@ -94,19 +94,37 @@ var (
 	ErrBridgeKYCRejected                 = errors.New("KYC verification was rejected, cannot create virtual account")
 )
 
+type OptInOptions struct {
+	UserID      string
+	FullName    string
+	Email       string
+	RedirectURL string
+	KYCType     KYCType
+}
+
+func (opts OptInOptions) Validate() error {
+	if opts.UserID == "" {
+		return fmt.Errorf("userID is required to opt into Bridge integration")
+	}
+	if opts.FullName == "" {
+		return fmt.Errorf("fullName is required to opt into Bridge integration")
+	}
+	if opts.Email == "" {
+		return fmt.Errorf("email is required to opt into Bridge integration")
+	}
+	if opts.RedirectURL == "" {
+		return fmt.Errorf("redirectURL is required to opt into Bridge integration")
+	}
+	if opts.KYCType != KYCTypeIndividual && opts.KYCType != KYCTypeBusiness {
+		return fmt.Errorf("KYCType must be either 'individual' or 'business'")
+	}
+	return nil
+}
+
 // OptInToBridge creates a KYC link and opts the tenant into Bridge integration.
-func (s *Service) OptInToBridge(ctx context.Context, userID, fullName, email, redirectURL string) (*BridgeIntegrationInfo, error) {
-	if userID == "" {
-		return nil, fmt.Errorf("userID is required to opt into Bridge integration")
-	}
-	if fullName == "" {
-		return nil, fmt.Errorf("fullName is required to opt into Bridge integration")
-	}
-	if email == "" {
-		return nil, fmt.Errorf("email is required to opt into Bridge integration")
-	}
-	if redirectURL == "" {
-		return nil, fmt.Errorf("redirectURL is required to opt into Bridge integration")
+func (s *Service) OptInToBridge(ctx context.Context, opts OptInOptions) (*BridgeIntegrationInfo, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("validating opt-in options: %w", err)
 	}
 
 	// 1. Check if organization already opted in
@@ -120,10 +138,10 @@ func (s *Service) OptInToBridge(ctx context.Context, userID, fullName, email, re
 
 	// 2. Create KYC link via Bridge API for organization onboarding
 	request := KYCLinkRequest{
-		FullName:    fullName,
-		Email:       email,
-		Type:        KYCTypeBusiness, // Always business for tenant organizations
-		RedirectURI: redirectURL,
+		FullName:    opts.FullName,
+		Email:       opts.Email,
+		Type:        opts.KYCType,
+		RedirectURI: opts.RedirectURL,
 	}
 
 	kycLinkInfo, err := s.client.PostKYCLink(ctx, request)
@@ -135,7 +153,7 @@ func (s *Service) OptInToBridge(ctx context.Context, userID, fullName, email, re
 	integration, err := s.models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
 		KYCLinkID:  kycLinkInfo.ID,
 		CustomerID: kycLinkInfo.CustomerID,
-		OptedInBy:  userID,
+		OptedInBy:  opts.UserID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("storing Bridge integration in database: %w", err)
