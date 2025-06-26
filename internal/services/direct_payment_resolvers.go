@@ -495,7 +495,7 @@ func (r *WalletResolver) Resolve(ctx context.Context, dbTx db.SQLExecuter, ref W
 			return nil, fmt.Errorf("finding user receiver wallets %w", err)
 		}
 
-		if !receiverWallet.Wallet.UserManaged {
+		if !receiverWallet.Wallet.UserManaged || !receiverWallet.Wallet.Enabled {
 			return nil, NotFoundError{
 				EntityType: EntityTypeWallet,
 				Message:    "no user managed wallet found",
