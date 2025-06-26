@@ -246,6 +246,47 @@ func Test_AssetModelGetByCodeAndIssuer(t *testing.T) {
 	})
 }
 
+func Test_AssetModelExistsByCodeOrID(t *testing.T) {
+	models := SetupModels(t)
+	ctx := context.Background()
+
+	t.Run("returns false when asset does not exist", func(t *testing.T) {
+		exists, err := models.Assets.ExistsByCodeOrID(ctx, "NONEXISTENT")
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+
+	t.Run("returns true when asset exists by code", func(t *testing.T) {
+		asset := CreateAssetFixture(t, ctx, models.DBConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		exists, err := models.Assets.ExistsByCodeOrID(ctx, asset.Code)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("returns true when asset exists by ID", func(t *testing.T) {
+		asset := CreateAssetFixture(t, ctx, models.DBConnectionPool, "XLM", "")
+
+		exists, err := models.Assets.ExistsByCodeOrID(ctx, asset.ID)
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("returns false for soft-deleted asset", func(t *testing.T) {
+		asset := CreateAssetFixture(t, ctx, models.DBConnectionPool, "DELETED", "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG")
+		_, err := models.Assets.SoftDelete(ctx, models.DBConnectionPool, asset.ID)
+		require.NoError(t, err)
+
+		exists, err := models.Assets.ExistsByCodeOrID(ctx, asset.Code)
+		require.NoError(t, err)
+		assert.False(t, exists)
+
+		exists, err = models.Assets.ExistsByCodeOrID(ctx, asset.ID)
+		require.NoError(t, err)
+		assert.False(t, exists)
+	})
+}
+
 func Test_AssetModelGetAll(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
