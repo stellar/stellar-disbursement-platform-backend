@@ -63,12 +63,17 @@ func Test_Service_OptInToBridge(t *testing.T) {
 	dbcp := models.DBConnectionPool
 	ctx := context.Background()
 
+	// Sample data for the test
+	fullName := "John Doe"
+	email := "john@example.com"
+	redirectURL := "https://example.com/distribution-account"
+
 	t.Run("missing userID", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "", "John Doe", "john@example.com")
+		result, err := svc.OptInToBridge(ctx, "", fullName, email, redirectURL)
 		assert.EqualError(t, err, "userID is required to opt into Bridge integration")
 		assert.Nil(t, result)
 	})
@@ -78,8 +83,17 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", "", "john@example.com")
+		result, err := svc.OptInToBridge(ctx, "user-123", "", email, redirectURL)
 		assert.EqualError(t, err, "fullName is required to opt into Bridge integration")
+		assert.Nil(t, result)
+	})
+
+	t.Run("missing redirectURL", func(t *testing.T) {
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
+		mockClient := NewMockClient(t)
+		svc := createService(t, mockClient, models)
+		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, "")
+		assert.EqualError(t, err, "redirectURL is required to opt into Bridge integration")
 		assert.Nil(t, result)
 	})
 
@@ -88,7 +102,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", "John Doe", "")
+		result, err := svc.OptInToBridge(ctx, "user-123", fullName, "", redirectURL)
 		assert.EqualError(t, err, "email is required to opt into Bridge integration")
 		assert.Nil(t, result)
 	})
@@ -106,7 +120,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", "John Doe", "john@example.com")
+		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, redirectURL)
 		assert.EqualError(t, err, ErrBridgeAlreadyOptedIn.Error())
 		assert.Nil(t, result)
 	})
@@ -117,16 +131,17 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		bridgeErr := errors.New("bridge API error")
 		mockClient.
 			On("PostKYCLink", ctx, KYCLinkRequest{
-				FullName: "John Doe",
-				Email:    "john@example.com",
-				Type:     KYCTypeBusiness,
+				FullName:    fullName,
+				Email:       email,
+				Type:        KYCTypeBusiness,
+				RedirectURI: redirectURL,
 			}).
 			Return(nil, bridgeErr).
 			Once()
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", "John Doe", "john@example.com")
+		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, redirectURL)
 		assert.EqualError(t, err, "creating KYC link via Bridge API: bridge API error")
 		assert.Nil(t, result)
 	})
@@ -137,8 +152,8 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		kycResponse := &KYCLinkInfo{
 			ID:         "kyc-link-123",
 			CustomerID: "customer-123",
-			FullName:   "John Doe",
-			Email:      "john@example.com",
+			FullName:   fullName,
+			Email:      email,
 			Type:       KYCTypeBusiness,
 			KYCStatus:  KYCStatusNotStarted,
 			TOSStatus:  TOSStatusPending,
@@ -146,16 +161,17 @@ func Test_Service_OptInToBridge(t *testing.T) {
 
 		mockClient.
 			On("PostKYCLink", ctx, KYCLinkRequest{
-				FullName: "John Doe",
-				Email:    "john@example.com",
-				Type:     KYCTypeBusiness,
+				FullName:    fullName,
+				Email:       email,
+				Type:        KYCTypeBusiness,
+				RedirectURI: redirectURL,
 			}).
 			Return(kycResponse, nil).
 			Once()
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.OptInToBridge(ctx, "user-123", "John Doe", "john@example.com")
+		result, err := svc.OptInToBridge(ctx, "user-123", fullName, email, redirectURL)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, data.BridgeIntegrationStatusOptedIn, result.Status)

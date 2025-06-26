@@ -128,6 +128,9 @@ func Test_BridgeIntegrationHandler_Get(t *testing.T) {
 }
 
 func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
+	// Sample data for the test
+	redirectURL := "https://example.com/distribution-account"
+
 	testUser := &auth.User{
 		ID:        "user-123",
 		Email:     "user@example.com",
@@ -214,7 +217,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com").
+					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
 					Return(nil, bridge.ErrBridgeAlreadyOptedIn).
 					Once()
 			},
@@ -244,7 +247,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					},
 				}
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com").
+					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
 					Return(nil, bridgeError).
 					Once()
 			},
@@ -270,7 +273,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com").
+					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
 					Return(nil, errors.New("unexpected error")).
 					Once()
 			},
@@ -295,7 +298,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					CustomerID: utils.StringPtr("customer-123"),
 				}
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "Custom Name", "custom@example.com").
+					On("OptInToBridge", mock.Anything, "user-123", "Custom Name", "custom@example.com", redirectURL).
 					Return(bridgeInfo, nil).
 					Once()
 			},
@@ -319,7 +322,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					CustomerID: utils.StringPtr("customer-123"),
 				}
 				mBridgeService.
-					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com").
+					On("OptInToBridge", mock.Anything, "user-123", "John Doe", "user@example.com", redirectURL).
 					Return(bridgeInfo, nil).
 					Once()
 			},
@@ -368,8 +371,15 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 				}
 			}
 
+			tnt := tenant.Tenant{
+				ID:           "test-tenant",
+				BaseURL:      utils.Ptr("https://example.com"),
+				SDPUIBaseURL: utils.Ptr("https://example.com"),
+			}
+			ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+
 			rr := httptest.NewRecorder()
-			req, err := http.NewRequest(http.MethodPatch, "/bridge-integration", bodyReader)
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/bridge-integration", bodyReader)
 			require.NoError(t, err)
 
 			// Add user context if needed for auth

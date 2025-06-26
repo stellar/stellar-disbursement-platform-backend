@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path"
 	"slices"
 	"strings"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // BridgeIntegrationHandler handles Bridge integration endpoints.
@@ -140,8 +143,15 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 		fullName = fmt.Sprintf("%s %s", firstName, lastName)
 	}
 
+	// Resolve Redirect URI
+	redirectURL, err := resolveRedirectURL(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Failed to resolve redirect URL", err, nil).Render(w)
+		return
+	}
+
 	// Opt into Bridge integration
-	bridgeInfo, err := h.BridgeService.OptInToBridge(ctx, user.ID, fullName, email)
+	bridgeInfo, err := h.BridgeService.OptInToBridge(ctx, user.ID, fullName, email, redirectURL.String())
 	if err != nil {
 		var bridgeError bridge.BridgeErrorResponse
 		switch {
@@ -159,6 +169,23 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, bridgeInfo, httpjson.JSON)
+}
+
+// resolveRedirectURL resolves the redirect URL for the Bridge integration based on the tenant's SDP UI Base URL.
+func resolveRedirectURL(ctx context.Context) (*url.URL, error) {
+	t, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting tenant from context: %w", err)
+	}
+	if t.SDPUIBaseURL == nil || *t.SDPUIBaseURL == "" {
+		return nil, fmt.Errorf("tenant SDP UI Base URL is not set")
+	}
+	redirectURL, err := url.Parse(*t.SDPUIBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tenant SDP UI Base URL: %w", err)
+	}
+	redirectURL.Path = path.Join(redirectURL.Path, "distribution-account")
+	return redirectURL, nil
 }
 
 // createVirtualAccount creates a virtual account for the user in the Bridge integration.
