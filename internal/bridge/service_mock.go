@@ -13,9 +13,9 @@ type MockService struct {
 	mock.Mock
 }
 
-// CreateVirtualAccount provides a mock function with given fields: ctx, userID, memo, distributionAccountAddress
-func (_m *MockService) CreateVirtualAccount(ctx context.Context, userID string, memo string, distributionAccountAddress string) (*BridgeIntegrationInfo, error) {
-	ret := _m.Called(ctx, userID, memo, distributionAccountAddress)
+// CreateVirtualAccount provides a mock function with given fields: ctx, userID, distributionAccountAddress
+func (_m *MockService) CreateVirtualAccount(ctx context.Context, userID string, distributionAccountAddress string) (*BridgeIntegrationInfo, error) {
+	ret := _m.Called(ctx, userID, distributionAccountAddress)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateVirtualAccount")
@@ -23,19 +23,19 @@ func (_m *MockService) CreateVirtualAccount(ctx context.Context, userID string, 
 
 	var r0 *BridgeIntegrationInfo
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) (*BridgeIntegrationInfo, error)); ok {
-		return rf(ctx, userID, memo, distributionAccountAddress)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (*BridgeIntegrationInfo, error)); ok {
+		return rf(ctx, userID, distributionAccountAddress)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) *BridgeIntegrationInfo); ok {
-		r0 = rf(ctx, userID, memo, distributionAccountAddress)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) *BridgeIntegrationInfo); ok {
+		r0 = rf(ctx, userID, distributionAccountAddress)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*BridgeIntegrationInfo)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, string) error); ok {
-		r1 = rf(ctx, userID, memo, distributionAccountAddress)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, userID, distributionAccountAddress)
 	} else {
 		r1 = ret.Error(1)
 	}

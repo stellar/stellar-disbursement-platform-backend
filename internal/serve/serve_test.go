@@ -463,7 +463,6 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// bridge
 		{http.MethodGet, "/bridge-integration"},
 		{http.MethodPatch, "/bridge-integration"},
-		{http.MethodPost, "/bridge-integration/virtual-account"},
 	}
 
 	// Expect 401 as a response:

@@ -532,12 +532,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					data.WriteOrganization,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
 				)).Patch("/", bridgeIntegrationHandler.Patch)
-
-				// Virtual account creation endpoint
-				r.With(middleware.RequirePermission(
-					data.WriteOrganization,
-					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
-				)).Post("/virtual-account", bridgeIntegrationHandler.PostVirtualAccount)
 			})
 		}
 

@@ -13,8 +13,8 @@ CREATE TYPE bridge_integration_status AS ENUM (
 -- Add new bridge_integration table.
 CREATE TABLE bridge_integration (
     status bridge_integration_status NOT NULL DEFAULT 'OPTED_IN',
-    kyc_link_id VARCHAR(36) NOT NULL, -- Bridge KYC link ID (nullable)
-    customer_id VARCHAR(36), -- Bridge customer ID (nullable)
+    kyc_link_id VARCHAR(36) NOT NULL, -- Bridge KYC link ID (NOT NULL)
+    customer_id VARCHAR(36) NOT NULL, -- Bridge customer ID (NOT NULL)
     opted_in_by TEXT, -- Email of the user who opted in for Bridge integration (nullable)
     opted_in_at TIMESTAMPTZ, -- When user opted in (nullable)
     virtual_account_id VARCHAR(36), -- Bridge virtual account ID (nullable)

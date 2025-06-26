@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_BridgeIntegrationHandler_Get(t *testing.T) {
@@ -126,7 +127,7 @@ func Test_BridgeIntegrationHandler_Get(t *testing.T) {
 	}
 }
 
-func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
+func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 	testUser := &auth.User{
 		ID:        "user-123",
 		Email:     "user@example.com",
@@ -143,7 +144,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 	}{
 		{
 			name:             "Bridge service not enabled",
-			requestBody:      OptInRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			requestBody:      PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks:     func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {},
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error": "Bridge integration is not enabled"}`,
@@ -157,19 +158,19 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name:           "invalid status in request",
-			requestBody:    OptInRequest{Status: data.BridgeIntegrationStatusNotOptedIn},
+			requestBody:    PatchRequest{Status: data.BridgeIntegrationStatusNotOptedIn},
 			prepareMocks:   func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {},
 			expectedStatus: http.StatusBadRequest,
 			expectedResponse: `{
 				"error": "Invalid request",
 				"extras": {
-					"validation_error": "status must be OPTED_IN"
+					"validation_error": "invalid status NOT_OPTED_IN, must be one of [OPTED_IN READY_FOR_DEPOSIT]"
 				}
 			}`,
 		},
 		{
 			name:           "invalid email format",
-			requestBody:    OptInRequest{Status: data.BridgeIntegrationStatusOptedIn, Email: "invalid-email"},
+			requestBody:    PatchRequest{Status: data.BridgeIntegrationStatusOptedIn, Email: "invalid-email"},
 			prepareMocks:   func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {},
 			expectedStatus: http.StatusBadRequest,
 			expectedResponse: `{
@@ -181,7 +182,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name:           "empty full name",
-			requestBody:    OptInRequest{Status: data.BridgeIntegrationStatusOptedIn, FullName: "   "},
+			requestBody:    PatchRequest{Status: data.BridgeIntegrationStatusOptedIn, FullName: "   "},
 			prepareMocks:   func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {},
 			expectedStatus: http.StatusBadRequest,
 			expectedResponse: `{
@@ -193,7 +194,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name:        "cannot retrieve user from context",
-			requestBody: OptInRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
 				mAuthenticator.
 					On("GetUser", mock.Anything, testUser.ID).
@@ -205,7 +206,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name:        "Bridge service already opted in error",
-			requestBody: OptInRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
 				mAuthenticator.
 					On("GetUser", mock.Anything, testUser.ID).
@@ -222,7 +223,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name:        "Bridge API error",
-			requestBody: OptInRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
 				mAuthenticator.
 					On("GetUser", mock.Anything, testUser.ID).
@@ -261,7 +262,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name:        "internal server error",
-			requestBody: OptInRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
 				mAuthenticator.
 					On("GetUser", mock.Anything, testUser.ID).
@@ -278,7 +279,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully opts in with custom email and name",
-			requestBody: OptInRequest{
+			requestBody: PatchRequest{
 				Status:   data.BridgeIntegrationStatusOptedIn,
 				Email:    "custom@example.com",
 				FullName: "Custom Name",
@@ -306,7 +307,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 		},
 		{
 			name:        "🎉 successfully opts in with user defaults",
-			requestBody: OptInRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
 				mAuthenticator.
 					On("GetUser", mock.Anything, testUser.ID).
@@ -389,7 +390,7 @@ func Test_BridgeIntegrationHandler_Patch(t *testing.T) {
 	}
 }
 
-func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
+func Test_BridgeIntegrationHandler_Patch_createVirtualAccount(t *testing.T) {
 	testUser := &auth.User{
 		ID:        "user-123",
 		Email:     "user@example.com",
@@ -410,7 +411,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 	}{
 		{
 			name:        "Bridge service not enabled",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 			},
 			expectedStatus:   http.StatusBadRequest,
@@ -425,35 +426,14 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 			expectedResponse: `{"error": "Invalid request body"}`,
 		},
 		{
-			name:        "empty memo",
-			requestBody: VirtualAccountRequest{Memo: ""},
-			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedResponse: `{
-				"error": "Invalid request",
-				"extras": {
-					"validation_error": "memo cannot be empty"
-				}
-			}`,
-		},
-		{
-			name:        "whitespace only memo",
-			requestBody: VirtualAccountRequest{Memo: "   "},
-			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
-			},
-			expectedStatus: http.StatusBadRequest,
-			expectedResponse: `{
-				"error": "Invalid request",
-				"extras": {
-					"validation_error": "memo cannot be empty"
-				}
-			}`,
-		},
-		{
 			name:        "failed to get distribution account",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{}, errors.New("distribution account error")).
@@ -464,13 +444,8 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "cannot retrieve user from context",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
-				mDistAccountResolver.
-					On("DistributionAccountFromContext", mock.Anything).
-					Return(testDistributionAccount, nil).
-					Once()
-
 				mAuthenticator.
 					On("GetUser", mock.Anything, testUser.ID).
 					Return(nil, errors.New("user not found")).
@@ -481,7 +456,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "organization not opted in",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -494,7 +469,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(nil, bridge.ErrBridgeNotOptedIn).
 					Once()
 			},
@@ -503,7 +478,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "virtual account already exists",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -516,7 +491,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(nil, bridge.ErrBridgeVirtualAccountAlreadyExists).
 					Once()
 			},
@@ -525,7 +500,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "KYC not approved",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -538,7 +513,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(nil, bridge.ErrBridgeKYCNotApproved).
 					Once()
 			},
@@ -547,7 +522,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "TOS not accepted",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -560,7 +535,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(nil, bridge.ErrBridgeTOSNotAccepted).
 					Once()
 			},
@@ -569,7 +544,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "KYC rejected",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -582,7 +557,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(nil, bridge.ErrBridgeKYCRejected).
 					Once()
 			},
@@ -591,7 +566,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "Bridge API error",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -609,7 +584,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					Type:    "validation_error",
 				}
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(nil, bridgeError).
 					Once()
 			},
@@ -624,7 +599,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "internal server error",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -637,7 +612,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					Once()
 
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(nil, errors.New("unexpected error")).
 					Once()
 			},
@@ -646,7 +621,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 		},
 		{
 			name:        "🎉 successfully creates virtual account",
-			requestBody: VirtualAccountRequest{Memo: "test-memo"},
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusReadyForDeposit},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock, mDistAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -669,7 +644,7 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 					},
 				}
 				mBridgeService.
-					On("CreateVirtualAccount", mock.Anything, "user-123", "test-memo", testDistributionAccount.Address).
+					On("CreateVirtualAccount", mock.Anything, "user-123", testDistributionAccount.Address).
 					Return(bridgeInfo, nil).
 					Once()
 			},
@@ -742,12 +717,18 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 				}
 			}
 
+			tnt := tenant.Tenant{
+				ID:      "test-tenant",
+				BaseURL: utils.Ptr("https://example.com"),
+			}
+			ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+			ctx = context.WithValue(ctx, middleware.UserIDContextKey, testUser.ID)
+
 			rr := httptest.NewRecorder()
-			ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, testUser.ID)
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/bridge-integration/virtual-account", bodyReader)
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/bridge-integration", bodyReader)
 			require.NoError(t, err)
 
-			http.HandlerFunc(handler.PostVirtualAccount).ServeHTTP(rr, req)
+			http.HandlerFunc(handler.Patch).ServeHTTP(rr, req)
 			resp := rr.Result()
 			defer resp.Body.Close()
 			respBody, err := io.ReadAll(resp.Body)
@@ -762,69 +743,31 @@ func Test_BridgeIntegrationHandler_PostVirtualAccount(t *testing.T) {
 func Test_OptInRequest_Validate(t *testing.T) {
 	testCases := []struct {
 		name                string
-		request             OptInRequest
+		request             PatchRequest
 		expectedErrContains string
 	}{
 		{
 			name:                "invalid status",
-			request:             OptInRequest{Status: data.BridgeIntegrationStatusNotOptedIn},
-			expectedErrContains: "status must be OPTED_IN",
+			request:             PatchRequest{Status: data.BridgeIntegrationStatusNotOptedIn},
+			expectedErrContains: "invalid status NOT_OPTED_IN, must be one of [OPTED_IN READY_FOR_DEPOSIT]",
 		},
 		{
 			name:                "invalid email format",
-			request:             OptInRequest{Status: data.BridgeIntegrationStatusOptedIn, Email: "invalid-email"},
+			request:             PatchRequest{Status: data.BridgeIntegrationStatusOptedIn, Email: "invalid-email"},
 			expectedErrContains: "invalid email",
 		},
 		{
 			name:                "empty full name",
-			request:             OptInRequest{Status: data.BridgeIntegrationStatusOptedIn, FullName: "   "},
+			request:             PatchRequest{Status: data.BridgeIntegrationStatusOptedIn, FullName: "   "},
 			expectedErrContains: "full_name cannot be empty or whitespace only",
 		},
 		{
 			name:    "🎉 valid request with email and full name",
-			request: OptInRequest{Status: data.BridgeIntegrationStatusOptedIn, Email: "test@example.com", FullName: "John Doe"},
+			request: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn, Email: "test@example.com", FullName: "John Doe"},
 		},
 		{
 			name:    "🎉 valid request without email and full name",
-			request: OptInRequest{Status: data.BridgeIntegrationStatusOptedIn},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.request.Validate()
-			if tc.expectedErrContains != "" {
-				assert.ErrorContains(t, err, tc.expectedErrContains)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func Test_VirtualAccountRequest_Validate(t *testing.T) {
-	testCases := []struct {
-		name                string
-		request             VirtualAccountRequest
-		expectedErrContains string
-	}{
-		{
-			name:                "empty memo",
-			request:             VirtualAccountRequest{Memo: ""},
-			expectedErrContains: "memo cannot be empty",
-		},
-		{
-			name:                "whitespace only memo",
-			request:             VirtualAccountRequest{Memo: "   "},
-			expectedErrContains: "memo cannot be empty",
-		},
-		{
-			name:    "🎉 valid text memo",
-			request: VirtualAccountRequest{Memo: "test-memo"},
-		},
-		{
-			name:    "🎉 valid id memo",
-			request: VirtualAccountRequest{Memo: "123456"},
+			request: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 		},
 	}
 

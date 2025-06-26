@@ -8,6 +8,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // Service provides business logic for Bridge integration operations.
@@ -36,7 +37,7 @@ type BridgeIntegrationInfo struct {
 type ServiceInterface interface {
 	OptInToBridge(ctx context.Context, userID string, fullName, email string) (*BridgeIntegrationInfo, error)
 	GetBridgeIntegration(ctx context.Context) (*BridgeIntegrationInfo, error)
-	CreateVirtualAccount(ctx context.Context, userID, memo, distributionAccountAddress string) (*BridgeIntegrationInfo, error)
+	CreateVirtualAccount(ctx context.Context, userID, distributionAccountAddress string) (*BridgeIntegrationInfo, error)
 }
 
 var _ ServiceInterface = (*Service)(nil)
@@ -192,8 +193,14 @@ func (s *Service) GetBridgeIntegration(ctx context.Context) (*BridgeIntegrationI
 	return result, nil
 }
 
+const (
+	sourceCurrencyUSD       = "usd"
+	destinationCurrencyUSDC = "usdc"
+	destinationRailStellar  = "stellar"
+)
+
 // CreateVirtualAccount creates a virtual account for the Bridge integration.
-func (s *Service) CreateVirtualAccount(ctx context.Context, userID, memo, distributionAccountAddress string) (*BridgeIntegrationInfo, error) {
+func (s *Service) CreateVirtualAccount(ctx context.Context, userID, distributionAccountAddress string) (*BridgeIntegrationInfo, error) {
 	// 1. Get existing integration
 	integration, err := s.models.BridgeIntegration.Get(ctx)
 	if err != nil {
@@ -232,16 +239,21 @@ func (s *Service) CreateVirtualAccount(ctx context.Context, userID, memo, distri
 		return nil, ErrBridgeTOSNotAccepted
 	}
 
+	memo, err := tenant.GenerateMemoForTenant(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("generating memo for tenant: %w", err)
+	}
+
 	// 3. Create virtual account request
 	vaRequest := VirtualAccountRequest{
 		Source: VirtualAccountSource{
-			Currency: "usd", // Always USD for source
+			Currency: sourceCurrencyUSD,
 		},
 		Destination: VirtualAccountDestination{
-			PaymentRail:    "stellar",
-			Currency:       "usdc",
+			PaymentRail:    destinationRailStellar,
+			Currency:       destinationCurrencyUSDC,
 			Address:        distributionAccountAddress,
-			BlockchainMemo: memo,
+			BlockchainMemo: memo.Value,
 		},
 	}
 

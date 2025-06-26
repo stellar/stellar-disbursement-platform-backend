@@ -1,10 +1,12 @@
 package httphandler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/stellar/go/support/render/httpjson"
@@ -15,7 +17,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -48,25 +49,33 @@ func (h BridgeIntegrationHandler) Get(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, bridgeInfo, httpjson.JSON)
 }
 
-// OptInRequest represents the request to opt into Bridge integration
-type OptInRequest struct {
+// PatchRequest represents the request to opt into Bridge integration
+type PatchRequest struct {
 	Status   data.BridgeIntegrationStatus `json:"status"`
 	Email    string                       `json:"email,omitempty"`
 	FullName string                       `json:"full_name,omitempty"`
 }
 
+var validPatchStatuses = []data.BridgeIntegrationStatus{
+	data.BridgeIntegrationStatusOptedIn,
+	data.BridgeIntegrationStatusReadyForDeposit,
+}
+
 // Validate validates the opt-in request
-func (r OptInRequest) Validate() error {
-	if r.Status != data.BridgeIntegrationStatusOptedIn {
-		return fmt.Errorf("status must be OPTED_IN")
+func (r PatchRequest) Validate() error {
+	if !slices.Contains(validPatchStatuses, r.Status) {
+		return fmt.Errorf("invalid status %s, must be one of %v", r.Status, validPatchStatuses)
 	}
-	if r.Email != "" {
-		if err := utils.ValidateEmail(r.Email); err != nil {
-			return fmt.Errorf("invalid email: %w", err)
+
+	if r.Status == data.BridgeIntegrationStatusOptedIn {
+		if r.Email != "" {
+			if err := utils.ValidateEmail(r.Email); err != nil {
+				return fmt.Errorf("invalid email: %w", err)
+			}
 		}
-	}
-	if r.FullName != "" && strings.TrimSpace(r.FullName) == "" {
-		return fmt.Errorf("full_name cannot be empty or whitespace only")
+		if r.FullName != "" && strings.TrimSpace(r.FullName) == "" {
+			return fmt.Errorf("full_name cannot be empty or whitespace only")
+		}
 	}
 	return nil
 }
@@ -82,14 +91,14 @@ func (h BridgeIntegrationHandler) Patch(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Parse request
-	var optInRequest OptInRequest
-	err := json.NewDecoder(r.Body).Decode(&optInRequest)
+	var patchRequest PatchRequest
+	err := json.NewDecoder(r.Body).Decode(&patchRequest)
 	if err != nil {
 		httperror.BadRequest("Invalid request body", err, nil).Render(w)
 		return
 	}
 
-	if err = optInRequest.Validate(); err != nil {
+	if err = patchRequest.Validate(); err != nil {
 		extras := map[string]interface{}{"validation_error": err.Error()}
 		httperror.BadRequest("Invalid request", err, extras).Render(w)
 		return
@@ -102,17 +111,29 @@ func (h BridgeIntegrationHandler) Patch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	switch patchRequest.Status {
+	case data.BridgeIntegrationStatusOptedIn:
+		h.optInToBridge(ctx, user, patchRequest, w)
+	case data.BridgeIntegrationStatusReadyForDeposit:
+		h.createVirtualAccount(ctx, user.ID, w)
+	default:
+		httperror.BadRequest(fmt.Sprintf("Invalid status for PATCH request: %s", patchRequest.Status), nil, nil).Render(w)
+	}
+}
+
+// optInToBridge handles the opt-in process for Bridge integration.
+func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.User, patchRequest PatchRequest, w http.ResponseWriter) {
 	// Use provided email/fullName or default to user info
-	email := optInRequest.Email
+	email := patchRequest.Email
 	if email == "" {
 		email = user.Email
 	}
-	if err = utils.ValidateEmail(email); err != nil {
+	if err := utils.ValidateEmail(email); err != nil {
 		httperror.BadRequest("Invalid email format", err, nil).Render(w)
 		return
 	}
 
-	fullName := optInRequest.FullName
+	fullName := patchRequest.FullName
 	if fullName == "" {
 		firstName := strings.TrimSpace(user.FirstName)
 		lastName := strings.TrimSpace(user.LastName)
@@ -140,62 +161,16 @@ func (h BridgeIntegrationHandler) Patch(w http.ResponseWriter, r *http.Request) 
 	httpjson.RenderStatus(w, http.StatusOK, bridgeInfo, httpjson.JSON)
 }
 
-// VirtualAccountRequest represents the request to create a virtual account
-type VirtualAccountRequest struct {
-	Memo string `json:"memo,omitempty"`
-}
-
-// Validate validates the virtual account request
-func (r VirtualAccountRequest) Validate() error {
-	if strings.TrimSpace(r.Memo) == "" {
-		return fmt.Errorf("memo cannot be empty")
-	}
-	if _, memoType, err := schema.ParseMemo(r.Memo); err != nil {
-		return fmt.Errorf("invalid memo format for memo type %s: %w", memoType, err)
-	}
-	return nil
-}
-
-// PostVirtualAccount handles POST /bridge-integration/virtual-account
-func (h BridgeIntegrationHandler) PostVirtualAccount(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Check if Bridge service is enabled
-	if h.BridgeService == nil {
-		httperror.BadRequest("Bridge integration is not enabled", nil, nil).Render(w)
-		return
-	}
-
-	// Parse request
-	var vaRequest VirtualAccountRequest
-	err := json.NewDecoder(r.Body).Decode(&vaRequest)
-	if err != nil {
-		httperror.BadRequest("Invalid request body", err, nil).Render(w)
-		return
-	}
-
-	if err = vaRequest.Validate(); err != nil {
-		extras := map[string]interface{}{"validation_error": err.Error()}
-		httperror.BadRequest("Invalid request", err, extras).Render(w)
-		return
-	}
-
-	// Get distribution account address from the tenant
+// createVirtualAccount creates a virtual account for the user in the Bridge integration.
+func (h BridgeIntegrationHandler) createVirtualAccount(ctx context.Context, userID string, w http.ResponseWriter) {
 	distributionAccount, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to get distribution account", err, nil).Render(w)
 		return
 	}
 
-	// Get user from context
-	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve user from context", err, nil).Render(w)
-		return
-	}
-
 	// Create virtual account
-	bridgeInfo, err := h.BridgeService.CreateVirtualAccount(ctx, user.ID, vaRequest.Memo, distributionAccount.Address)
+	bridgeInfo, err := h.BridgeService.CreateVirtualAccount(ctx, userID, distributionAccount.Address)
 	if err != nil {
 		// Check for specific Bridge service errors first
 		var bridgeError bridge.BridgeErrorResponse

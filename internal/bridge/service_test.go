@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ServiceOptions_Validate(t *testing.T) {
@@ -58,10 +60,11 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 
 func Test_Service_OptInToBridge(t *testing.T) {
 	models := data.SetupModels(t)
+	dbcp := models.DBConnectionPool
 	ctx := context.Background()
 
 	t.Run("missing userID", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
@@ -71,7 +74,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 	})
 
 	t.Run("missing fullName", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
@@ -81,7 +84,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 	})
 
 	t.Run("missing email", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
@@ -91,7 +94,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 	})
 
 	t.Run("already opted in", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
@@ -109,7 +112,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 	})
 
 	t.Run("Bridge API error", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		bridgeErr := errors.New("bridge API error")
 		mockClient.
@@ -129,7 +132,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 	})
 
 	t.Run("🎉 successfully opts in to Bridge", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		kycResponse := &KYCLinkInfo{
 			ID:         "kyc-link-123",
@@ -165,10 +168,11 @@ func Test_Service_OptInToBridge(t *testing.T) {
 
 func Test_Service_GetBridgeIntegration(t *testing.T) {
 	models := data.SetupModels(t)
+	dbcp := models.DBConnectionPool
 	ctx := context.Background()
 
 	t.Run("no integration record exists", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
@@ -181,7 +185,7 @@ func Test_Service_GetBridgeIntegration(t *testing.T) {
 	})
 
 	t.Run("integration exists with KYC info", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		kycResponse := &KYCLinkInfo{
 			ID:         "kyc-link-123",
@@ -214,7 +218,7 @@ func Test_Service_GetBridgeIntegration(t *testing.T) {
 	})
 
 	t.Run("integration exists with virtual account", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		vaResponse := &VirtualAccountInfo{
 			ID:         "va-123",
@@ -256,20 +260,27 @@ func Test_Service_GetBridgeIntegration(t *testing.T) {
 
 func Test_Service_CreateVirtualAccount(t *testing.T) {
 	models := data.SetupModels(t)
+	dbcp := models.DBConnectionPool
 	ctx := context.Background()
 
+	tnt := tenant.Tenant{
+		ID:      "test-tenant",
+		BaseURL: utils.Ptr("https://example.com"),
+	}
+	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+
 	t.Run("integration not found", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.CreateVirtualAccount(ctx, "user-123", "memo", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
+		result, err := svc.CreateVirtualAccount(ctx, "user-123", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
 		assert.ErrorContains(t, err, "getting Bridge integration")
 		assert.Nil(t, result)
 	})
 
 	t.Run("integration in error status", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
 
@@ -284,13 +295,13 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 		`)
 		require.NoError(t, err)
 
-		result, err := svc.CreateVirtualAccount(ctx, "user-123", "memo", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
+		result, err := svc.CreateVirtualAccount(ctx, "user-123", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
 		assert.EqualError(t, err, ErrBridgeNotOptedIn.Error())
 		assert.Nil(t, result)
 	})
 
 	t.Run("KYC not approved", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		kycResponse := &KYCLinkInfo{
 			ID:        "kyc-link-123",
@@ -312,13 +323,13 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.CreateVirtualAccount(ctx, "user-123", "memo", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
+		result, err := svc.CreateVirtualAccount(ctx, "user-123", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
 		assert.EqualError(t, err, ErrBridgeKYCNotApproved.Error())
 		assert.Nil(t, result)
 	})
 
 	t.Run("KYC rejected", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		kycResponse := &KYCLinkInfo{
 			ID:               "kyc-link-123",
@@ -341,7 +352,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.CreateVirtualAccount(ctx, "user-123", "memo", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
+		result, err := svc.CreateVirtualAccount(ctx, "user-123", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
 		assert.ErrorContains(t, err, "KYC verification was rejected")
 		assert.ErrorContains(t, err, "invalid documents")
 		assert.ErrorContains(t, err, "incomplete information")
@@ -349,7 +360,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 	})
 
 	t.Run("Bridge API error creating virtual account", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		kycResponse := &KYCLinkInfo{
 			ID:        "kyc-link-123",
@@ -373,7 +384,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 				PaymentRail:    "stellar",
 				Currency:       "usdc",
 				Address:        "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
-				BlockchainMemo: "memo",
+				BlockchainMemo: "sdp-100680ad546c",
 			},
 		}
 
@@ -391,13 +402,13 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.CreateVirtualAccount(ctx, "user-123", "memo", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
+		result, err := svc.CreateVirtualAccount(ctx, "user-123", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
 		assert.EqualError(t, err, "creating virtual account via Bridge API: bridge API error")
 		assert.Nil(t, result)
 	})
 
 	t.Run("🎉 successfully creates virtual account", func(t *testing.T) {
-		cleanupBridgeIntegration(t, ctx, models)
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		kycResponse := &KYCLinkInfo{
 			ID:        "kyc-link-123",
@@ -413,7 +424,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 				PaymentRail:    "stellar",
 				Currency:       "usdc",
 				Address:        "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
-				BlockchainMemo: "memo",
+				BlockchainMemo: "sdp-100680ad546c",
 			},
 		}
 
@@ -433,7 +444,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 				PaymentRail:    "stellar",
 				Currency:       "usdc",
 				Address:        "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
-				BlockchainMemo: "memo",
+				BlockchainMemo: "sdp-100680ad546c",
 			},
 		}
 
@@ -449,7 +460,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 
 		svc := createService(t, mockClient, models)
 
-		result, err := svc.CreateVirtualAccount(ctx, "user-123", "memo", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
+		result, err := svc.CreateVirtualAccount(ctx, "user-123", "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN")
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, data.BridgeIntegrationStatusReadyForDeposit, result.Status)
@@ -458,13 +469,6 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 		assert.NotNil(t, result.VirtualAccountCreatedAt)
 		assert.Equal(t, vaResponse, result.VirtualAccountDetails)
 	})
-}
-
-func cleanupBridgeIntegration(t *testing.T, ctx context.Context, models *data.Models) {
-	t.Helper()
-
-	_, err := models.DBConnectionPool.ExecContext(ctx, "DELETE FROM bridge_integration")
-	require.NoError(t, err)
 }
 
 func createService(t *testing.T, mockClient *MockClient, models *data.Models) *Service {
