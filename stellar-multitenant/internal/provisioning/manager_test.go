@@ -453,6 +453,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"auth_user_mfa_codes",
 		"auth_user_password_reset",
 		"auth_users",
+		"bridge_integration",
 		"circle_client_config",
 		"circle_recipients",
 		"circle_transfer_requests",

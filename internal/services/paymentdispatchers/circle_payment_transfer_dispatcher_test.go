@@ -230,7 +230,7 @@ func Test_CirclePaymentTransferDispatcher_DispatchPayments_success(t *testing.T)
 			IsMemoTracingEnabled: true,
 			paymentToDispatch:    paymentWithoutMemo,
 			fnAssertMemo: func(t *testing.T, p data.Payment, pReq circle.PaymentRequest) {
-				assert.Equal(t, GenerateHashFromBaseURL(*tnt.BaseURL), pReq.DestinationStellarMemo)
+				assert.Equal(t, tenant.GenerateHashFromBaseURL(*tnt.BaseURL), pReq.DestinationStellarMemo)
 			},
 		},
 	}

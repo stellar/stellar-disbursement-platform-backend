@@ -844,6 +844,13 @@ func CreateShortURLFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 	require.NoError(t, err)
 }
 
+func CleanupBridgeIntegration(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM bridge_integration")
+	require.NoError(t, err)
+}
+
 func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	DeleteAllMessagesFixtures(t, ctx, sqlExec)
 	DeleteAllPaymentsFixtures(t, ctx, sqlExec)
