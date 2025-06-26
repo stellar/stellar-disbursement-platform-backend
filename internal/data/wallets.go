@@ -141,19 +141,14 @@ func (wm *WalletModel) GetByWalletName(ctx context.Context, name string) (*Walle
 }
 
 const (
-	FilterEnabledWallets FilterKey = "enabled"
-	FilterUserManaged    FilterKey = "user_managed"
+	FilterEnabledWallets  FilterKey = "enabled"
+	FilterUserManaged     FilterKey = "user_managed"
+	FilterSupportedAssets FilterKey = "supported_assets"
 )
 
 // FindWallets returns wallets filtering by enabled status.
 func (wm *WalletModel) FindWallets(ctx context.Context, filters ...Filter) ([]Wallet, error) {
-	qb := NewQueryBuilder(getQuery)
-	for _, filter := range filters {
-		qb.AddCondition(filter.Key.Equals(), filter.Value)
-	}
-	qb.AddGroupBy("w.id")
-	qb.AddSorting(SortFieldName, SortOrderASC, "w")
-	query, args := qb.BuildAndRebind(wm.dbConnectionPool)
+	query, args := newWalletQuery(getQuery, wm.dbConnectionPool, filters...)
 
 	wallets := []Wallet{}
 	err := wm.dbConnectionPool.SelectContext(ctx, &wallets, query, args...)
@@ -161,6 +156,38 @@ func (wm *WalletModel) FindWallets(ctx context.Context, filters ...Filter) ([]Wa
 		return nil, fmt.Errorf("querying wallets: %w", err)
 	}
 	return wallets, nil
+}
+
+func newWalletQuery(baseQuery string, sqlExec db.SQLExecuter, filters ...Filter) (string, []any) {
+	qb := NewQueryBuilder(baseQuery)
+
+	for _, filter := range filters {
+		switch filter.Key {
+		case FilterEnabledWallets:
+			qb.AddCondition("w.enabled = ?", filter.Value)
+		case FilterUserManaged:
+			qb.AddCondition("w.user_managed = ?", filter.Value)
+		case FilterSupportedAssets:
+			if assets, ok := filter.Value.([]string); ok && len(assets) > 0 {
+				// Filter wallets that support all specified assets
+				assetCondition := `w.id IN (
+					SELECT wa.wallet_id 
+					FROM wallets_assets wa 
+					JOIN assets a ON wa.asset_id = a.id 
+					WHERE a.code = ANY(?) OR a.id = ANY(?)
+					GROUP BY wa.wallet_id 
+					HAVING COUNT(DISTINCT a.id) = ?
+				)`
+				qb.AddCondition(assetCondition, pq.Array(assets), pq.Array(assets), len(assets))
+			}
+		default:
+			qb.AddCondition(filter.Key.Equals(), filter.Value)
+		}
+	}
+
+	qb.AddGroupBy("w.id")
+	qb.AddSorting(SortFieldName, SortOrderASC, "w")
+	return qb.BuildAndRebind(sqlExec)
 }
 
 // GetAll returns all wallets in the database

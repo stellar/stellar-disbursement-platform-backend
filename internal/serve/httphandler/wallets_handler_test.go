@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -22,149 +23,292 @@ import (
 )
 
 func Test_WalletsHandlerGetWallets(t *testing.T) {
-	dbConnectionPool := getDBConnectionPool(t)
-
-	models, outerErr := data.NewModels(dbConnectionPool)
-	require.NoError(t, outerErr)
-
+	models := data.SetupModels(t)
+	dbPool := models.DBConnectionPool
 	ctx := context.Background()
 
 	handler := &WalletsHandler{
 		Models: models,
 	}
 
-	t.Run("successfully returns a list of wallets", func(t *testing.T) {
-		expected := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
-		expectedJSON, err := json.Marshal(expected)
-		require.NoError(t, err)
+	testCases := []struct {
+		name           string
+		setupFn        func(t *testing.T) *testWalletSetup
+		queryParams    string
+		expectedStatus int
+		expectedBody   string
+		validateResult func(t *testing.T, setup *testWalletSetup, respBody []byte)
+	}{
+		{
+			name: "successfully returns all wallets",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, len(setup.wallets))
+			},
+		},
 
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/wallets", nil)
-		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+		{
+			name: "successfully returns enabled wallets",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				data.EnableOrDisableWalletFixtures(t, ctx, dbPool, true, wallets[0].ID)
+				for _, wallet := range wallets[1:] {
+					data.EnableOrDisableWalletFixtures(t, ctx, dbPool, false, wallet.ID)
+				}
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "enabled=true",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, setup.wallets[0].ID, resultWallets[0].ID)
+				assert.True(t, resultWallets[0].Enabled)
+			},
+		},
 
-		resp := rr.Result()
+		{
+			name: "successfully returns disabled wallets",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				data.EnableOrDisableWalletFixtures(t, ctx, dbPool, false, wallets[0].ID)
+				for _, wallet := range wallets[1:] {
+					data.EnableOrDisableWalletFixtures(t, ctx, dbPool, true, wallet.ID)
+				}
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "enabled=false",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, setup.wallets[0].ID, resultWallets[0].ID)
+				assert.False(t, resultWallets[0].Enabled)
+			},
+		},
+		{
+			name: "successfully returns user managed wallets",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				data.MakeWalletUserManaged(t, ctx, dbPool, wallets[0].ID)
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "user_managed=true",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, setup.wallets[0].ID, resultWallets[0].ID)
+				assert.Equal(t, setup.wallets[0].Name, resultWallets[0].Name)
+			},
+		},
+		{
+			name: "successfully returns wallets filtered by single supported asset",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				return createWalletAssetsTestSetup(t, ctx, dbPool)
+			},
+			queryParams:    "supported_assets=USDC",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 2)
+				walletNames := []string{resultWallets[0].Name, resultWallets[1].Name}
+				assert.Contains(t, walletNames, "Wallet1")
+				assert.Contains(t, walletNames, "Wallet2")
+			},
+		},
+		{
+			name: "successfully returns wallets filtered by multiple supported assets",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				return createWalletAssetsTestSetup(t, ctx, dbPool)
+			},
+			queryParams:    "supported_assets=USDC,XLM",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, "Wallet1", resultWallets[0].Name)
+			},
+		},
+		{
+			name: "successfully returns wallets filtered by asset ID",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				return createWalletAssetsTestSetup(t, ctx, dbPool)
+			},
+			queryParams:    "supported_assets={{USDC_ID}}",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 2)
+			},
+		},
+		{
+			name: "successfully combines asset filtering with enabled filtering",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				setup := createWalletAssetsTestSetup(t, ctx, dbPool)
+				data.EnableOrDisableWalletFixtures(t, ctx, dbPool, false, setup.wallet2.ID)
+				return setup
+			},
+			queryParams:    "supported_assets=USDC&enabled=true",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, "Wallet1", resultWallets[0].Name)
+			},
+		},
+		{
+			name: "handles whitespace in asset list",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				return createWalletAssetsTestSetup(t, ctx, dbPool)
+			},
+			queryParams:    "supported_assets= USDC , XLM ",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, "Wallet1", resultWallets[0].Name)
+			},
+		},
+		{
+			name: "returns bad request for invalid user_managed parameter",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				return &testWalletSetup{}
+			},
+			queryParams:    "user_managed=xxx",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "Error parsing request filters",
+				"extras": {
+					"validation_error": "invalid 'user_managed' parameter value"
+				}
+			}`,
+		},
+		{
+			name: "returns bad request for invalid enabled parameter",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				return &testWalletSetup{}
+			},
+			queryParams:    "enabled=xxx",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "Error parsing request filters",
+				"extras": {
+					"validation_error": "invalid 'enabled' parameter value"
+				}
+			}`,
+		},
+		{
+			name: "returns bad request for non-existent asset",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				return &testWalletSetup{}
+			},
+			queryParams:    "supported_assets=NONEXISTENT",
+			expectedStatus: http.StatusBadRequest,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var httpErr httperror.HTTPError
+				err := json.Unmarshal(respBody, &httpErr)
+				require.NoError(t, err)
+				assert.Contains(t, httpErr.Extras["validation_error"], "asset 'NONEXISTENT' not found")
+			},
+		},
+	}
 
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			setup := tc.setupFn(t)
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+			queryParams := tc.queryParams
+			if strings.Contains(queryParams, "{{USDC_ID}}") && setup.assetUSDC != nil {
+				queryParams = strings.ReplaceAll(queryParams, "{{USDC_ID}}", setup.assetUSDC.ID)
+			}
 
-		assert.JSONEq(t, string(expectedJSON), string(respBody))
-	})
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequest("GET", "/wallets?"+queryParams, nil)
+			require.NoError(t, err)
 
-	t.Run("successfully returns a list of enabled wallets", func(t *testing.T) {
-		wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+			http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
 
-		// enable first wallet and disable all others
-		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[0].ID)
-		for _, wallet := range wallets[1:] {
-			data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
-		}
+			resp := rr.Result()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
 
-		expected, err := models.Wallets.Get(ctx, wallets[0].ID)
-		require.NoError(t, err)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
 
-		expectedJSON, err := json.Marshal([]data.Wallet{*expected})
-		require.NoError(t, err)
+			if tc.expectedBody != "" {
+				assert.JSONEq(t, tc.expectedBody, string(respBody))
+			} else if tc.validateResult != nil {
+				tc.validateResult(t, setup, respBody)
+			}
+		})
+	}
+}
 
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/wallets?enabled=true", nil)
-		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+type testWalletSetup struct {
+	wallets   []data.Wallet
+	wallet1   *data.Wallet
+	wallet2   *data.Wallet
+	wallet3   *data.Wallet
+	assetUSDC *data.Asset
+	assetXLM  *data.Asset
+	assetEURT *data.Asset
+}
 
-		resp := rr.Result()
+func createWalletAssetsTestSetup(t *testing.T, ctx context.Context, dbPool db.SQLExecuter) *testWalletSetup {
+	data.DeleteAllFixtures(t, ctx, dbPool)
 
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+	assetUSDC := data.CreateAssetFixture(t, ctx, dbPool, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+	assetXLM := data.CreateAssetFixture(t, ctx, dbPool, "XLM", "")
+	assetEURT := data.CreateAssetFixture(t, ctx, dbPool, "EURT", "GAP5LETOV6YIE62YAM56STDANPRDO7ZFDBGSNHJQIYGGKSMOZAHOOS2S")
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		require.JSONEq(t, string(expectedJSON), string(respBody))
-	})
+	wallet1 := data.CreateWalletFixture(t, ctx, dbPool, "Wallet1", "https://wallet1.com", "wallet1.com", "wallet1://")
+	wallet2 := data.CreateWalletFixture(t, ctx, dbPool, "Wallet2", "https://wallet2.com", "wallet2.com", "wallet2://")
+	wallet3 := data.CreateWalletFixture(t, ctx, dbPool, "Wallet3", "https://wallet3.com", "wallet3.com", "wallet3://")
 
-	t.Run("successfully returns a list of disabled wallets", func(t *testing.T) {
-		wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+	data.CreateWalletAssets(t, ctx, dbPool, wallet1.ID, []string{assetUSDC.ID, assetXLM.ID})
+	data.CreateWalletAssets(t, ctx, dbPool, wallet2.ID, []string{assetUSDC.ID, assetEURT.ID})
+	data.CreateWalletAssets(t, ctx, dbPool, wallet3.ID, []string{assetXLM.ID})
 
-		// disable first wallet and enable all others
-		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
-		for _, wallet := range wallets[1:] {
-			data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
-		}
-
-		expected, err := models.Wallets.Get(ctx, wallets[0].ID)
-		require.NoError(t, err)
-
-		expectedJSON, err := json.Marshal([]data.Wallet{*expected})
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/wallets?enabled=false", nil)
-		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		require.JSONEq(t, string(expectedJSON), string(respBody))
-	})
-
-	t.Run("successfully returns a list of user managed wallets", func(t *testing.T) {
-		wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
-
-		// make first wallet user managed
-		data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
-
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/wallets?user_managed=true", nil)
-		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		respWallets := []data.Wallet{}
-		err = json.Unmarshal(respBody, &respWallets)
-		require.NoError(t, err)
-		assert.Equal(t, 1, len(respWallets))
-		assert.Equal(t, wallets[0].ID, respWallets[0].ID)
-		assert.Equal(t, wallets[0].Name, respWallets[0].Name)
-	})
-
-	t.Run("bad request when user_managed parameter isn't a bool", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/wallets?user_managed=xxx", nil)
-		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		var httpErr httperror.HTTPError
-		err = json.Unmarshal(respBody, &httpErr)
-		require.NoError(t, err)
-		assert.Equal(t, "invalid 'user_managed' parameter value", httpErr.Extras["validation_error"])
-	})
-
-	t.Run("bad request when enabled parameter isn't a bool", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/wallets?enabled=xxx", nil)
-		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		var httpErr httperror.HTTPError
-		err = json.Unmarshal(respBody, &httpErr)
-		require.NoError(t, err)
-		assert.Equal(t, "invalid 'enabled' parameter value", httpErr.Extras["validation_error"])
-	})
+	return &testWalletSetup{
+		wallets:   []data.Wallet{*wallet1, *wallet2, *wallet3},
+		wallet1:   wallet1,
+		wallet2:   wallet2,
+		wallet3:   wallet3,
+		assetUSDC: assetUSDC,
+		assetXLM:  assetXLM,
+		assetEURT: assetEURT,
+	}
 }
 
 func Test_WalletsHandlerPostWallets(t *testing.T) {
@@ -939,6 +1083,294 @@ func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
 				err = json.Unmarshal(respBody, &updatedWallet)
 				require.NoError(t, err)
 				tc.validateResult(t, &updatedWallet, wallet)
+			}
+		})
+	}
+}
+
+func Test_WalletsHandler_parseFilters(t *testing.T) {
+	models := data.SetupModels(t)
+	dbPool := models.DBConnectionPool
+	ctx := context.Background()
+
+	handler := &WalletsHandler{
+		Models: models,
+	}
+
+	// Create test assets for validation
+	data.DeleteAllAssetFixtures(t, ctx, dbPool)
+	assetUSDC := data.CreateAssetFixture(t, ctx, dbPool, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+	_ = data.CreateAssetFixture(t, ctx, dbPool, "XLM", "")
+
+	testCases := []struct {
+		name           string
+		queryParams    string
+		expectedError  string
+		expectedCount  int
+		validateFilter func(t *testing.T, filters []data.Filter)
+	}{
+		{
+			name:          "no query parameters",
+			queryParams:   "",
+			expectedCount: 0,
+		},
+		{
+			name:          "enabled=true",
+			queryParams:   "enabled=true",
+			expectedCount: 1,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				assert.Equal(t, data.FilterEnabledWallets, filters[0].Key)
+				assert.Equal(t, true, filters[0].Value)
+			},
+		},
+		{
+			name:          "enabled=false",
+			queryParams:   "enabled=false",
+			expectedCount: 1,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				assert.Equal(t, data.FilterEnabledWallets, filters[0].Key)
+				assert.Equal(t, false, filters[0].Value)
+			},
+		},
+		{
+			name:          "user_managed=true",
+			queryParams:   "user_managed=true",
+			expectedCount: 1,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				assert.Equal(t, data.FilterUserManaged, filters[0].Key)
+				assert.Equal(t, true, filters[0].Value)
+			},
+		},
+		{
+			name:          "supported_assets single asset code",
+			queryParams:   "supported_assets=USDC",
+			expectedCount: 1,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filters[0].Key)
+				assets, ok := filters[0].Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC"}, assets)
+			},
+		},
+		{
+			name:          "supported_assets multiple asset codes",
+			queryParams:   "supported_assets=USDC,XLM",
+			expectedCount: 1,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filters[0].Key)
+				assets, ok := filters[0].Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC", "XLM"}, assets)
+			},
+		},
+		{
+			name:          "supported_assets with asset ID",
+			queryParams:   fmt.Sprintf("supported_assets=%s", assetUSDC.ID),
+			expectedCount: 1,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filters[0].Key)
+				assets, ok := filters[0].Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{assetUSDC.ID}, assets)
+			},
+		},
+		{
+			name:          "supported_assets with whitespace",
+			queryParams:   "supported_assets= USDC , XLM ",
+			expectedCount: 1,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filters[0].Key)
+				assets, ok := filters[0].Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC", "XLM"}, assets)
+			},
+		},
+		{
+			name:          "multiple filters combined",
+			queryParams:   "enabled=true&user_managed=false&supported_assets=USDC",
+			expectedCount: 3,
+			validateFilter: func(t *testing.T, filters []data.Filter) {
+				// Check that all filters are present
+				filterKeys := make([]data.FilterKey, len(filters))
+				for i, filter := range filters {
+					filterKeys[i] = filter.Key
+				}
+				assert.Contains(t, filterKeys, data.FilterEnabledWallets)
+				assert.Contains(t, filterKeys, data.FilterUserManaged)
+				assert.Contains(t, filterKeys, data.FilterSupportedAssets)
+			},
+		},
+		{
+			name:          "supported_assets empty string (should be ignored)",
+			queryParams:   "supported_assets=",
+			expectedCount: 0,
+		},
+		{
+			name:          "invalid enabled parameter",
+			queryParams:   "enabled=invalid",
+			expectedError: "invalid 'enabled' parameter value",
+		},
+		{
+			name:          "invalid user_managed parameter",
+			queryParams:   "user_managed=xyz",
+			expectedError: "invalid 'user_managed' parameter value",
+		},
+		{
+			name:          "supported_assets with non-existent asset",
+			queryParams:   "supported_assets=NONEXISTENT",
+			expectedError: "parsing supported_assets parameter: invalid asset reference in supported_assets: asset 'NONEXISTENT' not found",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequestWithContext(ctx, "GET", "/wallets?"+tc.queryParams, nil)
+			require.NoError(t, err)
+
+			filters, err := handler.parseFilters(ctx, req)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Len(t, filters, tc.expectedCount)
+
+			if tc.validateFilter != nil {
+				tc.validateFilter(t, filters)
+			}
+		})
+	}
+}
+
+func Test_WalletsHandler_parseSupportedAssetsParam(t *testing.T) {
+	models := data.SetupModels(t)
+	dbPool := models.DBConnectionPool
+	ctx := context.Background()
+
+	handler := &WalletsHandler{
+		Models: models,
+	}
+
+	// Create test assets
+	data.DeleteAllAssetFixtures(t, ctx, dbPool)
+	assetUSDC := data.CreateAssetFixture(t, ctx, dbPool, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+	assetXLM := data.CreateAssetFixture(t, ctx, dbPool, "XLM", "")
+
+	testCases := []struct {
+		name           string
+		input          string
+		expectedError  string
+		validateResult func(t *testing.T, filter data.Filter)
+	}{
+		{
+			name:  "empty string returns empty filter",
+			input: "",
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterKey(""), filter.Key)
+				assert.Nil(t, filter.Value)
+			},
+		},
+		{
+			name:  "single asset code",
+			input: "USDC",
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filter.Key)
+				assets, ok := filter.Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC"}, assets)
+			},
+		},
+		{
+			name:  "multiple asset codes",
+			input: "USDC,XLM",
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filter.Key)
+				assets, ok := filter.Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC", "XLM"}, assets)
+			},
+		},
+		{
+			name:  "asset ID",
+			input: assetUSDC.ID,
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filter.Key)
+				assets, ok := filter.Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{assetUSDC.ID}, assets)
+			},
+		},
+		{
+			name:  "mixed asset codes and IDs",
+			input: fmt.Sprintf("USDC,%s", assetXLM.ID),
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filter.Key)
+				assets, ok := filter.Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC", assetXLM.ID}, assets)
+			},
+		},
+		{
+			name:  "whitespace handling",
+			input: " USDC , XLM ",
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filter.Key)
+				assets, ok := filter.Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC", "XLM"}, assets)
+			},
+		},
+		{
+			name:  "empty entries filtered out",
+			input: "USDC,,XLM,",
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterSupportedAssets, filter.Key)
+				assets, ok := filter.Value.([]string)
+				require.True(t, ok)
+				assert.Equal(t, []string{"USDC", "XLM"}, assets)
+			},
+		},
+		{
+			name:  "all empty entries result in empty filter",
+			input: ",,",
+			validateResult: func(t *testing.T, filter data.Filter) {
+				assert.Equal(t, data.FilterKey(""), filter.Key)
+				assert.Nil(t, filter.Value)
+			},
+		},
+		{
+			name:          "non-existent asset code",
+			input:         "NONEXISTENT",
+			expectedError: "invalid asset reference in supported_assets: asset 'NONEXISTENT' not found",
+		},
+		{
+			name:          "mixed valid and invalid assets",
+			input:         "USDC,INVALID",
+			expectedError: "invalid asset reference in supported_assets: asset 'INVALID' not found",
+		},
+		{
+			name:          "too many assets exceeds limit",
+			input:         strings.Repeat("USDC,", 21)[:len(strings.Repeat("USDC,", 21))-1], // 21 "USDC" entries
+			expectedError: "too many assets specified (max 20)",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filter, err := handler.parseSupportedAssetsParam(ctx, tc.input)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, tc.expectedError)
+				return
+			}
+
+			assert.NoError(t, err)
+			if tc.validateResult != nil {
+				tc.validateResult(t, filter)
 			}
 		})
 	}
