@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
@@ -142,5 +143,143 @@ func Test_TxProcessingLimiterImpl_LimitValue(t *testing.T) {
 		assert.Equal(t, tc.wantResult.limitValue, txProcessingLimiter.limitValue)
 		assert.Equal(t, tc.wantResult.IndeterminateResponsesCounter, txProcessingLimiter.IndeterminateResponsesCounter)
 		assert.Equal(t, tc.wantResult.limitValue, lv)
+	}
+}
+
+func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded_RPCErrors(t *testing.T) {
+	currNumChannelAccounts := 50
+
+	testCases := []struct {
+		name       string
+		rpcErr     *utils.RPCErrorWrapper
+		wantResult *TransactionProcessingLimiterImpl
+	}{
+		{
+			name: "adjusts limit if the rpc client error is network error",
+			rpcErr: &utils.RPCErrorWrapper{
+				SimulationError: stellar.NewSimulationError(
+					stellar.SimulationErrorTypeNetwork,
+					"connection timeout",
+					nil,
+					nil,
+				),
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    DefaultBundlesSelectionLimit,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
+			},
+		},
+		{
+			name: "adjusts limit if the rpc client error is resource error",
+			rpcErr: &utils.RPCErrorWrapper{
+				SimulationError: stellar.NewSimulationError(
+					stellar.SimulationErrorTypeResource,
+					"cpu limit exceeded",
+					nil,
+					nil,
+				),
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    DefaultBundlesSelectionLimit,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
+			},
+		},
+		{
+			name: "no adjustment for contract execution error",
+			rpcErr: &utils.RPCErrorWrapper{
+				SimulationError: stellar.NewSimulationError(
+					stellar.SimulationErrorTypeContractExecution,
+					"contract execution failed",
+					nil,
+					nil,
+				),
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
+		{
+			name: "no adjustment for auth error",
+			rpcErr: &utils.RPCErrorWrapper{
+				SimulationError: stellar.NewSimulationError(
+					stellar.SimulationErrorTypeAuth,
+					"authorization failed",
+					nil,
+					nil,
+				),
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
+		{
+			name: "no adjustment for nil simulation error",
+			rpcErr: &utils.RPCErrorWrapper{
+				SimulationError: nil,
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			txProcessingLimiter := &TransactionProcessingLimiterImpl{
+				CurrNumChannelAccounts:        currNumChannelAccounts,
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+				CounterLastUpdated:            time.Now(),
+			}
+			txProcessingLimiter.AdjustLimitIfNeeded(tc.rpcErr)
+
+			assert.Equal(t, txProcessingLimiter.limitValue, tc.wantResult.limitValue)
+			assert.Equal(t, txProcessingLimiter.IndeterminateResponsesCounter, tc.wantResult.IndeterminateResponsesCounter)
+		})
+	}
+}
+
+func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded_UnsupportedErrorTypes(t *testing.T) {
+	currNumChannelAccounts := 50
+
+	testCases := []struct {
+		name       string
+		err        interface{}
+		wantResult *TransactionProcessingLimiterImpl
+	}{
+		{
+			name: "no adjustment for string error",
+			err:  "string error",
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
+		{
+			name: "no adjustment for nil error",
+			err:  nil,
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			txProcessingLimiter := &TransactionProcessingLimiterImpl{
+				CurrNumChannelAccounts:        currNumChannelAccounts,
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+				CounterLastUpdated:            time.Now(),
+			}
+			txProcessingLimiter.AdjustLimitIfNeeded(tc.err)
+
+			assert.Equal(t, txProcessingLimiter.limitValue, tc.wantResult.limitValue)
+			assert.Equal(t, txProcessingLimiter.IndeterminateResponsesCounter, tc.wantResult.IndeterminateResponsesCounter)
+		})
 	}
 }
