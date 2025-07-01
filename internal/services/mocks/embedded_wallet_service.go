@@ -14,9 +14,9 @@ type MockEmbeddedWalletService struct {
 	mock.Mock
 }
 
-// CreateInvitationToken provides a mock function with given fields: ctx
-func (_m *MockEmbeddedWalletService) CreateInvitationToken(ctx context.Context) (string, error) {
-	ret := _m.Called(ctx)
+// CreateInvitationToken provides a mock function with given fields: ctx, receiverContact, contactType
+func (_m *MockEmbeddedWalletService) CreateInvitationToken(ctx context.Context, receiverContact string, contactType string) (string, error) {
+	ret := _m.Called(ctx, receiverContact, contactType)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateInvitationToken")
@@ -24,17 +24,17 @@ func (_m *MockEmbeddedWalletService) CreateInvitationToken(ctx context.Context) 
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context) (string, error)); ok {
-		return rf(ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (string, error)); ok {
+		return rf(ctx, receiverContact, contactType)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context) string); ok {
-		r0 = rf(ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) string); ok {
+		r0 = rf(ctx, receiverContact, contactType)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = rf(ctx)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, receiverContact, contactType)
 	} else {
 		r1 = ret.Error(1)
 	}

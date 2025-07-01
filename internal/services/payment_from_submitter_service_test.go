@@ -258,6 +258,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 				WasmHash:  "a5016f845e76fe452de6d3638ac47523b845a813db56de3d713eb7a49276e254",
+				Salt:      "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 			},
 			TenantID: tenantID,
 		})
@@ -294,6 +295,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: "0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404",
 				WasmHash:  "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+				Salt:      "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b",
 			},
 			TenantID: tenantID,
 		})

@@ -18,6 +18,22 @@ import (
 
 var ErrEmbeddedWalletCredentialIDAlreadyExists = errors.New("an embedded wallet with this credential ID already exists")
 
+type ContactType string
+
+const (
+	ContactTypeEmail       ContactType = "EMAIL"
+	ContactTypePhoneNumber ContactType = "PHONE_NUMBER"
+)
+
+func (ct ContactType) Validate() error {
+	switch ct {
+	case ContactTypeEmail, ContactTypePhoneNumber:
+		return nil
+	default:
+		return fmt.Errorf("invalid contact type %q", ct)
+	}
+}
+
 type EmbeddedWalletStatus string
 
 const (
@@ -45,6 +61,8 @@ type EmbeddedWallet struct {
 	WasmHash        string               `json:"wasm_hash" db:"wasm_hash"`
 	ContractAddress string               `json:"contract_address" db:"contract_address"`
 	CredentialID    string               `json:"credential_id" db:"credential_id"`
+	ReceiverContact string               `json:"receiver_contact" db:"receiver_contact"`
+	ContactType     ContactType          `json:"contact_type" db:"contact_type"`
 	CreatedAt       *time.Time           `json:"created_at" db:"created_at"`
 	UpdatedAt       *time.Time           `json:"updated_at" db:"updated_at"`
 	WalletStatus    EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
@@ -63,6 +81,8 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 			"wallet_status",
+			"contact_type",
+			"receiver_contact",
 		},
 		CoalesceStringColumns: []string{
 			"wasm_hash",
@@ -117,9 +137,11 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 }
 
 type EmbeddedWalletInsert struct {
-	Token        string               `db:"token"`
-	WasmHash     string               `db:"wasm_hash"`
-	WalletStatus EmbeddedWalletStatus `db:"wallet_status"`
+	Token           string               `db:"token"`
+	WasmHash        string               `db:"wasm_hash"`
+	ReceiverContact string               `db:"receiver_contact"`
+	ContactType     ContactType          `db:"contact_type"`
+	WalletStatus    EmbeddedWalletStatus `db:"wallet_status"`
 }
 
 func (ewi EmbeddedWalletInsert) Validate() error {
@@ -140,6 +162,18 @@ func (ewi EmbeddedWalletInsert) Validate() error {
 		return fmt.Errorf("validating wallet status: %w", err)
 	}
 
+	if ewi.ReceiverContact == "" {
+		return fmt.Errorf("receiver contact cannot be empty")
+	}
+
+	if ewi.ContactType == "" {
+		return fmt.Errorf("contact type cannot be empty")
+	}
+
+	if err := ewi.ContactType.Validate(); err != nil {
+		return fmt.Errorf("validating contact type: %w", err)
+	}
+
 	return nil
 }
 
@@ -152,15 +186,19 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 		INSERT INTO embedded_wallets (
 			token,
 			wasm_hash,
+			receiver_contact,
+			contact_type,
 			wallet_status
 		) VALUES (
-			$1, $2, $3
+			$1, $2, $3, $4, $5
 		) RETURNING %s`, EmbeddedWalletColumnNames("", ""))
 
 	var wallet EmbeddedWallet
 	err := sqlExec.GetContext(ctx, &wallet, query,
 		insert.Token,
 		insert.WasmHash,
+		insert.ReceiverContact,
+		insert.ContactType,
 		insert.WalletStatus)
 	if err != nil {
 		return nil, fmt.Errorf("inserting embedded wallet: %w", err)
@@ -173,6 +211,8 @@ type EmbeddedWalletUpdate struct {
 	WasmHash        string               `db:"wasm_hash"`
 	ContractAddress string               `db:"contract_address"`
 	CredentialID    string               `db:"credential_id"`
+	ReceiverContact string               `db:"receiver_contact"`
+	ContactType     ContactType          `db:"contact_type"`
 	WalletStatus    EmbeddedWalletStatus `db:"wallet_status"`
 }
 
@@ -197,6 +237,12 @@ func (ewu EmbeddedWalletUpdate) Validate() error {
 	if ewu.WalletStatus != "" {
 		if err := ewu.WalletStatus.Validate(); err != nil {
 			return fmt.Errorf("validating wallet status: %w", err)
+		}
+	}
+
+	if ewu.ContactType != "" {
+		if err := ewu.ContactType.Validate(); err != nil {
+			return fmt.Errorf("validating contact type: %w", err)
 		}
 	}
 

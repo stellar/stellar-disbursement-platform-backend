@@ -13,6 +13,41 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
+func TestValidateContactType(t *testing.T) {
+	testCases := []struct {
+		name          string
+		contactType   string
+		expectedError string
+	}{
+		{
+			name:        "valid EMAIL type",
+			contactType: "EMAIL",
+		},
+		{
+			name:        "valid PHONE_NUMBER type",
+			contactType: "PHONE_NUMBER",
+		},
+		{
+			name:          "invalid type",
+			contactType:   "INVALID",
+			expectedError: "contact type must be 'EMAIL' or 'PHONE_NUMBER', got: INVALID",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateContactType(tc.contactType)
+
+			if tc.expectedError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func Test_ValidatePhoneNumber(t *testing.T) {
 	testCases := []struct {
 		phoneNumber string

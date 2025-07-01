@@ -2,7 +2,6 @@ package transactionsubmission
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -67,6 +66,9 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	if txJob.Transaction.WalletCreation.WasmHash == "" {
 		return nil, fmt.Errorf("wasm hash cannot be empty")
 	}
+	if txJob.Transaction.WalletCreation.Salt == "" {
+		return nil, fmt.Errorf("salt cannot be empty")
+	}
 
 	publicKeyBytes, err := hex.DecodeString(txJob.Transaction.WalletCreation.PublicKey)
 	if err != nil {
@@ -85,8 +87,16 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	}
 
 	wasmHash := xdr.Hash(wasmHashBytes)
-	publicKeyHash := sha256.Sum256(publicKeyBytes)
-	salt := xdr.Uint256(publicKeyHash)
+
+	saltBytes, err := hex.DecodeString(txJob.Transaction.WalletCreation.Salt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing contract salt: invalid hex salt: %w", err)
+	}
+	if len(saltBytes) != 32 {
+		return nil, fmt.Errorf("parsing contract salt: salt must be 32 bytes, got %d", len(saltBytes))
+	}
+	var salt xdr.Uint256
+	copy(salt[:], saltBytes)
 
 	distributionAccountId := xdr.MustAddress(distributionAccount)
 	distributionScAddress := xdr.ScAddress{
