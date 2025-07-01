@@ -26,6 +26,7 @@ const (
 	PaymentReadyToPayDisbursementStarted           = "payment-ready-to-pay-disbursement-started"
 	PaymentReadyToPayReceiverVerificationCompleted = "payment-ready-to-pay-receiver-verification-completed"
 	PaymentReadyToPayRetryFailedPayment            = "payment-ready-to-pay-retry-failed-payment"
+	PaymentReadyToPayDirectPayment                 = "payment-direct-payment"
 	WalletCreationCompletedSuccessType             = "wallet-creation-completed-success"
 	WalletCreationCompletedErrorType               = "wallet-creation-completed-error"
 )

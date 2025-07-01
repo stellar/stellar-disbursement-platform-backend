@@ -8,17 +8,17 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 )
 
-type AssetResolver struct {
+type WalletAssetResolver struct {
 	assetModel *data.AssetModel
 }
 
-func NewAssetResolver(assetModel *data.AssetModel) *AssetResolver {
-	return &AssetResolver{
+func NewWalletAssetResolver(assetModel *data.AssetModel) *WalletAssetResolver {
+	return &WalletAssetResolver{
 		assetModel: assetModel,
 	}
 }
 
-func (ar *AssetResolver) ResolveAssetReferences(ctx context.Context, references []validators.AssetReference) ([]string, error) {
+func (ar *WalletAssetResolver) ResolveAssetReferences(ctx context.Context, references []validators.AssetReference) ([]string, error) {
 	assetIDs := make([]string, 0, len(references))
 
 	for i, ref := range references {
@@ -32,7 +32,7 @@ func (ar *AssetResolver) ResolveAssetReferences(ctx context.Context, references 
 	return assetIDs, nil
 }
 
-func (ar *AssetResolver) resolveAssetReference(ctx context.Context, ref validators.AssetReference) (string, error) {
+func (ar *WalletAssetResolver) resolveAssetReference(ctx context.Context, ref validators.AssetReference) (string, error) {
 	switch ref.GetReferenceType() {
 	case validators.AssetReferenceTypeID:
 		asset, err := ar.assetModel.Get(ctx, ref.ID)
@@ -62,7 +62,7 @@ func (ar *AssetResolver) resolveAssetReference(ctx context.Context, ref validato
 	}
 }
 
-func (ar *AssetResolver) ValidateAssetIDs(ctx context.Context, assetIDs []string) error {
+func (ar *WalletAssetResolver) ValidateAssetIDs(ctx context.Context, assetIDs []string) error {
 	for _, assetID := range assetIDs {
 		_, err := ar.assetModel.Get(ctx, assetID)
 		if err != nil {

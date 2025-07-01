@@ -68,7 +68,6 @@ func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx contex
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, tnt)
-
 	err = h.service.PatchAPTransactionForPaymentEvent(ctx, payment)
 	if err != nil {
 		return fmt.Errorf("patching anchor platform transaction for payment event: %w", err)
