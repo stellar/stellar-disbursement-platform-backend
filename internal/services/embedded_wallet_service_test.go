@@ -365,3 +365,55 @@ func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 		assert.Contains(t, err.Error(), "credential ID does not exist")
 	})
 }
+
+func Test_EmbeddedWalletService_GetWalletByToken(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	tssModel := store.NewTransactionModel(dbConnectionPool)
+
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, "somehash")
+	require.NoError(t, err)
+
+	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: "tenant-id"})
+
+	t.Run("successfully gets a wallet by token", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", "test@example.com", "EMAIL", data.SuccessWalletStatus)
+
+		retrievedWallet, err := service.GetWalletByToken(ctx, expectedWallet.Token)
+		require.NoError(t, err)
+		require.NotNil(t, retrievedWallet)
+
+		assert.Equal(t, expectedWallet.Token, retrievedWallet.Token)
+		assert.Equal(t, expectedWallet.WasmHash, retrievedWallet.WasmHash)
+		assert.Equal(t, expectedWallet.ContractAddress, retrievedWallet.ContractAddress)
+		assert.Equal(t, expectedWallet.CredentialID, retrievedWallet.CredentialID)
+		assert.Equal(t, expectedWallet.ReceiverContact, retrievedWallet.ReceiverContact)
+		assert.Equal(t, expectedWallet.ContactType, retrievedWallet.ContactType)
+		assert.Equal(t, expectedWallet.WalletStatus, retrievedWallet.WalletStatus)
+		assert.NotNil(t, retrievedWallet.CreatedAt)
+		assert.NotNil(t, retrievedWallet.UpdatedAt)
+	})
+
+	t.Run("returns error if token is empty", func(t *testing.T) {
+		_, err := service.GetWalletByToken(ctx, "")
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+
+	t.Run("returns error if GetByToken fails (wallet not found)", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		nonExistentToken := "non-existent-token"
+		_, err := service.GetWalletByToken(ctx, nonExistentToken)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrInvalidToken)
+	})
+}
