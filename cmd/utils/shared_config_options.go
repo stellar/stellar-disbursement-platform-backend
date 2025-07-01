@@ -316,6 +316,50 @@ func SchedulerConfigOptions(opts *scheduler.SchedulerOptions) []*config.ConfigOp
 	}
 }
 
+type BridgeIntegrationOptions struct {
+	EnableBridgeIntegration bool
+	BridgeBaseURL           string
+	BridgeAPIKey            string
+}
+
+func (opts *BridgeIntegrationOptions) ValidateFlags() error {
+	if opts.EnableBridgeIntegration && opts.BridgeAPIKey == "" {
+		return fmt.Errorf("bridge API key must be set when bridge integration is enabled")
+	}
+	if opts.EnableBridgeIntegration && opts.BridgeBaseURL == "" {
+		return fmt.Errorf("bridge base URL must be set when bridge integration is enabled")
+	}
+	return nil
+}
+
+func BridgeIntegrationConfigOptions(opts *BridgeIntegrationOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:        "enable-bridge-integration",
+			Usage:       "Enable Bridge integration for Liquidity Sourcing.",
+			OptType:     types.Bool,
+			ConfigKey:   &opts.EnableBridgeIntegration,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
+			Name:        "bridge-base-url",
+			Usage:       "Bridge Base URL. This needs to be configured only if the Bridge integration is enabled.",
+			OptType:     types.String,
+			ConfigKey:   &opts.BridgeBaseURL,
+			FlagDefault: "https://api.sandbox.bridge.xyz",
+			Required:    false,
+		},
+		{
+			Name:      "bridge-api-key",
+			Usage:     "Bridge API key. This needs to be configured only if the Bridge integration is enabled.",
+			OptType:   types.String,
+			ConfigKey: &opts.BridgeAPIKey,
+			Required:  false,
+		},
+	}
+}
+
 func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
 		Name:           "distribution-public-key",
