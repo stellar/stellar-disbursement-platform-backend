@@ -20,6 +20,7 @@ import (
 const (
 	testWasmHash            = "a5016f845e76fe452de6d3638ac47523b845a813db56de3d713eb7a49276e254"
 	testPublicKey           = "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
+	testSalt                = "e3b4c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7b2c4a6b"
 	testDistributionAccount = "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
 	testNetworkPassphrase   = "Test SDF Network ; September 2015"
 )
@@ -54,9 +55,11 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 
 	walletToken := uuid.NewString()
 	_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-		Token:        walletToken,
-		WasmHash:     testWasmHash,
-		WalletStatus: data.ProcessingWalletStatus,
+		Token:           walletToken,
+		WasmHash:        testWasmHash,
+		ReceiverContact: "test@example.com",
+		ContactType:     data.ContactTypeEmail,
+		WalletStatus:    data.ProcessingWalletStatus,
 	})
 	require.NoError(t, err)
 
@@ -68,6 +71,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      testSalt,
 			},
 			TenantID: testCtx.tenantID,
 		})
@@ -97,9 +101,11 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 		// Create another embedded wallet for failed test
 		failedWalletToken := uuid.NewString()
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-			Token:        failedWalletToken,
-			WasmHash:     testWasmHash,
-			WalletStatus: data.ProcessingWalletStatus,
+			Token:           failedWalletToken,
+			WasmHash:        testWasmHash,
+			ReceiverContact: "test@example.com",
+			ContactType:     data.ContactTypeEmail,
+			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
 
@@ -109,6 +115,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      testSalt,
 			},
 			TenantID: testCtx.tenantID,
 		})
@@ -182,6 +189,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      testSalt,
 			},
 			TenantID: testCtx.tenantID,
 		})
@@ -201,9 +209,11 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 	t.Run("returns error when transaction is not in terminal state", func(t *testing.T) {
 		walletToken := uuid.NewString()
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-			Token:        walletToken,
-			WasmHash:     testWasmHash,
-			WalletStatus: data.ProcessingWalletStatus,
+			Token:           walletToken,
+			WasmHash:        testWasmHash,
+			ReceiverContact: "test@example.com",
+			ContactType:     data.ContactTypeEmail,
+			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
 
@@ -213,6 +223,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      testSalt,
 			},
 			TenantID: testCtx.tenantID,
 		})
@@ -225,9 +236,11 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 	t.Run("returns error when distribution account is missing", func(t *testing.T) {
 		walletToken := uuid.NewString()
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-			Token:        walletToken,
-			WasmHash:     testWasmHash,
-			WalletStatus: data.ProcessingWalletStatus,
+			Token:           walletToken,
+			WasmHash:        testWasmHash,
+			ReceiverContact: "test@example.com",
+			ContactType:     data.ContactTypeEmail,
+			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
 
@@ -237,6 +250,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      testSalt,
 			},
 			TenantID: testCtx.tenantID,
 		})
@@ -281,9 +295,11 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 	// Create embedded wallet fixtures
 	for _, token := range walletTokens {
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-			Token:        token,
-			WasmHash:     testWasmHash,
-			WalletStatus: data.ProcessingWalletStatus,
+			Token:           token,
+			WasmHash:        testWasmHash,
+			ReceiverContact: "test@example.com",
+			ContactType:     data.ContactTypeEmail,
+			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
 	}
@@ -373,6 +389,7 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      testSalt,
 			},
 			TenantID: tenantID,
 		})
@@ -450,24 +467,24 @@ func Test_WalletCreationFromSubmitterService_calculateContractAddress(t *testing
 	t.Run("successfully calculates contract address", func(t *testing.T) {
 		distributionAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
 
-		contractAddress, err := service.calculateContractAddress(distributionAccount, testPublicKey)
+		contractAddress, err := service.calculateContractAddress(distributionAccount, testSalt)
 		require.NoError(t, err)
 		assert.NotEmpty(t, contractAddress)
 		assert.True(t, strkey.IsValidContractAddress(contractAddress), "contract address should be a valid stellar contract address")
 	})
 
-	t.Run("returns error for invalid public key", func(t *testing.T) {
+	t.Run("returns error for invalid salt", func(t *testing.T) {
 		distributionAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
-		invalidPublicKey := "invalid-hex"
+		invalidSalt := "invalid-hex"
 
-		_, err := service.calculateContractAddress(distributionAccount, invalidPublicKey)
-		assert.ErrorContains(t, err, "decoding public key")
+		_, err := service.calculateContractAddress(distributionAccount, invalidSalt)
+		assert.ErrorContains(t, err, "parsing contract salt")
 	})
 
-	t.Run("panics for invalid distribution account", func(t *testing.T) {
+	t.Run("returns error for invalid distribution account", func(t *testing.T) {
 		invalidDistributionAccount := "invalid-account"
 
-		_, err := service.calculateContractAddress(invalidDistributionAccount, testPublicKey)
+		_, err := service.calculateContractAddress(invalidDistributionAccount, testSalt)
 		assert.ErrorContains(t, err, "decoding distribution account address")
 	})
 }
@@ -486,6 +503,7 @@ func createEmbeddedWalletTSSTxs(t *testing.T, testCtx *testContext, walletTokens
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      testSalt,
 			},
 			TenantID: testCtx.tenantID,
 		})

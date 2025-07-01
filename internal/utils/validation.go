@@ -229,3 +229,11 @@ func ValidateNoHTML(input string) error {
 
 	return nil
 }
+
+// ValidateContactType validates that the contact type is supported for receiver communication
+func ValidateContactType(contactType string) error {
+	if contactType != "EMAIL" && contactType != "PHONE_NUMBER" {
+		return fmt.Errorf("contact type must be 'EMAIL' or 'PHONE_NUMBER', got: %s", contactType)
+	}
+	return nil
+}

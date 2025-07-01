@@ -95,6 +95,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 	channelAccount := "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX"
 	publicKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
 	wasmHashHex := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	saltHex := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 
 	t.Run("input validation", func(t *testing.T) {
 		engine := &engine.SubmitterEngine{
@@ -119,6 +120,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 						WalletCreation: store.WalletCreation{
 							PublicKey: "",
 							WasmHash:  wasmHashHex,
+							Salt:      saltHex,
 						},
 					},
 					ChannelAccount: store.ChannelAccount{
@@ -135,6 +137,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 						WalletCreation: store.WalletCreation{
 							PublicKey: publicKeyHex,
 							WasmHash:  "",
+							Salt:      saltHex,
 						},
 					},
 					ChannelAccount: store.ChannelAccount{
@@ -151,6 +154,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 						WalletCreation: store.WalletCreation{
 							PublicKey: "invalid-hex",
 							WasmHash:  wasmHashHex,
+							Salt:      saltHex,
 						},
 					},
 					ChannelAccount: store.ChannelAccount{
@@ -167,6 +171,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 						WalletCreation: store.WalletCreation{
 							PublicKey: publicKeyHex,
 							WasmHash:  "invalid-hex",
+							Salt:      saltHex,
 						},
 					},
 					ChannelAccount: store.ChannelAccount{
@@ -183,6 +188,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 						WalletCreation: store.WalletCreation{
 							PublicKey: publicKeyHex,
 							WasmHash:  "abcdef",
+							Salt:      saltHex,
 						},
 					},
 					ChannelAccount: store.ChannelAccount{
@@ -199,6 +205,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 						WalletCreation: store.WalletCreation{
 							PublicKey: "0123456789abcdef",
 							WasmHash:  wasmHashHex,
+							Salt:      saltHex,
 						},
 					},
 					ChannelAccount: store.ChannelAccount{
@@ -207,6 +214,40 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 					LockedUntilLedgerNumber: 12345,
 				},
 				expectedError: "public key must be 65 bytes",
+			},
+			{
+				name: "returns an error if salt is empty",
+				txJob: &TxJob{
+					Transaction: store.Transaction{
+						WalletCreation: store.WalletCreation{
+							PublicKey: publicKeyHex,
+							WasmHash:  wasmHashHex,
+							Salt:      "",
+						},
+					},
+					ChannelAccount: store.ChannelAccount{
+						PublicKey: channelAccount,
+					},
+					LockedUntilLedgerNumber: 12345,
+				},
+				expectedError: "salt cannot be empty",
+			},
+			{
+				name: "returns an error if salt is invalid hex",
+				txJob: &TxJob{
+					Transaction: store.Transaction{
+						WalletCreation: store.WalletCreation{
+							PublicKey: publicKeyHex,
+							WasmHash:  wasmHashHex,
+							Salt:      "invalid-hex",
+						},
+					},
+					ChannelAccount: store.ChannelAccount{
+						PublicKey: channelAccount,
+					},
+					LockedUntilLedgerNumber: 12345,
+				},
+				expectedError: "parsing contract salt",
 			},
 		}
 
@@ -260,6 +301,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				WalletCreation: store.WalletCreation{
 					PublicKey: publicKeyHex,
 					WasmHash:  wasmHashHex,
+					Salt:      saltHex,
 				},
 			},
 			ChannelAccount: store.ChannelAccount{
@@ -359,6 +401,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				WalletCreation: store.WalletCreation{
 					PublicKey: publicKeyHex,
 					WasmHash:  wasmHashHex,
+					Salt:      saltHex,
 				},
 			},
 			ChannelAccount: store.ChannelAccount{
@@ -394,6 +437,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				WalletCreation: store.WalletCreation{
 					PublicKey: publicKeyHex,
 					WasmHash:  wasmHashHex,
+					Salt:      saltHex,
 				},
 			},
 			ChannelAccount: store.ChannelAccount{
@@ -447,6 +491,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 				WalletCreation: store.WalletCreation{
 					PublicKey: publicKeyHex,
 					WasmHash:  wasmHashHex,
+					Salt:      saltHex,
 				},
 			},
 			ChannelAccount: store.ChannelAccount{
