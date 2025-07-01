@@ -91,7 +91,7 @@ func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, recei
 			WalletStatus:    data.PendingWalletStatus,
 		}
 
-		embeddedWallet, err := e.sdpModels.EmbeddedWallets.Insert(ctx, e.sdpModels.DBConnectionPool, insert)
+		embeddedWallet, err := e.sdpModels.EmbeddedWallets.Insert(ctx, dbTx, insert)
 		if err != nil {
 			return "", fmt.Errorf("creating embedded wallet invitation token with contact: %w", err)
 		}

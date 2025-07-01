@@ -236,10 +236,10 @@ func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl
 	var receiverContact, contactType string
 	if receiver.Email != "" {
 		receiverContact = receiver.Email
-		contactType = "EMAIL"
+		contactType = string(data.ContactTypeEmail)
 	} else if receiver.PhoneNumber != "" {
 		receiverContact = receiver.PhoneNumber
-		contactType = "PHONE_NUMBER"
+		contactType = string(data.ContactTypePhoneNumber)
 	} else {
 		return fmt.Errorf("receiver must have either email or phone number for embedded wallet creation")
 	}

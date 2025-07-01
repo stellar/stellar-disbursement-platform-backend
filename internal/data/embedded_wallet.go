@@ -162,10 +162,16 @@ func (ewi EmbeddedWalletInsert) Validate() error {
 		return fmt.Errorf("validating wallet status: %w", err)
 	}
 
-	if ewi.ContactType != "" {
-		if err := ewi.ContactType.Validate(); err != nil {
-			return fmt.Errorf("validating contact type: %w", err)
-		}
+	if ewi.ReceiverContact == "" {
+		return fmt.Errorf("receiver contact cannot be empty")
+	}
+
+	if ewi.ContactType == "" {
+		return fmt.Errorf("contact type cannot be empty")
+	}
+
+	if err := ewi.ContactType.Validate(); err != nil {
+		return fmt.Errorf("validating contact type: %w", err)
 	}
 
 	return nil

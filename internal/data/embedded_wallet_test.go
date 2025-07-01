@@ -206,6 +206,8 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 		assert.EqualError(t, err, "validating wallet status: invalid embedded wallet status \"INVALID_STATUS\"")
 
 		insert.WalletStatus = SuccessWalletStatus
+		insert.ReceiverContact = "test@example.com"
+		insert.ContactType = ContactTypeEmail
 		err = insert.Validate()
 		require.NoError(t, err)
 	})

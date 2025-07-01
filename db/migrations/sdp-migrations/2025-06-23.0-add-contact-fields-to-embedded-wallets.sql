@@ -7,7 +7,7 @@ CREATE TYPE contact_type AS ENUM (
 
 ALTER TABLE embedded_wallets
     ADD COLUMN receiver_contact VARCHAR(255) NOT NULL,
-    ADD COLUMN contact_type contact_type NOT NULL DEFAULT 'EMAIL';
+    ADD COLUMN contact_type contact_type NOT NULL;
 
 -- +migrate Down
 
