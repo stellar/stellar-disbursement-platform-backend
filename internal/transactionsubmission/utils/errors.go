@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -12,8 +11,42 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+// TransactionError represents the base interface for handling transaction errors
+type TransactionError interface {
+	Error() string
+	IsRetryable() bool
+	ShouldMarkAsError() bool
+	ShouldReportToCrashTracker() bool
+	GetErrorType() string
+	AdjustLimits(limiter TransactionProcessingLimiter)
+}
+
+// HorizonSpecificError represents errors that come from Horizon transaction submission
+type HorizonSpecificError interface {
+	TransactionError
+	IsBadSequence() bool
+	IsTxInsufficientFee() bool
+	IsDestinationAccountNotReady() bool
+}
+
+// RPCSpecificError represents errors that come from RPC simulation
+type RPCSpecificError interface {
+	TransactionError
+	IsContractExecutionError() bool
+	IsAuthError() bool
+	IsNetworkError() bool
+	IsTransactionInvalid() bool
+}
+
+// TransactionProcessingLimiter is imported here to avoid circular imports
+// This interface is defined in engine package but used by error types
+type TransactionProcessingLimiter interface {
+	AdjustLimitIfNeeded(err interface{})
+}
 
 // TransactionStatusUpdateError is an error that occurs when failing to update a transaction's status.
 type TransactionStatusUpdateError struct {
@@ -60,16 +93,13 @@ func NewHorizonErrorWrapper(err error) *HorizonErrorWrapper {
 		return nil
 	}
 
-	var existingHorizonErr *HorizonErrorWrapper
-	if errors.As(err, &existingHorizonErr) {
-		return existingHorizonErr
+	if existingWrapper, ok := err.(*HorizonErrorWrapper); ok {
+		return existingWrapper
 	}
 
 	hError := horizonclient.GetError(err)
 	if hError == nil {
-		return &HorizonErrorWrapper{
-			Err: err,
-		}
+		return &HorizonErrorWrapper{Err: err}
 	}
 
 	resultCodes, resCodeErr := hError.ResultCodes()
@@ -357,3 +387,195 @@ func (e *HorizonErrorWrapper) handleExtrasResultCodes(msgBuilder *strings.Builde
 }
 
 var _ error = &HorizonErrorWrapper{}
+
+// RPCErrorWrapper wraps RPC simulation errors to provide consistent error handling
+type RPCErrorWrapper struct {
+	SimulationError *stellar.SimulationError
+	Err             error
+}
+
+func NewRPCErrorWrapper(err error) *RPCErrorWrapper {
+	if err == nil {
+		return nil
+	}
+
+	if existingWrapper, ok := err.(*RPCErrorWrapper); ok {
+		return existingWrapper
+	}
+
+	if simErr, ok := err.(*stellar.SimulationError); ok {
+		return &RPCErrorWrapper{
+			SimulationError: simErr,
+			Err:             err,
+		}
+	}
+
+	return &RPCErrorWrapper{Err: err}
+}
+
+func (e *RPCErrorWrapper) Unwrap() error {
+	return e.Err
+}
+
+func (e *RPCErrorWrapper) Error() string {
+	if e.SimulationError != nil {
+		return fmt.Sprintf("rpc simulation error: %v", e.SimulationError)
+	}
+	return fmt.Sprintf("rpc error: %v", e.Err)
+}
+
+func (e *RPCErrorWrapper) IsRPCError() bool {
+	return e.SimulationError != nil
+}
+
+// IsNetworkError returns true if this is a network/transport error that should be retried
+func (e *RPCErrorWrapper) IsNetworkError() bool {
+	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeNetwork
+}
+
+// IsTransactionInvalid returns true if the transaction itself is malformed and should not be retried
+func (e *RPCErrorWrapper) IsTransactionInvalid() bool {
+	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeTransactionInvalid
+}
+
+// IsRetryable returns true if this error should be retried based on the error type
+func (e *RPCErrorWrapper) IsRetryable() bool {
+	if e.SimulationError != nil {
+		return e.SimulationError.IsRetryable
+	}
+	return false
+}
+
+// IsRateLimit returns true if this is a rate limiting error (similar to Horizon)
+func (e *RPCErrorWrapper) IsRateLimit() bool {
+	if e.SimulationError == nil {
+		return false
+	}
+
+	if e.SimulationError.Type == stellar.SimulationErrorTypeNetwork {
+		msgLower := strings.ToLower(e.SimulationError.Message)
+		return sdpUtils.ContainsAny(msgLower, "rate limit", "too many requests", "throttle", "429")
+	}
+
+	return false
+}
+
+// IsGatewayTimeout returns true if this is a gateway timeout error (similar to Horizon)
+func (e *RPCErrorWrapper) IsGatewayTimeout() bool {
+	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeNetwork
+}
+
+// IsContractExecutionError returns true if this is a contract execution error
+func (e *RPCErrorWrapper) IsContractExecutionError() bool {
+	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeContractExecution
+}
+
+// IsAuthError returns true if this is an authorization error
+func (e *RPCErrorWrapper) IsAuthError() bool {
+	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeAuth
+}
+
+// ShouldMarkAsError determines whether a transaction needs to be marked as an error based on the
+// RPC error type so that TSS can determine whether it needs to be retried.
+func (e *RPCErrorWrapper) ShouldMarkAsError() bool {
+	if e.SimulationError == nil {
+		return false
+	}
+
+	switch e.SimulationError.Type {
+	case stellar.SimulationErrorTypeTransactionInvalid, stellar.SimulationErrorTypeAuth, stellar.SimulationErrorTypeContractExecution:
+		return true
+	default:
+		return false
+	}
+}
+
+var _ error = &RPCErrorWrapper{}
+
+// HorizonTransactionError wraps Horizon errors to implement TransactionError
+type HorizonTransactionError struct {
+	*HorizonErrorWrapper
+}
+
+func (h *HorizonTransactionError) IsRetryable() bool {
+	return !(h.IsHorizonError() && h.ShouldMarkAsError())
+}
+
+func (h *HorizonTransactionError) ShouldMarkAsError() bool {
+	return h.IsHorizonError() && h.HorizonErrorWrapper.ShouldMarkAsError()
+}
+
+func (h *HorizonTransactionError) ShouldReportToCrashTracker() bool {
+	return h.ShouldMarkAsError() && !h.IsDestinationAccountNotReady()
+}
+
+func (h *HorizonTransactionError) GetErrorType() string {
+	return "Horizon"
+}
+
+func (h *HorizonTransactionError) AdjustLimits(limiter TransactionProcessingLimiter) {
+	if h.IsHorizonError() {
+		limiter.AdjustLimitIfNeeded(h.HorizonErrorWrapper)
+	}
+}
+
+func (h *HorizonTransactionError) IsBadSequence() bool {
+	return h.HorizonErrorWrapper.IsBadSequence()
+}
+
+func (h *HorizonTransactionError) IsTxInsufficientFee() bool {
+	return h.HorizonErrorWrapper.IsTxInsufficientFee()
+}
+
+func (h *HorizonTransactionError) IsDestinationAccountNotReady() bool {
+	return h.HorizonErrorWrapper.IsDestinationAccountNotReady()
+}
+
+var _ TransactionError = &HorizonTransactionError{}
+var _ HorizonSpecificError = &HorizonTransactionError{}
+
+// RPCTransactionError wraps RPC errors to implement TransactionError
+type RPCTransactionError struct {
+	*RPCErrorWrapper
+}
+
+func (r *RPCTransactionError) IsRetryable() bool {
+	return !r.ShouldMarkAsError()
+}
+
+func (r *RPCTransactionError) ShouldMarkAsError() bool {
+	return r.RPCErrorWrapper.ShouldMarkAsError()
+}
+
+func (r *RPCTransactionError) ShouldReportToCrashTracker() bool {
+	return r.ShouldMarkAsError()
+}
+
+func (r *RPCTransactionError) GetErrorType() string {
+	return "RPC"
+}
+
+func (r *RPCTransactionError) AdjustLimits(limiter TransactionProcessingLimiter) {
+	if r.IsRPCError() {
+		limiter.AdjustLimitIfNeeded(r.RPCErrorWrapper)
+	}
+}
+
+func (r *RPCTransactionError) IsContractExecutionError() bool {
+	return r.RPCErrorWrapper.IsContractExecutionError()
+}
+
+func (r *RPCTransactionError) IsAuthError() bool {
+	return r.RPCErrorWrapper.IsAuthError()
+}
+
+func (r *RPCTransactionError) IsNetworkError() bool {
+	return r.RPCErrorWrapper.IsNetworkError()
+}
+
+func (r *RPCTransactionError) IsTransactionInvalid() bool {
+	return r.RPCErrorWrapper.IsTransactionInvalid()
+}
+
+var _ TransactionError = &RPCTransactionError{}
+var _ RPCSpecificError = &RPCTransactionError{}
