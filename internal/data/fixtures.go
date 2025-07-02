@@ -201,14 +201,19 @@ func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLEx
 	require.NoError(t, err)
 }
 
-// ClearAndCreateWalletFixtures deletes all wallets in the database then creates new wallets for testing
-func ClearAndCreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Wallet {
-	DeleteAllWalletFixtures(t, ctx, sqlExec)
+// CreateWalletFixtures creates a set of wallets for testing purposes.
+func CreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Wallet {
 	expected := []Wallet{
 		*CreateWalletFixture(t, ctx, sqlExec, "BOSS Money", "https://www.walletbyboss.com", "www.walletbyboss.com", "https://www.walletbyboss.com"),
 		*CreateWalletFixture(t, ctx, sqlExec, "Vibrant Assist", "https://vibrantapp.com", "vibrantapp.com", "vibrantapp://"),
 	}
 	return expected
+}
+
+// ClearAndCreateWalletFixtures deletes all wallets in the database then creates new wallets for testing
+func ClearAndCreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Wallet {
+	DeleteAllWalletFixtures(t, ctx, sqlExec)
+	return CreateWalletFixtures(t, ctx, sqlExec)
 }
 
 func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, enabled bool, walletIDs ...string) {
@@ -888,6 +893,13 @@ func CreateShortURLFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		VALUES ($1, $2)
 	`
 	_, err := sqlExec.ExecContext(ctx, query, shortCode, url)
+	require.NoError(t, err)
+}
+
+func CleanupBridgeIntegration(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM bridge_integration")
 	require.NoError(t, err)
 }
 
