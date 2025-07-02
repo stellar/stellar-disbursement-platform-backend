@@ -845,3 +845,42 @@ func Test_Manager_CreateTenantSchema(t *testing.T) {
 	err = m.CreateTenantSchema(ctx, orgName)
 	require.ErrorContains(t, err, fmt.Sprintf("creating schema for tenant sdp_%s: pq: schema \"sdp_%s\" already exists", orgName, orgName))
 }
+
+func Test_generateHashFromBaseURL(t *testing.T) {
+	testCases := []struct {
+		baseURL      string
+		expectedHash string
+	}{
+		{
+			baseURL:      "https://example.com",
+			expectedHash: "sdp-100680ad546c",
+		},
+		{
+			baseURL:      "   https://example.com   ",
+			expectedHash: "sdp-100680ad546c",
+		},
+		{
+			baseURL:      "https://example.com/",
+			expectedHash: "sdp-100680ad546c",
+		},
+		{
+			baseURL:      "  https://example.com/  ",
+			expectedHash: "sdp-100680ad546c",
+		},
+		{
+			baseURL:      "https://example.com/path?query=param",
+			expectedHash: "sdp-58821f845568",
+		},
+		{
+			baseURL:      "https://test.com",
+			expectedHash: "sdp-396936bd0bf0",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.baseURL, func(t *testing.T) {
+			hash := GenerateHashFromBaseURL(tc.baseURL)
+			assert.Equal(t, tc.expectedHash, hash)
+		})
+	}
+}
