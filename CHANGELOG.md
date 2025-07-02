@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `GET /bridge-integration` to get the current integration status.
   - `PATCH /bridge-integration` to opt into the Bridge integration or create a virtual account.
   - [#720](https://github.com/stellar/stellar-disbursement-platform-backend/pull/720)
+- Added Bridge Helm chart configuration to the SDP charts [#742](https://github.com/stellar/stellar-disbursement-platform-backend/pull/742)
 - Add API keys management endpoints [#677](https://github.com/stellar/stellar-disbursement-platform-backend/pull/677)
 - Added a new endpoint to unregister a receiver wallet `PATCH /receivers/wallets/:id/status`. [#675](https://github.com/stellar/stellar-disbursement-platform-backend/pull/675)
 - Added a new authentication middleware to support API keys. [#681](https://github.com/stellar/stellar-disbursement-platform-backend/pull/681)
