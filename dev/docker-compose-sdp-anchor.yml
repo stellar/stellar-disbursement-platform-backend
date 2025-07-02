@@ -67,6 +67,7 @@ services:
       # Embedded wallet configuration
       ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-false}
       EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-}
+      EMBEDDED_WALLETS_RECOVERY_ADDRESS: ${EMBEDDED_WALLETS_RECOVERY_ADDRESS:-}
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin

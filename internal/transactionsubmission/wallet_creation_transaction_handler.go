@@ -113,6 +113,21 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 		Type:  xdr.ScValTypeScvBytes,
 		Bytes: &publicKeyScBytes,
 	}
+
+	if !txJob.Transaction.WalletCreation.RecoveryAddress.Valid || txJob.Transaction.WalletCreation.RecoveryAddress.String == "" {
+		return nil, fmt.Errorf("recovery address not set - this indicates a configuration error")
+	}
+	recoveryAddress := txJob.Transaction.WalletCreation.RecoveryAddress.String
+	recoveryAccountId := xdr.MustAddress(recoveryAddress)
+	recoveryScAddress := xdr.ScAddress{
+		Type:      xdr.ScAddressTypeScAddressTypeAccount,
+		AccountId: &recoveryAccountId,
+	}
+	argRecovery := xdr.ScVal{
+		Type:    xdr.ScValTypeScvAddress,
+		Address: &recoveryScAddress,
+	}
+
 	hostFunction := xdr.HostFunction{
 		Type: xdr.HostFunctionTypeHostFunctionTypeCreateContractV2,
 		CreateContractV2: &xdr.CreateContractArgsV2{
@@ -127,7 +142,7 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 				Type:     xdr.ContractExecutableTypeContractExecutableWasm,
 				WasmHash: &wasmHash,
 			},
-			ConstructorArgs: []xdr.ScVal{argAdmin, argPublicKey},
+			ConstructorArgs: []xdr.ScVal{argAdmin, argPublicKey, argRecovery},
 		},
 	}
 

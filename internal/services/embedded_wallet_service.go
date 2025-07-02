@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -39,12 +40,13 @@ var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
 
 // EmbeddedWalletService handles wallet creation and transaction sponsorship
 type EmbeddedWalletService struct {
-	sdpModels *data.Models
-	tssModel  *store.TransactionModel
-	wasmHash  string
+	sdpModels       *data.Models
+	tssModel        *store.TransactionModel
+	wasmHash        string
+	recoveryAddress string
 }
 
-func NewEmbeddedWalletService(sdpModels *data.Models, tssModel *store.TransactionModel, wasmHash string) (*EmbeddedWalletService, error) {
+func NewEmbeddedWalletService(sdpModels *data.Models, tssModel *store.TransactionModel, wasmHash, recoveryAddress string) (*EmbeddedWalletService, error) {
 	if sdpModels == nil {
 		return nil, fmt.Errorf("sdpModels cannot be nil")
 	}
@@ -54,11 +56,15 @@ func NewEmbeddedWalletService(sdpModels *data.Models, tssModel *store.Transactio
 	if wasmHash == "" {
 		return nil, fmt.Errorf("wasmHash cannot be empty")
 	}
+	if recoveryAddress == "" {
+		return nil, fmt.Errorf("recoveryAddress cannot be empty")
+	}
 
 	return &EmbeddedWalletService{
-		sdpModels: sdpModels,
-		tssModel:  tssModel,
-		wasmHash:  wasmHash,
+		sdpModels:       sdpModels,
+		tssModel:        tssModel,
+		wasmHash:        wasmHash,
+		recoveryAddress: recoveryAddress,
 	}, nil
 }
 
@@ -66,6 +72,7 @@ type EmbeddedWalletServiceOptions struct {
 	MTNDBConnectionPool db.DBConnectionPool
 	TSSDBConnectionPool db.DBConnectionPool
 	WasmHash            string
+	RecoveryAddress     string
 }
 
 func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, receiverContact, contactType string) (string, error) {
@@ -140,9 +147,10 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 				TransactionType: store.TransactionTypeWalletCreation,
 				TenantID:        currentTenant.ID,
 				WalletCreation: store.WalletCreation{
-					PublicKey: publicKey,
-					WasmHash:  e.wasmHash,
-					Salt:      saltHex,
+					PublicKey:       publicKey,
+					WasmHash:        e.wasmHash,
+					Salt:            saltHex,
+					RecoveryAddress: sql.NullString{String: e.recoveryAddress, Valid: true},
 				},
 			}
 

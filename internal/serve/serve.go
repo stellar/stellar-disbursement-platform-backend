@@ -12,6 +12,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/strkey"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
 
@@ -79,6 +80,7 @@ type ServeOptions struct {
 	Sep10SigningPrivateKey          string
 	EnableEmbeddedWallets           bool
 	EmbeddedWalletsWasmHash         string
+	EmbeddedWalletsRecoveryAddress  string
 	EnableSep45                     bool
 	Sep45ContractId                 string
 	RpcConfig                       stellar.RPCOptions
@@ -193,6 +195,14 @@ func (opts *ServeOptions) ValidateRpc() error {
 	// Embedded wallet feature validation
 	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsWasmHash == "" {
 		return fmt.Errorf("embedded wallets WASM hash must be set when embedded wallets are enabled")
+	}
+	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsRecoveryAddress == "" {
+		return fmt.Errorf("embedded wallets recovery address must be set when embedded wallets are enabled")
+	}
+	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsRecoveryAddress != "" {
+		if !strkey.IsValidEd25519PublicKey(opts.EmbeddedWalletsRecoveryAddress) {
+			return fmt.Errorf("embedded wallets recovery address %q is not a valid ed25519 public key", opts.EmbeddedWalletsRecoveryAddress)
+		}
 	}
 
 	// SEP-45 feature validation
