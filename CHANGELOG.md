@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Added Bridge Integration API endpoints to the backend:
+  - `GET /bridge-integration` to get the current integration status.
+  - `PATCH /bridge-integration` to opt into the Bridge integration or create a virtual account.
+  - [#720](https://github.com/stellar/stellar-disbursement-platform-backend/pull/720)
 - Add API keys management endpoints [#677](https://github.com/stellar/stellar-disbursement-platform-backend/pull/677)
 - Added a new endpoint to unregister a receiver wallet `PATCH /receivers/wallets/:id/status`. [#675](https://github.com/stellar/stellar-disbursement-platform-backend/pull/675)
 - Added a new authentication middleware to support API keys. [#681](https://github.com/stellar/stellar-disbursement-platform-backend/pull/681)
@@ -16,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add endpoint for the direct payments [#693](https://github.com/stellar/stellar-disbursement-platform-backend/pull/693)
 - Update wallet POST to allow accept new asset references [#696](https://github.com/stellar/stellar-disbursement-platform-backend/pull/696)
 - Update PATCH endpoint to extend update capabilities [#697](https://github.com/stellar/stellar-disbursement-platform-backend/pull/697)
+- Add `supported_assets` filter to `GET /wallets` endpoint [#734](https://github.com/stellar/stellar-disbursement-platform-backend/pull/734)
 
 ### Changed
 

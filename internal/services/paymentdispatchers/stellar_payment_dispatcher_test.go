@@ -197,7 +197,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 				require.NoError(t, err)
 			},
 			fnAssertMemo: func(t *testing.T, p *data.Payment, tx *txSubStore.Transaction) {
-				assert.Equal(t, GenerateHashFromBaseURL(*tnt.BaseURL), tx.Memo)
+				assert.Equal(t, tenant.GenerateHashFromBaseURL(*tnt.BaseURL), tx.Memo)
 				assert.Equal(t, schema.MemoTypeText, tx.MemoType)
 				assert.Equal(t, "tenant-id", tx.TenantID)
 			},

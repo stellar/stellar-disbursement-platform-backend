@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -27,7 +28,7 @@ type WalletsHandler struct {
 func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	filters, err := h.parseFilters(r)
+	filters, err := h.parseFilters(ctx, r)
 	if err != nil {
 		extras := map[string]interface{}{"validation_error": err.Error()}
 		httperror.BadRequest("Error parsing request filters", nil, extras).Render(w)
@@ -42,14 +43,14 @@ func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, wallets, httpjson.JSON)
 }
 
-func (h WalletsHandler) parseFilters(r *http.Request) ([]data.Filter, error) {
+func (h WalletsHandler) parseFilters(ctx context.Context, r *http.Request) ([]data.Filter, error) {
 	filters := []data.Filter{}
-	filterParams := map[string]data.FilterKey{
+	boolFilterParams := map[string]data.FilterKey{
 		"enabled":      data.FilterEnabledWallets,
 		"user_managed": data.FilterUserManaged,
 	}
 
-	for param, filterType := range filterParams {
+	for param, filterType := range boolFilterParams {
 		paramValue, err := utils.ParseBoolQueryParam(r, param)
 		if err != nil {
 			return nil, fmt.Errorf("invalid '%s' parameter value", param)
@@ -58,7 +59,64 @@ func (h WalletsHandler) parseFilters(r *http.Request) ([]data.Filter, error) {
 			filters = append(filters, data.NewFilter(filterType, *paramValue))
 		}
 	}
+
+	supportedAssetsParam := r.URL.Query().Get("supported_assets")
+	if supportedAssetsParam != "" {
+		f, err := h.parseSupportedAssetsParam(ctx, supportedAssetsParam)
+		if err != nil {
+			return nil, fmt.Errorf("parsing supported_assets parameter: %w", err)
+		}
+		if !utils.IsEmpty(f) {
+			filters = append(filters, f)
+		}
+	}
+
 	return filters, nil
+}
+
+const maxSupportedAssets = 20
+
+// parseSupportedAssetsParam parses the supported_assets query parameter, validates it and returns a Filter.
+func (h WalletsHandler) parseSupportedAssetsParam(ctx context.Context, supportedAssetsParam string) (data.Filter, error) {
+	if supportedAssetsParam == "" {
+		return data.Filter{}, nil
+	}
+
+	assetStrings := strings.Split(supportedAssetsParam, ",")
+	var assets []string
+	for _, assetStr := range assetStrings {
+		asset := strings.TrimSpace(assetStr)
+		if asset != "" {
+			assets = append(assets, asset)
+		}
+	}
+
+	if len(assets) > maxSupportedAssets {
+		return data.Filter{}, fmt.Errorf("too many assets specified (max %d)", maxSupportedAssets)
+	}
+
+	if len(assets) > 0 {
+		if err := h.validateAssetReferences(ctx, assets); err != nil {
+			return data.Filter{}, fmt.Errorf("invalid asset reference in supported_assets: %w", err)
+		}
+
+		return data.NewFilter(data.FilterSupportedAssets, assets), nil
+	}
+	return data.Filter{}, nil
+}
+
+// validateAssetReferences validates that asset references (codes or IDs) exist in the database
+func (h WalletsHandler) validateAssetReferences(ctx context.Context, assetReferences []string) error {
+	for _, ref := range assetReferences {
+		exists, err := h.Models.Assets.ExistsByCodeOrID(ctx, ref)
+		if err != nil {
+			return fmt.Errorf("validating asset '%s': %w", ref, err)
+		}
+		if !exists {
+			return fmt.Errorf("asset '%s' not found", ref)
+		}
+	}
+	return nil
 }
 
 func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {

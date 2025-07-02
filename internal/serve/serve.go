@@ -17,6 +17,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -100,6 +101,7 @@ type ServeOptions struct {
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
 	CircleAPIType                   circle.APIType
+	BridgeService                   bridge.ServiceInterface
 	EmbeddedWalletService           services.EmbeddedWalletServiceInterface
 }
 
@@ -555,6 +557,28 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				MonitorService:              o.MonitorService,
 			}.Patch)
 		})
+
+		// Bridge integration endpoints
+		if o.BridgeService != nil {
+			r.Route("/bridge-integration", func(r chi.Router) {
+				bridgeIntegrationHandler := httphandler.BridgeIntegrationHandler{
+					BridgeService:               o.BridgeService,
+					AuthManager:                 authManager,
+					Models:                      o.Models,
+					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				}
+
+				r.With(middleware.RequirePermission(
+					data.ReadOrganization,
+					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+				)).Get("/", bridgeIntegrationHandler.Get)
+
+				r.With(middleware.RequirePermission(
+					data.WriteOrganization,
+					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+				)).Patch("/", bridgeIntegrationHandler.Patch)
+			})
+		}
 
 		r.With(middleware.RequirePermission(
 			data.ReadAll,

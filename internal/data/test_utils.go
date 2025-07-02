@@ -10,6 +10,19 @@ import (
 )
 
 func SetupModels(t *testing.T) *Models {
+	t.Helper()
+
+	pool := SetupDBCP(t)
+
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+
+	return models
+}
+
+func SetupDBCP(t *testing.T) db.DBConnectionPool {
+	t.Helper()
+
 	dbt := dbtest.Open(t)
 	t.Cleanup(func() { dbt.Close() })
 
@@ -17,8 +30,5 @@ func SetupModels(t *testing.T) *Models {
 	require.NoError(t, err)
 	t.Cleanup(func() { pool.Close() })
 
-	models, err := NewModels(pool)
-	require.NoError(t, err)
-
-	return models
+	return pool
 }

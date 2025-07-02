@@ -125,7 +125,7 @@ jobs:
 
       - name: Create integration test data
         run: |
-          docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
+          docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests create-data"
         shell: bash
 
       - name: Restart Anchor Platform
@@ -157,7 +157,7 @@ jobs:
 
       - name: Start integration test command
         run: |
-          docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests start"
+          docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
         shell: bash
 
       - name: Docker logs

@@ -32,10 +32,12 @@ services:
       METRICS_TYPE: PROMETHEUS
       EMAIL_SENDER_TYPE: DRY_RUN
       SMS_SENDER_TYPE: DRY_RUN
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
+      RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
+      RPC_REQUEST_AUTH_HEADER_KEY: ${RPC_REQUEST_AUTH_HEADER_KEY:-}
+      RPC_REQUEST_AUTH_HEADER_VALUE: ${RPC_REQUEST_AUTH_HEADER_VALUE:-}
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
-      SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID}
-      RPC_URL: "https://soroban-testnet.stellar.org"
       ANCHOR_PLATFORM_BASE_SEP_URL: http://localhost:8080
       ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
@@ -57,6 +59,14 @@ services:
 
       # Kafka Configuration - possible values: KAFKA; SCHEDULER
       EVENT_BROKER_TYPE: "SCHEDULER"
+
+      # SEP-45 configuration
+      ENABLE_SEP45: ${ENABLE_SEP45:-false}
+      SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID:-}
+
+      # Embedded wallet configuration
+      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-false}
+      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-}
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin
