@@ -34,6 +34,8 @@ type EmbeddedWalletServiceInterface interface {
 	CreateWallet(ctx context.Context, token, publicKey, credentialID string) error
 	// GetWalletByCredentialID retrieves an embedded wallet by credential ID
 	GetWalletByCredentialID(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error)
+	// GetWalletByToken retrieves an embedded wallet by token, including receiver contact information
+	GetWalletByToken(ctx context.Context, token string) (*data.EmbeddedWallet, error)
 }
 
 var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
@@ -189,6 +191,23 @@ func (e *EmbeddedWalletService) GetWalletByCredentialID(ctx context.Context, cre
 				return nil, ErrInvalidCredentialID
 			}
 			return nil, fmt.Errorf("getting wallet by credential ID %s: %w", credentialID, err)
+		}
+		return embeddedWallet, nil
+	})
+}
+
+func (e *EmbeddedWalletService) GetWalletByToken(ctx context.Context, token string) (*data.EmbeddedWallet, error) {
+	if token == "" {
+		return nil, ErrInvalidToken
+	}
+
+	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.EmbeddedWallet, error) {
+		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, dbTx, token)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return nil, ErrInvalidToken
+			}
+			return nil, fmt.Errorf("getting wallet by token: %w", err)
 		}
 		return embeddedWallet, nil
 	})

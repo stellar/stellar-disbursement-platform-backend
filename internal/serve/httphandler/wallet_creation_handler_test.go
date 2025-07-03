@@ -292,3 +292,111 @@ func Test_WalletCreationHandler_GetWallet_EmptyCredentialID(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
 }
+
+func Test_WalletCreationHandler_GetWalletStatus(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	testCases := []struct {
+		name           string
+		token          string
+		mockWallet     *data.EmbeddedWallet
+		mockError      error
+		expectedStatus int
+		expectedBody   WalletStatusResponse
+	}{
+		{
+			name:  "successful wallet status retrieval with email",
+			token: "test-token-123",
+			mockWallet: &data.EmbeddedWallet{
+				Token:           "test-token-123",
+				ContractAddress: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAHHAGCKAA",
+				WalletStatus:    data.SuccessWalletStatus,
+				ReceiverContact: "user@example.com",
+				ContactType:     data.ContactTypeEmail,
+			},
+			mockError:      nil,
+			expectedStatus: http.StatusOK,
+			expectedBody: WalletStatusResponse{
+				ContractAddress: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAHHAGCKAA",
+				Status:          data.SuccessWalletStatus,
+				ReceiverContact: "user@example.com",
+				ContactType:     data.ContactTypeEmail,
+			},
+		},
+		{
+			name:  "successful wallet status retrieval with phone number",
+			token: "test-token-456",
+			mockWallet: &data.EmbeddedWallet{
+				Token:           "test-token-456",
+				ContractAddress: "",
+				WalletStatus:    data.PendingWalletStatus,
+				ReceiverContact: "+14155551234",
+				ContactType:     data.ContactTypePhoneNumber,
+			},
+			mockError:      nil,
+			expectedStatus: http.StatusOK,
+			expectedBody: WalletStatusResponse{
+				ContractAddress: "",
+				Status:          data.PendingWalletStatus,
+				ReceiverContact: "+14155551234",
+				ContactType:     data.ContactTypePhoneNumber,
+			},
+		},
+		{
+			name:           "invalid token",
+			token:          "invalid-token",
+			mockWallet:     nil,
+			mockError:      services.ErrInvalidToken,
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "internal server error",
+			token:          "test-token-error",
+			mockWallet:     nil,
+			mockError:      errors.New("database connection failed"),
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			walletService.On("GetWalletByToken", mock.Anything, tc.token).Return(tc.mockWallet, tc.mockError).Once()
+
+			r := chi.NewRouter()
+			r.Get("/embedded-wallets/status/{token}", handler.GetWalletStatus)
+
+			rr := httptest.NewRecorder()
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/status/"+tc.token, nil)
+
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Result().StatusCode)
+
+			if tc.expectedStatus == http.StatusOK {
+				var resp WalletStatusResponse
+				require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+				assert.Equal(t, tc.expectedBody, resp)
+			}
+		})
+	}
+}
+
+func Test_WalletCreationHandler_GetWalletStatus_EmptyToken(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	r := chi.NewRouter()
+	r.Get("/embedded-wallets/status/{token}", handler.GetWalletStatus)
+
+	rr := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/status/ ", nil)
+
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Result().StatusCode)
+}

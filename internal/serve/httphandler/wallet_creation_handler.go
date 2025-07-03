@@ -47,6 +47,13 @@ type WalletResponse struct {
 	Status          data.EmbeddedWalletStatus `json:"status"`
 }
 
+type WalletStatusResponse struct {
+	ContractAddress string                    `json:"contract_address,omitempty"`
+	Status          data.EmbeddedWalletStatus `json:"status"`
+	ReceiverContact string                    `json:"receiver_contact"`
+	ContactType     data.ContactType          `json:"contact_type"`
+}
+
 func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
@@ -104,6 +111,33 @@ func (h WalletCreationHandler) GetWallet(rw http.ResponseWriter, req *http.Reque
 	resp := WalletResponse{
 		ContractAddress: wallet.ContractAddress,
 		Status:          wallet.WalletStatus,
+	}
+	httpjson.Render(rw, resp, httpjson.JSON)
+}
+
+func (h WalletCreationHandler) GetWalletStatus(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	token := strings.TrimSpace(chi.URLParam(req, "token"))
+	if len(token) == 0 {
+		httperror.Unauthorized("", nil, nil).Render(rw)
+		return
+	}
+
+	wallet, err := h.EmbeddedWalletService.GetWalletByToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidToken) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+		} else {
+			httperror.InternalError(ctx, "Failed to get wallet status", err, nil).Render(rw)
+		}
+		return
+	}
+
+	resp := WalletStatusResponse{
+		ContractAddress: wallet.ContractAddress,
+		Status:          wallet.WalletStatus,
+		ReceiverContact: wallet.ReceiverContact,
+		ContactType:     wallet.ContactType,
 	}
 	httpjson.Render(rw, resp, httpjson.JSON)
 }
