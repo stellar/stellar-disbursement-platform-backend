@@ -395,17 +395,13 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, userManagedWallet.ID, data.RegisteredReceiversWalletStatus)
 
-		stellarAddress := "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON"
-		err = models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{
-			StellarAddress: stellarAddress,
-		}, dbConnectionPool)
+		wallet, err := models.ReceiverWallet.GetByID(ctx, dbConnectionPool, rw.ID)
 		require.NoError(t, err)
-
 		req := CreateDirectPaymentRequest{
 			Amount:   "10000.00", // Large amount to test balance validation
 			Asset:    AssetReference{ID: &asset.ID},
 			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{Address: &stellarAddress},
+			Wallet:   WalletReference{Address: &wallet.StellarAddress},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}

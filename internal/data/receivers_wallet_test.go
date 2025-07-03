@@ -1322,6 +1322,8 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByDisbursementID(t *testing.T)
 }
 
 func Test_GetByStellarAccountAndMemo(t *testing.T) {
+	var emptyString string = ""
+
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -1336,7 +1338,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
-		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, "GCRSI42IC7WSW6N46LWPAHQWFI6MLGPBN3BYQ2WMNJ43GNRTIEYCAD6O", "", wallet.SEP10ClientDomain)
+		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, "GCRSI42IC7WSW6N46LWPAHQWFI6MLGPBN3BYQ2WMNJ43GNRTIEYCAD6O", wallet.SEP10ClientDomain, &emptyString)
 		require.ErrorIs(t, innerErr, ErrRecordNotFound)
 		require.Empty(t, actual)
 	})
@@ -1344,19 +1346,19 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 
 	t.Run("wont find the result if stellar address is provided but memo is not", func(t *testing.T) {
-		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, "", wallet.SEP10ClientDomain)
+		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, wallet.SEP10ClientDomain, &emptyString)
 		require.ErrorIs(t, innerErr, ErrRecordNotFound)
 		require.Empty(t, actual)
 	})
 
 	t.Run("wont find the result if memo is provided but stellar address is not", func(t *testing.T) {
-		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, "", receiverWallet.StellarMemo, wallet.SEP10ClientDomain)
+		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, "", wallet.SEP10ClientDomain, &receiverWallet.StellarMemo)
 		require.ErrorIs(t, innerErr, ErrRecordNotFound)
 		require.Empty(t, actual)
 	})
 
 	t.Run("returns receiver_wallet when both stellar account and memo are provided", func(t *testing.T) {
-		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, receiverWallet.StellarMemo, wallet.SEP10ClientDomain)
+		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, wallet.SEP10ClientDomain, &receiverWallet.StellarMemo)
 		require.NoError(t, innerErr)
 
 		expected := ReceiverWallet{
@@ -1393,7 +1395,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns receiver_wallet when stellar account is provided and memo is null", func(t *testing.T) {
-		actual, err := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, "", wallet.SEP10ClientDomain)
+		actual, err := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, wallet.SEP10ClientDomain, &emptyString)
 		require.NoError(t, err)
 
 		expected := ReceiverWallet{
@@ -1426,7 +1428,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	})
 
 	t.Run("won't find a result if stellar account and memo are provided, but the DB memo is NULL", func(t *testing.T) {
-		actual, err := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, receiverWallet.StellarMemo, wallet.SEP10ClientDomain)
+		actual, err := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, wallet.SEP10ClientDomain, &receiverWallet.StellarMemo)
 		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Empty(t, actual)
 	})
