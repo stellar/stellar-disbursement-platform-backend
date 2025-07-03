@@ -1,5 +1,9 @@
 -- +migrate Up
 -- +migrate StatementBegin
+CREATE INDEX idx_receiver_wallets_stellar_address 
+ON receiver_wallets (stellar_address) 
+WHERE stellar_address IS NOT NULL;
+
 CREATE OR REPLACE FUNCTION validate_stellar_address_per_receiver() 
 RETURNS TRIGGER AS $$
 BEGIN
@@ -27,3 +31,4 @@ CREATE TRIGGER trigger_validate_stellar_address_per_receiver
 DROP TRIGGER trigger_validate_stellar_address_per_receiver ON receiver_wallets;
 
 DROP FUNCTION IF EXISTS validate_stellar_address_per_receiver;
+DROP INDEX IF EXISTS idx_receiver_wallets_stellar_address;
