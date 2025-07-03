@@ -1,7 +1,8 @@
 -- +migrate Up
 
 ALTER TABLE submitter_transactions
-    ADD COLUMN salt VARCHAR(64);
+    ADD COLUMN salt VARCHAR(64),
+    ADD COLUMN recovery_address VARCHAR(56);
 
 ALTER TABLE submitter_transactions
     DROP CONSTRAINT submitter_transactions_wallet_creation_constraints;
@@ -29,4 +30,5 @@ ALTER TABLE submitter_transactions
     );
 
 ALTER TABLE submitter_transactions
-    DROP COLUMN salt;
+    DROP COLUMN salt,
+    DROP COLUMN recovery_address;

@@ -296,12 +296,14 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
 
+		recoveryAddress := "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 		txJob := &TxJob{
 			Transaction: store.Transaction{
 				WalletCreation: store.WalletCreation{
-					PublicKey: publicKeyHex,
-					WasmHash:  wasmHashHex,
-					Salt:      saltHex,
+					PublicKey:       publicKeyHex,
+					WasmHash:        wasmHashHex,
+					Salt:            saltHex,
+					RecoveryAddress: sql.NullString{String: recoveryAddress, Valid: true},
 				},
 			},
 			ChannelAccount: store.ChannelAccount{
@@ -334,9 +336,9 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		require.Equal(t, operation.HostFunction.Type, xdr.HostFunctionTypeHostFunctionTypeCreateContractV2)
 		require.NotNil(t, operation.HostFunction.CreateContractV2)
 
-		// Verify constructor arguments are in the correct order: [argAdmin, argPublicKey]
+		// Verify constructor arguments are in the correct order: [argAdmin, argPublicKey, argRecovery]
 		constructorArgs := operation.HostFunction.CreateContractV2.ConstructorArgs
-		require.Len(t, constructorArgs, 2)
+		require.Len(t, constructorArgs, 3)
 
 		// First argument should be argAdmin (distribution account address)
 		argAdmin := constructorArgs[0]
@@ -356,6 +358,15 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		expectedPublicKeyBytes, err := hex.DecodeString(publicKeyHex)
 		require.NoError(t, err)
 		assert.Equal(t, expectedPublicKeyBytes, []byte(*argPublicKey.Bytes))
+
+		// Third argument should be argRecovery (recovery account address)
+		argRecovery := constructorArgs[2]
+		assert.Equal(t, xdr.ScValTypeScvAddress, argRecovery.Type)
+		require.NotNil(t, argRecovery.Address)
+		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, argRecovery.Address.Type)
+		require.NotNil(t, argRecovery.Address.AccountId)
+		recoveryAccountId := xdr.MustAddress("GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB")
+		assert.Equal(t, recoveryAccountId, *argRecovery.Address.AccountId)
 
 		// Verify the WASM hash is correctly set
 		require.NotNil(t, operation.HostFunction.CreateContractV2.Executable.WasmHash)
@@ -378,6 +389,39 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		rpcClient.AssertExpectations(t)
 	})
 
+	t.Run("returns error when recovery address is not set", func(t *testing.T) {
+		engine := &engine.SubmitterEngine{
+			MaxBaseFee: 100,
+		}
+
+		rpcClient := &mocks.MockRPCClient{}
+		monitorSvc := tssMonitor.TSSMonitorService{
+			Client: &sdpMonitorMocks.MockMonitorClient{},
+		}
+		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
+		require.NoError(t, err)
+
+		txJob := &TxJob{
+			Transaction: store.Transaction{
+				WalletCreation: store.WalletCreation{
+					PublicKey:       publicKeyHex,
+					WasmHash:        wasmHashHex,
+					Salt:            saltHex,
+					RecoveryAddress: sql.NullString{Valid: false}, // Not set
+				},
+			},
+			ChannelAccount: store.ChannelAccount{
+				PublicKey: channelAccount,
+			},
+			LockedUntilLedgerNumber: 12345,
+		}
+
+		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 1000, distributionAccount)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "recovery address not set - this indicates a configuration error")
+		assert.Nil(t, tx)
+	})
+
 	t.Run("simulation error handling", func(t *testing.T) {
 		engine := &engine.SubmitterEngine{
 			MaxBaseFee: 100,
@@ -396,12 +440,14 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
 
+		recoveryAddress := "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 		txJob := &TxJob{
 			Transaction: store.Transaction{
 				WalletCreation: store.WalletCreation{
-					PublicKey: publicKeyHex,
-					WasmHash:  wasmHashHex,
-					Salt:      saltHex,
+					PublicKey:       publicKeyHex,
+					WasmHash:        wasmHashHex,
+					Salt:            saltHex,
+					RecoveryAddress: sql.NullString{String: recoveryAddress, Valid: true},
 				},
 			},
 			ChannelAccount: store.ChannelAccount{
@@ -432,12 +478,14 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
 
+		recoveryAddress := "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 		txJob := &TxJob{
 			Transaction: store.Transaction{
 				WalletCreation: store.WalletCreation{
-					PublicKey: publicKeyHex,
-					WasmHash:  wasmHashHex,
-					Salt:      saltHex,
+					PublicKey:       publicKeyHex,
+					WasmHash:        wasmHashHex,
+					Salt:            saltHex,
+					RecoveryAddress: sql.NullString{String: recoveryAddress, Valid: true},
 				},
 			},
 			ChannelAccount: store.ChannelAccount{
@@ -486,12 +534,14 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
 
+		recoveryAddress := "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 		txJob := &TxJob{
 			Transaction: store.Transaction{
 				WalletCreation: store.WalletCreation{
-					PublicKey: publicKeyHex,
-					WasmHash:  wasmHashHex,
-					Salt:      saltHex,
+					PublicKey:       publicKeyHex,
+					WasmHash:        wasmHashHex,
+					Salt:            saltHex,
+					RecoveryAddress: sql.NullString{String: recoveryAddress, Valid: true},
 				},
 			},
 			ChannelAccount: store.ChannelAccount{

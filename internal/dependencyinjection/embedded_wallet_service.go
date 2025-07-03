@@ -35,7 +35,7 @@ func NewEmbeddedWalletService(ctx context.Context, opts services.EmbeddedWalletS
 	// Create TSS transaction model from TSS DB connection pool
 	tssModel := &store.TransactionModel{DBConnectionPool: opts.TSSDBConnectionPool}
 
-	newInstance, err := services.NewEmbeddedWalletService(sdpModels, tssModel, opts.WasmHash)
+	newInstance, err := services.NewEmbeddedWalletService(sdpModels, tssModel, opts.WasmHash, opts.RecoveryAddress)
 	if err != nil {
 		return nil, fmt.Errorf("creating embedded wallet service: %w", err)
 	}
