@@ -193,13 +193,13 @@ func (opts *ServeOptions) ValidateRpc() error {
 	}
 
 	// Embedded wallet feature validation
-	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsWasmHash == "" {
-		return fmt.Errorf("embedded wallets WASM hash must be set when embedded wallets are enabled")
-	}
-	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsRecoveryAddress == "" {
-		return fmt.Errorf("embedded wallets recovery address must be set when embedded wallets are enabled")
-	}
-	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsRecoveryAddress != "" {
+	if opts.EnableEmbeddedWallets {
+		if opts.EmbeddedWalletsWasmHash == "" {
+			return fmt.Errorf("embedded wallets WASM hash must be set when embedded wallets are enabled")
+		}
+		if opts.EmbeddedWalletsRecoveryAddress == "" {
+			return fmt.Errorf("embedded wallets recovery address must be set when embedded wallets are enabled")
+		}
 		if !strkey.IsValidEd25519PublicKey(opts.EmbeddedWalletsRecoveryAddress) {
 			return fmt.Errorf("embedded wallets recovery address %q is not a valid ed25519 public key", opts.EmbeddedWalletsRecoveryAddress)
 		}
