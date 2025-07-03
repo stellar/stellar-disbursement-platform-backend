@@ -31,6 +31,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Bump the minor-and-patch group across 1 directory with 6 updates. [#690](https://github.com/stellar/stellar-disbursement-platform-backend/pull/690)
 
+## [3.7.2](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.2) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.1...3.7.2))
+
+### Added
+- Added Receiver's External ID to the `GET /exports/payments` endpoint. [#748](https://github.com/stellar/stellar-disbursement-platform-backend/pull/748)
+
+### Fixed
+- Fix `GET /disbursements` endpoint when `receiver_registration_message_template` is NULL. [#749](https://github.com/stellar/stellar-disbursement-platform-backend/pull/749)
+
 ## [3.7.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.0...3.7.1))
 
 ### Fixed
