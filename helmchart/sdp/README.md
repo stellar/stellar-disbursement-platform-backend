@@ -19,37 +19,55 @@
   - [Dashboard](#dashboard)
 
 ## Introduction
-This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
 
-The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP consists of the following services:
-- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions.
-- Anchor Platform: the API server that the wallet uses to authenticate and initiate the recipient’s registration process through the SEP-24 deposit flow.
-- Transaction Submission Service (TSS): the service that submits all payment transactions to the Stellar network.
-- Dashboard: the user interface administrators use to initiate and track the progress of disbursements.
+This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a
+[Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh)
+package manager.
+
+The SDP is a set of services that enable organizations to disburse funds to
+recipients using the Stellar network. The SDP consists of the following
+services:
+
+- Stellar Disbursement Platform (SDP) Core Service: the core backend service
+  that performs several functions.
+- Anchor Platform: the API server that the wallet uses to authenticate and
+  initiate the recipient’s registration process through the SEP-24 deposit flow.
+- Transaction Submission Service (TSS): the service that submits all payment
+  transactions to the Stellar network.
+- Dashboard: the user interface administrators use to initiate and track the
+  progress of disbursements.
 
 ## Installing the Chart
 
-The chart can be installed either from a packaged chart or directly from the git repository.
+The chart can be installed either from a packaged chart or directly from the git
+repository.
 
 ### Prerequisites
+
 - Kubernetes 1.19+
 - Helm 3.2.0+
 - Postgres 14.0+ database deployed in the same Kubernetes cluster
-- Kafka (optional) needed for inter-service communication when `eventBroker.type` is set to "KAFKA"
+- Kafka (optional) needed for inter-service communication when
+  `eventBroker.type` is set to "KAFKA"
 
 ### From a packaged chart
 
 - Add the Stellar Helm repository to Helm
+
 ```shell
 helm repo add stellar https://helm.stellar.org/charts
 ```
 
-- Customize the chart by downloading and modifying `minimal-values.yaml`. This chart contains the minimum set of values required to deploy the SDP. For a complete list of values, refer to the [Parameters](#parameters) section below.
+- Customize the chart by downloading and modifying `minimal-values.yaml`. This
+  chart contains the minimum set of values required to deploy the SDP. For a
+  complete list of values, refer to the [Parameters](#parameters) section below.
+
 ```shell
 curl -LJO https://raw.githubusercontent.com/stellar/stellar-disbursement-platform-backend/main/helmchart/sdp/minimal-values.yaml
 ```
 
 - Install the chart
+
 ```shell
 helm install sdp -f myvalues.yaml stellar/stellar-disbursement-platform
 ```
@@ -57,20 +75,26 @@ helm install sdp -f myvalues.yaml stellar/stellar-disbursement-platform
 ### From the git repository
 
 - Clone the git repository
+
 ```shell
 git clone git@github.com:stellar/stellar-disbursement-platform-backend.git
 ```
 
 - Change directory to the helm chart
+
 ```shell
 cd stellar-disbursement-platform-backend/helmchart/sdp
 ```
 
-- Prepare the values needed to run the SDP locally. We will only need a distribution account and a SEP-10 account. 
-Both can be created using the [Stellar Laboratory](https://lab.stellar.org/account/create?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;;).
+- Prepare the values needed to run the SDP locally. We will only need a
+  distribution account and a SEP-10 account. Both can be created using the
+  [Stellar Laboratory](https://lab.stellar.org/account/create?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;;).
 
-- Install the chart
-It is possible to use the `minimal-values.yaml` file provided in the repository or create your own values file. The `minimal-values.yaml` file contains the minimum set of values required to deploy the SDP.
+- Install the chart It is possible to use the `minimal-values.yaml` file
+  provided in the repository or create your own values file. The
+  `minimal-values.yaml` file contains the minimum set of values required to
+  deploy the SDP.
+
 ```shell
 helm install sdp -f minimal-values.yaml . \
      --set "global.distributionPublicKey=GCUD...EZW7" \
@@ -88,28 +112,36 @@ helm delete sdp
 ```
 
 ## Local Development
-Running the SDP locally using the helm chart is easy. We will use the `minikube` tool to run a local Kubernetes cluster.
+
+Running the SDP locally using the helm chart is easy. We will use the `minikube`
+tool to run a local Kubernetes cluster.
 
 ### Prerequisites
+
 - [minikube](https://minikube.sigs.k8s.io/docs/start/)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [helm](https://helm.sh/docs/intro/install/)
 
 ### Running the SDP locally
+
 1. Start minikube
+
 ```shell
 minikube start
 ```
 
 2. Enable the ingress addon
+
 ```shell
 minikube addons enable ingress
 ```
 
-3. Prepare the values needed to run the SDP locally. 
-We will only need a distribution account and a SEP-10 account. Both can be created using the [Stellar Laboratory](https://lab.stellar.org/account/create?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;;).
+3. Prepare the values needed to run the SDP locally. We will only need a
+   distribution account and a SEP-10 account. Both can be created using the
+   [Stellar Laboratory](https://lab.stellar.org/account/create?$=network$id=testnet&label=Testnet&horizonUrl=https:////horizon-testnet.stellar.org&rpcUrl=https:////soroban-testnet.stellar.org&passphrase=Test%20SDF%20Network%20/;%20September%202015;;).
 
 4. Run helm install using the provided `minimal-values.yaml` file
+
 ```shell
 helm install sdp -f minimal-values.yaml . \
      --set "global.distributionPublicKey=GCUD...EZW7" \
@@ -118,18 +150,23 @@ helm install sdp -f minimal-values.yaml . \
      --set "global.sep10PrivateKey=SBNY...FZAG"
 ```
 
-5. Setup Local DNS resolution.
-Add entries to your `/etc/hosts` file to access the services.
+5. Setup Local DNS resolution. Add entries to your `/etc/hosts` file to access
+   the services.
+
 ```shell
 sudo bash -c 'echo "127.0.0.1 dashboard.local sdp.local ap.local admin.local" >> /etc/hosts'
 ```
-Run the following command to enable the minikube tunnel. Make sure to keep this command running in a separate terminal.
+
+Run the following command to enable the minikube tunnel. Make sure to keep this
+command running in a separate terminal.
+
 ```shell
 minikube tunnel
 ```
 
-6. Access the services
-With the tunnel running, you can access the services using the following URLs:
+6. Access the services With the tunnel running, you can access the services
+   using the following URLs:
+
 - Dashboard: [https://dashboard.local](https://dashboard.local)
 - SDP Backend: [https://sdp.local](https://sdp.local)
 - SDP Admin API: [https://sdp.local:8003](https://sdp.local:8003)
@@ -234,6 +271,7 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.configMap.data.CIRCLE_API_TYPE`                              | The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".                                                                      | `TRANSFERS`                                     |
 | `sdp.configMap.data.ENABLE_EMBEDDED_WALLETS`                      | Determines if embedded wallet features are enabled ("true" or "false").                                                                                        | `false`                                         |
 | `sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH`                   | The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".                                                     |                                                 |
+| `sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_ADDRESS`            | The recovery address for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".                                                                    |                                                 |
 | `sdp.configMap.data.ENABLE_SEP45`                                 | Determines if SEP-45 web authentication features are enabled ("true" or "false").                                                                              | `false`                                         |
 | `sdp.configMap.data.SEP45_CONTRACT_ID`                            | The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true".                                                                        |                                                 |
 | `sdp.configMap.data.RPC_URL`                                      | The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".                   |                                                 |
