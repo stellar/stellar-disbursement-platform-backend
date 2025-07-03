@@ -83,9 +83,10 @@ type Payment struct {
 }
 
 type WalletCreation struct {
-	PublicKey string `db:"public_key"`
-	WasmHash  string `db:"wasm_hash"`
-	Salt      string `db:"salt"`
+	PublicKey       string         `db:"public_key"`
+	WasmHash        string         `db:"wasm_hash"`
+	Salt            string         `db:"salt"`
+	RecoveryAddress sql.NullString `db:"recovery_address"`
 }
 
 type Sponsored struct {
@@ -158,6 +159,11 @@ func (wc *WalletCreation) validate() error {
 		_, err := hex.DecodeString(wc.Salt)
 		if err != nil {
 			return fmt.Errorf("salt %q is not a valid hex string: %w", wc.Salt, err)
+		}
+	}
+	if wc.RecoveryAddress.Valid && wc.RecoveryAddress.String != "" {
+		if !strkey.IsValidEd25519PublicKey(wc.RecoveryAddress.String) {
+			return fmt.Errorf("recovery address %q is not a valid ed25519 public key", wc.RecoveryAddress.String)
 		}
 	}
 
@@ -245,6 +251,7 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"public_key",
 			"wasm_hash",
 			"salt",
+			"recovery_address",
 			"sponsored_account",
 			"sponsored_transaction_xdr",
 			"memo",
@@ -275,15 +282,15 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, salt, sponsored_account, sponsored_transaction_xdr, tenant_id, memo, memo_type) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, salt, recovery_address, sponsored_account, sponsored_transaction_xdr, tenant_id, memo, memo_type) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
-	valueArgs := make([]interface{}, 0, len(transactions)*14)
+	valueArgs := make([]interface{}, 0, len(transactions)*15)
 
 	for _, transaction := range transactions {
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
 			transaction.TransactionType,
 			transaction.ExternalID,
@@ -294,6 +301,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 			sdpUtils.SQLNullString(transaction.PublicKey),
 			sdpUtils.SQLNullString(transaction.WasmHash),
 			sdpUtils.SQLNullString(transaction.Salt),
+			transaction.RecoveryAddress,
 			sdpUtils.SQLNullString(transaction.SponsoredAccount),
 			sdpUtils.SQLNullString(transaction.SponsoredTransactionXDR),
 			transaction.TenantID,

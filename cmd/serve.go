@@ -335,6 +335,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:  false,
 		},
 		{
+			Name:      "embedded-wallets-recovery-address",
+			Usage:     "The Stellar address required to sign transactions for account recovery (required when --enable-embedded-wallets is true)",
+			OptType:   types.String,
+			ConfigKey: &serveOpts.EmbeddedWalletsRecoveryAddress,
+			Required:  false,
+		},
+		{
 			Name:        "enable-sep45",
 			Usage:       "Enable SEP-45 web authentication features that require Stellar RPC integration",
 			OptType:     types.Bool,
@@ -761,6 +768,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
 					TSSDBConnectionPool: serveOpts.TSSDBConnectionPool,
 					WasmHash:            serveOpts.EmbeddedWalletsWasmHash,
+					RecoveryAddress:     serveOpts.EmbeddedWalletsRecoveryAddress,
 				})
 				log.Info("Embedded wallet features enabled")
 				if err != nil {

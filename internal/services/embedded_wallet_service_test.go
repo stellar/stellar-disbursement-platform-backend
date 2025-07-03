@@ -23,10 +23,11 @@ func Test_NewEmbeddedWalletService(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	wasmHash := "e5da3b"
+	recoveryAddress := "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 
 	t.Run("return an error if sdpModels is nil", func(t *testing.T) {
 		tssModel := store.NewTransactionModel(dbConnectionPool)
-		service, err := NewEmbeddedWalletService(nil, tssModel, wasmHash)
+		service, err := NewEmbeddedWalletService(nil, tssModel, wasmHash, recoveryAddress)
 		assert.Nil(t, service)
 		assert.EqualError(t, err, "sdpModels cannot be nil")
 	})
@@ -35,7 +36,7 @@ func Test_NewEmbeddedWalletService(t *testing.T) {
 		sdpModels, err := data.NewModels(dbConnectionPool)
 		require.NoError(t, err)
 
-		service, err := NewEmbeddedWalletService(sdpModels, nil, wasmHash)
+		service, err := NewEmbeddedWalletService(sdpModels, nil, wasmHash, recoveryAddress)
 		assert.Nil(t, service)
 		assert.EqualError(t, err, "tssModel cannot be nil")
 	})
@@ -45,9 +46,19 @@ func Test_NewEmbeddedWalletService(t *testing.T) {
 		require.NoError(t, err)
 		tssModel := store.NewTransactionModel(dbConnectionPool)
 
-		service, err := NewEmbeddedWalletService(sdpModels, tssModel, "")
+		service, err := NewEmbeddedWalletService(sdpModels, tssModel, "", recoveryAddress)
 		assert.Nil(t, service)
 		assert.EqualError(t, err, "wasmHash cannot be empty")
+	})
+
+	t.Run("return an error if recoveryAddress is empty", func(t *testing.T) {
+		sdpModels, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+		tssModel := store.NewTransactionModel(dbConnectionPool)
+
+		service, err := NewEmbeddedWalletService(sdpModels, tssModel, wasmHash, "")
+		assert.Nil(t, service)
+		assert.EqualError(t, err, "recoveryAddress cannot be empty")
 	})
 
 	t.Run("🎉 successfully creates a new EmbeddedWalletService instance", func(t *testing.T) {
@@ -55,13 +66,14 @@ func Test_NewEmbeddedWalletService(t *testing.T) {
 		require.NoError(t, err)
 		tssModel := store.NewTransactionModel(dbConnectionPool)
 
-		service, err := NewEmbeddedWalletService(sdpModels, tssModel, wasmHash)
+		service, err := NewEmbeddedWalletService(sdpModels, tssModel, wasmHash, recoveryAddress)
 		require.NoError(t, err)
 		require.NotNil(t, service)
 
 		assert.Equal(t, sdpModels, service.sdpModels)
 		assert.Equal(t, tssModel, service.tssModel)
 		assert.Equal(t, wasmHash, service.wasmHash)
+		assert.Equal(t, recoveryAddress, service.recoveryAddress)
 	})
 }
 
@@ -78,8 +90,9 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := store.NewTransactionModel(dbConnectionPool)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+	const testRecoveryAddress = "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 
-	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash, testRecoveryAddress)
 	require.NoError(t, err)
 
 	t.Run("successfully creates unique tokens", func(t *testing.T) {
@@ -143,8 +156,9 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := store.NewTransactionModel(dbConnectionPool)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+	const testRecoveryAddress = "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 
-	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash, testRecoveryAddress)
 	require.NoError(t, err)
 
 	defaultPublicKey := "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
@@ -219,7 +233,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("rolls back wallet update if TSS transaction creation fails", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes")
+		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes", testRecoveryAddress)
 		require.NoError(t, err)
 
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.PendingWalletStatus)
@@ -238,7 +252,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("rolls back TSS transaction creation if wallet update fails", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash, testRecoveryAddress)
 		require.NoError(t, err)
 
 		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "test@example.com", "EMAIL", data.SuccessWalletStatus)
@@ -329,8 +343,9 @@ func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := store.NewTransactionModel(dbConnectionPool)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+	const testRecoveryAddress = "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
 
-	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash, testRecoveryAddress)
 	require.NoError(t, err)
 
 	t.Run("successfully gets a wallet by credential ID", func(t *testing.T) {

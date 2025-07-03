@@ -289,6 +289,16 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		require.EqualError(t, err, "embedded wallets WASM hash must be set when embedded wallets are enabled")
 	})
 
+	t.Run("embedded wallets enabled without recovery address: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			EnableEmbeddedWallets:   true,
+			EmbeddedWalletsWasmHash: "abc123",
+			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		}
+		err := serveOptions.ValidateRpc()
+		require.EqualError(t, err, "embedded wallets recovery address must be set when embedded wallets are enabled")
+	})
+
 	t.Run("SEP-45 enabled without contract ID: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableSep45: true,
@@ -300,9 +310,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 
 	t.Run("embedded wallets enabled without RPC URL: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
-			EnableEmbeddedWallets:   true,
-			EmbeddedWalletsWasmHash: "abc123",
-			RpcConfig:               stellar.RPCOptions{},
+			EnableEmbeddedWallets:          true,
+			EmbeddedWalletsWasmHash:        "abc123",
+			EmbeddedWalletsRecoveryAddress: "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB",
+			RpcConfig:                      stellar.RPCOptions{},
 		}
 		err := serveOptions.ValidateRpc()
 		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
@@ -320,9 +331,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 
 	t.Run("embedded wallets enabled with valid configuration: should not return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
-			EnableEmbeddedWallets:   true,
-			EmbeddedWalletsWasmHash: "abc123",
-			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			EnableEmbeddedWallets:          true,
+			EmbeddedWalletsWasmHash:        "abc123",
+			EmbeddedWalletsRecoveryAddress: "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB",
+			RpcConfig:                      stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
 		err := serveOptions.ValidateRpc()
 		require.NoError(t, err)
@@ -340,11 +352,12 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 
 	t.Run("both features enabled with valid configuration: should not return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
-			EnableEmbeddedWallets:   true,
-			EmbeddedWalletsWasmHash: "abc123",
-			EnableSep45:             true,
-			Sep45ContractId:         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			EnableEmbeddedWallets:          true,
+			EmbeddedWalletsWasmHash:        "abc123",
+			EmbeddedWalletsRecoveryAddress: "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB",
+			EnableSep45:                    true,
+			Sep45ContractId:                "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:                      stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
 		err := serveOptions.ValidateRpc()
 		require.NoError(t, err)
@@ -573,6 +586,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		BridgeService:                   bridge.NewMockService(t),
 		EnableEmbeddedWallets:           true,
 		EmbeddedWalletsWasmHash:         "abc123",
+		EmbeddedWalletsRecoveryAddress:  "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB",
 		EmbeddedWalletService:           mEmbeddedWalletService,
 		RpcConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
