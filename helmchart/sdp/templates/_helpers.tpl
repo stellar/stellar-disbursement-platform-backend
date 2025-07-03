@@ -319,3 +319,14 @@ Dashboard base URL with schema and domain
 {{- printf "%s://%s" (include "sdp.dashboard.schema" .) (include "sdp.dashboard.domain" .) -}}
 {{- end -}}
 
+{{/*
+Bridge API base URL depending on network
+*/}}
+{{- define "sdp.bridge.baseURL" -}}
+{{- if eq .Values.global.isPubnet true -}}
+https://api.bridge.xyz
+{{- else -}}
+https://api.sandbox.bridge.xyz
+{{- end -}}
+{{- end -}}
+
