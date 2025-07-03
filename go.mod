@@ -15,7 +15,7 @@ require (
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/getsentry/sentry-go v0.33.0
 	github.com/go-chi/chi v4.1.2+incompatible
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/httprate v0.15.0
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
 	github.com/golang-jwt/jwt/v4 v4.5.2
