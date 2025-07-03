@@ -117,6 +117,23 @@ func (a *AssetModel) GetByCodeAndIssuer(ctx context.Context, code, issuer string
 	return &asset, nil
 }
 
+// ExistsByCodeOrID checks if an asset exists by either code or ID.
+func (a *AssetModel) ExistsByCodeOrID(ctx context.Context, codeOrID string) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM assets 
+			WHERE (code = $1 OR id = $1) 
+			AND deleted_at IS NULL
+		)
+	`
+	var exists bool
+	err := a.dbConnectionPool.GetContext(ctx, &exists, query, codeOrID)
+	if err != nil {
+		return false, fmt.Errorf("checking asset existence for '%s': %w", codeOrID, err)
+	}
+	return exists, nil
+}
+
 // GetByWalletID returns all assets associated with a wallet.
 func (a *AssetModel) GetByWalletID(ctx context.Context, walletID string) ([]Asset, error) {
 	assets := []Asset{}

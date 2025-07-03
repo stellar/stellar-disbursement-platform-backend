@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -230,4 +232,215 @@ func Test_RetryInvitation(t *testing.T) {
 		require.Len(t, entries, 1)
 		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", []events.Message{msg}), entries[0].Message)
 	})
+}
+
+func Test_ReceiverWalletsHandler_PatchReceiverWalletStatus(t *testing.T) {
+	type TestCase struct {
+		name           string
+		setup          func(ctx context.Context, t *testing.T) (models *data.Models, receiverWalletID string)
+		body           string
+		expectedStatus int
+		expectedJSON   string
+	}
+
+	ctx := context.Background()
+
+	tests := []TestCase{
+		{
+			name: "400 – missing receiver_wallet_id URL param",
+			setup: func(_ context.Context, _ *testing.T) (*data.Models, string) {
+				return data.SetupModels(t), ""
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"receiver_wallet_id is required"}`,
+		},
+		{
+			name: "400 – invalid JSON in request body",
+			setup: func(_ context.Context, _ *testing.T) (*data.Models, string) {
+				return data.SetupModels(t), "irrelevant-id"
+			},
+			body:           `{"status": READY}`, // malformed JSON
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"invalid request"}`,
+		},
+		{
+			name: "400 – unknown status value",
+			setup: func(_ context.Context, _ *testing.T) (*data.Models, string) {
+				return data.SetupModels(t), "wallet-id"
+			},
+			body:           `{"status":"UNKNOWN_STATUS"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"invalid status \"UNKNOWN_STATUS\"; valid values [DRAFT READY REGISTERED FLAGGED]"}`,
+		},
+		{
+			name: "404 – receiver wallet not found",
+			setup: func(ctx context.Context, _ *testing.T) (*data.Models, string) {
+				return data.SetupModels(t), "non-existent-id"
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusNotFound,
+			expectedJSON:   `{"error":"receiver wallet not found"}`,
+		},
+		{
+			name: "400 – receiver wallet not registered",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+				// create wallet & receiver wallet already in READY (≠ REGISTERED)
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.ReadyReceiversWalletStatus)
+
+				return models, rw.ID
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"receiver wallet is not registered"}`,
+		},
+		{
+			name: "400 – unsupported status transition to [FLAGGED]",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.RegisteredReceiversWalletStatus)
+
+				return models, rw.ID
+			},
+			body:           `{"status":"FLAGGED"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"switching to status \"FLAGGED\" is not supported"}`,
+		},
+		{
+			name: "400 – user-managed wallet cannot be unregistered",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				_, err := dbPool.ExecContext(ctx,
+					`UPDATE wallets SET user_managed = TRUE WHERE id = $1`, wallet.ID)
+				require.NoError(t, err)
+
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.RegisteredReceiversWalletStatus)
+
+				t.Cleanup(func() {
+					data.DeleteAllReceiverWalletsFixtures(t, ctx, dbPool)
+				})
+
+				return models, rw.ID
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"user managed wallet cannot be unregistered"}`,
+		},
+		{
+			name: "400 – wallet has payments in progress",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.RegisteredReceiversWalletStatus)
+
+				disb := data.CreateDisbursementFixture(t, ctx, dbPool,
+					models.Disbursements, &data.Disbursement{})
+
+				data.CreatePaymentFixture(t, ctx, dbPool, models.Payment, &data.Payment{
+					Amount:         "42",
+					Asset:          *disb.Asset,
+					Status:         data.ReadyPaymentStatus,
+					ReceiverWallet: rw,
+					Disbursement:   disb,
+				})
+
+				t.Cleanup(func() {
+					data.DeleteAllPaymentsFixtures(t, ctx, dbPool)
+					data.DeleteAllReceiverWalletsFixtures(t, ctx, dbPool)
+				})
+
+				return models, rw.ID
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedJSON:   `{"error":"wallet has payments in progress"}`,
+		},
+		{
+			name: "500 – unexpected DB error bubbles up as internal error",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.RegisteredReceiversWalletStatus)
+
+				// close pool so UpdateStatusToReady fails with a generic error
+				dbPool.Close()
+
+				return models, rw.ID
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusInternalServerError,
+			expectedJSON:   `{"error":"An internal error occurred while processing this request."}`,
+		},
+		{
+			name: "200 – happy path, status updated to READY",
+			setup: func(ctx context.Context, t *testing.T) (*data.Models, string) {
+				models := data.SetupModels(t)
+				dbPool := models.DBConnectionPool
+
+				wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
+				recv := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
+				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
+					data.RegisteredReceiversWalletStatus)
+
+				return models, rw.ID
+			},
+			body:           `{"status":"READY"}`,
+			expectedStatus: http.StatusOK,
+			expectedJSON:   `{"message":"receiver wallet status updated to \"READY\""}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			models, receiverWalletID := tc.setup(ctx, t)
+
+			handler := ReceiverWalletsHandler{Models: models}
+			router := chi.NewRouter()
+			router.Patch("/receivers/wallets/{receiver_wallet_id}/status", handler.PatchReceiverWalletStatus)
+
+			url := fmt.Sprintf("/receivers/wallets/%s/status", receiverWalletID)
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(tc.body))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+
+			respBody, readErr := io.ReadAll(resp.Body)
+			require.NoError(t, readErr)
+
+			if tc.expectedJSON != "" {
+				assert.JSONEq(t, tc.expectedJSON, string(respBody))
+			}
+		})
+	}
 }

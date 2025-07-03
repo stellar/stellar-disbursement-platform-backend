@@ -1,9 +1,11 @@
 package data
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_ReceiversWalletStatus_TransitionTo(t *testing.T) {
@@ -106,6 +108,58 @@ func Test_ReceiversWalletStatus_Validate(t *testing.T) {
 				assert.NoError(t, err)
 			} else {
 				assert.EqualError(t, err, tt.err)
+			}
+		})
+	}
+}
+
+func Test_ReceiversWalletStatus_ReceiversWalletStatuses(t *testing.T) {
+	expectedStatuses := []ReceiversWalletStatus{DraftReceiversWalletStatus, ReadyReceiversWalletStatus, RegisteredReceiversWalletStatus, FlaggedReceiversWalletStatus}
+	require.Equal(t, expectedStatuses, ReceiversWalletStatuses())
+}
+
+func Test_ReceiversWalletStatus_ToReceiversWalletStatus(t *testing.T) {
+	tests := []struct {
+		name   string
+		actual string
+		want   ReceiversWalletStatus
+		err    error
+	}{
+		{
+			name:   "valid status",
+			actual: "DRAFT",
+			want:   DraftReceiversWalletStatus,
+			err:    nil,
+		},
+		{
+			name:   "valid status with lower case",
+			actual: "draft",
+			want:   DraftReceiversWalletStatus,
+			err:    nil,
+		},
+		{
+			name:   "valid status with mixed case",
+			actual: "DrAfT",
+			want:   DraftReceiversWalletStatus,
+			err:    nil,
+		},
+		{
+			name:   "invalid status",
+			actual: "INVALID",
+			want:   "",
+			err:    fmt.Errorf("invalid receiver wallet status \"INVALID\""),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ToReceiversWalletStatus(tt.actual)
+
+			if tt.err != nil {
+				assert.ErrorContains(t, err, tt.err.Error())
+				return
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.want, got)
 			}
 		})
 	}

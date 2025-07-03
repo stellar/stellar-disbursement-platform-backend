@@ -26,13 +26,16 @@ func NewPaymentQueryValidator() *PaymentQueryValidator {
 }
 
 // ValidateAndGetPaymentFilters validates the filters and returns a map of valid filters.
-func (qv *PaymentQueryValidator) ValidateAndGetPaymentFilters(filters map[data.FilterKey]interface{}) map[data.FilterKey]interface{} {
-	validFilters := make(map[data.FilterKey]interface{})
+func (qv *PaymentQueryValidator) ValidateAndGetPaymentFilters(filters map[data.FilterKey]any) map[data.FilterKey]any {
+	validFilters := make(map[data.FilterKey]any)
 	if filters[data.FilterKeyStatus] != nil {
 		validFilters[data.FilterKeyStatus] = qv.validateAndGetPaymentStatus(filters[data.FilterKeyStatus].(string))
 	}
 	if filters[data.FilterKeyReceiverID] != nil {
 		validFilters[data.FilterKeyReceiverID] = filters[data.FilterKeyReceiverID]
+	}
+	if filters[data.FilterKeyPaymentType] != nil {
+		validFilters[data.FilterKeyPaymentType] = qv.validateAndGetPaymentType(filters[data.FilterKeyPaymentType].(string))
 	}
 
 	createdAtAfter := qv.ValidateAndGetTimeParams(string(data.FilterKeyCreatedAtAfter), filters[data.FilterKeyCreatedAtAfter])
@@ -64,4 +67,16 @@ func (qv *PaymentQueryValidator) validateAndGetPaymentStatus(status string) data
 
 	qv.Check(false, string(data.FilterKeyStatus), fmt.Sprintf("invalid parameter. valid values are: %v", data.PaymentStatuses()))
 	return ""
+}
+
+func (qv *PaymentQueryValidator) validateAndGetPaymentType(typeParam string) data.PaymentType {
+	switch strings.ToUpper(strings.TrimSpace(typeParam)) {
+	case "DIRECT":
+		return data.PaymentTypeDirect
+	case "DISBURSEMENT":
+		return data.PaymentTypeDisbursement
+	default:
+		qv.Check(false, string(data.FilterKeyPaymentType), fmt.Sprintf("invalid payment type '%s'. Must be 'direct' or 'disbursement'", typeParam))
+		return ""
+	}
 }

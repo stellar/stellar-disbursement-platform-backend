@@ -200,14 +200,19 @@ func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLEx
 	require.NoError(t, err)
 }
 
-// ClearAndCreateWalletFixtures deletes all wallets in the database then creates new wallets for testing
-func ClearAndCreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Wallet {
-	DeleteAllWalletFixtures(t, ctx, sqlExec)
+// CreateWalletFixtures creates a set of wallets for testing purposes.
+func CreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Wallet {
 	expected := []Wallet{
 		*CreateWalletFixture(t, ctx, sqlExec, "BOSS Money", "https://www.walletbyboss.com", "www.walletbyboss.com", "https://www.walletbyboss.com"),
 		*CreateWalletFixture(t, ctx, sqlExec, "Vibrant Assist", "https://vibrantapp.com", "vibrantapp.com", "vibrantapp://"),
 	}
 	return expected
+}
+
+// ClearAndCreateWalletFixtures deletes all wallets in the database then creates new wallets for testing
+func ClearAndCreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) []Wallet {
+	DeleteAllWalletFixtures(t, ctx, sqlExec)
+	return CreateWalletFixtures(t, ctx, sqlExec)
 }
 
 func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, enabled bool, walletIDs ...string) {
@@ -382,12 +387,11 @@ func DeleteAllReceiverVerificationFixtures(t *testing.T, ctx context.Context, sq
 }
 
 func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, receiverID, walletID string, status ReceiversWalletStatus) *ReceiverWallet {
-	var stellarAddress, stellarMemo, stellarMemoType, anchorPlatformTransactionID string
+	var stellarAddress, stellarMemo, stellarMemoType, anchorPlatformTransactionID, otp, otpConfirmedWith string
+	var otpConfirmedAt, otpCreatedAt, invitationSentAt time.Time
 
 	if status != DraftReceiversWalletStatus && status != ReadyReceiversWalletStatus {
-		kp, err := keypair.Random()
-		require.NoError(t, err)
-		stellarAddress = kp.Address()
+		stellarAddress = keypair.MustRandom().Address()
 
 		randNumber, err := rand.Int(rand.Reader, big.NewInt(90000))
 		require.NoError(t, err)
@@ -397,14 +401,20 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 
 		anchorPlatformTransactionID, err = utils.RandomString(10)
 		require.NoError(t, err)
+
+		otp = randNumber.String()
+		otpConfirmedWith = "user@example.com"
+		invitationSentAt, otpConfirmedAt, otpCreatedAt = time.Now(), time.Now(), time.Now()
 	}
 
 	query := `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
-				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, anchor_platform_transaction_id)
+				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history,
+otp, otp_confirmed_with, otp_confirmed_at, otp_created_at,anchor_platform_transaction_id, invitation_sent_at)
 			VALUES
-				($1, $2, $3, $4, $5, $6, ARRAY[create_receiver_wallet_status_history(now(), $6)], $7)
+				($1, $2, $3, $4, $5, $6, ARRAY[create_receiver_wallet_status_history(now(), $6, '')], 
+$7, $8, $9, $10 ,$11, $12)
 			RETURNING
 				*
 		)
@@ -419,9 +429,10 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, utils.SQLNullString(stellarMemo), utils.SQLNullString(stellarMemoType), status, anchorPlatformTransactionID)
-	require.NoError(t, err)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletID, stellarAddress, utils.SQLNullString(stellarMemo), utils.SQLNullString(stellarMemoType), status,
+		utils.SQLNullString(otp), utils.SQLNullString(otpConfirmedWith), utils.SQLNullTime(otpConfirmedAt), utils.SQLNullTime(otpCreatedAt), anchorPlatformTransactionID, utils.SQLNullTime(invitationSentAt))
 
+	require.NoError(t, err)
 	return &receiverWallet
 }
 
@@ -481,19 +492,32 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.UpdatedAt = time.Now()
 	}
 
+	// todo this is temp if statement, we should set type explicitly in the tests, will tackle this in next PRs
+	if p.Disbursement != nil && p.Disbursement.ID != "" {
+		p.Type = PaymentTypeDisbursement
+	}
+
+	var disbursementID any
+	if p.Type == PaymentTypeDisbursement {
+		require.NotNil(t, p.Disbursement, "Disbursement must be set for disbursement payments")
+		disbursementID = p.Disbursement.ID
+	} else {
+		disbursementID = nil
+	}
+
 	const query = `
 		INSERT INTO payments
 			(receiver_id, disbursement_id, receiver_wallet_id, asset_id, amount, status, status_history,
-			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id)
+			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING
 			id
 	`
 	var newId string
 	err := sqlExec.GetContext(ctx, &newId, query,
 		p.ReceiverWallet.Receiver.ID,
-		p.Disbursement.ID,
+		disbursementID,
 		p.ReceiverWallet.ID,
 		p.Asset.ID,
 		p.Amount,
@@ -504,6 +528,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.CreatedAt,
 		p.UpdatedAt,
 		p.ExternalPaymentID,
+		p.Type,
 	)
 	require.NoError(t, err)
 
@@ -548,6 +573,16 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	}
 	if utils.IsEmpty(d.RegistrationContactType) {
 		d.RegistrationContactType = RegistrationContactTypePhone
+	}
+
+	if d.CreatedAt == nil {
+		now := time.Now()
+		d.CreatedAt = &now
+	}
+
+	if d.UpdatedAt == nil {
+		now := time.Now()
+		d.UpdatedAt = &now
 	}
 
 	// insert disbursement
@@ -806,6 +841,13 @@ func CreateShortURLFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		VALUES ($1, $2)
 	`
 	_, err := sqlExec.ExecContext(ctx, query, shortCode, url)
+	require.NoError(t, err)
+}
+
+func CleanupBridgeIntegration(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM bridge_integration")
 	require.NoError(t, err)
 }
 

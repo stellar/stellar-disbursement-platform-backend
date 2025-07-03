@@ -1,5 +1,5 @@
 # Stage 1: Build the Go application
-FROM golang:1.24.2-bullseye AS build
+FROM golang:1.24.4-alpine AS build
 ARG GIT_COMMIT
 
 WORKDIR /src/stellar-disbursement-platform
@@ -9,11 +9,11 @@ COPY . ./
 RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 
 # Stage 2: Setup the development environment with Delve for debugging
-FROM golang:1.24.2-bullseye AS development
+FROM golang:1.24.4-alpine AS development
 
 # set workdir according to repo structure so remote debug source code is in sync
 WORKDIR /app/github.com/stellar/stellar-disbursement-platform
-RUN apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache jq
 # Copy the built executable and all source files for debugging
 COPY --from=build /src/stellar-disbursement-platform /app/github.com/stellar/stellar-disbursement-platform
 # Build a debug version of the binary

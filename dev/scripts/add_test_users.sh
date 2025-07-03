@@ -1,12 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 echo "running $0 from directory $(pwd)"
 
 # Credentials for Basic Auth
 USERNAME="SDP-admin"
 PASSWORD="api_key_1234567890"
 
-# Retrieve tenant details using curl with Basic Auth from an API endpoint
-TENANTS_JSON=$(curl -u $USERNAME:$PASSWORD -s http://localhost:8003/tenants/)
+# Retrieve tenant details using wget with Basic Auth from an API endpoint
+AUTH_HEADER="Authorization: Basic $(echo -n "$USERNAME:$PASSWORD" | base64)"
+TENANTS_JSON=$(wget --quiet --header="$AUTH_HEADER" --output-document=- http://localhost:8003/tenants/)
 
 if [ -z "$TENANTS_JSON" ]; then
   echo "No tenant details could be retrieved. Exiting."

@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
 func Test_ExportHandler_ExportDisbursements(t *testing.T) {
@@ -47,7 +48,7 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 		Status:    data.StartedDisbursementStatus,
 		Wallet:    wallet,
 		Asset:     asset,
-		CreatedAt: time.Date(2023, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2023, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
@@ -55,7 +56,7 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 		Status:    data.DraftDisbursementStatus,
 		Wallet:    wallet,
 		Asset:     asset,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
@@ -63,7 +64,7 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 		Status:    data.ReadyDisbursementStatus,
 		Wallet:    wallet,
 		Asset:     asset,
-		CreatedAt: time.Date(2021, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2021, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	tests := []struct {

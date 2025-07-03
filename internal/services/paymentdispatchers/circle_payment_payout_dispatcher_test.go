@@ -255,7 +255,7 @@ func Test_CirclePaymentPayoutDispatcher_ensureRecipientIsReady_success_assertMem
 			isMemoTracingEnabled: true,
 			receiverWallet:       rwWithoutMemo,
 			assertMemo: func(t *testing.T, rw *data.ReceiverWallet, recipientRequest circle.RecipientRequest) {
-				assert.Equal(t, GenerateHashFromBaseURL(*tnt.BaseURL), recipientRequest.AddressTag)
+				assert.Equal(t, tenant.GenerateHashFromBaseURL(*tnt.BaseURL), recipientRequest.AddressTag)
 				assert.NotEmpty(t, recipientRequest.AddressTag)
 			},
 		},

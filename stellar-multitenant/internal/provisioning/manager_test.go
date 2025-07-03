@@ -453,6 +453,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"auth_user_mfa_codes",
 		"auth_user_password_reset",
 		"auth_users",
+		"bridge_integration",
 		"circle_client_config",
 		"circle_recipients",
 		"circle_transfer_requests",
@@ -463,6 +464,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"receiver_verifications",
 		"receiver_verifications_audit",
 		"receiver_wallets",
+		"receiver_wallets_audit",
 		"receivers",
 		"receivers_audit",
 		"sdp_migrations",
@@ -470,6 +472,8 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"wallets",
 		"wallets_assets",
 		"receiver_registration_attempts",
+		"api_keys",
+		"api_keys_audit",
 	}
 }
 

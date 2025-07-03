@@ -1,10 +1,10 @@
-linters:
-  # Enable these linters in addition to the default linters that golangci-lint starts with.
+version: "2"
+formatters:
   enable:
     - gofmt
+    - goimports
     - gofumpt
-    - govet
 
-linters-settings:
-  gofmt:
-    simplify: true
+linters:
+  enable:
+    - govet

@@ -175,8 +175,12 @@ func validatePaymentReadyForSending(p *data.Payment) error {
 	if p.ReceiverWallet.Status != data.RegisteredReceiversWalletStatus {
 		return fmt.Errorf("receiver wallet %s for payment %s is not in %s state", p.ReceiverWallet.ID, p.ID, data.RegisteredReceiversWalletStatus)
 	}
-	if p.Disbursement.Status != data.StartedDisbursementStatus {
-		return fmt.Errorf("disbursement %s for payment %s is not in %s state", p.Disbursement.ID, p.ID, data.StartedDisbursementStatus)
+
+	if p.Type == data.PaymentTypeDisbursement {
+		if p.Disbursement.Status != data.StartedDisbursementStatus {
+			return fmt.Errorf("disbursement %s for payment %s is not in %s state",
+				p.Disbursement.ID, p.ID, data.StartedDisbursementStatus)
+		}
 	}
 
 	// verify that transaction required fields are not empty

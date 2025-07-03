@@ -238,6 +238,31 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 	return strings.Join(columns, ",\n")
 }
 
+// GetByID returns a receiver wallet by ID
+func (rw *ReceiverWalletModel) GetByID(ctx context.Context, sqlExec db.SQLExecuter, id string) (*ReceiverWallet, error) {
+	query := `
+		SELECT
+			` + ReceiverWalletColumnNames("rw", "") + `,
+			` + WalletColumnNames("w", "wallet", false) + `
+		FROM
+			receiver_wallets rw
+		JOIN
+			wallets w ON rw.wallet_id = w.id
+		WHERE
+			rw.id = $1
+	`
+
+	var receiverWallet ReceiverWallet
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying receiver wallet: %w", err)
+	}
+	return &receiverWallet, nil
+}
+
 // GetByIDs returns a receiver wallet by IDs
 func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, ids ...string) ([]ReceiverWallet, error) {
 	if len(ids) == 0 {
@@ -462,7 +487,7 @@ func (rw *ReceiverWalletModel) UpdateStatusByDisbursementID(ctx context.Context,
 	query := `
 		UPDATE receiver_wallets
 		SET status = $1,
-			status_history = array_append(status_history, create_receiver_wallet_status_history(NOW(), $1))
+			status_history = array_append(status_history, create_receiver_wallet_status_history(NOW(), $1, ''))
 		WHERE id IN (
 			SELECT rw.id
 			FROM payments p
@@ -642,7 +667,7 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	if update.Status != "" {
 		fields = append(fields, "status = ?")
 		args = append(args, update.Status)
-		fields = append(fields, "status_history = array_prepend(create_receiver_wallet_status_history(NOW(), ?), status_history)")
+		fields = append(fields, "status_history = array_prepend(create_receiver_wallet_status_history(NOW(), ?, ''), status_history)")
 		args = append(args, update.Status)
 	}
 	if update.AnchorPlatformTransactionID != "" {
@@ -693,4 +718,81 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	}
 
 	return nil
+}
+
+var (
+	ErrWalletNotRegistered         = errors.New("receiver wallet not registered")
+	ErrPaymentsInProgressForWallet = errors.New("receiver wallet has payments in progress")
+	ErrUnregisterUserManagedWallet = errors.New("user managed wallet cannot be unregistered")
+)
+
+// UpdateStatusToReady updates the status of a receiver wallet to "READY" and clears the stellar address and memo.
+func (rw *ReceiverWalletModel) UpdateStatusToReady(ctx context.Context, id string) error {
+	return db.RunInTransaction(ctx, rw.dbConnectionPool, nil, func(tx db.DBTransaction) error {
+		// 1. Check if the receiver-wallet is in "REGISTERED" status
+		receiverWallet, err := rw.GetByID(ctx, tx, id)
+		if err != nil {
+			return fmt.Errorf("getting receiver wallet with ID %q: %w", id, err)
+		}
+
+		if receiverWallet.Status != RegisteredReceiversWalletStatus {
+			return ErrWalletNotRegistered
+		}
+
+		// 2. Check if the wallet is user managed
+		if receiverWallet.Wallet.UserManaged {
+			return ErrUnregisterUserManagedWallet
+		}
+
+		// 3. Check if there are payments in progress
+		paymentsInProgress, err := rw.HasPaymentsInProgress(ctx, tx, id)
+		if err != nil {
+			return fmt.Errorf("checking payments in progress for receiver wallet %s: %w", id, err)
+		}
+		if paymentsInProgress {
+			return ErrPaymentsInProgressForWallet
+		}
+
+		// Record wallet id and memo in status message.
+		statusMessage := fmt.Sprintf("unregistered stellar address %s, memo %s", receiverWallet.StellarAddress, receiverWallet.StellarMemo)
+		const q = `
+			UPDATE receiver_wallets
+			SET status = 'READY',
+				status_history = array_append(status_history, create_receiver_wallet_status_history(NOW(), 'READY', $1)),
+					stellar_address = NULL,
+					stellar_memo = NULL,
+					stellar_memo_type = NULL,
+					invitation_sent_at = NULL,
+					otp = NULL,
+					otp_confirmed_at = NULL,
+					otp_confirmed_with = NULL,
+					otp_created_at = NULL,
+					anchor_platform_transaction_id = NULL,
+					anchor_platform_transaction_synced_at = NULL
+			WHERE id = $2
+	`
+		_, err = tx.ExecContext(ctx, q, statusMessage, id)
+		if err != nil {
+			return fmt.Errorf("unregistering receiver wallet: %w", err)
+		}
+		return nil
+	})
+}
+
+// HasPaymentsInProgress checks if there are any payments in progress for the given receiver wallet ID.
+func (rw *ReceiverWalletModel) HasPaymentsInProgress(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (bool, error) {
+	const q = `
+        SELECT EXISTS (
+            SELECT 1
+              FROM payments
+             WHERE receiver_wallet_id = $1
+               AND status = ANY($2)
+        )
+    `
+
+	var exists bool
+	if err := sqlExec.GetContext(ctx, &exists, q, receiverWalletID, pq.Array(PaymentInProgressStatuses())); err != nil {
+		return false, fmt.Errorf("checking payments in progress for receiver wallet: %w", err)
+	}
+	return exists, nil
 }

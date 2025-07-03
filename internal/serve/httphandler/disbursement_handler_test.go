@@ -32,6 +32,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -189,8 +190,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
 	user := &auth.User{
 		ID:    "user-id",
 		Email: "email@email.com",
@@ -387,7 +387,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mAuthManager := &auth.AuthManagerMock{}
 			mAuthManager.
-				On("GetUser", mock.Anything, token).
+				On("GetUserByID", mock.Anything, "user-id").
 				Return(user, nil)
 			mMonitorService := monitorMocks.NewMockMonitorService(t)
 			if tc.prepareMocksFn != nil {
@@ -618,7 +618,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:          "disbursement 2",
@@ -626,7 +626,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC)),
 	})
 	disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:          "disbursement 3",
@@ -634,7 +634,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: startedStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC)),
 	})
 	disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:          "disbursement 4",
@@ -642,7 +642,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		StatusHistory: draftStatusHistory,
 		Asset:         asset,
 		Wallet:        wallet,
-		CreatedAt:     time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC),
+		CreatedAt:     testutils.TimePtr(time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	tests := []struct {
@@ -908,21 +908,18 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
-	user := &auth.User{
-		ID:    "user-id",
-		Email: "email@email.com",
-	}
+	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUser", mock.Anything, token).
-		Return(user, nil).
+		On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&auth.User{
+			ID:    "user-id",
+			Email: "email@email.com",
+		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
-			val := mockCtx.Value(middleware.TokenContextKey)
-			assert.Equal(t, token, val)
+			val := mockCtx.Value(middleware.UserIDContextKey)
+			assert.Equal(t, "user-id", val)
 		})
 
 	handler := &DisbursementHandler{
@@ -966,7 +963,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 		Name:      "disbursement 1",
 		Status:    data.StartedDisbursementStatus,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	maxCSVRecords := [][]string{
@@ -1322,7 +1319,7 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 				UserID: startedByUser.ID,
 			},
 		},
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
 	response := services.DisbursementWithUserMetadata{
@@ -2157,8 +2154,7 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
 
 	// Setup fixtures
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
@@ -2179,15 +2175,15 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	// Setup Mocks
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUser", mock.Anything, token).
+		On("GetUserByID", mock.Anything, mock.Anything).
 		Return(&auth.User{
 			ID:    "user-id",
 			Email: "email@email.com",
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
-			val := mockCtx.Value(middleware.TokenContextKey)
-			assert.Equal(t, token, val)
+			val := mockCtx.Value(middleware.UserIDContextKey)
+			assert.Equal(t, "user-id", val)
 		})
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)

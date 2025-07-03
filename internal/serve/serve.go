@@ -17,6 +17,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -93,6 +94,7 @@ type ServeOptions struct {
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
 	CircleAPIType                   circle.APIType
+	BridgeService                   bridge.ServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -228,16 +230,33 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Authenticated Routes
 	authManager := o.authManager
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.AuthenticateMiddleware(authManager, o.tenantManager))
+		r.Use(middleware.APIKeyOrJWTAuthenticate(o.Models.APIKeys, middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
 		r.Use(middleware.EnsureTenantMiddleware)
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
-			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
-			r.Get("/", statisticsHandler.GetStatistics)
-			r.Get("/{id}", statisticsHandler.GetStatisticsByDisbursement)
+		r.With(middleware.RequirePermission(
+			data.WriteAll,
+			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
+		)).Route("/api-keys", func(r chi.Router) {
+			apiKeyHandler := httphandler.APIKeyHandler{
+				Models: o.Models,
+			}
+			r.Get("/{id}", apiKeyHandler.GetApiKeyByID)
+			r.Get("/", apiKeyHandler.GetAllApiKeys)
+			r.Post("/", apiKeyHandler.CreateAPIKey)
+			r.Patch("/{id}", apiKeyHandler.UpdateKey)
+			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).Route("/users", func(r chi.Router) {
+		r.With(middleware.RequirePermission(
+			data.ReadStatistics,
+			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+		)).Route("/statistics", func(r chi.Router) {
+			h := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
+			r.Get("/", h.GetStatistics)
+			r.Get("/{id}", h.GetStatisticsByDisbursement)
+		})
+
+		r.Route("/users", func(r chi.Router) {
 			userHandler := httphandler.UserHandler{
 				AuthManager:        authManager,
 				CrashTrackerClient: o.CrashTrackerClient,
@@ -245,13 +264,28 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:             o.Models,
 			}
 
-			r.Get("/", userHandler.GetAllUsers)
-			r.Post("/", userHandler.CreateUser)
-			r.Get("/roles", httphandler.ListRolesHandler{}.GetRoles)
-			r.Patch("/roles", userHandler.UpdateUserRoles)
-			r.Patch("/activation", userHandler.UserActivation)
+			r.With(middleware.RequirePermission(
+				data.ReadUsers,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+			)).Group(func(r chi.Router) {
+				r.Get("/", userHandler.GetAllUsers)
+				r.Get("/roles", httphandler.ListRolesHandler{}.GetRoles)
+			})
+
+			r.With(middleware.RequirePermission(
+				data.WriteUsers,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+			)).Group(func(r chi.Router) {
+				r.Post("/", userHandler.CreateUser)
+				r.Patch("/roles", userHandler.UpdateUserRoles)
+				r.Patch("/activation", userHandler.UserActivation)
+			})
 		})
-		r.Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager}.PostRefreshToken)
+
+		r.With(middleware.RequirePermission(
+			data.ReadAll,
+			middleware.AnyRoleMiddleware(authManager),
+		)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager}.PostRefreshToken)
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
@@ -267,32 +301,31 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					DistributionAccountService: o.DistributionAccountService,
 				},
 			}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Post("/", handler.PostDisbursement)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Delete("/{id}", handler.DeleteDisbursement)
+			// Group all READ operations
+			r.With(middleware.RequirePermission(
+				data.ReadDisbursements,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+			)).Group(func(r chi.Router) {
+				r.Get("/", handler.GetDisbursements)
+				r.Get("/{id}", handler.GetDisbursement)
+				r.Get("/{id}/receivers", handler.GetDisbursementReceivers)
+				r.Get("/{id}/instructions", handler.GetDisbursementInstructions)
+			})
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Post("/{id}/instructions", handler.PostDisbursementInstructions)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Get("/{id}/instructions", handler.GetDisbursementInstructions)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
-				Get("/", handler.GetDisbursements)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
-				Get("/{id}", handler.GetDisbursement)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
-				Get("/{id}/receivers", handler.GetDisbursementReceivers)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Patch("/{id}/status", handler.PatchDisbursementStatus)
+			// Group all WRITE operations
+			r.With(middleware.RequirePermission(
+				data.WriteDisbursements,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+			)).Group(func(r chi.Router) {
+				r.Post("/", handler.PostDisbursement)
+				r.Delete("/{id}", handler.DeleteDisbursement)
+				r.Post("/{id}/instructions", handler.PostDisbursementInstructions)
+				r.Patch("/{id}/status", handler.PatchDisbursementStatus)
+			})
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
+		r.Route("/payments", func(r chi.Router) {
 			paymentsHandler := httphandler.PaymentsHandler{
 				Models:                      o.Models,
 				DBConnectionPool:            o.MtnDBConnectionPool,
@@ -300,44 +333,82 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				DirectPaymentService: services.NewDirectPaymentService(
+					o.Models,
+					o.EventProducer,
+					o.DistributionAccountService,
+					o.SubmitterEngine,
+				),
 			}
-			r.Get("/", paymentsHandler.GetPayments)
-			r.Get("/{id}", paymentsHandler.GetPayment)
-			r.Patch("/retry", paymentsHandler.RetryPayments)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Patch("/{id}/status", paymentsHandler.PatchPaymentStatus)
+
+			// Read operations
+			r.With(middleware.RequirePermission(
+				data.ReadPayments,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+			)).Group(func(r chi.Router) {
+				r.Get("/", paymentsHandler.GetPayments)
+				r.Get("/{id}", paymentsHandler.GetPayment)
+			})
+
+			// Write operations with different role permissions
+			r.With(middleware.RequirePermission(
+				data.WritePayments,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+			)).Group(func(r chi.Router) {
+				r.Post("/", paymentsHandler.PostDirectPayment)
+				r.Patch("/retry", paymentsHandler.RetryPayments)
+			})
+
+			r.With(middleware.RequirePermission(
+				data.WritePayments,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+			)).Patch("/{id}/status", paymentsHandler.PatchPaymentStatus)
 		})
 
 		r.Route("/receivers", func(r chi.Router) {
 			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
-				Get("/", receiversHandler.GetReceivers)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
-				Get("/{id}", receiversHandler.GetReceiver)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Get("/verification-types", receiversHandler.GetReceiverVerificationTypes)
+			// Read operations
+			r.With(middleware.RequirePermission(
+				data.ReadReceivers,
+				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+			)).Get("/verification-types", receiversHandler.GetReceiverVerificationTypes)
 
+			r.With(middleware.RequirePermission(
+				data.ReadReceivers,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+			)).Group(func(r chi.Router) {
+				r.Get("/", receiversHandler.GetReceivers)
+				r.Get("/{id}", receiversHandler.GetReceiver)
+			})
+
+			// Write operations
 			updateReceiverHandler := httphandler.UpdateReceiverHandler{
 				Models:           o.Models,
 				DBConnectionPool: o.MtnDBConnectionPool,
 				AuthManager:      authManager,
 			}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Patch("/{id}", updateReceiverHandler.UpdateReceiver)
-
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
 				Models:             o.Models,
 				CrashTrackerClient: o.CrashTrackerClient,
 				EventProducer:      o.EventProducer,
 			}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
+
+			r.With(middleware.RequirePermission(
+				data.WriteReceivers,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+			)).Group(func(r chi.Router) {
+				r.Post("/", receiversHandler.CreateReceiver)
+				r.Patch("/{id}", updateReceiverHandler.UpdateReceiver)
+				r.Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
+				r.Patch("/wallets/{receiver_wallet_id}/status", receiverWalletHandler.PatchReceiverWalletStatus)
+			})
 		})
 
-		r.
-			With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-			Get("/registration-contact-types", httphandler.RegistrationContactTypesHandler{}.Get)
+		r.With(middleware.RequirePermission(
+			data.ReadAll,
+			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+		)).Get("/registration-contact-types", httphandler.RegistrationContactTypesHandler{}.Get)
 
 		r.Route("/assets", func(r chi.Router) {
 			assetsHandler := httphandler.AssetsHandler{
@@ -345,29 +416,48 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				SubmitterEngine: o.SubmitterEngine,
 			}
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Get("/", assetsHandler.GetAssets)
+			// Read operations
+			r.With(middleware.RequirePermission(
+				data.ReadAll,
+				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+			)).Get("/", assetsHandler.GetAssets)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole)).
-				Post("/", assetsHandler.CreateAsset)
-
-			r.Route("/{id}", func(r chi.Router) {
-				r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole)).Delete("/", assetsHandler.DeleteAsset)
+			// Write operations
+			r.With(middleware.RequirePermission(
+				data.WriteAll,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole),
+			)).Group(func(r chi.Router) {
+				r.Post("/", assetsHandler.CreateAsset)
+				r.Delete("/{id}", assetsHandler.DeleteAsset)
 			})
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/wallets", func(r chi.Router) {
+		r.Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{
-				Models:      o.Models,
-				NetworkType: o.NetworkType,
+				Models:              o.Models,
+				NetworkType:         o.NetworkType,
+				WalletAssetResolver: services.NewWalletAssetResolver(o.Models.Assets),
 			}
-			r.Get("/", walletsHandler.GetWallets)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
-				Post("/", walletsHandler.PostWallets)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
-				Delete("/{id}", walletsHandler.DeleteWallet)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
-				Patch("/{id}", walletsHandler.PatchWallets)
+
+			// Read operations
+			r.With(middleware.RequirePermission(
+				data.ReadWallets,
+				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+			)).Get("/", walletsHandler.GetWallets)
+
+			// Write operations
+			r.With(middleware.RequirePermission(
+				data.WriteWallets,
+				middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole),
+			)).Group(func(r chi.Router) {
+				r.Post("/", walletsHandler.PostWallets)
+				r.Delete("/{id}", walletsHandler.DeleteWallet)
+			})
+
+			r.With(middleware.RequirePermission(
+				data.WriteWallets,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
 		profileHandler := httphandler.ProfileHandler{
@@ -379,52 +469,92 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkType:                 o.NetworkType,
 		}
 		r.Route("/profile", func(r chi.Router) {
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Get("/", profileHandler.GetProfile)
+			// Read operations
+			r.With(middleware.RequirePermission(
+				data.ReadAll,
+				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+			)).Get("/", profileHandler.GetProfile)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Patch("/", profileHandler.PatchUserProfile)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Patch("/reset-password", profileHandler.PatchUserPassword)
+			// Write operations
+			r.With(middleware.RequirePermission(
+				data.WriteAll,
+				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+			)).Group(func(r chi.Router) {
+				r.Patch("/", profileHandler.PatchUserProfile)
+				r.Patch("/reset-password", profileHandler.PatchUserPassword)
+			})
 		})
 
 		r.Route("/organization", func(r chi.Router) {
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-				Patch("/", profileHandler.PatchOrganizationProfile)
+			// Read operations
+			r.With(middleware.RequirePermission(
+				data.ReadOrganization,
+				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+			)).Get("/", profileHandler.GetOrganizationInfo)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
-				Get("/", profileHandler.GetOrganizationInfo)
+			// Write operations with different role permissions
+			r.With(middleware.RequirePermission(
+				data.WriteOrganization,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+			)).Patch("/", profileHandler.PatchOrganizationProfile)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
-				Patch("/circle-config", httphandler.CircleConfigHandler{
-					NetworkType:                 o.NetworkType,
-					CircleFactory:               circle.NewClient,
-					TenantManager:               o.tenantManager,
-					Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
-					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
-					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
-					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
-					MonitorService:              o.MonitorService,
-				}.Patch)
+			r.With(middleware.RequirePermission(
+				data.WriteOrganization,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+			)).Patch("/circle-config", httphandler.CircleConfigHandler{
+				NetworkType:                 o.NetworkType,
+				CircleFactory:               circle.NewClient,
+				TenantManager:               o.tenantManager,
+				Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+				EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
+				CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				MonitorService:              o.MonitorService,
+			}.Patch)
 		})
 
-		balancesHandler := httphandler.BalancesHandler{
+		// Bridge integration endpoints
+		if o.BridgeService != nil {
+			r.Route("/bridge-integration", func(r chi.Router) {
+				bridgeIntegrationHandler := httphandler.BridgeIntegrationHandler{
+					BridgeService:               o.BridgeService,
+					AuthManager:                 authManager,
+					Models:                      o.Models,
+					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				}
+
+				r.With(middleware.RequirePermission(
+					data.ReadOrganization,
+					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+				)).Get("/", bridgeIntegrationHandler.Get)
+
+				r.With(middleware.RequirePermission(
+					data.WriteOrganization,
+					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+				)).Patch("/", bridgeIntegrationHandler.Patch)
+			})
+		}
+
+		r.With(middleware.RequirePermission(
+			data.ReadAll,
+			middleware.AnyRoleMiddleware(authManager),
+		)).Get("/balances", httphandler.BalancesHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			CircleService:               o.CircleService,
 			NetworkType:                 o.NetworkType,
-		}
-		r.Get("/balances", balancesHandler.Get)
+		}.Get)
 
 		exportHandler := httphandler.ExportHandler{
 			Models: o.Models,
 		}
-		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
-			Route("/exports", func(r chi.Router) {
-				r.Get("/disbursements", exportHandler.ExportDisbursements)
-				r.Get("/payments", exportHandler.ExportPayments)
-				r.Get("/receivers", exportHandler.ExportReceivers)
-			})
+		r.With(middleware.RequirePermission(
+			data.ReadExports,
+			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+		)).Route("/exports", func(r chi.Router) {
+			r.Get("/disbursements", exportHandler.ExportDisbursements)
+			r.Get("/payments", exportHandler.ExportPayments)
+			r.Get("/receivers", exportHandler.ExportReceivers)
+		})
 	})
 
 	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())
