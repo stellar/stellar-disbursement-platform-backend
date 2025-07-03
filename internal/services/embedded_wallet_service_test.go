@@ -394,7 +394,7 @@ func Test_EmbeddedWalletService_GetWalletByToken(t *testing.T) {
 
 	tssModel := store.NewTransactionModel(dbConnectionPool)
 
-	service, err := NewEmbeddedWalletService(sdpModels, tssModel, "somehash")
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, "somehash", "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB")
 	require.NoError(t, err)
 
 	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: "tenant-id"})

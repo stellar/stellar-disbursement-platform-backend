@@ -350,7 +350,7 @@ func Test_WalletCreationHandler_GetWalletStatus(t *testing.T) {
 			token:          "invalid-token",
 			mockWallet:     nil,
 			mockError:      services.ErrInvalidToken,
-			expectedStatus: http.StatusNotFound,
+			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:           "internal server error",
@@ -398,5 +398,5 @@ func Test_WalletCreationHandler_GetWalletStatus_EmptyToken(t *testing.T) {
 
 	r.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	assert.Equal(t, http.StatusUnauthorized, rr.Result().StatusCode)
 }

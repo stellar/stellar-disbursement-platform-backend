@@ -119,14 +119,14 @@ func (h WalletCreationHandler) GetWalletStatus(rw http.ResponseWriter, req *http
 	ctx := req.Context()
 	token := strings.TrimSpace(chi.URLParam(req, "token"))
 	if len(token) == 0 {
-		httperror.BadRequest("Token is required", nil, nil).Render(rw)
+		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
 
 	wallet, err := h.EmbeddedWalletService.GetWalletByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidToken) {
-			httperror.NotFound("Wallet not found", err, nil).Render(rw)
+			httperror.Unauthorized("", err, nil).Render(rw)
 		} else {
 			httperror.InternalError(ctx, "Failed to get wallet status", err, nil).Render(rw)
 		}
