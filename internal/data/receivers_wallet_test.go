@@ -1929,3 +1929,229 @@ func TestReceiverWalletModel_HasPaymentsInProgress(t *testing.T) {
 		})
 	}
 }
+
+func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
+	ctx := context.Background()
+	models := SetupModels(t)
+	dbConnectionPool := models.DBConnectionPool
+
+	stellarAddress := "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
+
+	t.Run("insert without stellar_address succeeds", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+		insert := ReceiverWalletInsert{
+			ReceiverID: receiver.ID,
+			WalletID:   wallet.ID,
+		}
+
+		rwID, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert)
+		require.NoError(t, err)
+		require.NotEmpty(t, rwID)
+
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	t.Run("insert + update with unique stellar_address succeeds", func(t *testing.T) {
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+		insert := ReceiverWalletInsert{
+			ReceiverID: wallet2.ID,
+			WalletID:   wallet1.ID,
+		}
+
+		rwID, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert)
+		require.NoError(t, err)
+		require.NotEmpty(t, rwID)
+
+		update := ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}
+
+		err = models.ReceiverWallet.Update(ctx, rwID, update, dbConnectionPool)
+		require.NoError(t, err)
+
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	t.Run("same receiver can use same stellar_address across different wallets", func(t *testing.T) {
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+		insert1 := ReceiverWalletInsert{
+			ReceiverID: receiver.ID,
+			WalletID:   wallet1.ID,
+		}
+
+		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		require.NoError(t, err)
+
+		update1 := ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}
+
+		err = models.ReceiverWallet.Update(ctx, rwID1, update1, dbConnectionPool)
+		require.NoError(t, err)
+
+		insert2 := ReceiverWalletInsert{
+			ReceiverID: receiver.ID,
+			WalletID:   wallet2.ID,
+		}
+
+		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		require.NoError(t, err)
+
+		update2 := ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}
+
+		err = models.ReceiverWallet.Update(ctx, rwID2, update2, dbConnectionPool)
+		require.NoError(t, err, "Same receiver should be able to use same stellar address across different wallets")
+
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	t.Run("different receivers cannot use same stellar_address", func(t *testing.T) {
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+
+		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+		insert1 := ReceiverWalletInsert{
+			ReceiverID: receiver1.ID,
+			WalletID:   wallet1.ID,
+		}
+
+		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		require.NoError(t, err)
+
+		update1 := ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}
+
+		err = models.ReceiverWallet.Update(ctx, rwID1, update1, dbConnectionPool)
+		require.NoError(t, err)
+
+		insert2 := ReceiverWalletInsert{
+			ReceiverID: receiver2.ID,
+			WalletID:   wallet2.ID,
+		}
+
+		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		require.NoError(t, err)
+
+		update2 := ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}
+
+		err = models.ReceiverWallet.Update(ctx, rwID2, update2, dbConnectionPool)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "already belongs to another receiver")
+
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	t.Run("null stellar_address always succeeds", func(t *testing.T) {
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+
+		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+		insert1 := ReceiverWalletInsert{
+			ReceiverID: receiver1.ID,
+			WalletID:   wallet1.ID,
+		}
+
+		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		require.NoError(t, err)
+
+		insert2 := ReceiverWalletInsert{
+			ReceiverID: receiver2.ID,
+			WalletID:   wallet2.ID,
+		}
+
+		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		require.NoError(t, err)
+
+		_, err = dbConnectionPool.ExecContext(ctx, "DELETE FROM receiver_wallets WHERE id IN ($1, $2)", rwID1, rwID2)
+		require.NoError(t, err)
+	})
+
+	t.Run("direct database insert with conflicting stellar_address fails", func(t *testing.T) {
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+
+		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+		query1 := `
+			INSERT INTO receiver_wallets (receiver_id, wallet_id, stellar_address)
+			VALUES ($1, $2, $3)
+			RETURNING id
+		`
+
+		var rwID1 string
+		err := dbConnectionPool.GetContext(ctx, &rwID1, query1, receiver1.ID, wallet1.ID, stellarAddress)
+		require.NoError(t, err)
+
+		query2 := `
+			INSERT INTO receiver_wallets (receiver_id, wallet_id, stellar_address)
+			VALUES ($1, $2, $3)
+			RETURNING id
+		`
+
+		var rwID2 string
+		err = dbConnectionPool.GetContext(ctx, &rwID2, query2, receiver2.ID, wallet2.ID, stellarAddress)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "already belongs to another receiver")
+
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	t.Run("update existing receiver_wallet to conflicting stellar_address fails", func(t *testing.T) {
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+
+		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+		insert1 := ReceiverWalletInsert{
+			ReceiverID: receiver1.ID,
+			WalletID:   wallet1.ID,
+		}
+
+		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		require.NoError(t, err)
+
+		insert2 := ReceiverWalletInsert{
+			ReceiverID: receiver2.ID,
+			WalletID:   wallet2.ID,
+		}
+
+		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		require.NoError(t, err)
+
+		update1 := ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}
+
+		err = models.ReceiverWallet.Update(ctx, rwID1, update1, dbConnectionPool)
+		require.NoError(t, err)
+
+		update2 := ReceiverWalletUpdate{
+			StellarAddress: stellarAddress,
+		}
+
+		err = models.ReceiverWallet.Update(ctx, rwID2, update2, dbConnectionPool)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "already belongs to another receiver")
+
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+}
