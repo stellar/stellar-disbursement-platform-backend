@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
 func Test_AssetColumnNames(t *testing.T) {
@@ -546,13 +547,7 @@ func Test_AssetModelSoftDelete(t *testing.T) {
 }
 
 func Test_GetAssetsPerReceiverWallet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := context.Background()
 
 	models, err := NewModels(dbConnectionPool)
@@ -564,6 +559,8 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 
 	walletA := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
 	walletB := CreateWalletFixture(t, ctx, dbConnectionPool, "walletB", "https://www.b.com", "www.b.com", "b://")
+	walletC := CreateWalletFixture(t, ctx, dbConnectionPool, "walletC", "https://www.c.com", "www.c.com", "c://")
+	walletD := CreateWalletFixture(t, ctx, dbConnectionPool, "walletD", "https://www.d.com", "www.d.com", "d://")
 
 	disbursementA1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletA,
@@ -589,6 +586,30 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B2",
 	})
+	disbursementC1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet:                              walletC,
+		Status:                              ReadyDisbursementStatus,
+		Asset:                               asset1,
+		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template C1",
+	})
+	disbursementC2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet:                              walletC,
+		Status:                              ReadyDisbursementStatus,
+		Asset:                               asset2,
+		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template C2",
+	})
+	disbursementD1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet:                              walletD,
+		Status:                              ReadyDisbursementStatus,
+		Asset:                               asset1,
+		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template D1",
+	})
+	disbursementD2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet:                              walletD,
+		Status:                              ReadyDisbursementStatus,
+		Asset:                               asset2,
+		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template D2",
+	})
 
 	// 2. Create receivers, and receiver wallets:
 	receiverX := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -596,8 +617,10 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 
 	receiverWalletXA := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverX.ID, walletA.ID, DraftReceiversWalletStatus)
 	receiverWalletXB := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverX.ID, walletB.ID, DraftReceiversWalletStatus)
-	receiverWalletYA := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverY.ID, walletA.ID, DraftReceiversWalletStatus)
-	receiverWalletYB := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverY.ID, walletB.ID, DraftReceiversWalletStatus)
+
+	// ReceiverY uses walletC and walletD (different stellar address from receiverX)
+	receiverWalletYC := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverY.ID, walletC.ID, DraftReceiversWalletStatus)
+	receiverWalletYD := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverY.ID, walletD.ID, DraftReceiversWalletStatus)
 
 	// 3. Create payments:
 	// paymentXA1 - walletA, asset1 for receiverX on their receiverWalletA
@@ -690,47 +713,44 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 		Amount:         "1",
 	})
 
-	// paymentYA2 - walletA, asset2 for receiverY on their receiverWalletA
+	// Payments for receiverY (using walletC and walletD)
 	_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-		ReceiverWallet: receiverWalletYA,
-		Disbursement:   disbursementA2,
+		ReceiverWallet: receiverWalletYC,
+		Disbursement:   disbursementC2,
 		Asset:          *asset2,
 		Status:         ReadyPaymentStatus,
 		UpdatedAt:      time.Date(2024, 1, 6, 0, 0, 0, 0, time.UTC),
 		Amount:         "1",
 	})
 
-	// paymentYA1 - walletA, asset1 for receiverY on their receiverWalletA
 	_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-		ReceiverWallet: receiverWalletYA,
-		Disbursement:   disbursementA1,
+		ReceiverWallet: receiverWalletYC,
+		Disbursement:   disbursementC1,
 		Asset:          *asset1,
 		Status:         ReadyPaymentStatus,
 		UpdatedAt:      time.Date(2024, 2, 5, 0, 0, 0, 0, time.UTC),
 		Amount:         "1",
 	})
 
-	// paymentYB1 - walletB, asset1 for receiverY on their receiverWalletB
 	_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-		ReceiverWallet: receiverWalletYB,
-		Disbursement:   disbursementB1,
+		ReceiverWallet: receiverWalletYD,
+		Disbursement:   disbursementD1,
 		Asset:          *asset1,
 		Status:         ReadyPaymentStatus,
 		UpdatedAt:      time.Date(2024, 1, 7, 0, 0, 0, 0, time.UTC),
 		Amount:         "1",
 	})
 
-	// paymentYB2 - walletB, asset2 for receiverY on their receiverWalletB
 	_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-		ReceiverWallet: receiverWalletYB,
-		Disbursement:   disbursementB2,
+		ReceiverWallet: receiverWalletYD,
+		Disbursement:   disbursementD2,
 		Asset:          *asset2,
 		Status:         ReadyPaymentStatus,
 		UpdatedAt:      time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC),
 		Amount:         "1",
 	})
 
-	gotLatestAssetsPerRW, err := models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWalletXA, receiverWalletXB, receiverWalletYA, receiverWalletYB)
+	gotLatestAssetsPerRW, err := models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWalletXA, receiverWalletXB, receiverWalletYC, receiverWalletYD)
 	require.NoError(t, err)
 	require.Len(t, gotLatestAssetsPerRW, 8)
 
@@ -794,55 +814,55 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
-				ID: receiverWalletYA.ID,
+				ID: receiverWalletYC.ID,
 				Receiver: Receiver{
 					ID:          receiverY.ID,
 					Email:       receiverY.Email,
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletA.ID,
+			WalletID: walletC.ID,
 			Asset:    *asset1,
-			DisbursementReceiverRegistrationMsgTemplate: &disbursementA1.ReceiverRegistrationMessageTemplate,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementC1.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
-				ID: receiverWalletYA.ID,
+				ID: receiverWalletYC.ID,
 				Receiver: Receiver{
 					ID:          receiverY.ID,
 					Email:       receiverY.Email,
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletA.ID,
+			WalletID: walletC.ID,
 			Asset:    *asset2,
-			DisbursementReceiverRegistrationMsgTemplate: &disbursementA2.ReceiverRegistrationMessageTemplate,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementC2.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
-				ID: receiverWalletYB.ID,
+				ID: receiverWalletYD.ID,
 				Receiver: Receiver{
 					ID:          receiverY.ID,
 					Email:       receiverY.Email,
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletB.ID,
+			WalletID: walletD.ID,
 			Asset:    *asset1,
-			DisbursementReceiverRegistrationMsgTemplate: &disbursementB1.ReceiverRegistrationMessageTemplate,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementD1.ReceiverRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
-				ID: receiverWalletYB.ID,
+				ID: receiverWalletYD.ID,
 				Receiver: Receiver{
 					ID:          receiverY.ID,
 					Email:       receiverY.Email,
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletB.ID,
+			WalletID: walletD.ID,
 			Asset:    *asset2,
-			DisbursementReceiverRegistrationMsgTemplate: &disbursementB2.ReceiverRegistrationMessageTemplate,
+			DisbursementReceiverRegistrationMsgTemplate: &disbursementD2.ReceiverRegistrationMessageTemplate,
 		},
 	}
 

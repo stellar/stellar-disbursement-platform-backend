@@ -490,21 +490,19 @@ func (r *WalletResolver) Resolve(ctx context.Context, dbTx db.SQLExecuter, ref W
 	}
 
 	if ref.Address != nil {
-		wallets, err := r.models.Wallets.FindWallets(ctx,
-			data.NewFilter(data.FilterUserManaged, true),
-			data.NewFilter(data.FilterEnabledWallets, true))
+		receiverWallet, err := r.models.ReceiverWallet.GetByStellarAccountAndMemo(ctx, *ref.Address, "", nil)
 		if err != nil {
-			return nil, fmt.Errorf("finding user managed wallets: %w", err)
+			return nil, fmt.Errorf("finding user receiver wallets %w", err)
 		}
 
-		if len(wallets) == 0 {
+		if !receiverWallet.Wallet.UserManaged || !receiverWallet.Wallet.Enabled {
 			return nil, NotFoundError{
 				EntityType: EntityTypeWallet,
 				Message:    "no user managed wallet found",
 			}
 		}
 
-		return &wallets[0], nil
+		return &receiverWallet.Wallet, nil
 	}
 
 	return nil, ValidationError{

@@ -1001,7 +1001,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			disbursementID: phoneWalletDraftDisbursement.ID,
 			csvRecords: [][]string{
 				{"phone", "walletAddress", "walletAddressMemo", "id", "amount"},
-				{"+380445555555", "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH", "valid-memo-text", "123456789", "100.5"},
+				{"+380445555555", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "valid-memo-text", "123456789", "100.5"},
 			},
 			expectedStatus:  http.StatusOK,
 			expectedMessage: "File uploaded successfully",

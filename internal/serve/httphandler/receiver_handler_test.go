@@ -1742,11 +1742,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	// Create a user-managed wallet for the tests
 	ctx := context.Background()
-	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
-	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
-
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
@@ -1867,6 +1863,11 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
+			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+
 			jsonBody, err := json.Marshal(tc.requestBody)
 			require.NoError(t, err)
 
