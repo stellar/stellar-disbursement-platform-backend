@@ -723,16 +723,47 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		receiverContact = "test@example.com"
 	}
 
+	// Check if a receiver with this contact already exists, otherwise create one
+	var receiver *Receiver
+	if contactType == string(ContactTypeEmail) {
+		existingQuery := "SELECT id, email, phone_number, external_id, created_at, updated_at FROM receivers WHERE email = $1"
+		existingReceiver := &Receiver{}
+		err := sqlExec.GetContext(ctx, existingReceiver, existingQuery, receiverContact)
+		if err == nil {
+			receiver = existingReceiver
+		} else {
+			receiverData := &Receiver{Email: receiverContact}
+			receiver = CreateReceiverFixture(t, ctx, sqlExec, receiverData)
+		}
+	} else {
+		existingQuery := "SELECT id, email, phone_number, external_id, created_at, updated_at FROM receivers WHERE phone_number = $1"
+		existingReceiver := &Receiver{}
+		err := sqlExec.GetContext(ctx, existingReceiver, existingQuery, receiverContact)
+		if err == nil {
+			receiver = existingReceiver
+		} else {
+			receiverData := &Receiver{PhoneNumber: receiverContact}
+			receiver = CreateReceiverFixture(t, ctx, sqlExec, receiverData)
+		}
+	}
+
 	q := fmt.Sprintf(`
 		INSERT INTO embedded_wallets
-			(token, wasm_hash, contract_address, credential_id, receiver_contact, contact_type, wallet_status)
+			(token, wasm_hash, contract_address, credential_id, receiver_contact, contact_type, receiver_id, wallet_status)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7)
+			($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING %s
 	`, EmbeddedWalletColumnNames("", ""))
 	wallet := EmbeddedWallet{}
 
-	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), receiverContact, contactType, status)
+	actualContact := receiverContact
+	if contactType == string(ContactTypeEmail) && receiver.Email != "" {
+		actualContact = receiver.Email
+	} else if contactType == string(ContactTypePhoneNumber) && receiver.PhoneNumber != "" {
+		actualContact = receiver.PhoneNumber
+	}
+
+	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), actualContact, contactType, receiver.ID, status)
 	require.NoError(t, err)
 	return &wallet
 }

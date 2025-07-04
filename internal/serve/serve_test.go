@@ -548,7 +548,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	// Setup embedded wallet service mock
 	mEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mEmbeddedWalletService.
-		On("CreateInvitationToken", mock.Anything).
+		On("CreateInvitationToken", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return("mock-token", nil).
 		Maybe()
 	mEmbeddedWalletService.
