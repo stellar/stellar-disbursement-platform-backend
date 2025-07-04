@@ -63,6 +63,7 @@ type EmbeddedWallet struct {
 	CredentialID    string               `json:"credential_id" db:"credential_id"`
 	ReceiverContact string               `json:"receiver_contact" db:"receiver_contact"`
 	ContactType     ContactType          `json:"contact_type" db:"contact_type"`
+	ReceiverID      string               `json:"receiver_id" db:"receiver_id"`
 	CreatedAt       *time.Time           `json:"created_at" db:"created_at"`
 	UpdatedAt       *time.Time           `json:"updated_at" db:"updated_at"`
 	WalletStatus    EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
@@ -83,6 +84,7 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"wallet_status",
 			"contact_type",
 			"receiver_contact",
+			"receiver_id",
 		},
 		CoalesceStringColumns: []string{
 			"wasm_hash",
@@ -136,11 +138,57 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 	return &wallet, nil
 }
 
+// GetByReceiverID returns all embedded wallets for a specific receiver
+func (ew *EmbeddedWalletModel) GetByReceiverID(ctx context.Context, sqlExec db.SQLExecuter, receiverID string) ([]EmbeddedWallet, error) {
+	query := fmt.Sprintf(`
+        SELECT
+            %s
+        FROM embedded_wallets ew
+        WHERE
+            ew.receiver_id = $1
+        ORDER BY
+            ew.created_at DESC
+        `, EmbeddedWalletColumnNames("ew", ""))
+
+	var wallets []EmbeddedWallet
+	err := sqlExec.SelectContext(ctx, &wallets, query, receiverID)
+	if err != nil {
+		return nil, fmt.Errorf("querying embedded wallets by receiver ID: %w", err)
+	}
+
+	return wallets, nil
+}
+
+func (ew *EmbeddedWalletModel) GetByReceiverIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverIDs []string) ([]EmbeddedWallet, error) {
+	if len(receiverIDs) == 0 {
+		return []EmbeddedWallet{}, nil
+	}
+
+	query := fmt.Sprintf(`
+        SELECT
+            %s
+        FROM embedded_wallets ew
+        WHERE
+            ew.receiver_id = ANY($1)
+        ORDER BY
+            ew.receiver_id, ew.created_at DESC
+        `, EmbeddedWalletColumnNames("ew", ""))
+
+	var wallets []EmbeddedWallet
+	err := sqlExec.SelectContext(ctx, &wallets, query, pq.Array(receiverIDs))
+	if err != nil {
+		return nil, fmt.Errorf("querying embedded wallets by receiver IDs: %w", err)
+	}
+
+	return wallets, nil
+}
+
 type EmbeddedWalletInsert struct {
 	Token           string               `db:"token"`
 	WasmHash        string               `db:"wasm_hash"`
 	ReceiverContact string               `db:"receiver_contact"`
 	ContactType     ContactType          `db:"contact_type"`
+	ReceiverID      string               `db:"receiver_id"`
 	WalletStatus    EmbeddedWalletStatus `db:"wallet_status"`
 }
 
@@ -174,6 +222,10 @@ func (ewi EmbeddedWalletInsert) Validate() error {
 		return fmt.Errorf("validating contact type: %w", err)
 	}
 
+	if ewi.ReceiverID == "" {
+		return fmt.Errorf("receiver ID cannot be empty")
+	}
+
 	return nil
 }
 
@@ -188,9 +240,10 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 			wasm_hash,
 			receiver_contact,
 			contact_type,
+			receiver_id,
 			wallet_status
 		) VALUES (
-			$1, $2, $3, $4, $5
+			$1, $2, $3, $4, $5, $6
 		) RETURNING %s`, EmbeddedWalletColumnNames("", ""))
 
 	var wallet EmbeddedWallet
@@ -199,6 +252,7 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 		insert.WasmHash,
 		insert.ReceiverContact,
 		insert.ContactType,
+		insert.ReceiverID,
 		insert.WalletStatus)
 	if err != nil {
 		return nil, fmt.Errorf("inserting embedded wallet: %w", err)

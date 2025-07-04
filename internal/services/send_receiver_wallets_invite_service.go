@@ -244,7 +244,7 @@ func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl
 		return fmt.Errorf("receiver must have either email or phone number for embedded wallet creation")
 	}
 
-	token, err := s.embeddedWalletService.CreateInvitationToken(ctx, receiverContact, contactType)
+	token, err := s.embeddedWalletService.CreateInvitationToken(ctx, receiverContact, contactType, receiver.ID)
 	if err != nil {
 		return fmt.Errorf("creating embedded wallet invitation token: %w", err)
 	}

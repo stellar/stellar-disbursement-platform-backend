@@ -53,12 +53,17 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 
 	service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
 
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email: "test@example.com",
+	})
+
 	walletToken := uuid.NewString()
 	_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
 		Token:           walletToken,
 		WasmHash:        testWasmHash,
-		ReceiverContact: "test@example.com",
+		ReceiverContact: receiver.Email,
 		ContactType:     data.ContactTypeEmail,
+		ReceiverID:      receiver.ID,
 		WalletStatus:    data.ProcessingWalletStatus,
 	})
 	require.NoError(t, err)
@@ -98,13 +103,18 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 	})
 
 	t.Run("successfully syncs failed wallet creation transaction", func(t *testing.T) {
+		failedReceiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "failed@example.com",
+		})
+
 		// Create another embedded wallet for failed test
 		failedWalletToken := uuid.NewString()
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
 			Token:           failedWalletToken,
 			WasmHash:        testWasmHash,
-			ReceiverContact: "test@example.com",
+			ReceiverContact: failedReceiver.Email,
 			ContactType:     data.ContactTypeEmail,
+			ReceiverID:      failedReceiver.ID,
 			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
@@ -207,12 +217,17 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 	})
 
 	t.Run("returns error when transaction is not in terminal state", func(t *testing.T) {
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "terminal@example.com",
+		})
+
 		walletToken := uuid.NewString()
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
 			Token:           walletToken,
 			WasmHash:        testWasmHash,
-			ReceiverContact: "test@example.com",
+			ReceiverContact: receiver.Email,
 			ContactType:     data.ContactTypeEmail,
+			ReceiverID:      receiver.ID,
 			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
@@ -234,12 +249,17 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 	})
 
 	t.Run("returns error when distribution account is missing", func(t *testing.T) {
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "distribution@example.com",
+		})
+
 		walletToken := uuid.NewString()
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
 			Token:           walletToken,
 			WasmHash:        testWasmHash,
-			ReceiverContact: "test@example.com",
+			ReceiverContact: receiver.Email,
 			ContactType:     data.ContactTypeEmail,
+			ReceiverID:      receiver.ID,
 			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
@@ -293,12 +313,17 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 	walletTokens := []string{wallet1Token, wallet2Token, wallet3Token, wallet4Token, wallet5Token}
 
 	// Create embedded wallet fixtures
-	for _, token := range walletTokens {
+	for i, token := range walletTokens {
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: fmt.Sprintf("test%d@example.com", i+1),
+		})
+
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
 			Token:           token,
 			WasmHash:        testWasmHash,
-			ReceiverContact: "test@example.com",
+			ReceiverContact: receiver.Email,
 			ContactType:     data.ContactTypeEmail,
+			ReceiverID:      receiver.ID,
 			WalletStatus:    data.ProcessingWalletStatus,
 		})
 		require.NoError(t, err)
