@@ -46,6 +46,15 @@ Values from the `global` section
   {{- if .sep10PublicKey}}
   SEP10_SIGNING_PUBLIC_KEY: {{ .sep10PublicKey | quote }}
   {{- end }}
+  {{- /* Bridge Integration configuration */ -}}
+  {{- if .bridgeIntegration.enabled }}
+  ENABLE_BRIDGE_INTEGRATION: "true"
+  {{- if .bridgeIntegration.baseUrl }}
+  BRIDGE_BASE_URL: {{ .bridgeIntegration.baseUrl | quote }}
+  {{- else }}
+  BRIDGE_BASE_URL: {{ include "sdp.bridge.baseURL" $ | quote }}
+  {{- end }}
+  {{- end }}
   {{- end }}
   {{- /*
 Values from the sdp configmap section - These will override the global values

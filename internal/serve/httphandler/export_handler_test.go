@@ -246,7 +246,7 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			expectedHeaders := []string{
 				"ID", "Amount", "StellarTransactionID", "Status",
 				"Disbursement.ID", "Asset.Code", "Asset.Issuer", "Wallet.Name", "Receiver.ID",
-				"Receiver.PhoneNumber", "Receiver.Email", "ReceiverWallet.Address", "ReceiverWallet.Status",
+				"Receiver.PhoneNumber", "Receiver.Email", "Receiver.ExternalID", "ReceiverWallet.Address", "ReceiverWallet.Status",
 				"CreatedAt", "UpdatedAt", "ExternalPaymentID", "CircleTransferRequestID",
 			}
 			assert.Equal(t, expectedHeaders, header)
@@ -271,9 +271,10 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.Receiver.ID, row[8])
 				assert.Equal(t, receiverReady.PhoneNumber, row[9])
 				assert.Equal(t, receiverReady.Email, row[10])
-				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.StellarAddress, row[11])
-				assert.Equal(t, string(tc.expectedPayments[i].ReceiverWallet.Status), row[12])
-				assert.Equal(t, tc.expectedPayments[i].ExternalPaymentID, row[15])
+				assert.Equal(t, receiverReady.ExternalID, row[11])
+				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.StellarAddress, row[12])
+				assert.Equal(t, string(tc.expectedPayments[i].ReceiverWallet.Status), row[13])
+				assert.Equal(t, tc.expectedPayments[i].ExternalPaymentID, row[16])
 			}
 		})
 	}
