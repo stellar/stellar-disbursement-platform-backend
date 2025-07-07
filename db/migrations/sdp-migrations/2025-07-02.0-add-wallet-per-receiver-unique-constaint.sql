@@ -1,4 +1,5 @@
 -- +migrate Up
+-- +migrate StatementBegin
 DO $$
 DECLARE
     duplicate_count INTEGER;
@@ -6,21 +7,22 @@ BEGIN
     SELECT COUNT(*) INTO duplicate_count
     FROM (
         SELECT stellar_address
-        FROM receiver_wallets 
-        WHERE stellar_address IS NOT NULL 
-        AND trim(stellar_address) != ''
+        FROM receiver_wallets
+        WHERE stellar_address IS NOT NULL
+          AND trim(stellar_address) <> ''
         GROUP BY stellar_address
         HAVING COUNT(DISTINCT receiver_id) > 1
-    ) duplicates;
-    
+    ) AS duplicates;
     IF duplicate_count > 0 THEN
         RAISE EXCEPTION 'Migration failed: Found % stellar addresses shared across multiple receivers. Please resolve data conflicts before proceeding.', duplicate_count;
     END IF;
-END $$;
+END;
+$$ LANGUAGE plpgsql;
+-- +migrate StatementEnd
 
-CREATE INDEX idx_receiver_wallets_stellar_address 
-ON receiver_wallets (stellar_address) 
-WHERE stellar_address IS NOT NULL;
+CREATE INDEX idx_receiver_wallets_stellar_address ON receiver_wallets (stellar_address)
+WHERE
+    stellar_address IS NOT NULL;
 
 -- +migrate StatementBegin
 CREATE OR REPLACE FUNCTION validate_stellar_address_per_receiver() 
@@ -50,4 +52,5 @@ CREATE TRIGGER trigger_validate_stellar_address_per_receiver
 DROP TRIGGER trigger_validate_stellar_address_per_receiver ON receiver_wallets;
 
 DROP FUNCTION IF EXISTS validate_stellar_address_per_receiver;
+
 DROP INDEX IF EXISTS idx_receiver_wallets_stellar_address;
