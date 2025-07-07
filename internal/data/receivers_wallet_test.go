@@ -1322,7 +1322,7 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByDisbursementID(t *testing.T)
 }
 
 func Test_GetByStellarAccountAndMemo(t *testing.T) {
-	var emptyString string = ""
+	emptyString := ""
 
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -1940,7 +1940,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 	stellarAddress := "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
 
 	t.Run("insert without stellar_address succeeds", func(t *testing.T) {
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 
 		insert := ReceiverWalletInsert{
@@ -1956,7 +1956,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 	})
 
 	t.Run("insert + update with unique stellar_address succeeds", func(t *testing.T) {
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 		wallet2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 
 		insert := ReceiverWalletInsert{
@@ -1979,8 +1979,8 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 	})
 
 	t.Run("same receiver can use same stellar_address across different wallets", func(t *testing.T) {
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
-		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
 
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 
@@ -2018,8 +2018,8 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 	})
 
 	t.Run("different receivers cannot use same stellar_address", func(t *testing.T) {
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
-		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
 
 		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -2059,8 +2059,8 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 	})
 
 	t.Run("null stellar_address always succeeds", func(t *testing.T) {
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
-		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
 
 		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -2086,8 +2086,8 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 	})
 
 	t.Run("direct database insert with conflicting stellar_address fails", func(t *testing.T) {
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
-		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
 
 		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -2117,8 +2117,8 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 	})
 
 	t.Run("update existing receiver_wallet to conflicting stellar_address fails", func(t *testing.T) {
-		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Cadia", "https://cadia.com", "cadia.com", "cadia://")
-		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Terra", "https://terra.com", "terra.com", "terra://")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
 
 		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})

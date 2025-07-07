@@ -537,7 +537,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	if stellarMemo != nil {
 		if *stellarMemo != "" {
 			query += " AND rw.stellar_memo = ?"
-			args = append(args, stellarMemo)
+			args = append(args, *stellarMemo)
 		} else {
 			query += " AND (rw.stellar_memo IS NULL OR rw.stellar_memo = '')"
 		}

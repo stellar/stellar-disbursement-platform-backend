@@ -492,7 +492,7 @@ func (r *WalletResolver) Resolve(ctx context.Context, dbTx db.SQLExecuter, ref W
 	if ref.Address != nil {
 		receiverWallet, err := r.models.ReceiverWallet.GetByStellarAccountAndMemo(ctx, *ref.Address, "", nil)
 		if err != nil {
-			return nil, fmt.Errorf("finding user receiver wallets %w", err)
+			return nil, fmt.Errorf("finding receiver wallet: %w", err)
 		}
 
 		if !receiverWallet.Wallet.UserManaged || !receiverWallet.Wallet.Enabled {
