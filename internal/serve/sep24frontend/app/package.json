@@ -15,7 +15,6 @@
   "dependencies": {
     "@stellar/design-system": "^3.0.0",
     "@tanstack/react-query": "^5.67.3",
-    "esbuild": "^0.25.0",
     "i18next": "^24.2.2",
     "immer": "^10.1.1",
     "intl-tel-input": "^25.3.0",
@@ -33,7 +32,7 @@
     "@types/react-google-recaptcha": "^2.1.9",
     "@typescript-eslint/eslint-plugin": "^8.24.1",
     "@typescript-eslint/parser": "^8.24.1",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^4.6.0",
     "eslint": "^9.20.1",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.18",
@@ -41,7 +40,7 @@
     "sass-embedded": "^1.85.1",
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.22.0",
-    "vite": "^6.1.6",
+    "vite": "^7.0.2",
     "vite-tsconfig-paths": "^5.1.4"
   }
 }
