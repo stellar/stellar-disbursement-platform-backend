@@ -84,12 +84,12 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"wallet_status",
 			"contact_type",
 			"receiver_contact",
-			"receiver_id",
 		},
 		CoalesceStringColumns: []string{
 			"wasm_hash",
 			"contract_address",
 			"credential_id",
+			"receiver_id",
 		},
 	}.Build()
 
@@ -138,28 +138,8 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 	return &wallet, nil
 }
 
-// GetByReceiverID returns all embedded wallets for a specific receiver
-func (ew *EmbeddedWalletModel) GetByReceiverID(ctx context.Context, sqlExec db.SQLExecuter, receiverID string) ([]EmbeddedWallet, error) {
-	query := fmt.Sprintf(`
-        SELECT
-            %s
-        FROM embedded_wallets ew
-        WHERE
-            ew.receiver_id = $1
-        ORDER BY
-            ew.created_at DESC
-        `, EmbeddedWalletColumnNames("ew", ""))
-
-	var wallets []EmbeddedWallet
-	err := sqlExec.SelectContext(ctx, &wallets, query, receiverID)
-	if err != nil {
-		return nil, fmt.Errorf("querying embedded wallets by receiver ID: %w", err)
-	}
-
-	return wallets, nil
-}
-
-func (ew *EmbeddedWalletModel) GetByReceiverIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverIDs []string) ([]EmbeddedWallet, error) {
+// GetByReceiverIDs returns all embedded wallets for the given receiver IDs.
+func (ew *EmbeddedWalletModel) GetByReceiverIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverIDs ...string) ([]EmbeddedWallet, error) {
 	if len(receiverIDs) == 0 {
 		return []EmbeddedWallet{}, nil
 	}

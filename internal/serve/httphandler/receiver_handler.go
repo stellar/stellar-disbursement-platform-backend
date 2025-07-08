@@ -171,7 +171,7 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("getting receiver verifications for receiver ID: %w", innerErr)
 		}
 
-		embeddedWallets, innerErr := rh.Models.EmbeddedWallets.GetByReceiverID(ctx, dbTx, receiver.ID)
+		embeddedWallets, innerErr := rh.Models.EmbeddedWallets.GetByReceiverIDs(ctx, dbTx, receiver.ID)
 		if innerErr != nil {
 			return nil, fmt.Errorf("getting embedded wallets for receiver ID: %w", innerErr)
 		}
@@ -231,13 +231,9 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("error retrieving receiver wallets: %w", err)
 		}
 
-		var allEmbeddedWallets []data.EmbeddedWallet
-		for _, receiverID := range receiverIDs {
-			embeddedWallets, walletsErr := rh.Models.EmbeddedWallets.GetByReceiverID(ctx, dbTx, receiverID)
-			if walletsErr != nil {
-				return nil, fmt.Errorf("error retrieving embedded wallets for receiver %s: %w", receiverID, walletsErr)
-			}
-			allEmbeddedWallets = append(allEmbeddedWallets, embeddedWallets...)
+		allEmbeddedWallets, err := rh.Models.EmbeddedWallets.GetByReceiverIDs(ctx, dbTx, receiverIDs...)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving embedded wallets: %w", err)
 		}
 
 		receiversResponse := rh.buildReceiversResponse(receivers, receiversWallets, allEmbeddedWallets)
