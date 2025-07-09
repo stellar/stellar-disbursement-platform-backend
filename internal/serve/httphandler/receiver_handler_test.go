@@ -1453,8 +1453,10 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 	receiversId := handler.Models.Receiver.ParseReceiverIDs(receivers)
 	receiversWallets, err := handler.Models.ReceiverWallet.GetWithReceiverIDs(ctx, dbTx, receiversId)
 	require.NoError(t, err)
+	embeddedWallets, err := handler.Models.EmbeddedWallets.GetByReceiverIDs(ctx, dbTx, receiversId...)
+	require.NoError(t, err)
 
-	actualResponse := handler.buildReceiversResponse(receivers, receiversWallets)
+	actualResponse := handler.buildReceiversResponse(receivers, receiversWallets, embeddedWallets)
 
 	ar, err := json.Marshal(actualResponse)
 	require.NoError(t, err)

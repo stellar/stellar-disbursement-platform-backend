@@ -28,7 +28,7 @@ var (
 //go:generate mockery --name=EmbeddedWalletServiceInterface --case=underscore --structname=MockEmbeddedWalletService --filename=embedded_wallet_service.go
 type EmbeddedWalletServiceInterface interface {
 	// CreateInvitationToken creates a new embedded wallet invitation token with receiver contact info for salt calculation
-	CreateInvitationToken(ctx context.Context, receiverContact, contactType string) (string, error)
+	CreateInvitationToken(ctx context.Context, receiverContact, contactType, receiverID string) (string, error)
 	// CreateWallet creates a new embedded wallet using the provided token, public key and credential ID
 	// The salt for contract address calculation is automatically derived from the receiver's contact info stored with the token
 	CreateWallet(ctx context.Context, token, publicKey, credentialID string) error
@@ -77,12 +77,15 @@ type EmbeddedWalletServiceOptions struct {
 	RecoveryAddress     string
 }
 
-func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, receiverContact, contactType string) (string, error) {
+func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, receiverContact, contactType, receiverID string) (string, error) {
 	if receiverContact == "" {
 		return "", fmt.Errorf("receiver contact cannot be empty")
 	}
 	if contactType == "" {
 		return "", fmt.Errorf("contact type cannot be empty")
+	}
+	if receiverID == "" {
+		return "", fmt.Errorf("receiver ID cannot be empty")
 	}
 
 	if err := data.ContactType(contactType).Validate(); err != nil {
@@ -97,6 +100,7 @@ func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, recei
 			WasmHash:        e.wasmHash,
 			ReceiverContact: receiverContact,
 			ContactType:     data.ContactType(contactType),
+			ReceiverID:      receiverID,
 			WalletStatus:    data.PendingWalletStatus,
 		}
 

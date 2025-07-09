@@ -31,6 +31,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`COALESCE(wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(contract_address, '') AS "contract_address"`,
 				`COALESCE(credential_id, '') AS "credential_id"`,
+				`COALESCE(receiver_id, '') AS "receiver_id"`,
 			}, ", "),
 		},
 		{
@@ -46,6 +47,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`COALESCE(ew.wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "contract_address"`,
 				`COALESCE(ew.credential_id, '') AS "credential_id"`,
+				`COALESCE(ew.receiver_id, '') AS "receiver_id"`,
 			}, ", "),
 		},
 		{
@@ -61,6 +63,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`COALESCE(ew.wasm_hash, '') AS "embedded_wallets.wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "embedded_wallets.contract_address"`,
 				`COALESCE(ew.credential_id, '') AS "embedded_wallets.credential_id"`,
+				`COALESCE(ew.receiver_id, '') AS "embedded_wallets.receiver_id"`,
 			}, ", "),
 		},
 	}
@@ -195,10 +198,24 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 		assert.EqualError(t, err, "invalid wasm hash")
 	})
 
+	t.Run("returns error if receiver ID is empty", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			Token:           "token-123",
+			WasmHash:        "abcdef123456",
+			ReceiverContact: "test@example.com",
+			ContactType:     ContactTypeEmail,
+			WalletStatus:    PendingWalletStatus,
+		}
+		err := insert.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "receiver ID cannot be empty")
+	})
+
 	t.Run("validates wallet status", func(t *testing.T) {
 		insert := EmbeddedWalletInsert{
 			Token:        "token-123",
 			WasmHash:     "abcdef123456",
+			ReceiverID:   "receiver-123",
 			WalletStatus: "INVALID_STATUS",
 		}
 		err := insert.Validate()
@@ -218,6 +235,7 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 			WasmHash:        "abcdef123456",
 			ReceiverContact: "test@example.com",
 			ContactType:     ContactTypeEmail,
+			ReceiverID:      "receiver-123",
 			WalletStatus:    SuccessWalletStatus,
 		}
 		err := insert.Validate()
@@ -230,10 +248,88 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 			WasmHash:        "abcdef123456",
 			ReceiverContact: "+15551234567",
 			ContactType:     ContactTypePhoneNumber,
+			ReceiverID:      "receiver-456",
 			WalletStatus:    PendingWalletStatus,
 		}
 		err := insert.Validate()
 		require.NoError(t, err)
+	})
+}
+
+func Test_EmbeddedWalletModel_GetByReceiverIDs(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	embeddedWalletModel := EmbeddedWalletModel{dbConnectionPool: dbConnectionPool}
+
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+	DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+	defer DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+	t.Run("returns empty slice when no wallets found for receiver", func(t *testing.T) {
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+			Email: "test@example.com",
+		})
+
+		wallets, err := embeddedWalletModel.GetByReceiverIDs(ctx, dbConnectionPool, receiver.ID)
+		require.NoError(t, err)
+		assert.Empty(t, wallets)
+	})
+
+	t.Run("returns wallets for specific receiver ordered by created_at DESC", func(t *testing.T) {
+		wallet1 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token1", "hash1", "", "", "contact1@example.com", "EMAIL", PendingWalletStatus)
+		wallet2 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token2", "hash2", "", "", "contact1@example.com", "EMAIL", SuccessWalletStatus)
+
+		CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token3", "hash3", "", "", "contact2@example.com", "EMAIL", PendingWalletStatus)
+
+		receiverID := wallet1.ReceiverID
+
+		wallets, err := embeddedWalletModel.GetByReceiverIDs(ctx, dbConnectionPool, receiverID)
+		require.NoError(t, err)
+		require.Len(t, wallets, 2)
+
+		assert.Equal(t, wallet2.Token, wallets[0].Token)
+		assert.Equal(t, wallet1.Token, wallets[1].Token)
+
+		for _, wallet := range wallets {
+			assert.Equal(t, receiverID, wallet.ReceiverID)
+		}
+	})
+
+	t.Run("handles non-existent receiver ID", func(t *testing.T) {
+		wallets, err := embeddedWalletModel.GetByReceiverIDs(ctx, dbConnectionPool, "non-existent-id")
+		require.NoError(t, err)
+		assert.Empty(t, wallets)
+	})
+
+	t.Run("returns wallets for multiple receivers", func(t *testing.T) {
+		wallet1 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token_multi_1", "hash_multi_1", "", "", "multi1@example.com", "EMAIL", PendingWalletStatus)
+		wallet2 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token_multi_2", "hash_multi_2", "", "", "multi2@example.com", "EMAIL", SuccessWalletStatus)
+		CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token_multi_3", "hash_multi_3", "", "", "multi1@example.com", "EMAIL", SuccessWalletStatus)
+
+		wallets, err := embeddedWalletModel.GetByReceiverIDs(ctx, dbConnectionPool, wallet1.ReceiverID, wallet2.ReceiverID)
+		require.NoError(t, err)
+		require.Len(t, wallets, 3)
+
+		tokenMap := make(map[string]bool)
+		for _, w := range wallets {
+			tokenMap[w.Token] = true
+		}
+		assert.True(t, tokenMap["token_multi_1"])
+		assert.True(t, tokenMap["token_multi_2"])
+		assert.True(t, tokenMap["token_multi_3"])
+	})
+
+	t.Run("returns empty slice when no receiver IDs provided", func(t *testing.T) {
+		wallets, err := embeddedWalletModel.GetByReceiverIDs(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Empty(t, wallets)
 	})
 }
 

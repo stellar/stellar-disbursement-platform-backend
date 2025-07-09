@@ -130,7 +130,8 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 			w.name as wallet_name,
 			w.homepage as wallet_homepage,
 			w.sep_10_client_domain as wallet_sep_10_client_domain,
-			w.enabled as wallet_enabled
+			w.enabled as wallet_enabled,
+			w.embedded as wallet_embedded
 		FROM receiver_wallets rw
 		JOIN wallets w ON rw.wallet_id = w.id
 		WHERE rw.receiver_id = ANY($1::varchar[])
@@ -186,6 +187,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 		rwc.wallet_homepage as "wallet.homepage",
 		rwc.wallet_sep_10_client_domain as "wallet.sep_10_client_domain",
 		rwc.wallet_enabled as "wallet.enabled",
+		rwc.wallet_embedded as "wallet.embedded",
 		COALESCE(rws.total_payments, '0') as total_payments,
 		COALESCE(rws.payments_received, '0') as payments_received,
 		COALESCE(rws.failed_payments, '0') as failed_payments,

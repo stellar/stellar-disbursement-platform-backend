@@ -97,8 +97,16 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 
 	t.Run("successfully creates unique tokens", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
-		token1, err := service.CreateInvitationToken(ctx, "test1@example.com", "EMAIL")
+		receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "test1@example.com",
+		})
+		receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			PhoneNumber: "+15551234567",
+		})
+
+		token1, err := service.CreateInvitationToken(ctx, "test1@example.com", "EMAIL", receiver1.ID)
 		require.NoError(t, err)
 		require.NotNil(t, token1)
 
@@ -110,7 +118,7 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 		assert.Equal(t, "test1@example.com", wallet.ReceiverContact)
 		assert.Equal(t, data.ContactTypeEmail, wallet.ContactType)
 
-		token2, err := service.CreateInvitationToken(ctx, "+15551234567", "PHONE_NUMBER")
+		token2, err := service.CreateInvitationToken(ctx, "+15551234567", "PHONE_NUMBER", receiver2.ID)
 		require.NoError(t, err)
 		require.NotNil(t, token2)
 
@@ -126,18 +134,38 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 	})
 
 	t.Run("returns error if receiver contact is empty", func(t *testing.T) {
-		_, err := service.CreateInvitationToken(ctx, "", "EMAIL")
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "test@example.com",
+		})
+
+		_, err := service.CreateInvitationToken(ctx, "", "EMAIL", receiver.ID)
 		assert.EqualError(t, err, "receiver contact cannot be empty")
 	})
 
 	t.Run("returns error if contact type is empty", func(t *testing.T) {
-		_, err := service.CreateInvitationToken(ctx, "test@example.com", "")
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "test@example.com",
+		})
+
+		_, err := service.CreateInvitationToken(ctx, "test@example.com", "", receiver.ID)
 		assert.EqualError(t, err, "contact type cannot be empty")
 	})
 
 	t.Run("returns error if contact type is invalid", func(t *testing.T) {
-		_, err := service.CreateInvitationToken(ctx, "test@example.com", "INVALID")
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "test@example.com",
+		})
+
+		_, err := service.CreateInvitationToken(ctx, "test@example.com", "INVALID", receiver.ID)
 		assert.EqualError(t, err, "validating contact type: invalid contact type \"INVALID\"")
+	})
+
+	t.Run("returns error if receiver ID is empty", func(t *testing.T) {
+		_, err := service.CreateInvitationToken(ctx, "test@example.com", "EMAIL", "")
+		assert.EqualError(t, err, "receiver ID cannot be empty")
 	})
 }
 
