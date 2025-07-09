@@ -9,6 +9,10 @@ on:
   push:
     branches:
       - develop
+
+permissions:
+  contents: read
+
 jobs:
   tests:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml
