@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -181,7 +182,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		err := service.CreateWallet(ctx, nonExistentToken, defaultPublicKey, defaultCredentialID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidToken)
-		assert.Contains(t, err.Error(), "transaction execution error: token does not exist")
+		assert.Contains(t, err.Error(), "token does not exist")
 	})
 
 	t.Run("returns error if wallet status is not pending", func(t *testing.T) {
@@ -193,7 +194,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		err := service.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrCreateWalletInvalidStatus)
-		assert.Contains(t, err.Error(), "transaction execution error: wallet status is not pending for token")
+		assert.Contains(t, err.Error(), "wallet status is not pending for token")
 	})
 
 	t.Run("rolls back wallet update if TSS transaction creation fails", func(t *testing.T) {
@@ -226,7 +227,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 
 		err = invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "transaction execution error: wallet status is not pending for token")
+		assert.Contains(t, err.Error(), "wallet status is not pending for token")
 
 		tssTransactions, err := tssModel.GetAllByExternalIDs(ctx, []string{walletIDForTest})
 		require.NoError(t, err)
@@ -238,15 +239,77 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 
 		duplicateCredentialID := "duplicate-credential-id"
 
+		// Step 1: Create first wallet successfully
 		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
 		err := service.CreateWallet(ctx, wallet1.Token, defaultPublicKey, duplicateCredentialID)
 		require.NoError(t, err)
 
+		updatedWallet1, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, wallet1.Token)
+		require.NoError(t, err)
+		assert.Equal(t, duplicateCredentialID, updatedWallet1.CredentialID)
+		assert.Equal(t, data.ProcessingWalletStatus, updatedWallet1.WalletStatus)
+
+		// Verify first wallet has a TSS transaction
+		tssTransactions1, err := tssModel.GetAllByExternalIDs(ctx, []string{wallet1.Token})
+		require.NoError(t, err)
+		assert.Len(t, tssTransactions1, 1, "First wallet should have exactly one TSS transaction")
+
+		// Step 2: Try duplicate credential ID (should fail cleanly)
 		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
-		otherPublicKey := "deadbeef"
+		otherPublicKey := "04deadbeef" + strings.Repeat("00", 60)
 		err = service.CreateWallet(ctx, wallet2.Token, otherPublicKey, duplicateCredentialID)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, ErrCredentialIDAlreadyExists), "expected ErrCredentialIDAlreadyExists, got: %v", err)
+		assert.True(t, errors.Is(err, ErrCredentialIDAlreadyExists))
+
+		// Verify second wallet remains unchanged
+		unchangedWallet2, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, wallet2.Token)
+		require.NoError(t, err)
+		assert.Empty(t, unchangedWallet2.CredentialID)
+		assert.Equal(t, data.PendingWalletStatus, unchangedWallet2.WalletStatus)
+
+		// There should be no TSS transaction for the second wallet
+		tssTransactions2, err := tssModel.GetAllByExternalIDs(ctx, []string{wallet2.Token})
+		require.NoError(t, err)
+		assert.Empty(t, tssTransactions2)
+	})
+
+	t.Run("allows retry with different credential ID after failure", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		firstCredentialID := "first-credential-id"
+		secondCredentialID := "second-credential-id"
+
+		// Step 1: Create first wallet successfully
+		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		err := service.CreateWallet(ctx, wallet1.Token, defaultPublicKey, firstCredentialID)
+		require.NoError(t, err)
+
+		// Step 2: Try duplicate credential ID (should fail)
+		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		otherPublicKey := "04deadbeef" + strings.Repeat("00", 60)
+		err = service.CreateWallet(ctx, wallet2.Token, otherPublicKey, firstCredentialID)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrCredentialIDAlreadyExists))
+
+		// Verify no TSS transaction was created for failed attempt
+		tssTransactionsBefore, err := tssModel.GetAllByExternalIDs(ctx, []string{wallet2.Token})
+		require.NoError(t, err)
+		assert.Empty(t, tssTransactionsBefore)
+
+		// Step 3: Retry with different credential ID (should succeed)
+		err = service.CreateWallet(ctx, wallet2.Token, otherPublicKey, secondCredentialID)
+		require.NoError(t, err)
+
+		// Verify second wallet was updated successfully
+		updatedWallet2, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, wallet2.Token)
+		require.NoError(t, err)
+		assert.Equal(t, secondCredentialID, updatedWallet2.CredentialID)
+		assert.Equal(t, data.ProcessingWalletStatus, updatedWallet2.WalletStatus)
+
+		// Verify TSS transaction was created for successful retry
+		tssTransactionsAfter, err := tssModel.GetAllByExternalIDs(ctx, []string{wallet2.Token})
+		require.NoError(t, err)
+		assert.Len(t, tssTransactionsAfter, 1)
 	})
 }
 
