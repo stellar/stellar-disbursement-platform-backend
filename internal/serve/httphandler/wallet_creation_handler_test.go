@@ -28,12 +28,12 @@ func Test_WalletCreationHandler_CreateWallet(t *testing.T) {
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
 		Token:        "123",
-		PublicKey:    "04f5",
+		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(nil)
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(nil)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -72,10 +72,19 @@ func Test_WalletCreationHandler_CreateWallet_ValidationErrors(t *testing.T) {
 			expectedField: "public_key",
 		},
 		{
-			name: "invalid public key",
+			name: "invalid hex public key",
 			requestBody: CreateWalletRequest{
 				Token:        "123",
-				PublicKey:    "invalid_key",
+				PublicKey:    "invalid_hex",
+				CredentialID: "test-credential-id",
+			},
+			expectedField: "public_key",
+		},
+		{
+			name: "invalid P256 public key",
+			requestBody: CreateWalletRequest{
+				Token:        "123",
+				PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f22", // Invalid - last byte changed
 				CredentialID: "test-credential-id",
 			},
 			expectedField: "public_key",
@@ -84,7 +93,7 @@ func Test_WalletCreationHandler_CreateWallet_ValidationErrors(t *testing.T) {
 			name: "empty credential id",
 			requestBody: CreateWalletRequest{
 				Token:        "123",
-				PublicKey:    "04f5",
+				PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 				CredentialID: "",
 			},
 			expectedField: "credential_id",
@@ -122,12 +131,12 @@ func Test_WalletCreationHandler_CreateWallet_InternalError(t *testing.T) {
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
 		Token:        "123",
-		PublicKey:    "04f5",
+		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(errors.New("foobar"))
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(errors.New("foobar"))
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -144,12 +153,12 @@ func Test_WalletCreationHandler_CreateWallet_InvalidToken(t *testing.T) {
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
 		Token:        "123",
-		PublicKey:    "04f5",
+		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(services.ErrInvalidToken)
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(services.ErrInvalidToken)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -166,12 +175,12 @@ func Test_WalletCreationHandler_CreateWallet_InvalidStatus(t *testing.T) {
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
 		Token:        "123",
-		PublicKey:    "04f5",
+		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "test-credential-id").Return(services.ErrCreateWalletInvalidStatus)
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(services.ErrCreateWalletInvalidStatus)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
@@ -188,12 +197,12 @@ func Test_WalletCreationHandler_CreateWallet_CredentialIDConflict(t *testing.T) 
 	rr := httptest.NewRecorder()
 	requestBody, _ := json.Marshal(CreateWalletRequest{
 		Token:        "123",
-		PublicKey:    "04f5",
+		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "duplicate-credential-id",
 	})
 	ctx := context.Background()
 
-	walletService.On("CreateWallet", mock.Anything, "123", "04f5", "duplicate-credential-id").Return(services.ErrCredentialIDAlreadyExists)
+	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "duplicate-credential-id").Return(services.ErrCredentialIDAlreadyExists)
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
