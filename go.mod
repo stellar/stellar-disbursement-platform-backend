@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ses v1.30.5
 	github.com/aws/aws-sdk-go-v2/service/sns v1.34.7
 	github.com/dimchansky/utfbom v1.1.1
-	github.com/getsentry/sentry-go v0.34.0
+	github.com/getsentry/sentry-go v0.34.1
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/httprate v0.15.0
@@ -37,10 +37,10 @@ require (
 	github.com/spf13/viper v1.20.1
 	github.com/stellar/go v0.0.0-20250606230746-ef10cd0a5920
 	github.com/stretchr/testify v1.10.0
-	github.com/twilio/twilio-go v1.26.4
-	golang.org/x/crypto v0.39.0
+	github.com/twilio/twilio-go v1.26.5
+	golang.org/x/crypto v0.40.0
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
-	golang.org/x/net v0.41.0
+	golang.org/x/net v0.42.0
 )
 
 require (
@@ -89,8 +89,8 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/text v0.27.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/tylerb/graceful.v1 v1.2.15 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
