@@ -10,8 +10,11 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/stellar-rpc/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 )
 
 func Test_NewTransactionStatusUpdateError(t *testing.T) {
@@ -1658,6 +1661,204 @@ func Test_HorizonErrorWrapper_ShouldMarkAsError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			wrapper := NewHorizonErrorWrapper(tc.hErr)
 			assert.Equal(t, tc.wantResult, wrapper.ShouldMarkAsError())
+		})
+	}
+}
+
+// RPC Error Tests
+
+func Test_NewRPCErrorWrapper(t *testing.T) {
+	t.Run("with nil error", func(t *testing.T) {
+		wrapper := NewRPCErrorWrapper(nil)
+		assert.Nil(t, wrapper)
+	})
+
+	t.Run("with existing wrapper", func(t *testing.T) {
+		simErr := &stellar.SimulationError{
+			Type:     stellar.SimulationErrorTypeNetwork,
+			Err:      errors.New("network error: connection failed"),
+			Response: nil,
+		}
+		originalWrapper := &RPCErrorWrapper{
+			SimulationError: simErr,
+			Err:             simErr,
+		}
+
+		wrapper := NewRPCErrorWrapper(originalWrapper)
+		assert.Equal(t, originalWrapper, wrapper)
+	})
+
+	t.Run("with simulation error", func(t *testing.T) {
+		simErr := &stellar.SimulationError{
+			Type:     stellar.SimulationErrorTypeContractExecution,
+			Err:      errors.New("contract failed"),
+			Response: &protocol.SimulateTransactionResponse{Error: "contract failed"},
+		}
+
+		wrapper := NewRPCErrorWrapper(simErr)
+		assert.NotNil(t, wrapper)
+		assert.Equal(t, simErr, wrapper.SimulationError)
+		assert.Equal(t, simErr, wrapper.Err)
+	})
+
+	t.Run("with non-simulation error", func(t *testing.T) {
+		err := errors.New("generic error")
+		wrapper := NewRPCErrorWrapper(err)
+		assert.NotNil(t, wrapper)
+		assert.Nil(t, wrapper.SimulationError)
+		assert.Equal(t, err, wrapper.Err)
+	})
+}
+
+func Test_RPCErrorWrapper_IsRetryable(t *testing.T) {
+	testCases := []struct {
+		name          string
+		errorType     stellar.SimulationErrorType
+		wantRetryable bool
+	}{
+		{
+			name:          "network error - retryable",
+			errorType:     stellar.SimulationErrorTypeNetwork,
+			wantRetryable: true,
+		},
+		{
+			name:          "resource error - retryable",
+			errorType:     stellar.SimulationErrorTypeResource,
+			wantRetryable: true,
+		},
+		{
+			name:          "transaction invalid - not retryable",
+			errorType:     stellar.SimulationErrorTypeTransactionInvalid,
+			wantRetryable: false,
+		},
+		{
+			name:          "auth error - not retryable",
+			errorType:     stellar.SimulationErrorTypeAuth,
+			wantRetryable: false,
+		},
+		{
+			name:          "contract execution - not retryable",
+			errorType:     stellar.SimulationErrorTypeContractExecution,
+			wantRetryable: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			simErr := stellar.NewSimulationErrorWithType(tc.errorType, errors.New("test error"), nil)
+			wrapper := NewRPCErrorWrapper(simErr)
+
+			assert.Equal(t, tc.wantRetryable, wrapper.IsRetryable())
+		})
+	}
+}
+
+func Test_RPCErrorWrapper_IsRateLimit(t *testing.T) {
+	testCases := []struct {
+		name            string
+		errorType       stellar.SimulationErrorType
+		message         string
+		wantIsRateLimit bool
+	}{
+		{
+			name:            "network error with rate limit message",
+			errorType:       stellar.SimulationErrorTypeNetwork,
+			message:         "rate limit exceeded",
+			wantIsRateLimit: true,
+		},
+		{
+			name:            "network error with too many requests message",
+			errorType:       stellar.SimulationErrorTypeNetwork,
+			message:         "too many requests",
+			wantIsRateLimit: true,
+		},
+		{
+			name:            "network error with throttle message",
+			errorType:       stellar.SimulationErrorTypeNetwork,
+			message:         "request throttled",
+			wantIsRateLimit: true,
+		},
+		{
+			name:            "network error with 429 status",
+			errorType:       stellar.SimulationErrorTypeNetwork,
+			message:         "HTTP 429 error",
+			wantIsRateLimit: true,
+		},
+		{
+			name:            "network error without rate limit indicators",
+			errorType:       stellar.SimulationErrorTypeNetwork,
+			message:         "connection timeout",
+			wantIsRateLimit: false,
+		},
+		{
+			name:            "resource error with rate limit message",
+			errorType:       stellar.SimulationErrorTypeResource,
+			message:         "rate limit exceeded",
+			wantIsRateLimit: false,
+		},
+		{
+			name:            "contract execution error with rate limit message",
+			errorType:       stellar.SimulationErrorTypeContractExecution,
+			message:         "rate limit exceeded",
+			wantIsRateLimit: false,
+		},
+		{
+			name:            "auth error with rate limit message",
+			errorType:       stellar.SimulationErrorTypeAuth,
+			message:         "rate limit exceeded",
+			wantIsRateLimit: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			simErr := stellar.NewSimulationErrorWithType(tc.errorType, errors.New(tc.message), nil)
+			wrapper := NewRPCErrorWrapper(simErr)
+
+			assert.Equal(t, tc.wantIsRateLimit, wrapper.IsRateLimit())
+		})
+	}
+
+	t.Run("nil simulation error", func(t *testing.T) {
+		wrapper := &RPCErrorWrapper{SimulationError: nil}
+		assert.False(t, wrapper.IsRateLimit())
+	})
+}
+
+func Test_RPCErrorWrapper_ShouldMarkAsError(t *testing.T) {
+	testCases := []struct {
+		name          string
+		errorType     stellar.SimulationErrorType
+		wantMarkError bool
+	}{
+		{
+			name:          "network error - don't mark as error",
+			errorType:     stellar.SimulationErrorTypeNetwork,
+			wantMarkError: false,
+		},
+		{
+			name:          "transaction invalid - mark as error",
+			errorType:     stellar.SimulationErrorTypeTransactionInvalid,
+			wantMarkError: true,
+		},
+		{
+			name:          "auth error - mark as error",
+			errorType:     stellar.SimulationErrorTypeAuth,
+			wantMarkError: true,
+		},
+		{
+			name:          "contract execution - mark as error",
+			errorType:     stellar.SimulationErrorTypeContractExecution,
+			wantMarkError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			simErr := stellar.NewSimulationErrorWithType(tc.errorType, errors.New("test error"), nil)
+			wrapper := NewRPCErrorWrapper(simErr)
+
+			assert.Equal(t, tc.wantMarkError, wrapper.ShouldMarkAsError())
 		})
 	}
 }

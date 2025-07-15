@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -247,7 +248,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		}
 
 		rpcClient := &mocks.MockRPCClient{}
-		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(&stellar.SimulationResult{Response: simulationResponse}, (*stellar.SimulationError)(nil))
 
 		monitorSvc := tssMonitor.TSSMonitorService{
 			Client: &sdpMonitorMocks.MockMonitorClient{},
@@ -341,12 +342,14 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			MaxBaseFee: 100,
 		}
 
-		simulationResponse := protocol.SimulateTransactionResponse{
-			Error: "contract execution failed",
-		}
+		simulationError := stellar.NewSimulationErrorWithType(
+			stellar.SimulationErrorTypeContractExecution,
+			errors.New("contract execution failed"),
+			&protocol.SimulateTransactionResponse{Error: "contract execution failed"},
+		)
 
 		rpcClient := &mocks.MockRPCClient{}
-		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return((*stellar.SimulationResult)(nil), simulationError)
 
 		monitorSvc := tssMonitor.TSSMonitorService{
 			Client: &sdpMonitorMocks.MockMonitorClient{},
@@ -369,7 +372,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 
 		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "simulation error: contract execution failed")
+		assert.Contains(t, err.Error(), "contract execution failed")
 		assert.Nil(t, tx)
 
 		rpcClient.AssertExpectations(t)
@@ -380,8 +383,14 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			MaxBaseFee: 100,
 		}
 
+		networkError := stellar.NewSimulationErrorWithType(
+			stellar.SimulationErrorTypeNetwork,
+			fmt.Errorf("rpc error"),
+			nil,
+		)
+
 		rpcClient := &mocks.MockRPCClient{}
-		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(protocol.SimulateTransactionResponse{}, fmt.Errorf("rpc error"))
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return((*stellar.SimulationResult)(nil), networkError)
 
 		monitorSvc := tssMonitor.TSSMonitorService{
 			Client: &sdpMonitorMocks.MockMonitorClient{},
@@ -404,8 +413,12 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 
 		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "simulating transaction: rpc error")
+		assert.Contains(t, err.Error(), "rpc error")
 		assert.Nil(t, tx)
+
+		var rpcErr *utils.RPCErrorWrapper
+		assert.ErrorAs(t, err, &rpcErr)
+		assert.True(t, rpcErr.IsRPCError())
 
 		rpcClient.AssertExpectations(t)
 	})
@@ -434,7 +447,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		}
 
 		rpcClient := &mocks.MockRPCClient{}
-		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(simulationResponse, nil)
+		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(&stellar.SimulationResult{Response: simulationResponse}, (*stellar.SimulationError)(nil))
 
 		monitorSvc := tssMonitor.TSSMonitorService{
 			Client: &sdpMonitorMocks.MockMonitorClient{},
@@ -931,4 +944,11 @@ func Test_WalletCreationTransactionHandler_ApplyTransactionData(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "unmarshaling transaction data")
 	})
+}
+
+func Test_WalletCreationTransactionHandler_RequiresRebuildOnRetry(t *testing.T) {
+	handler := &WalletCreationTransactionHandler{}
+
+	result := handler.RequiresRebuildOnRetry()
+	assert.True(t, result)
 }

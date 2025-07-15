@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
@@ -14,17 +15,22 @@ const (
 )
 
 // TransactionProcessingLimiter is an interface that defines the methods that the manager and transaction worker use to
-// share metadata about and adjust the rate at which transactions are processed based on responses from Horizon.
+// share metadata about and adjust the rate at which transactions are processed based on responses from Horizon and RPC.
 //
 //go:generate mockery --name=TransactionProcessingLimiter --case=underscore --structname=MockTransactionProcessingLimiter
 type TransactionProcessingLimiter interface {
 	// AdjustLimitIfNeeded is used to temporarily adjust the limitValue variable, returned by the LimitValue() getter,
-	// if it starts seeing a high number of indeterminate responses from Horizon, which are indicative of network
+	// if it starts seeing a high number of indeterminate responses from Horizon or RPC, which are indicative of network
 	// congestion. The following error codes are considered indeterminate responses:
+	//   Horizon:
 	//   - 504: Timeout
 	//   - 429: Too Many Requests
 	//   - 400 - tx_insufficient_fee: Bad Request
-	AdjustLimitIfNeeded(hErr *utils.HorizonErrorWrapper)
+	//   RPC:
+	//   - Network errors (connection timeouts, DNS failures)
+	//   - Rate limit errors (429)
+	//   - Resource errors (CPU/memory limits)
+	AdjustLimitIfNeeded(err utils.TransactionError)
 	// LimitValue returns the current value of the limitValue variable, which is used to determine the number of channel
 	// accounts to process transactions for in a single iteration. If the value being returned was downsized due to
 	// indeterminate responses, the method will restore it to the original value after a fixed window of time has
@@ -57,20 +63,53 @@ func NewTransactionProcessingLimiter(limit int) *TransactionProcessingLimiterImp
 	}
 }
 
-func (tpl *TransactionProcessingLimiterImpl) AdjustLimitIfNeeded(hErr *utils.HorizonErrorWrapper) {
+// shouldAdjustLimitForHorizonError determines if a Horizon error should trigger limit adjustment
+func shouldAdjustLimitForHorizonError(hErr *utils.HorizonErrorWrapper) bool {
+	return hErr.IsRateLimit() || hErr.IsGatewayTimeout() || hErr.IsTxInsufficientFee()
+}
+
+// shouldAdjustLimitForRPCError determines if an RPC error should trigger limit adjustment
+// These are errors that indicate network congestion or resource constraints
+func shouldAdjustLimitForRPCError(rpcErr *utils.RPCErrorWrapper) bool {
+	if rpcErr.SimulationError == nil {
+		return false
+	}
+
+	switch rpcErr.SimulationError.Type {
+	case stellar.SimulationErrorTypeNetwork, stellar.SimulationErrorTypeResource:
+		return true
+	default:
+		return false
+	}
+}
+
+func (tpl *TransactionProcessingLimiterImpl) adjustLimitIfNeeded() {
 	tpl.mutex.Lock()
 	defer tpl.mutex.Unlock()
 
-	if !(hErr.IsRateLimit() || hErr.IsGatewayTimeout() || hErr.IsTxInsufficientFee()) {
-		return
-	}
-
 	tpl.IndeterminateResponsesCounter++
-	// We can tweek the following values as needed, and maybe add additional functionality to
-	// dynamically determine values for the default selection limit rather than using the default harcoded values
+	// We can tweak the following values as needed, and maybe add additional functionality to
+	// dynamically determine values for the default selection limit rather than using the default hardcoded values
 	if tpl.IndeterminateResponsesCounter >= IndeterminateResponsesToleranceLimit {
 		tpl.limitValue = DefaultBundlesSelectionLimit
 		tpl.CounterLastUpdated = time.Now()
+	}
+}
+
+func (tpl *TransactionProcessingLimiterImpl) AdjustLimitIfNeeded(err utils.TransactionError) {
+	switch e := err.(type) {
+	case *utils.HorizonTransactionError:
+		if e.IsHorizonError() {
+			if shouldAdjustLimitForHorizonError(e.HorizonErrorWrapper) {
+				tpl.adjustLimitIfNeeded()
+			}
+		}
+	case *utils.RPCTransactionError:
+		if e.IsRPCError() {
+			if shouldAdjustLimitForRPCError(e.RPCErrorWrapper) {
+				tpl.adjustLimitIfNeeded()
+			}
+		}
 	}
 }
 
