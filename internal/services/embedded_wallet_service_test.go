@@ -460,3 +460,182 @@ func Test_EmbeddedWalletService_GetWalletByToken(t *testing.T) {
 		assert.ErrorIs(t, err, ErrInvalidToken)
 	})
 }
+
+func Test_EmbeddedWalletService_GetWalletByReceiverContact(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	tssModel := store.NewTransactionModel(dbConnectionPool)
+	require.NoError(t, err)
+
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, "somehash", "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB")
+	require.NoError(t, err)
+
+	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: "tenant-id"})
+
+	t.Run("successfully gets a wallet by receiver contact", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", "test@example.com", "EMAIL", data.PendingWalletStatus)
+
+		retrievedWallet, err := service.GetWalletByReceiverContact(ctx, "test@example.com", "EMAIL")
+		require.NoError(t, err)
+		require.NotNil(t, retrievedWallet)
+
+		assert.Equal(t, expectedWallet.Token, retrievedWallet.Token)
+		assert.Equal(t, expectedWallet.ReceiverContact, retrievedWallet.ReceiverContact)
+		assert.Equal(t, expectedWallet.ContactType, retrievedWallet.ContactType)
+		assert.Equal(t, expectedWallet.WalletStatus, retrievedWallet.WalletStatus)
+	})
+
+	t.Run("successfully gets a wallet by phone number", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", "+14155555555", "PHONE_NUMBER", data.PendingWalletStatus)
+
+		retrievedWallet, err := service.GetWalletByReceiverContact(ctx, "+14155555555", "PHONE_NUMBER")
+		require.NoError(t, err)
+		require.NotNil(t, retrievedWallet)
+
+		assert.Equal(t, expectedWallet.Token, retrievedWallet.Token)
+		assert.Equal(t, expectedWallet.ReceiverContact, retrievedWallet.ReceiverContact)
+		assert.Equal(t, expectedWallet.ContactType, retrievedWallet.ContactType)
+		assert.Equal(t, expectedWallet.WalletStatus, retrievedWallet.WalletStatus)
+	})
+
+	t.Run("returns error if receiver contact is empty", func(t *testing.T) {
+		_, err := service.GetWalletByReceiverContact(ctx, "", "EMAIL")
+		assert.EqualError(t, err, "receiver contact cannot be empty")
+	})
+
+	t.Run("returns error if contact type is empty", func(t *testing.T) {
+		_, err := service.GetWalletByReceiverContact(ctx, "test@example.com", "")
+		assert.EqualError(t, err, "contact type cannot be empty")
+	})
+
+	t.Run("returns error if contact type is invalid", func(t *testing.T) {
+		_, err := service.GetWalletByReceiverContact(ctx, "test@example.com", "INVALID")
+		assert.EqualError(t, err, "validating contact type: invalid contact type \"INVALID\"")
+	})
+
+	t.Run("returns error if wallet not found", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		_, err := service.GetWalletByReceiverContact(ctx, "notfound@example.com", "EMAIL")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "getting embedded wallet by receiver contact")
+	})
+}
+
+func Test_EmbeddedWalletService_ResendInvite(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	tssModel := store.NewTransactionModel(dbConnectionPool)
+	require.NoError(t, err)
+
+	service, err := NewEmbeddedWalletService(sdpModels, tssModel, "somehash", "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB")
+	require.NoError(t, err)
+
+	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: "tenant-id"})
+
+	t.Run("successfully resends invite for PENDING wallet", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "", "test-credential-id", "test1@example.com", "EMAIL", data.PendingWalletStatus)
+
+		receivers, getErr := sdpModels.Receiver.GetByContacts(ctx, dbConnectionPool, "test1@example.com")
+		require.NoError(t, getErr)
+		require.Len(t, receivers, 1)
+		receiver := receivers[0]
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "SDP Embedded Wallet", "https://stellar.org", "SELF", "")
+		data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
+
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		_, err = sdpModels.ReceiverWallet.UpdateInvitationSentAt(ctx, sdpModels.DBConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+
+		testErr := service.ResendInvite(ctx, "test1@example.com", "EMAIL")
+		require.NoError(t, testErr)
+	})
+
+	t.Run("successfully resends invite for phone number", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "", "test-credential-id", "+14155555555", "PHONE_NUMBER", data.PendingWalletStatus)
+
+		receivers, getErr := sdpModels.Receiver.GetByContacts(ctx, dbConnectionPool, "+14155555555")
+		require.NoError(t, getErr)
+		require.Len(t, receivers, 1)
+		receiver := receivers[0]
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "SDP Embedded Wallet", "https://stellar.org", "SELF", "")
+		data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
+
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		_, err = sdpModels.ReceiverWallet.UpdateInvitationSentAt(ctx, sdpModels.DBConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+
+		testErr := service.ResendInvite(ctx, "+14155555555", "PHONE_NUMBER")
+		require.NoError(t, testErr)
+	})
+
+	t.Run("returns error if embedded wallet not found", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		testErr := service.ResendInvite(ctx, "notfound@example.com", "EMAIL")
+		require.Error(t, testErr)
+		assert.Contains(t, testErr.Error(), "getting embedded wallet by receiver contact")
+	})
+
+	t.Run("returns error if wallet status is not PENDING", func(t *testing.T) {
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "test2@example.com",
+		})
+
+		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", "test2@example.com", "EMAIL", data.SuccessWalletStatus)
+
+		err = service.ResendInvite(ctx, "test2@example.com", "EMAIL")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "wallet status invalid for resend")
+	})
+
+	t.Run("returns error if receiver wallet not found", func(t *testing.T) {
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "test3@example.com",
+		})
+
+		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "", "test-credential-id", "test3@example.com", "EMAIL", data.PendingWalletStatus)
+
+		err = service.ResendInvite(ctx, "test3@example.com", "EMAIL")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no embedded wallet found for receiver")
+	})
+}

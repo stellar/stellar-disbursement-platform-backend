@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type WalletCreationHandler struct {
@@ -52,6 +53,38 @@ type WalletStatusResponse struct {
 	Status          data.EmbeddedWalletStatus `json:"status"`
 	ReceiverContact string                    `json:"receiver_contact"`
 	ContactType     data.ContactType          `json:"contact_type"`
+}
+
+type ResendInviteRequest struct {
+	ReceiverContact string           `json:"receiver_contact"`
+	ContactType     data.ContactType `json:"contact_type"`
+}
+
+func (r ResendInviteRequest) Validate() *httperror.HTTPError {
+	validator := validators.NewValidator()
+
+	validator.Check(len(strings.TrimSpace(r.ReceiverContact)) > 0, "receiver_contact", "receiver_contact should not be empty")
+
+	if err := r.ContactType.Validate(); err != nil {
+		validator.AddError("contact_type", "contact_type must be EMAIL or PHONE_NUMBER")
+	}
+
+	switch r.ContactType {
+	case data.ContactTypeEmail:
+		validator.CheckError(utils.ValidateEmail(r.ReceiverContact), "receiver_contact", "invalid email format")
+	case data.ContactTypePhoneNumber:
+		validator.CheckError(utils.ValidatePhoneNumber(r.ReceiverContact), "receiver_contact", "invalid phone number format")
+	}
+
+	if validator.HasErrors() {
+		return httperror.BadRequest("Request invalid", nil, validator.Errors)
+	}
+
+	return nil
+}
+
+type ResendInviteResponse struct {
+	Message string `json:"message"`
 }
 
 func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Request) {
@@ -140,4 +173,41 @@ func (h WalletCreationHandler) GetWalletStatus(rw http.ResponseWriter, req *http
 		ContactType:     wallet.ContactType,
 	}
 	httpjson.Render(rw, resp, httpjson.JSON)
+}
+
+func (h WalletCreationHandler) ResendInvite(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	var reqBody ResendInviteRequest
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+		httperror.BadRequest("", err, nil).Render(rw)
+		return
+	}
+
+	if err := reqBody.Validate(); err != nil {
+		err.Render(rw)
+		return
+	}
+
+	err := h.EmbeddedWalletService.ResendInvite(ctx, reqBody.ReceiverContact, string(reqBody.ContactType))
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.BadRequest("Not available for receiver", err, nil).Render(rw)
+			return
+		}
+
+		if errors.Is(err, services.ErrInvalidWalletStatus) {
+			httperror.BadRequest("Invitation already used", err, nil).Render(rw)
+			return
+		}
+
+		httperror.InternalError(ctx, "Resending invitation", err, nil).Render(rw)
+		return
+	}
+
+	response := ResendInviteResponse{
+		Message: "Invitation queued for sending",
+	}
+
+	httpjson.RenderStatus(rw, http.StatusOK, response, httpjson.JSON)
 }

@@ -661,6 +661,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
 					r.Get("/status/{token}", walletCreationHandler.GetWalletStatus)
+					r.Post("/resend-invite", walletCreationHandler.ResendInvite)
 				})
 			})
 		}
