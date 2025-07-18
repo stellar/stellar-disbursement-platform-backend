@@ -234,13 +234,11 @@ func (e *EmbeddedWalletService) GetWalletByReceiverContact(ctx context.Context, 
 		return nil, fmt.Errorf("validating contact type: %w", err)
 	}
 
-	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.EmbeddedWallet, error) {
-		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByReceiverContact(ctx, dbTx, receiverContact, data.ContactType(contactType))
-		if err != nil {
-			return nil, fmt.Errorf("getting embedded wallet by receiver contact %s: %w", receiverContact, err)
-		}
-		return embeddedWallet, nil
-	})
+	embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByReceiverContact(ctx, e.sdpModels.DBConnectionPool, receiverContact, data.ContactType(contactType))
+	if err != nil {
+		return nil, fmt.Errorf("getting embedded wallet by receiver contact %s: %w", receiverContact, err)
+	}
+	return embeddedWallet, nil
 }
 
 func (e *EmbeddedWalletService) ResendInvite(ctx context.Context, receiverContact, contactType string) error {
@@ -253,30 +251,28 @@ func (e *EmbeddedWalletService) ResendInvite(ctx context.Context, receiverContac
 		return ErrInvalidWalletStatus
 	}
 
-	return db.RunInTransaction(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		// Check if the receiver wallet exists
-		receiverWallets, txErr := e.sdpModels.ReceiverWallet.GetWithReceiverIDs(ctx, dbTx, []string{embeddedWallet.ReceiverID})
-		if txErr != nil {
-			return fmt.Errorf("getting receiver wallets for receiver ID %s: %w", embeddedWallet.ReceiverID, txErr)
-		}
+	// Check if the receiver wallet exists
+	receiverWallets, err := e.sdpModels.ReceiverWallet.GetWithReceiverIDs(ctx, e.sdpModels.DBConnectionPool, []string{embeddedWallet.ReceiverID})
+	if err != nil {
+		return fmt.Errorf("getting receiver wallets for receiver ID %s: %w", embeddedWallet.ReceiverID, err)
+	}
 
-		// Find the first embedded wallet receiver wallet (there should be only one for the demo)
-		var receiverWallet *data.ReceiverWallet
-		for _, rw := range receiverWallets {
-			if rw.Wallet.Embedded {
-				receiverWallet = &rw
-				break
-			}
+	// Find the first embedded wallet receiver wallet (there should be only one for the demo)
+	var receiverWallet *data.ReceiverWallet
+	for _, rw := range receiverWallets {
+		if rw.Wallet.Embedded {
+			receiverWallet = &rw
+			break
 		}
-		if receiverWallet == nil {
-			return fmt.Errorf("no embedded wallet found for receiver ID %s", embeddedWallet.ReceiverID)
-		}
+	}
+	if receiverWallet == nil {
+		return fmt.Errorf("no embedded wallet found for receiver ID %s", embeddedWallet.ReceiverID)
+	}
 
-		_, txErr = e.sdpModels.ReceiverWallet.RetryInvitationMessage(ctx, dbTx, receiverWallet.ID)
-		if txErr != nil {
-			return fmt.Errorf("retrying invitation message for receiver wallet ID %s: %w", receiverWallet.ID, txErr)
-		}
+	_, err = e.sdpModels.ReceiverWallet.RetryInvitationMessage(ctx, e.sdpModels.DBConnectionPool, receiverWallet.ID)
+	if err != nil {
+		return fmt.Errorf("retrying invitation message for receiver wallet ID %s: %w", receiverWallet.ID, err)
+	}
 
-		return nil
-	})
+	return nil
 }

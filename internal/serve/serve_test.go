@@ -724,6 +724,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/embedded-wallets"},
 		{http.MethodGet, "/embedded-wallets/test-credential-id"},
 		{http.MethodGet, "/embedded-wallets/status/test-token"},
+		{http.MethodPost, "/embedded-wallets/resend-invite"},
 	}
 
 	// Expect 401 as a response:
