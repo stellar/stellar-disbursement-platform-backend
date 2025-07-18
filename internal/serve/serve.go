@@ -568,6 +568,24 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			}.Patch)
 		})
 
+		// Embedded wallet routes (only if feature is enabled)
+		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
+			mux.Group(func(r chi.Router) {
+				walletCreationHandler := httphandler.WalletCreationHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+				}
+				r.With(middleware.RequirePermission(
+					data.WriteDisbursements,
+					middleware.AnyRoleMiddleware(authManager, data.FinancialControllerUserRole),
+				)).Route("/embedded-wallets", func(r chi.Router) {
+					r.Post("/", walletCreationHandler.CreateWallet)
+					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
+					r.Get("/status/{token}", walletCreationHandler.GetWalletStatus)
+					r.Post("/resend-invite", walletCreationHandler.ResendInvite)
+				})
+			})
+		}
+
 		// Bridge integration endpoints
 		if o.BridgeService != nil {
 			r.Route("/bridge-integration", func(r chi.Router) {
@@ -650,21 +668,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.ServeHTTP)
 
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
-
-		// Embedded wallet routes (only if feature is enabled)
-		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
-			mux.Group(func(r chi.Router) {
-				walletCreationHandler := httphandler.WalletCreationHandler{
-					EmbeddedWalletService: o.EmbeddedWalletService,
-				}
-				r.Route("/embedded-wallets", func(r chi.Router) {
-					r.Post("/", walletCreationHandler.CreateWallet)
-					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
-					r.Get("/status/{token}", walletCreationHandler.GetWalletStatus)
-					r.Post("/resend-invite", walletCreationHandler.ResendInvite)
-				})
-			})
-		}
 	})
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
