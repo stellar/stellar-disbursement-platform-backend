@@ -720,6 +720,10 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// bridge
 		{http.MethodGet, "/bridge-integration"},
 		{http.MethodPatch, "/bridge-integration"},
+		// embedded wallets
+		{http.MethodPost, "/embedded-wallets"},
+		{http.MethodGet, "/embedded-wallets/test-credential-id"},
+		{http.MethodGet, "/embedded-wallets/status/test-token"},
 	}
 
 	// Expect 401 as a response:
