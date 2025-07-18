@@ -244,14 +244,35 @@ func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl
 		return fmt.Errorf("receiver must have either email or phone number for embedded wallet creation")
 	}
 
-	token, err := s.embeddedWalletService.CreateInvitationToken(ctx, receiverContact, contactType, receiver.ID)
+	token, err := s.getOrCreateInvitationToken(ctx, receiverContact, contactType, receiver.ID)
 	if err != nil {
-		return fmt.Errorf("creating embedded wallet invitation token: %w", err)
+		return fmt.Errorf("getting or creating invitation token: %w", err)
 	}
 
 	wdl.Token = token
 
 	return nil
+}
+
+func (s SendReceiverWalletInviteService) getOrCreateInvitationToken(ctx context.Context, receiverContact, contactType, receiverID string) (string, error) {
+	existingWallet, err := s.embeddedWalletService.GetWalletByReceiverContact(ctx, receiverContact, contactType)
+	if err != nil {
+		token, createErr := s.embeddedWalletService.CreateInvitationToken(ctx, receiverContact, contactType, receiverID)
+		if createErr != nil {
+			return "", fmt.Errorf("creating invitation token: %w", createErr)
+		}
+		return token, nil
+	}
+
+	if existingWallet.WalletStatus == data.PendingWalletStatus {
+		return existingWallet.Token, nil
+	}
+
+	token, createErr := s.embeddedWalletService.CreateInvitationToken(ctx, receiverContact, contactType, receiverID)
+	if createErr != nil {
+		return "", fmt.Errorf("creating invitation token: %w", createErr)
+	}
+	return token, nil
 }
 
 func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context, wdl WalletDeepLink, isLinkShortenerEnabled bool) (string, error) {

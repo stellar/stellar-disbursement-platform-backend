@@ -138,6 +138,29 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 	return &wallet, nil
 }
 
+func (ew *EmbeddedWalletModel) GetByReceiverContact(ctx context.Context, sqlExec db.SQLExecuter, receiverContact string, contactType ContactType) (*EmbeddedWallet, error) {
+	query := fmt.Sprintf(`
+        SELECT
+            %s
+        FROM embedded_wallets ew
+        WHERE
+            ew.receiver_contact = $1 AND ew.contact_type = $2
+        ORDER BY ew.created_at DESC
+        LIMIT 1
+        `, EmbeddedWalletColumnNames("ew", ""))
+
+	var wallet EmbeddedWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, receiverContact, contactType)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying embedded wallet by receiver contact: %w", err)
+	}
+
+	return &wallet, nil
+}
+
 // GetByReceiverIDs returns all embedded wallets for the given receiver IDs.
 func (ew *EmbeddedWalletModel) GetByReceiverIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverIDs ...string) ([]EmbeddedWallet, error) {
 	if len(receiverIDs) == 0 {

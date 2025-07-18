@@ -400,3 +400,195 @@ func Test_WalletCreationHandler_GetWalletStatus_EmptyToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Result().StatusCode)
 }
+
+func Test_WalletCreationHandler_ResendInvite(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	testCases := []struct {
+		name             string
+		requestBody      ResendInviteRequest
+		mockError        error
+		expectedStatus   int
+		expectedResponse *ResendInviteResponse
+	}{
+		{
+			name: "successful resend invite for email",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "test@example.com",
+				ContactType:     data.ContactTypeEmail,
+			},
+			mockError:      nil,
+			expectedStatus: http.StatusOK,
+			expectedResponse: &ResendInviteResponse{
+				Message: "Invitation queued for sending",
+			},
+		},
+		{
+			name: "successful resend invite for phone number",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "+14155555555",
+				ContactType:     data.ContactTypePhoneNumber,
+			},
+			mockError:      nil,
+			expectedStatus: http.StatusOK,
+			expectedResponse: &ResendInviteResponse{
+				Message: "Invitation queued for sending",
+			},
+		},
+		{
+			name: "receiver not found",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "notfound@example.com",
+				ContactType:     data.ContactTypeEmail,
+			},
+			mockError:      data.ErrRecordNotFound,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "internal server error",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "error@example.com",
+				ContactType:     data.ContactTypeEmail,
+			},
+			mockError:      errors.New("database connection failed"),
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			walletService.On("ResendInvite", mock.Anything, tc.requestBody.ReceiverContact, string(tc.requestBody.ContactType)).Return(tc.mockError).Once()
+
+			r := chi.NewRouter()
+			r.Post("/embedded-wallets/resend-invite", handler.ResendInvite)
+
+			rr := httptest.NewRecorder()
+			requestBody, _ := json.Marshal(tc.requestBody)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/embedded-wallets/resend-invite", strings.NewReader(string(requestBody)))
+
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Result().StatusCode)
+
+			if tc.expectedResponse != nil {
+				var resp ResendInviteResponse
+				require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+				assert.Equal(t, tc.expectedResponse.Message, resp.Message)
+			}
+		})
+	}
+}
+
+func Test_WalletCreationHandler_ResendInvite_ValidationErrors(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	testCases := []struct {
+		name           string
+		requestBody    ResendInviteRequest
+		expectedStatus int
+		expectedField  string
+	}{
+		{
+			name: "empty receiver contact",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "",
+				ContactType:     data.ContactTypeEmail,
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedField:  "receiver_contact",
+		},
+		{
+			name: "invalid contact type",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "test@example.com",
+				ContactType:     "INVALID_TYPE",
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedField:  "contact_type",
+		},
+		{
+			name: "invalid email format",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "invalid-email",
+				ContactType:     data.ContactTypeEmail,
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedField:  "receiver_contact",
+		},
+		{
+			name: "invalid phone format",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "not-a-phone",
+				ContactType:     data.ContactTypePhoneNumber,
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedField:  "receiver_contact",
+		},
+		{
+			name: "mismatched contact format",
+			requestBody: ResendInviteRequest{
+				ReceiverContact: "test@example.com",
+				ContactType:     data.ContactTypePhoneNumber,
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedField:  "receiver_contact",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := chi.NewRouter()
+			r.Post("/embedded-wallets/resend-invite", handler.ResendInvite)
+
+			rr := httptest.NewRecorder()
+			requestBody, _ := json.Marshal(tc.requestBody)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/embedded-wallets/resend-invite", strings.NewReader(string(requestBody)))
+
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Result().StatusCode)
+
+			var errorResp map[string]interface{}
+			require.NoError(t, json.NewDecoder(rr.Body).Decode(&errorResp))
+			extras, ok := errorResp["extras"].(map[string]interface{})
+			if ok {
+				assert.Contains(t, extras, tc.expectedField)
+			} else {
+				assert.Contains(t, errorResp["error"].(string), tc.expectedField)
+			}
+		})
+	}
+}
+
+func Test_WalletCreationHandler_ResendInvite_WalletStatusError(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := WalletCreationHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	walletService.On("ResendInvite", mock.Anything, "test@example.com", "EMAIL").Return(services.ErrInvalidWalletStatus).Once()
+
+	r := chi.NewRouter()
+	r.Post("/embedded-wallets/resend-invite", handler.ResendInvite)
+
+	rr := httptest.NewRecorder()
+	requestBody, _ := json.Marshal(ResendInviteRequest{
+		ReceiverContact: "test@example.com",
+		ContactType:     data.ContactTypeEmail,
+	})
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "/embedded-wallets/resend-invite", strings.NewReader(string(requestBody)))
+
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+
+	var errorResp map[string]interface{}
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&errorResp))
+	assert.Contains(t, errorResp["error"].(string), "Invitation already used")
+}

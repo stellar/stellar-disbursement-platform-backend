@@ -581,6 +581,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
 					r.Get("/status/{token}", walletCreationHandler.GetWalletStatus)
+					r.Post("/resend-invite", walletCreationHandler.ResendInvite)
 				})
 			})
 		}
@@ -667,7 +668,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.ServeHTTP)
 
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
-
 	})
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware

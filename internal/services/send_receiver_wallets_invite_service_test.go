@@ -401,6 +401,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		require.NoError(t, err)
 
 		mockToken := uuid.New().String()
+		embeddedWalletServiceMock.On("GetWalletByReceiverContact", mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("wallet not found")).Once()
 		embeddedWalletServiceMock.On("CreateInvitationToken", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockToken, nil).Once()
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
