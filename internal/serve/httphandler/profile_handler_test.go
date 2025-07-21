@@ -480,6 +480,8 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
 					"payment_cancellation_period_days": 2,
 					"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+					"receiver_registration_html_email_template": "<html><body><h1>{{.OrganizationName}} Payment</h1><p>Register at {{.RegistrationLink}}</p></body></html>",
+					"receiver_registration_html_email_subject": "{{.OrganizationName}}: Payment Notification",
 					"receiver_invitation_resend_interval_days": 2,
 					"timezone_utc_offset": "-03:00",
 					"is_memo_tracing_enabled": false,
@@ -489,19 +491,21 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", reqBody, newPNGImgBuf())
 			},
 			resultingFieldsToCompare: map[string]interface{}{
-				"IsApprovalRequired":                   true,
-				"Name":                                 "My Org Name",
-				"Logo":                                 newPNGImgBuf().Bytes(),
-				"OTPMessageTemplate":                   "Here's your OTP Code to complete your registration. MyOrg 👋",
-				"PaymentCancellationPeriodDays":        int64(2),
-				"ReceiverRegistrationMessageTemplate":  "My custom receiver wallet registration invite. MyOrg 👋",
-				"ReceiverInvitationResendIntervalDays": int64(2),
-				"TimezoneUTCOffset":                    "-03:00",
-				"IsMemoTracingEnabled":                 false,
-				"IsLinkShortenerEnabled":               true,
-				"PrivacyPolicyLink":                    "https://example.com/privacy-policy",
+				"IsApprovalRequired":                    true,
+				"Name":                                  "My Org Name",
+				"Logo":                                  newPNGImgBuf().Bytes(),
+				"OTPMessageTemplate":                    "Here's your OTP Code to complete your registration. MyOrg 👋",
+				"PaymentCancellationPeriodDays":         int64(2),
+				"ReceiverRegistrationMessageTemplate":   "My custom receiver wallet registration invite. MyOrg 👋",
+				"ReceiverRegistrationHTMLEmailTemplate": "<html><body><h1>{{.OrganizationName}} Payment</h1><p>Register at {{.RegistrationLink}}</p></body></html>",
+				"ReceiverRegistrationHTMLEmailSubject":  "{{.OrganizationName}}: Payment Notification",
+				"ReceiverInvitationResendIntervalDays":  int64(2),
+				"TimezoneUTCOffset":                     "-03:00",
+				"IsMemoTracingEnabled":                  false,
+				"IsLinkShortenerEnabled":                true,
+				"PrivacyPolicyLink":                     "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsMemoTracingEnabled='false', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsMemoTracingEnabled='false', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationHTMLEmailSubject='{{.OrganizationName}}: Payment Notification', ReceiverRegistrationHTMLEmailTemplate='<html><body><h1>{{.OrganizationName}} Payment</h1><p>Register at {{.RegistrationLink}}</p></body></html>', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
@@ -549,6 +553,59 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"IsLinkShortenerEnabled":               false,
 			},
 			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsLinkShortenerEnabled='false', IsMemoTracingEnabled='true', OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', ReceiverInvitationResendIntervalDays='0', ReceiverRegistrationMessageTemplate='']"},
+		},
+		{
+			name:  "🎉 successfully updates the organization's HTML email template fields",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_html_email_template": "<html><body><h1>Welcome to {{.OrganizationName}}!</h1><p>Click <a href=\"{{.RegistrationLink}}\">here</a> to register.</p></body></html>",
+					"receiver_registration_html_email_subject": "Payment from {{.OrganizationName}} - Action Required"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			resultingFieldsToCompare: map[string]interface{}{
+				"ReceiverRegistrationHTMLEmailTemplate": "<html><body><h1>Welcome to {{.OrganizationName}}!</h1><p>Click <a href=\"{{.RegistrationLink}}\">here</a> to register.</p></body></html>",
+				"ReceiverRegistrationHTMLEmailSubject":  "Payment from {{.OrganizationName}} - Action Required",
+			},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [ReceiverRegistrationHTMLEmailSubject='Payment from {{.OrganizationName}} - Action Required', ReceiverRegistrationHTMLEmailTemplate='<html><body><h1>Welcome to {{.OrganizationName}}!</h1><p>Click <a href=\\\"{{.RegistrationLink}}\\\">here</a> to register.</p></body></html>']"},
+		},
+		{
+			name:  "🎉 successfully clears the organization's HTML email template fields",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			updateOrgInitialValuesFn: func(t *testing.T, ctx context.Context, models *data.Models) {
+				htmlTemplate := "<html><body>Existing Template</body></html>"
+				htmlSubject := "Existing Subject"
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					ReceiverRegistrationHTMLEmailTemplate: &htmlTemplate,
+					ReceiverRegistrationHTMLEmailSubject:  &htmlSubject,
+				})
+				require.NoError(t, err)
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_html_email_template": "",
+					"receiver_registration_html_email_subject": ""
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			resultingFieldsToCompare: map[string]interface{}{
+				"ReceiverRegistrationHTMLEmailTemplate": (*string)(nil),
+				"ReceiverRegistrationHTMLEmailSubject":  (*string)(nil),
+			},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [ReceiverRegistrationHTMLEmailSubject='', ReceiverRegistrationHTMLEmailTemplate='']"},
 		},
 	}
 
@@ -1456,6 +1513,52 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": "https://example.com/privacy-policy",
+				"message_channel_priority": ["SMS", "EMAIL"]
+			}
+		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns HTML email template fields when they are set", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		htmlTemplate := `<html><body><h1>Welcome to {{.OrganizationName}}!</h1><p>Click <a href="{{.RegistrationLink}}">here</a> to register.</p></body></html>`
+		htmlSubject := "Payment from {{.OrganizationName}} - Action Required"
+
+		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReceiverRegistrationHTMLEmailTemplate: &htmlTemplate,
+			ReceiverRegistrationHTMLEmailSubject:  &htmlSubject,
+		})
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody := fmt.Sprintf(`
+			{
+				"logo_url": "%s/organization/logo",
+				"base_url": %q,
+				"name": "MyCustomAid",
+				"distribution_account": %s,
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required": false,
+				"is_link_shortener_enabled": false,
+				"is_memo_tracing_enabled": true,
+				"receiver_registration_html_email_template": "<html><body><h1>Welcome to {{.OrganizationName}}!</h1><p>Click <a href=\"{{.RegistrationLink}}\">here</a> to register.</p></body></html>",
+				"receiver_registration_html_email_subject": "Payment from {{.OrganizationName}} - Action Required",
+				"receiver_invitation_resend_interval_days": 0,
+				"payment_cancellation_period_days": 0,
+				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)

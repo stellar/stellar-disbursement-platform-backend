@@ -3,11 +3,11 @@ package services
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"net/url"
 	"path"
 	"slices"
 	"strings"
+	txttemplate "text/template"
 	"time"
 
 	"github.com/stellar/go/strkey"
@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -80,7 +81,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	}
 
 	// Execute the template early so we avoid hitting the database to query the other info
-	msgTemplate, err := template.New("").Parse(orgReceiverRegistrationMessageTemplate)
+	msgTemplate, err := txttemplate.New("").Parse(orgReceiverRegistrationMessageTemplate)
 	if err != nil {
 		return fmt.Errorf("parsing organization receiver registration message template: %w", err)
 	}
@@ -137,37 +138,51 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			continue
 		}
 
-		disbursementReceiverRegistrationMessageTemplate := rwa.DisbursementReceiverRegistrationMsgTemplate
-		if disbursementReceiverRegistrationMessageTemplate != nil && *disbursementReceiverRegistrationMessageTemplate != "" {
-			if !strings.Contains(*disbursementReceiverRegistrationMessageTemplate, "{{.RegistrationLink}}") {
-				*disbursementReceiverRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(*disbursementReceiverRegistrationMessageTemplate))
-			}
+		var messageContent, customSubject string
 
-			msgTemplate, err = template.New("").Parse(*disbursementReceiverRegistrationMessageTemplate)
+		// Try HTML template for email messages (only organization HTML templates and no disbursement template override)
+		htmlTemplateUsed := false
+		hasDisbursementTemplate := rwa.DisbursementReceiverRegistrationMsgTemplate != nil && *rwa.DisbursementReceiverRegistrationMsgTemplate != ""
+
+		if rwa.ReceiverWallet.Receiver.Email != "" && !hasDisbursementTemplate && organization.ReceiverRegistrationHTMLEmailTemplate != nil && *organization.ReceiverRegistrationHTMLEmailTemplate != "" {
+			// Process the HTML with the registration without template to prevent sanitization issues
+			processedTemplate := strings.ReplaceAll(*organization.ReceiverRegistrationHTMLEmailTemplate, "{{.RegistrationLink}}", registrationLink)
+			htmlTemplateData := map[string]string{
+				"OrganizationName": organization.Name,
+			}
+			if htmlContent, htmlErr := htmltemplate.ExecuteCustomHTMLTemplate(processedTemplate, htmlTemplateData); htmlErr == nil {
+				messageContent = htmlContent
+				htmlTemplateUsed = true
+				// Process custom subject if available
+				if organization.ReceiverRegistrationHTMLEmailSubject != nil && *organization.ReceiverRegistrationHTMLEmailSubject != "" {
+					if subject, subjErr := htmltemplate.ProcessSubjectTemplate(*organization.ReceiverRegistrationHTMLEmailSubject, htmlTemplateData); subjErr == nil {
+						customSubject = subject
+					}
+				}
+			} else {
+				log.Ctx(ctx).Warn("failed to render HTML email template, falling back to plain text")
+			}
+		}
+
+		// Use plain text template if HTML wasn't used
+		if !htmlTemplateUsed {
+			messageContent, err = s.renderPlainTextTemplate(organization, &rwa, registrationLink, msgTemplate)
 			if err != nil {
-				return fmt.Errorf("parsing disbursement receiver registration message template: %w", err)
+				return fmt.Errorf("executing plain text registration message template: %w", err)
 			}
 		}
 
-		content := new(strings.Builder)
-		err = msgTemplate.Execute(content, struct {
-			OrganizationName string
-			RegistrationLink template.HTML
-		}{
-			OrganizationName: organization.Name,
-			RegistrationLink: template.HTML(registrationLink),
-		})
-		if err != nil {
-			return fmt.Errorf("executing registration message template: %w", err)
-		}
-
-		msg := message.Message{Body: content.String()}
+		msg := message.Message{Body: messageContent}
 		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
 			msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
 		}
 		if rwa.ReceiverWallet.Receiver.Email != "" {
 			msg.ToEmail = rwa.ReceiverWallet.Receiver.Email
-			msg.Title = "You have a payment waiting for you from " + organization.Name
+			if customSubject != "" {
+				msg.Title = customSubject
+			} else {
+				msg.Title = "You have a payment waiting for you from " + organization.Name
+			}
 		}
 
 		msgToInsert := &data.MessageInsert{
@@ -563,4 +578,37 @@ func (wdl WalletDeepLink) GetSignedRegistrationLink(stellarSecretKey string) (st
 	}
 
 	return signedRegistrationLink, nil
+}
+
+// renderPlainTextTemplate renders the plain text message template (for SMS or fallback for email).
+func (s SendReceiverWalletInviteService) renderPlainTextTemplate(organization *data.Organization, rwa *data.ReceiverWalletAsset, registrationLink string, msgTemplate *txttemplate.Template) (string, error) {
+	// Use disbursement template if available, otherwise use organization template
+	templateToUse := msgTemplate
+	if rwa.DisbursementReceiverRegistrationMsgTemplate != nil && *rwa.DisbursementReceiverRegistrationMsgTemplate != "" {
+		disbursementTemplate := *rwa.DisbursementReceiverRegistrationMsgTemplate
+		if !strings.Contains(disbursementTemplate, "{{.RegistrationLink}}") {
+			disbursementTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(disbursementTemplate))
+		}
+
+		var err error
+		templateToUse, err = txttemplate.New("").Parse(disbursementTemplate)
+		if err != nil {
+			return "", fmt.Errorf("parsing disbursement receiver registration message template: %w", err)
+		}
+	}
+
+	// Execute the template
+	content := new(strings.Builder)
+	err := templateToUse.Execute(content, struct {
+		OrganizationName string
+		RegistrationLink string
+	}{
+		OrganizationName: organization.Name,
+		RegistrationLink: registrationLink,
+	})
+	if err != nil {
+		return "", fmt.Errorf("executing plain text template: %w", err)
+	}
+
+	return content.String(), nil
 }
