@@ -576,7 +576,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				}
 				r.With(middleware.RequirePermission(
 					data.WriteDisbursements,
-					middleware.AnyRoleMiddleware(authManager, data.FinancialControllerUserRole),
+					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 				)).Route("/embedded-wallets", func(r chi.Router) {
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
