@@ -48,6 +48,46 @@ func TestValidateContactType(t *testing.T) {
 	}
 }
 
+func TestValidateHTMLEmailTemplate(t *testing.T) {
+	testCases := []struct {
+		name        string
+		template    string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid template with RegistrationLink",
+			template:    `<html><body>Click {{.RegistrationLink}} to register.</body></html>`,
+			expectError: false,
+		},
+		{
+			name:        "empty template",
+			template:    "",
+			expectError: true,
+			errorMsg:    "template content cannot be empty",
+		},
+		{
+			name:        "missing RegistrationLink",
+			template:    `<html><body>Click here to register</body></html>`,
+			expectError: true,
+			errorMsg:    "template must contain {{.RegistrationLink}} variable",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateHTMLEmailTemplate(tc.template)
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func Test_ValidatePhoneNumber(t *testing.T) {
 	testCases := []struct {
 		phoneNumber string

@@ -38,8 +38,10 @@ type Organization struct {
 	// If it's nil means resending the invitation is deactivated.
 	ReceiverInvitationResendIntervalDays *int64 `json:"receiver_invitation_resend_interval_days" db:"receiver_invitation_resend_interval_days"`
 	// PaymentCancellationPeriodDays is the number of days for a ready payment to be automatically cancelled.
-	PaymentCancellationPeriodDays       *int64 `json:"payment_cancellation_period_days" db:"payment_cancellation_period_days"`
-	ReceiverRegistrationMessageTemplate string `json:"receiver_registration_message_template" db:"receiver_registration_message_template"`
+	PaymentCancellationPeriodDays         *int64  `json:"payment_cancellation_period_days" db:"payment_cancellation_period_days"`
+	ReceiverRegistrationMessageTemplate   string  `json:"receiver_registration_message_template" db:"receiver_registration_message_template"`
+	ReceiverRegistrationHTMLEmailTemplate *string `json:"receiver_registration_html_email_template" db:"receiver_registration_html_email_template"`
+	ReceiverRegistrationHTMLEmailSubject  *string `json:"receiver_registration_html_email_subject" db:"receiver_registration_html_email_subject"`
 	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
 	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
 	// When the {{.OTP}} is not found in the message, it's added at the beginning of the message.
@@ -67,9 +69,11 @@ type OrganizationUpdate struct {
 	PaymentCancellationPeriodDays        *int64 `json:",omitempty"`
 
 	// Using pointers to accept empty strings
-	ReceiverRegistrationMessageTemplate *string `json:",omitempty"`
-	OTPMessageTemplate                  *string `json:",omitempty"`
-	PrivacyPolicyLink                   *string `json:",omitempty"`
+	ReceiverRegistrationMessageTemplate   *string `json:",omitempty"`
+	ReceiverRegistrationHTMLEmailTemplate *string `json:",omitempty"`
+	ReceiverRegistrationHTMLEmailSubject  *string `json:",omitempty"`
+	OTPMessageTemplate                    *string `json:",omitempty"`
+	PrivacyPolicyLink                     *string `json:",omitempty"`
 }
 
 type LogoType string
@@ -221,6 +225,26 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		} else {
 			// When empty value is passed by parameter we set the DEFAULT value for the column.
 			fields = append(fields, "otp_message_template = DEFAULT")
+		}
+	}
+
+	if ou.ReceiverRegistrationHTMLEmailTemplate != nil {
+		if *ou.ReceiverRegistrationHTMLEmailTemplate != "" {
+			fields = append(fields, "receiver_registration_html_email_template = ?")
+			args = append(args, *ou.ReceiverRegistrationHTMLEmailTemplate)
+		} else {
+			// When empty value is passed by parameter we set it as NULL.
+			fields = append(fields, "receiver_registration_html_email_template = NULL")
+		}
+	}
+
+	if ou.ReceiverRegistrationHTMLEmailSubject != nil {
+		if *ou.ReceiverRegistrationHTMLEmailSubject != "" {
+			fields = append(fields, "receiver_registration_html_email_subject = ?")
+			args = append(args, *ou.ReceiverRegistrationHTMLEmailSubject)
+		} else {
+			// When empty value is passed by parameter we set it as NULL.
+			fields = append(fields, "receiver_registration_html_email_subject = NULL")
 		}
 	}
 

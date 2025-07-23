@@ -50,16 +50,18 @@ type ProfileHandler struct {
 }
 
 type PatchOrganizationProfileRequest struct {
-	OrganizationName                    string  `json:"organization_name"`
-	TimezoneUTCOffset                   string  `json:"timezone_utc_offset"`
-	IsApprovalRequired                  *bool   `json:"is_approval_required"`
-	IsLinkShortenerEnabled              *bool   `json:"is_link_shortener_enabled"`
-	IsMemoTracingEnabled                *bool   `json:"is_memo_tracing_enabled"`
-	ReceiverInvitationResendInterval    *int64  `json:"receiver_invitation_resend_interval_days"`
-	PaymentCancellationPeriodDays       *int64  `json:"payment_cancellation_period_days"`
-	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
-	OTPMessageTemplate                  *string `json:"otp_message_template"`
-	PrivacyPolicyLink                   *string `json:"privacy_policy_link"`
+	OrganizationName                      string  `json:"organization_name"`
+	TimezoneUTCOffset                     string  `json:"timezone_utc_offset"`
+	IsApprovalRequired                    *bool   `json:"is_approval_required"`
+	IsLinkShortenerEnabled                *bool   `json:"is_link_shortener_enabled"`
+	IsMemoTracingEnabled                  *bool   `json:"is_memo_tracing_enabled"`
+	ReceiverInvitationResendInterval      *int64  `json:"receiver_invitation_resend_interval_days"`
+	PaymentCancellationPeriodDays         *int64  `json:"payment_cancellation_period_days"`
+	ReceiverRegistrationMessageTemplate   *string `json:"receiver_registration_message_template"`
+	ReceiverRegistrationHTMLEmailTemplate *string `json:"receiver_registration_html_email_template"`
+	ReceiverRegistrationHTMLEmailSubject  *string `json:"receiver_registration_html_email_subject"`
+	OTPMessageTemplate                    *string `json:"otp_message_template"`
+	PrivacyPolicyLink                     *string `json:"privacy_policy_link"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
@@ -165,23 +167,28 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	if reqBody.ReceiverRegistrationMessageTemplate != nil {
 		validator.CheckError(utils.ValidateNoHTML(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 	}
+	if reqBody.ReceiverRegistrationHTMLEmailTemplate != nil && *reqBody.ReceiverRegistrationHTMLEmailTemplate != "" {
+		validator.CheckError(utils.ValidateHTMLEmailTemplate(*reqBody.ReceiverRegistrationHTMLEmailTemplate), "receiver_registration_html_email_template", "receiver_registration_html_email_template must include {{.RegistrationLink}}")
+	}
 	if validator.HasErrors() {
 		httperror.BadRequest("", nil, validator.Errors).Render(rw)
 		return
 	}
 
 	organizationUpdate := data.OrganizationUpdate{
-		Name:                                 reqBody.OrganizationName,
-		Logo:                                 fileContentBytes,
-		TimezoneUTCOffset:                    reqBody.TimezoneUTCOffset,
-		IsApprovalRequired:                   reqBody.IsApprovalRequired,
-		IsLinkShortenerEnabled:               reqBody.IsLinkShortenerEnabled,
-		IsMemoTracingEnabled:                 reqBody.IsMemoTracingEnabled,
-		ReceiverRegistrationMessageTemplate:  reqBody.ReceiverRegistrationMessageTemplate,
-		OTPMessageTemplate:                   reqBody.OTPMessageTemplate,
-		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
-		PaymentCancellationPeriodDays:        reqBody.PaymentCancellationPeriodDays,
-		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
+		Name:                                  reqBody.OrganizationName,
+		Logo:                                  fileContentBytes,
+		TimezoneUTCOffset:                     reqBody.TimezoneUTCOffset,
+		IsApprovalRequired:                    reqBody.IsApprovalRequired,
+		IsLinkShortenerEnabled:                reqBody.IsLinkShortenerEnabled,
+		IsMemoTracingEnabled:                  reqBody.IsMemoTracingEnabled,
+		ReceiverRegistrationMessageTemplate:   reqBody.ReceiverRegistrationMessageTemplate,
+		ReceiverRegistrationHTMLEmailTemplate: reqBody.ReceiverRegistrationHTMLEmailTemplate,
+		ReceiverRegistrationHTMLEmailSubject:  reqBody.ReceiverRegistrationHTMLEmailSubject,
+		OTPMessageTemplate:                    reqBody.OTPMessageTemplate,
+		ReceiverInvitationResendIntervalDays:  reqBody.ReceiverInvitationResendInterval,
+		PaymentCancellationPeriodDays:         reqBody.PaymentCancellationPeriodDays,
+		PrivacyPolicyLink:                     reqBody.PrivacyPolicyLink,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
 	if err != nil {
@@ -385,6 +392,14 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 
 	if org.PrivacyPolicyLink != nil {
 		resp["privacy_policy_link"] = *org.PrivacyPolicyLink
+	}
+
+	if org.ReceiverRegistrationHTMLEmailTemplate != nil {
+		resp["receiver_registration_html_email_template"] = *org.ReceiverRegistrationHTMLEmailTemplate
+	}
+
+	if org.ReceiverRegistrationHTMLEmailSubject != nil {
+		resp["receiver_registration_html_email_subject"] = *org.ReceiverRegistrationHTMLEmailSubject
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
