@@ -1174,6 +1174,229 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Nil(t, msg.AssetID)
 	})
 
+	t.Run("send email invite with HTML template successfully", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		recRW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverEmailOnly.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+
+		htmlTemplate := `<html><body><h1>Welcome to {{.OrganizationName}}!</h1><p>Click <a href="{{.RegistrationLink}}">here</a> to register.</p></body></html>`
+		htmlSubject := "Payment from {{.OrganizationName}}"
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReceiverRegistrationHTMLEmailTemplate: &htmlTemplate,
+			ReceiverRegistrationHTMLEmailSubject:  &htmlSubject,
+		})
+		require.NoError(t, err)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: recRW,
+			Amount:         "1",
+		})
+
+		walletDeepLink := WalletDeepLink{
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
+		}
+		deepLink, err := walletDeepLink.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+
+		expectedHTMLContent := `<html><body><h1>Welcome to MyCustomAid!</h1><p>Click <a href="` + deepLink + `">here</a> to register.</p></body></html>`
+		expectedSubject := "Payment from MyCustomAid"
+
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, message.Message{
+				ToEmail: receiverEmailOnly.Email,
+				Body:    expectedHTMLContent,
+				Title:   expectedSubject,
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioEmail, nil).
+			Once()
+
+		reqs := []schemas.EventReceiverWalletInvitationData{{ReceiverWalletID: recRW.ID}}
+		err = s.SendInvite(ctx, reqs...)
+		require.NoError(t, err)
+	})
+
+	t.Run("send SMS invite with plain text ignoring HTML templates", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		recRW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverPhoneOnly.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+
+		htmlTemplate := `<html><body><h1>Welcome to {{.OrganizationName}}!</h1></body></html>`
+		plainTextTemplate := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReceiverRegistrationHTMLEmailTemplate: &htmlTemplate,
+			ReceiverRegistrationMessageTemplate:   &plainTextTemplate,
+		})
+		require.NoError(t, err)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: recRW,
+			Amount:         "1",
+		})
+
+		walletDeepLink := WalletDeepLink{
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
+		}
+		deepLink, err := walletDeepLink.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+
+		expectedContent := "You have a payment waiting for you from the MyCustomAid. Click " + deepLink + " to register."
+
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, message.Message{
+				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
+				Body:          expectedContent,
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioSMS, nil).
+			Once()
+
+		reqs := []schemas.EventReceiverWalletInvitationData{{ReceiverWalletID: recRW.ID}}
+		err = s.SendInvite(ctx, reqs...)
+		require.NoError(t, err)
+	})
+
+	t.Run("send email invite with HTML template fallback to plain text", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		recRW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverEmailOnly.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+
+		// Set up organization with invalid HTML template (should fall back to plain text)
+		invalidHTMLTemplate := `<html><body>{{.OrganizationName | invalidFunction}}</body></html>` // Invalid function should cause HTML rendering to fail
+		plainTextTemplate := "Plain text fallback: You have a payment from {{.OrganizationName}}. Register: {{.RegistrationLink}}"
+		emptySubject := ""
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReceiverRegistrationHTMLEmailTemplate: &invalidHTMLTemplate,
+			ReceiverRegistrationHTMLEmailSubject:  &emptySubject, // Clear any custom subject from previous tests
+			ReceiverRegistrationMessageTemplate:   &plainTextTemplate,
+		})
+		require.NoError(t, err)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: recRW,
+			Amount:         "1",
+		})
+
+		walletDeepLink := WalletDeepLink{
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
+		}
+		deepLink, err := walletDeepLink.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+
+		// Expected plain text fallback content
+		expectedContent := "Plain text fallback: You have a payment from MyCustomAid. Register: " + deepLink
+		expectedTitle := "You have a payment waiting for you from MyCustomAid" // Default title since custom subject is cleared
+
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, message.Message{
+				ToEmail: receiverEmailOnly.Email,
+				Body:    expectedContent,
+				Title:   expectedTitle,
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioEmail, nil).
+			Once()
+
+		reqs := []schemas.EventReceiverWalletInvitationData{{ReceiverWalletID: recRW.ID}}
+		err = s.SendInvite(ctx, reqs...)
+		require.NoError(t, err)
+	})
+
+	t.Run("send invite with disbursement template priority over organization HTML template", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		// Create disbursement with custom template
+		disbursementCustomTemplate := "Disbursement-specific: Payment from {{.OrganizationName}} ready! {{.RegistrationLink}}"
+		disbursementWithTemplate := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet:                              wallet1,
+			Status:                              data.ReadyDisbursementStatus,
+			Asset:                               asset1,
+			ReceiverRegistrationMessageTemplate: disbursementCustomTemplate,
+		})
+
+		recRW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverEmailOnly.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+
+		// Set up organization with HTML template (should be overridden by disbursement template)
+		orgHTMLTemplate := `<html><body>Org template</body></html>`
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReceiverRegistrationHTMLEmailTemplate: &orgHTMLTemplate,
+		})
+		require.NoError(t, err)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursementWithTemplate,
+			Asset:          *asset1,
+			ReceiverWallet: recRW,
+			Amount:         "1",
+		})
+
+		walletDeepLink := WalletDeepLink{
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
+		}
+		deepLink, err := walletDeepLink.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+
+		// Expected content from disbursement template, not organization HTML template (plain text)
+		expectedContent := "Disbursement-specific: Payment from MyCustomAid ready! " + deepLink
+		expectedTitle := "You have a payment waiting for you from MyCustomAid"
+
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, message.Message{
+				ToEmail: receiverEmailOnly.Email,
+				Body:    expectedContent,
+				Title:   expectedTitle,
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioEmail, nil).
+			Once()
+
+		reqs := []schemas.EventReceiverWalletInvitationData{{ReceiverWalletID: recRW.ID}}
+		err = s.SendInvite(ctx, reqs...)
+		require.NoError(t, err)
+	})
+
 	messageDispatcherMock.AssertExpectations(t)
 }
 

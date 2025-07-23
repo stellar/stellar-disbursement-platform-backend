@@ -472,6 +472,60 @@ func Test_Organizations_Update(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, o.PrivacyPolicyLink)
 	})
+
+	t.Run("updates the organization's ReceiverRegistrationHTMLEmailTemplate", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.ReceiverRegistrationHTMLEmailTemplate)
+
+		htmlTemplate := `<html><body><h1>Welcome to {{.OrganizationName}}!</h1><p>Click <a href="{{.RegistrationLink}}">here</a> to register.</p></body></html>`
+		ou := &OrganizationUpdate{ReceiverRegistrationHTMLEmailTemplate: &htmlTemplate}
+
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, htmlTemplate, *o.ReceiverRegistrationHTMLEmailTemplate)
+
+		// Set it as nil
+		ou.ReceiverRegistrationHTMLEmailTemplate = new(string)
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.ReceiverRegistrationHTMLEmailTemplate)
+	})
+
+	t.Run("updates the organization's ReceiverRegistrationHTMLEmailSubject", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.ReceiverRegistrationHTMLEmailSubject)
+
+		subject := "Payment from {{.OrganizationName}}"
+		ou := &OrganizationUpdate{ReceiverRegistrationHTMLEmailSubject: &subject}
+
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, subject, *o.ReceiverRegistrationHTMLEmailSubject)
+
+		// Set it as nil
+		ou.ReceiverRegistrationHTMLEmailSubject = new(string)
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.ReceiverRegistrationHTMLEmailSubject)
+	})
 }
 
 func TestOrganizationModel_UpdateMessageChannelPriority(t *testing.T) {

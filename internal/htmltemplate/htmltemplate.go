@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"strings"
 )
 
 //go:embed tmpl/**/*.tmpl "tmpl/*.tmpl"
@@ -68,6 +69,57 @@ type StaffMFAEmailMessageTemplate struct {
 
 func ExecuteHTMLTemplateForStaffMFAEmailMessage(data StaffMFAEmailMessageTemplate) (string, error) {
 	return ExecuteHTMLTemplate("staff_mfa_message.tmpl", data)
+}
+
+func ExecuteCustomHTMLTemplate(templateContent string, data map[string]string) (string, error) {
+	if templateContent == "" {
+		return "", fmt.Errorf("template content cannot be empty")
+	}
+
+	hasCustomCSS := strings.Contains(templateContent, "<style")
+
+	funcMap := template.FuncMap{
+		"EmailStyle": func() template.HTML {
+			// If template has custom CSS, don't inject default styles
+			if hasCustomCSS {
+				return template.HTML("")
+			}
+			return emailStyle
+		},
+	}
+
+	t, err := template.New("custom").Funcs(funcMap).Parse(templateContent)
+	if err != nil {
+		return "", fmt.Errorf("error parsing custom template: %w", err)
+	}
+
+	var executedTemplate bytes.Buffer
+	err = t.Execute(&executedTemplate, data)
+	if err != nil {
+		return "", fmt.Errorf("executing custom html template: %w", err)
+	}
+
+	return executedTemplate.String(), nil
+}
+
+func ProcessSubjectTemplate(subjectTemplate string, data interface{}) (string, error) {
+	if subjectTemplate == "" {
+		return "", nil
+	}
+
+	// Parse and execute the subject template
+	t, err := template.New("subject").Parse(subjectTemplate)
+	if err != nil {
+		return "", fmt.Errorf("error parsing subject template: %w", err)
+	}
+
+	var result bytes.Buffer
+	err = t.Execute(&result, data)
+	if err != nil {
+		return "", fmt.Errorf("error executing subject template: %w", err)
+	}
+
+	return result.String(), nil
 }
 
 // emailStyle is the CSS style that will be included in the email templates.

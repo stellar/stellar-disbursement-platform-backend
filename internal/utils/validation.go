@@ -237,3 +237,16 @@ func ValidateContactType(contactType string) error {
 	}
 	return nil
 }
+
+// ValidateHTMLEmailTemplate validates that a custom HTML email template contains {{.RegistrationLink}}.
+func ValidateHTMLEmailTemplate(templateContent string) error {
+	if templateContent == "" {
+		return fmt.Errorf("template content cannot be empty")
+	}
+
+	if !strings.Contains(templateContent, "{{.RegistrationLink}}") {
+		return fmt.Errorf("template must contain {{.RegistrationLink}} variable")
+	}
+
+	return nil
+}
