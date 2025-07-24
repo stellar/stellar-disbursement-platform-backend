@@ -1745,7 +1745,11 @@ func Test_RPCErrorWrapper_IsRetryable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			simErr := stellar.NewSimulationErrorWithType(tc.errorType, errors.New("test error"), nil)
+			simErr := &stellar.SimulationError{
+				Type:     tc.errorType,
+				Err:      errors.New("test error"),
+				Response: nil,
+			}
 			wrapper := NewRPCErrorWrapper(simErr)
 
 			assert.Equal(t, tc.wantRetryable, wrapper.IsRetryable())
@@ -1812,7 +1816,11 @@ func Test_RPCErrorWrapper_IsRateLimit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			simErr := stellar.NewSimulationErrorWithType(tc.errorType, errors.New(tc.message), nil)
+			simErr := &stellar.SimulationError{
+				Type:     tc.errorType,
+				Err:      errors.New(tc.message),
+				Response: nil,
+			}
 			wrapper := NewRPCErrorWrapper(simErr)
 
 			assert.Equal(t, tc.wantIsRateLimit, wrapper.IsRateLimit())
@@ -1855,7 +1863,11 @@ func Test_RPCErrorWrapper_ShouldMarkAsError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			simErr := stellar.NewSimulationErrorWithType(tc.errorType, errors.New("test error"), nil)
+			simErr := &stellar.SimulationError{
+				Type:     tc.errorType,
+				Err:      errors.New("test error"),
+				Response: nil,
+			}
 			wrapper := NewRPCErrorWrapper(simErr)
 
 			assert.Equal(t, tc.wantMarkError, wrapper.ShouldMarkAsError())

@@ -50,7 +50,7 @@ func Humanize(str string) string {
 	return strings.ToLower(strings.ReplaceAll(str, "_", " "))
 }
 
-// ContainsAny returns true if message contains any of the given substrings
+// ContainsAny returns true if message contains any of the given substrings.
 func ContainsAny(message string, substrings ...string) bool {
 	if message == "" || len(substrings) == 0 {
 		return false

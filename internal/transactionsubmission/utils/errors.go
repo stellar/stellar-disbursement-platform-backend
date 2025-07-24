@@ -374,7 +374,24 @@ func (e *HorizonErrorWrapper) handleExtrasResultCodes(msgBuilder *strings.Builde
 	}
 }
 
+// IsRetryable returns true if the error should be retried
+func (e *HorizonErrorWrapper) IsRetryable() bool {
+	return !(e.IsHorizonError() && e.ShouldMarkAsError())
+}
+
+// ShouldReportToCrashTracker returns true if the error should be reported to crash tracker
+func (e *HorizonErrorWrapper) ShouldReportToCrashTracker() bool {
+	return e.ShouldMarkAsError() && !e.IsDestinationAccountNotReady()
+}
+
+// GetErrorType returns the error type identifier
+func (e *HorizonErrorWrapper) GetErrorType() string {
+	return "Horizon"
+}
+
 var _ error = &HorizonErrorWrapper{}
+var _ TransactionError = &HorizonErrorWrapper{}
+var _ HorizonSpecificError = &HorizonErrorWrapper{}
 
 // RPCErrorWrapper wraps RPC simulation errors to provide consistent error handling
 type RPCErrorWrapper struct {
@@ -417,11 +434,6 @@ func (e *RPCErrorWrapper) IsRPCError() bool {
 	return e.SimulationError != nil
 }
 
-// IsRetryable returns true if this error should be retried based on the error type
-func (e *RPCErrorWrapper) IsRetryable() bool {
-	return e.SimulationError != nil && e.SimulationError.IsRetryable()
-}
-
 // IsRateLimit returns true if this is a rate limiting error (similar to Horizon)
 func (e *RPCErrorWrapper) IsRateLimit() bool {
 	if e.SimulationError == nil {
@@ -456,63 +468,20 @@ func (e *RPCErrorWrapper) ShouldMarkAsError() bool {
 	}
 }
 
-var _ error = &RPCErrorWrapper{}
-
-// HorizonTransactionError wraps Horizon errors to implement TransactionError
-type HorizonTransactionError struct {
-	*HorizonErrorWrapper
+// IsRetryable returns true if the error should be retried
+func (e *RPCErrorWrapper) IsRetryable() bool {
+	return !e.ShouldMarkAsError()
 }
 
-func (h *HorizonTransactionError) IsRetryable() bool {
-	return !(h.IsHorizonError() && h.ShouldMarkAsError())
+// ShouldReportToCrashTracker returns true if the error should be reported to crash tracker
+func (e *RPCErrorWrapper) ShouldReportToCrashTracker() bool {
+	return e.ShouldMarkAsError()
 }
 
-func (h *HorizonTransactionError) ShouldMarkAsError() bool {
-	return h.IsHorizonError() && h.HorizonErrorWrapper.ShouldMarkAsError()
-}
-
-func (h *HorizonTransactionError) ShouldReportToCrashTracker() bool {
-	return h.ShouldMarkAsError() && !h.IsDestinationAccountNotReady()
-}
-
-func (h *HorizonTransactionError) GetErrorType() string {
-	return "Horizon"
-}
-
-func (h *HorizonTransactionError) IsBadSequence() bool {
-	return h.HorizonErrorWrapper.IsBadSequence()
-}
-
-func (h *HorizonTransactionError) IsTxInsufficientFee() bool {
-	return h.HorizonErrorWrapper.IsTxInsufficientFee()
-}
-
-func (h *HorizonTransactionError) IsDestinationAccountNotReady() bool {
-	return h.HorizonErrorWrapper.IsDestinationAccountNotReady()
-}
-
-var _ TransactionError = &HorizonTransactionError{}
-var _ HorizonSpecificError = &HorizonTransactionError{}
-
-// RPCTransactionError wraps RPC errors to implement TransactionError
-type RPCTransactionError struct {
-	*RPCErrorWrapper
-}
-
-func (r *RPCTransactionError) IsRetryable() bool {
-	return !r.ShouldMarkAsError()
-}
-
-func (r *RPCTransactionError) ShouldMarkAsError() bool {
-	return r.RPCErrorWrapper.ShouldMarkAsError()
-}
-
-func (r *RPCTransactionError) ShouldReportToCrashTracker() bool {
-	return r.ShouldMarkAsError()
-}
-
-func (r *RPCTransactionError) GetErrorType() string {
+// GetErrorType returns the error type identifier
+func (e *RPCErrorWrapper) GetErrorType() string {
 	return "RPC"
 }
 
-var _ TransactionError = &RPCTransactionError{}
+var _ error = &RPCErrorWrapper{}
+var _ TransactionError = &RPCErrorWrapper{}

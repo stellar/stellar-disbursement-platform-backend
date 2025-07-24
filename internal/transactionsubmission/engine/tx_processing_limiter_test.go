@@ -24,70 +24,62 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 	}{
 		// Horizon transaction error test cases
 		{
-			name: "adjusts limit for HorizonTransactionError with rate limit",
-			err: &utils.HorizonTransactionError{
-				HorizonErrorWrapper: utils.NewHorizonErrorWrapper(
-					&horizonclient.Error{
-						Problem: problem.P{Status: http.StatusTooManyRequests},
-					},
-				),
-			},
+			name: "adjusts limit for HorizonErrorWrapper with rate limit",
+			err: utils.NewHorizonErrorWrapper(
+				&horizonclient.Error{
+					Problem: problem.P{Status: http.StatusTooManyRequests},
+				},
+			),
 			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    DefaultBundlesSelectionLimit,
 				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
 			},
 		},
 		{
-			name: "adjusts limit for HorizonTransactionError with gateway timeout",
-			err: &utils.HorizonTransactionError{
-				HorizonErrorWrapper: utils.NewHorizonErrorWrapper(
-					&horizonclient.Error{
-						Problem: problem.P{Status: http.StatusGatewayTimeout},
-					},
-				),
-			},
+			name: "adjusts limit for HorizonErrorWrapper with gateway timeout",
+			err: utils.NewHorizonErrorWrapper(
+				&horizonclient.Error{
+					Problem: problem.P{Status: http.StatusGatewayTimeout},
+				},
+			),
 			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    DefaultBundlesSelectionLimit,
 				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
 			},
 		},
 		{
-			name: "adjusts limit for HorizonTransactionError with tx_insufficient_fee",
-			err: &utils.HorizonTransactionError{
-				HorizonErrorWrapper: utils.NewHorizonErrorWrapper(
-					&horizonclient.Error{
-						Problem: problem.P{
-							Status: http.StatusBadRequest,
-							Extras: map[string]interface{}{
-								"result_codes": map[string]interface{}{
-									"transaction": "tx_insufficient_fee",
-								},
+			name: "adjusts limit for HorizonErrorWrapper with tx_insufficient_fee",
+			err: utils.NewHorizonErrorWrapper(
+				&horizonclient.Error{
+					Problem: problem.P{
+						Status: http.StatusBadRequest,
+						Extras: map[string]interface{}{
+							"result_codes": map[string]interface{}{
+								"transaction": "tx_insufficient_fee",
 							},
 						},
 					},
-				),
-			},
+				},
+			),
 			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    DefaultBundlesSelectionLimit,
 				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
 			},
 		},
 		{
-			name: "no adjustment for HorizonTransactionError with determinate error",
-			err: &utils.HorizonTransactionError{
-				HorizonErrorWrapper: utils.NewHorizonErrorWrapper(
-					&horizonclient.Error{
-						Problem: problem.P{
-							Status: http.StatusBadRequest,
-							Extras: map[string]interface{}{
-								"result_codes": map[string]interface{}{
-									"transaction": "tx_bad_auth",
-								},
+			name: "no adjustment for HorizonErrorWrapper with determinate error",
+			err: utils.NewHorizonErrorWrapper(
+				&horizonclient.Error{
+					Problem: problem.P{
+						Status: http.StatusBadRequest,
+						Extras: map[string]interface{}{
+							"result_codes": map[string]interface{}{
+								"transaction": "tx_bad_auth",
 							},
 						},
 					},
-				),
-			},
+				},
+			),
 			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    currNumChannelAccounts,
 				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
@@ -95,10 +87,12 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 		},
 		// RPC transaction error test cases
 		{
-			name: "adjusts limit for RPCTransactionError with network error",
-			err: &utils.RPCTransactionError{
-				RPCErrorWrapper: &utils.RPCErrorWrapper{
-					SimulationError: stellar.NewSimulationErrorWithType(stellar.SimulationErrorTypeNetwork, errors.New("network error"), nil),
+			name: "adjusts limit for RPCErrorWrapper with network error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeNetwork,
+					Err:      errors.New("network error"),
+					Response: nil,
 				},
 			},
 			wantResult: &TransactionProcessingLimiterImpl{
@@ -107,10 +101,12 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			},
 		},
 		{
-			name: "adjusts limit for RPCTransactionError with resource error",
-			err: &utils.RPCTransactionError{
-				RPCErrorWrapper: &utils.RPCErrorWrapper{
-					SimulationError: stellar.NewSimulationErrorWithType(stellar.SimulationErrorTypeResource, errors.New("cpu limit exceeded"), nil),
+			name: "adjusts limit for RPCErrorWrapper with resource error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeResource,
+					Err:      errors.New("cpu limit exceeded"),
+					Response: nil,
 				},
 			},
 			wantResult: &TransactionProcessingLimiterImpl{
@@ -119,10 +115,12 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			},
 		},
 		{
-			name: "no adjustment for RPCTransactionError with contract execution error",
-			err: &utils.RPCTransactionError{
-				RPCErrorWrapper: &utils.RPCErrorWrapper{
-					SimulationError: stellar.NewSimulationErrorWithType(stellar.SimulationErrorTypeContractExecution, errors.New("contract execution failed"), nil),
+			name: "no adjustment for RPCErrorWrapper with contract execution error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeContractExecution,
+					Err:      errors.New("contract execution failed"),
+					Response: nil,
 				},
 			},
 			wantResult: &TransactionProcessingLimiterImpl{
@@ -131,10 +129,12 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			},
 		},
 		{
-			name: "no adjustment for RPCTransactionError with auth error",
-			err: &utils.RPCTransactionError{
-				RPCErrorWrapper: &utils.RPCErrorWrapper{
-					SimulationError: stellar.NewSimulationErrorWithType(stellar.SimulationErrorTypeAuth, errors.New("authorization failed"), nil),
+			name: "no adjustment for RPCErrorWrapper with auth error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeAuth,
+					Err:      errors.New("authorization failed"),
+					Response: nil,
 				},
 			},
 			wantResult: &TransactionProcessingLimiterImpl{
@@ -143,10 +143,8 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			},
 		},
 		{
-			name: "no adjustment for RPCTransactionError with nil simulation error",
-			err: &utils.RPCTransactionError{
-				RPCErrorWrapper: &utils.RPCErrorWrapper{SimulationError: nil},
-			},
+			name: "no adjustment for RPCErrorWrapper with nil simulation error",
+			err:  &utils.RPCErrorWrapper{SimulationError: nil},
 			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    currNumChannelAccounts,
 				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,

@@ -24,6 +24,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
+// ErrTransactionHandled is returned when a transaction error has been handled and processing should stop
+var ErrTransactionHandled = errors.New("transaction error was handled")
+
 type TxJob store.ChannelTransactionBundle
 
 func (job TxJob) String() string {
@@ -173,7 +176,8 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //
 // Errors marked as definitive error, that won't be resolved with retries:
 //
-//	Horizon: 400 with tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance, or operation error codes
+//	Horizon: 400 with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
+//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
 //	RPC: Contract errors, auth failures
 //
 // Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
@@ -370,9 +374,9 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 	}
 
 	// STEP 2: prepare transaction for processing
-	feeBumpTx, handled, err := tw.prepareForSubmission(ctx, txJob)
+	feeBumpTx, err := tw.prepareForSubmission(ctx, txJob)
 	if err != nil {
-		if handled {
+		if errors.Is(err, ErrTransactionHandled) {
 			return nil
 		}
 		return fmt.Errorf("preparing bundle for processing: %w", err)
@@ -414,10 +418,10 @@ func (tw *TransactionWorker) validateJob(txJob *TxJob) error {
 	return nil
 }
 
-func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, bool, error) {
-	feeBumpTx, handled, err := tw.buildAndSignTransaction(ctx, txJob)
+func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
+	feeBumpTx, err := tw.buildAndSignTransaction(ctx, txJob)
 	if err != nil {
-		return nil, handled, err
+		return nil, err
 	}
 
 	innerTx := feeBumpTx.InnerTransaction()
@@ -428,41 +432,39 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 	// is processed, we can easily determine whether tx was sent or not later using tx hash.
 	feeBumpTxHash, err := feeBumpTx.HashHex(tw.engine.SignatureService.NetworkPassphrase())
 	if err != nil {
-		return nil, false, fmt.Errorf("hashing transaction for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("hashing transaction for job %v: %w", txJob, err)
 	}
 
 	sentXDR, err := feeBumpTx.Base64()
 	if err != nil {
-		return nil, false, fmt.Errorf("getting envelopeXDR for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("getting envelopeXDR for job %v: %w", txJob, err)
 	}
 
 	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR, distributionAccount)
 	if err != nil {
-		return nil, false, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
 	}
 	txJob.Transaction = *updatedTx
 
-	return feeBumpTx, false, nil
+	return feeBumpTx, nil
 }
 
-func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, bool, error) {
+func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
 	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
 	if err != nil {
-		return nil, false, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
+		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
 	} else if !distributionAccount.IsStellar() {
-		return nil, false, fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
+		return nil, fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
 	}
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
-		handled, handlerErr := tw.handlePreparationError(ctx, txJob, err)
-		return nil, handled, handlerErr
+		return nil, tw.handlePreparationError(ctx, txJob, err)
 	}
 
 	innerTx, err := tw.txHandler.BuildInnerTransaction(ctx, txJob, horizonAccount.Sequence, distributionAccount.Address)
 	if err != nil {
-		handled, handlerErr := tw.handlePreparationError(ctx, txJob, err)
-		return nil, handled, handlerErr
+		return nil, tw.handlePreparationError(ctx, txJob, err)
 	}
 
 	// Sign tx for the channel account:
@@ -472,7 +474,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 	innerTx, err = tw.engine.SignerRouter.SignStellarTransaction(ctx, innerTx, chAccount, distributionAccount)
 	if err != nil {
-		return nil, false, fmt.Errorf("signing transaction in job=%v: %w", txJob, err)
+		return nil, fmt.Errorf("signing transaction in job=%v: %w", txJob, err)
 	}
 
 	// build the outer fee-bump transaction
@@ -484,22 +486,22 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		},
 	)
 	if err != nil {
-		return nil, false, fmt.Errorf("building fee-bump transaction for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("building fee-bump transaction for job %v: %w", txJob, err)
 	}
 
 	// Sign fee-bump tx for the distribution account:
 	feeBumpTx, err = tw.engine.SignerRouter.SignFeeBumpStellarTransaction(ctx, feeBumpTx, distributionAccount)
 	if err != nil {
-		return nil, false, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
 	}
 
-	return feeBumpTx, false, nil
+	return feeBumpTx, nil
 }
 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {
 	resp, err := tw.engine.HorizonClient.SubmitFeeBumpTransactionWithOptions(feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
-		txErr := &utils.HorizonTransactionError{HorizonErrorWrapper: utils.NewHorizonErrorWrapper(err)}
+		txErr := utils.NewHorizonErrorWrapper(err)
 		err = tw.handleFailedTransaction(ctx, txJob, resp, txErr)
 		if err != nil {
 			return fmt.Errorf("handling failed transaction: %w", err)
@@ -530,30 +532,28 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 }
 
 // handlePreparationError processes errors during transaction preparation and determines if they need special handling.
-// Returns (handled bool, error) where handled=true means the error was already processed by handleFailedTransaction.
-func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *TxJob, err error) (bool, error) {
+// Returns ErrTransactionHandled if the error was handled, otherwise returns the original error.
+func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *TxJob, err error) error {
 	// Check if it's a Horizon error
 	var hErr *utils.HorizonErrorWrapper
 	if errors.As(err, &hErr) && hErr.IsHorizonError() {
-		txErr := &utils.HorizonTransactionError{HorizonErrorWrapper: hErr}
-		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, txErr)
+		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, hErr)
 		if handlerErr != nil {
-			return false, fmt.Errorf("handling horizon error: %w", handlerErr)
+			return fmt.Errorf("handling horizon error: %w", handlerErr)
 		}
-		return true, hErr
+		return ErrTransactionHandled
 	}
 
 	// Check if it's an RPC error
 	var rpcErr *utils.RPCErrorWrapper
 	if errors.As(err, &rpcErr) && rpcErr.IsRPCError() {
-		txErr := &utils.RPCTransactionError{RPCErrorWrapper: rpcErr}
-		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, txErr)
+		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, rpcErr)
 		if handlerErr != nil {
-			return false, fmt.Errorf("handling rpc error: %w", handlerErr)
+			return fmt.Errorf("handling rpc error: %w", handlerErr)
 		}
-		return true, rpcErr
+		return ErrTransactionHandled
 	}
 
 	// For other errors, return as-is without special handling
-	return false, err
+	return err
 }

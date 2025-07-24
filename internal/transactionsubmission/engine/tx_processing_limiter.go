@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
@@ -71,16 +70,7 @@ func shouldAdjustLimitForHorizonError(hErr *utils.HorizonErrorWrapper) bool {
 // shouldAdjustLimitForRPCError determines if an RPC error should trigger limit adjustment
 // These are errors that indicate network congestion or resource constraints
 func shouldAdjustLimitForRPCError(rpcErr *utils.RPCErrorWrapper) bool {
-	if rpcErr.SimulationError == nil {
-		return false
-	}
-
-	switch rpcErr.SimulationError.Type {
-	case stellar.SimulationErrorTypeNetwork, stellar.SimulationErrorTypeResource:
-		return true
-	default:
-		return false
-	}
+	return rpcErr.IsRetryable()
 }
 
 func (tpl *TransactionProcessingLimiterImpl) adjustLimitIfNeeded() {
@@ -98,15 +88,15 @@ func (tpl *TransactionProcessingLimiterImpl) adjustLimitIfNeeded() {
 
 func (tpl *TransactionProcessingLimiterImpl) AdjustLimitIfNeeded(err utils.TransactionError) {
 	switch e := err.(type) {
-	case *utils.HorizonTransactionError:
+	case *utils.HorizonErrorWrapper:
 		if e.IsHorizonError() {
-			if shouldAdjustLimitForHorizonError(e.HorizonErrorWrapper) {
+			if shouldAdjustLimitForHorizonError(e) {
 				tpl.adjustLimitIfNeeded()
 			}
 		}
-	case *utils.RPCTransactionError:
+	case *utils.RPCErrorWrapper:
 		if e.IsRPCError() {
-			if shouldAdjustLimitForRPCError(e.RPCErrorWrapper) {
+			if shouldAdjustLimitForRPCError(e) {
 				tpl.adjustLimitIfNeeded()
 			}
 		}

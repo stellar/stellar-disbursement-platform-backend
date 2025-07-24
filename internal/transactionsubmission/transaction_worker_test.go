@@ -557,7 +557,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 
 				// PART 2: mock transaction processing limiter
 				mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-				mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.HorizonTransactionError")).Return().Once()
+				mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.HorizonErrorWrapper")).Return().Once()
 				tw.txProcessingLimiter = mockTxProcessingLimiter
 
 				// PART 3: mock Unlock that'll be called in unlockJob
@@ -615,7 +615,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 			tc.setupMocksFn(t, &transactionWorker, &txJob)
 
 			// Run test:
-			err := transactionWorker.handleFailedTransaction(context.Background(), &txJob, tc.hTxRespFn(&txJob), &utils.HorizonTransactionError{HorizonErrorWrapper: tc.hErr})
+			err := transactionWorker.handleFailedTransaction(context.Background(), &txJob, tc.hTxRespFn(&txJob), tc.hErr)
 
 			// Assert:
 			if tc.errContains != nil {
@@ -740,7 +740,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 				Successful: false,
 				Account:    txJob.ChannelAccount.PublicKey,
 			}
-			err := tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, &utils.HorizonTransactionError{HorizonErrorWrapper: hErr})
+			err := tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
 			require.NoError(t, err)
 
 			// Assert that the jitter took action
@@ -848,11 +848,10 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				},
 			}
 			hErr := utils.NewHorizonErrorWrapper(horizonError)
-			txErr := &utils.HorizonTransactionError{HorizonErrorWrapper: hErr}
 
 			// PART 1: mock call to jitter (TransactionProcessingLimiter)
 			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", txErr).Return().Once()
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// PART 2: mock producer that'll be called in producePaymentCompletedEvent -> WriteMessages
@@ -945,7 +944,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				Successful:  false,
 				Account:     txJob.ChannelAccount.PublicKey,
 			}
-			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, &utils.HorizonTransactionError{HorizonErrorWrapper: hErr})
+			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
 			require.NoError(t, err)
 
 			// Assert transaction status
@@ -989,17 +988,16 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		},
 	}
 	hErr := utils.NewHorizonErrorWrapper(horizonError)
-	txErr := &utils.HorizonTransactionError{HorizonErrorWrapper: hErr}
 
 	// PART 1: mock call to jitter (TransactionProcessingLimiter)
 	mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-	mockTxProcessingLimiter.On("AdjustLimitIfNeeded", txErr).Return().Once()
+	mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
 	tw.txProcessingLimiter = mockTxProcessingLimiter
 
 	// PART 2: mock LogAndReportErrors
 	mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
 	mockCrashTrackerClient.
-		On("LogAndReportErrors", mock.Anything, mock.AnythingOfType("*utils.HorizonTransactionError"), "tx_bad_seq detected!").
+		On("LogAndReportErrors", mock.Anything, mock.AnythingOfType("*utils.HorizonErrorWrapper"), "tx_bad_seq detected!").
 		Return().
 		Once()
 	tw.crashTrackerClient = mockCrashTrackerClient
@@ -1040,7 +1038,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		Successful:  false,
 		Account:     txJob.ChannelAccount.PublicKey,
 	}
-	err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, &utils.HorizonTransactionError{HorizonErrorWrapper: hErr})
+	err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
 	require.NoError(t, err)
 
 	// Assert transaction status
@@ -1110,9 +1108,8 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 			txJob.Transaction = *tx
 
 			// PART 1: mock call to jitter (TransactionProcessingLimiter)
-			txErr := &utils.HorizonTransactionError{HorizonErrorWrapper: tc.hErr}
 			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", txErr).Return().Once()
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", tc.hErr).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// PART 2: mock deferred LogAndMonitorTransaction
@@ -1151,7 +1148,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 				Successful:  false,
 				Account:     txJob.ChannelAccount.PublicKey,
 			}
-			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, &utils.HorizonTransactionError{HorizonErrorWrapper: tc.hErr})
+			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, tc.hErr)
 			require.NoError(t, err)
 
 			// Assert transaction status
@@ -1995,8 +1992,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		txHandler:  handler,
 	}
 
-	gotFeeBumpTx, handled, err := transactionWorker.buildAndSignTransaction(context.Background(), &txJob)
-	require.False(t, handled)
+	gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(context.Background(), &txJob)
 	require.NoError(t, err)
 	require.NotNil(t, gotFeeBumpTx)
 
@@ -2103,15 +2099,11 @@ func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) 
 			eventProducer:       &events.MockProducer{},
 		}
 
-		gotFeeBumpTx, handled, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
-		require.True(t, handled)
+		gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
 		require.Error(t, err)
 		require.Nil(t, gotFeeBumpTx)
 
-		var hErr *utils.HorizonErrorWrapper
-		require.ErrorAs(t, err, &hErr)
-		assert.Equal(t, originalHorizonErr, hErr)
-		assert.NotContains(t, err.Error(), "building transaction for job")
+		assert.Equal(t, ErrTransactionHandled, err)
 
 		handler.AssertExpectations(t)
 	})
@@ -2130,8 +2122,7 @@ func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) 
 			txHandler:  handler,
 		}
 
-		gotFeeBumpTx, handled, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
-		require.False(t, handled)
+		gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
 		require.Error(t, err)
 		require.Nil(t, gotFeeBumpTx)
 
@@ -2182,7 +2173,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			horizonError:               horizonError,
 			wantFinalTransactionStatus: store.TransactionStatusError,
 			prepareMocks: func(t *testing.T, txJob TxJob, mockCrashTrackerClient *crashtracker.MockCrashTrackerClient, mockEventProducer *events.MockProducer) {
-				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.HorizonTransactionError"), "horizon transaction error - cannot be retried").Once()
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.HorizonErrorWrapper"), "horizon transaction error - cannot be retried").Once()
 				mockEventProducer.
 					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
 					Run(func(args mock.Arguments) {
@@ -2414,12 +2405,12 @@ func Test_TransactionWorker_handlePreparationError_RPCErrors(t *testing.T) {
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
 
 			rpcError := &utils.RPCErrorWrapper{
-				SimulationError: stellar.NewSimulationErrorWithType(tc.errorType, errors.New(tc.errorMessage), nil),
+				SimulationError: &stellar.SimulationError{Type: tc.errorType, Err: errors.New(tc.errorMessage), Response: nil},
 			}
 
 			// Mock processing limiter
 			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCTransactionError")).Return().Once()
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCErrorWrapper")).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// Mock monitor
@@ -2466,16 +2457,15 @@ func Test_TransactionWorker_handlePreparationError_RPCErrors(t *testing.T) {
 			// Mock crash tracker
 			if tc.expectCrashTrackerReport {
 				mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
-				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.RPCTransactionError"), "rpc transaction error - cannot be retried").Once()
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.RPCErrorWrapper"), "rpc transaction error - cannot be retried").Once()
 				tw.crashTrackerClient = mockCrashTrackerClient
 			}
 
 			// Execute test
-			handled, returnedErr := tw.handlePreparationError(ctx, &txJob, rpcError)
+			err := tw.handlePreparationError(ctx, &txJob, rpcError)
 
 			// Verify results
-			assert.True(t, handled)
-			assert.Equal(t, rpcError, returnedErr)
+			assert.Equal(t, ErrTransactionHandled, err)
 
 			// Check transaction status
 			refreshedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
@@ -2543,13 +2533,12 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrors(t *testing.T) {
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
 
 			rpcError := &utils.RPCErrorWrapper{
-				SimulationError: stellar.NewSimulationErrorWithType(tc.errorType, errors.New(tc.errorMessage), nil),
+				SimulationError: &stellar.SimulationError{Type: tc.errorType, Err: errors.New(tc.errorMessage), Response: nil},
 			}
-			rpcTxErr := &utils.RPCTransactionError{RPCErrorWrapper: rpcError}
 
 			// Mock processing limiter (always called)
 			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCTransactionError")).Return().Once()
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCErrorWrapper")).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// Mock monitor
@@ -2574,7 +2563,7 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrors(t *testing.T) {
 							PaymentID:            txJob.Transaction.ExternalID,
 							TransactionID:        txJob.Transaction.ID,
 							PaymentStatus:        string(data.FailedPaymentStatus),
-							PaymentStatusMessage: rpcTxErr.Error(),
+							PaymentStatusMessage: rpcError.Error(),
 						},
 					}, nil).Once()
 			} else {
@@ -2596,12 +2585,12 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrors(t *testing.T) {
 			// Mock crash tracker
 			if tc.expectCrashTrackerCall {
 				mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
-				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.RPCTransactionError"), "rpc transaction error - cannot be retried").Once()
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.RPCErrorWrapper"), "rpc transaction error - cannot be retried").Once()
 				tw.crashTrackerClient = mockCrashTrackerClient
 			}
 
 			// Execute test
-			err := tw.handleFailedTransaction(ctx, &txJob, horizon.Transaction{}, rpcTxErr)
+			err := tw.handleFailedTransaction(ctx, &txJob, horizon.Transaction{}, rpcError)
 			require.NoError(t, err)
 
 			// Verify transaction status
@@ -2684,12 +2673,12 @@ func Test_TransactionWorker_handlePreparationError_RPCErrorCategorization(t *tes
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
 
 			rpcError := &utils.RPCErrorWrapper{
-				SimulationError: stellar.NewSimulationErrorWithType(tc.expectedErrorType, errors.New(tc.errorMessage), nil),
+				SimulationError: &stellar.SimulationError{Type: tc.expectedErrorType, Err: errors.New(tc.errorMessage), Response: nil},
 			}
 
 			// Mock processing limiter
 			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCTransactionError")).Return().Once()
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCErrorWrapper")).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// Mock monitor
@@ -2736,16 +2725,15 @@ func Test_TransactionWorker_handlePreparationError_RPCErrorCategorization(t *tes
 			// Mock crash tracker
 			if tc.expectCrashTracker {
 				mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
-				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.RPCTransactionError"), "rpc transaction error - cannot be retried").Once()
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.RPCErrorWrapper"), "rpc transaction error - cannot be retried").Once()
 				tw.crashTrackerClient = mockCrashTrackerClient
 			}
 
 			// Execute test
-			handled, returnedErr := tw.handlePreparationError(ctx, &txJob, rpcError)
+			err := tw.handlePreparationError(ctx, &txJob, rpcError)
 
 			// Verify results
-			assert.True(t, handled)
-			assert.Equal(t, rpcError, returnedErr)
+			assert.Equal(t, ErrTransactionHandled, err)
 
 			// Check transaction status
 			refreshedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
@@ -2789,10 +2777,9 @@ func Test_TransactionWorker_handlePreparationError_NonRPCErrors(t *testing.T) {
 			tw := getTransactionWorkerInstance(t, dbConnectionPool, NewMockTransactionHandler(t))
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
 
-			handled, returnedErr := tw.handlePreparationError(ctx, &txJob, tc.error)
+			err := tw.handlePreparationError(ctx, &txJob, tc.error)
 
-			assert.False(t, handled)
-			assert.Equal(t, tc.error, returnedErr)
+			assert.Equal(t, tc.error, err)
 
 			refreshedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
 			require.NoError(t, err)
@@ -2848,13 +2835,12 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrorRebuild(t *testing.T
 			_, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, testTxHash, initialXDR, "GCZJM35NKGVK47BB4SPBDV25477PZYIYPVVG453LPYFNXLS3FGHDXOCM")
 			require.NoError(t, err)
 
-			rpcErrorWrapper := &utils.RPCErrorWrapper{
-				SimulationError: stellar.NewSimulationErrorWithType(tc.errorType, errors.New("some error"), nil),
+			rpcError := &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{Type: tc.errorType, Err: errors.New("some error"), Response: nil},
 			}
-			rpcTxErr := &utils.RPCTransactionError{RPCErrorWrapper: rpcErrorWrapper}
 
 			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCTransactionError")).Return().Once()
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCErrorWrapper")).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
@@ -2875,7 +2861,7 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrorRebuild(t *testing.T
 				Return().Once()
 			tw.txHandler = transactionHandler
 
-			err = tw.handleFailedTransaction(ctx, &txJob, horizon.Transaction{}, rpcTxErr)
+			err = tw.handleFailedTransaction(ctx, &txJob, horizon.Transaction{}, rpcError)
 			require.NoError(t, err)
 
 			refreshedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)

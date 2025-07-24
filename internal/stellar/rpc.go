@@ -3,6 +3,7 @@ package stellar
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/stellar/stellar-rpc/protocol"
@@ -62,14 +63,7 @@ func (e *SimulationError) Unwrap() error {
 }
 
 func (e *SimulationError) IsRetryable() bool {
-	switch e.Type {
-	case SimulationErrorTypeNetwork, SimulationErrorTypeResource:
-		return true
-	case SimulationErrorTypeTransactionInvalid, SimulationErrorTypeAuth, SimulationErrorTypeContractExecution, SimulationErrorTypeUnknown:
-		return false
-	default:
-		return false
-	}
+	return e != nil && slices.Contains([]SimulationErrorType{SimulationErrorTypeNetwork, SimulationErrorTypeResource}, e.Type)
 }
 
 // SimulationResult wraps the successful simulation response
@@ -91,15 +85,6 @@ func NewSimulationError(err error, response *protocol.SimulateTransactionRespons
 		errorType = SimulationErrorTypeUnknown
 	}
 
-	return &SimulationError{
-		Type:     errorType,
-		Err:      err,
-		Response: response,
-	}
-}
-
-// NewSimulationErrorWithType creates a new SimulationError with explicit error type (for testing)
-func NewSimulationErrorWithType(errorType SimulationErrorType, err error, response *protocol.SimulateTransactionResponse) *SimulationError {
 	return &SimulationError{
 		Type:     errorType,
 		Err:      err,

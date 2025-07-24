@@ -342,11 +342,11 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			MaxBaseFee: 100,
 		}
 
-		simulationError := stellar.NewSimulationErrorWithType(
-			stellar.SimulationErrorTypeContractExecution,
-			errors.New("contract execution failed"),
-			&protocol.SimulateTransactionResponse{Error: "contract execution failed"},
-		)
+		simulationError := &stellar.SimulationError{
+			Type:     stellar.SimulationErrorTypeContractExecution,
+			Err:      errors.New("contract execution failed"),
+			Response: &protocol.SimulateTransactionResponse{Error: "contract execution failed"},
+		}
 
 		rpcClient := &mocks.MockRPCClient{}
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return((*stellar.SimulationResult)(nil), simulationError)
@@ -383,11 +383,11 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			MaxBaseFee: 100,
 		}
 
-		networkError := stellar.NewSimulationErrorWithType(
-			stellar.SimulationErrorTypeNetwork,
-			fmt.Errorf("rpc error"),
-			nil,
-		)
+		networkError := &stellar.SimulationError{
+			Type:     stellar.SimulationErrorTypeNetwork,
+			Err:      fmt.Errorf("rpc error"),
+			Response: nil,
+		}
 
 		rpcClient := &mocks.MockRPCClient{}
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return((*stellar.SimulationResult)(nil), networkError)
