@@ -617,8 +617,23 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkType:                 o.NetworkType,
 		}.Get)
 
+		inviteService, err := services.NewSendReceiverWalletInviteService(
+			o.Models,
+			o.MessageDispatcher,
+			o.EmbeddedWalletService,
+			o.Sep10SigningPrivateKey,
+			int64(o.MaxInvitationResendAttempts),
+			o.CrashTrackerClient,
+		)
+		if err != nil {
+			log.Fatalf("error creating SendReceiverWalletInviteService: %v", err)
+		}
+
 		exportHandler := httphandler.ExportHandler{
-			Models: o.Models,
+			Models:                 o.Models,
+			Sep10SigningPrivateKey: o.Sep10SigningPrivateKey,
+			EmbeddedWalletService:  o.EmbeddedWalletService,
+			InviteService:          inviteService,
 		}
 		r.With(middleware.RequirePermission(
 			data.ReadExports,

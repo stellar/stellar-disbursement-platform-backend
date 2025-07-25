@@ -70,6 +70,12 @@ func Test_Serve(t *testing.T) {
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 
+	messageDispatcherMock := message.NewMockMessageDispatcher(t)
+	messageDispatcherMock.
+		On("SendMessage", mock.Anything, mock.Anything).
+		Return(nil).
+		Maybe()
+
 	opts := ServeOptions{
 		CrashTrackerClient:              mockCrashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
@@ -86,6 +92,8 @@ func Test_Serve(t *testing.T) {
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
+		MessageDispatcher:               messageDispatcherMock,
+		Sep10SigningPrivateKey:          privateKeyStr,
 	}
 
 	// Mock supportHTTPRun
@@ -425,17 +433,25 @@ func Test_handleHTTP_Health(t *testing.T) {
 		Return(events.KafkaEventBrokerType).
 		Once()
 
+	messageDispatcherMock := message.NewMockMessageDispatcher(t)
+	messageDispatcherMock.
+		On("SendMessage", mock.Anything, mock.Anything).
+		Return(nil).
+		Maybe()
+
 	handlerMux := handleHTTP(ServeOptions{
-		EC256PrivateKey:       privateKeyStr,
-		Environment:           "test",
-		GitCommit:             "1234567890abcdef",
-		Models:                models,
-		MonitorService:        mMonitorService,
-		SEP24JWTSecret:        "jwt_secret_1234567890",
-		Version:               "x.y.z",
-		tenantManager:         tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
-		EventProducer:         producerMock,
-		AdminDBConnectionPool: dbConnectionPool,
+		EC256PrivateKey:        privateKeyStr,
+		Environment:            "test",
+		GitCommit:              "1234567890abcdef",
+		Models:                 models,
+		MonitorService:         mMonitorService,
+		SEP24JWTSecret:         "jwt_secret_1234567890",
+		Version:                "x.y.z",
+		tenantManager:          tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
+		EventProducer:          producerMock,
+		AdminDBConnectionPool:  dbConnectionPool,
+		MessageDispatcher:      messageDispatcherMock,
+		Sep10SigningPrivateKey: privateKeyStr,
 	})
 
 	req := httptest.NewRequest("GET", "/health", nil)

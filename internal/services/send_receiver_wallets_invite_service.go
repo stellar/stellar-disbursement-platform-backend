@@ -126,7 +126,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		}
 
 		if wallet.Embedded {
-			if err := s.updateDeepLink(ctx, &wdl, &rwa.ReceiverWallet.Receiver); err != nil {
+			if err := s.UpdateDeepLink(ctx, &wdl, &rwa.ReceiverWallet.Receiver); err != nil {
 				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
 				continue
 			}
@@ -231,7 +231,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	})
 }
 
-func (s SendReceiverWalletInviteService) updateDeepLink(ctx context.Context, wdl *WalletDeepLink, receiver *data.Receiver) error {
+func (s SendReceiverWalletInviteService) UpdateDeepLink(ctx context.Context, wdl *WalletDeepLink, receiver *data.Receiver) error {
 	if wdl == nil {
 		return fmt.Errorf("wallet deep link cannot be nil")
 	}
@@ -288,6 +288,45 @@ func (s SendReceiverWalletInviteService) getOrCreateInvitationToken(ctx context.
 		return "", fmt.Errorf("creating invitation token: %w", createErr)
 	}
 	return token, nil
+}
+
+func (s SendReceiverWalletInviteService) GenerateInvitationLinkForPayment(ctx context.Context, payment data.Payment, receiver data.Receiver) (string, error) {
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting tenant from context: %w", err)
+	}
+	if currentTenant.BaseURL == nil {
+		return "", fmt.Errorf("tenant base URL cannot be nil for tenant %s", currentTenant.ID)
+	}
+
+	organization, err := s.Models.Organizations.Get(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting organization: %w", err)
+	}
+
+	wallet := payment.ReceiverWallet.Wallet
+
+	wdl := WalletDeepLink{
+		DeepLink:         wallet.DeepLinkSchema,
+		OrganizationName: organization.Name,
+		AssetCode:        payment.Asset.Code,
+		AssetIssuer:      payment.Asset.Issuer,
+		TenantBaseURL:    *currentTenant.BaseURL,
+		SelfHosted:       wallet.IsSelfHosted(),
+	}
+
+	if wallet.Embedded {
+		if updateErr := s.UpdateDeepLink(ctx, &wdl, &receiver); updateErr != nil {
+			return "", fmt.Errorf("updating deep link for embedded wallet: %w", updateErr)
+		}
+	}
+
+	registrationLink, err := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
+	if err != nil {
+		return "", fmt.Errorf("getting registration link: %w", err)
+	}
+
+	return registrationLink, nil
 }
 
 func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context, wdl WalletDeepLink, isLinkShortenerEnabled bool) (string, error) {
