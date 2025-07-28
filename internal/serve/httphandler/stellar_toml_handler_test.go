@@ -102,7 +102,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
-				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`, // Updated to use tenant BaseURL
+				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
 			},
 		},
@@ -139,7 +139,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
-				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`, // Updated to use tenant BaseURL
+				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
 			},
 		},
