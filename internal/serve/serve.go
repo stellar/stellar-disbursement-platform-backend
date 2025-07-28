@@ -144,8 +144,8 @@ func (opts *ServeOptions) SetupDependencies() error {
 		sep24JWTManager,
 		opts.NetworkPassphrase,
 		opts.Sep10SigningPrivateKey,
-		time.Minute*3000,
-		time.Minute*3000,
+		time.Hour*24,
+		time.Minute*15,
 		opts.BaseURL,
 		opts.Models,
 	)
@@ -618,7 +618,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			SEP10Service: o.Sep10Service,
 		}
 
-		// These endpoints are public for wallet authentication
 		r.Get("/auth", sep10Handler.GetChallenge)
 		r.Post("/auth", sep10Handler.PostChallenge)
 	})
