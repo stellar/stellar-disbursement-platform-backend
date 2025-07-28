@@ -18,7 +18,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-type SEP10Service struct {
+//go:generate mockery --name=SEP10Service --case=underscore --structname=MockSEP10Service --filename=sep10_service_mock.go --inpackage
+type SEP10Service interface {
+	CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error)
+	ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error)
+}
+
+type sep10Service struct {
 	JWTManager          *anchorplatform.JWTManager
 	JWTExpiration       time.Duration
 	NetworkPassphrase   string
@@ -56,13 +62,13 @@ func NewSEP10Service(
 	jwtExpiration time.Duration,
 	baseURL string,
 	models *data.Models,
-) (*SEP10Service, error) {
+) (SEP10Service, error) {
 	kp, err := keypair.ParseFull(sep10SigningPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("parsing sep10 signing key: %w", err)
 	}
 
-	return &SEP10Service{
+	return sep10Service{
 		JWTManager:          jwtManager,
 		JWTExpiration:       jwtExpiration,
 		NetworkPassphrase:   networkPassphrase,
@@ -73,7 +79,7 @@ func NewSEP10Service(
 	}, nil
 }
 
-func (s *SEP10Service) CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error) {
+func (s sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error) {
 	if !strkey.IsValidEd25519PublicKey(req.Account) {
 		return nil, fmt.Errorf("invalid account: not a valid ed25519 public key")
 	}
@@ -92,7 +98,6 @@ func (s *SEP10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		return nil, fmt.Errorf("invalid home_domain: must match %s", s.getBaseDomain(ctx))
 	}
 
-	// Validate client domain (wallet domain) if provided
 	if req.ClientDomain != "" {
 		if err := s.validateClientDomain(ctx, req.ClientDomain); err != nil {
 			return nil, fmt.Errorf("invalid client_domain: %w", err)
@@ -140,7 +145,7 @@ func (s *SEP10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 	}, nil
 }
 
-func (s *SEP10Service) ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error) {
+func (s sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error) {
 	if req.Transaction == "" {
 		return nil, fmt.Errorf("transaction is required")
 	}
@@ -223,7 +228,7 @@ func (s *SEP10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 	return &ValidationResponse{Token: token}, nil
 }
 
-func (s *SEP10Service) getAllowedHomeDomains(ctx context.Context) ([]string, string) {
+func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) ([]string, string) {
 	baseDomain := s.getBaseDomain(ctx)
 
 	// For SEP-10, we support wildcard matching: *.<base_domain>
@@ -233,7 +238,7 @@ func (s *SEP10Service) getAllowedHomeDomains(ctx context.Context) ([]string, str
 	return allowedDomains, baseDomain
 }
 
-func (s *SEP10Service) getBaseDomain(ctx context.Context) string {
+func (s *sep10Service) getBaseDomain(ctx context.Context) string {
 	currentTenant, err := tenant.GetTenantFromContext(ctx)
 	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
 		parsedURL, err := url.Parse(*currentTenant.BaseURL)
@@ -250,12 +255,12 @@ func (s *SEP10Service) getBaseDomain(ctx context.Context) string {
 	return ""
 }
 
-func (s *SEP10Service) isValidHomeDomain(ctx context.Context, homeDomain string) bool {
+func (s *sep10Service) isValidHomeDomain(ctx context.Context, homeDomain string) bool {
 	baseDomain := s.getBaseDomain(ctx)
 	return homeDomain == baseDomain || strings.HasSuffix(homeDomain, "."+baseDomain)
 }
 
-func (s *SEP10Service) validateClientDomain(ctx context.Context, clientDomain string) error {
+func (s *sep10Service) validateClientDomain(ctx context.Context, clientDomain string) error {
 	wallets, err := s.Models.Wallets.FindWallets(ctx, data.NewFilter(data.FilterEnabledWallets, true))
 	if err != nil {
 		return fmt.Errorf("fetching wallets: %w", err)
@@ -270,18 +275,16 @@ func (s *SEP10Service) validateClientDomain(ctx context.Context, clientDomain st
 	return fmt.Errorf("client domain %q not found in registered wallets", clientDomain)
 }
 
-func (s *SEP10Service) addClientDomainOperation(tx *txnbuild.Transaction, clientDomain string) (*txnbuild.Transaction, error) {
+func (s *sep10Service) addClientDomainOperation(tx *txnbuild.Transaction, clientDomain string) (*txnbuild.Transaction, error) {
 	clientDomainOp := &txnbuild.ManageData{
 		SourceAccount: s.Sep10SigningKeypair.Address(),
 		Name:          "client_domain",
 		Value:         []byte(clientDomain),
 	}
 
-	// Get existing operations and append	
 	ops := tx.Operations()
 	ops = append(ops, clientDomainOp)
 
-	// Get the source account
 	sourceAccount := tx.SourceAccount()
 
 	// Rebuild transaction with new operations
@@ -309,7 +312,7 @@ func (s *SEP10Service) addClientDomainOperation(tx *txnbuild.Transaction, client
 	return newTx, nil
 }
 
-func (s *SEP10Service) extractClientDomain(tx *txnbuild.Transaction) string {
+func (s *sep10Service) extractClientDomain(tx *txnbuild.Transaction) string {
 	for _, op := range tx.Operations() {
 		if md, ok := op.(*txnbuild.ManageData); ok && md.Name == "client_domain" {
 			return string(md.Value)

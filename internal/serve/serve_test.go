@@ -463,6 +463,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// bridge
 		{http.MethodGet, "/bridge-integration"},
 		{http.MethodPatch, "/bridge-integration"},
+		// SEP-10 Auth
+		{http.MethodGet, "/auth"},
+		{http.MethodPost, "/auth"},
 	}
 
 	// Expect 401 as a response:

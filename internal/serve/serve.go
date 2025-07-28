@@ -153,7 +153,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error initializing SEP 10 Service: %w", err)
 	}
 
-	opts.Sep10Service = *sep10Service
+	opts.Sep10Service = sep10Service
 
 	return nil
 }
@@ -615,7 +615,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	mux.Group(func(r chi.Router) {
 		sep10Handler := httphandler.SEP10Handler{
-			SEP10Service: &o.Sep10Service,
+			SEP10Service: o.Sep10Service,
 		}
 
 		// These endpoints are public for wallet authentication
