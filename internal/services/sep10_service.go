@@ -197,7 +197,7 @@ func (s sep10Service) ValidateChallenge(ctx context.Context, req ValidationReque
 		subject = fmt.Sprintf("%s:%d", clientAccountID, memoID)
 	}
 
-	issuer := fmt.Sprintf("https://%s/auth", matchedHomeDomain)
+	issuer := fmt.Sprintf("http://%s/auth", matchedHomeDomain)
 
 	// Get transaction hash for jti
 	jti, err := tx.HashHex(s.NetworkPassphrase)

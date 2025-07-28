@@ -44,6 +44,7 @@ func (h SEP10Handler) GetChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	httpjson.Render(w, challenge, httpjson.JSON)
 }
 
@@ -53,9 +54,18 @@ func (h SEP10Handler) PostChallenge(w http.ResponseWriter, r *http.Request) {
 
 	var req services.ValidationRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
-		return
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "application/x-www-form-urlencoded" || contentType == "" {
+		if err := r.ParseForm(); err != nil {
+			httperror.BadRequest("invalid form data", err, nil).Render(w)
+			return
+		}
+		req.Transaction = r.FormValue("transaction")
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			httperror.BadRequest("invalid request body", err, nil).Render(w)
+			return
+		}
 	}
 
 	if req.Transaction == "" {
@@ -70,5 +80,6 @@ func (h SEP10Handler) PostChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	httpjson.Render(w, response, httpjson.JSON)
 }
