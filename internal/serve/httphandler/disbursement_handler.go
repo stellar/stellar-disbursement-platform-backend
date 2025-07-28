@@ -37,11 +37,12 @@ import (
 )
 
 type DisbursementHandler struct {
-	Models                        *data.Models
-	MonitorService                monitor.MonitorServiceInterface
-	AuthManager                   auth.AuthManager
-	DisbursementManagementService *services.DisbursementManagementService
-	DistributionAccountResolver   signing.DistributionAccountResolver
+	Models                                *data.Models
+	MonitorService                        monitor.MonitorServiceInterface
+	AuthManager                           auth.AuthManager
+	DisbursementManagementService         *services.DisbursementManagementService
+	DistributionAccountResolver           signing.DistributionAccountResolver
+	DisableInitialDisbursementInvitations bool
 }
 
 type PostDisbursementRequest struct {
@@ -339,11 +340,12 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 	}
 
 	if err := d.Models.DisbursementInstructions.ProcessAll(ctx, dbTx, data.DisbursementInstructionsOpts{
-		UserID:                  authUser.ID,
-		Instructions:            instructions,
-		Disbursement:            disbursement,
-		DisbursementUpdate:      disbursementUpdate,
-		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
+		UserID:                                authUser.ID,
+		Instructions:                          instructions,
+		Disbursement:                          disbursement,
+		DisbursementUpdate:                    disbursementUpdate,
+		MaxNumberOfInstructions:               data.MaxInstructionsPerDisbursement,
+		DisableInitialDisbursementInvitations: d.DisableInitialDisbursementInvitations,
 	}); err != nil {
 		switch {
 		case errors.Is(err, data.ErrMaxInstructionsExceeded):

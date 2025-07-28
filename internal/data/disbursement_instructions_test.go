@@ -271,11 +271,12 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:                                "user-id",
+			Instructions:                          smsInstructions,
+			Disbursement:                          disbursement,
+			DisbursementUpdate:                    disbursementUpdate,
+			MaxNumberOfInstructions:               MaxInstructionsPerDisbursement,
+			DisableInitialDisbursementInvitations: false,
 		})
 		require.NoError(t, err)
 
@@ -578,6 +579,31 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.EqualError(t, err, "processing receiver verifications: receiver verification mismatch: receiver verification for +380-12-345-673 doesn't match. Check instruction with ID 123456783")
+	})
+
+	t.Run("success - DisableInitialDisbursementInvitations sets invitation timestamp", func(t *testing.T) {
+		defer cleanup()
+		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
+
+		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
+			UserID:                                "user-id",
+			Instructions:                          smsInstructions,
+			Disbursement:                          disbursement,
+			DisbursementUpdate:                    disbursementUpdate,
+			MaxNumberOfInstructions:               MaxInstructionsPerDisbursement,
+			DisableInitialDisbursementInvitations: true,
+		})
+		require.NoError(t, err)
+
+		receivers, err := di.receiverModel.GetByContacts(ctx, dbTx, smsInstruction1.Phone, smsInstruction2.Phone, smsInstruction3.Phone)
+		require.NoError(t, err)
+		receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbTx, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, wallet.ID)
+		require.NoError(t, err)
+		assert.Len(t, receiverWallets, 3)
+		for _, receiverWallet := range receiverWallets {
+			// Setting invitation_send_at disables the initial invitation
+			assert.NotNil(t, receiverWallet.InvitationSentAt)
+		}
 	})
 }
 

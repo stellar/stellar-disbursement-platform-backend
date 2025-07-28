@@ -195,6 +195,7 @@ sdp:
   ## @extra sdp.configMap.data.SEP45_CONTRACT_ID The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true".
   ## @extra sdp.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".
   ## @extra sdp.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_VALUE.
+  ## @param sdp.configMap.data.DISABLE_INITIAL_DISBURSEMENT_INVITATIONS Determines if initial disbursement invitations should be disabled ("true" or "false").
   configMap:
     annotations:
     data:
@@ -239,6 +240,9 @@ sdp:
       ## SEP-45 configuration
       ENABLE_SEP45: "false"
 #     SEP45_CONTRACT_ID: #required when ENABLE_SEP45 is "true"
+
+      ## Invitation configuration
+      DISABLE_INITIAL_DISBURSEMENT_INVITATIONS: "false"
 
       ## RPC configuration
 #     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true"

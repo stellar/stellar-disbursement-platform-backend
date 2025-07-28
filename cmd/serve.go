@@ -419,6 +419,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    false,
 		},
 		{
+			Name:        "disable-initial-disbursement-invitations",
+			Usage:       "Disables automatic initial disbursement invitations",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.DisableInitialDisbursementInvitations,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
 			Name:        "enable-scheduler",
 			Usage:       "Enable Scheduler Jobs. Deprecated: Use event-broker-type=SCHEDULER instead.",
 			OptType:     types.Bool,

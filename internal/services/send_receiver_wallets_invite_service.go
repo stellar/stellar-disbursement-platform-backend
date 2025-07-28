@@ -110,10 +110,6 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	receiverWalletIDs := []string{}
 	// TODO: improve this code adding go routines
 	for _, rwa := range receiverWalletsAsset {
-		if !s.shouldSendInvitation(ctx, organization, &rwa) {
-			continue
-		}
-
 		wallet := walletsMap[rwa.WalletID]
 
 		wdl := WalletDeepLink{
@@ -130,6 +126,10 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
 				continue
 			}
+		}
+
+		if !s.shouldSendInvitation(ctx, organization, &rwa) {
+			continue
 		}
 
 		registrationLink, err := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
