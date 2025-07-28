@@ -127,13 +127,6 @@ func (s sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest)
 		return nil, fmt.Errorf("building challenge transaction: %w", err)
 	}
 
-	if req.ClientDomain != "" {
-		tx, err = s.addClientDomainOperation(tx, req.ClientDomain)
-		if err != nil {
-			return nil, fmt.Errorf("adding client domain: %w", err)
-		}
-	}
-
 	txBase64, err := tx.Base64()
 	if err != nil {
 		return nil, fmt.Errorf("encoding transaction: %w", err)
@@ -243,7 +236,7 @@ func (s *sep10Service) getBaseDomain(ctx context.Context) string {
 	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
 		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
 		if parseErr == nil {
-			return parsedURL.Hostname()
+			return parsedURL.Host
 		}
 	}
 
@@ -273,43 +266,6 @@ func (s *sep10Service) validateClientDomain(ctx context.Context, clientDomain st
 	}
 
 	return fmt.Errorf("client domain %q not found in registered wallets", clientDomain)
-}
-
-func (s *sep10Service) addClientDomainOperation(tx *txnbuild.Transaction, clientDomain string) (*txnbuild.Transaction, error) {
-	clientDomainOp := &txnbuild.ManageData{
-		SourceAccount: s.Sep10SigningKeypair.Address(),
-		Name:          "client_domain",
-		Value:         []byte(clientDomain),
-	}
-
-	ops := tx.Operations()
-	ops = append(ops, clientDomainOp)
-
-	sourceAccount := tx.SourceAccount()
-
-	// Rebuild transaction with new operations
-	newTx, err := txnbuild.NewTransaction(
-		txnbuild.TransactionParams{
-			SourceAccount:        &sourceAccount,
-			IncrementSequenceNum: false,
-			Operations:           ops,
-			BaseFee:              tx.BaseFee(),
-			Memo:                 tx.Memo(),
-			Preconditions: txnbuild.Preconditions{
-				TimeBounds: tx.Timebounds(),
-			},
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	newTx, err = newTx.Sign(s.NetworkPassphrase, s.Sep10SigningKeypair)
-	if err != nil {
-		return nil, err
-	}
-
-	return newTx, nil
 }
 
 func (s *sep10Service) extractClientDomain(tx *txnbuild.Transaction) string {
