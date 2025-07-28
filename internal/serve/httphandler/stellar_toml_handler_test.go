@@ -54,7 +54,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	req.Host = "test.com"
 	tenantDistAccPublicKey := "GDEWLTJMGKABNF3GBA3VTVBYPES3FXQHHJVJVI6X3CRKKFH5EMLRT5JZ"
 	distAccount := schema.NewDefaultStellarTransactionAccount(tenantDistAccPublicKey)
-	
+
 	// Create a tenant with BaseURL for testing
 	testTenant := &tenant.Tenant{
 		ID:      "test-tenant-id",
@@ -147,7 +147,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			
+
 			// Add tenant to context if needed
 			if tc.isTenantInContext && tc.tenantInContext != nil {
 				ctx = tenant.SaveTenantInContext(ctx, tc.tenantInContext)

@@ -136,7 +136,7 @@ func Test_JWTManager_GenerateAndParseSEP10Token(t *testing.T) {
 			tokenStr, err := jwtManager.GenerateSEP10Token(
 				tc.issuer, tc.subject, tc.jti, tc.clientDomain, tc.homeDomain, tc.iat, tc.exp,
 			)
-			
+
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.errContains != "" {
@@ -144,7 +144,7 @@ func Test_JWTManager_GenerateAndParseSEP10Token(t *testing.T) {
 				}
 				return
 			}
-			
+
 			require.NoError(t, err)
 			require.NotEmpty(t, tokenStr)
 
@@ -235,7 +235,7 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 			}
 
 			claims, err := jwtManager.ParseSEP10TokenClaims(tokenStr)
-			
+
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.errContains != "" {

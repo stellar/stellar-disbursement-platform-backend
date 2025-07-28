@@ -144,8 +144,8 @@ func (opts *ServeOptions) SetupDependencies() error {
 		sep24JWTManager,
 		opts.NetworkPassphrase,
 		opts.Sep10SigningPrivateKey,
-		time.Minute * 3000,
-		time.Minute * 3000,
+		time.Minute*3000,
+		time.Minute*3000,
 		opts.BaseURL,
 		opts.Models,
 	)

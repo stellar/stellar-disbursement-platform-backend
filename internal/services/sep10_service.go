@@ -168,9 +168,9 @@ func (s sep10Service) ValidateChallenge(ctx context.Context, req ValidationReque
 	clientDomain := s.extractClientDomain(tx)
 
 	if clientDomain != "" {
-		if err := s.validateClientDomain(ctx, clientDomain); err != nil {
-			log.Ctx(ctx).Warnf("Client domain validation failed: %v", err)
-			return nil, fmt.Errorf("invalid client_domain in transaction: %w", err)
+		if validationErr := s.validateClientDomain(ctx, clientDomain); validationErr != nil {
+			log.Ctx(ctx).Warnf("Client domain validation failed: %v", validationErr)
+			return nil, fmt.Errorf("invalid client_domain in transaction: %w", validationErr)
 		}
 	}
 
@@ -241,8 +241,8 @@ func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) ([]string, str
 func (s *sep10Service) getBaseDomain(ctx context.Context) string {
 	currentTenant, err := tenant.GetTenantFromContext(ctx)
 	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
-		parsedURL, err := url.Parse(*currentTenant.BaseURL)
-		if err == nil {
+		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
+		if parseErr == nil {
 			return parsedURL.Hostname()
 		}
 	}
