@@ -47,7 +47,14 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.Address, s.Sep10SigningPublicKey)
 	}
 
-	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
+	var webAuthEndpoint string
+	t, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		webAuthEndpoint = fmt.Sprintf("https://%s/auth", req.Host)
+	} else {
+		webAuthEndpoint = *t.BaseURL + "/auth"
+	}
+
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
 
 	return fmt.Sprintf(`
