@@ -1,3 +1,5 @@
+//go:build payment_loadtest
+
 package main
 
 import (
@@ -124,18 +126,20 @@ func calculateAndPrintMetrics(ctx context.Context, horizonClient *horizonclient.
 }
 
 // createPaymentTransactions creates bulk transactions in the submitter_transactions table for TSS to process.
-func createPaymentTransactions(ctx context.Context, txModel *store.TransactionModel, paymentCount int, assetCode, assetIssuer, destination string) []store.Transaction {
+func createPaymentTransactions(ctx context.Context, txModel *store.TransactionModel, paymentCount int, assetCode, assetIssuer, destination, tenantId string) []store.Transaction {
 	transactions := make([]store.Transaction, 0, paymentCount)
 	for i := 0; i < paymentCount; i++ {
 		externalID := fmt.Sprintf("external-id-%d", i)
 		transactions = append(transactions, store.Transaction{
 			ExternalID: externalID,
+			TransactionType: store.TransactionTypePayment,
 			Payment: store.Payment{
 				AssetCode:   assetCode,
 				AssetIssuer: assetIssuer,
 				Amount:      0.1,
 				Destination: destination,
 			},
+			TenantID: tenantId,
 		})
 	}
 	insertedTransactions, err := txModel.BulkInsert(ctx, txModel.DBConnectionPool, transactions)
@@ -181,6 +185,7 @@ func main() {
 	assetCode := flag.String("assetCode", "USDC", "asset code")
 	assetIssuer := flag.String("assetIssuer", "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP", "asset issuer")
 	paymentDestination := flag.String("paymentDestination", "", "destination address of the payment")
+	tenantId := flag.String("tenantId", "", "tenant ID for multi-tenant testing (required)")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -198,7 +203,7 @@ func main() {
 	}
 
 	// 1) create the payment transactions
-	transactionIDs := createPaymentTransactions(ctx, txModel, *paymentCount, *assetCode, *assetIssuer, *paymentDestination)
+	transactionIDs := createPaymentTransactions(ctx, txModel, *paymentCount, *assetCode, *assetIssuer, *paymentDestination, *tenantId)
 	txIDs := make([]string, 0, len(transactionIDs))
 	for _, tx := range transactionIDs {
 		txIDs = append(txIDs, tx.ID)
