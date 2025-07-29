@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -87,16 +88,18 @@ func (tpl *TransactionProcessingLimiterImpl) adjustLimitIfNeeded() {
 }
 
 func (tpl *TransactionProcessingLimiterImpl) AdjustLimitIfNeeded(err utils.TransactionError) {
-	switch e := err.(type) {
-	case *utils.HorizonErrorWrapper:
-		if e.IsHorizonError() {
-			if shouldAdjustLimitForHorizonError(e) {
+	var horizonErr *utils.HorizonErrorWrapper
+	var rpcErr *utils.RPCErrorWrapper
+
+	if errors.As(err, &horizonErr) {
+		if horizonErr.IsHorizonError() {
+			if shouldAdjustLimitForHorizonError(horizonErr) {
 				tpl.adjustLimitIfNeeded()
 			}
 		}
-	case *utils.RPCErrorWrapper:
-		if e.IsRPCError() {
-			if shouldAdjustLimitForRPCError(e) {
+	} else if errors.As(err, &rpcErr) {
+		if rpcErr.IsRPCError() {
+			if shouldAdjustLimitForRPCError(rpcErr) {
 				tpl.adjustLimitIfNeeded()
 			}
 		}
