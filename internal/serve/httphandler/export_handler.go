@@ -8,13 +8,17 @@ import (
 
 	"github.com/gocarina/gocsv"
 
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 )
 
 type ExportHandler struct {
-	Models *data.Models
+	Models        *data.Models
+	InviteService services.SendReceiverWalletInviteServiceInterface
 }
 
 func (e ExportHandler) ExportDisbursements(rw http.ResponseWriter, r *http.Request) {
@@ -63,6 +67,7 @@ type PaymentCSV struct {
 	ReceiverEmail           string                     `csv:"Receiver.Email"`
 	ReceiverWalletAddress   string                     `csv:"ReceiverWallet.Address"`
 	ReceiverWalletStatus    data.ReceiversWalletStatus `csv:"ReceiverWallet.Status"`
+	InvitationLink          string                     `csv:"ReceiverWallet.InvitationLink"`
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 	ExternalPaymentID       string
@@ -98,7 +103,7 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paymentCSVs := e.convertPaymentsToCSV(payments, receiversMap)
+	paymentCSVs := e.convertPaymentsToCSV(ctx, payments, receiversMap)
 
 	fileName := fmt.Sprintf("payments_%s.csv", time.Now().Format("2006-01-02-15-04-05"))
 	rw.Header().Set("Content-Type", "text/csv")
@@ -139,9 +144,18 @@ func (e ExportHandler) getPaymentReceiversMap(ctx context.Context, payments []da
 }
 
 // convertPaymentsToCSV converts the given payments and receivers to a slice of PaymentCSV.
-func (e ExportHandler) convertPaymentsToCSV(payments []data.Payment, receiversMap map[string]data.Receiver) []*PaymentCSV {
+func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data.Payment, receiversMap map[string]data.Receiver) []*PaymentCSV {
 	paymentCSVs := make([]*PaymentCSV, 0, len(payments))
 	for _, payment := range payments {
+		receiver := receiversMap[payment.ReceiverWallet.Receiver.ID]
+
+		var invitationLink string
+		if link, err := e.InviteService.GenerateInvitationLinkForPayment(ctx, payment, receiver); err == nil {
+			invitationLink = link
+		} else {
+			log.Ctx(ctx).Warnf("Failed to generate invitation link for payment %s: %v", payment.ID, err)
+		}
+
 		paymentCSV := &PaymentCSV{
 			ID:                      payment.ID,
 			Amount:                  payment.Amount,
@@ -155,6 +169,7 @@ func (e ExportHandler) convertPaymentsToCSV(payments []data.Payment, receiversMa
 			ReceiverEmail:           receiversMap[payment.ReceiverWallet.Receiver.ID].Email,
 			ReceiverWalletAddress:   payment.ReceiverWallet.StellarAddress,
 			ReceiverWalletStatus:    payment.ReceiverWallet.Status,
+			InvitationLink:          invitationLink,
 			CreatedAt:               payment.CreatedAt,
 			UpdatedAt:               payment.UpdatedAt,
 			ExternalPaymentID:       payment.ExternalPaymentID,
