@@ -2090,3 +2090,114 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 		require.True(t, isValid)
 	})
 }
+
+func Test_SendReceiverWalletInviteService_GenerateInvitationLinkForPayment(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	tenantBaseURL := "http://localhost:8000"
+	tenantInfo := &tenant.Tenant{
+		ID:      uuid.NewString(),
+		Name:    "TestTenant",
+		BaseURL: &tenantBaseURL,
+	}
+	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+
+	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
+	messageDispatcherMock := message.NewMockMessageDispatcher(t)
+	embeddedWalletServiceMock := mocks.NewMockEmbeddedWalletService(t)
+	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	service, err := NewSendReceiverWalletInviteService(
+		models,
+		messageDispatcherMock,
+		embeddedWalletServiceMock,
+		stellarSecretKey,
+		3,
+		mockCrashTrackerClient,
+	)
+	require.NoError(t, err)
+
+	regularWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "TestWallet", "https://testwallet.com", "testwallet.com", "testwallet://sdp")
+	embeddedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "EmbeddedWallet", tenantBaseURL, tenantBaseURL, "SELF")
+	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
+
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, "USDC")
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email:       "test@example.com",
+		PhoneNumber: "+1234567890",
+	})
+
+	t.Run("🎉 successfully generates invitation link for regular wallet", func(t *testing.T) {
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, regularWallet.ID, data.RegisteredReceiversWalletStatus)
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet: regularWallet,
+			Status: data.ReadyDisbursementStatus,
+			Asset:  asset,
+		})
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "100.00",
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+		})
+
+		invitationLink, err := service.GenerateInvitationLinkForPayment(ctx, *payment, *receiver)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, invitationLink)
+		assert.Contains(t, invitationLink, "testwallet://sdp")
+		assert.Contains(t, invitationLink, "asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+		assert.Contains(t, invitationLink, "domain=localhost%3A8000")
+		assert.Contains(t, invitationLink, "name=MyCustomAid")
+		assert.Contains(t, invitationLink, "signature=")
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+	})
+
+	t.Run("🎉 successfully generates invitation link for embedded wallet", func(t *testing.T) {
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, embeddedWallet.ID, data.RegisteredReceiversWalletStatus)
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet: embeddedWallet,
+			Status: data.ReadyDisbursementStatus,
+			Asset:  asset,
+		})
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "100.00",
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+		})
+
+		embeddedWalletServiceMock.On("GetWalletByReceiverContact", mock.Anything, "test@example.com", "EMAIL").
+			Return(nil, fmt.Errorf("wallet not found")).Once()
+		embeddedWalletServiceMock.On("CreateInvitationToken", mock.Anything, "test@example.com", "EMAIL", receiver.ID).
+			Return("test-token-123", nil).Once()
+
+		invitationLink, err := service.GenerateInvitationLinkForPayment(ctx, *payment, *receiver)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, invitationLink)
+		assert.Contains(t, invitationLink, tenantBaseURL)
+		assert.Contains(t, invitationLink, "asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+		assert.Contains(t, invitationLink, "token=test-token-123")
+		assert.Contains(t, invitationLink, "signature=")
+		assert.NotContains(t, invitationLink, "domain=")
+		assert.NotContains(t, invitationLink, "name=")
+
+		embeddedWalletServiceMock.AssertExpectations(t)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+	})
+}
