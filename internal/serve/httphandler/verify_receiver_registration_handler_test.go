@@ -795,8 +795,8 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "token",
 	}
-	reqBody, err := json.Marshal(receiverRegistrationRequestWithPhone)
-	require.NoError(t, err)
+	reqBody, outerErr := json.Marshal(receiverRegistrationRequestWithPhone)
+	require.NoError(t, outerErr)
 
 	email := "test@stellar.org"
 	receiverRegistrationRequestWithEmail := data.ReceiverRegistrationRequest{
@@ -806,8 +806,8 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "token",
 	}
-	reqBodyEmail, err := json.Marshal(receiverRegistrationRequestWithEmail)
-	require.NoError(t, err)
+	reqBodyEmail, outerErr := json.Marshal(receiverRegistrationRequestWithEmail)
+	require.NoError(t, outerErr)
 
 	r := chi.NewRouter()
 
@@ -953,7 +953,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			VerificationValue: "1990-01-01",
 		})
 		receiverVerificationExceededAttempts.Attempts = data.MaxAttemptsAllowed
-		err = models.ReceiverVerification.UpdateReceiverVerification(ctx, data.ReceiverVerificationUpdate{
+		err := models.ReceiverVerification.UpdateReceiverVerification(ctx, data.ReceiverVerificationUpdate{
 			ReceiverID:          receiverWithExceededAttempts.ID,
 			VerificationField:   data.VerificationTypeDateOfBirth,
 			Attempts:            utils.IntPtr(data.MaxAttemptsAllowed),
@@ -1373,7 +1373,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
 		// Set OTP attempts to max
-		_, err = dbConnectionPool.ExecContext(ctx,
+		_, err := dbConnectionPool.ExecContext(ctx,
 			"UPDATE receiver_wallets SET otp = $1, otp_created_at = NOW(), otp_attempts = $2 WHERE id = $3",
 			"123456", OTPMaxAttempts, receiverWallet.ID)
 		require.NoError(t, err)
@@ -1474,7 +1474,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
 		// Set OTP to different value than in request
-		_, err = dbConnectionPool.ExecContext(ctx,
+		_, err := dbConnectionPool.ExecContext(ctx,
 			"UPDATE receiver_wallets SET otp = $1, otp_created_at = NOW(), otp_attempts = 0 WHERE id = $2",
 			"622141", receiverWallet.ID) // Different from "123456" in reqBody
 		require.NoError(t, err)

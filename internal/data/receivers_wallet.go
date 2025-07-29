@@ -391,7 +391,7 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx
 		SET
 			otp = $3,
 			otp_created_at = NOW(),
-		    otp_attempts = 0
+			otp_attempts = 0
 		FROM rw_cte
 		WHERE
 			receiver_wallets.id = rw_cte.id

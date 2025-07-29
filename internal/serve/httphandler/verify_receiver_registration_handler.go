@@ -491,8 +491,8 @@ func verifyReceiverWalletOTP(ctx context.Context, networkPassphrase string, rece
 	if receiverWallet.OTPCreatedAt == nil || receiverWallet.OTPCreatedAt.IsZero() {
 		return fmt.Errorf("otp does not have a valid created_at time")
 	}
-	otpExpirationTime := receiverWallet.OTPCreatedAt.Add(time.Minute * OTPExpirationTimeMinutes)
-	if time.Now().After(otpExpirationTime) {
+	otpExpirationTime := receiverWallet.OTPCreatedAt.UTC().Add(time.Minute * OTPExpirationTimeMinutes)
+	if time.Now().UTC().After(otpExpirationTime) {
 		return ErrOTPExpired
 	}
 
