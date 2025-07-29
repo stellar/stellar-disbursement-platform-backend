@@ -54,57 +54,58 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 }
 
 type ServeOptions struct {
-	Environment                     string
-	GitCommit                       string
-	Port                            int
-	Version                         string
-	InstanceName                    string
-	MonitorService                  monitor.MonitorServiceInterface
-	MtnDBConnectionPool             db.DBConnectionPool
-	AdminDBConnectionPool           db.DBConnectionPool
-	TSSDBConnectionPool             db.DBConnectionPool
-	EC256PrivateKey                 string
-	Models                          *data.Models
-	CorsAllowedOrigins              []string
-	authManager                     auth.AuthManager
-	EmailMessengerClient            message.MessengerClient
-	MessageDispatcher               message.MessageDispatcherInterface
-	SEP24JWTSecret                  string
-	sep24JWTManager                 *anchorplatform.JWTManager
-	BaseURL                         string
-	ResetTokenExpirationHours       int
-	NetworkPassphrase               string
-	NetworkType                     utils.NetworkType
-	SubmitterEngine                 engine.SubmitterEngine
-	Sep10SigningPublicKey           string
-	Sep10SigningPrivateKey          string
-	EnableEmbeddedWallets           bool
-	EmbeddedWalletsWasmHash         string
-	EmbeddedWalletsRecoveryAddress  string
-	EnableSep45                     bool
-	Sep45ContractId                 string
-	RpcConfig                       stellar.RPCOptions
-	AnchorPlatformBaseSepURL        string
-	AnchorPlatformBasePlatformURL   string
-	AnchorPlatformOutgoingJWTSecret string
-	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
-	CrashTrackerClient              crashtracker.CrashTrackerClient
-	ReCAPTCHASiteKey                string
-	ReCAPTCHASiteSecretKey          string
-	DisableMFA                      bool
-	DisableReCAPTCHA                bool
-	PasswordValidator               *authUtils.PasswordValidator
-	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
-	tenantManager                   tenant.ManagerInterface
-	DistributionAccountService      services.DistributionAccountServiceInterface
-	DistAccEncryptionPassphrase     string
-	EventProducer                   events.Producer
-	MaxInvitationResendAttempts     int
-	SingleTenantMode                bool
-	CircleService                   circle.ServiceInterface
-	CircleAPIType                   circle.APIType
-	BridgeService                   bridge.ServiceInterface
-	EmbeddedWalletService           services.EmbeddedWalletServiceInterface
+	Environment                           string
+	GitCommit                             string
+	Port                                  int
+	Version                               string
+	InstanceName                          string
+	MonitorService                        monitor.MonitorServiceInterface
+	MtnDBConnectionPool                   db.DBConnectionPool
+	AdminDBConnectionPool                 db.DBConnectionPool
+	TSSDBConnectionPool                   db.DBConnectionPool
+	EC256PrivateKey                       string
+	Models                                *data.Models
+	CorsAllowedOrigins                    []string
+	authManager                           auth.AuthManager
+	EmailMessengerClient                  message.MessengerClient
+	MessageDispatcher                     message.MessageDispatcherInterface
+	SEP24JWTSecret                        string
+	sep24JWTManager                       *anchorplatform.JWTManager
+	BaseURL                               string
+	ResetTokenExpirationHours             int
+	NetworkPassphrase                     string
+	NetworkType                           utils.NetworkType
+	SubmitterEngine                       engine.SubmitterEngine
+	Sep10SigningPublicKey                 string
+	Sep10SigningPrivateKey                string
+	EnableEmbeddedWallets                 bool
+	EmbeddedWalletsWasmHash               string
+	EmbeddedWalletsRecoveryAddress        string
+	EnableSep45                           bool
+	Sep45ContractId                       string
+	RpcConfig                             stellar.RPCOptions
+	AnchorPlatformBaseSepURL              string
+	AnchorPlatformBasePlatformURL         string
+	AnchorPlatformOutgoingJWTSecret       string
+	AnchorPlatformAPIService              anchorplatform.AnchorPlatformAPIServiceInterface
+	CrashTrackerClient                    crashtracker.CrashTrackerClient
+	ReCAPTCHASiteKey                      string
+	ReCAPTCHASiteSecretKey                string
+	DisableMFA                            bool
+	DisableReCAPTCHA                      bool
+	DisableInitialDisbursementInvitations bool
+	PasswordValidator                     *authUtils.PasswordValidator
+	EnableScheduler                       bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
+	tenantManager                         tenant.ManagerInterface
+	DistributionAccountService            services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase           string
+	EventProducer                         events.Producer
+	MaxInvitationResendAttempts           int
+	SingleTenantMode                      bool
+	CircleService                         circle.ServiceInterface
+	CircleAPIType                         circle.APIType
+	BridgeService                         bridge.ServiceInterface
+	EmbeddedWalletService                 services.EmbeddedWalletServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -344,10 +345,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:                      o.Models,
-				AuthManager:                 authManager,
-				MonitorService:              o.MonitorService,
-				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				Models:                                o.Models,
+				AuthManager:                           authManager,
+				MonitorService:                        o.MonitorService,
+				DistributionAccountResolver:           o.SubmitterEngine.DistributionAccountResolver,
+				DisableInitialDisbursementInvitations: o.DisableInitialDisbursementInvitations,
 				DisbursementManagementService: &services.DisbursementManagementService{
 					Models:                     o.Models,
 					AuthManager:                authManager,

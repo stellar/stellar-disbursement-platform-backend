@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
@@ -67,11 +68,12 @@ var (
 )
 
 type DisbursementInstructionsOpts struct {
-	UserID                  string
-	Instructions            []*DisbursementInstruction
-	Disbursement            *Disbursement
-	DisbursementUpdate      *DisbursementUpdate
-	MaxNumberOfInstructions int
+	UserID                                string
+	Instructions                          []*DisbursementInstruction
+	Disbursement                          *Disbursement
+	DisbursementUpdate                    *DisbursementUpdate
+	MaxNumberOfInstructions               int
+	DisableInitialDisbursementInvitations bool
 }
 
 // ProcessAll Processes all disbursement instructions and persists the data to the database.
@@ -106,7 +108,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.D
 	}
 
 	// Step 2: Fetch all receiver wallets and create missing ones
-	receiverIDToReceiverWalletIDMap, err := di.processReceiverWallets(ctx, dbTx, receiversByIDMap, opts.Disbursement)
+	receiverIDToReceiverWalletIDMap, err := di.processReceiverWallets(ctx, dbTx, receiversByIDMap, opts.Disbursement, opts.DisableInitialDisbursementInvitations)
 	if err != nil {
 		return fmt.Errorf("processing receiver wallets: %w", err)
 	}
@@ -343,7 +345,7 @@ func (di DisbursementInstructionModel) processReceiverVerifications(ctx context.
 	return nil
 }
 
-func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Context, dbTx db.DBTransaction, receiversByIDMap map[string]*Receiver, disbursement *Disbursement) (map[string]string, error) {
+func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Context, dbTx db.DBTransaction, receiversByIDMap map[string]*Receiver, disbursement *Disbursement, disableInitialDisbursementInvitations bool) (map[string]string, error) {
 	receiverIDs := maps.Keys(receiversByIDMap)
 
 	receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbTx, receiverIDs, disbursement.Wallet.ID)
@@ -362,6 +364,14 @@ func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Contex
 				ReceiverID: receiverID,
 				WalletID:   disbursement.Wallet.ID,
 			}
+
+			// If initial disbursement invitations are disabled, set the invitation_sent_at timestamp
+			// to prevent the scheduled job from sending invitations
+			if disableInitialDisbursementInvitations {
+				now := time.Now()
+				receiverWalletInsert.InvitationSentAt = &now
+			}
+
 			rwID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
 			if insertErr != nil {
 				return nil, fmt.Errorf("inserting receiver wallet for receiver id %s: %w", receiverID, insertErr)

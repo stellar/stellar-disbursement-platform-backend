@@ -108,8 +108,9 @@ type ReceiverWalletModel struct {
 }
 
 type ReceiverWalletInsert struct {
-	ReceiverID string
-	WalletID   string
+	ReceiverID       string
+	WalletID         string
+	InvitationSentAt *time.Time
 }
 
 func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverIDs ReceiverIDs) ([]ReceiverWallet, error) {
@@ -417,12 +418,12 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx
 func (rw *ReceiverWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, insert ReceiverWalletInsert) (string, error) {
 	var newId string
 	query := `
-		INSERT INTO receiver_wallets (receiver_id, wallet_id)
-		VALUES ($1, $2)
+		INSERT INTO receiver_wallets (receiver_id, wallet_id, invitation_sent_at)
+		VALUES ($1, $2, $3)
 		RETURNING id
 	`
 
-	err := sqlExec.GetContext(ctx, &newId, query, insert.ReceiverID, insert.WalletID)
+	err := sqlExec.GetContext(ctx, &newId, query, insert.ReceiverID, insert.WalletID, insert.InvitationSentAt)
 	if err != nil {
 		return "", fmt.Errorf("error inserting receiver wallet: %w", err)
 	}
