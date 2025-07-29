@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	// Hardcoded values as per requirements
 	sep24MinAmount = 1
 	sep24MaxAmount = 10000
 )
@@ -23,19 +22,16 @@ type SEP24InfoResponse struct {
 	Features SEP24FeatureFlagResponse          `json:"features"`
 }
 
-// SEP24OperationResponse represents deposit/withdraw operation details
 type SEP24OperationResponse struct {
 	Enabled   bool `json:"enabled"`
 	MinAmount int  `json:"min_amount"`
 	MaxAmount int  `json:"max_amount"`
 }
 
-// SEP24FeeResponse represents fee configuration
 type SEP24FeeResponse struct {
 	Enabled bool `json:"enabled"`
 }
 
-// SEP24FeatureFlagResponse represents feature flags
 type SEP24FeatureFlagResponse struct {
 	AccountCreation   bool `json:"account_creation"`
 	ClaimableBalances bool `json:"claimable_balances"`
@@ -48,7 +44,6 @@ type SEP24InfoHandler struct {
 func (h SEP24InfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get all assets
 	assets, err := h.Models.Assets.GetAll(ctx)
 	if err != nil {
 		log.Ctx(ctx).Errorf("Error fetching assets for SEP-24 info: %v", err)
