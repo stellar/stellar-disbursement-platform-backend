@@ -130,3 +130,29 @@ func Test_GetNetworkTypeFromNetworkPassphrase(t *testing.T) {
 		}
 	}
 }
+
+func Test_IsTestNetwork(t *testing.T) {
+	testCases := []struct {
+		networkPassphrase string
+		expectedResult    bool
+	}{
+		{
+			networkPassphrase: network.TestNetworkPassphrase,
+			expectedResult:    true,
+		},
+		{
+			networkPassphrase: network.FutureNetworkPassphrase,
+			expectedResult:    true,
+		},
+		{
+			networkPassphrase: network.PublicNetworkPassphrase,
+			expectedResult:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.networkPassphrase, func(t *testing.T) {
+			assert.Equal(t, tc.expectedResult, IsTestNetwork(tc.networkPassphrase))
+		})
+	}
+}

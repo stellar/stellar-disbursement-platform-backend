@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
@@ -612,11 +612,7 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 }
 
 func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
@@ -629,6 +625,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 		contactInfo         func(r Receiver, contactType ReceiverContactType) string
 		clientDomain        string
 		expectedRows        int
+		expectedAttempts    int
 	}{
 		{
 			name: "does not update OTP for a receiver wallet with a different contact info",
@@ -675,8 +672,9 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
 				return r.ContactByType(contactType)
 			},
-			clientDomain: wallet.SEP10ClientDomain,
-			expectedRows: 1,
+			clientDomain:     wallet.SEP10ClientDomain,
+			expectedRows:     1,
+			expectedAttempts: 0,
 		},
 		{
 			name: "🎉 successfully renews OTP for an unconfirmed receiver wallet",
@@ -695,8 +693,9 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
 				return r.ContactByType(contactType)
 			},
-			clientDomain: wallet.SEP10ClientDomain,
-			expectedRows: 1,
+			clientDomain:     wallet.SEP10ClientDomain,
+			expectedRows:     1,
+			expectedAttempts: 0,
 		},
 	}
 
@@ -731,166 +730,16 @@ func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testin
 				assert.Equal(t, tc.expectedRows, rowsUpdated)
 
 				if tc.expectedRows > 0 {
-					q := `SELECT otp FROM receiver_wallets WHERE receiver_id = $1 AND wallet_id = $2`
-					var dbOTP string
-					err := dbConnectionPool.GetContext(ctx, &dbOTP, q, receiver.ID, wallet.ID)
+					var actualOTP string
+					var actualAttempts int
+					q := `SELECT otp, otp_attempts FROM receiver_wallets WHERE receiver_id = $1 AND wallet_id = $2`
+					err := dbConnectionPool.QueryRowxContext(ctx, q, receiver.ID, wallet.ID).Scan(&actualOTP, &actualAttempts)
 					require.NoError(t, err)
-					assert.Equal(t, otp, dbOTP)
+					assert.Equal(t, otp, actualOTP)
+					assert.Equal(t, tc.expectedAttempts, actualAttempts)
 				}
 			})
 		}
-	}
-}
-
-func Test_VerifyReceiverWalletOTP(t *testing.T) {
-	ctx := context.Background()
-	receiverWalletModel := ReceiverWalletModel{}
-
-	expiredOTPCreatedAt := time.Now().Add(-OTPExpirationTimeMinutes * time.Minute).Add(-time.Second) // expired 1 second ago
-	validOTPTime := time.Now()
-
-	testCases := []struct {
-		name              string
-		networkPassphrase string
-		attemptedOTP      string
-		otp               string
-		otpCreatedAt      time.Time
-		wantErr           error
-	}{
-		// mismatching OTP fails:
-		{
-			name:              "mismatching OTP fails",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      "123123",
-			otp:               "123456",
-			otpCreatedAt:      time.Time{}, // invalid created_at
-			wantErr:           fmt.Errorf("otp does not match with value saved in the database"),
-		},
-		{
-			name:              "mismatching OTP fails when passing the TestnetAlwaysValidOTP in Pubnet",
-			networkPassphrase: network.PublicNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               "123456",
-			otpCreatedAt:      time.Time{}, // invalid created_at
-			wantErr:           fmt.Errorf("otp does not match with value saved in the database"),
-		},
-		{
-			name:              "mismatching OTP succeeds when passing the TestnetAlwaysValidOTP in Testnet",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               "123456",
-			otpCreatedAt:      time.Time{}, // invalid created_at
-			wantErr:           nil,
-		},
-
-		// matching OTP fails when its created_at date is invalid:
-		{
-			name:              "matching OTP fails when its created_at date is invalid",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      "123456",
-			otp:               "123456",
-			otpCreatedAt:      time.Time{}, // invalid created_at
-			wantErr:           fmt.Errorf("otp does not have a valid created_at time"),
-		},
-		{
-			name:              "matching OTP fails when its created_at date is invalid and we pass TestnetAlwaysValidOTP in Pubnet",
-			networkPassphrase: network.PublicNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               TestnetAlwaysValidOTP,
-			otpCreatedAt:      time.Time{}, // invalid created_at
-			wantErr:           fmt.Errorf("otp does not have a valid created_at time"),
-		},
-		{
-			name:              "matching OTP succeeds when its created_at date is invalid but we pass TestnetAlwaysValidOTP in Testnet",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               "123456",
-			otpCreatedAt:      time.Time{}, // invalid created_at
-			wantErr:           nil,
-		},
-
-		// returns error when otp is expired:
-		{
-			name:              "matching OTP fails when OTP is expired",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      "123456",
-			otp:               "123456",
-			otpCreatedAt:      expiredOTPCreatedAt,
-			wantErr:           fmt.Errorf("otp is expired"),
-		},
-		{
-			name:              "matching OTP fails when OTP is expired and we pass TestnetAlwaysValidOTP in Pubnet",
-			networkPassphrase: network.PublicNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               TestnetAlwaysValidOTP,
-			otpCreatedAt:      expiredOTPCreatedAt,
-			wantErr:           fmt.Errorf("otp is expired"),
-		},
-		{
-			name:              "matching OTP fails when OTP is expired but we pass TestnetAlwaysValidOTP in Testnet",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               "123456",
-			otpCreatedAt:      expiredOTPCreatedAt,
-			wantErr:           nil,
-		},
-		{
-			name:              "matching OTP fails when OTP is expired but we pass TestnetAlwaysValidOTP in Futurenet",
-			networkPassphrase: network.FutureNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               "123456",
-			otpCreatedAt:      expiredOTPCreatedAt,
-			wantErr:           nil,
-		},
-
-		// OTP is valid 🎉
-		{
-			name:              "OTP is valid 🎉",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      "123456",
-			otp:               "123456",
-			otpCreatedAt:      validOTPTime,
-			wantErr:           nil,
-		},
-		{
-			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Pubnet",
-			networkPassphrase: network.PublicNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               TestnetAlwaysValidOTP,
-			otpCreatedAt:      validOTPTime,
-			wantErr:           nil,
-		},
-		{
-			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Testnet",
-			networkPassphrase: network.TestNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               TestnetAlwaysValidOTP,
-			otpCreatedAt:      validOTPTime,
-			wantErr:           nil,
-		},
-		{
-			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Futurenet",
-			networkPassphrase: network.FutureNetworkPassphrase,
-			attemptedOTP:      TestnetAlwaysValidOTP,
-			otp:               TestnetAlwaysValidOTP,
-			otpCreatedAt:      validOTPTime,
-			wantErr:           nil,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			receiverWallet := ReceiverWallet{
-				OTP:          tc.otp,
-				OTPCreatedAt: &tc.otpCreatedAt,
-			}
-			err := receiverWalletModel.VerifyReceiverWalletOTP(ctx, tc.networkPassphrase, receiverWallet, tc.attemptedOTP)
-			if tc.wantErr != nil {
-				assert.Equal(t, tc.wantErr, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
 	}
 }
 
