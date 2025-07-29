@@ -7,7 +7,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 type ReconcileSuccessType string
@@ -18,6 +17,8 @@ const (
 )
 
 // TransactionHandlerInterface defines the interface for handling different transaction types
+//
+//go:generate mockery --name=TransactionHandlerInterface --case=underscore --structname=MockTransactionHandler --filename=transaction_handler_mock.go --inpackage
 type TransactionHandlerInterface interface {
 	// BuildInnerTransaction builds the inner transaction for a given job
 	BuildInnerTransaction(ctx context.Context, txJob *TxJob, sequenceNumber int64, distributionAccount string) (*txnbuild.Transaction, error)
@@ -26,7 +27,11 @@ type TransactionHandlerInterface interface {
 	BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error)
 
 	// BuildFailureEvent builds an appropriate event message for a failed transaction
-	BuildFailureEvent(ctx context.Context, txJob *TxJob, hErr *utils.HorizonErrorWrapper) (*events.Message, error)
+	BuildFailureEvent(ctx context.Context, txJob *TxJob, err error) (*events.Message, error)
+
+	// RequiresRebuildOnRetry returns true if this transaction type needs to be rebuilt
+	// when retried
+	RequiresRebuildOnRetry() bool
 
 	// AddContextLoggerFields adds handler-specific fields to the logger context
 	AddContextLoggerFields(transaction *store.Transaction) map[string]interface{}
