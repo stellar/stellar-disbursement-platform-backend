@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"crypto/ecdh"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -32,8 +33,10 @@ func (r CreateWalletRequest) Validate() *httperror.HTTPError {
 	validator.Check(len(strings.TrimSpace(r.Token)) > 0, "token", "token should not be empty")
 	validator.Check(len(strings.TrimSpace(r.PublicKey)) > 0, "public_key", "public_key should not be empty")
 	validator.Check(len(strings.TrimSpace(r.CredentialID)) > 0, "credential_id", "credential_id should not be empty")
-	if _, err := hex.DecodeString(r.PublicKey); err != nil {
-		validator.AddError("public_key", "public_key should be a valid hex string")
+	if pk, err := hex.DecodeString(r.PublicKey); err != nil {
+		validator.AddError("public_key", "public_key is not a valid hex string")
+	} else if !isValidP256PublicKey(pk) {
+		validator.AddError("public_key", "public_key is not a valid uncompressed P256 public key")
 	}
 
 	if validator.HasErrors() {
@@ -41,6 +44,14 @@ func (r CreateWalletRequest) Validate() *httperror.HTTPError {
 	}
 
 	return nil
+}
+
+func isValidP256PublicKey(pubKeyBytes []byte) bool {
+	if len(pubKeyBytes) != 65 || pubKeyBytes[0] != 0x04 {
+		return false
+	}
+	_, err := ecdh.P256().NewPublicKey(pubKeyBytes)
+	return err == nil
 }
 
 type WalletResponse struct {

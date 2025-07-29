@@ -17,7 +17,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -136,15 +135,15 @@ func (h *PaymentTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob
 		},
 	}
 
-	err := msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
+	validationErr := msg.Validate()
+	if validationErr != nil {
+		return nil, fmt.Errorf("validating message: %w", validationErr)
 	}
 
 	return msg, nil
 }
 
-func (h *PaymentTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, hErr *utils.HorizonErrorWrapper) (*events.Message, error) {
+func (h *PaymentTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, err error) (*events.Message, error) {
 	msg := &events.Message{
 		Topic:    events.PaymentCompletedTopic,
 		Key:      txJob.Transaction.ExternalID,
@@ -154,15 +153,15 @@ func (h *PaymentTransactionHandler) BuildFailureEvent(ctx context.Context, txJob
 			TransactionID:        txJob.Transaction.ID,
 			PaymentID:            txJob.Transaction.ExternalID,
 			PaymentStatus:        string(data.FailedPaymentStatus),
-			PaymentStatusMessage: hErr.Error(),
+			PaymentStatusMessage: err.Error(),
 			PaymentCompletedAt:   time.Now(),
 			StellarTransactionID: txJob.Transaction.StellarTransactionHash.String,
 		},
 	}
 
-	err := msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
+	validationErr := msg.Validate()
+	if validationErr != nil {
+		return nil, fmt.Errorf("validating message: %w", validationErr)
 	}
 
 	return msg, nil
@@ -251,6 +250,10 @@ func (h *PaymentTransactionHandler) MonitorTransactionReconciliationFailure(ctx 
 			TransactionEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
 		},
 	)
+}
+
+func (h *PaymentTransactionHandler) RequiresRebuildOnRetry() bool {
+	return false
 }
 
 func (h *PaymentTransactionHandler) AddContextLoggerFields(transaction *store.Transaction) map[string]interface{} {

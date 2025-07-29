@@ -730,6 +730,12 @@ func TestWalletResolver_Resolve(t *testing.T) {
 	// Create a user-managed wallet
 	userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
 	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email:       "vulkan@nocturne.imperium",
+		PhoneNumber: "+41555511111",
+	})
+
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, userManagedWallet.ID, data.RegisteredReceiversWalletStatus)
 
 	resolver := NewWalletResolver(models)
 
@@ -749,7 +755,7 @@ func TestWalletResolver_Resolve(t *testing.T) {
 		{
 			name: "resolve by address returns user-managed wallet",
 			ref: WalletReference{
-				Address: testutils.StringPtr("GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON"),
+				Address: &receiverWallet.StellarAddress,
 			},
 			wantWallet: userManagedWallet,
 		},

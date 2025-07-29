@@ -65,6 +65,7 @@ type PaymentCSV struct {
 	ReceiverID              string                     `csv:"Receiver.ID"`
 	ReceiverPhoneNumber     string                     `csv:"Receiver.PhoneNumber"`
 	ReceiverEmail           string                     `csv:"Receiver.Email"`
+	ReceiverExternalID      string                     `csv:"Receiver.ExternalID"`
 	ReceiverWalletAddress   string                     `csv:"ReceiverWallet.Address"`
 	ReceiverWalletStatus    data.ReceiversWalletStatus `csv:"ReceiverWallet.Status"`
 	InvitationLink          string                     `csv:"ReceiverWallet.InvitationLink"`
@@ -103,7 +104,11 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paymentCSVs := e.convertPaymentsToCSV(ctx, payments, receiversMap)
+	paymentCSVs, err := e.convertPaymentsToCSV(ctx, payments, receiversMap)
+	if err != nil {
+		httperror.InternalError(ctx, "Failed to convert payments to CSV", err, nil).Render(rw)
+		return
+	}
 
 	fileName := fmt.Sprintf("payments_%s.csv", time.Now().Format("2006-01-02-15-04-05"))
 	rw.Header().Set("Content-Type", "text/csv")
@@ -144,10 +149,13 @@ func (e ExportHandler) getPaymentReceiversMap(ctx context.Context, payments []da
 }
 
 // convertPaymentsToCSV converts the given payments and receivers to a slice of PaymentCSV.
-func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data.Payment, receiversMap map[string]data.Receiver) []*PaymentCSV {
+func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data.Payment, receiversMap map[string]data.Receiver) ([]*PaymentCSV, error) {
 	paymentCSVs := make([]*PaymentCSV, 0, len(payments))
 	for _, payment := range payments {
-		receiver := receiversMap[payment.ReceiverWallet.Receiver.ID]
+		receiver, ok := receiversMap[payment.ReceiverWallet.Receiver.ID]
+		if !ok {
+			return nil, fmt.Errorf("receiver %s does not exist in the map", payment.ReceiverWallet.Receiver.ID)
+		}
 
 		var invitationLink string
 		if link, err := e.InviteService.GenerateInvitationLinkForPayment(ctx, payment, receiver); err == nil {
@@ -165,8 +173,9 @@ func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data
 			Asset:                   payment.Asset,
 			Wallet:                  payment.ReceiverWallet.Wallet,
 			ReceiverID:              payment.ReceiverWallet.Receiver.ID,
-			ReceiverPhoneNumber:     receiversMap[payment.ReceiverWallet.Receiver.ID].PhoneNumber,
-			ReceiverEmail:           receiversMap[payment.ReceiverWallet.Receiver.ID].Email,
+			ReceiverPhoneNumber:     receiver.PhoneNumber,
+			ReceiverEmail:           receiver.Email,
+			ReceiverExternalID:      receiver.ExternalID,
 			ReceiverWalletAddress:   payment.ReceiverWallet.StellarAddress,
 			ReceiverWalletStatus:    payment.ReceiverWallet.Status,
 			InvitationLink:          invitationLink,
@@ -177,7 +186,7 @@ func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data
 		}
 		paymentCSVs = append(paymentCSVs, paymentCSV)
 	}
-	return paymentCSVs
+	return paymentCSVs, nil
 }
 
 func (e ExportHandler) ExportReceivers(rw http.ResponseWriter, r *http.Request) {
