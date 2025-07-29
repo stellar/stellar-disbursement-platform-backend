@@ -1,0 +1,87 @@
+package httphandler
+
+import (
+	"net/http"
+
+	"github.com/stellar/go/support/log"
+	"github.com/stellar/go/support/render/httpjson"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+)
+
+const (
+	// Hardcoded values as per requirements
+	sep24MinAmount = 1
+	sep24MaxAmount = 10000
+)
+
+type SEP24InfoResponse struct {
+	Deposit  map[string]SEP24OperationResponse `json:"deposit"`
+	Withdraw map[string]SEP24OperationResponse `json:"withdraw"`
+	Fee      SEP24FeeResponse                  `json:"fee"`
+	Features SEP24FeatureFlagResponse          `json:"features"`
+}
+
+// SEP24OperationResponse represents deposit/withdraw operation details
+type SEP24OperationResponse struct {
+	Enabled   bool `json:"enabled"`
+	MinAmount int  `json:"min_amount"`
+	MaxAmount int  `json:"max_amount"`
+}
+
+// SEP24FeeResponse represents fee configuration
+type SEP24FeeResponse struct {
+	Enabled bool `json:"enabled"`
+}
+
+// SEP24FeatureFlagResponse represents feature flags
+type SEP24FeatureFlagResponse struct {
+	AccountCreation   bool `json:"account_creation"`
+	ClaimableBalances bool `json:"claimable_balances"`
+}
+
+type SEP24InfoHandler struct {
+	Models *data.Models
+}
+
+func (h SEP24InfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get all assets
+	assets, err := h.Models.Assets.GetAll(ctx)
+	if err != nil {
+		log.Ctx(ctx).Errorf("Error fetching assets for SEP-24 info: %v", err)
+		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
+		return
+	}
+
+	deposit := make(map[string]SEP24OperationResponse)
+
+	for _, asset := range assets {
+		assetCode := asset.Code
+		if asset.IsNative() {
+			assetCode = "native"
+		}
+
+		deposit[assetCode] = SEP24OperationResponse{
+			Enabled:   true,
+			MinAmount: sep24MinAmount,
+			MaxAmount: sep24MaxAmount,
+		}
+	}
+
+	response := SEP24InfoResponse{
+		Deposit:  deposit,
+		Withdraw: make(map[string]SEP24OperationResponse),
+		Fee: SEP24FeeResponse{
+			Enabled: false,
+		},
+		Features: SEP24FeatureFlagResponse{
+			AccountCreation:   false,
+			ClaimableBalances: false,
+		},
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+}

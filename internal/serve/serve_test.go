@@ -356,6 +356,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	}{
 		{http.MethodGet, "/organization/logo"},
 		{http.MethodGet, "/health"},
+		{http.MethodGet, "/sep24/info"},
 		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
 		{http.MethodPost, "/mfa"},
