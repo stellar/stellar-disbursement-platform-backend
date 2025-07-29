@@ -182,56 +182,55 @@ func (s sep10Service) ValidateChallenge(ctx context.Context, req ValidationReque
 			expectedSignatures, actualSignatures, hasClientDomain)
 	}
 
-    if err := s.verifySignatures(
-        req.Transaction,
-        clientAccountID,
-        webAuthDomain,
-        allowedHomeDomains,
-        hasClientDomain,
-    ); err != nil {
-        return nil, err
-    }
+	if err := s.verifySignatures(
+		req.Transaction,
+		clientAccountID,
+		webAuthDomain,
+		allowedHomeDomains,
+		hasClientDomain,
+	); err != nil {
+		return nil, err
+	}
 
-    return s.generateToken(tx, clientAccountID, clientDomain, matchedHomeDomain, memo)
+	return s.generateToken(tx, clientAccountID, clientDomain, matchedHomeDomain, memo)
 }
 
 func (s *sep10Service) verifySignatures(
-    transaction string,
-    clientAccountID string,
-    webAuthDomain string,
-    allowedHomeDomains []string,
-    hasClientDomain bool,
+	transaction string,
+	clientAccountID string,
+	webAuthDomain string,
+	allowedHomeDomains []string,
+	hasClientDomain bool,
 ) error {
-    signers := []string{clientAccountID}
-    
-    signersFound, err := txnbuild.VerifyChallengeTxSigners(
-        transaction,
-        s.Sep10SigningKeypair.Address(),
-        s.NetworkPassphrase,
-        webAuthDomain,
-        allowedHomeDomains,
-        signers...,
-    )
-    
-    // Special handling for client_domain case with 3 signatures
-    if err != nil {
-        if hasClientDomain && strings.Contains(err.Error(), "unrecognized signatures") {
-            // Expected error for client_domain case - we validated signature count already
-            return nil
-        }
-        return fmt.Errorf("verifying challenge signatures: %w", err)
-    }
+	signers := []string{clientAccountID}
 
-    if len(signersFound) == 0 {
-        return fmt.Errorf("transaction not signed by client")
-    }
+	signersFound, err := txnbuild.VerifyChallengeTxSigners(
+		transaction,
+		s.Sep10SigningKeypair.Address(),
+		s.NetworkPassphrase,
+		webAuthDomain,
+		allowedHomeDomains,
+		signers...,
+	)
+	// Special handling for client_domain case with 3 signatures
+	if err != nil {
+		if hasClientDomain && strings.Contains(err.Error(), "unrecognized signatures") {
+			// Expected error for client_domain case - we validated signature count already
+			return nil
+		}
+		return fmt.Errorf("verifying challenge signatures: %w", err)
+	}
 
-    return nil
+	if len(signersFound) == 0 {
+		return fmt.Errorf("transaction not signed by client")
+	}
+
+	return nil
 }
 
 func (s *sep10Service) generateToken(
 	tx *txnbuild.Transaction,
-	clientAccountID, clientDomain ,matchedHomeDomain string,
+	clientAccountID, clientDomain, matchedHomeDomain string,
 	memo *txnbuild.MemoID,
 ) (*ValidationResponse, error) {
 	subject := clientAccountID
