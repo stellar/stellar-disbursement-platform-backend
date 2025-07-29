@@ -630,10 +630,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}
 
 		exportHandler := httphandler.ExportHandler{
-			Models:                 o.Models,
-			Sep10SigningPrivateKey: o.Sep10SigningPrivateKey,
-			EmbeddedWalletService:  o.EmbeddedWalletService,
-			InviteService:          inviteService,
+			Models:        o.Models,
+			InviteService: inviteService,
 		}
 		r.With(middleware.RequirePermission(
 			data.ReadExports,

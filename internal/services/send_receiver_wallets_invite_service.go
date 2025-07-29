@@ -25,6 +25,7 @@ import (
 
 type SendReceiverWalletInviteServiceInterface interface {
 	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletInvitationData) error
+	GenerateInvitationLinkForPayment(ctx context.Context, payment data.Payment, receiver data.Receiver) (string, error)
 }
 
 type SendReceiverWalletInviteService struct {

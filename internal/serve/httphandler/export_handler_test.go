@@ -12,11 +12,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
@@ -33,8 +35,12 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	inviteService := &mocks.MockSendReceiverWalletInviteService{}
+	inviteService.On("GenerateInvitationLinkForPayment", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
+
 	handler := &ExportHandler{
-		Models: models,
+		Models:        models,
+		InviteService: inviteService,
 	}
 
 	r := chi.NewRouter()
@@ -147,8 +153,12 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	inviteService := &mocks.MockSendReceiverWalletInviteService{}
+	inviteService.On("GenerateInvitationLinkForPayment", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
+
 	handler := &ExportHandler{
-		Models: models,
+		Models:        models,
+		InviteService: inviteService,
 	}
 
 	r := chi.NewRouter()
@@ -292,8 +302,12 @@ func Test_ExportHandler_ExportReceivers(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	inviteService := &mocks.MockSendReceiverWalletInviteService{}
+	inviteService.On("GenerateInvitationLinkForPayment", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
+
 	handler := &ExportHandler{
-		Models: models,
+		Models:        models,
+		InviteService: inviteService,
 	}
 
 	r := chi.NewRouter()
