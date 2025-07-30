@@ -572,17 +572,26 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		// Embedded wallet routes (only if feature is enabled)
 		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
-			mux.Group(func(r chi.Router) {
-				walletCreationHandler := httphandler.WalletCreationHandler{
-					EmbeddedWalletService: o.EmbeddedWalletService,
-				}
+			walletCreationHandler := httphandler.WalletCreationHandler{
+				EmbeddedWalletService: o.EmbeddedWalletService,
+			}
+
+			r.Route("/embedded-wallets", func(r chi.Router) {
+				// Read operations
+				r.With(middleware.RequirePermission(
+					data.ReadDisbursements,
+					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+				)).Group(func(r chi.Router) {
+					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
+					r.Get("/status/{token}", walletCreationHandler.GetWalletStatus)
+				})
+
+				// Write operations
 				r.With(middleware.RequirePermission(
 					data.WriteDisbursements,
 					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
-				)).Route("/embedded-wallets", func(r chi.Router) {
+				)).Group(func(r chi.Router) {
 					r.Post("/", walletCreationHandler.CreateWallet)
-					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
-					r.Get("/status/{token}", walletCreationHandler.GetWalletStatus)
 					r.Post("/resend-invite", walletCreationHandler.ResendInvite)
 				})
 			})
