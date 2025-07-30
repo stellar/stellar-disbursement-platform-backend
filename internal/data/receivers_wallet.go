@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
@@ -309,7 +310,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 
 func (rw *ReceiverWalletModel) GetByAnchorPlatformTransactionID(ctx context.Context, transactionID string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
-	
+
 	query := `
 		SELECT
 			rw.*

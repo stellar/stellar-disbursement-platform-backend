@@ -18,7 +18,6 @@ import (
 )
 
 type StellarTomlHandler struct {
-	AnchorPlatformBaseSepURL    string
 	DistributionAccountResolver signing.DistributionAccountResolver
 	NetworkPassphrase           string
 	Models                      *data.Models
