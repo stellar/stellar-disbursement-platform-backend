@@ -5,10 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
@@ -169,17 +167,6 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 		return nil, applyErr
 	}
 
-	txParams.BaseFee = h.calculateAdjustedBaseFee(simulationResponse)
-
-	channelAccount, err := h.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
-	if err != nil {
-		return nil, utils.NewHorizonErrorWrapper(err)
-	}
-	txParams.SourceAccount = &txnbuild.SimpleAccount{
-		AccountID: txJob.ChannelAccount.PublicKey,
-		Sequence:  channelAccount.Sequence,
-	}
-
 	preparedTx, err := txnbuild.NewTransaction(txParams)
 	if err != nil {
 		return nil, fmt.Errorf("building final transaction: %w", err)
@@ -218,17 +205,6 @@ func (h *WalletCreationTransactionHandler) applyTransactionData(operation *txnbu
 		SorobanData: &transactionData,
 	}
 	return nil
-}
-
-func (h *WalletCreationTransactionHandler) calculateAdjustedBaseFee(simulationResponse protocol.SimulateTransactionResponse) int64 {
-	if simulationResponse.MinResourceFee <= 0 {
-		return int64(h.engine.MaxBaseFee)
-	}
-
-	sorobanFee := simulationResponse.MinResourceFee
-	adjustedBaseFee := int64(h.engine.MaxBaseFee) - sorobanFee
-
-	return int64(math.Max(float64(adjustedBaseFee), float64(txnbuild.MinBaseFee)))
 }
 
 func (h *WalletCreationTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error) {
