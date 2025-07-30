@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
@@ -17,12 +19,13 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 
 	testCases := []struct {
 		name       string
-		hErr       *utils.HorizonErrorWrapper
+		err        utils.TransactionError
 		wantResult *TransactionProcessingLimiterImpl
 	}{
+		// Horizon transaction error test cases
 		{
-			name: "adjusts limit if the horizon client error is too_many_requests",
-			hErr: utils.NewHorizonErrorWrapper(
+			name: "adjusts limit for HorizonErrorWrapper with rate limit",
+			err: utils.NewHorizonErrorWrapper(
 				&horizonclient.Error{
 					Problem: problem.P{Status: http.StatusTooManyRequests},
 				},
@@ -33,8 +36,8 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			},
 		},
 		{
-			name: "adjusts limit if the horizon client error is gateway_timeout",
-			hErr: utils.NewHorizonErrorWrapper(
+			name: "adjusts limit for HorizonErrorWrapper with gateway timeout",
+			err: utils.NewHorizonErrorWrapper(
 				&horizonclient.Error{
 					Problem: problem.P{Status: http.StatusGatewayTimeout},
 				},
@@ -45,8 +48,8 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			},
 		},
 		{
-			name: "adjusts limit if one of the operation error is tx_insufficient_fee",
-			hErr: utils.NewHorizonErrorWrapper(
+			name: "adjusts limit for HorizonErrorWrapper with tx_insufficient_fee",
+			err: utils.NewHorizonErrorWrapper(
 				&horizonclient.Error{
 					Problem: problem.P{
 						Status: http.StatusBadRequest,
@@ -64,8 +67,8 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			},
 		},
 		{
-			name: "no adjustment for determinate error",
-			hErr: utils.NewHorizonErrorWrapper(
+			name: "no adjustment for HorizonErrorWrapper with determinate error",
+			err: utils.NewHorizonErrorWrapper(
 				&horizonclient.Error{
 					Problem: problem.P{
 						Status: http.StatusBadRequest,
@@ -82,6 +85,71 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
 			},
 		},
+		// RPC transaction error test cases
+		{
+			name: "adjusts limit for RPCErrorWrapper with network error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeNetwork,
+					Err:      errors.New("network error"),
+					Response: nil,
+				},
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    DefaultBundlesSelectionLimit,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
+			},
+		},
+		{
+			name: "adjusts limit for RPCErrorWrapper with resource error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeResource,
+					Err:      errors.New("cpu limit exceeded"),
+					Response: nil,
+				},
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    DefaultBundlesSelectionLimit,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
+			},
+		},
+		{
+			name: "no adjustment for RPCErrorWrapper with contract execution error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeContractExecution,
+					Err:      errors.New("contract execution failed"),
+					Response: nil,
+				},
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
+		{
+			name: "no adjustment for RPCErrorWrapper with auth error",
+			err: &utils.RPCErrorWrapper{
+				SimulationError: &stellar.SimulationError{
+					Type:     stellar.SimulationErrorTypeAuth,
+					Err:      errors.New("authorization failed"),
+					Response: nil,
+				},
+			},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
+		{
+			name: "no adjustment for RPCErrorWrapper with nil simulation error",
+			err:  &utils.RPCErrorWrapper{SimulationError: nil},
+			wantResult: &TransactionProcessingLimiterImpl{
+				limitValue:                    currNumChannelAccounts,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -92,7 +160,7 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
 				CounterLastUpdated:            time.Now(),
 			}
-			txProcessingLimiter.AdjustLimitIfNeeded(tc.hErr)
+			txProcessingLimiter.AdjustLimitIfNeeded(tc.err)
 
 			assert.Equal(t, txProcessingLimiter.limitValue, tc.wantResult.limitValue)
 			assert.Equal(t, txProcessingLimiter.IndeterminateResponsesCounter, tc.wantResult.IndeterminateResponsesCounter)

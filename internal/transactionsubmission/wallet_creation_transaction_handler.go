@@ -176,15 +176,14 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 		return nil, fmt.Errorf("encoding transaction envelope: %w", err)
 	}
 
-	simulationResponse, err := h.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{
+	simulationResult, simulationErr := h.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{
 		Transaction: txEnvelope,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("simulating transaction: %w", err)
+	if simulationErr != nil {
+		return nil, utils.NewRPCErrorWrapper(simulationErr)
 	}
-	if simulationResponse.Error != "" {
-		return nil, fmt.Errorf("simulation error: %s", simulationResponse.Error)
-	}
+
+	simulationResponse := simulationResult.Response
 
 	operation.Auth, err = h.extractAuthEntries(simulationResponse)
 	if err != nil {
@@ -273,15 +272,15 @@ func (h *WalletCreationTransactionHandler) BuildSuccessEvent(ctx context.Context
 		},
 	}
 
-	err := msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
+	validationErr := msg.Validate()
+	if validationErr != nil {
+		return nil, fmt.Errorf("validating message: %w", validationErr)
 	}
 
 	return msg, nil
 }
 
-func (h *WalletCreationTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, hErr *utils.HorizonErrorWrapper) (*events.Message, error) {
+func (h *WalletCreationTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, err error) (*events.Message, error) {
 	msg := &events.Message{
 		Topic:    events.WalletCreationCompletedTopic,
 		Key:      txJob.Transaction.ExternalID,
@@ -291,15 +290,15 @@ func (h *WalletCreationTransactionHandler) BuildFailureEvent(ctx context.Context
 			TransactionID:               txJob.Transaction.ID,
 			WalletCreationID:            txJob.Transaction.ExternalID,
 			WalletCreationStatus:        string(data.FailedWalletStatus),
-			WalletCreationStatusMessage: hErr.Error(),
+			WalletCreationStatusMessage: err.Error(),
 			WalletCreationCompletedAt:   time.Now(),
 			StellarTransactionID:        txJob.Transaction.StellarTransactionHash.String,
 		},
 	}
 
-	err := msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
+	validationErr := msg.Validate()
+	if validationErr != nil {
+		return nil, fmt.Errorf("validating message: %w", validationErr)
 	}
 
 	return msg, nil
@@ -388,6 +387,10 @@ func (h *WalletCreationTransactionHandler) MonitorTransactionReconciliationFailu
 			TransactionEventType: sdpMonitor.WalletCreationReconciliationUnexpectedErrorLabel,
 		},
 	)
+}
+
+func (h *WalletCreationTransactionHandler) RequiresRebuildOnRetry() bool {
+	return true // Wallet creation transactions need fresh simulation data
 }
 
 func (h *WalletCreationTransactionHandler) AddContextLoggerFields(transaction *store.Transaction) map[string]interface{} {

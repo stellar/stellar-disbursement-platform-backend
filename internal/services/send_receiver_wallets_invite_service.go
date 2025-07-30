@@ -123,7 +123,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		}
 
 		if wallet.Embedded {
-			if err := s.UpdateDeepLink(ctx, &wdl, &rwa.ReceiverWallet.Receiver); err != nil {
+			if err := s.UpdateEmbeddedWalletDeepLink(ctx, &wdl, &rwa.ReceiverWallet.Receiver); err != nil {
 				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
 				continue
 			}
@@ -232,7 +232,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	})
 }
 
-func (s SendReceiverWalletInviteService) UpdateDeepLink(ctx context.Context, wdl *WalletDeepLink, receiver *data.Receiver) error {
+func (s SendReceiverWalletInviteService) UpdateEmbeddedWalletDeepLink(ctx context.Context, wdl *WalletDeepLink, receiver *data.Receiver) error {
 	if wdl == nil {
 		return fmt.Errorf("wallet deep link cannot be nil")
 	}
@@ -317,7 +317,7 @@ func (s SendReceiverWalletInviteService) GenerateInvitationLinkForPayment(ctx co
 	}
 
 	if wallet.Embedded {
-		if updateErr := s.UpdateDeepLink(ctx, &wdl, &receiver); updateErr != nil {
+		if updateErr := s.UpdateEmbeddedWalletDeepLink(ctx, &wdl, &receiver); updateErr != nil {
 			return "", fmt.Errorf("updating deep link for embedded wallet: %w", updateErr)
 		}
 	}

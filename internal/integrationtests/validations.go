@@ -91,7 +91,7 @@ func validateExpectationsAfterStartDisbursement(ctx context.Context, disbursemen
 }
 
 func validateExpectationsAfterReceiverRegistration(ctx context.Context, models *data.Models, stellarAccount, stellarMemo, clientDomain string) error {
-	receiverWallet, err := models.ReceiverWallet.GetByStellarAccountAndMemo(ctx, stellarAccount, stellarMemo, clientDomain)
+	receiverWallet, err := models.ReceiverWallet.GetByStellarAccountAndMemo(ctx, stellarAccount, clientDomain, &stellarMemo)
 	if err != nil {
 		return fmt.Errorf("error getting receiver wallet with stellar account: %w", err)
 	}
