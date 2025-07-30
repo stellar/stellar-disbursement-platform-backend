@@ -10,6 +10,9 @@ on:
       - "hotfix/**"
   pull_request:
 
+permissions:
+  contents: read
+
 env:
   USER_EMAIL: "sdp_user@stellar.org"
   USER_PASSWORD: "mockPassword123!"
