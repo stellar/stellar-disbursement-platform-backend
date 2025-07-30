@@ -1,70 +1,20 @@
 package httphandler
 
 import (
-	"errors"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
-
-type SEP24Handler struct {
-	Models *data.Models
-}
-
-type SEP24TransactionResponse struct {
-	Transaction SEP24Transaction `json:"transaction"`
-}
-
-type SEP24Transaction struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Status string `json:"status"`
-}
-
-func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	transactionID := r.URL.Query().Get("id")
-	if transactionID == "" {
-		httperror.BadRequest("id parameter is required", nil, nil).Render(w)
-		return
-	}
-
-	receiverWallet, err := h.Models.ReceiverWallet.GetByAnchorPlatformTransactionID(ctx, transactionID)
-	if err != nil {
-		if errors.Is(err, data.ErrRecordNotFound) {
-			httperror.NotFound("transaction not found", err, nil).Render(w)
-			return
-		}
-		log.Ctx(ctx).Errorf("error getting receiver wallet by transaction ID: %v", err)
-		httperror.InternalError(ctx, "Failed to get transaction status", err, nil).Render(w)
-		return
-	}
-
-	var status string
-	switch receiverWallet.Status {
-	case data.ReadyReceiversWalletStatus:
-		status = "pending_external"
-	case data.RegisteredReceiversWalletStatus:
-		status = "completed"
-	default:
-		status = "error"
-	}
-
-	response := SEP24TransactionResponse{
-		Transaction: SEP24Transaction{
-			ID:     transactionID,
-			Kind:   "deposit",
-			Status: status,
-		},
-	}
-
-	httpjson.Render(w, response, httpjson.JSON)
-}
 
 const (
 	sep24MinAmount = 1
@@ -91,6 +41,98 @@ type SEP24FeeResponse struct {
 type SEP24FeatureFlagResponse struct {
 	AccountCreation   bool `json:"account_creation"`
 	ClaimableBalances bool `json:"claimable_balances"`
+}
+
+type SEP24Handler struct {
+	Models             *data.Models
+	SEP24JWTManager    *anchorplatform.JWTManager
+	InteractiveBaseURL string
+}
+
+type SEP24TransactionResponse struct {
+	Transaction SEP24Transaction `json:"transaction"`
+}
+
+type SEP24Transaction struct {
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Status string `json:"status"`
+}
+
+type SEP24DepositRequest struct {
+	AssetCode                 string `json:"asset_code" schema:"asset_code"`
+	Account                   string `json:"account" schema:"account"`
+	Lang                      string `json:"lang" schema:"lang"`
+	ClaimableBalanceSupported string `json:"claimable_balance_supported" schema:"claimable_balance_supported"`
+}
+
+type SEP24InteractiveResponse struct {
+	Type          string `json:"type"`
+	URL           string `json:"url"`
+	TransactionID string `json:"id"`
+}
+
+func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	transactionID := r.URL.Query().Get("id")
+	if transactionID == "" {
+		httperror.BadRequest("id parameter is required", nil, nil).Render(w)
+		return
+	}
+
+	transaction := map[string]any{
+		"id":       transactionID,
+		"kind":     "deposit",
+		"refunded": false, // Always false for registration
+	}
+
+	receiverWallet, err := h.Models.ReceiverWallet.GetByAnchorPlatformTransactionID(ctx, transactionID)
+
+	if err != nil {
+		if err == data.ErrRecordNotFound {
+			transaction["status"] = "incomplete"
+			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
+
+			// Build more_info_url for incomplete transactions
+			transaction["more_info_url"] = fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s",
+				h.InteractiveBaseURL, transactionID)
+		} else {
+			log.Ctx(ctx).Errorf("Error fetching receiver wallet: %v", err)
+			httperror.InternalError(ctx, "Failed to get transaction", err, nil).Render(w)
+			return
+		}
+	} else {
+		switch receiverWallet.Status {
+		case data.RegisteredReceiversWalletStatus:
+			transaction["status"] = "completed"
+			transaction["completed_at"] = receiverWallet.UpdatedAt.UTC().Format(time.RFC3339)
+			transaction["stellar_transaction_id"] = ""
+			transaction["to"] = receiverWallet.StellarAddress
+			if receiverWallet.StellarMemo != "" {
+				transaction["deposit_memo"] = receiverWallet.StellarMemo
+				transaction["deposit_memo_type"] = receiverWallet.StellarMemoType
+			}
+		case data.ReadyReceiversWalletStatus:
+			transaction["status"] = "pending_user_info_update"
+			transaction["more_info_url"] = fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s",
+				h.InteractiveBaseURL, transactionID)
+		default:
+			transaction["status"] = "error"
+		}
+
+		transaction["started_at"] = receiverWallet.CreatedAt.UTC().Format(time.RFC3339)
+
+		if receiverWallet.StellarAddress != "" {
+			transaction["to"] = receiverWallet.StellarAddress
+		}
+	}
+
+	response := map[string]any{
+		"transaction": transaction,
+	}
+
+	httpjson.Render(w, response, httpjson.JSON)
 }
 
 func (h SEP24Handler) GetInfo(w http.ResponseWriter, r *http.Request) {
@@ -131,4 +173,85 @@ func (h SEP24Handler) GetInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+}
+
+func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)
+		return
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	sep10Claims, err := h.SEP24JWTManager.ParseSEP10TokenClaims(token)
+	if err != nil {
+		log.Ctx(ctx).Errorf("Failed to parse SEP-10 token: %v", err)
+		httperror.Unauthorized("Invalid token", err, nil).Render(w)
+		return
+	}
+
+	var assetCode, account, lang string
+	contentType := r.Header.Get("Content-Type")
+
+	if strings.Contains(contentType, "application/json") {
+		var req map[string]string
+		if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr != nil {
+			httperror.BadRequest("Invalid JSON", decodeErr, nil).Render(w)
+			return
+		}
+		assetCode = req["asset_code"]
+		account = req["account"]
+		lang = req["lang"]
+	} else {
+		assetCode = r.FormValue("asset_code")
+		account = r.FormValue("account")
+		lang = r.FormValue("lang")
+	}
+
+	if assetCode == "" {
+		httperror.BadRequest("asset_code is required", nil, nil).Render(w)
+		return
+	}
+
+	if account == "" {
+		account = sep10Claims.Subject
+		if idx := strings.Index(account, ":"); idx > 0 {
+			account = account[:idx]
+		}
+	}
+
+	if lang == "" {
+		lang = "en"
+	}
+
+	txnID := uuid.New().String()
+
+	sep24Token, err := h.SEP24JWTManager.GenerateSEP24Token(
+		account,
+		"",
+		sep10Claims.ClientDomain,
+		sep10Claims.HomeDomain,
+		txnID,
+	)
+	if err != nil {
+		log.Ctx(ctx).Errorf("Failed to generate SEP-24 token: %v", err)
+		httperror.InternalError(ctx, "Failed to generate token", err, nil).Render(w)
+		return
+	}
+
+	interactiveURL := fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s&token=%s&lang=%s",
+		h.InteractiveBaseURL, txnID, sep24Token, lang)
+
+	response := map[string]any{
+		"type": "interactive_customer_info_needed",
+		"url":  interactiveURL,
+		"id":   txnID,
+	}
+
+	log.Ctx(ctx).Infof("SEP-24 deposit initiated - ID: %s, Account: %s, Asset: %s, ClientDomain: %s",
+		txnID, account, assetCode, sep10Claims.ClientDomain)
+
+	httpjson.Render(w, response, httpjson.JSON)
 }

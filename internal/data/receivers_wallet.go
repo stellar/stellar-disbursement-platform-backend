@@ -309,10 +309,10 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 
 func (rw *ReceiverWalletModel) GetByAnchorPlatformTransactionID(ctx context.Context, transactionID string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
-	
+
 	query := `
 		SELECT
-			rw.*
+			` + ReceiverWalletColumnNames("rw", "") + `
 		FROM
 			receiver_wallets rw
 		WHERE

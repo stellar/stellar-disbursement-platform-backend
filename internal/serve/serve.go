@@ -644,10 +644,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/sep24", func(r chi.Router) {
 			sep24Handler := httphandler.SEP24Handler{
-				Models: o.Models,
+				Models:             o.Models,
+				SEP24JWTManager:    o.sep24JWTManager,
+				InteractiveBaseURL: o.BaseURL,
 			}
 			r.Get("/info", sep24Handler.GetInfo)
 			r.Get("/transaction", sep24Handler.GetTransaction)
+			r.Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
 		})
 
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
@@ -672,7 +675,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 			}.ServeHTTP)
 			r.Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
 				Models:                      o.Models,
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
 				ReCAPTCHADisabled:           o.DisableReCAPTCHA,
