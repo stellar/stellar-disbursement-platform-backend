@@ -92,9 +92,8 @@ fn test_validate_signature() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -119,9 +118,8 @@ fn test_webauthn_invalid_type() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -159,9 +157,8 @@ fn test_webauthn_client_data_duplicate_fields() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -203,9 +200,8 @@ fn test_webauthn_user_not_present() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -239,9 +235,8 @@ fn test_webauthn_user_not_verified() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -275,9 +270,8 @@ fn test_webauthn_invalid_challenge_content() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload_sign: BytesN<32> = BytesN::random(&env);
@@ -306,9 +300,8 @@ fn test_webauthn_invalid_challenge_length_in_client_data() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -352,9 +345,8 @@ fn test_webauthn_tampered_signature() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery);
+    let args = (public_key.clone(), recovery);
     let contract_address = env.register(AccountContract {}, args);
 
     let payload: BytesN<32> = BytesN::random(&env);
@@ -383,9 +375,8 @@ fn test_recovery_with_valid_signer() {
 
     let (public_key, mut signing_key) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery.clone());
+    let args = (public_key.clone(), recovery.clone());
     let contract_address = env.register(AccountContract {}, args);
 
     let (new_public_key, mut new_signing_key) = generate_test_p256_keypair(env.clone());
@@ -435,9 +426,8 @@ fn test_recovery_signer_missing_auth() {
 
     let (public_key, _) = generate_test_p256_keypair(env.clone());
 
-    let admin = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let args = (admin, public_key.clone(), recovery.clone());
+    let args = (public_key.clone(), recovery.clone());
     let contract_address = env.register(AccountContract {}, args);
 
     let (new_public_key, _) = generate_test_p256_keypair(env.clone());
