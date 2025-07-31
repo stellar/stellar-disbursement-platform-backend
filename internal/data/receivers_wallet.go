@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/network"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 
@@ -20,8 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
-
-const OTPExpirationTimeMinutes = 30
 
 type ReceiversWalletStatusHistoryEntry struct {
 	Status    ReceiversWalletStatus `json:"status"`
@@ -79,6 +75,7 @@ type ReceiverWallet struct {
 	CreatedAt        time.Time                    `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time                    `json:"updated_at" db:"updated_at"`
 	OTP              string                       `json:"-" db:"otp"`
+	OTPAttempts      int                          `json:"-" db:"otp_attempts"`
 	OTPCreatedAt     *time.Time                   `json:"-" db:"otp_created_at"`
 	OTPConfirmedAt   *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
 	OTPConfirmedWith string                       `json:"otp_confirmed_with,omitempty" db:"otp_confirmed_with"`
@@ -216,6 +213,7 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"id",
 			`receiver_id AS "receiver.id"`,
 			`wallet_id AS "wallet.id"`,
+			"otp_attempts",
 			"otp_created_at",
 			"otp_confirmed_at",
 			"status",
@@ -392,7 +390,8 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx
 			receiver_wallets
 		SET
 			otp = $3,
-			otp_created_at = NOW()
+			otp_created_at = NOW(),
+			otp_attempts = 0
 		FROM rw_cte
 		WHERE
 			receiver_wallets.id = rw_cte.id
@@ -449,34 +448,6 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	}
 
 	return &receiverWallet, nil
-}
-
-// VerifyReceiverWalletOTP validates the receiver wallet OTP.
-func (rw *ReceiverWalletModel) VerifyReceiverWalletOTP(ctx context.Context, networkPassphrase string, receiverWallet ReceiverWallet, otp string) error {
-	if slices.Contains([]string{network.TestNetworkPassphrase, network.FutureNetworkPassphrase}, networkPassphrase) {
-		if otp == TestnetAlwaysValidOTP {
-			log.Ctx(ctx).Warnf("OTP is being approved because TestnetAlwaysValidOTP (%s) was used", TestnetAlwaysValidOTP)
-			return nil
-		} else if otp == TestnetAlwaysInvalidOTP {
-			log.Ctx(ctx).Errorf("OTP is being denied because TestnetAlwaysInvalidOTP (%s) was used", TestnetAlwaysInvalidOTP)
-			return fmt.Errorf("otp does not match with value saved in the database")
-		}
-	}
-
-	if receiverWallet.OTP != otp {
-		return fmt.Errorf("otp does not match with value saved in the database")
-	}
-
-	if receiverWallet.OTPCreatedAt.IsZero() {
-		return fmt.Errorf("otp does not have a valid created_at time")
-	}
-
-	otpExpirationTime := receiverWallet.OTPCreatedAt.Add(time.Minute * OTPExpirationTimeMinutes)
-	if otpExpirationTime.Before(time.Now()) {
-		return fmt.Errorf("otp is expired")
-	}
-
-	return nil
 }
 
 // UpdateStatusByDisbursementID updates the status of the receiver wallets associated with a disbursement.
@@ -628,6 +599,7 @@ type ReceiverWalletUpdate struct {
 	StellarMemoType             *schema.MemoType      `db:"stellar_memo_type"`
 	OTPConfirmedAt              time.Time             `db:"otp_confirmed_at"`
 	OTPConfirmedWith            string                `db:"otp_confirmed_with"`
+	OTPAttempts                 *int                  `db:"otp_attempts"`
 }
 
 func (rwu ReceiverWalletUpdate) Validate() error {
@@ -695,6 +667,10 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	if update.OTPConfirmedWith != "" {
 		fields = append(fields, "otp_confirmed_with = ?")
 		args = append(args, update.OTPConfirmedWith)
+	}
+	if update.OTPAttempts != nil {
+		fields = append(fields, "otp_attempts = ?")
+		args = append(args, *update.OTPAttempts)
 	}
 
 	args = append(args, id)
