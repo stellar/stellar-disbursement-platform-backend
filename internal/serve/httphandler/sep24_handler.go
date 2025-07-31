@@ -3,7 +3,6 @@ package httphandler
 import (
 	"net/http"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -46,7 +45,6 @@ func (h SEP24InfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	assets, err := h.Models.Assets.GetAll(ctx)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Error fetching assets for SEP-24 info: %v", err)
 		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
 		return
 	}
