@@ -1769,7 +1769,7 @@ func Test_verifyReceiverWalletOTP(t *testing.T) {
 			attemptedOTP:      "123456",
 			otp:               "123456",
 			otpCreatedAt:      validOTPTime,
-			otpAttempts:       OTPMaxAttempts + 1,
+			otpAttempts:       OTPMaxAttempts,
 			wantErr:           ErrOTPMaxAttemptsExceeded,
 		},
 
