@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 //go:generate mockery --name=SEP10Service --case=underscore --structname=MockSEP10Service --filename=sep10_service_mock.go --inpackage
@@ -84,7 +85,7 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		return nil, fmt.Errorf("invalid account not a valid ed25519 public key")
 	}
 
-	_, webAuthDomain := s.getAllowedHomeDomains()
+	webAuthDomain := s.getWebAuthDomain(ctx)
 
 	if req.HomeDomain == "" {
 		req.HomeDomain = s.getBaseDomain()
@@ -137,8 +138,8 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 		return nil, fmt.Errorf("transaction is required")
 	}
 
-	allowedHomeDomains, webAuthDomain := s.getAllowedHomeDomains()
-
+	allowedHomeDomains := s.getAllowedHomeDomains()
+	webAuthDomain := s.getWebAuthDomain(ctx)
 	tx, clientAccountID, matchedHomeDomain, memo, err := txnbuild.ReadChallengeTx(
 		req.Transaction,
 		s.Sep10SigningKeypair.Address(),
@@ -251,14 +252,31 @@ func (s *sep10Service) generateToken(
 	return &ValidationResponse{Token: token}, nil
 }
 
-func (s *sep10Service) getAllowedHomeDomains() ([]string, string) {
+func (s *sep10Service) getAllowedHomeDomains() []string {
 	baseDomain := s.getBaseDomain()
 
 	// For SEP-10, we support wildcard matching: *.<base_domain>
 	// This means any subdomain of the base domain is allowed
 	allowedDomains := []string{baseDomain}
 
-	return allowedDomains, baseDomain
+	return allowedDomains
+}
+
+func (s *sep10Service) getWebAuthDomain(ctx context.Context) string {
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
+		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
+		if parseErr == nil {
+			return parsedURL.Host
+		}
+	}
+
+	parsedURL, err := url.Parse(s.BaseURL)
+	if err == nil {
+		return parsedURL.Host
+	}
+
+	return ""
 }
 
 func (s *sep10Service) getBaseDomain() string {
@@ -271,7 +289,21 @@ func (s *sep10Service) getBaseDomain() string {
 
 func (s *sep10Service) isValidHomeDomain(homeDomain string) bool {
 	baseDomain := s.getBaseDomain()
-	return homeDomain == baseDomain || strings.HasSuffix(homeDomain, "."+baseDomain)
+	if baseDomain == "" || homeDomain == "" {
+		return false
+	}
+
+	// Convert both to lowercase for case-insensitive comparison
+	baseDomainLower := strings.ToLower(baseDomain)
+	homeDomainLower := strings.ToLower(homeDomain)
+
+	// Exact match
+	if homeDomainLower == baseDomainLower {
+		return true
+	}
+
+	// Subdomain match (must end with "." + baseDomain)
+	return strings.HasSuffix(homeDomainLower, "."+baseDomainLower)
 }
 
 func (s *sep10Service) validateClientDomain(ctx context.Context, clientDomain string) error {
@@ -322,7 +354,6 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 		}
 	}
 
-	// represent server signing account as SimpleAccount
 	sa := txnbuild.SimpleAccount{
 		AccountID: s.Sep10SigningKeypair.Address(),
 		Sequence:  0,
@@ -331,7 +362,6 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 	currentTime := time.Now().UTC()
 	maxTime := currentTime.Add(s.AuthTimeout)
 
-	// Create operations
 	operations := []txnbuild.Operation{
 		&txnbuild.ManageData{
 			SourceAccount: clientAccountID,
