@@ -334,13 +334,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ConfigKey: &serveOpts.EmbeddedWalletsWasmHash,
 			Required:  false,
 		},
-		{
-			Name:      "embedded-wallets-recovery-address",
-			Usage:     "The Stellar address required to sign transactions for account recovery (required when --enable-embedded-wallets is true)",
-			OptType:   types.String,
-			ConfigKey: &serveOpts.EmbeddedWalletsRecoveryAddress,
-			Required:  false,
-		},
+		cmdUtils.EmbeddedWalletsRecoveryAddress(&serveOpts.EmbeddedWalletsRecoveryAddress),
 		{
 			Name:        "enable-sep45",
 			Usage:       "Enable SEP-45 web authentication features that require Stellar RPC integration",
