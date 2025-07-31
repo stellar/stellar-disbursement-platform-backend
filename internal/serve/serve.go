@@ -144,13 +144,11 @@ func (opts *ServeOptions) SetupDependencies() error {
 		sep24JWTManager,
 		opts.NetworkPassphrase,
 		opts.Sep10SigningPrivateKey,
-		time.Hour*24,
-		time.Minute*15,
 		opts.BaseURL,
 		opts.Models,
 	)
 	if err != nil {
-		return fmt.Errorf("error initializing SEP 10 Service: %w", err)
+		return fmt.Errorf("initializing SEP 10 Service: %w", err)
 	}
 
 	opts.Sep10Service = sep10Service
