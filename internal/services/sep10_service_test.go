@@ -777,3 +777,117 @@ func TestSEP10Service_ValidateChallenge_CompleteFlow(t *testing.T) {
 		assert.Nil(t, validationResp)
 	})
 }
+
+func TestChallengeRequest_Validate(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		req           ChallengeRequest
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "✅ valid request",
+			req: ChallengeRequest{
+				Account:    keypair.MustRandom().Address(),
+				HomeDomain: "fenris.imperium.com",
+			},
+			expectError: false,
+		},
+		{
+			name: "✅ valid request with memo",
+			req: ChallengeRequest{
+				Account:    keypair.MustRandom().Address(),
+				HomeDomain: "fenris.imperium.com",
+				Memo:       "12345",
+			},
+			expectError: false,
+		},
+		{
+			name: "❌ empty account",
+			req: ChallengeRequest{
+				Account:    "",
+				HomeDomain: "fenris.imperium.com",
+			},
+			expectError:   true,
+			errorContains: "account is required",
+		},
+		{
+			name: "❌ invalid account",
+			req: ChallengeRequest{
+				Account:    "invalid-account",
+				HomeDomain: "fenris.imperium.com",
+			},
+			expectError:   true,
+			errorContains: "invalid account not a valid ed25519 public key",
+		},
+		{
+			name: "❌ invalid memo",
+			req: ChallengeRequest{
+				Account:    keypair.MustRandom().Address(),
+				HomeDomain: "fenris.imperium.com",
+				Memo:       "invalid-memo",
+			},
+			expectError:   true,
+			errorContains: "invalid memo must be a positive integer",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tc.req.Validate()
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidationRequest_Validate(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		req           ValidationRequest
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "✅ valid request",
+			req: ValidationRequest{
+				Transaction: "valid_transaction",
+			},
+			expectError: false,
+		},
+		{
+			name: "❌ empty transaction",
+			req: ValidationRequest{
+				Transaction: "",
+			},
+			expectError:   true,
+			errorContains: "transaction is required",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tc.req.Validate()
+
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

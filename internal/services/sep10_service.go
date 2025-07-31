@@ -44,6 +44,28 @@ type ChallengeRequest struct {
 	ClientDomain string `json:"client_domain,omitempty" query:"client_domain"`
 }
 
+func (req *ChallengeRequest) Validate() error {
+	if req.Account == "" {
+		return fmt.Errorf("account is required")
+	}
+
+	if !strkey.IsValidEd25519PublicKey(req.Account) {
+		return fmt.Errorf("invalid account not a valid ed25519 public key")
+	}
+
+	if req.Memo != "" {
+		memo, err := schema.NewMemo(schema.MemoTypeID, req.Memo)
+		if err != nil {
+			return fmt.Errorf("invalid memo must be a positive integer")
+		}
+		if _, ok := memo.(txnbuild.MemoID); !ok {
+			return fmt.Errorf("invalid memo type")
+		}
+	}
+
+	return nil
+}
+
 type ChallengeResponse struct {
 	Transaction       string `json:"transaction"`
 	NetworkPassphrase string `json:"network_passphrase"`
@@ -51,6 +73,13 @@ type ChallengeResponse struct {
 
 type ValidationRequest struct {
 	Transaction string `json:"transaction" form:"transaction"`
+}
+
+func (req *ValidationRequest) Validate() error {
+	if req.Transaction == "" {
+		return fmt.Errorf("transaction is required")
+	}
+	return nil
 }
 
 type ValidationResponse struct {
@@ -81,8 +110,8 @@ func NewSEP10Service(
 }
 
 func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error) {
-	if !strkey.IsValidEd25519PublicKey(req.Account) {
-		return nil, fmt.Errorf("invalid account not a valid ed25519 public key")
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid challenge request %w", err)
 	}
 
 	webAuthDomain := s.getWebAuthDomain(ctx)
@@ -106,14 +135,9 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 	var memoParam *txnbuild.MemoID
 	if req.Memo != "" {
-		memo, err := schema.NewMemo(schema.MemoTypeID, req.Memo)
-		if err != nil {
-			return nil, fmt.Errorf("invalid memo must be a positive integer")
-		}
+		memo, _ := schema.NewMemo(schema.MemoTypeID, req.Memo)
 		if memoID, ok := memo.(txnbuild.MemoID); ok {
 			memoParam = &memoID
-		} else {
-			return nil, fmt.Errorf("invalid memo type")
 		}
 	}
 
@@ -134,8 +158,8 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 }
 
 func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error) {
-	if req.Transaction == "" {
-		return nil, fmt.Errorf("transaction is required")
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid validation request %w", err)
 	}
 
 	allowedHomeDomains := s.getAllowedHomeDomains()
