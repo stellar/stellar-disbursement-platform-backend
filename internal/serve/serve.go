@@ -605,7 +605,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				)).Group(func(r chi.Router) {
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Post("/resend-invite", walletCreationHandler.ResendInvite)
-					r.Post("/{contractAddress}/cosign-recovery", cosignRecoveryHandler.CosignRecovery)
+					r.Post("/cosign-recovery/{contractAddress}", cosignRecoveryHandler.CosignRecovery)
 				})
 			})
 		}

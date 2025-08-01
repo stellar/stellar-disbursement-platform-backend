@@ -56,7 +56,7 @@ func (h CosignRecoveryHandler) CosignRecovery(rw http.ResponseWriter, req *http.
 	}
 
 	var reqBody CosignRecoveryRequest
-	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		httperror.BadRequest("Decoding request body", err, nil).Render(rw)
 		return
 	}
