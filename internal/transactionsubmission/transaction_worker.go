@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
@@ -22,6 +23,9 @@ import (
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
+
+// ErrTransactionHandled is returned when a transaction error has been handled and processing should stop
+var ErrTransactionHandled = errors.New("transaction error was handled")
 
 type TxJob store.ChannelTransactionBundle
 
@@ -162,72 +166,89 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 	}
 }
 
-// handleFailedTransaction will wrap up the job when the transaction was submitted to the network but failed.
-// This method will only return an error if something goes wrong when handling the result and marking the transaction as
-// ERROR.
+// handleFailedTransaction handles both Horizon and RPC errors through a unified interface.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as ERROR.
 //
-// Errors that triger the pause/jitter mechanism at TransactionProcessingLimiter:
-//   - 504: Timeout
-//   - 429: Too Many Requests
-//   - 400 - tx_insufficient_fee: Bad Request
+// Errors that trigger the pause/jitter mechanism at TransactionProcessingLimiter:
+//
+//	Horizon: 504 (Timeout), 429 (Too Many Requests), 400 tx_insufficient_fee
+//	RPC: Network errors, Resource errors
 //
 // Errors marked as definitive error, that won't be resolved with retries:
-//   - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
-//   - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//
+//	Horizon: 400 with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
+//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//	RPC: Contract errors, auth failures
 //
 // Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
-//   - 400 - tx_bad_seq: Bad Request
+//
+//	Horizon: 400 tx_bad_seq
 //
 // Errors that are marked for retry without pause/jitter and are not reported to CrashTracker:
-//   - 400 - tx_too_late: Bad Request
-//   - xxx - Any unexpected error.
-func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
-	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
+//
+//	Horizon: 400 tx_too_late, unexpected errors
+//	RPC: unexpected errors
+func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, txErr utils.TransactionError) error {
+	log.Ctx(ctx).Errorf("🔴 Error processing job (%s): %v", txErr.GetErrorType(), txErr)
 
-	isRetryable := !(hErr.IsHorizonError() && hErr.ShouldMarkAsError())
-	defer tw.txHandler.MonitorTransactionProcessingFailed(ctx, txJob, tw.jobUUID, isRetryable, hErr.Error())
+	defer tw.txHandler.MonitorTransactionProcessingFailed(ctx, txJob, tw.jobUUID, txErr.IsRetryable(), txErr.Error())
 
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
 		return fmt.Errorf("saving response XDR: %w", err)
 	}
 
-	if hErr.IsHorizonError() {
-		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErr)
+	tw.txProcessingLimiter.AdjustLimitIfNeeded(txErr)
 
-		if hErr.ShouldMarkAsError() {
-			// Building the completed event before updating the transaction status. This way, if the message
-			// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
-			// will be re-tried.
-			eventMsg, eventErr := tw.txHandler.BuildFailureEvent(ctx, txJob, hErr)
-			if eventErr != nil {
-				return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, eventErr)
-			}
+	if txErr.ShouldMarkAsError() {
+		if markErr := tw.markTransactionAsError(ctx, txJob, txErr, txErr.Error()); markErr != nil {
+			return markErr
+		}
 
-			updatedTx, txErr := tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErr.Error())
-			if txErr != nil {
-				return fmt.Errorf("updating transaction status to error: %w", err)
+		if txErr.ShouldReportToCrashTracker() {
+			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, fmt.Sprintf("%s transaction error - cannot be retried", strings.ToLower(txErr.GetErrorType())))
+		}
+	} else {
+		if txErr.IsRetryable() && tw.txHandler.RequiresRebuildOnRetry() {
+			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
+				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
 			}
-			txJob.Transaction = *updatedTx
+		}
 
-			// Publishing a new event on the event producer
-			err = events.ProduceEvents(ctx, tw.eventProducer, eventMsg)
-			if err != nil {
-				return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-			}
-
-			// report any terminal errors, excluding those caused by the external account not being valid
-			if !hErr.IsDestinationAccountNotReady() {
-				tw.crashTrackerClient.LogAndReportErrors(ctx, hErr, "transaction error - cannot be retried")
-			}
-		} else if hErr.IsBadSequence() {
-			tw.crashTrackerClient.LogAndReportErrors(ctx, hErr, "tx_bad_seq detected!")
+		if horizonErr, ok := txErr.(utils.HorizonSpecificError); ok && horizonErr.IsBadSequence() {
+			// Special handling for bad sequence errors (Horizon-specific)
+			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "tx_bad_seq detected!")
 		}
 	}
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
 		return fmt.Errorf("unlocking job: %w", err)
+	}
+
+	return nil
+}
+
+// markTransactionAsError handles the process of marking a transaction as ERROR and producing events
+func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *TxJob, txErr utils.TransactionError, errorMsg string) error {
+	// Building the completed event before updating the transaction status. This way, if the message
+	// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
+	// will be re-tried.
+	eventMsg, eventErr := tw.txHandler.BuildFailureEvent(ctx, txJob, txErr)
+	if eventErr != nil {
+		return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, eventErr)
+	}
+
+	updatedTx, updateErr := tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, errorMsg)
+	if updateErr != nil {
+		return fmt.Errorf("updating transaction status to error: %w", updateErr)
+	}
+	txJob.Transaction = *updatedTx
+
+	// Publishing a new event on the event producer
+	err := events.ProduceEvents(ctx, tw.eventProducer, eventMsg)
+	if err != nil {
+		return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 	}
 
 	return nil
@@ -355,6 +376,9 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 	// STEP 2: prepare transaction for processing
 	feeBumpTx, err := tw.prepareForSubmission(ctx, txJob)
 	if err != nil {
+		if errors.Is(err, ErrTransactionHandled) {
+			return nil
+		}
 		return fmt.Errorf("preparing bundle for processing: %w", err)
 	}
 
@@ -397,7 +421,7 @@ func (tw *TransactionWorker) validateJob(txJob *TxJob) error {
 func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
 	feeBumpTx, err := tw.buildAndSignTransaction(ctx, txJob)
 	if err != nil {
-		return nil, fmt.Errorf("building transaction: %w", err)
+		return nil, err
 	}
 
 	innerTx := feeBumpTx.InnerTransaction()
@@ -435,17 +459,12 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
-		return nil, utils.NewHorizonErrorWrapper(err)
+		return nil, tw.handlePreparationError(ctx, txJob, err)
 	}
 
 	innerTx, err := tw.txHandler.BuildInnerTransaction(ctx, txJob, horizonAccount.Sequence, distributionAccount.Address)
 	if err != nil {
-		var hErr *utils.HorizonErrorWrapper
-		if errors.As(err, &hErr) {
-			return nil, hErr
-		}
-		// TODO(philip): handle RPC errors
-		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
+		return nil, tw.handlePreparationError(ctx, txJob, err)
 	}
 
 	// Sign tx for the channel account:
@@ -482,7 +501,8 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {
 	resp, err := tw.engine.HorizonClient.SubmitFeeBumpTransactionWithOptions(feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
-		err = tw.handleFailedTransaction(ctx, txJob, resp, utils.NewHorizonErrorWrapper(err))
+		txErr := utils.NewHorizonErrorWrapper(err)
+		err = tw.handleFailedTransaction(ctx, txJob, resp, txErr)
 		if err != nil {
 			return fmt.Errorf("handling failed transaction: %w", err)
 		}
@@ -509,4 +529,31 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 	txJob.Transaction = *updatedTx
 
 	return nil
+}
+
+// handlePreparationError processes errors during transaction preparation and determines if they need special handling.
+// Returns ErrTransactionHandled if the error was handled, otherwise returns the original error.
+func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *TxJob, err error) error {
+	// Check if it's a Horizon error
+	var hErr *utils.HorizonErrorWrapper
+	if errors.As(err, &hErr) && hErr.IsHorizonError() {
+		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, hErr)
+		if handlerErr != nil {
+			return fmt.Errorf("handling horizon error: %w", handlerErr)
+		}
+		return ErrTransactionHandled
+	}
+
+	// Check if it's an RPC error
+	var rpcErr *utils.RPCErrorWrapper
+	if errors.As(err, &rpcErr) && rpcErr.IsRPCError() {
+		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, rpcErr)
+		if handlerErr != nil {
+			return fmt.Errorf("handling rpc error: %w", handlerErr)
+		}
+		return ErrTransactionHandled
+	}
+
+	// For other errors, return as-is without special handling
+	return err
 }
