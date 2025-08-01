@@ -54,58 +54,59 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 }
 
 type ServeOptions struct {
-	Environment                           string
-	GitCommit                             string
-	Port                                  int
-	Version                               string
-	InstanceName                          string
-	MonitorService                        monitor.MonitorServiceInterface
-	MtnDBConnectionPool                   db.DBConnectionPool
-	AdminDBConnectionPool                 db.DBConnectionPool
-	TSSDBConnectionPool                   db.DBConnectionPool
-	EC256PrivateKey                       string
-	Models                                *data.Models
-	CorsAllowedOrigins                    []string
-	authManager                           auth.AuthManager
-	EmailMessengerClient                  message.MessengerClient
-	MessageDispatcher                     message.MessageDispatcherInterface
-	SEP24JWTSecret                        string
-	sep24JWTManager                       *anchorplatform.JWTManager
-	BaseURL                               string
-	ResetTokenExpirationHours             int
-	NetworkPassphrase                     string
-	NetworkType                           utils.NetworkType
-	SubmitterEngine                       engine.SubmitterEngine
-	Sep10SigningPublicKey                 string
-	Sep10SigningPrivateKey                string
-	EnableEmbeddedWallets                 bool
-	EmbeddedWalletsWasmHash               string
-	EmbeddedWalletsRecoveryAddress        string
-	EnableSep45                           bool
-	Sep45ContractId                       string
-	RpcConfig                             stellar.RPCOptions
-	AnchorPlatformBaseSepURL              string
-	AnchorPlatformBasePlatformURL         string
-	AnchorPlatformOutgoingJWTSecret       string
-	AnchorPlatformAPIService              anchorplatform.AnchorPlatformAPIServiceInterface
-	CrashTrackerClient                    crashtracker.CrashTrackerClient
-	ReCAPTCHASiteKey                      string
-	ReCAPTCHASiteSecretKey                string
-	DisableMFA                            bool
-	DisableReCAPTCHA                      bool
-	DisableInitialDisbursementInvitations bool
-	PasswordValidator                     *authUtils.PasswordValidator
-	EnableScheduler                       bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
-	tenantManager                         tenant.ManagerInterface
-	DistributionAccountService            services.DistributionAccountServiceInterface
-	DistAccEncryptionPassphrase           string
-	EventProducer                         events.Producer
-	MaxInvitationResendAttempts           int
-	SingleTenantMode                      bool
-	CircleService                         circle.ServiceInterface
-	CircleAPIType                         circle.APIType
-	BridgeService                         bridge.ServiceInterface
-	EmbeddedWalletService                 services.EmbeddedWalletServiceInterface
+	Environment                             string
+	GitCommit                               string
+	Port                                    int
+	Version                                 string
+	InstanceName                            string
+	MonitorService                          monitor.MonitorServiceInterface
+	MtnDBConnectionPool                     db.DBConnectionPool
+	AdminDBConnectionPool                   db.DBConnectionPool
+	TSSDBConnectionPool                     db.DBConnectionPool
+	EC256PrivateKey                         string
+	Models                                  *data.Models
+	CorsAllowedOrigins                      []string
+	authManager                             auth.AuthManager
+	EmailMessengerClient                    message.MessengerClient
+	MessageDispatcher                       message.MessageDispatcherInterface
+	SEP24JWTSecret                          string
+	sep24JWTManager                         *anchorplatform.JWTManager
+	BaseURL                                 string
+	ResetTokenExpirationHours               int
+	NetworkPassphrase                       string
+	NetworkType                             utils.NetworkType
+	SubmitterEngine                         engine.SubmitterEngine
+	Sep10SigningPublicKey                   string
+	Sep10SigningPrivateKey                  string
+	EnableEmbeddedWallets                   bool
+	EmbeddedWalletsWasmHash                 string
+	EmbeddedWalletsRecoveryAddress          string
+	EmbeddedWalletsRecoveryMasterPrivateKey string
+	EnableSep45                             bool
+	Sep45ContractId                         string
+	RpcConfig                               stellar.RPCOptions
+	AnchorPlatformBaseSepURL                string
+	AnchorPlatformBasePlatformURL           string
+	AnchorPlatformOutgoingJWTSecret         string
+	AnchorPlatformAPIService                anchorplatform.AnchorPlatformAPIServiceInterface
+	CrashTrackerClient                      crashtracker.CrashTrackerClient
+	ReCAPTCHASiteKey                        string
+	ReCAPTCHASiteSecretKey                  string
+	DisableMFA                              bool
+	DisableReCAPTCHA                        bool
+	DisableInitialDisbursementInvitations   bool
+	PasswordValidator                       *authUtils.PasswordValidator
+	EnableScheduler                         bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
+	tenantManager                           tenant.ManagerInterface
+	DistributionAccountService              services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase             string
+	EventProducer                           events.Producer
+	MaxInvitationResendAttempts             int
+	SingleTenantMode                        bool
+	CircleService                           circle.ServiceInterface
+	CircleAPIType                           circle.APIType
+	BridgeService                           bridge.ServiceInterface
+	EmbeddedWalletService                   services.EmbeddedWalletServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -203,6 +204,12 @@ func (opts *ServeOptions) ValidateRpc() error {
 		}
 		if !strkey.IsValidEd25519PublicKey(opts.EmbeddedWalletsRecoveryAddress) {
 			return fmt.Errorf("embedded wallets recovery address %q is not a valid ed25519 public key", opts.EmbeddedWalletsRecoveryAddress)
+		}
+		if opts.EmbeddedWalletsRecoveryMasterPrivateKey == "" {
+			return fmt.Errorf("embedded wallets recovery master private key must be set when embedded wallets are enabled")
+		}
+		if !strkey.IsValidEd25519SecretSeed(opts.EmbeddedWalletsRecoveryMasterPrivateKey) {
+			return fmt.Errorf("embedded wallets recovery master private key %q is not a valid ed25519 secret seed", utils.TruncateString(opts.EmbeddedWalletsRecoveryMasterPrivateKey, 4))
 		}
 	}
 
@@ -586,6 +593,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Get("/status/{token}", walletCreationHandler.GetWalletStatus)
 				})
 
+				cosignRecoveryHandler := httphandler.CosignRecoveryHandler{
+					Models:            o.Models,
+					RotationSecretKey: o.EmbeddedWalletsRecoveryMasterPrivateKey,
+					NetworkPassphrase: o.NetworkPassphrase,
+				}
 				// Write operations
 				r.With(middleware.RequirePermission(
 					data.WriteDisbursements,
@@ -593,6 +605,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				)).Group(func(r chi.Router) {
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Post("/resend-invite", walletCreationHandler.ResendInvite)
+					r.Post("/{contractAddress}/cosign-recovery", cosignRecoveryHandler.CosignRecovery)
 				})
 			})
 		}

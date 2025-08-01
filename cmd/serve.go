@@ -335,6 +335,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:  false,
 		},
 		cmdUtils.EmbeddedWalletsRecoveryAddress(&serveOpts.EmbeddedWalletsRecoveryAddress),
+		cmdUtils.EmbeddedWalletsRecoveryMasterPrivateKey(&serveOpts.EmbeddedWalletsRecoveryMasterPrivateKey),
 		{
 			Name:        "enable-sep45",
 			Usage:       "Enable SEP-45 web authentication features that require Stellar RPC integration",

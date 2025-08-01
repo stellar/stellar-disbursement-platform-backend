@@ -339,10 +339,11 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 
 	t.Run("embedded wallets enabled with valid configuration: should not return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
-			EnableEmbeddedWallets:          true,
-			EmbeddedWalletsWasmHash:        "abc123",
-			EmbeddedWalletsRecoveryAddress: "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB",
-			RpcConfig:                      stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			EnableEmbeddedWallets:                   true,
+			EmbeddedWalletsWasmHash:                 "abc123",
+			EmbeddedWalletsRecoveryAddress:          "GBNFP7OJDPB3ZWYA4LDPAWC6Z4PSRGH7NAXQ7VQTYSUVKXPW23WIKGLT",
+			EmbeddedWalletsRecoveryMasterPrivateKey: "SDMEBMTSBYLT7ZMVWRSAM5TO26TIQLNGI6DKTBPN6LTFXK46KLOVTM6W",
+			RpcConfig:                               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
 		err := serveOptions.ValidateRpc()
 		require.NoError(t, err)
@@ -360,12 +361,13 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 
 	t.Run("both features enabled with valid configuration: should not return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
-			EnableEmbeddedWallets:          true,
-			EmbeddedWalletsWasmHash:        "abc123",
-			EmbeddedWalletsRecoveryAddress: "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB",
-			EnableSep45:                    true,
-			Sep45ContractId:                "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:                      stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			EnableEmbeddedWallets:                   true,
+			EmbeddedWalletsWasmHash:                 "abc123",
+			EmbeddedWalletsRecoveryAddress:          "GBNFP7OJDPB3ZWYA4LDPAWC6Z4PSRGH7NAXQ7VQTYSUVKXPW23WIKGLT",
+			EmbeddedWalletsRecoveryMasterPrivateKey: "SDMEBMTSBYLT7ZMVWRSAM5TO26TIQLNGI6DKTBPN6LTFXK46KLOVTM6W",
+			EnableSep45:                             true,
+			Sep45ContractId:                         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RpcConfig:                               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
 		err := serveOptions.ValidateRpc()
 		require.NoError(t, err)
