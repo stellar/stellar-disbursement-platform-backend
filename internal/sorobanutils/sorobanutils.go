@@ -38,7 +38,6 @@ func CreateContractInvocationOp(opts InvokeContractOptions) (txnbuild.InvokeHost
 
 	return txnbuild.InvokeHostFunction{
 		SourceAccount: opts.OpSourceAccount,
-		// The HostFunction must be constructed using `xdr` objects, unlike other operations that utilize `txnbuild` objects or native Go types.
 		HostFunction: xdr.HostFunction{
 			Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
 			InvokeContract: &xdr.InvokeContractArgs{
