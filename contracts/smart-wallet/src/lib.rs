@@ -44,17 +44,9 @@ pub struct AccountContract;
 
 #[contractimpl]
 impl AccountContract {
-    pub fn __constructor(env: Env, admin: Address, public_key: BytesN<65>, recovery: Address) {
-        env.storage().instance().set(&DataKey::Admin, &admin);
+    pub fn __constructor(env: Env, public_key: BytesN<65>, recovery: Address) {
         env.storage().instance().set(&DataKey::Signer, &public_key);
         env.storage().instance().set(&DataKey::Recovery, &recovery);
-    }
-
-    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-        admin.require_auth();
-
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }
 
