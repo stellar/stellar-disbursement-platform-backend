@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.7.3](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.3) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.2...3.7.3))
+
+### Fixed
+- Fix balance calculation for resumed disbursements by subtracting amount already disbursed. [#787](https://github.com/stellar/stellar-disbursement-platform-backend/pull/787)
+
 ## [3.7.2](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.2) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.1...3.7.2))
 
 ### Added
