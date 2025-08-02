@@ -25,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -1496,6 +1497,108 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 				require.ErrorContains(t, err, tc.expectedErrContains)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func Test_DisbursementManagementService_validateBalanceForDisbursement_AmountDisbursed(t *testing.T) {
+	ctx := context.Background()
+	models := data.SetupModels(t)
+	dbConnectionPool := models.DBConnectionPool
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	// Create a distribution account
+	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
+	stellarDistAccount := schema.NewStellarEnvTransactionAccount(distributionAccPubKey)
+
+	testCases := []struct {
+		name                string
+		totalAmount         string
+		amountDisbursed     string
+		availableBalance    float64
+		expectedErrContains string
+		description         string
+	}{
+		{
+			name:             "🟢 New disbursement: empty AmountDisbursed",
+			totalAmount:      "100.00",
+			amountDisbursed:  "",
+			availableBalance: 150.00,
+			description:      "New disbursement with empty AmountDisbursed should use full TotalAmount",
+		},
+		{
+			name:             "🟢 Resumed disbursement: sufficient balance for remaining amount",
+			totalAmount:      "100.00",
+			amountDisbursed:  "60.00",
+			availableBalance: 50.00, // More than remaining 40.00
+			description:      "Resumed disbursement should subtract AmountDisbursed from TotalAmount",
+		},
+		{
+			name:                "🔴 Resumed disbursement: insufficient balance for remaining amount",
+			totalAmount:         "100.00",
+			amountDisbursed:     "60.00",
+			availableBalance:    30.00, // Less than remaining 40.00
+			expectedErrContains: "insufficient to fulfill new amount (40.00)",
+			description:         "Resumed disbursement should fail when balance < remaining amount",
+		},
+		{
+			name:             "🟢 Resumed disbursement: zero remaining (fully disbursed)",
+			totalAmount:      "100.00",
+			amountDisbursed:  "100.00",
+			availableBalance: 1.00, // Any amount should work when remaining is 0
+			description:      "Fully disbursed amount should result in 0 remaining amount needed",
+		},
+		{
+			name:                "🔴 Invalid AmountDisbursed format",
+			totalAmount:         "100.00",
+			amountDisbursed:     "invalid",
+			availableBalance:    150.00,
+			expectedErrContains: "cannot convert amount disbursed invalid",
+			description:         "Invalid AmountDisbursed should return parse error",
+		},
+		{
+			name:             "🟢 AmountDisbursed with decimal precision",
+			totalAmount:      "100.50",
+			amountDisbursed:  "60.25",
+			availableBalance: 50.00, // More than remaining 40.25
+			description:      "Should handle decimal precision correctly",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create disbursement with test data
+			disbursement := &data.Disbursement{
+				ID:    "test-disbursement-id",
+				Asset: asset,
+				DisbursementStats: &data.DisbursementStats{
+					TotalAmount:     tc.totalAmount,
+					AmountDisbursed: tc.amountDisbursed,
+				},
+			}
+
+			dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
+
+			mDistAccService := mocks.NewMockDistributionAccountService(t)
+			mDistAccService.
+				On("GetBalance", ctx, &stellarDistAccount, *asset).
+				Return(tc.availableBalance, nil).
+				Once()
+
+			svc := &DisbursementManagementService{
+				Models:                     models,
+				DistributionAccountService: mDistAccService,
+			}
+
+			err := svc.validateBalanceForDisbursement(ctx, dbTx, &stellarDistAccount, disbursement)
+
+			if tc.expectedErrContains != "" {
+				require.Error(t, err, "Expected error for case: %s", tc.description)
+				assert.Contains(t, err.Error(), tc.expectedErrContains, "Error message should contain expected text for case: %s", tc.description)
+			} else {
+				assert.NoError(t, err, "Expected success for case: %s", tc.description)
 			}
 		})
 	}
