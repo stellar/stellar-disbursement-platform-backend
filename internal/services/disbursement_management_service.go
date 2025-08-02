@@ -341,6 +341,19 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 		)
 	}
 
+	if disbursement.AmountDisbursed != "" {
+		amountDisbursed, parseErr := strconv.ParseFloat(disbursement.AmountDisbursed, 64)
+		if parseErr != nil {
+			return fmt.Errorf(
+				"cannot convert amount disbursed %s for disbursement id %s into float: %w",
+				disbursement.AmountDisbursed,
+				disbursement.ID,
+				parseErr,
+			)
+		}
+		disbursementAmount -= amountDisbursed
+	}
+
 	totalPendingAmount := 0.0
 	incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 		Filters: map[data.FilterKey]interface{}{
