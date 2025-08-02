@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -272,11 +273,7 @@ func Test_ReceiverVerificationModel_UpdateVerificationValue(t *testing.T) {
 }
 
 func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -291,7 +288,7 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 	t.Run("upserts the verification value successfully", func(t *testing.T) {
 		// Inserts the verification value
 		firstVerificationValue := "123456"
-		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, "my-user-id", receiver.ID, VerificationTypePin, firstVerificationValue)
+		err := receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, "my-user-id", receiver.ID, VerificationTypePin, firstVerificationValue)
 		require.NoError(t, err)
 
 		initialRV := getReceiverVerification(t, ctx, dbConnectionPool, receiver.ID, VerificationTypePin)
@@ -349,6 +346,39 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 		assert.False(t, verified)
 		// Checking if the hashed value is equal the updated verification value
 		verified = CompareVerificationValue(finalRV.HashedValue, newVerificationValue)
+		assert.True(t, verified)
+	})
+
+	t.Run("resets attempts to 0 when upserting verification values", func(t *testing.T) {
+		// Insert initial verification value
+		firstVerificationValue := "1985-05-15"
+		err := receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, "user-id", receiver.ID, VerificationTypeDateOfBirth, firstVerificationValue)
+		require.NoError(t, err)
+
+		// Simulate failed attempts by updating the attempts count directly
+		const updateAttemptsQuery = `
+			UPDATE receiver_verifications 
+			SET attempts = $1 
+			WHERE receiver_id = $2 AND verification_field = $3
+		`
+		_, err = dbConnectionPool.ExecContext(ctx, updateAttemptsQuery, 5, receiver.ID, VerificationTypeDateOfBirth)
+		require.NoError(t, err)
+
+		// Verify attempts were set to 5
+		initialRV := getReceiverVerification(t, ctx, dbConnectionPool, receiver.ID, VerificationTypeDateOfBirth)
+		assert.Equal(t, 5, initialRV.Attempts)
+
+		// Upsert with new verification value
+		newVerificationValue := "1985-12-25"
+		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, "user-id", receiver.ID, VerificationTypeDateOfBirth, newVerificationValue)
+		require.NoError(t, err)
+
+		// Verify attempts were reset to 0
+		finalRV := getReceiverVerification(t, ctx, dbConnectionPool, receiver.ID, VerificationTypeDateOfBirth)
+		assert.Equal(t, 0, finalRV.Attempts)
+
+		// Verify the verification value was updated correctly
+		verified := CompareVerificationValue(finalRV.HashedValue, newVerificationValue)
 		assert.True(t, verified)
 	})
 }

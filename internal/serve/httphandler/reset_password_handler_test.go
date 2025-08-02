@@ -123,7 +123,29 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		expectedBody := `{"error": "invalid reset password token"}`
+		expectedBody := `{"error": "Invalid reset password token."}`
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, expectedBody, string(respBody))
+	})
+
+	t.Run("Should return an error with an expired token", func(t *testing.T) {
+		requestBody := `{"password":"!1Az?2By.3Cx","reset_token":"expiredtoken"}`
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))
+
+		authenticatorMock.
+			On("ResetPassword", req.Context(), "expiredtoken", "!1Az?2By.3Cx").
+			Return(auth.ErrExpiredResetPasswordToken).
+			Once()
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		expectedBody := `{"error": "Reset password token expired, please request a new token through the forgot password flow."}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, expectedBody, string(respBody))
 	})

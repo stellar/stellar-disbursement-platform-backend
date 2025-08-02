@@ -12,6 +12,7 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -487,6 +488,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		cmdUtils.SchedulerConfigOptions(&schedulerOpts)...,
 	)
 
+	// bridge integration options
+	bridgeIntegrationOpts := cmdUtils.BridgeIntegrationOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.BridgeIntegrationConfigOptions(&bridgeIntegrationOpts)...,
+	)
+
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the Stellar Disbursement Platform API",
@@ -641,6 +649,27 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)
 			}
 			serveOpts.CircleService = circleService
+
+			if err = bridgeIntegrationOpts.ValidateFlags(); err != nil {
+				log.Ctx(ctx).Fatalf("error validating Bridge integration options: %v", err)
+			}
+
+			if bridgeIntegrationOpts.EnableBridgeIntegration {
+				bridgeModels, brErr := data.NewModels(mtnDBConnectionPool)
+				if brErr != nil {
+					log.Ctx(ctx).Fatalf("error creating models for Bridge service: %v", brErr)
+				}
+				bridgeService, brErr := bridge.NewService(bridge.ServiceOptions{
+					BaseURL: bridgeIntegrationOpts.BridgeBaseURL,
+					APIKey:  bridgeIntegrationOpts.BridgeAPIKey,
+					Models:  bridgeModels,
+				})
+				if brErr != nil {
+					log.Ctx(ctx).Fatalf("error creating Bridge service: %v", brErr)
+				}
+				serveOpts.BridgeService = bridgeService
+				log.Ctx(ctx).Infof("🌉 Bridge integration is enabled for base URL %s", bridgeIntegrationOpts.BridgeBaseURL)
+			}
 
 			// Setup Distribution Account Service
 			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{

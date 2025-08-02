@@ -40,7 +40,7 @@ echo "====> ✅Step 2: finishing build"
 echo $DIVIDER
 echo "====> 👀Step 3: copy DB dump to container and restore it into the newly created database"
 docker cp ../resources/single_tenant_dump.sql e2e-sdp-v2-database:/tmp/single_tenant_dump.sql
-docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -f /tmp/single_tenant_dump.sql"
+docker exec e2e-sdp-v2-database sh -c "psql -d $DATABASE_URL -f /tmp/single_tenant_dump.sql"
 echo "====> ✅Step 3: finish copying and restoring DB dump"
 
 echo $DIVIDER
@@ -82,12 +82,12 @@ fi
 
 echo $DIVIDER
 echo "====> 👀Step 5: run migration"
-docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -c \"SELECT admin.migrate_tenant_data_from_v1_to_v2('migrated-tenant');\""
+docker exec e2e-sdp-v2-database sh -c "psql -d $DATABASE_URL -c \"SELECT admin.migrate_tenant_data_from_v1_to_v2('migrated-tenant');\"" 
 echo "====> ✅Step 5: run migration"
 
 echo $DIVIDER
 echo "====> 👀Step 6: exclude deprecated tables"
-docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -c \"
+docker exec e2e-sdp-v2-database sh -c "psql -d $DATABASE_URL -c \"
   BEGIN TRANSACTION;
     DROP TABLE public.messages CASCADE;
     DROP TABLE public.payments CASCADE;

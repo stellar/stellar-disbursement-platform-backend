@@ -122,7 +122,7 @@ for config_name in "${options[@]}"; do
   # Create integration test data
   echo $DIVIDER
   echo "====> 👀Step 3: provision new tenant and populate new asset and test wallet on database"
-  docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
+  docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests create-data"
   echo "====> ✅Step 3: finish creating integration test data ($DESCRIPTION)"
 
   # Restart anchor platform container
@@ -137,7 +137,7 @@ for config_name in "${options[@]}"; do
   # Run integration tests
   echo $DIVIDER
   echo "====> 👀Step 5: run integration tests command"
-  docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests start"
+  docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
   echo "====> ✅Step 5: finish running integration test data ($DESCRIPTION)"
 
   # Cleanup container and volumes

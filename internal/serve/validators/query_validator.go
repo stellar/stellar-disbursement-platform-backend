@@ -38,12 +38,18 @@ func (qv *QueryValidator) ParseParametersFromRequest(r *http.Request) *data.Quer
 		qv.AddError("direction", "invalid sort order. valid values are 'asc' and 'desc'")
 	}
 
-	filters := make(map[data.FilterKey]interface{})
+	filters := make(map[data.FilterKey]any)
 	for _, fk := range qv.AllowedFilters {
 		value := strings.TrimSpace(query.Get(string(fk)))
 		if value != "" {
 			filters[fk] = value
 		}
+	}
+
+	ok := slices.Contains(qv.AllowedFilters, data.FilterKeyPaymentType)
+
+	if paymentType := query.Get("type"); ok && paymentType != "" {
+		filters[data.FilterKeyPaymentType] = paymentType
 	}
 
 	if qv.HasErrors() {

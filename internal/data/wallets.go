@@ -40,7 +40,17 @@ type WalletInsert struct {
 	Homepage          string   `db:"homepage"`
 	SEP10ClientDomain string   `db:"sep_10_client_domain"`
 	DeepLinkSchema    string   `db:"deep_link_schema"`
+	Enabled           bool     `db:"enabled"`
 	AssetsIDs         []string `db:"assets_ids"`
+}
+
+type WalletUpdate struct {
+	Name              *string   `db:"name"`
+	Homepage          *string   `db:"homepage"`
+	SEP10ClientDomain *string   `db:"sep_10_client_domain"`
+	DeepLinkSchema    *string   `db:"deep_link_schema"`
+	Enabled           *bool     `db:"enabled"`
+	AssetsIDs         *[]string `db:"assets_ids"`
 }
 
 type WalletAssets []Asset
@@ -131,19 +141,14 @@ func (wm *WalletModel) GetByWalletName(ctx context.Context, name string) (*Walle
 }
 
 const (
-	FilterEnabledWallets FilterKey = "enabled"
-	FilterUserManaged    FilterKey = "user_managed"
+	FilterEnabledWallets  FilterKey = "enabled"
+	FilterUserManaged     FilterKey = "user_managed"
+	FilterSupportedAssets FilterKey = "supported_assets"
 )
 
 // FindWallets returns wallets filtering by enabled status.
 func (wm *WalletModel) FindWallets(ctx context.Context, filters ...Filter) ([]Wallet, error) {
-	qb := NewQueryBuilder(getQuery)
-	for _, filter := range filters {
-		qb.AddCondition(filter.Key.Equals(), filter.Value)
-	}
-	qb.AddGroupBy("w.id")
-	qb.AddSorting(SortFieldName, SortOrderASC, "w")
-	query, args := qb.BuildAndRebind(wm.dbConnectionPool)
+	query, args := newWalletQuery(getQuery, wm.dbConnectionPool, filters...)
 
 	wallets := []Wallet{}
 	err := wm.dbConnectionPool.SelectContext(ctx, &wallets, query, args...)
@@ -151,6 +156,38 @@ func (wm *WalletModel) FindWallets(ctx context.Context, filters ...Filter) ([]Wa
 		return nil, fmt.Errorf("querying wallets: %w", err)
 	}
 	return wallets, nil
+}
+
+func newWalletQuery(baseQuery string, sqlExec db.SQLExecuter, filters ...Filter) (string, []any) {
+	qb := NewQueryBuilder(baseQuery)
+
+	for _, filter := range filters {
+		switch filter.Key {
+		case FilterEnabledWallets:
+			qb.AddCondition("w.enabled = ?", filter.Value)
+		case FilterUserManaged:
+			qb.AddCondition("w.user_managed = ?", filter.Value)
+		case FilterSupportedAssets:
+			if assets, ok := filter.Value.([]string); ok && len(assets) > 0 {
+				// Filter wallets that support all specified assets
+				assetCondition := `w.id IN (
+					SELECT wa.wallet_id 
+					FROM wallets_assets wa 
+					JOIN assets a ON wa.asset_id = a.id 
+					WHERE a.code = ANY(?) OR a.id = ANY(?)
+					GROUP BY wa.wallet_id 
+					HAVING COUNT(DISTINCT a.id) = ?
+				)`
+				qb.AddCondition(assetCondition, pq.Array(assets), pq.Array(assets), len(assets))
+			}
+		default:
+			qb.AddCondition(filter.Key.Equals(), filter.Value)
+		}
+	}
+
+	qb.AddGroupBy("w.id")
+	qb.AddSorting(SortFieldName, SortOrderASC, "w")
+	return qb.BuildAndRebind(sqlExec)
 }
 
 // GetAll returns all wallets in the database
@@ -163,13 +200,13 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 		const query = `
 			WITH new_wallet AS (
 				INSERT INTO wallets
-					(name, homepage, deep_link_schema, sep_10_client_domain)
+					(name, homepage, deep_link_schema, sep_10_client_domain, enabled)
 				VALUES
-					($1, $2, $3, $4)
+					($1, $2, $3, $4, $5)
 				RETURNING
 					*
 			), assets_cte AS (
-				SELECT UNNEST($5::text[]) id
+				SELECT UNNEST($6::text[]) id
 			), new_wallet_assets AS (
 				INSERT INTO wallets_assets
 					(wallet_id, asset_id)
@@ -183,12 +220,11 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 		`
 
 		var w Wallet
-		err := dbTx.GetContext(
+		if err := dbTx.GetContext(
 			ctx, &w, query,
-			newWallet.Name, newWallet.Homepage, newWallet.DeepLinkSchema, newWallet.SEP10ClientDomain,
+			newWallet.Name, newWallet.Homepage, newWallet.DeepLinkSchema, newWallet.SEP10ClientDomain, newWallet.Enabled,
 			pq.Array(newWallet.AssetsIDs),
-		)
-		if err != nil {
+		); err != nil {
 			if pqError, ok := err.(*pq.Error); ok {
 				constraintErrMap := map[string]error{
 					"wallets_assets_asset_id_fkey": ErrInvalidAssetID,
@@ -289,24 +325,100 @@ func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet,
 	return &wallet, nil
 }
 
-func (wm *WalletModel) Update(ctx context.Context, walletID string, enabled bool) (*Wallet, error) {
-	const query = `
-		UPDATE
-			wallets
-		SET
-			enabled = $1
-		WHERE
-			id = $2
-		RETURNING *
-	`
-	var wallet Wallet
-	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, enabled, walletID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
+func (wm *WalletModel) Update(ctx context.Context, walletID string, update WalletUpdate) (*Wallet, error) {
+	wallet, err := db.RunInTransactionWithResult(ctx, wm.dbConnectionPool, nil, func(dbTx db.DBTransaction) (*Wallet, error) {
+		var setClauses []string
+		var args []any
+
+		if update.Name != nil {
+			setClauses = append(setClauses, "name = ?")
+			args = append(args, *update.Name)
 		}
-		return nil, fmt.Errorf("updating wallet enabled status: %w", err)
+		if update.Homepage != nil {
+			setClauses = append(setClauses, "homepage = ?")
+			args = append(args, *update.Homepage)
+		}
+		if update.SEP10ClientDomain != nil {
+			setClauses = append(setClauses, "sep_10_client_domain = ?")
+			args = append(args, *update.SEP10ClientDomain)
+		}
+		if update.DeepLinkSchema != nil {
+			setClauses = append(setClauses, "deep_link_schema = ?")
+			args = append(args, *update.DeepLinkSchema)
+		}
+		if update.Enabled != nil {
+			setClauses = append(setClauses, "enabled = ?")
+			args = append(args, *update.Enabled)
+		}
+
+		if len(setClauses) == 0 && update.AssetsIDs == nil {
+			return nil, fmt.Errorf("no fields provided for update")
+		}
+
+		var w Wallet
+		if len(setClauses) > 0 {
+			setClauses = append(setClauses, "updated_at = NOW()")
+			query := dbTx.Rebind(fmt.Sprintf(`
+				UPDATE wallets 
+				SET %s
+				WHERE id = ? AND deleted_at IS NULL
+				RETURNING *
+			`, strings.Join(setClauses, ", ")))
+
+			args = append(args, walletID)
+
+			if err := dbTx.GetContext(ctx, &w, query, args...); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil, ErrRecordNotFound
+				}
+				if pqError, ok := err.(*pq.Error); ok {
+					constraintErrMap := map[string]error{
+						"wallets_name_key":             ErrWalletNameAlreadyExists,
+						"wallets_homepage_key":         ErrWalletHomepageAlreadyExists,
+						"wallets_deep_link_schema_key": ErrWalletDeepLinkSchemaAlreadyExists,
+					}
+
+					if mappedErr, ok := constraintErrMap[pqError.Constraint]; ok {
+						return nil, mappedErr
+					}
+				}
+				return nil, fmt.Errorf("updating wallet: %w", err)
+			}
+		} else {
+			const q = "SELECT * FROM wallets WHERE id = $1 AND deleted_at IS NULL"
+			if err := dbTx.GetContext(ctx, &w, q, walletID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil, ErrRecordNotFound
+				}
+				return nil, fmt.Errorf("getting wallet: %w", err)
+			}
+		}
+
+		if update.AssetsIDs != nil {
+			if _, err := dbTx.ExecContext(ctx, "DELETE FROM wallets_assets WHERE wallet_id = $1", walletID); err != nil {
+				return nil, fmt.Errorf("deleting existing wallet assets: %w", err)
+			}
+
+			if len(*update.AssetsIDs) > 0 {
+				const q = `
+					INSERT INTO wallets_assets (wallet_id, asset_id)
+					SELECT $1, UNNEST($2::text[])
+					ON CONFLICT DO NOTHING
+				`
+				if _, err := dbTx.ExecContext(ctx, q, walletID, pq.Array(*update.AssetsIDs)); err != nil {
+					if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "wallets_assets_asset_id_fkey" {
+						return nil, ErrInvalidAssetID
+					}
+					return nil, fmt.Errorf("inserting new wallet assets: %w", err)
+				}
+			}
+		}
+
+		return &w, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return &wallet, nil
+	return wm.Get(ctx, wallet.ID)
 }
