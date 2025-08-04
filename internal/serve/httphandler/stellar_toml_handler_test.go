@@ -77,6 +77,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				NetworkPassphrase:        network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -96,6 +97,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				NetworkPassphrase:        network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -114,6 +116,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				NetworkPassphrase:        network.TestNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -133,6 +136,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				NetworkPassphrase:        network.TestNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -319,6 +323,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
+			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
 
 		r := chi.NewRouter()
@@ -370,6 +375,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
+			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
 
 		r := chi.NewRouter()
@@ -422,6 +428,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
 			InstanceName:                "SDP Pubnet",
+			BaseURL:                     "https://instance.example.com",
 		}
 
 		r := chi.NewRouter()

@@ -149,7 +149,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	// Determine allow retry based on network passphrase
-	allowHttpRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
+	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
 
 	sep10Service, err := services.NewSEP10Service(
 		sep24JWTManager,
@@ -157,7 +157,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 		opts.Sep10SigningPrivateKey,
 		opts.BaseURL,
 		opts.Models,
-		allowHttpRetry,
+		allowHTTPRetry,
 		horizonClient,
 	)
 	if err != nil {
@@ -659,6 +659,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
 			InstanceName:                o.InstanceName,
+			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
 
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
