@@ -623,6 +623,7 @@ func TestSEP10Service_GenerateToken(t *testing.T) {
 			kp.Address(),
 			"caliban.imperium.com",
 			nil,
+			"test-client-domain",
 		)
 		require.NoError(t, err)
 		assert.NotNil(t, resp)
