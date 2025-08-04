@@ -1,22 +1,27 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -35,6 +40,9 @@ type sep10Service struct {
 	AuthTimeout         time.Duration
 	BaseURL             string
 	Models              *data.Models
+	AllowHTTPRetry      bool
+	HTTPClient          httpclient.HttpClientInterface
+	HorizonClient       horizonclient.ClientInterface
 }
 
 type ChallengeRequest struct {
@@ -44,6 +52,32 @@ type ChallengeRequest struct {
 	ClientDomain string `json:"client_domain,omitempty" query:"client_domain"`
 }
 
+func (req *ChallengeRequest) Validate() error {
+	if req.Account == "" {
+		return fmt.Errorf("account is required")
+	}
+
+	if !strkey.IsValidEd25519PublicKey(req.Account) {
+		return fmt.Errorf("invalid account not a valid ed25519 public key")
+	}
+
+	if req.ClientDomain == "" {
+		return fmt.Errorf("client_domain is required")
+	}
+
+	if req.Memo != "" {
+		memo, err := schema.NewMemo(schema.MemoTypeID, req.Memo)
+		if err != nil {
+			return fmt.Errorf("invalid memo must be a positive integer")
+		}
+		if _, ok := memo.(txnbuild.MemoID); !ok {
+			return fmt.Errorf("invalid memo type")
+		}
+	}
+
+	return nil
+}
+
 type ChallengeResponse struct {
 	Transaction       string `json:"transaction"`
 	NetworkPassphrase string `json:"network_passphrase"`
@@ -51,6 +85,13 @@ type ChallengeResponse struct {
 
 type ValidationRequest struct {
 	Transaction string `json:"transaction" form:"transaction"`
+}
+
+func (req *ValidationRequest) Validate() error {
+	if req.Transaction == "" {
+		return fmt.Errorf("transaction is required")
+	}
+	return nil
 }
 
 type ValidationResponse struct {
@@ -63,6 +104,8 @@ func NewSEP10Service(
 	sep10SigningPrivateKey string,
 	baseURL string,
 	models *data.Models,
+	allowHTTPRetry bool,
+	horizonClient horizonclient.ClientInterface,
 ) (SEP10Service, error) {
 	kp, err := keypair.ParseFull(sep10SigningPrivateKey)
 	if err != nil {
@@ -77,14 +120,13 @@ func NewSEP10Service(
 		AuthTimeout:         time.Minute * 15,
 		BaseURL:             baseURL,
 		Models:              models,
+		AllowHTTPRetry:      allowHTTPRetry,
+		HTTPClient:          httpclient.DefaultClient(),
+		HorizonClient:       horizonClient,
 	}, nil
 }
 
 func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error) {
-	if !strkey.IsValidEd25519PublicKey(req.Account) {
-		return nil, fmt.Errorf("invalid account not a valid ed25519 public key")
-	}
-
 	webAuthDomain := s.getWebAuthDomain(ctx)
 
 	if req.HomeDomain == "" {
@@ -98,26 +140,26 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		return nil, fmt.Errorf("invalid home_domain must match %s", s.getBaseDomain())
 	}
 
-	if req.ClientDomain != "" {
-		if err := s.validateClientDomain(ctx, req.ClientDomain); err != nil {
-			return nil, fmt.Errorf("invalid client_domain %w", err)
-		}
+	// Validate account first
+	if _, err := xdr.AddressToAccountId(req.Account); err != nil {
+		return nil, fmt.Errorf("%s is not a valid account id", req.Account)
+	}
+
+	// Fetch signing key from client domain
+	clientSigningKey, err := s.fetchSigningKeyFromClientDomain(req.ClientDomain)
+	if err != nil {
+		return nil, fmt.Errorf("fetching client domain signing key: %w", err)
 	}
 
 	var memoParam *txnbuild.MemoID
 	if req.Memo != "" {
-		memo, err := schema.NewMemo(schema.MemoTypeID, req.Memo)
-		if err != nil {
-			return nil, fmt.Errorf("invalid memo must be a positive integer")
-		}
+		memo, _ := schema.NewMemo(schema.MemoTypeID, req.Memo)
 		if memoID, ok := memo.(txnbuild.MemoID); ok {
 			memoParam = &memoID
-		} else {
-			return nil, fmt.Errorf("invalid memo type")
 		}
 	}
 
-	tx, err := s.buildChallengeTx(req.Account, webAuthDomain, req.HomeDomain, req.ClientDomain, memoParam)
+	tx, err := s.buildChallengeTx(req.Account, webAuthDomain, req.HomeDomain, req.ClientDomain, clientSigningKey, memoParam)
 	if err != nil {
 		return nil, fmt.Errorf("building challenge transaction %w", err)
 	}
@@ -134,13 +176,11 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 }
 
 func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error) {
-	if req.Transaction == "" {
-		return nil, fmt.Errorf("transaction is required")
-	}
-
-	allowedHomeDomains := s.getAllowedHomeDomains()
+	allowedHomeDomains := s.getAllowedHomeDomains(ctx)
 	webAuthDomain := s.getWebAuthDomain(ctx)
-	tx, clientAccountID, matchedHomeDomain, memo, err := txnbuild.ReadChallengeTx(
+
+	// Use custom validation instead of the restrictive Go SDK validation
+	tx, clientAccountID, matchedHomeDomain, memo, err := s.validateChallengeCustom(
 		req.Transaction,
 		s.Sep10SigningKeypair.Address(),
 		s.NetworkPassphrase,
@@ -151,74 +191,253 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 		return nil, fmt.Errorf("reading challenge transaction %w", err)
 	}
 
-	clientDomain := s.extractClientDomain(tx)
-	hasClientDomain := clientDomain != ""
-
-	actualSignatures := len(tx.Signatures())
-	expectedSignatures := 2
-	if hasClientDomain {
-		expectedSignatures = 3
-
-		if err := s.validateClientDomain(ctx, clientDomain); err != nil {
-			log.Ctx(ctx).Warnf("Client domain validation failed %v", err)
-			return nil, fmt.Errorf("invalid client_domain in transaction %w", err)
-		}
+	// Fetch account from Horizon to get thresholds
+	account, err := s.fetchAccountFromHorizon(clientAccountID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching account from horizon: %w", err)
 	}
 
-	if actualSignatures != expectedSignatures {
-		return nil, fmt.Errorf("expected %d signatures but found %d (client_domain %v)",
-			expectedSignatures, actualSignatures, hasClientDomain)
-	}
-
-	if err := s.verifySignatures(
+	if err := s.verifySignaturesWithThreshold(
 		req.Transaction,
 		clientAccountID,
 		webAuthDomain,
 		allowedHomeDomains,
-		hasClientDomain,
+		account,
 	); err != nil {
 		return nil, err
 	}
 
-	return s.generateToken(tx, clientAccountID, clientDomain, matchedHomeDomain, memo)
+	return s.generateToken(tx, clientAccountID, matchedHomeDomain, memo)
 }
 
-func (s *sep10Service) verifySignatures(
+// validateChallengeCustom provides custom SEP-10 challenge validation that properly handles client_domain operations
+func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, network, webAuthDomain string, homeDomains []string) (*txnbuild.Transaction, string, string, *txnbuild.MemoID, error) {
+	parsed, err := txnbuild.TransactionFromXDR(challengeTx)
+	if err != nil {
+		return nil, "", "", nil, fmt.Errorf("could not parse challenge: %w", err)
+	}
+
+	tx, isSimple := parsed.Transaction()
+	if !isSimple {
+		return nil, "", "", nil, fmt.Errorf("challenge cannot be a fee bump transaction")
+	}
+
+	if tx.SourceAccount().AccountID != serverAccountID {
+		return nil, "", "", nil, fmt.Errorf("transaction source account is not equal to server's account")
+	}
+
+	if tx.SourceAccount().Sequence != 0 {
+		return nil, "", "", nil, fmt.Errorf("transaction sequence number must be 0")
+	}
+
+	if tx.Timebounds().MaxTime == txnbuild.TimeoutInfinite {
+		return nil, "", "", nil, fmt.Errorf("transaction requires non-infinite timebounds")
+	}
+
+	const gracePeriod = 5 * 60 // seconds
+	currentTime := time.Now().UTC().Unix()
+	if currentTime+gracePeriod < tx.Timebounds().MinTime || currentTime > tx.Timebounds().MaxTime {
+		return nil, "", "", nil, fmt.Errorf("transaction is not within range of the specified timebounds (currentTime=%d, MinTime=%d, MaxTime=%d)",
+			currentTime, tx.Timebounds().MinTime, tx.Timebounds().MaxTime)
+	}
+
+	operations := tx.Operations()
+	if len(operations) < 1 {
+		return nil, "", "", nil, fmt.Errorf("transaction requires at least one manage_data operation")
+	}
+
+	op, ok := operations[0].(*txnbuild.ManageData)
+	if !ok {
+		return nil, "", "", nil, fmt.Errorf("operation type should be manage_data")
+	}
+
+	if op.SourceAccount == "" {
+		return nil, "", "", nil, fmt.Errorf("operation should have a source account")
+	}
+
+	var matchedHomeDomain string
+	for _, homeDomain := range homeDomains {
+		if op.Name == homeDomain+" auth" {
+			matchedHomeDomain = homeDomain
+			break
+		}
+	}
+	if matchedHomeDomain == "" {
+		return nil, "", "", nil, fmt.Errorf("operation key does not match any homeDomains passed (key=%q, homeDomains=%v)", op.Name, homeDomains)
+	}
+
+	clientAccountID := op.SourceAccount
+
+	var memo *txnbuild.MemoID
+	if tx.Memo() != nil {
+		if memoID, ok := tx.Memo().(txnbuild.MemoID); ok {
+			memo = &memoID
+		} else {
+			return nil, "", "", nil, fmt.Errorf("invalid memo, only ID memos are permitted")
+		}
+	}
+
+	nonceB64 := string(op.Value)
+	if len(nonceB64) != 64 {
+		return nil, "", "", nil, fmt.Errorf("random nonce encoded as base64 should be 64 bytes long")
+	}
+	nonceBytes, err := base64.StdEncoding.DecodeString(nonceB64)
+	if err != nil {
+		return nil, "", "", nil, fmt.Errorf("failed to decode random nonce provided in manage_data operation: %w", err)
+	}
+	if len(nonceBytes) != 48 {
+		return nil, "", "", nil, fmt.Errorf("random nonce before encoding as base64 should be 48 bytes long")
+	}
+
+	for i, op := range operations[1:] {
+		manageDataOp, ok := op.(*txnbuild.ManageData)
+		if !ok {
+			return nil, "", "", nil, fmt.Errorf("subsequent operation %d type should be manage_data", i+1)
+		}
+
+		if manageDataOp.SourceAccount == "" {
+			return nil, "", "", nil, fmt.Errorf("subsequent operation %d should have a source account", i+1)
+		}
+
+		switch manageDataOp.Name {
+		case "web_auth_domain":
+			if manageDataOp.SourceAccount != serverAccountID {
+				return nil, "", "", nil, fmt.Errorf("web auth domain operation must have server source account")
+			}
+			if !bytes.Equal(manageDataOp.Value, []byte(webAuthDomain)) {
+				return nil, "", "", nil, fmt.Errorf("web auth domain operation value is %q but expect %q", string(manageDataOp.Value), webAuthDomain)
+			}
+		case "client_domain":
+			if _, err := xdr.AddressToAccountId(manageDataOp.SourceAccount); err != nil {
+				return nil, "", "", nil, fmt.Errorf("client_domain operation has invalid source account: %w", err)
+			}
+		default:
+			if manageDataOp.SourceAccount != serverAccountID {
+				return nil, "", "", nil, fmt.Errorf("unknown subsequent operation %q must have server account as source", manageDataOp.Name)
+			}
+		}
+	}
+
+	if err := s.verifyServerSignature(tx, network, serverAccountID); err != nil {
+		return nil, "", "", nil, fmt.Errorf("verifying server signature: %w", err)
+	}
+
+	return tx, clientAccountID, matchedHomeDomain, memo, nil
+}
+
+func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accountID, accountType string) error {
+	hash, err := tx.Hash(network)
+	if err != nil {
+		return fmt.Errorf("computing transaction hash: %w", err)
+	}
+
+	signatures := tx.Signatures()
+	if len(signatures) == 0 {
+		return fmt.Errorf("transaction has no signatures")
+	}
+
+	kp, err := keypair.ParseAddress(accountID)
+	if err != nil {
+		return fmt.Errorf("parsing %s account: %w", accountType, err)
+	}
+
+	for _, sig := range signatures {
+		if err := kp.Verify(hash[:], sig.Signature); err == nil {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("transaction is not signed by %s account %s", accountType, accountID)
+}
+
+func (s *sep10Service) verifyServerSignature(tx *txnbuild.Transaction, network, serverAccountID string) error {
+	return s.verifySignature(tx, network, serverAccountID, "server")
+}
+
+func (s *sep10Service) verifyClientSignature(tx *txnbuild.Transaction, network, clientAccountID string) error {
+	return s.verifySignature(tx, network, clientAccountID, "client")
+}
+
+func (s *sep10Service) verifySignaturesWithThreshold(
 	transaction string,
 	clientAccountID string,
 	webAuthDomain string,
 	allowedHomeDomains []string,
-	hasClientDomain bool,
+	account *horizon.Account,
 ) error {
-	signers := []string{clientAccountID}
-
-	signersFound, err := txnbuild.VerifyChallengeTxSigners(
+	tx, _, _, _, err := s.validateChallengeCustom(
 		transaction,
 		s.Sep10SigningKeypair.Address(),
 		s.NetworkPassphrase,
 		webAuthDomain,
 		allowedHomeDomains,
-		signers...,
 	)
-	// Special handling for client_domain case with 3 signatures
 	if err != nil {
-		if hasClientDomain && strings.Contains(err.Error(), "unrecognized signatures") {
-			// Expected error for client_domain case - we validated signature count already
-			return nil
-		}
-		return fmt.Errorf("verifying challenge signatures: %w", err)
+		return fmt.Errorf("validating SEP-10 challenge: %w", err)
 	}
 
-	if len(signersFound) == 0 {
-		return fmt.Errorf("transaction not signed by client")
+	if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientAccountID); err != nil {
+		return fmt.Errorf("verifying client signature: %w", err)
+	}
+
+	threshold := int(account.Thresholds.MedThreshold)
+	if err := s.verifyThreshold(tx, account, threshold); err != nil {
+		return fmt.Errorf("verifying signature threshold: %w", err)
 	}
 
 	return nil
 }
 
+// verifyThreshold checks if the sum of the weights of the signers present on the transaction
+// meets or exceeds the required threshold.
+func (s *sep10Service) verifyThreshold(
+	tx *txnbuild.Transaction,
+	account *horizon.Account,
+	threshold int,
+) error {
+	// Build a map of signer public key -> weight
+	signerWeights := make(map[string]int)
+	for _, signer := range account.Signers {
+		signerWeights[signer.Key] = int(signer.Weight)
+	}
+
+	// Get the transaction hash
+	hash, err := tx.Hash(s.NetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("computing transaction hash: %w", err)
+	}
+
+	// Track which signers have already been counted (avoid double-counting)
+	usedSigners := make(map[string]bool)
+	totalWeight := 0
+
+	// For each signature, check if it matches a signer and sum the weights
+	for _, sig := range tx.Signatures() {
+		for signer, weight := range signerWeights {
+			if usedSigners[signer] {
+				continue // Don't count the same signer twice
+			}
+			kp, err := keypair.ParseAddress(signer)
+			if err != nil {
+				continue // skip invalid keys
+			}
+			if kp.Verify(hash[:], sig.Signature) == nil {
+				totalWeight += weight
+				usedSigners[signer] = true
+				break // move to next signature
+			}
+		}
+	}
+
+	if totalWeight < threshold {
+		return fmt.Errorf("signatures do not meet threshold: got %d, need %d", totalWeight, threshold)
+	}
+	return nil
+}
+
 func (s *sep10Service) generateToken(
 	tx *txnbuild.Transaction,
-	clientAccountID, clientDomain, matchedHomeDomain string,
+	clientAccountID, matchedHomeDomain string,
 	memo *txnbuild.MemoID,
 ) (*ValidationResponse, error) {
 	subject := clientAccountID
@@ -226,7 +445,6 @@ func (s *sep10Service) generateToken(
 		subject = fmt.Sprintf("%s:%d", clientAccountID, uint64(*memo))
 	}
 
-	// Get transaction hash for jti
 	jti, err := tx.HashHex(s.NetworkPassphrase)
 	if err != nil {
 		return nil, fmt.Errorf("getting transaction hash: %w", err)
@@ -236,11 +454,16 @@ func (s *sep10Service) generateToken(
 	iat := time.Unix(int64(timebounds.MinTime), 0)
 	exp := iat.Add(s.JWTExpiration)
 
+	protocol := "http"
+	if parsedURL, parseErr := url.Parse(s.BaseURL); parseErr == nil && parsedURL.Scheme != "" {
+		protocol = parsedURL.Scheme
+	}
+
 	token, err := s.JWTManager.GenerateSEP10Token(
-		fmt.Sprintf("http://%s/auth", matchedHomeDomain),
+		fmt.Sprintf("%s://%s/auth", protocol, matchedHomeDomain),
 		subject,
 		jti,
-		clientDomain,
+		"",
 		matchedHomeDomain,
 		iat,
 		exp,
@@ -252,12 +475,21 @@ func (s *sep10Service) generateToken(
 	return &ValidationResponse{Token: token}, nil
 }
 
-func (s *sep10Service) getAllowedHomeDomains() []string {
+func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) []string {
 	baseDomain := s.getBaseDomain()
+	if baseDomain == "" {
+		return []string{}
+	}
 
-	// For SEP-10, we support wildcard matching: *.<base_domain>
-	// This means any subdomain of the base domain is allowed
 	allowedDomains := []string{baseDomain}
+
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
+		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
+		if parseErr == nil && parsedURL.Host != "" {
+			allowedDomains = append(allowedDomains, parsedURL.Host)
+		}
+	}
 
 	return allowedDomains
 }
@@ -306,57 +538,33 @@ func (s *sep10Service) isValidHomeDomain(homeDomain string) bool {
 	return strings.HasSuffix(homeDomainLower, "."+baseDomainLower)
 }
 
-func (s *sep10Service) validateClientDomain(ctx context.Context, clientDomain string) error {
-	wallets, err := s.Models.Wallets.FindWallets(ctx, data.NewFilter(data.FilterEnabledWallets, true))
-	if err != nil {
-		return fmt.Errorf("fetching wallets: %w", err)
-	}
-
-	for _, wallet := range wallets {
-		if wallet.SEP10ClientDomain == clientDomain {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("client domain %q not found in registered wallets", clientDomain)
-}
-
-func (s *sep10Service) extractClientDomain(tx *txnbuild.Transaction) string {
-	for _, op := range tx.Operations() {
-		if md, ok := op.(*txnbuild.ManageData); ok && md.Name == "client_domain" {
-			return string(md.Value)
-		}
-	}
-	return ""
-}
-
-func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDomain, clientDomain string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
+func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDomain, clientDomain string, signingKey string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
 	if s.AuthTimeout < time.Second {
 		return nil, fmt.Errorf("provided timebound must be at least 1s (300s is recommended)")
 	}
 
-	// SEP10 spec requires 48 byte cryptographic-quality random string
 	randomNonce, err := s.generateRandomNonce(48)
 	if err != nil {
 		return nil, err
 	}
-	// Encode 48-byte nonce to base64 for a total of 64-bytes
 	randomNonceToString := base64.StdEncoding.EncodeToString(randomNonce)
 	if len(randomNonceToString) != 64 {
 		return nil, fmt.Errorf("64 byte long random nonce required")
 	}
 
 	if _, err = xdr.AddressToAccountId(clientAccountID); err != nil {
-		if _, err = xdr.AddressToMuxedAccount(clientAccountID); err != nil {
-			return nil, fmt.Errorf("%s is not a valid account id or muxed account", clientAccountID)
-		} else if memo != nil {
-			return nil, fmt.Errorf("memos are not valid for challenge transactions with a muxed client account")
+		return nil, fmt.Errorf("%s is not a valid account id", clientAccountID)
+	}
+
+	if signingKey != "" {
+		if _, parseErr := keypair.ParseAddress(signingKey); parseErr != nil {
+			return nil, fmt.Errorf("invalid signing key: %s is not a valid Stellar account ID", signingKey)
 		}
 	}
 
 	sa := txnbuild.SimpleAccount{
 		AccountID: s.Sep10SigningKeypair.Address(),
-		Sequence:  0,
+		Sequence:  -1,
 	}
 
 	currentTime := time.Now().UTC()
@@ -375,19 +583,17 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 		},
 	}
 
-	// Add client domain operation if provided
-	if clientDomain != "" {
+	if signingKey != "" {
 		operations = append(operations, &txnbuild.ManageData{
-			SourceAccount: s.Sep10SigningKeypair.Address(),
+			SourceAccount: signingKey,
 			Name:          "client_domain",
 			Value:         []byte(clientDomain),
 		})
 	}
 
-	// Create a SEP 10 compatible response
 	txParams := txnbuild.TransactionParams{
 		SourceAccount:        &sa,
-		IncrementSequenceNum: false,
+		IncrementSequenceNum: true,
 		Operations:           operations,
 		BaseFee:              txnbuild.MinBaseFee,
 		Preconditions: txnbuild.Preconditions{
@@ -395,7 +601,6 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 		},
 	}
 
-	// Add memo if provided
 	if memo != nil {
 		txParams.Memo = memo
 	}
@@ -409,7 +614,6 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 	if err != nil {
 		return nil, err
 	}
-
 	return tx, nil
 }
 
@@ -421,4 +625,86 @@ func (s *sep10Service) generateRandomNonce(n int) ([]byte, error) {
 	}
 
 	return binary, err
+}
+
+func (s *sep10Service) fetchSigningKeyFromClientDomain(clientDomain string) (string, error) {
+	url := "https://" + clientDomain + "/.well-known/stellar.toml"
+
+	signingKey, err := s.tryReadToml(url)
+	if err != nil && s.AllowHTTPRetry {
+		httpURL := strings.Replace(url, "https://", "http://", 1)
+		signingKey, err = s.tryReadToml(httpURL)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("unable to read from %s: %w", url, err)
+	}
+
+	if _, parseErr := keypair.ParseAddress(signingKey); parseErr != nil {
+		return "", fmt.Errorf("SIGNING_KEY %s is not a valid Stellar account ID", signingKey)
+	}
+
+	return signingKey, nil
+}
+
+func (s *sep10Service) tryReadToml(url string) (string, error) {
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("creating request: %w", err)
+	}
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetching TOML: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading response body: %w", err)
+	}
+
+	signingKey, err := s.extractSigningKeyFromToml(string(body))
+	if err != nil {
+		return "", fmt.Errorf("extracting SIGNING_KEY from TOML: %w", err)
+	}
+
+	if signingKey == "" {
+		return "", fmt.Errorf("SIGNING_KEY not present in client_domain TOML")
+	}
+
+	return signingKey, nil
+}
+
+func (s *sep10Service) extractSigningKeyFromToml(tomlContent string) (string, error) {
+	lines := strings.Split(tomlContent, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "SIGNING_KEY") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+				return key, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+func (s *sep10Service) fetchAccountFromHorizon(accountID string) (*horizon.Account, error) {
+	if s.HorizonClient == nil {
+		return nil, fmt.Errorf("horizon client is not configured")
+	}
+
+	account, err := s.HorizonClient.AccountDetail(horizonclient.AccountRequest{
+		AccountID: accountID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("loading account %s from horizon: %w", accountID, err)
+	}
+	return &account, nil
 }
