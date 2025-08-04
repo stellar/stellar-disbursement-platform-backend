@@ -55,14 +55,14 @@ func Test_SEP24InfoHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, SEP24OperationResponse{
 			Enabled:   true,
-			MinAmount: 1,
-			MaxAmount: 10000,
+			MinAmount: "1",
+			MaxAmount: "10000",
 		}, response.Deposit["USDC"])
 
 		assert.Equal(t, SEP24OperationResponse{
 			Enabled:   true,
-			MinAmount: 1,
-			MaxAmount: 10000,
+			MinAmount: "1",
+			MaxAmount: "10000",
 		}, response.Deposit["native"])
 
 		assert.Empty(t, response.Withdraw)

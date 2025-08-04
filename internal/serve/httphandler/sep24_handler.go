@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/stellar/go/support/render/httpjson"
 
@@ -22,9 +23,9 @@ type SEP24InfoResponse struct {
 }
 
 type SEP24OperationResponse struct {
-	Enabled   bool `json:"enabled"`
-	MinAmount int  `json:"min_amount"`
-	MaxAmount int  `json:"max_amount"`
+	Enabled   bool   `json:"enabled"`
+	MinAmount string `json:"min_amount"`
+	MaxAmount string `json:"max_amount"`
 }
 
 type SEP24FeeResponse struct {
@@ -59,8 +60,8 @@ func (h SEP24InfoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		deposit[assetCode] = SEP24OperationResponse{
 			Enabled:   true,
-			MinAmount: sep24MinAmount,
-			MaxAmount: sep24MaxAmount,
+			MinAmount: strconv.Itoa(sep24MinAmount),
+			MaxAmount: strconv.Itoa(sep24MaxAmount),
 		}
 	}
 
