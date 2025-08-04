@@ -13,7 +13,6 @@ mod webauthn;
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[contracttype]
 pub enum DataKey {
-    Admin,
     Signer,
     Recovery,
 }
