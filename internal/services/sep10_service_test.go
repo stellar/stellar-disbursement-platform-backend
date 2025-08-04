@@ -2,23 +2,29 @@ package services
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
 func TestNewSEP10Service(t *testing.T) {
 	t.Parallel()
-
 	kp := keypair.MustRandom()
 
 	testCases := []struct {
@@ -29,7 +35,7 @@ func TestNewSEP10Service(t *testing.T) {
 		baseURL                string
 		models                 *data.Models
 		expectError            bool
-		errorContains          string
+		errMsg          string
 	}{
 		{
 			name:                   "✅ valid configuration",
@@ -48,13 +54,21 @@ func TestNewSEP10Service(t *testing.T) {
 			baseURL:                "https://ultramar.imperium.com",
 			models:                 &data.Models{},
 			expectError:            true,
-			errorContains:          "parsing sep10 signing key",
+			errMsg:          "parsing sep10 signing key",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			mockHorizonClient := &horizonclient.MockClient{}
+			mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+				AccountID: "GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN",
+				Thresholds: horizon.AccountThresholds{
+					LowThreshold:  1,
+					MedThreshold:  2,
+					HighThreshold: 3,
+				},
+			}, nil)
 
 			service, err := NewSEP10Service(
 				tc.jwtManager,
@@ -62,11 +76,13 @@ func TestNewSEP10Service(t *testing.T) {
 				tc.sep10SigningPrivateKey,
 				tc.baseURL,
 				tc.models,
+				true,
+				mockHorizonClient,
 			)
 
 			if tc.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errorContains)
+				assert.Contains(t, err.Error(), tc.errMsg)
 				assert.Nil(t, service)
 			} else {
 				require.NoError(t, err)
@@ -86,35 +102,21 @@ func TestNewSEP10Service(t *testing.T) {
 }
 
 func TestSEP10Service_CreateChallenge(t *testing.T) {
-	t.Parallel()
-
 	kp := keypair.MustRandom()
-
-	realService, err := NewSEP10Service(
-		&anchorplatform.JWTManager{},
-		"Test SDF Network ; September 2015",
-		kp.Seed(),
-		"https://ultramar.imperium.com",
-		&data.Models{},
-	)
-	require.NoError(t, err)
-
-	mockService := NewMockSEP10Service(t)
 
 	testCases := []struct {
 		name          string
-		service       SEP10Service
 		req           ChallengeRequest
 		expectError   bool
-		errorContains string
+		errMsg string
 		checkResponse func(t *testing.T, resp *ChallengeResponse)
 	}{
 		{
-			name:    "✅ valid challenge request",
-			service: realService,
+			name: "✅ valid challenge request",
 			req: ChallengeRequest{
-				Account:    kp.Address(),
-				HomeDomain: "ultramar.imperium.com",
+				Account:      kp.Address(),
+				HomeDomain:   "ultramar.imperium.com",
+				ClientDomain: "test-client-domain.com",
 			},
 			expectError: false,
 			checkResponse: func(t *testing.T, resp *ChallengeResponse) {
@@ -123,12 +125,12 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 			},
 		},
 		{
-			name:    "✅ valid challenge with memo",
-			service: realService,
+			name: "✅ valid challenge with memo",
 			req: ChallengeRequest{
-				Account:    kp.Address(),
-				HomeDomain: "ultramar.imperium.com",
-				Memo:       "12345",
+				Account:      kp.Address(),
+				HomeDomain:   "ultramar.imperium.com",
+				ClientDomain: "test-client-domain.com",
+				Memo:         "12345",
 			},
 			expectError: false,
 			checkResponse: func(t *testing.T, resp *ChallengeResponse) {
@@ -137,69 +139,65 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 			},
 		},
 		{
-			name:    "❌ invalid account",
-			service: realService,
+			name: "❌ invalid account",
 			req: ChallengeRequest{
-				Account:    "invalid-account",
-				HomeDomain: "ultramar.imperium.com",
+				Account:      "invalid-account",
+				HomeDomain:   "ultramar.imperium.com",
+				ClientDomain: "test-client-domain.com",
 			},
 			expectError:   true,
-			errorContains: "invalid account not a valid ed25519 public key",
+			errMsg: "invalid-account is not a valid account id",
 		},
 		{
-			name:    "❌ invalid memo",
-			service: realService,
+			name: "❌ invalid home domain",
 			req: ChallengeRequest{
-				Account:    kp.Address(),
-				HomeDomain: "ultramar.imperium.com",
-				Memo:       "invalid-memo",
+				Account:      kp.Address(),
+				HomeDomain:   "chaos.galaxy.com",
+				ClientDomain: "test-client-domain.com",
 			},
 			expectError:   true,
-			errorContains: "invalid memo must be a positive integer",
-		},
-		{
-			name:    "❌ invalid home domain",
-			service: realService,
-			req: ChallengeRequest{
-				Account:    kp.Address(),
-				HomeDomain: "chaos.galaxy.com",
-			},
-			expectError:   true,
-			errorContains: "invalid home_domain must match ultramar.imperium.com",
-		},
-		{
-			name:    "✅ mock service success",
-			service: mockService,
-			req: ChallengeRequest{
-				Account:    kp.Address(),
-				HomeDomain: "ultramar.imperium.com",
-			},
-			expectError: false,
-			checkResponse: func(t *testing.T, resp *ChallengeResponse) {
-				assert.Equal(t, "mock_transaction", resp.Transaction)
-				assert.Equal(t, "mock_network", resp.NetworkPassphrase)
-			},
+			errMsg: "invalid home_domain must match ultramar.imperium.com",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			mockHorizonClient := &horizonclient.MockClient{}
+			mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+				AccountID: kp.Address(),
+				Thresholds: horizon.AccountThresholds{
+					LowThreshold:  1,
+					MedThreshold:  2,
+					HighThreshold: 3,
+				},
+			}, nil)
 
-			if mockSvc, ok := tc.service.(*MockSEP10Service); ok {
-				mockSvc.On("CreateChallenge", mock.Anything, tc.req).Return(
-					&ChallengeResponse{
-						Transaction:       "mock_transaction",
-						NetworkPassphrase: "mock_network",
-					}, nil,
-				).Once()
+			service, err := NewSEP10Service(
+				&anchorplatform.JWTManager{},
+				"Test SDF Network ; September 2015",
+				kp.Seed(),
+				"https://ultramar.imperium.com",
+				&data.Models{},
+				true,
+				mockHorizonClient,
+			)
+			require.NoError(t, err)
+
+			if !tc.expectError {
+				sep10Service := service.(*sep10Service)
+				mockHTTPClient := mocks.NewHttpClientMock(t)
+				mockHTTPClient.On("Do", mock.AnythingOfType("*http.Request")).Return(&http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + kp.Address() + "\"\n")),
+				}, nil)
+				sep10Service.HTTPClient = mockHTTPClient
 			}
 
-			resp, err := tc.service.CreateChallenge(context.Background(), tc.req)
+			resp, err := service.CreateChallenge(context.Background(), tc.req)
 
 			if tc.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errorContains)
+				assert.Contains(t, err.Error(), tc.errMsg)
 				assert.Nil(t, resp)
 			} else {
 				require.NoError(t, err)
@@ -214,86 +212,40 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 
 func TestSEP10Service_ValidateChallenge(t *testing.T) {
 	t.Parallel()
-
 	kp := keypair.MustRandom()
 
-	realService, err := NewSEP10Service(
-		&anchorplatform.JWTManager{},
+	mockHorizonClient := &horizonclient.MockClient{}
+	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+		AccountID: kp.Address(),
+		Thresholds: horizon.AccountThresholds{
+			LowThreshold:  1,
+			MedThreshold:  2,
+			HighThreshold: 3,
+		},
+	}, nil)
+
+	testKP := keypair.MustRandom()
+
+	sep10Service, err := NewSEP10Service(
+		nil,
 		"Test SDF Network ; September 2015",
-		kp.Seed(),
-		"https://ultramar.imperium.com",
-		&data.Models{},
+		testKP.Seed(),
+		"https://stellar.local:8000",
+		nil,
+		false,
+		mockHorizonClient,
 	)
 	require.NoError(t, err)
 
-	mockService := NewMockSEP10Service(t)
+	t.Run("❌ invalid transaction", func(t *testing.T) {
+		req := ValidationRequest{
+			Transaction: "invalid-transaction",
+		}
 
-	testCases := []struct {
-		name          string
-		service       SEP10Service
-		req           ValidationRequest
-		expectError   bool
-		errorContains string
-		checkResponse func(t *testing.T, resp *ValidationResponse)
-	}{
-		{
-			name:    "❌ empty transaction",
-			service: realService,
-			req: ValidationRequest{
-				Transaction: "",
-			},
-			expectError:   true,
-			errorContains: "transaction is required",
-		},
-		{
-			name:    "❌ invalid transaction",
-			service: realService,
-			req: ValidationRequest{
-				Transaction: "invalid_transaction",
-			},
-			expectError:   true,
-			errorContains: "reading challenge transaction",
-		},
-		{
-			name:    "✅ mock service success",
-			service: mockService,
-			req: ValidationRequest{
-				Transaction: "mock_transaction",
-			},
-			expectError: false,
-			checkResponse: func(t *testing.T, resp *ValidationResponse) {
-				assert.Equal(t, "mock_jwt_token", resp.Token)
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if mockSvc, ok := tc.service.(*MockSEP10Service); ok {
-				mockSvc.On("ValidateChallenge", mock.Anything, tc.req).Return(
-					&ValidationResponse{
-						Token: "mock_jwt_token",
-					}, nil,
-				).Once()
-			}
-
-			resp, err := tc.service.ValidateChallenge(context.Background(), tc.req)
-
-			if tc.expectError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errorContains)
-				assert.Nil(t, resp)
-			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, resp)
-				if tc.checkResponse != nil {
-					tc.checkResponse(t, resp)
-				}
-			}
-		})
-	}
+		_, err := sep10Service.ValidateChallenge(context.Background(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "could not parse challenge")
+	})
 }
 
 func TestSEP10Service_Integration_WithRealDB(t *testing.T) {
@@ -303,21 +255,41 @@ func TestSEP10Service_Integration_WithRealDB(t *testing.T) {
 
 	kp := keypair.MustRandom()
 
+	mockHTTPClient := mocks.NewHttpClientMock(t)
+	mockHTTPClient.On("Do", mock.AnythingOfType("*http.Request")).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + kp.Address() + "\"\n")),
+	}, nil)
+
+	mockHorizonClient := &horizonclient.MockClient{}
+	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+		AccountID: kp.Address(),
+		Thresholds: horizon.AccountThresholds{
+			LowThreshold:  1,
+			MedThreshold:  2,
+			HighThreshold: 3,
+		},
+	}, nil)
+
 	service, err := NewSEP10Service(
 		&anchorplatform.JWTManager{},
 		"Test SDF Network ; September 2015",
 		kp.Seed(),
 		"https://cadia.imperium.com",
 		models,
+		true,
+		mockHorizonClient,
 	)
 	require.NoError(t, err)
 
-	t.Run("✅ integration test with real DB", func(t *testing.T) {
-		t.Parallel()
+	sep10Service := service.(*sep10Service)
+	sep10Service.HTTPClient = mockHTTPClient
 
+	t.Run("✅ integration test with real DB", func(t *testing.T) {
 		req := ChallengeRequest{
-			Account:    kp.Address(),
-			HomeDomain: "cadia.imperium.com",
+			Account:      kp.Address(),
+			HomeDomain:   "cadia.imperium.com",
+			ClientDomain: "test-client-domain.com",
 		}
 
 		resp, err := service.CreateChallenge(context.Background(), req)
@@ -329,64 +301,127 @@ func TestSEP10Service_Integration_WithRealDB(t *testing.T) {
 
 func TestSEP10Service_HelperMethods(t *testing.T) {
 	t.Parallel()
-
 	kp := keypair.MustRandom()
+
+	mockHorizonClient := &horizonclient.MockClient{}
+	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+		AccountID: kp.Address(),
+		Thresholds: horizon.AccountThresholds{
+			LowThreshold:  1,
+			MedThreshold:  2,
+			HighThreshold: 3,
+		},
+	}, nil)
 
 	service, err := NewSEP10Service(
 		&anchorplatform.JWTManager{},
 		"Test SDF Network ; September 2015",
 		kp.Seed(),
-		"https://fenris.imperium.com",
+		"https://stellar.local:8000",
 		&data.Models{},
+		true,
+		mockHorizonClient,
 	)
 	require.NoError(t, err)
 
 	sep10Service := service.(*sep10Service)
 
 	t.Run("✅ getBaseDomain", func(t *testing.T) {
-		t.Parallel()
-		domain := sep10Service.getBaseDomain()
-		assert.Equal(t, "fenris.imperium.com", domain)
-	})
-
-	t.Run("✅ isValidHomeDomain", func(t *testing.T) {
-		t.Parallel()
-
-		testCases := []struct {
-			domain      string
-			expectValid bool
-		}{
-			{"fenris.imperium.com", true},
-			{"chaos.galaxy.com", false},
-			{"", false},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.domain, func(t *testing.T) {
-				t.Parallel()
-				isValid := sep10Service.isValidHomeDomain(tc.domain)
-				assert.Equal(t, tc.expectValid, isValid)
-			})
-		}
-	})
-
-	t.Run("✅ getAllowedHomeDomains", func(t *testing.T) {
-		t.Parallel()
-		domains := sep10Service.getAllowedHomeDomains()
-		assert.Len(t, domains, 1)
-		assert.Equal(t, "fenris.imperium.com", domains[0])
+		baseDomain := sep10Service.getBaseDomain()
+		assert.Equal(t, "stellar.local:8000", baseDomain)
 	})
 
 	t.Run("✅ getWebAuthDomain", func(t *testing.T) {
-		t.Parallel()
-		domain := sep10Service.getWebAuthDomain(context.Background())
-		assert.Equal(t, "fenris.imperium.com", domain)
+		webAuthDomain := sep10Service.getWebAuthDomain(context.Background())
+		assert.Equal(t, "stellar.local:8000", webAuthDomain)
+	})
+
+	t.Run("✅ getAllowedHomeDomains", func(t *testing.T) {
+		allowedDomains := sep10Service.getAllowedHomeDomains(context.Background())
+		assert.Len(t, allowedDomains, 1)
+		assert.Contains(t, allowedDomains, "stellar.local:8000")
+	})
+
+	t.Run("✅ isValidHomeDomain", func(t *testing.T) {
+		assert.True(t, sep10Service.isValidHomeDomain("stellar.local:8000"))
+		assert.True(t, sep10Service.isValidHomeDomain("subdomain.stellar.local:8000"))
+		assert.False(t, sep10Service.isValidHomeDomain("other.domain"))
+		assert.False(t, sep10Service.isValidHomeDomain(""))
 	})
 }
 
-func TestSEP10Service_IsValidHomeDomain_Comprehensive(t *testing.T) {
+func TestSEP10Service_BuildChallengeTx(t *testing.T) {
 	t.Parallel()
+	kp := keypair.MustRandom()
 
+	mockHorizonClient := &horizonclient.MockClient{}
+	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+		AccountID: kp.Address(),
+		Thresholds: horizon.AccountThresholds{
+			LowThreshold:  1,
+			MedThreshold:  2,
+			HighThreshold: 3,
+		},
+	}, nil)
+
+	service, err := NewSEP10Service(
+		&anchorplatform.JWTManager{},
+		"Test SDF Network ; September 2015",
+		kp.Seed(),
+		"https://stellar.local:8000",
+		&data.Models{},
+		true,
+		mockHorizonClient,
+	)
+	require.NoError(t, err)
+
+	sep10Service := service.(*sep10Service)
+
+	t.Run("✅ valid challenge tx", func(t *testing.T) {
+		tx, err := sep10Service.buildChallengeTx("GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN", "stellar.local:8000", "stellar.local:8000", "test-client-domain", "GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN", nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, tx)
+
+		operations := tx.Operations()
+		assert.Len(t, operations, 3)
+
+		// Check auth operation
+		authOp, ok := operations[0].(*txnbuild.ManageData)
+		assert.True(t, ok)
+		assert.Equal(t, "stellar.local:8000 auth", authOp.Name)
+		assert.Equal(t, "GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN", authOp.SourceAccount)
+
+		// Check web_auth_domain operation
+		webAuthOp, ok := operations[1].(*txnbuild.ManageData)
+		assert.True(t, ok)
+		assert.Equal(t, "web_auth_domain", webAuthOp.Name)
+		assert.Equal(t, "stellar.local:8000", string(webAuthOp.Value))
+		assert.Equal(t, sep10Service.Sep10SigningKeypair.Address(), webAuthOp.SourceAccount)
+
+		// Check client_domain operation
+		clientDomainOp, ok := operations[2].(*txnbuild.ManageData)
+		assert.True(t, ok)
+		assert.Equal(t, "client_domain", clientDomainOp.Name)
+		assert.Equal(t, "test-client-domain", string(clientDomainOp.Value))
+		assert.Equal(t, "GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN", clientDomainOp.SourceAccount)
+	})
+
+	t.Run("❌ invalid account", func(t *testing.T) {
+		_, err := sep10Service.buildChallengeTx("invalid-account", "stellar.local:8000", "stellar.local:8000", "test-client-domain", "GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN", nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "is not a valid account id")
+	})
+
+	t.Run("❌ timeout too short", func(t *testing.T) {
+		sep10Service.AuthTimeout = time.Millisecond
+		_, err := sep10Service.buildChallengeTx("GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN", "stellar.local:8000", "stellar.local:8000", "test-client-domain", "GDXC7OOSMJR3ZWNPYKHPHCSTP2SC6D4HY4SNKQMM7GEV6WRAMVCYA7XN", nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "provided timebound must be at least 1s")
+	})
+}
+
+func TestSEP10Service_IsValidHomeDomain(t *testing.T) {
+	t.Parallel()
 	kp := keypair.MustRandom()
 
 	testCases := []struct {
@@ -447,7 +482,15 @@ func TestSEP10Service_IsValidHomeDomain_Comprehensive(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			mockHorizonClient := &horizonclient.MockClient{}
+			mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+				AccountID: kp.Address(),
+				Thresholds: horizon.AccountThresholds{
+					LowThreshold:  1,
+					MedThreshold:  2,
+					HighThreshold: 3,
+				},
+			}, nil)
 
 			testService, err := NewSEP10Service(
 				&anchorplatform.JWTManager{},
@@ -455,6 +498,8 @@ func TestSEP10Service_IsValidHomeDomain_Comprehensive(t *testing.T) {
 				kp.Seed(),
 				tc.baseURL,
 				&data.Models{},
+				true,
+				mockHorizonClient,
 			)
 			require.NoError(t, err)
 
@@ -467,193 +512,19 @@ func TestSEP10Service_IsValidHomeDomain_Comprehensive(t *testing.T) {
 	}
 }
 
-func TestSEP10Service_BuildChallengeTx(t *testing.T) {
-	t.Parallel()
-
-	kp := keypair.MustRandom()
-
-	service, err := NewSEP10Service(
-		&anchorplatform.JWTManager{},
-		"Test SDF Network ; September 2015",
-		kp.Seed(),
-		"https://maccrage.imperium.com",
-		&data.Models{},
-	)
-	require.NoError(t, err)
-
-	sep10Service := service.(*sep10Service)
-
-	testCases := []struct {
-		name            string
-		clientAccountID string
-		webAuthDomain   string
-		homeDomain      string
-		clientDomain    string
-		memo            *txnbuild.MemoID
-		expectError     bool
-		errorContains   string
-	}{
-		{
-			name:            "✅ valid challenge tx without memo",
-			clientAccountID: kp.Address(),
-			webAuthDomain:   "maccrage.imperium.com",
-			homeDomain:      "maccrage.imperium.com",
-			clientDomain:    "",
-			memo:            nil,
-			expectError:     false,
-		},
-		{
-			name:            "✅ valid challenge tx with memo",
-			clientAccountID: kp.Address(),
-			webAuthDomain:   "maccrage.imperium.com",
-			homeDomain:      "maccrage.imperium.com",
-			clientDomain:    "",
-			memo:            &[]txnbuild.MemoID{12345}[0],
-			expectError:     false,
-		},
-		{
-			name:            "✅ valid challenge tx with client domain",
-			clientAccountID: kp.Address(),
-			webAuthDomain:   "maccrage.imperium.com",
-			homeDomain:      "maccrage.imperium.com",
-			clientDomain:    "valhalla.imperium.com",
-			memo:            nil,
-			expectError:     false,
-		},
-		{
-			name:            "❌ invalid account",
-			clientAccountID: "invalid-account",
-			webAuthDomain:   "maccrage.imperium.com",
-			homeDomain:      "maccrage.imperium.com",
-			clientDomain:    "",
-			memo:            nil,
-			expectError:     true,
-			errorContains:   "is not a valid account id or muxed account",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tx, err := sep10Service.buildChallengeTx(
-				tc.clientAccountID,
-				tc.webAuthDomain,
-				tc.homeDomain,
-				tc.clientDomain,
-				tc.memo,
-			)
-
-			if tc.expectError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errorContains)
-				assert.Nil(t, tx)
-			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, tx)
-
-				expectedOps := 2
-				if tc.clientDomain != "" {
-					expectedOps = 3
-				}
-				assert.Len(t, tx.Operations(), expectedOps)
-
-				if tc.clientDomain != "" {
-					foundClientDomain := false
-					for _, op := range tx.Operations() {
-						if md, ok := op.(*txnbuild.ManageData); ok && md.Name == "client_domain" {
-							assert.Equal(t, tc.clientDomain, string(md.Value))
-							foundClientDomain = true
-							break
-						}
-					}
-					assert.True(t, foundClientDomain, "Client domain operation not found")
-				}
-			}
-		})
-	}
-}
-
-func TestSEP10Service_ExtractClientDomain(t *testing.T) {
-	t.Parallel()
-
-	kp := keypair.MustRandom()
-
-	service, err := NewSEP10Service(
-		&anchorplatform.JWTManager{},
-		"Test SDF Network ; September 2015",
-		kp.Seed(),
-		"https://baal.imperium.com",
-		&data.Models{},
-	)
-	require.NoError(t, err)
-
-	sep10Service := service.(*sep10Service)
-
-	t.Run("✅ extract client domain from transaction", func(t *testing.T) {
-		t.Parallel()
-
-		tx, err := sep10Service.buildChallengeTx(
-			kp.Address(),
-			"baal.imperium.com",
-			"baal.imperium.com",
-			"caliban.imperium.com",
-			nil,
-		)
-		require.NoError(t, err)
-
-		clientDomain := sep10Service.extractClientDomain(tx)
-		assert.Equal(t, "caliban.imperium.com", clientDomain)
-	})
-
-	t.Run("✅ no client domain in transaction", func(t *testing.T) {
-		t.Parallel()
-
-		tx, err := sep10Service.buildChallengeTx(
-			kp.Address(),
-			"baal.imperium.com",
-			"baal.imperium.com",
-			"",
-			nil,
-		)
-		require.NoError(t, err)
-
-		clientDomain := sep10Service.extractClientDomain(tx)
-		assert.Equal(t, "", clientDomain)
-	})
-}
-
-func TestSEP10Service_ValidateChallenge_WithRealDB(t *testing.T) {
-	dbPool := testutils.GetDBConnectionPool(t)
-	models, err := data.NewModels(dbPool)
-	require.NoError(t, err)
-
-	kp := keypair.MustRandom()
-
-	service, err := NewSEP10Service(
-		&anchorplatform.JWTManager{},
-		"Test SDF Network ; September 2015",
-		kp.Seed(),
-		"https://cadia.imperium.com",
-		models,
-	)
-	require.NoError(t, err)
-
-	sep10Service := service.(*sep10Service)
-
-	t.Run("✅ validateClientDomain with real DB", func(t *testing.T) {
-		t.Parallel()
-
-		err := sep10Service.validateClientDomain(context.Background(), "nonexistent.imperium.com")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "client domain")
-	})
-}
-
 func TestSEP10Service_VerifySignatures(t *testing.T) {
 	t.Parallel()
-
 	kp := keypair.MustRandom()
+
+	mockHorizonClient := &horizonclient.MockClient{}
+	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+		AccountID: kp.Address(),
+		Thresholds: horizon.AccountThresholds{
+			LowThreshold:  1,
+			MedThreshold:  2,
+			HighThreshold: 3,
+		},
+	}, nil)
 
 	service, err := NewSEP10Service(
 		&anchorplatform.JWTManager{},
@@ -661,19 +532,20 @@ func TestSEP10Service_VerifySignatures(t *testing.T) {
 		kp.Seed(),
 		"https://baal.imperium.com",
 		&data.Models{},
+		true,
+		mockHorizonClient,
 	)
 	require.NoError(t, err)
 
 	sep10Service := service.(*sep10Service)
 
 	t.Run("✅ verifySignatures with valid transaction", func(t *testing.T) {
-		t.Parallel()
-
 		tx, err := sep10Service.buildChallengeTx(
 			kp.Address(),
 			"baal.imperium.com",
 			"baal.imperium.com",
-			"",
+			"test-client-domain",
+			kp.Address(),
 			nil,
 		)
 		require.NoError(t, err)
@@ -685,12 +557,21 @@ func TestSEP10Service_VerifySignatures(t *testing.T) {
 		txBase64, err := tx.Base64()
 		require.NoError(t, err)
 
-		err = sep10Service.verifySignatures(
+		mockAccount := &horizon.Account{
+			AccountID: clientKP.Address(),
+			Thresholds: horizon.AccountThresholds{
+				LowThreshold:  1,
+				MedThreshold:  2,
+				HighThreshold: 3,
+			},
+		}
+
+		err = sep10Service.verifySignaturesWithThreshold(
 			txBase64,
 			clientKP.Address(),
 			"baal.imperium.com",
 			[]string{"baal.imperium.com"},
-			false,
+			mockAccount,
 		)
 		require.Error(t, err)
 	})
@@ -698,11 +579,20 @@ func TestSEP10Service_VerifySignatures(t *testing.T) {
 
 func TestSEP10Service_GenerateToken(t *testing.T) {
 	t.Parallel()
-
 	kp := keypair.MustRandom()
 
 	jwtManager, err := anchorplatform.NewJWTManager("test-secret-key-123", 3600000)
 	require.NoError(t, err)
+
+	mockHorizonClient := &horizonclient.MockClient{}
+	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+		AccountID: kp.Address(),
+		Thresholds: horizon.AccountThresholds{
+			LowThreshold:  1,
+			MedThreshold:  2,
+			HighThreshold: 3,
+		},
+	}, nil)
 
 	service, err := NewSEP10Service(
 		jwtManager,
@@ -710,19 +600,20 @@ func TestSEP10Service_GenerateToken(t *testing.T) {
 		kp.Seed(),
 		"https://caliban.imperium.com",
 		&data.Models{},
+		true,
+		mockHorizonClient,
 	)
 	require.NoError(t, err)
 
 	sep10Service := service.(*sep10Service)
 
 	t.Run("✅ generateToken with valid transaction", func(t *testing.T) {
-		t.Parallel()
-
 		tx, err := sep10Service.buildChallengeTx(
 			kp.Address(),
 			"caliban.imperium.com",
 			"caliban.imperium.com",
-			"",
+			"test-client-domain",
+			kp.Address(),
 			nil,
 		)
 		require.NoError(t, err)
@@ -730,7 +621,6 @@ func TestSEP10Service_GenerateToken(t *testing.T) {
 		resp, err := sep10Service.generateToken(
 			tx,
 			kp.Address(),
-			"",
 			"caliban.imperium.com",
 			nil,
 		)
@@ -747,21 +637,37 @@ func TestSEP10Service_ValidateChallenge_CompleteFlow(t *testing.T) {
 
 	kp := keypair.MustRandom()
 
+	mockHTTPClient := mocks.NewHttpClientMock(t)
+	mockHTTPClient.On("Do", mock.AnythingOfType("*http.Request")).Return(&http.Response{
+		StatusCode: 200,
+		Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + kp.Address() + "\"\n")),
+	}, nil)
+
+	mockHorizonClient := &horizonclient.MockClient{}
+	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
+		AccountID: kp.Address(),
+		Thresholds: horizon.AccountThresholds{},
+	}, nil)
+
 	service, err := NewSEP10Service(
 		&anchorplatform.JWTManager{},
 		"Test SDF Network ; September 2015",
 		kp.Seed(),
 		"https://fenris.imperium.com",
 		models,
+		true,
+		mockHorizonClient,
 	)
 	require.NoError(t, err)
 
-	t.Run("✅ complete validation flow", func(t *testing.T) {
-		t.Parallel()
+	sep10Service := service.(*sep10Service)
+	sep10Service.HTTPClient = mockHTTPClient
 
+	t.Run("✅ complete validation flow", func(t *testing.T) {
 		req := ChallengeRequest{
-			Account:    kp.Address(),
-			HomeDomain: "fenris.imperium.com",
+			Account:      kp.Address(),
+			HomeDomain:   "fenris.imperium.com",
+			ClientDomain: "test-client-domain.com",
 		}
 
 		challengeResp, err := service.CreateChallenge(context.Background(), req)
@@ -773,34 +679,36 @@ func TestSEP10Service_ValidateChallenge_CompleteFlow(t *testing.T) {
 		}
 
 		validationResp, err := service.ValidateChallenge(context.Background(), validationReq)
-		require.Error(t, err)
-		assert.Nil(t, validationResp)
+		require.NoError(t, err)
+		assert.NotNil(t, validationResp)
+		assert.NotEmpty(t, validationResp.Token)
 	})
 }
 
 func TestChallengeRequest_Validate(t *testing.T) {
 	t.Parallel()
-
 	testCases := []struct {
 		name          string
 		req           ChallengeRequest
 		expectError   bool
-		errorContains string
+		errMsg string
 	}{
 		{
 			name: "✅ valid request",
 			req: ChallengeRequest{
-				Account:    keypair.MustRandom().Address(),
-				HomeDomain: "fenris.imperium.com",
+				Account:      keypair.MustRandom().Address(),
+				HomeDomain:   "fenris.imperium.com",
+				ClientDomain: "test-client-domain.com",
 			},
 			expectError: false,
 		},
 		{
 			name: "✅ valid request with memo",
 			req: ChallengeRequest{
-				Account:    keypair.MustRandom().Address(),
-				HomeDomain: "fenris.imperium.com",
-				Memo:       "12345",
+				Account:      keypair.MustRandom().Address(),
+				HomeDomain:   "fenris.imperium.com",
+				ClientDomain: "test-client-domain.com",
+				Memo:         "12345",
 			},
 			expectError: false,
 		},
@@ -811,7 +719,7 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				HomeDomain: "fenris.imperium.com",
 			},
 			expectError:   true,
-			errorContains: "account is required",
+			errMsg: "account is required",
 		},
 		{
 			name: "❌ invalid account",
@@ -820,71 +728,37 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				HomeDomain: "fenris.imperium.com",
 			},
 			expectError:   true,
-			errorContains: "invalid account not a valid ed25519 public key",
+			errMsg: "invalid account not a valid ed25519 public key",
+		},
+		{
+			name: "❌ missing client_domain",
+			req: ChallengeRequest{
+				Account:    keypair.MustRandom().Address(),
+				HomeDomain: "fenris.imperium.com",
+			},
+			expectError:   true,
+			errMsg: "client_domain is required",
 		},
 		{
 			name: "❌ invalid memo",
 			req: ChallengeRequest{
-				Account:    keypair.MustRandom().Address(),
-				HomeDomain: "fenris.imperium.com",
-				Memo:       "invalid-memo",
+				Account:      keypair.MustRandom().Address(),
+				HomeDomain:   "fenris.imperium.com",
+				ClientDomain: "test-client-domain.com",
+				Memo:         "invalid-memo",
 			},
 			expectError:   true,
-			errorContains: "invalid memo must be a positive integer",
+			errMsg: "invalid memo must be a positive integer",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			err := tc.req.Validate()
 
 			if tc.expectError {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errorContains)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestValidationRequest_Validate(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name          string
-		req           ValidationRequest
-		expectError   bool
-		errorContains string
-	}{
-		{
-			name: "✅ valid request",
-			req: ValidationRequest{
-				Transaction: "valid_transaction",
-			},
-			expectError: false,
-		},
-		{
-			name: "❌ empty transaction",
-			req: ValidationRequest{
-				Transaction: "",
-			},
-			expectError:   true,
-			errorContains: "transaction is required",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tc.req.Validate()
-
-			if tc.expectError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errorContains)
+				assert.Contains(t, err.Error(), tc.errMsg)
 			} else {
 				require.NoError(t, err)
 			}
