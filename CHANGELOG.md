@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Optimize the Dockerfile to reduce the image size. [#692](https://github.com/stellar/stellar-disbursement-platform-backend/pull/692)
+- Add Makefile to interact with the contract, and other polishes. [#790](https://github.com/stellar/stellar-disbursement-platform-backend/pull/790)
 
 ### Security and Dependencies
 
