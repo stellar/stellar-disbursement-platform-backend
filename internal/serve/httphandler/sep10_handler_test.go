@@ -15,10 +15,10 @@ func TestValidateChallengeRequest(t *testing.T) {
 	handler := SEP10Handler{}
 
 	testCases := []struct {
-		name          string
-		account       string
-		expectError   bool
-		errMsg string
+		name        string
+		account     string
+		expectError bool
+		errMsg      string
 	}{
 		{
 			name:        "valid Ed25519 account",
@@ -26,22 +26,22 @@ func TestValidateChallengeRequest(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:          "empty account",
-			account:       "",
-			expectError:   true,
-			errMsg: "account is required",
+			name:        "empty account",
+			account:     "",
+			expectError: true,
+			errMsg:      "account is required",
 		},
 		{
-			name:          "invalid account format",
-			account:       "invalid-account",
-			expectError:   true,
-			errMsg: "invalid account format",
+			name:        "invalid account format",
+			account:     "invalid-account",
+			expectError: true,
+			errMsg:      "invalid account format",
 		},
 		{
-			name:          "muxed account not supported",
-			account:       "MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-			expectError:   true,
-			errMsg: "invalid account format",
+			name:        "muxed account not supported",
+			account:     "MAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			expectError: true,
+			errMsg:      "invalid account format",
 		},
 	}
 
@@ -70,11 +70,11 @@ func TestValidateChallengeRequestWithMemo(t *testing.T) {
 	handler := SEP10Handler{}
 
 	testCases := []struct {
-		name          string
-		account       string
-		memo          string
-		expectError   bool
-		errMsg string
+		name        string
+		account     string
+		memo        string
+		expectError bool
+		errMsg      string
 	}{
 		{
 			name:        "valid account with valid memo",
@@ -83,18 +83,18 @@ func TestValidateChallengeRequestWithMemo(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:          "valid account with invalid memo",
-			account:       kp.Address(),
-			memo:          "invalid-memo",
-			expectError:   true,
-			errMsg: "invalid memo must be a positive integer",
+			name:        "valid account with invalid memo",
+			account:     kp.Address(),
+			memo:        "invalid-memo",
+			expectError: true,
+			errMsg:      "invalid memo must be a positive integer",
 		},
 		{
-			name:          "valid account with negative memo",
-			account:       kp.Address(),
-			memo:          "-123",
-			expectError:   true,
-			errMsg: "invalid memo must be a positive integer",
+			name:        "valid account with negative memo",
+			account:     kp.Address(),
+			memo:        "-123",
+			expectError: true,
+			errMsg:      "invalid memo must be a positive integer",
 		},
 	}
 

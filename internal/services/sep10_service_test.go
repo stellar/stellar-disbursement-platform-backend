@@ -35,7 +35,7 @@ func TestNewSEP10Service(t *testing.T) {
 		baseURL                string
 		models                 *data.Models
 		expectError            bool
-		errMsg          string
+		errMsg                 string
 	}{
 		{
 			name:                   "✅ valid configuration",
@@ -54,7 +54,7 @@ func TestNewSEP10Service(t *testing.T) {
 			baseURL:                "https://ultramar.imperium.com",
 			models:                 &data.Models{},
 			expectError:            true,
-			errMsg:          "parsing sep10 signing key",
+			errMsg:                 "parsing sep10 signing key",
 		},
 	}
 
@@ -108,7 +108,7 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 		name          string
 		req           ChallengeRequest
 		expectError   bool
-		errMsg string
+		errMsg        string
 		checkResponse func(t *testing.T, resp *ChallengeResponse)
 	}{
 		{
@@ -145,8 +145,8 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 				HomeDomain:   "ultramar.imperium.com",
 				ClientDomain: "test-client-domain.com",
 			},
-			expectError:   true,
-			errMsg: "invalid-account is not a valid account id",
+			expectError: true,
+			errMsg:      "invalid-account is not a valid account id",
 		},
 		{
 			name: "❌ invalid home domain",
@@ -155,8 +155,8 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 				HomeDomain:   "chaos.galaxy.com",
 				ClientDomain: "test-client-domain.com",
 			},
-			expectError:   true,
-			errMsg: "invalid home_domain must match ultramar.imperium.com",
+			expectError: true,
+			errMsg:      "invalid home_domain must match ultramar.imperium.com",
 		},
 	}
 
@@ -645,7 +645,7 @@ func TestSEP10Service_ValidateChallenge_CompleteFlow(t *testing.T) {
 
 	mockHorizonClient := &horizonclient.MockClient{}
 	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
-		AccountID: kp.Address(),
+		AccountID:  kp.Address(),
 		Thresholds: horizon.AccountThresholds{},
 	}, nil)
 
@@ -688,10 +688,10 @@ func TestSEP10Service_ValidateChallenge_CompleteFlow(t *testing.T) {
 func TestChallengeRequest_Validate(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
-		name          string
-		req           ChallengeRequest
-		expectError   bool
-		errMsg string
+		name        string
+		req         ChallengeRequest
+		expectError bool
+		errMsg      string
 	}{
 		{
 			name: "✅ valid request",
@@ -718,8 +718,8 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				Account:    "",
 				HomeDomain: "fenris.imperium.com",
 			},
-			expectError:   true,
-			errMsg: "account is required",
+			expectError: true,
+			errMsg:      "account is required",
 		},
 		{
 			name: "❌ invalid account",
@@ -727,8 +727,8 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				Account:    "invalid-account",
 				HomeDomain: "fenris.imperium.com",
 			},
-			expectError:   true,
-			errMsg: "invalid account not a valid ed25519 public key",
+			expectError: true,
+			errMsg:      "invalid account not a valid ed25519 public key",
 		},
 		{
 			name: "❌ missing client_domain",
@@ -736,8 +736,8 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				Account:    keypair.MustRandom().Address(),
 				HomeDomain: "fenris.imperium.com",
 			},
-			expectError:   true,
-			errMsg: "client_domain is required",
+			expectError: true,
+			errMsg:      "client_domain is required",
 		},
 		{
 			name: "❌ invalid memo",
@@ -747,8 +747,8 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				ClientDomain: "test-client-domain.com",
 				Memo:         "invalid-memo",
 			},
-			expectError:   true,
-			errMsg: "invalid memo must be a positive integer",
+			expectError: true,
+			errMsg:      "invalid memo must be a positive integer",
 		},
 	}
 
