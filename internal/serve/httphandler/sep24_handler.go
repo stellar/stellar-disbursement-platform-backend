@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -241,8 +242,17 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	baseURLParsed, err := url.Parse(h.InteractiveBaseURL)
+	if err != nil {
+		log.Ctx(ctx).Errorf("Failed to parse base URL %s: %v", h.InteractiveBaseURL, err)
+		httperror.InternalError(ctx, "Failed to parse base URL", err, nil).Render(w)
+		return
+	}
+
+	tenantBaseURL := fmt.Sprintf("%s://%s", baseURLParsed.Scheme, sep10Claims.HomeDomain)
+
 	interactiveURL := fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s&token=%s&lang=%s",
-		h.InteractiveBaseURL, txnID, sep24Token, lang)
+		tenantBaseURL, txnID, sep24Token, lang)
 
 	response := map[string]any{
 		"type": "interactive_customer_info_needed",
