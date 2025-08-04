@@ -180,7 +180,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 	webAuthDomain := s.getWebAuthDomain(ctx)
 
 	// Use custom validation instead of the restrictive Go SDK validation
-	tx, clientAccountID, matchedHomeDomain, memo, err := s.validateChallengeCustom(
+	tx, clientAccountID, matchedHomeDomain, memo, clientDomain, err := s.validateChallengeCustom(
 		req.Transaction,
 		s.Sep10SigningKeypair.Address(),
 		s.NetworkPassphrase,
@@ -207,52 +207,52 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 		return nil, err
 	}
 
-	return s.generateToken(tx, clientAccountID, matchedHomeDomain, memo)
+	return s.generateToken(tx, clientAccountID, matchedHomeDomain, memo, clientDomain)
 }
 
 // validateChallengeCustom provides custom SEP-10 challenge validation that properly handles client_domain operations
-func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, network, webAuthDomain string, homeDomains []string) (*txnbuild.Transaction, string, string, *txnbuild.MemoID, error) {
+func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, network, webAuthDomain string, homeDomains []string) (*txnbuild.Transaction, string, string, *txnbuild.MemoID, string, error) {
 	parsed, err := txnbuild.TransactionFromXDR(challengeTx)
 	if err != nil {
-		return nil, "", "", nil, fmt.Errorf("could not parse challenge: %w", err)
+		return nil, "", "", nil, "", fmt.Errorf("could not parse challenge: %w", err)
 	}
 
 	tx, isSimple := parsed.Transaction()
 	if !isSimple {
-		return nil, "", "", nil, fmt.Errorf("challenge cannot be a fee bump transaction")
+		return nil, "", "", nil, "", fmt.Errorf("challenge cannot be a fee bump transaction")
 	}
 
 	if tx.SourceAccount().AccountID != serverAccountID {
-		return nil, "", "", nil, fmt.Errorf("transaction source account is not equal to server's account")
+		return nil, "", "", nil, "", fmt.Errorf("transaction source account is not equal to server's account")
 	}
 
 	if tx.SourceAccount().Sequence != 0 {
-		return nil, "", "", nil, fmt.Errorf("transaction sequence number must be 0")
+		return nil, "", "", nil, "", fmt.Errorf("transaction sequence number must be 0")
 	}
 
 	if tx.Timebounds().MaxTime == txnbuild.TimeoutInfinite {
-		return nil, "", "", nil, fmt.Errorf("transaction requires non-infinite timebounds")
+		return nil, "", "", nil, "", fmt.Errorf("transaction requires non-infinite timebounds")
 	}
 
 	const gracePeriod = 5 * 60 // seconds
 	currentTime := time.Now().UTC().Unix()
 	if currentTime+gracePeriod < tx.Timebounds().MinTime || currentTime > tx.Timebounds().MaxTime {
-		return nil, "", "", nil, fmt.Errorf("transaction is not within range of the specified timebounds (currentTime=%d, MinTime=%d, MaxTime=%d)",
+		return nil, "", "", nil, "", fmt.Errorf("transaction is not within range of the specified timebounds (currentTime=%d, MinTime=%d, MaxTime=%d)",
 			currentTime, tx.Timebounds().MinTime, tx.Timebounds().MaxTime)
 	}
 
 	operations := tx.Operations()
 	if len(operations) < 1 {
-		return nil, "", "", nil, fmt.Errorf("transaction requires at least one manage_data operation")
+		return nil, "", "", nil, "", fmt.Errorf("transaction requires at least one manage_data operation")
 	}
 
 	op, ok := operations[0].(*txnbuild.ManageData)
 	if !ok {
-		return nil, "", "", nil, fmt.Errorf("operation type should be manage_data")
+		return nil, "", "", nil, "", fmt.Errorf("operation type should be manage_data")
 	}
 
 	if op.SourceAccount == "" {
-		return nil, "", "", nil, fmt.Errorf("operation should have a source account")
+		return nil, "", "", nil, "", fmt.Errorf("operation should have a source account")
 	}
 
 	var matchedHomeDomain string
@@ -263,7 +263,7 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 		}
 	}
 	if matchedHomeDomain == "" {
-		return nil, "", "", nil, fmt.Errorf("operation key does not match any homeDomains passed (key=%q, homeDomains=%v)", op.Name, homeDomains)
+		return nil, "", "", nil, "", fmt.Errorf("operation key does not match any homeDomains passed (key=%q, homeDomains=%v)", op.Name, homeDomains)
 	}
 
 	clientAccountID := op.SourceAccount
@@ -273,56 +273,58 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 		if memoID, ok := tx.Memo().(txnbuild.MemoID); ok {
 			memo = &memoID
 		} else {
-			return nil, "", "", nil, fmt.Errorf("invalid memo, only ID memos are permitted")
+			return nil, "", "", nil, "", fmt.Errorf("invalid memo, only ID memos are permitted")
 		}
 	}
 
 	nonceB64 := string(op.Value)
 	if len(nonceB64) != 64 {
-		return nil, "", "", nil, fmt.Errorf("random nonce encoded as base64 should be 64 bytes long")
+		return nil, "", "", nil, "", fmt.Errorf("random nonce encoded as base64 should be 64 bytes long")
 	}
 	nonceBytes, err := base64.StdEncoding.DecodeString(nonceB64)
 	if err != nil {
-		return nil, "", "", nil, fmt.Errorf("failed to decode random nonce provided in manage_data operation: %w", err)
+		return nil, "", "", nil, "", fmt.Errorf("failed to decode random nonce provided in manage_data operation: %w", err)
 	}
 	if len(nonceBytes) != 48 {
-		return nil, "", "", nil, fmt.Errorf("random nonce before encoding as base64 should be 48 bytes long")
+		return nil, "", "", nil, "", fmt.Errorf("random nonce before encoding as base64 should be 48 bytes long")
 	}
 
+	var clientDomain string
 	for i, op := range operations[1:] {
 		manageDataOp, ok := op.(*txnbuild.ManageData)
 		if !ok {
-			return nil, "", "", nil, fmt.Errorf("subsequent operation %d type should be manage_data", i+1)
+			return nil, "", "", nil, "", fmt.Errorf("subsequent operation %d type should be manage_data", i+1)
 		}
 
 		if manageDataOp.SourceAccount == "" {
-			return nil, "", "", nil, fmt.Errorf("subsequent operation %d should have a source account", i+1)
+			return nil, "", "", nil, "", fmt.Errorf("subsequent operation %d should have a source account", i+1)
 		}
 
 		switch manageDataOp.Name {
 		case "web_auth_domain":
 			if manageDataOp.SourceAccount != serverAccountID {
-				return nil, "", "", nil, fmt.Errorf("web auth domain operation must have server source account")
+				return nil, "", "", nil, "", fmt.Errorf("web auth domain operation must have server source account")
 			}
 			if !bytes.Equal(manageDataOp.Value, []byte(webAuthDomain)) {
-				return nil, "", "", nil, fmt.Errorf("web auth domain operation value is %q but expect %q", string(manageDataOp.Value), webAuthDomain)
+				return nil, "", "", nil, "", fmt.Errorf("web auth domain operation value is %q but expect %q", string(manageDataOp.Value), webAuthDomain)
 			}
 		case "client_domain":
 			if _, err := xdr.AddressToAccountId(manageDataOp.SourceAccount); err != nil {
-				return nil, "", "", nil, fmt.Errorf("client_domain operation has invalid source account: %w", err)
+				return nil, "", "", nil, "", fmt.Errorf("client_domain operation has invalid source account: %w", err)
 			}
+			clientDomain = string(manageDataOp.Value)
 		default:
 			if manageDataOp.SourceAccount != serverAccountID {
-				return nil, "", "", nil, fmt.Errorf("unknown subsequent operation %q must have server account as source", manageDataOp.Name)
+				return nil, "", "", nil, "", fmt.Errorf("unknown subsequent operation %q must have server account as source", manageDataOp.Name)
 			}
 		}
 	}
 
 	if err := s.verifyServerSignature(tx, network, serverAccountID); err != nil {
-		return nil, "", "", nil, fmt.Errorf("verifying server signature: %w", err)
+		return nil, "", "", nil, "", fmt.Errorf("verifying server signature: %w", err)
 	}
 
-	return tx, clientAccountID, matchedHomeDomain, memo, nil
+	return tx, clientAccountID, matchedHomeDomain, memo, clientDomain, nil
 }
 
 func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accountID, accountType string) error {
@@ -365,7 +367,7 @@ func (s *sep10Service) verifySignaturesWithThreshold(
 	allowedHomeDomains []string,
 	account *horizon.Account,
 ) error {
-	tx, _, _, _, err := s.validateChallengeCustom(
+	tx, _, _, _, _, err := s.validateChallengeCustom(
 		transaction,
 		s.Sep10SigningKeypair.Address(),
 		s.NetworkPassphrase,
@@ -439,6 +441,7 @@ func (s *sep10Service) generateToken(
 	tx *txnbuild.Transaction,
 	clientAccountID, matchedHomeDomain string,
 	memo *txnbuild.MemoID,
+	clientDomain string,
 ) (*ValidationResponse, error) {
 	subject := clientAccountID
 	if memo != nil {
@@ -463,7 +466,7 @@ func (s *sep10Service) generateToken(
 		fmt.Sprintf("%s://%s/auth", protocol, matchedHomeDomain),
 		subject,
 		jti,
-		"",
+		clientDomain,
 		matchedHomeDomain,
 		iat,
 		exp,
