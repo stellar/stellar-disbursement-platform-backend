@@ -617,6 +617,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			InstanceName:                o.InstanceName,
 		}.ServeHTTP)
 
+		r.Get("/sep24/info", httphandler.SEP24InfoHandler{
+			Models: o.Models,
+		}.ServeHTTP)
+
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/wallet-registration/*", httphandler.SEP24InteractiveDepositHandler{
 			App:      sep24frontend.App,
