@@ -37,6 +37,7 @@ deploy: clean build
 	--public_key $(PUBLIC_KEY_BYTES1)
 
 rotate-signer:
-	stellar contract invoke -s multisig \
+	stellar contract invoke -s $(SOURCE_ACCOUNT) \
+	--id $(CONTRACT_ID) \
 	-- rotate_signer \
 	--new_signer $(PUBLIC_KEY_BYTES2)

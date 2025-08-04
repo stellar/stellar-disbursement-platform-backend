@@ -348,7 +348,7 @@ func Test_CosignRecoveryHandler_CosignRecovery(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create & execute request
-			bodyBytes, err := json.Marshal(CosignRecoveryRequest{TransactionXDR: tc.txXDR})
+			bodyBytes, err := json.Marshal(TransactionPayload{TransactionXDR: tc.txXDR})
 			require.NoError(t, err)
 			req := httptest.NewRequest(http.MethodPost, "/cosign-recovery/"+contractAddress, strings.NewReader(string(bodyBytes)))
 			req.Header.Set("Content-Type", "application/json")
@@ -360,10 +360,10 @@ func Test_CosignRecoveryHandler_CosignRecovery(t *testing.T) {
 				assert.Contains(t, w.Body.String(), tc.wantErrContains)
 			} else {
 				// parse tx XDR from response
-				var response CosignRecoveryResponse
+				var response TransactionPayload
 				err = json.Unmarshal(w.Body.Bytes(), &response)
 				require.NoError(t, err)
-				assert.NotEmpty(t, response.SignedTransactionXDR, "signed transaction XDR should not be empty")
+				assert.NotEmpty(t, response.TransactionXDR, "signed transaction XDR should not be empty")
 
 				// sign tx XDR
 				tx, err := txnbuild.TransactionFromXDR(tc.txXDR)
@@ -374,7 +374,7 @@ func Test_CosignRecoveryHandler_CosignRecovery(t *testing.T) {
 				require.NoError(t, err)
 				signedTxXDR, err := signedTx.Base64()
 				require.NoError(t, err)
-				assert.Equal(t, response.SignedTransactionXDR, signedTxXDR)
+				assert.Equal(t, response.TransactionXDR, signedTxXDR)
 			}
 		})
 	}

@@ -26,12 +26,8 @@ type CosignRecoveryHandler struct {
 	NetworkPassphrase string
 }
 
-type CosignRecoveryRequest struct {
+type TransactionPayload struct {
 	TransactionXDR string `json:"transaction_xdr"`
-}
-
-type CosignRecoveryResponse struct {
-	SignedTransactionXDR string `json:"signed_transaction_xdr"`
 }
 
 func (h CosignRecoveryHandler) CosignRecovery(rw http.ResponseWriter, req *http.Request) {
@@ -55,7 +51,7 @@ func (h CosignRecoveryHandler) CosignRecovery(rw http.ResponseWriter, req *http.
 		return
 	}
 
-	var reqBody CosignRecoveryRequest
+	var reqBody TransactionPayload
 	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		httperror.BadRequest("Decoding request body", err, nil).Render(rw)
 		return
@@ -74,7 +70,7 @@ func (h CosignRecoveryHandler) CosignRecovery(rw http.ResponseWriter, req *http.
 		return
 	}
 
-	resp := CosignRecoveryResponse{SignedTransactionXDR: txXDR}
+	resp := TransactionPayload{TransactionXDR: txXDR}
 	httpjson.Render(rw, resp, httpjson.JSON)
 }
 

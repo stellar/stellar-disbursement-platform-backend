@@ -352,7 +352,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	const url = "/restricted"
 
-	setRestrictedEndpoint := func(ctx context.Context, r *chi.Mux, roles ...data.UserRole) {
+	setRestrictedEndpoint := func(_ context.Context, r *chi.Mux, roles ...data.UserRole) {
 		r.With(AnyRoleMiddleware(authManager, roles...)).
 			Get(url, func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
