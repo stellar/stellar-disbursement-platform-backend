@@ -36,6 +36,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Bump the minor-and-patch group across 1 directory with 6 updates. [#690](https://github.com/stellar/stellar-disbursement-platform-backend/pull/690)
 
+## [3.7.3](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.3) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.2...3.7.3))
+
+### Fixed
+- Fix balance calculation for resumed disbursements by subtracting amount already disbursed. [#787](https://github.com/stellar/stellar-disbursement-platform-backend/pull/787)
+
 ## [3.7.2](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.2) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.1...3.7.2))
 
 ### Added
