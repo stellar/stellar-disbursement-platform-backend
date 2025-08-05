@@ -128,7 +128,7 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	txParams := txnbuild.TransactionParams{
 		SourceAccount: &txnbuild.SimpleAccount{
 			AccountID: txJob.ChannelAccount.PublicKey,
-			Sequence:  channelAccountSequenceNum,
+			Sequence:  channelAccountSequenceNum + 1,
 		},
 		Operations: []txnbuild.Operation{operation},
 		BaseFee:    int64(h.engine.MaxBaseFee),
@@ -136,7 +136,6 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 			TimeBounds:   txnbuild.NewTimeout(300),
 			LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
 		},
-		IncrementSequenceNum: true,
 	}
 
 	initialTx, err := txnbuild.NewTransaction(txParams)
