@@ -3,7 +3,6 @@ package transactionsubmission
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"testing"
@@ -27,6 +26,7 @@ import (
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_NewWalletCreationTransactionHandler(t *testing.T) {
@@ -258,70 +258,78 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			LockedUntilLedgerNumber: 12345,
 		}
 
+		// Call method under test
 		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 		require.NoError(t, err)
-		require.NotNil(t, tx)
 
-		// Verify transaction structure
-		assert.Equal(t, channelAccount, tx.SourceAccount().AccountID)
-		assert.Len(t, tx.Operations(), 1)
-
-		// Verify it's an InvokeHostFunction operation
-		operation, ok := tx.Operations()[0].(*txnbuild.InvokeHostFunction)
-		require.True(t, ok)
-		assert.Equal(t, distributionAccount, operation.SourceAccount)
-
-		// Verify that auth entries were processed (should have 1 auth entry)
-		assert.Len(t, operation.Auth, 1)
-
-		// Verify that transaction data was applied
-		assert.Equal(t, 1, int(operation.Ext.V))
-		assert.NotNil(t, operation.Ext.SorobanData)
-
-		// Verify the contract invocation has correct arguments
-		require.Equal(t, operation.HostFunction.Type, xdr.HostFunctionTypeHostFunctionTypeCreateContractV2)
-		require.NotNil(t, operation.HostFunction.CreateContractV2)
-
-		// Verify constructor arguments are in the correct order: [argAdmin, argPublicKey]
-		constructorArgs := operation.HostFunction.CreateContractV2.ConstructorArgs
-		require.Len(t, constructorArgs, 2)
-
-		// First argument should be argAdmin (distribution account address)
-		argAdmin := constructorArgs[0]
-		assert.Equal(t, xdr.ScValTypeScvAddress, argAdmin.Type)
-		require.NotNil(t, argAdmin.Address)
-		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, argAdmin.Address.Type)
-		require.NotNil(t, argAdmin.Address.AccountId)
-		distributionAccountId := xdr.MustAddress(distributionAccount)
-		assert.Equal(t, distributionAccountId, *argAdmin.Address.AccountId)
-
-		// Second argument should be argPublicKey (public key bytes)
-		argPublicKey := constructorArgs[1]
-		assert.Equal(t, xdr.ScValTypeScvBytes, argPublicKey.Type)
-		require.NotNil(t, argPublicKey.Bytes)
-
-		// Verify the public key bytes match the expected decoded hex
-		expectedPublicKeyBytes, err := hex.DecodeString(publicKeyHex)
+		// Build the expected transaction, for assertions
+		var transactionData xdr.SorobanTransactionData
+		require.NoError(t, xdr.SafeUnmarshalBase64(simulationResponse.TransactionDataXDR, &transactionData))
+		createContractOp := txnbuild.InvokeHostFunction{
+			SourceAccount: distributionAccount,
+			HostFunction: xdr.HostFunction{
+				Type: xdr.HostFunctionTypeHostFunctionTypeCreateContractV2,
+				CreateContractV2: &xdr.CreateContractArgsV2{
+					ContractIdPreimage: xdr.ContractIdPreimage{
+						Type: xdr.ContractIdPreimageTypeContractIdPreimageFromAddress,
+						FromAddress: &xdr.ContractIdPreimageFromAddress{
+							Address: xdr.ScAddress{
+								Type:      xdr.ScAddressTypeScAddressTypeAccount,
+								AccountId: sdpUtils.Ptr(xdr.MustAddress(distributionAccount)),
+							},
+							Salt: xdr.Uint256{
+								99, 129, 232, 41, 167, 236, 207, 121, 224, 247, 188, 136, 165, 129, 4, 28, 105, 128, 46, 193, 138, 11, 31, 179, 182, 238, 155, 201, 113, 108, 56, 41,
+							},
+						},
+					},
+					Executable: xdr.ContractExecutable{
+						Type: xdr.ContractExecutableTypeContractExecutableWasm,
+						WasmHash: &xdr.Hash{
+							171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137,
+						},
+					},
+					ConstructorArgs: []xdr.ScVal{
+						{
+							Type: xdr.ScValTypeScvAddress,
+							Address: &xdr.ScAddress{
+								Type:      xdr.ScAddressTypeScAddressTypeAccount,
+								AccountId: sdpUtils.Ptr(xdr.MustAddress(distributionAccount)),
+							},
+						},
+						{
+							Type: xdr.ScValTypeScvBytes,
+							Bytes: &xdr.ScBytes{
+								1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1,
+							},
+						},
+					},
+				},
+			},
+			Ext: xdr.TransactionExt{
+				V:           1,
+				SorobanData: &transactionData,
+			},
+		}
+		createContractOp.Auth, err = walletCreationHandler.extractAuthEntries(simulationResponse)
 		require.NoError(t, err)
-		assert.Equal(t, expectedPublicKeyBytes, []byte(*argPublicKey.Bytes))
-
-		// Verify the WASM hash is correctly set
-		require.NotNil(t, operation.HostFunction.CreateContractV2.Executable.WasmHash)
-		expectedWasmHashBytes, err := hex.DecodeString(wasmHashHex)
+		wantTx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+			SourceAccount: &txnbuild.SimpleAccount{
+				AccountID: channelAccount,
+				Sequence:  101,
+			},
+			IncrementSequenceNum: false,
+			BaseFee:              100,
+			Operations:           []txnbuild.Operation{&createContractOp},
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds:   tx.Timebounds(),
+				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
+			},
+		})
 		require.NoError(t, err)
-		assert.Equal(t, expectedWasmHashBytes, (*operation.HostFunction.CreateContractV2.Executable.WasmHash)[:])
 
-		// Verify the contract ID preimage is correctly configured
-		contractIdPreimage := operation.HostFunction.CreateContractV2.ContractIdPreimage
-		assert.Equal(t, xdr.ContractIdPreimageTypeContractIdPreimageFromAddress, contractIdPreimage.Type)
-		require.NotNil(t, contractIdPreimage.FromAddress)
-
-		// Verify the address in the preimage matches the distribution account
-		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, contractIdPreimage.FromAddress.Address.Type)
-		require.NotNil(t, contractIdPreimage.FromAddress.Address.AccountId)
-		assert.Equal(t, distributionAccountId, *contractIdPreimage.FromAddress.Address.AccountId)
-
-		// Verify mocks were called as expected
+		// Assertions
+		require.Equal(t, wantTx, tx)
+		require.InDelta(t, time.Now().Add(300*time.Second).UTC().Unix(), tx.Timebounds().MaxTime, 5)
 		rpcClient.AssertExpectations(t)
 	})
 
