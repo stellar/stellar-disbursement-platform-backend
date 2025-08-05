@@ -27,6 +27,7 @@ upload:
 	--wasm ../target/wasm32v1-none/release/smart_wallet.wasm
 
 deploy: clean build
+	@echo "==========\n⚠️ DISCLAIMER: This command is for TEST purposes only. Once deployed, the contract will only pass authentication if the client has the secret key and can produce the appropriate signature.\n=========="
 	stellar contract deploy \
 	-s $(SOURCE_ACCOUNT) \
 	--wasm ../target/wasm32v1-none/release/smart_wallet.wasm \
