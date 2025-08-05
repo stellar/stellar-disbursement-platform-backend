@@ -21,9 +21,14 @@ build: fmt
 test:
 	cargo test
 
+upload:
+	stellar contract upload \
+	-s $(SOURCE_ACCOUNT) \
+	--wasm ../target/wasm32v1-none/release/smart_wallet.wasm
+
 deploy: clean build
 	stellar contract deploy \
-	-s default \
+	-s $(SOURCE_ACCOUNT) \
 	--wasm ../target/wasm32v1-none/release/smart_wallet.wasm \
 	-- \
 	--admin $(shell stellar keys public-key $(SOURCE_ACCOUNT)) \
