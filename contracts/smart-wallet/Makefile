@@ -2,7 +2,7 @@
 export STELLAR_RPC_URL=https://soroban-testnet.stellar.org:443
 export STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 # export STELLAR_RPC_HEADERS=X-SOROBAN-ENVIRONMENT:testnet
-export SOURCE_ACCOUNT=default # This is the stellar-cli source account that we set as the recovery account
+export SOURCE_ACCOUNT=default # This is the stellar-cli source account
 
 # Envs used for the smart wallet contract
 export PUBLIC_KEY_BYTES=040efb310ac22bd982d0684ce173159c00636de84b0b2868eb7fdff4ca19154d39e0a9af9de6e5fbd8037efe932ef0245ebb1299e14bc3b0babcd77764cacce28a
