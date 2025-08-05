@@ -159,11 +159,11 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 
 	operation.Auth, err = h.extractAuthEntries(simulationResponse)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extracting auth entries: %w", err)
 	}
 
 	if applyErr := h.applyTransactionData(operation, simulationResponse); applyErr != nil {
-		return nil, applyErr
+		return nil, fmt.Errorf("applying transaction data: %w", applyErr)
 	}
 
 	preparedTx, err := txnbuild.NewTransaction(txParams)
