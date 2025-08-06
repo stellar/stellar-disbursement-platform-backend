@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +19,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -41,10 +43,17 @@ type AssetRequest struct {
 	Issuer string `json:"issuer"`
 }
 
+// AssetWithTrustlineInfo represents an asset with trustline information
+type AssetWithTrustlineInfo struct {
+	data.Asset
+	HasTrustline bool `json:"has_trustline"`
+}
+
 // GetAssets returns a list of assets.
 func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	walletID := strings.TrimSpace(r.URL.Query().Get("wallet"))
+	hasTrustlineParam := strings.TrimSpace(r.URL.Query().Get("hasTrustline"))
 
 	var assets []data.Asset
 	var err error
@@ -57,14 +66,95 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
 		return
 	}
+
+	// If hasTrustline parameter is provided, filter assets by trustline availability.
+	if hasTrustlineParam != "" {
+		hasTrustline, err := strconv.ParseBool(hasTrustlineParam)
+		if err != nil {
+			httperror.BadRequest("Invalid hasTrustline parameter. Must be 'true' or 'false'", err, nil).Render(w)
+			return
+		}
+
+		distributionAccount, err := c.DistributionAccountFromContext(ctx)
+		if err != nil {
+			httperror.InternalError(ctx, "Cannot resolve distribution account from context", err, nil).Render(w)
+			return
+		}
+
+		responseAssets := make([]AssetWithTrustlineInfo, 0)
+		for _, asset := range assets {
+			hasAssetTrustline, err := c.checkTrustlineExists(&distributionAccount, asset)
+			if err != nil {
+				log.Ctx(ctx).Warnf("Error checking trustline for asset %s:%s: %v", asset.Code, asset.Issuer, err)
+				continue
+			}
+
+			if hasAssetTrustline == hasTrustline {
+				responseAssets = append(responseAssets, AssetWithTrustlineInfo{
+					Asset:        asset,
+					HasTrustline: hasAssetTrustline,
+				})
+			}
+		}
+
+		httpjson.Render(w, responseAssets, httpjson.JSON)
+		return
+	}
+
 	httpjson.Render(w, assets, httpjson.JSON)
+}
+
+// checkTrustlineExists checks if the distribution account has a trustline for the given asset.
+func (c AssetsHandler) checkTrustlineExists(
+	account *schema.TransactionAccount,
+	asset data.Asset,
+) (bool, error) {
+	if asset.IsNative() {
+		return true, nil
+	}
+
+	if !account.IsStellar() {
+		// For Circle accounts, check if the asset is supported by Circle
+		// Circle only supports USD and EUR currencies mapped to USDC and EURC
+		for _, networkAssets := range circle.AllowedAssetsMap {
+			for _, circleAsset := range networkAssets {
+				if circleAsset.Code == asset.Code && circleAsset.Issuer == asset.Issuer {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	}
+
+	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
+		AccountID: account.Address,
+	})
+	if err != nil {
+		if horizonErr, ok := err.(*horizonclient.Error); ok {
+			if horizonErr.Response.StatusCode == 404 {
+				return false, fmt.Errorf("account %s not found on the Stellar network", account.Address)
+			}
+		}
+		return false, fmt.Errorf("getting account details from Horizon: %w", err)
+	}
+
+	for _, balance := range acc.Balances {
+		if balance.Asset.Type == validators.AssetTypeNative {
+			continue
+		}
+
+		if balance.Asset.Code == asset.Code && balance.Asset.Issuer == asset.Issuer {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // CreateAsset adds a new asset.
 func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	distributionAccount, err := c.DistributionAccountFromContext(ctx)
 	if err != nil {
 		err = fmt.Errorf("resolving distribution account from context: %w", err)
 		httperror.InternalError(ctx, "Cannot resolve distribution account from context", err, nil).Render(w)
@@ -122,7 +212,7 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	distributionAccount, err := c.DistributionAccountFromContext(ctx)
 	if err != nil {
 		err = fmt.Errorf("resolving distribution account from context: %w", err)
 		httperror.InternalError(ctx, "Cannot resolve distribution account from context", err, nil).Render(w)

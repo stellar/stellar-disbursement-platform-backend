@@ -35,6 +35,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 var defaultPreconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
@@ -51,8 +52,18 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 
 	ctx := context.Background()
 
+	horizonClientMock := &horizonclient.MockClient{}
+	signatureService, _, distAccResolver := signing.NewMockSignatureService(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+
 	handler := &AssetsHandler{
 		Models: models,
+		SubmitterEngine: engine.SubmitterEngine{
+			SignatureService:    signatureService,
+			HorizonClient:       horizonClientMock,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          txnbuild.MinBaseFee,
+		},
 	}
 
 	t.Run("successfully returns a list of assets", func(t *testing.T) {
@@ -93,6 +104,194 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		require.Equal(t, assets[0].ID, assetsResponse[0].ID)
 		require.Equal(t, assets[0].Code, assetsResponse[0].Code)
 		require.Equal(t, assets[0].Issuer, assetsResponse[0].Issuer)
+	})
+
+	t.Run("returns assets with trustline information", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &tenant.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "EURT",
+						Issuer: "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU",
+					},
+					Balance: "50.0000000",
+				},
+			},
+		}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithTrustlineInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+		require.Len(t, responseAssets, 1)
+
+		for _, asset := range responseAssets {
+			assert.NotNil(t, asset.HasTrustline)
+		}
+	})
+
+	t.Run("filters assets by hasTrustline=true", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &tenant.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "EURT",
+						Issuer: "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU",
+					},
+					Balance: "50.0000000",
+				},
+			},
+		}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithTrustlineInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+
+		for _, asset := range responseAssets {
+			assert.True(t, asset.HasTrustline)
+		}
+	})
+
+	t.Run("filters assets by hasTrustline=false", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &tenant.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?hasTrustline=false", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithTrustlineInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+
+		for _, asset := range responseAssets {
+			assert.False(t, asset.HasTrustline)
+		}
+	})
+
+	t.Run("returns error for invalid hasTrustline parameter", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?hasTrustline=invalid", nil)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
+func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
+	handler := &AssetsHandler{}
+
+	t.Run("returns true for native assets", func(t *testing.T) {
+		asset := data.Asset{Code: "XLM", Issuer: ""}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+	})
+
+	t.Run("returns true for Circle accounts with supported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+	})
+
+	t.Run("returns false for Circle accounts with unsupported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
 	})
 }
 
