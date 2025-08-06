@@ -183,7 +183,7 @@ func generateUniquePublicKey() (string, error) {
 // createPaymentTransactions creates bulk payment transactions in the submitter_transactions table for TSS to process.
 func createPaymentTransactions(ctx context.Context, txModel *store.TransactionModel, paymentCount int, assetCode, assetIssuer, destination, tenantId string) []store.Transaction {
 	transactions := make([]store.Transaction, 0, paymentCount)
-	for i := 0; i < paymentCount; i++ {
+	for i := range paymentCount {
 		externalID := fmt.Sprintf("payment_loadtest_%d_%03d", time.Now().Unix(), i+1)
 		transactions = append(transactions, store.Transaction{
 			ExternalID:      externalID,
@@ -210,7 +210,7 @@ func createPaymentTransactions(ctx context.Context, txModel *store.TransactionMo
 // createWalletCreationTransactions creates bulk wallet creation transactions in the submitter_transactions table for TSS to process.
 func createWalletCreationTransactions(ctx context.Context, txModel *store.TransactionModel, walletCount int, wasmHash, tenantId string) []store.Transaction {
 	transactions := make([]store.Transaction, 0, walletCount)
-	for i := 0; i < walletCount; i++ {
+	for i := range walletCount {
 		externalID := fmt.Sprintf("wallet_loadtest_%d_%03d", time.Now().Unix(), i+1)
 
 		publicKey, err := generateUniquePublicKey()
