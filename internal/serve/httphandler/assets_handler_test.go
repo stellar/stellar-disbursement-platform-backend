@@ -255,6 +255,66 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
+
+	t.Run("correctly identifies assets with zero balance trustlines", func(t *testing.T) {
+		horizonClientMock.ExpectedCalls = nil
+		distAccResolver.ExpectedCalls = nil
+
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &tenant.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		// Mock Horizon account with USDC trustline but zero balance
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "USDC",
+						Issuer: "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE",
+					},
+					Balance: "0.0000000",
+				},
+			},
+		}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithTrustlineInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+
+		for _, asset := range responseAssets {
+			if asset.Code == "USDC" {
+				assert.True(t, asset.HasTrustline)
+			}
+		}
+	})
 }
 
 func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
@@ -287,6 +347,80 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
 		account := schema.TransactionAccount{
 			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
+	})
+
+	t.Run("returns true for Stellar accounts with trustline but zero balance", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		// Mock Horizon account with USDC trustline but zero balance
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "USDC",
+						Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+					},
+					Balance: "0.0000000",
+				},
+			},
+		}
+		horizonClientMock := &horizonclient.MockClient{}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		handler := &AssetsHandler{
+			SubmitterEngine: engine.SubmitterEngine{
+				HorizonClient: horizonClientMock,
+			},
+		}
+
+		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+	})
+
+	t.Run("returns false for Stellar accounts without trustline", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		// Mock Horizon account with only native balance (no BTC trustline)
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+			},
+		}
+		horizonClientMock := &horizonclient.MockClient{}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		handler := &AssetsHandler{
+			SubmitterEngine: engine.SubmitterEngine{
+				HorizonClient: horizonClientMock,
+			},
 		}
 
 		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
