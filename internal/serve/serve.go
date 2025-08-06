@@ -21,7 +21,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -141,13 +140,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error initializing password validator: %w", err)
 	}
 
-	// Create horizon client
-	horizonURL := getHorizonURL(opts.NetworkPassphrase)
-	horizonClient, err := dependencyinjection.NewHorizonClient(context.Background(), horizonURL)
-	if err != nil {
-		return fmt.Errorf("initializing horizon client: %w", err)
-	}
-
 	// Determine allow retry based on network passphrase
 	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
 
@@ -158,7 +150,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 		opts.BaseURL,
 		opts.Models,
 		allowHTTPRetry,
-		horizonClient,
+		opts.SubmitterEngine.HorizonClient,
 	)
 	if err != nil {
 		return fmt.Errorf("initializing SEP 10 Service: %w", err)
@@ -167,14 +159,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.Sep10Service = sep10Service
 
 	return nil
-}
-
-// getHorizonURL returns the appropriate horizon URL based on network passphrase
-func getHorizonURL(networkPassphrase string) string {
-	if networkPassphrase == network.PublicNetworkPassphrase {
-		return "https://horizon.stellar.org"
-	}
-	return "https://horizon-testnet.stellar.org"
 }
 
 // ValidateSecurity validates the MFA and ReCAPTCHA security options.

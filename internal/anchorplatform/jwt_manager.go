@@ -15,6 +15,47 @@ type Sep10JWTClaims struct {
 	HomeDomain   string `json:"home_domain,omitempty"`
 }
 
+func (c Sep10JWTClaims) Valid() error {
+	if c.Issuer == "" {
+		return fmt.Errorf("issuer is required")
+	}
+
+	if c.Subject == "" {
+		return fmt.Errorf("subject is required")
+	}
+
+	if c.ID == "" {
+		return fmt.Errorf("jti (JWT ID) is required")
+	}
+
+	if c.IssuedAt == nil {
+		return fmt.Errorf("iat (issued at) is required")
+	}
+
+	if c.ExpiresAt == nil {
+		return fmt.Errorf("exp (expires at) is required")
+	}
+
+	err := c.RegisteredClaims.Valid()
+	if err != nil {
+		return fmt.Errorf("validating registered claims: %w", err)
+	}
+
+	if c.ClientDomain != "" {
+		if len(c.ClientDomain) == 0 {
+			return fmt.Errorf("client_domain cannot be empty if provided")
+		}
+	}
+
+	if c.HomeDomain != "" {
+		if len(c.HomeDomain) == 0 {
+			return fmt.Errorf("home_domain cannot be empty if provided")
+		}
+	}
+
+	return nil
+}
+
 type JWTManager struct {
 	secret                []byte
 	expirationMiliseconds int64
@@ -53,7 +94,11 @@ func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clien
 		},
 	}
 
-	return manager.signToken(claims, "SEP24", true)
+	token, err := manager.signToken(claims)
+	if err != nil {
+		return "", fmt.Errorf("generating SEP24 token: %w", err)
+	}
+	return token, nil
 }
 
 func (manager *JWTManager) GenerateSEP10Token(issuer, subject, jti, clientDomain, homeDomain string, iat, exp time.Time) (string, error) {
@@ -69,7 +114,11 @@ func (manager *JWTManager) GenerateSEP10Token(issuer, subject, jti, clientDomain
 		HomeDomain:   homeDomain,
 	}
 
-	return manager.signToken(claims, "SEP10", false)
+	token, err := manager.signToken(claims)
+	if err != nil {
+		return "", fmt.Errorf("generating SEP10 token: %w", err)
+	}
+	return token, nil
 }
 
 // GenerateDefaultToken will generate a JWT token string using the token manager and only the default claims.
@@ -80,7 +129,11 @@ func (manager *JWTManager) GenerateDefaultToken(id string) (string, error) {
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Millisecond * time.Duration(manager.expirationMiliseconds))),
 	}
 
-	return manager.signToken(claims, "default", true)
+	token, err := manager.signToken(claims)
+	if err != nil {
+		return "", fmt.Errorf("generating default token: %w", err)
+	}
+	return token, nil
 }
 
 // ParseDefaultTokenClaims will parse the default claims from a JWT token string.
@@ -98,20 +151,17 @@ func (manager *JWTManager) ParseSEP24TokenClaims(tokenString string) (*SEP24JWTC
 	return parseTokenClaims(manager.secret, tokenString, &SEP24JWTClaims{}, "SEP24")
 }
 
-// signToken handles the common token signing logic
-func (manager *JWTManager) signToken(claims jwt.Claims, tokenType string, validate bool) (string, error) {
-	if validate {
-		if validator, ok := claims.(interface{ Valid() error }); ok {
-			if err := validator.Valid(); err != nil {
-				return "", fmt.Errorf("validating %s token claims: %w", tokenType, err)
-			}
+func (manager *JWTManager) signToken(claims jwt.Claims) (string, error) {
+	if validator, ok := claims.(interface{ Valid() error }); ok {
+		if err := validator.Valid(); err != nil {
+			return "", fmt.Errorf("validating token claims: %w", err)
 		}
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString(manager.secret)
 	if err != nil {
-		return "", fmt.Errorf("signing %s token: %w", tokenType, err)
+		return "", fmt.Errorf("signing token: %w", err)
 	}
 
 	return signedToken, nil
