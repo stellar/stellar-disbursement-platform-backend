@@ -43,7 +43,7 @@ type AssetRequest struct {
 	Issuer string `json:"issuer"`
 }
 
-// AssetWithTrustlineInfo represents an asset with trustline information
+// AssetWithTrustlineInfo represents an asset with trustline information.
 type AssetWithTrustlineInfo struct {
 	data.Asset
 	HasTrustline bool `json:"has_trustline"`
@@ -115,7 +115,6 @@ func (c AssetsHandler) checkTrustlineExists(
 
 	if !account.IsStellar() {
 		// For Circle accounts, check if the asset is supported by Circle
-		// Circle only supports USD and EUR currencies mapped to USDC and EURC
 		for _, networkAssets := range circle.AllowedAssetsMap {
 			for _, circleAsset := range networkAssets {
 				if circleAsset.Code == asset.Code && circleAsset.Issuer == asset.Issuer {
