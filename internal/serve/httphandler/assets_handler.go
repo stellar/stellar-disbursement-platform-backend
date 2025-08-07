@@ -112,9 +112,6 @@ func (c AssetsHandler) getTrustlineInfo(
 	account *schema.TransactionAccount,
 	asset data.Asset,
 ) (bool, *float64, error) {
-	if asset.IsNative() {
-		return true, nil, nil
-	}
 
 	if !account.IsStellar() {
 		for _, networkAssets := range circle.AllowedAssetsMap {
