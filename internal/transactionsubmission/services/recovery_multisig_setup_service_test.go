@@ -215,6 +215,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🔴invalid_admin_secret_key",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  "invalid_secret_key",
 				CosignerPublicKey: cosignerKP.Address(),
 			},
@@ -223,6 +224,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🔴invalid_cosigner_public_key",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  account.Seed(),
 				CosignerPublicKey: "invalid_public_key",
 			},
@@ -231,6 +233,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🔴account_detail_failure",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  account.Seed(),
 				CosignerPublicKey: cosignerKP.Address(),
 			},
@@ -245,6 +248,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🟢already_configured_multisig",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  account.Seed(),
 				CosignerPublicKey: cosignerKP.Address(),
 			},
@@ -258,6 +262,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🔴transaction_submission_failure",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  account.Seed(),
 				CosignerPublicKey: cosignerKP.Address(),
 			},
@@ -275,6 +280,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🔴horizon_error_response",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  account.Seed(),
 				CosignerPublicKey: cosignerKP.Address(),
 			},
@@ -299,6 +305,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🔴transaction_unsuccessful",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  account.Seed(),
 				CosignerPublicKey: cosignerKP.Address(),
 			},
@@ -316,6 +323,7 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 		{
 			name: "🟢successfully_setup_multisig",
 			opts: RecoveryMultisigSetupOptions{
+				MasterPublicKey:   account.Address(),
 				MasterPrivateKey:  account.Seed(),
 				CosignerPublicKey: cosignerKP.Address(),
 			},

@@ -55,18 +55,18 @@ func (s *RecoveryMultisigSetupService) SetupMultisigAdmin(ctx context.Context, o
 
 	// Get recoveryAccount details
 	recoveryAccount, err := s.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: recoveryMasterKP.Address(),
+		AccountID: opts.MasterPublicKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get account details: %w", err)
 	}
 
 	if isAccountMultisigConfigured(ctx, recoveryAccount, opts.CosignerPublicKey) {
-		log.Ctx(ctx).Infof("✅ Account %s already has a multisig configured", recoveryMasterKP.Address())
+		log.Ctx(ctx).Infof("✅ Account %s already has a multisig configured", opts.MasterPublicKey)
 		return nil
 	}
 
-	log.Ctx(ctx).Debugf("Setting up multisig for account=%s with cosigner=%s...", recoveryMasterKP.Address(), opts.CosignerPublicKey)
+	log.Ctx(ctx).Debugf("Setting up multisig for account=%s with cosigner=%s...", opts.MasterPublicKey, opts.CosignerPublicKey)
 
 	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
 		SourceAccount: &recoveryAccount,
@@ -119,7 +119,7 @@ func (s *RecoveryMultisigSetupService) SetupMultisigAdmin(ctx context.Context, o
 		return fmt.Errorf("transaction failed with ResultXdr=%s", resp.ResultXdr)
 	}
 
-	log.Ctx(ctx).Infof("✅ Account %s now requires 2 signatures for all operations", recoveryMasterKP.Address())
+	log.Ctx(ctx).Infof("✅ Account %s now requires 2 signatures for all operations", opts.MasterPublicKey)
 	return nil
 }
 
