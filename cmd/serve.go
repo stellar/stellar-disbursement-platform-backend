@@ -654,23 +654,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error validating Bridge integration options: %v", err)
 			}
 
-			if bridgeIntegrationOpts.EnableBridgeIntegration {
-				bridgeModels, brErr := data.NewModels(mtnDBConnectionPool)
-				if brErr != nil {
-					log.Ctx(ctx).Fatalf("error creating models for Bridge service: %v", brErr)
-				}
-				bridgeService, brErr := bridge.NewService(bridge.ServiceOptions{
-					BaseURL: bridgeIntegrationOpts.BridgeBaseURL,
-					APIKey:  bridgeIntegrationOpts.BridgeAPIKey,
-					Models:  bridgeModels,
-				})
-				if brErr != nil {
-					log.Ctx(ctx).Fatalf("error creating Bridge service: %v", brErr)
-				}
-				serveOpts.BridgeService = bridgeService
-				log.Ctx(ctx).Infof("🌉 Bridge integration is enabled for base URL %s", bridgeIntegrationOpts.BridgeBaseURL)
-			}
-
 			// Setup Distribution Account Service
 			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{
 				NetworkType:   serveOpts.NetworkType,
@@ -683,6 +666,26 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.DistributionAccountService = distributionAccountService
 			adminServeOpts.DistributionAccountService = distributionAccountService
+
+			if bridgeIntegrationOpts.EnableBridgeIntegration {
+				bridgeModels, brErr := data.NewModels(mtnDBConnectionPool)
+				if brErr != nil {
+					log.Ctx(ctx).Fatalf("error creating models for Bridge service: %v", brErr)
+				}
+				bridgeService, brErr := bridge.NewService(bridge.ServiceOptions{
+					BaseURL:                     bridgeIntegrationOpts.BridgeBaseURL,
+					APIKey:                      bridgeIntegrationOpts.BridgeAPIKey,
+					Models:                      bridgeModels,
+					DistributionAccountResolver: submitterEngine.DistributionAccountResolver,
+					DistributionAccountService:  serveOpts.DistributionAccountService,
+					NetworkType:                 serveOpts.NetworkType,
+				})
+				if brErr != nil {
+					log.Ctx(ctx).Fatalf("error creating Bridge service: %v", brErr)
+				}
+				serveOpts.BridgeService = bridgeService
+				log.Ctx(ctx).Infof("🌉 Bridge integration is enabled for base URL %s", bridgeIntegrationOpts.BridgeBaseURL)
+			}
 
 			// Validate the Event Broker Type and Scheduler Jobs
 			if serveOpts.EnableScheduler {
