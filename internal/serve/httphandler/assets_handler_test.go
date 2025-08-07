@@ -30,6 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -55,6 +56,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService, _, distAccResolver := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	mockDistAccService := &mocks.MockDistributionAccountService{}
 
 	handler := &AssetsHandler{
 		Models: models,
@@ -64,6 +66,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			LedgerNumberTracker: mLedgerNumberTracker,
 			MaxBaseFee:          txnbuild.MinBaseFee,
 		},
+		DistributionAccountService: mockDistAccService,
 	}
 
 	t.Run("successfully returns a list of assets", func(t *testing.T) {
@@ -147,6 +150,14 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		}
 		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
 
+		// Mock DistributionAccountService to return success only for EURT (indicating trustline exists)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "EURT" && asset.Issuer == "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU"
+		})).Return(50.0, nil)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "USDC" && asset.Issuer == "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE"
+		})).Return(0.0, errors.New("asset not found"))
+
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
 		req = req.WithContext(ctxWithTenant)
@@ -158,6 +169,10 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 
 		for _, asset := range responseAssets {
 			assert.NotNil(t, asset.HasTrustline)
+			if asset.Code == "EURT" {
+				assert.NotNil(t, asset.Balance)
+				assert.Equal(t, 50.0, *asset.Balance)
+			}
 		}
 	})
 
@@ -202,6 +217,14 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		}
 		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
 
+		// Mock DistributionAccountService to return success only for EURT (indicating trustline exists)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "EURT" && asset.Issuer == "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU"
+		})).Return(50.0, nil)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "USDC" && asset.Issuer == "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE"
+		})).Return(0.0, errors.New("asset not found"))
+
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
 		req = req.WithContext(ctxWithTenant)
@@ -212,6 +235,10 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 
 		for _, asset := range responseAssets {
 			assert.True(t, asset.HasTrustline)
+			if asset.Code == "EURT" {
+				assert.NotNil(t, asset.Balance)
+				assert.Equal(t, 50.0, *asset.Balance)
+			}
 		}
 	})
 
@@ -234,6 +261,9 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			Status:  schema.AccountStatusActive,
 		}
 		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		// Mock DistributionAccountService to return error (indicating no trustline)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/assets?hasTrustline=false", nil)
@@ -279,6 +309,9 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		}
 		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
 
+		// Mock DistributionAccountService to return a balance (indicating trustline exists)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, nil)
+
 		// Mock Horizon account with USDC trustline but zero balance
 		horizonAccount := &horizon.Account{
 			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
@@ -312,13 +345,21 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		for _, asset := range responseAssets {
 			if asset.Code == "USDC" {
 				assert.True(t, asset.HasTrustline)
+				assert.NotNil(t, asset.Balance)
+				assert.Equal(t, 0.0, *asset.Balance)
 			}
 		}
 	})
 }
 
 func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
-	handler := &AssetsHandler{}
+	ctx := context.Background()
+
+	mockDistAccService := &mocks.MockDistributionAccountService{}
+
+	handler := &AssetsHandler{
+		DistributionAccountService: mockDistAccService,
+	}
 
 	t.Run("returns true for native assets", func(t *testing.T) {
 		asset := data.Asset{Code: "XLM", Issuer: ""}
@@ -327,9 +368,10 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
+		assert.Nil(t, balance)
 	})
 
 	t.Run("returns true for Circle accounts with supported assets", func(t *testing.T) {
@@ -338,9 +380,10 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
+		assert.Nil(t, balance)
 	})
 
 	t.Run("returns false for Circle accounts with unsupported assets", func(t *testing.T) {
@@ -349,9 +392,10 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
 	})
 
 	t.Run("returns true for Stellar accounts with trustline but zero balance", func(t *testing.T) {
@@ -361,38 +405,18 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		// Mock Horizon account with USDC trustline but zero balance
-		horizonAccount := &horizon.Account{
-			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-			Balances: []horizon.Balance{
-				{
-					Asset: base.Asset{
-						Type: "native",
-					},
-					Balance: "100.0000000",
-				},
-				{
-					Asset: base.Asset{
-						Type:   "credit_alphanum4",
-						Code:   "USDC",
-						Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
-					},
-					Balance: "0.0000000",
-				},
-			},
-		}
-		horizonClientMock := &horizonclient.MockClient{}
-		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+		mockDistAccService := &mocks.MockDistributionAccountService{}
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, nil)
 
 		handler := &AssetsHandler{
-			SubmitterEngine: engine.SubmitterEngine{
-				HorizonClient: horizonClientMock,
-			},
+			DistributionAccountService: mockDistAccService,
 		}
 
-		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 0.0, *balance)
 	})
 
 	t.Run("returns false for Stellar accounts without trustline", func(t *testing.T) {
@@ -402,30 +426,106 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		// Mock Horizon account with only native balance (no BTC trustline)
-		horizonAccount := &horizon.Account{
-			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-			Balances: []horizon.Balance{
-				{
-					Asset: base.Asset{
-						Type: "native",
-					},
-					Balance: "100.0000000",
-				},
-			},
-		}
-		horizonClientMock := &horizonclient.MockClient{}
-		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+		mockDistAccService := &mocks.MockDistributionAccountService{}
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, errors.New("asset not found"))
 
 		handler := &AssetsHandler{
-			SubmitterEngine: engine.SubmitterEngine{
-				HorizonClient: horizonClientMock,
-			},
+			DistributionAccountService: mockDistAccService,
 		}
 
-		hasTrustline, err := handler.checkTrustlineExists(&account, asset)
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
+	})
+}
+
+func Test_AssetsHandlerGetTrustlineInfo(t *testing.T) {
+	ctx := context.Background()
+
+	mockDistAccService := &mocks.MockDistributionAccountService{}
+
+	handler := &AssetsHandler{
+		DistributionAccountService: mockDistAccService,
+	}
+
+	t.Run("returns true and nil balance for native assets", func(t *testing.T) {
+		asset := data.Asset{Code: "XLM", Issuer: ""}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.Nil(t, balance)
+	})
+
+	t.Run("returns true and nil balance for Circle accounts with supported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.Nil(t, balance)
+	})
+
+	t.Run("returns false and nil balance for Circle accounts with unsupported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
+	})
+
+	t.Run("returns true and balance for Stellar accounts with trustline", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		expectedBalance := 100.5
+		mockDistAccService := &mocks.MockDistributionAccountService{}
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(expectedBalance, nil)
+
+		handler := &AssetsHandler{
+			DistributionAccountService: mockDistAccService,
+		}
+
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, expectedBalance, *balance)
+	})
+
+	t.Run("returns false and nil balance for Stellar accounts without trustline", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		mockDistAccService := &mocks.MockDistributionAccountService{}
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, errors.New("asset not found"))
+
+		handler := &AssetsHandler{
+			DistributionAccountService: mockDistAccService,
+		}
+
+		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
 	})
 }
 

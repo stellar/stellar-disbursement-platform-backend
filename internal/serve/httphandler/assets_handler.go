@@ -23,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -35,7 +36,8 @@ var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 type AssetsHandler struct {
 	Models *data.Models
 	engine.SubmitterEngine
-	GetPreconditionsFn func() txnbuild.Preconditions
+	GetPreconditionsFn         func() txnbuild.Preconditions
+	DistributionAccountService services.DistributionAccountServiceInterface
 }
 
 type AssetRequest struct {
@@ -43,10 +45,10 @@ type AssetRequest struct {
 	Issuer string `json:"issuer"`
 }
 
-// AssetWithTrustlineInfo represents an asset with trustline information.
 type AssetWithTrustlineInfo struct {
 	data.Asset
-	HasTrustline bool `json:"has_trustline"`
+	HasTrustline bool     `json:"has_trustline"`
+	Balance      *float64 `json:"balance,omitempty"`
 }
 
 // GetAssets returns a list of assets.
@@ -83,7 +85,7 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 
 		responseAssets := make([]AssetWithTrustlineInfo, 0)
 		for _, asset := range assets {
-			hasAssetTrustline, err := c.checkTrustlineExists(&distributionAccount, asset)
+			hasAssetTrustline, balance, err := c.getTrustlineInfo(ctx, &distributionAccount, asset)
 			if err != nil {
 				log.Ctx(ctx).Warnf("Error checking trustline for asset %s:%s: %v", asset.Code, asset.Issuer, err)
 				continue
@@ -93,6 +95,7 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 				responseAssets = append(responseAssets, AssetWithTrustlineInfo{
 					Asset:        asset,
 					HasTrustline: hasAssetTrustline,
+					Balance:      balance,
 				})
 			}
 		}
@@ -104,49 +107,32 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, assets, httpjson.JSON)
 }
 
-// checkTrustlineExists checks if the distribution account has a trustline for the given asset.
-func (c AssetsHandler) checkTrustlineExists(
+func (c AssetsHandler) getTrustlineInfo(
+	ctx context.Context,
 	account *schema.TransactionAccount,
 	asset data.Asset,
-) (bool, error) {
+) (bool, *float64, error) {
 	if asset.IsNative() {
-		return true, nil
+		return true, nil, nil
 	}
 
 	if !account.IsStellar() {
-		// For Circle accounts, check if the asset is supported by Circle
 		for _, networkAssets := range circle.AllowedAssetsMap {
 			for _, circleAsset := range networkAssets {
 				if circleAsset.Code == asset.Code && circleAsset.Issuer == asset.Issuer {
-					return true, nil
+					return true, nil, nil
 				}
 			}
 		}
-		return false, nil
+		return false, nil, nil
 	}
 
-	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: account.Address,
-	})
+	balance, err := c.DistributionAccountService.GetBalance(ctx, account, asset)
 	if err != nil {
-		if horizonErr, ok := err.(*horizonclient.Error); ok {
-			if horizonErr.Response.StatusCode == 404 {
-				return false, fmt.Errorf("account %s not found on the Stellar network", account.Address)
-			}
-		}
-		return false, fmt.Errorf("getting account details from Horizon: %w", err)
+		return false, nil, nil
 	}
 
-	for _, balance := range acc.Balances {
-		if balance.Asset.Type == validators.AssetTypeNative {
-			continue
-		}
-
-		if balance.Asset.Code == asset.Code && balance.Asset.Issuer == asset.Issuer {
-			return true, nil
-		}
-	}
-	return false, nil
+	return true, &balance, nil
 }
 
 // CreateAsset adds a new asset.
