@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -333,6 +335,39 @@ func Test_RecoveryMultisigSetupService_SetupMultisigAdmin(t *testing.T) {
 					Return(hAccount, nil).
 					Once().
 					On("SubmitTransaction", mock.AnythingOfType("*txnbuild.Transaction")).
+					Run(func(args mock.Arguments) {
+						submittedTx := args.Get(0).(*txnbuild.Transaction)
+						assert.InDelta(t, time.Now().Add(300*time.Second).Unix(), submittedTx.Timebounds().MaxTime, 5)
+
+						wantTx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+							SourceAccount: &hAccount,
+							Operations: []txnbuild.Operation{
+								&txnbuild.SetOptions{
+									// Set thresholds to 2
+									LowThreshold:    txnbuild.NewThreshold(2),
+									MediumThreshold: txnbuild.NewThreshold(2),
+									HighThreshold:   txnbuild.NewThreshold(2),
+									// Add signer with weight=1
+									Signer: &txnbuild.Signer{
+										Address: cosignerKP.Address(),
+										Weight:  1,
+									},
+									// Set master signer weight=1
+									MasterWeight: txnbuild.NewThreshold(1),
+								},
+							},
+							BaseFee: txnbuild.MinBaseFee,
+							Preconditions: txnbuild.Preconditions{
+								TimeBounds: submittedTx.Timebounds(),
+							},
+							IncrementSequenceNum: true,
+						})
+						require.NoError(t, err)
+						wantTx, err = wantTx.Sign(networkPassphrase, account)
+						require.NoError(t, err)
+
+						assert.Equal(t, wantTx, submittedTx)
+					}).
 					Return(horizon.Transaction{Successful: true}, nil).
 					Once()
 			},

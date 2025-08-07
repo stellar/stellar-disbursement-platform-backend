@@ -120,6 +120,7 @@ func (s *RecoveryMultisigSetupService) SetupMultisigAdmin(ctx context.Context, o
 	}
 
 	log.Ctx(ctx).Infof("✅ Account %s now requires 2 signatures for all operations", opts.MasterPublicKey)
+
 	return nil
 }
 
