@@ -199,10 +199,10 @@ sdp:
   ## @extra sdp.configMap.data.ENABLE_BRIDGE_INTEGRATION Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.
   ## @extra sdp.configMap.data.BRIDGE_BASE_URL The base URL of the bridge API. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
   ## @param sdp.configMap.data.ENABLE_EMBEDDED_WALLETS Determines if embedded wallet features are enabled ("true" or "false").
-## @extra sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
-## @extra sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_ADDRESS The recovery address for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
-## @extra sdp.configMap.data.EMBEDDED_WALLETS_MULTISIG_ADMIN_ADDRESS The admin address for multisig configuration of embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled.
-## @extra sdp.configMap.data.EMBEDDED_WALLETS_MULTISIG_SECONDARY_SIGNER_ADDRESS The secondary signer address for multisig configuration of embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled.
+  ## @extra sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
+  ## @extra sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_ADDRESS The recovery address for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
+  ## @extra sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_MASTER_PRIVATE_KEY The master private key for multisig configuration of embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled.
+  ## @extra sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_COSIGNER_PUBLIC_KEY The cosigner public key for multisig configuration of embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled.
   ## @param sdp.configMap.data.ENABLE_SEP45 Determines if SEP-45 web authentication features are enabled ("true" or "false").
   ## @extra sdp.configMap.data.SEP45_CONTRACT_ID The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true".
   ## @extra sdp.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".
