@@ -178,6 +178,9 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 	if err != nil {
 		var bridgeError bridge.BridgeErrorResponse
 		switch {
+		case errors.Is(err, bridge.ErrBridgeUSDCTrustlineRequired):
+			httperror.BadRequest("Cannot opt into Bridge integration: distribution account must have a USDC trustline", err, nil).Render(w)
+			return
 		case errors.Is(err, bridge.ErrBridgeAlreadyOptedIn):
 			httperror.BadRequest("Your organization has already opted into Bridge integration", nil, nil).Render(w)
 			return
