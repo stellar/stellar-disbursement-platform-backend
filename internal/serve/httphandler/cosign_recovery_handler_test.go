@@ -151,13 +151,13 @@ func createNonContractInvocationTx(t *testing.T) *txnbuild.GenericTransaction {
 	return txnbuild.NewGenericTransactionWithTransaction(tx)
 }
 
-func createContractInvocationTx(t *testing.T, contractID, functionName string, withSubinvocations bool) *txnbuild.GenericTransaction {
+func createContractInvocationTx(t *testing.T, contractID, functionName string, withSubinvocations bool, args ...xdr.ScVal) *txnbuild.GenericTransaction {
 	t.Helper()
 
 	opts := sorobanutils.InvokeContractOptions{
 		ContractID:   contractID,
 		FunctionName: functionName,
-		Args:         []xdr.ScVal{},
+		Args:         args,
 	}
 	invokeOp, err := sorobanutils.CreateContractInvocationOp(opts)
 	require.NoError(t, err)
@@ -214,6 +214,8 @@ func createContractInvocationTx(t *testing.T, contractID, functionName string, w
 }
 
 func Test_parseAndValidateTransaction(t *testing.T) {
+	bytesArg := xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &xdr.ScBytes{1, 2, 3}}
+
 	testCases := []struct {
 		name               string
 		txXDR              string
@@ -269,14 +271,20 @@ func Test_parseAndValidateTransaction(t *testing.T) {
 			wantErrContains:    "wrong function being called",
 		},
 		{
-			name:               "🔴subinvocations_not_allowed",
-			txXDR:              txXDR(t, createContractInvocationTx(t, "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE", RotateSignerFnName, true)),
+			name:               "🔴wrong_args_length",
+			txXDR:              txXDR(t, createContractInvocationTx(t, "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE", RotateSignerFnName, false)),
 			intendedContractID: "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE",
-			wantErrContains:    "contract operation has subinvocations which are not allowed",
+			wantErrContains:    "contract invocation must have exactly one argument",
+		},
+		{
+			name:               "🔴subinvocations_not_allowed",
+			txXDR:              txXDR(t, createContractInvocationTx(t, "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE", RotateSignerFnName, true, bytesArg)),
+			intendedContractID: "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE",
+			wantErrContains:    "validating auth entry 0: auth entry has subinvocations which are not allowed",
 		},
 		{
 			name:               "🟢valid_transaction",
-			txXDR:              txXDR(t, createContractInvocationTx(t, "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE", RotateSignerFnName, false)),
+			txXDR:              txXDR(t, createContractInvocationTx(t, "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE", RotateSignerFnName, false, bytesArg)),
 			intendedContractID: "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE",
 		},
 	}

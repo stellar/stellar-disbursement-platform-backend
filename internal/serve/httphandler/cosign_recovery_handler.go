@@ -125,13 +125,48 @@ func parseAndValidateTransaction(txXDR, intendedContractID string) (*txnbuild.Tr
 		return nil, fmt.Errorf("wrong function being called: %s != %s", invokeContractOp.FunctionName, RotateSignerFnName)
 	}
 
-	for _, sorobanAuth := range invokeHostOp.Auth {
-		if len(sorobanAuth.RootInvocation.SubInvocations) > 0 {
-			return nil, errors.New("contract operation has subinvocations which are not allowed")
+	if len(invokeContractOp.Args) != 1 {
+		return nil, errors.New("contract invocation must have exactly one argument")
+	}
+
+	arg := invokeContractOp.Args[0]
+	if arg.Type != xdr.ScValTypeScvBytes {
+		return nil, fmt.Errorf("contract invocation argument must be of type ScvBytes")
+	}
+
+	for i, sorobanAuth := range invokeHostOp.Auth {
+		err = validateAuthEntry(sorobanAuth, invokeContractOp)
+		if err != nil {
+			return nil, fmt.Errorf("validating auth entry %d: %w", i, err)
 		}
 	}
 
 	return tx, nil
+}
+
+func validateAuthEntry(sorobanAuth xdr.SorobanAuthorizationEntry, invokeContractArgs xdr.InvokeContractArgs) error {
+	if len(sorobanAuth.RootInvocation.SubInvocations) > 0 {
+		return errors.New("auth entry has subinvocations which are not allowed")
+	}
+
+	if sorobanAuth.RootInvocation.Function.Type != xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn {
+		return fmt.Errorf("auth entry is not a contract function")
+	}
+
+	authFn := sorobanAuth.RootInvocation.Function.ContractFn
+	if !authFn.ContractAddress.Equals(invokeContractArgs.ContractAddress) {
+		return fmt.Errorf("auth entry contract address does not match the intended contract address")
+	}
+
+	if authFn.FunctionName != invokeContractArgs.FunctionName {
+		return fmt.Errorf("auth entry function name does not match the intended function name")
+	}
+
+	if len(authFn.Args) != len(invokeContractArgs.Args) {
+		return fmt.Errorf("auth entry args length does not match the intended args length")
+	}
+
+	return nil
 }
 
 func (h CosignRecoveryHandler) signTransaction(_ context.Context, tx *txnbuild.Transaction) (string, error) {
