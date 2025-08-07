@@ -205,7 +205,7 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				Memo:         "invalid-memo",
 			},
 			expectError: true,
-			errMsg:      "invalid memo must be a positive integer",
+			errMsg:      "invalid memo type: expected ID memo, got text",
 		},
 	}
 
