@@ -202,7 +202,6 @@ sdp:
   ## @extra sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
   ## @extra sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_ADDRESS The recovery address for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
   ## @extra sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_MASTER_PRIVATE_KEY The master private key for multisig configuration of embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled.
-  ## @extra sdp.configMap.data.EMBEDDED_WALLETS_RECOVERY_COSIGNER_PUBLIC_KEY The cosigner public key for multisig configuration of embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled.
   ## @param sdp.configMap.data.ENABLE_SEP45 Determines if SEP-45 web authentication features are enabled ("true" or "false").
   ## @extra sdp.configMap.data.SEP45_CONTRACT_ID The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true".
   ## @extra sdp.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".
@@ -249,7 +248,6 @@ sdp:
 #     EMBEDDED_WALLETS_WASM_HASH: #required when ENABLE_EMBEDDED_WALLETS is "true"
 #     EMBEDDED_WALLETS_RECOVERY_ADDRESS: #required when ENABLE_EMBEDDED_WALLETS is "true"
 #     EMBEDDED_WALLETS_RECOVERY_MASTER_PRIVATE_KEY: #required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled
-#     EMBEDDED_WALLETS_RECOVERY_COSIGNER_PUBLIC_KEY: #required when ENABLE_EMBEDDED_WALLETS is "true" and multisig is enabled
 
       ## SEP-45 configuration
       ENABLE_SEP45: "false"
