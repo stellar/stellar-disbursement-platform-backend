@@ -34,7 +34,7 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 
 	// invalid claims
 	tokenStr, err := jwtManager.GenerateSEP24Token("", "", "test.com", "test-home-domain.com:3000", "test-transaction-id")
-	require.EqualError(t, err, "validating SEP24 token claims: stellar account is invalid: strkey is 0 bytes long; minimum valid length is 5")
+	require.EqualError(t, err, "generating SEP24 token: validating token claims: stellar account is invalid: strkey is 0 bytes long; minimum valid length is 5")
 	require.Empty(t, tokenStr)
 
 	// valid claims 🎉
@@ -223,7 +223,8 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 				)
 				return token
 			},
-			wantErr: false,
+			wantErr:     true,
+			errContains: "parsing SEP10 token",
 		},
 	}
 

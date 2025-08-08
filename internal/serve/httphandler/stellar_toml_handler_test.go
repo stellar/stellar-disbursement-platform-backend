@@ -315,6 +315,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NetworkPassphrase:           network.TestNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
+			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
 
 		r := chi.NewRouter()
@@ -365,6 +366,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NetworkPassphrase:           network.PublicNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
+			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
 
 		r := chi.NewRouter()
@@ -416,6 +418,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
 			InstanceName:                "SDP Pubnet",
+			BaseURL:                     "https://instance.example.com",
 		}
 
 		r := chi.NewRouter()
