@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -19,13 +18,13 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -45,17 +44,17 @@ type AssetRequest struct {
 	Issuer string `json:"issuer"`
 }
 
-type AssetWithTrustlineInfo struct {
+type AssetWithEnabledInfo struct {
 	data.Asset
-	HasTrustline bool     `json:"has_trustline"`
-	Balance      *float64 `json:"balance,omitempty"`
+	Enabled bool     `json:"enabled"`
+	Balance *float64 `json:"balance,omitempty"`
 }
 
 // GetAssets returns a list of assets.
 func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	walletID := strings.TrimSpace(r.URL.Query().Get("wallet"))
-	hasTrustlineParam := strings.TrimSpace(r.URL.Query().Get("hasTrustline"))
+	enabledParam, errParse := utils.ParseBoolQueryParam(r, "enabled")
 
 	var assets []data.Asset
 	var err error
@@ -69,13 +68,13 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If hasTrustline parameter is provided, filter assets by trustline availability.
-	if hasTrustlineParam != "" {
-		hasTrustline, err := strconv.ParseBool(hasTrustlineParam)
-		if err != nil {
-			httperror.BadRequest("Invalid hasTrustline parameter. Must be 'true' or 'false'", err, nil).Render(w)
-			return
-		}
+	// If enabled parameter is provided, filter assets by availability for the distribution account.
+	if errParse != nil {
+		httperror.BadRequest("invalid 'enabled' parameter value", errParse, nil).Render(w)
+		return
+	}
+	if enabledParam != nil {
+		enabled := *enabledParam
 
 		distributionAccount, err := c.DistributionAccountFromContext(ctx)
 		if err != nil {
@@ -83,19 +82,19 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		responseAssets := make([]AssetWithTrustlineInfo, 0)
+		responseAssets := make([]AssetWithEnabledInfo, 0)
 		for _, asset := range assets {
-			hasAssetTrustline, balance, err := c.getTrustlineInfo(ctx, &distributionAccount, asset)
+			isEnabled, balance, err := c.getBalanceInfo(ctx, &distributionAccount, asset)
 			if err != nil {
-				log.Ctx(ctx).Warnf("Error checking trustline for asset %s:%s: %v", asset.Code, asset.Issuer, err)
+				log.Ctx(ctx).Warnf("Error getting balance for asset %s:%s: %v", asset.Code, asset.Issuer, err)
 				continue
 			}
 
-			if hasAssetTrustline == hasTrustline {
-				responseAssets = append(responseAssets, AssetWithTrustlineInfo{
-					Asset:        asset,
-					HasTrustline: hasAssetTrustline,
-					Balance:      balance,
+			if isEnabled == enabled {
+				responseAssets = append(responseAssets, AssetWithEnabledInfo{
+					Asset:   asset,
+					Enabled: isEnabled,
+					Balance: balance,
 				})
 			}
 		}
@@ -107,28 +106,19 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, assets, httpjson.JSON)
 }
 
-func (c AssetsHandler) getTrustlineInfo(
+// getBalanceInfo retrieves the availability information for a given asset and account.
+func (c AssetsHandler) getBalanceInfo(
 	ctx context.Context,
 	account *schema.TransactionAccount,
 	asset data.Asset,
 ) (bool, *float64, error) {
-
-	if !account.IsStellar() {
-		for _, networkAssets := range circle.AllowedAssetsMap {
-			for _, circleAsset := range networkAssets {
-				if circleAsset.Code == asset.Code && circleAsset.Issuer == asset.Issuer {
-					return true, nil, nil
-				}
-			}
-		}
-		return false, nil, nil
-	}
-
 	balance, err := c.DistributionAccountService.GetBalance(ctx, account, asset)
 	if err != nil {
-		return false, nil, nil
+		if errors.Is(err, services.ErrNoBalanceForAsset) {
+			return false, nil, nil
+		}
+		return false, nil, fmt.Errorf("getting balance for asset %s-%s %w", asset.Code, asset.Issuer, err)
 	}
-
 	return true, &balance, nil
 }
 

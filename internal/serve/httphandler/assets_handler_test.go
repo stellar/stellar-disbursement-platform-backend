@@ -159,16 +159,16 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		})).Return(0.0, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
+		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
-		var responseAssets []AssetWithTrustlineInfo
+		var responseAssets []AssetWithEnabledInfo
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
 		require.Len(t, responseAssets, 1)
 
 		for _, asset := range responseAssets {
-			assert.NotNil(t, asset.HasTrustline)
+			assert.NotNil(t, asset.Enabled)
 			if asset.Code == "EURT" {
 				assert.NotNil(t, asset.Balance)
 				assert.Equal(t, 50.0, *asset.Balance)
@@ -176,7 +176,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		}
 	})
 
-	t.Run("filters assets by hasTrustline=true", func(t *testing.T) {
+	t.Run("filters assets by enabled=true", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		require.Equal(t, 2, len(assets))
@@ -226,15 +226,15 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		})).Return(0.0, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
+		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
-		var responseAssets []AssetWithTrustlineInfo
+		var responseAssets []AssetWithEnabledInfo
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
 
 		for _, asset := range responseAssets {
-			assert.True(t, asset.HasTrustline)
+			assert.True(t, asset.Enabled)
 			if asset.Code == "EURT" {
 				assert.NotNil(t, asset.Balance)
 				assert.Equal(t, 50.0, *asset.Balance)
@@ -242,7 +242,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		}
 	})
 
-	t.Run("filters assets by hasTrustline=false", func(t *testing.T) {
+	t.Run("filters assets by enabled=false", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		require.Equal(t, 2, len(assets))
@@ -266,21 +266,21 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?hasTrustline=false", nil)
+		req, _ := http.NewRequest("GET", "/assets?enabled=false", nil)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
-		var responseAssets []AssetWithTrustlineInfo
+		var responseAssets []AssetWithEnabledInfo
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
 
 		for _, asset := range responseAssets {
-			assert.False(t, asset.HasTrustline)
+			assert.False(t, asset.Enabled)
 		}
 	})
 
-	t.Run("returns error for invalid hasTrustline parameter", func(t *testing.T) {
+	t.Run("returns error for invalid enabled parameter", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?hasTrustline=invalid", nil)
+		req, _ := http.NewRequest("GET", "/assets?enabled=invalid", nil)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -335,16 +335,16 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?hasTrustline=true", nil)
+		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
-		var responseAssets []AssetWithTrustlineInfo
+		var responseAssets []AssetWithEnabledInfo
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
 
 		for _, asset := range responseAssets {
 			if asset.Code == "USDC" {
-				assert.True(t, asset.HasTrustline)
+				assert.True(t, asset.Enabled)
 				assert.NotNil(t, asset.Balance)
 				assert.Equal(t, 0.0, *asset.Balance)
 			}
@@ -370,7 +370,7 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 
 		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(100.0, nil)
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
@@ -383,7 +383,7 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.Nil(t, balance)
@@ -395,7 +395,7 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.False(t, hasTrustline)
 		assert.Nil(t, balance)
@@ -410,7 +410,7 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 
 		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, nil)
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
@@ -426,14 +426,14 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 
 		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, errors.New("asset not found"))
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.False(t, hasTrustline)
 		assert.Nil(t, balance)
 	})
 }
 
-func Test_AssetsHandlerGetTrustlineInfo(t *testing.T) {
+func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 	ctx := context.Background()
 
 	mockDistAccService := &mocks.MockDistributionAccountService{}
@@ -451,7 +451,7 @@ func Test_AssetsHandlerGetTrustlineInfo(t *testing.T) {
 
 		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, nil)
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
@@ -464,7 +464,7 @@ func Test_AssetsHandlerGetTrustlineInfo(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.Nil(t, balance)
@@ -476,7 +476,7 @@ func Test_AssetsHandlerGetTrustlineInfo(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.False(t, hasTrustline)
 		assert.Nil(t, balance)
@@ -492,7 +492,7 @@ func Test_AssetsHandlerGetTrustlineInfo(t *testing.T) {
 		expectedBalance := 100.5
 		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(expectedBalance, nil)
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
@@ -508,7 +508,7 @@ func Test_AssetsHandlerGetTrustlineInfo(t *testing.T) {
 
 		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, errors.New("asset not found"))
 
-		hasTrustline, balance, err := handler.getTrustlineInfo(ctx, &account, asset)
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.False(t, hasTrustline)
 		assert.Nil(t, balance)
