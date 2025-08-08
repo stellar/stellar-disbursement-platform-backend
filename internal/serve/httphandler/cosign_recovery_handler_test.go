@@ -22,6 +22,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sorobanutils"
 )
 
+var bytesArg = xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &xdr.ScBytes{1, 2, 3}}
+
 func txXDR(t *testing.T, tx *txnbuild.GenericTransaction) string {
 	t.Helper()
 
@@ -214,8 +216,6 @@ func createContractInvocationTx(t *testing.T, contractID, functionName string, w
 }
 
 func Test_parseAndValidateTransaction(t *testing.T) {
-	bytesArg := xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &xdr.ScBytes{1, 2, 3}}
-
 	testCases := []struct {
 		name               string
 		txXDR              string
@@ -320,7 +320,7 @@ func Test_CosignRecoveryHandler_CosignRecovery(t *testing.T) {
 		"test@example.com", "EMAIL", data.PendingWalletStatus)
 
 	// Create a valid transaction for testing
-	tx := createContractInvocationTx(t, contractAddress, RotateSignerFnName, false)
+	tx := createContractInvocationTx(t, contractAddress, RotateSignerFnName, false, bytesArg)
 	txXDR := txXDR(t, tx)
 
 	// Create handler
