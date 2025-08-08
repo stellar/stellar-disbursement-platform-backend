@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- Fix scheduler to only run jobs for provisioned and activated tenants, preventing execution for pending or deactivated tenants. [#795](https://github.com/stellar/stellar-disbursement-platform-backend/pull/795)
 - Display clear error message during reset password when token is expired. [#783](https://github.com/stellar/stellar-disbursement-platform-backend/pull/783)
 
 ### Security and Dependencies

@@ -76,7 +76,11 @@ func TestMultiTenantScheduler(t *testing.T) {
 	tenant1 := tenant.Tenant{ID: "tenant1", Name: "Tenant 1"}
 	tenant2 := tenant.Tenant{ID: "tenant2", Name: "Tenant 2"}
 
-	mockTenantManager.On("GetAllTenants", mock.Anything, mock.Anything).
+	mockTenantManager.On("GetAllTenants", mock.Anything, &tenant.QueryParams{
+		Filters: map[tenant.FilterKey]interface{}{
+			tenant.FilterKeyStatus: []tenant.TenantStatus{tenant.ProvisionedTenantStatus, tenant.ActivatedTenantStatus},
+		},
+	}).
 		Return([]tenant.Tenant{tenant1, tenant2}, nil).
 		Once()
 
