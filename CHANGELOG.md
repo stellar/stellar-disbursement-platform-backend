@@ -26,6 +26,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- Update supported wallets for Pubnet and Testnet: 
+  - Removed Vibrant Assist wallets from pubnet and test configuration
+  - Added Vesseo and Beans App on Pubnet
+  - Added XLM as a supported asset for Decaf 
+  - [#793](https://github.com/stellar/stellar-disbursement-platform-backend/pull/793)
 - Optimize the Dockerfile to reduce the image size. [#692](https://github.com/stellar/stellar-disbursement-platform-backend/pull/692)
 
 ### Fixed
