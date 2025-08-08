@@ -412,8 +412,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/assets", func(r chi.Router) {
 			assetsHandler := httphandler.AssetsHandler{
-				Models:          o.Models,
-				SubmitterEngine: o.SubmitterEngine,
+				Models:                     o.Models,
+				SubmitterEngine:            o.SubmitterEngine,
+				DistributionAccountService: o.DistributionAccountService,
 			}
 
 			// Read operations
