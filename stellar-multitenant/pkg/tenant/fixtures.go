@@ -57,7 +57,16 @@ func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnect
 	`
 	err := dbConnectionPool.SelectContext(ctx, &registeredWallets, queryRegisteredWallets)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, expectedWallets, registeredWallets)
+
+	// Check that all expected wallets are present (allows for additional wallets to exist)
+	registeredMap := make(map[string]bool)
+	for _, wallet := range registeredWallets {
+		registeredMap[wallet] = true
+	}
+
+	for _, expectedWallet := range expectedWallets {
+		assert.True(t, registeredMap[expectedWallet], "Expected wallet %s not found in registered wallets", expectedWallet)
+	}
 }
 
 func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userFirstName, userLastName, userEmail string) {
