@@ -160,7 +160,11 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface) {
 	// Handle multi-tenant jobs.
 	if job.IsJobMultiTenant() {
-		tenants, err := tenantManager.GetAllTenants(ctx, nil)
+		tenants, err := tenantManager.GetAllTenants(ctx, &tenant.QueryParams{
+			Filters: map[tenant.FilterKey]interface{}{
+				tenant.FilterKeyStatus: []tenant.TenantStatus{tenant.ProvisionedTenantStatus, tenant.ActivatedTenantStatus},
+			},
+		})
 		if err != nil {
 			msg := fmt.Sprintf("error getting all tenants for job %s on worker %d", job.GetName(), workerID)
 			crashTrackerClient.LogAndReportErrors(ctx, err, msg)
