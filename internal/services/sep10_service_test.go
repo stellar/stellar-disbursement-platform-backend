@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 )
 
@@ -74,7 +73,6 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 		"Test SDF Network ; September 2015",
 		kps.server.Seed(),
 		baseURL,
-		&data.Models{},
 		true,
 		createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},

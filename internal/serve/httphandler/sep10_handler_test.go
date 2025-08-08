@@ -262,8 +262,6 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 }
 
 func Test_SEP10Handler_validateChallengeRequest(t *testing.T) {
-	handler := SEP10Handler{}
-
 	testCases := []struct {
 		name          string
 		request       services.ChallengeRequest
@@ -321,7 +319,7 @@ func Test_SEP10Handler_validateChallengeRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := handler.validateChallengeRequest(tc.request)
+			err := tc.request.Validate()
 			if tc.expectedError == "" {
 				assert.NoError(t, err)
 			} else {

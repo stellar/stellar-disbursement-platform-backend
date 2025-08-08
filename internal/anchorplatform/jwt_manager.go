@@ -2,6 +2,7 @@ package anchorplatform
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -41,16 +42,12 @@ func (c Sep10JWTClaims) Valid() error {
 		return fmt.Errorf("validating registered claims: %w", err)
 	}
 
-	if c.ClientDomain != "" {
-		if len(c.ClientDomain) == 0 {
-			return fmt.Errorf("client_domain cannot be empty if provided")
-		}
+	if c.ClientDomain != "" && len(strings.TrimSpace(c.ClientDomain)) == 0 {
+		return fmt.Errorf("client_domain cannot be empty if provided")
 	}
 
-	if c.HomeDomain != "" {
-		if len(c.HomeDomain) == 0 {
-			return fmt.Errorf("home_domain cannot be empty if provided")
-		}
+	if c.HomeDomain != "" && len(strings.TrimSpace(c.HomeDomain)) == 0 {
+		return fmt.Errorf("home_domain cannot be empty if provided")
 	}
 
 	return nil

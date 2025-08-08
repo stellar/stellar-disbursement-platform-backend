@@ -148,7 +148,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 		opts.NetworkPassphrase,
 		opts.Sep10SigningPrivateKey,
 		opts.BaseURL,
-		opts.Models,
 		allowHTTPRetry,
 		opts.SubmitterEngine.HorizonClient,
 	)

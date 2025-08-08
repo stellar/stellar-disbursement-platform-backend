@@ -2,16 +2,13 @@ package httphandler
 
 import (
 	"encoding/json"
-	"fmt"
 	"mime"
 	"net/http"
 
-	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type SEP10Handler struct {
@@ -29,7 +26,7 @@ func (h SEP10Handler) GetChallenge(w http.ResponseWriter, r *http.Request) {
 		ClientDomain: r.URL.Query().Get("client_domain"),
 	}
 
-	if err := h.validateChallengeRequest(req); err != nil {
+	if err := req.Validate(); err != nil {
 		httperror.BadRequest(err.Error(), nil, nil).Render(w)
 		return
 	}
@@ -77,8 +74,8 @@ func (h SEP10Handler) PostChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Transaction == "" {
-		httperror.BadRequest("transaction is required", nil, nil).Render(w)
+	if err := req.Validate(); err != nil {
+		httperror.BadRequest(err.Error(), nil, nil).Render(w)
 		return
 	}
 
@@ -90,27 +87,4 @@ func (h SEP10Handler) PostChallenge(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	httpjson.Render(w, response, httpjson.JSON)
-}
-
-// validateChallengeRequest validates all challenge request parameters.
-func (h SEP10Handler) validateChallengeRequest(req services.ChallengeRequest) error {
-	if req.Account == "" {
-		return fmt.Errorf("account is required")
-	}
-
-	if !strkey.IsValidEd25519PublicKey(req.Account) {
-		return fmt.Errorf("invalid account format - must be a valid Ed25519 public key")
-	}
-
-	if req.Memo != "" {
-		_, memoType, err := schema.ParseMemo(req.Memo)
-		if err != nil {
-			return fmt.Errorf("invalid memo: %w", err)
-		}
-		if memoType != schema.MemoTypeID {
-			return fmt.Errorf("invalid memo type: expected ID memo, got %s", memoType)
-		}
-	}
-
-	return nil
 }
