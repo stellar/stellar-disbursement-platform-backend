@@ -2165,6 +2165,9 @@ func Test_SendReceiverWalletInviteService_GenerateInvitationLinkForPayment(t *te
 	})
 
 	t.Run("🎉 successfully generates invitation link for embedded wallet", func(t *testing.T) {
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, embeddedWallet.ID, data.RegisteredReceiversWalletStatus)
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Wallet: embeddedWallet,
@@ -2179,25 +2182,95 @@ func Test_SendReceiverWalletInviteService_GenerateInvitationLinkForPayment(t *te
 			ReceiverWallet: receiverWallet,
 		})
 
-		embeddedWalletServiceMock.On("GetWalletByReceiverContact", mock.Anything, "test@example.com", "EMAIL").
-			Return(nil, fmt.Errorf("wallet not found")).Once()
-		embeddedWalletServiceMock.On("CreateInvitationToken", mock.Anything, "test@example.com", "EMAIL", receiver.ID).
-			Return("test-token-123", nil).Once()
+		testCases := []struct {
+			name                  string
+			existingWallet        *data.EmbeddedWallet
+			walletNotFound        bool
+			expectNewToken        bool
+			expectedToken         string
+			expectCreateTokenCall bool
+		}{
+			{
+				name:                  "creates new token when no wallet found",
+				walletNotFound:        true,
+				expectNewToken:        true,
+				expectedToken:         "test-token-123",
+				expectCreateTokenCall: true,
+			},
+			{
+				name: "returns existing token for PENDING status wallet",
+				existingWallet: &data.EmbeddedWallet{
+					Token:        "existing-pending-token",
+					WalletStatus: data.PendingWalletStatus,
+				},
+				expectNewToken:        false,
+				expectedToken:         "existing-pending-token",
+				expectCreateTokenCall: false,
+			},
+			{
+				name: "returns existing token for PROCESSING status wallet",
+				existingWallet: &data.EmbeddedWallet{
+					Token:        "existing-processing-token",
+					WalletStatus: data.ProcessingWalletStatus,
+				},
+				expectNewToken:        false,
+				expectedToken:         "existing-processing-token",
+				expectCreateTokenCall: false,
+			},
+			{
+				name: "returns existing token for SUCCESS status wallet",
+				existingWallet: &data.EmbeddedWallet{
+					Token:        "existing-success-token",
+					WalletStatus: data.SuccessWalletStatus,
+				},
+				expectNewToken:        false,
+				expectedToken:         "existing-success-token",
+				expectCreateTokenCall: false,
+			},
+			{
+				name: "creates new token for FAILED status wallet",
+				existingWallet: &data.EmbeddedWallet{
+					Token:        "failed-token",
+					WalletStatus: data.FailedWalletStatus,
+				},
+				expectNewToken:        true,
+				expectedToken:         "new-token-for-failed",
+				expectCreateTokenCall: true,
+			},
+		}
 
-		invitationLink, err := service.GenerateInvitationLinkForPayment(ctx, *payment, *receiver)
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				if tc.walletNotFound {
+					embeddedWalletServiceMock.On("GetWalletByReceiverContact", mock.Anything, "test@example.com", "EMAIL").
+						Return(nil, fmt.Errorf("wallet not found")).Once()
+				} else {
+					embeddedWalletServiceMock.On("GetWalletByReceiverContact", mock.Anything, "test@example.com", "EMAIL").
+						Return(tc.existingWallet, nil).Once()
+				}
 
-		require.NoError(t, err)
-		assert.NotEmpty(t, invitationLink)
-		assert.Contains(t, invitationLink, tenantBaseURL)
-		assert.Contains(t, invitationLink, "asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
-		assert.Contains(t, invitationLink, "token=test-token-123")
-		assert.Contains(t, invitationLink, "signature=")
-		assert.NotContains(t, invitationLink, "domain=")
-		assert.NotContains(t, invitationLink, "name=")
+				if tc.expectCreateTokenCall {
+					embeddedWalletServiceMock.On("CreateInvitationToken", mock.Anything, "test@example.com", "EMAIL", receiver.ID).
+						Return(tc.expectedToken, nil).Once()
+				}
 
-		embeddedWalletServiceMock.AssertExpectations(t)
+				invitationLink, err := service.GenerateInvitationLinkForPayment(ctx, *payment, *receiver)
 
-		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+				require.NoError(t, err)
+				assert.NotEmpty(t, invitationLink)
+				assert.Contains(t, invitationLink, tenantBaseURL)
+				assert.Contains(t, invitationLink, "asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+				assert.Contains(t, invitationLink, "token="+tc.expectedToken)
+				assert.Contains(t, invitationLink, "signature=")
+				assert.NotContains(t, invitationLink, "domain=")
+				assert.NotContains(t, invitationLink, "name=")
+
+				if tc.existingWallet != nil && tc.expectNewToken {
+					assert.NotContains(t, invitationLink, "token="+tc.existingWallet.Token)
+				}
+
+				embeddedWalletServiceMock.AssertExpectations(t)
+			})
+		}
 	})
 }
