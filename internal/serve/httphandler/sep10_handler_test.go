@@ -74,13 +74,13 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		r := chi.NewRouter()
 		r.Get("/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?account=invalid-account", nil)
+		req := httptest.NewRequest(http.MethodGet, "/auth?account=invalid-account&client_domain=client.stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "invalid account format")
+		assert.Contains(t, w.Body.String(), "invalid account not a valid ed25519 public key")
 	})
 
 	t.Run("❌invalid memo type", func(t *testing.T) {
@@ -90,7 +90,7 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		r := chi.NewRouter()
 		r.Get("/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&memo=invalid-memo", nil)
+		req := httptest.NewRequest(http.MethodGet, "/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&memo=invalid-memo&client_domain=client.stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -104,13 +104,14 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		handler := SEP10Handler{SEP10Service: mockService}
 
 		mockService.On("CreateChallenge", mock.Anything, services.ChallengeRequest{
-			Account: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Account:      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			ClientDomain: "client.stellar.org",
 		}).Return(nil, fmt.Errorf("service error"))
 
 		r := chi.NewRouter()
 		r.Get("/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", nil)
+		req := httptest.NewRequest(http.MethodGet, "/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&client_domain=client.stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -303,7 +304,7 @@ func Test_SEP10Handler_validateChallengeRequest(t *testing.T) {
 				HomeDomain:   "stellar.org",
 				ClientDomain: "client.stellar.org",
 			},
-			expectedError: "invalid account format",
+			expectedError: "invalid account not a valid ed25519 public key",
 		},
 		{
 			name: "❌invalid memo type",
