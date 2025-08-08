@@ -141,6 +141,8 @@ func (manager *JWTManager) ParseDefaultTokenClaims(tokenString string) (*jwt.Reg
 	return parseTokenClaims(manager.secret, tokenString, &jwt.RegisteredClaims{}, "default")
 }
 
+// ParseSEP10TokenClaims will parse the provided token string and return the Sep10JWTClaims, if possible.
+// If the token is not a valid SEP-10 token, an error is returned instead.
 func (manager *JWTManager) ParseSEP10TokenClaims(tokenString string) (*Sep10JWTClaims, error) {
 	return parseTokenClaims(manager.secret, tokenString, &Sep10JWTClaims{}, "SEP10")
 }

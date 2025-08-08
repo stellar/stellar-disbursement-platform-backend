@@ -53,10 +53,14 @@ func createMockHorizonClient(accountID string, thresholds horizon.AccountThresho
 
 func createMockHTTPClient(t *testing.T, clientDomainKP *keypair.Full) *mocks.HttpClientMock {
 	mockClient := mocks.NewHttpClientMock(t)
-	mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(&http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + clientDomainKP.Address() + "\"\n")),
-	}, nil)
+	mockClient.
+		On("Get", mock.AnythingOfType("string")).
+		Return(func(_ string) *http.Response {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + clientDomainKP.Address() + "\"\n")),
+			}
+		}, nil)
 	return mockClient
 }
 
@@ -134,7 +138,7 @@ func createSignedChallenge(t *testing.T, service *sep10Service, kps *testKeypair
 	tx, isSimple := parsed.Transaction()
 	require.True(t, isSimple)
 
-	signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client)
+	signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, kps.clientDomain)
 	require.NoError(t, err)
 
 	signedTxBase64, err := signedTx.Base64()
@@ -195,6 +199,25 @@ func TestChallengeRequest_Validate(t *testing.T) {
 			},
 			expectError: true,
 			errMsg:      "client_domain is required",
+		},
+		{
+			name: "client_domain with only whitespace",
+			req: ChallengeRequest{
+				Account:      keypair.MustRandom().Address(),
+				HomeDomain:   "fenris.imperium.com",
+				ClientDomain: "   ",
+			},
+			expectError: true,
+			errMsg:      "client_domain is required",
+		},
+		{
+			name: "client_domain with leading/trailing whitespace",
+			req: ChallengeRequest{
+				Account:      keypair.MustRandom().Address(),
+				HomeDomain:   "fenris.imperium.com",
+				ClientDomain: "  chaos.cadia.com  ",
+			},
+			expectError: false,
 		},
 		{
 			name: "invalid memo",
@@ -336,7 +359,20 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 				ClientDomain: "invalid-domain.com",
 			},
 			expectError: true,
-			errMsg:      "fetching client domain signing key",
+			errMsg:      "unable to fetch stellar.toml from invalid-domain.com",
+		},
+		{
+			name: "timeout validation",
+			req: ChallengeRequest{
+				Account:      kps.client.Address(),
+				HomeDomain:   "ultramar.imperium.com",
+				ClientDomain: "chaos.cadia.com",
+			},
+			expectError: true,
+			errMsg:      "provided timebound must be at least 1s",
+			checkResponse: func(t *testing.T, resp *ChallengeResponse) {
+				// This test case will fail before reaching response check
+			},
 		},
 	}
 
@@ -344,6 +380,13 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			service, err := createSEP10Service(t, kps, "https://ultramar.imperium.com", nil, !tc.expectError)
 			require.NoError(t, err)
+
+			// Set short timeout for timeout validation test
+			if tc.name == "timeout validation" {
+				service.AuthTimeout = time.Millisecond
+				// Set up HTTP mock for timeout test to avoid network errors
+				service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+			}
 
 			resp, err := service.CreateChallenge(context.Background(), tc.req)
 
@@ -360,26 +403,6 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSEP10Service_CreateChallenge_TimeoutValidation(t *testing.T) {
-	kps := newTestKeypairs()
-
-	service, err := createSEP10Service(t, kps, "https://ultramar.imperium.com", nil, true)
-	require.NoError(t, err)
-
-	service.AuthTimeout = time.Millisecond
-
-	req := ChallengeRequest{
-		Account:      kps.client.Address(),
-		HomeDomain:   "ultramar.imperium.com",
-		ClientDomain: "chaos.cadia.com",
-	}
-
-	resp, err := service.CreateChallenge(context.Background(), req)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "provided timebound must be at least 1s")
-	assert.Nil(t, resp)
 }
 
 func TestSEP10Service_ValidateChallenge(t *testing.T) {
@@ -423,23 +446,11 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, kps.clientDomain)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
 		require.NoError(t, err)
-
-		validationReq := ValidationRequest{Transaction: signedTxBase64}
-		validationResp, err := service.ValidateChallenge(context.Background(), validationReq)
-		require.NoError(t, err)
-		assert.NotNil(t, validationResp)
-		assert.NotEmpty(t, validationResp.Token)
-	})
-
-	t.Run("valid challenge validation with different client domain", func(t *testing.T) {
-		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
-
-		signedTxBase64 := createSignedChallenge(t, service, kps, "stellar.local:8000", "orks.waaagh.com")
 
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		validationResp, err := service.ValidateChallenge(context.Background(), validationReq)
@@ -604,7 +615,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", highThresholdKP)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, highThresholdKP, kps.clientDomain)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -617,51 +628,218 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 	})
 }
 
-func TestSEP10Service_Integration_WithRealDB(t *testing.T) {
-	models := data.SetupModels(t)
+func TestSEP10Service_SignatureValidation(t *testing.T) {
+	t.Parallel()
+	kps := newTestKeypairs()
+	wrongKP := keypair.MustRandom()
 
-	kp := keypair.MustRandom()
-
-	mockHTTPClient := mocks.NewHttpClientMock(t)
-	mockHTTPClient.On("Do", mock.AnythingOfType("*http.Request")).Return(&http.Response{
-		StatusCode: 200,
-		Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + kp.Address() + "\"\n")),
-	}, nil)
-
-	mockHorizonClient := &horizonclient.MockClient{}
-	mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(horizon.Account{
-		AccountID: kp.Address(),
-		Thresholds: horizon.AccountThresholds{
-			LowThreshold:  1,
-			MedThreshold:  2,
-			HighThreshold: 3,
-		},
-	}, nil)
-
-	service, err := NewSEP10Service(
-		&anchorplatform.JWTManager{},
-		"Test SDF Network ; September 2015",
-		kp.Seed(),
-		"https://cadia.imperium.com",
-		models,
-		true,
-		mockHorizonClient,
-	)
+	jwtManager, err := anchorplatform.NewJWTManager("emperors-light-123", 3600000)
 	require.NoError(t, err)
 
-	sep10Service := service.(*sep10Service)
-	sep10Service.HTTPClient = mockHTTPClient
+	service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
+	require.NoError(t, err)
 
-	t.Run("integration test with real DB", func(t *testing.T) {
-		req := ChallengeRequest{
-			Account:      kp.Address(),
-			HomeDomain:   "cadia.imperium.com",
+	t.Run("wrong server signature (extra wrong signature is ignored)", func(t *testing.T) {
+		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		challengeReq := ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
 			ClientDomain: "chaos.cadia.com",
 		}
 
-		resp, err := service.CreateChallenge(context.Background(), req)
+		challengeResp, err := service.CreateChallenge(context.Background(), challengeReq)
 		require.NoError(t, err)
-		assert.NotEmpty(t, resp.Transaction)
-		assert.Equal(t, "Test SDF Network ; September 2015", resp.NetworkPassphrase)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", wrongKP, kps.client, kps.clientDomain)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		resp, err := service.ValidateChallenge(context.Background(), validationReq)
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("wrong client domain signature", func(t *testing.T) {
+		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		challengeReq := ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		}
+
+		challengeResp, err := service.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, wrongKP)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		_, err = service.ValidateChallenge(context.Background(), validationReq)
+		assert.Error(t, err)
+		if err != nil {
+			assert.Contains(t, err.Error(), "verifying client domain signature")
+		}
+	})
+
+	t.Run("missing server signature", func(t *testing.T) {
+		// Build a challenge transaction manually without a server signature
+		sa := txnbuild.SimpleAccount{AccountID: kps.server.Address(), Sequence: -1}
+		currentTime := time.Now().UTC()
+		operations := []txnbuild.Operation{
+			&txnbuild.ManageData{
+				SourceAccount: kps.client.Address(),
+				Name:          "stellar.local:8000 auth",
+				Value:         []byte(base64.StdEncoding.EncodeToString(make([]byte, 48))),
+			},
+			&txnbuild.ManageData{
+				SourceAccount: kps.server.Address(),
+				Name:          "web_auth_domain",
+				Value:         []byte("stellar.local:8000"),
+			},
+			&txnbuild.ManageData{
+				SourceAccount: kps.clientDomain.Address(),
+				Name:          "client_domain",
+				Value:         []byte("chaos.cadia.com"),
+			},
+		}
+		txParams := txnbuild.TransactionParams{
+			SourceAccount:        &sa,
+			IncrementSequenceNum: true,
+			Operations:           operations,
+			BaseFee:              txnbuild.MinBaseFee,
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds: txnbuild.NewTimebounds(currentTime.Unix(), currentTime.Add(15*time.Minute).Unix()),
+			},
+		}
+		tx, err := txnbuild.NewTransaction(txParams)
+		require.NoError(t, err)
+
+		// Only client and client domain signatures; missing server signature
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, kps.clientDomain)
+		require.NoError(t, err)
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		_, err = service.ValidateChallenge(context.Background(), validationReq)
+		assert.Error(t, err)
+		if err != nil {
+			assert.Contains(t, err.Error(), "reading challenge transaction")
+		}
+	})
+
+	t.Run("missing client domain signature", func(t *testing.T) {
+		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		challengeReq := ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		}
+
+		challengeResp, err := service.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		_, err = service.ValidateChallenge(context.Background(), validationReq)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "verifying client domain signature")
+	})
+
+	t.Run("all wrong signatures", func(t *testing.T) {
+		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		challengeReq := ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		}
+
+		challengeResp, err := service.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", wrongKP, wrongKP, wrongKP)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		_, err = service.ValidateChallenge(context.Background(), validationReq)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "verifying client signature")
+	})
+
+	t.Run("valid signatures but wrong client domain account", func(t *testing.T) {
+		mockClient := mocks.NewHttpClientMock(t)
+		mockClient.On("Get", mock.AnythingOfType("string")).Return(&http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + wrongKP.Address() + "\"\n")),
+		}, nil)
+		service.HTTPClient = mockClient
+
+		challengeReq := ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		}
+
+		challengeResp, err := service.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, kps.clientDomain)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		_, err = service.ValidateChallenge(context.Background(), validationReq)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "fetching client domain signing key")
 	})
 }

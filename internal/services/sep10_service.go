@@ -6,13 +6,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/clients/stellartoml"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/strkey"
@@ -61,7 +60,7 @@ func (req *ChallengeRequest) Validate() error {
 		return fmt.Errorf("invalid account not a valid ed25519 public key")
 	}
 
-	if req.ClientDomain == "" {
+	if strings.TrimSpace(req.ClientDomain) == "" {
 		return fmt.Errorf("client_domain is required")
 	}
 
@@ -122,7 +121,7 @@ func NewSEP10Service(
 
 	return &sep10Service{
 		JWTManager:          jwtManager,
-		JWTExpiration:       time.Hour * 24,
+		JWTExpiration:       time.Hour * 2,
 		NetworkPassphrase:   networkPassphrase,
 		Sep10SigningKeypair: kp,
 		AuthTimeout:         time.Minute * 15,
@@ -136,6 +135,9 @@ func NewSEP10Service(
 
 func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error) {
 	webAuthDomain := s.getWebAuthDomain(ctx)
+
+	req.ClientDomain = strings.TrimSpace(req.ClientDomain)
+	req.HomeDomain = strings.TrimSpace(req.HomeDomain)
 
 	if req.HomeDomain == "" {
 		req.HomeDomain = s.getBaseDomain()
@@ -398,6 +400,17 @@ func (s *sep10Service) verifySignaturesWithThreshold(
 		return fmt.Errorf("verifying client signature: %w", err)
 	}
 
+	// Verify client domain signature if client domain is present
+	if result.ClientDomain != "" {
+		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(result.ClientDomain)
+		if err != nil {
+			return fmt.Errorf("fetching client domain signing key: %w", err)
+		}
+		if err := s.verifyClientSignature(result.Transaction, s.NetworkPassphrase, clientDomainAccountID); err != nil {
+			return fmt.Errorf("verifying client domain signature: %w", err)
+		}
+	}
+
 	threshold := int(account.Thresholds.MedThreshold)
 	if err := s.verifyThreshold(result.Transaction, account, threshold); err != nil {
 		return fmt.Errorf("verifying signature threshold: %w", err)
@@ -518,12 +531,7 @@ func (s *sep10Service) getWebAuthDomain(ctx context.Context) string {
 		}
 	}
 
-	parsedURL, err := url.Parse(s.BaseURL)
-	if err == nil {
-		return parsedURL.Host
-	}
-
-	return ""
+	return s.getBaseDomain()
 }
 
 func (s *sep10Service) getBaseDomain() string {
@@ -550,7 +558,7 @@ func (s *sep10Service) isValidHomeDomain(homeDomain string) bool {
 	return strings.HasSuffix(homeDomainLower, "."+baseDomainLower)
 }
 
-func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDomain, clientDomain string, signingKey string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
+func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDomain, clientDomain string, clientDomainAccountID string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
 	if s.AuthTimeout < time.Second {
 		return nil, fmt.Errorf("provided timebound must be at least 1s (300s is recommended)")
 	}
@@ -568,9 +576,9 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 		return nil, fmt.Errorf("%s is not a valid account id", clientAccountID)
 	}
 
-	if signingKey != "" {
-		if _, parseErr := keypair.ParseAddress(signingKey); parseErr != nil {
-			return nil, fmt.Errorf("invalid signing key: %s is not a valid Stellar account ID", signingKey)
+	if clientDomainAccountID != "" {
+		if _, parseErr := keypair.ParseAddress(clientDomainAccountID); parseErr != nil {
+			return nil, fmt.Errorf("invalid client domain account ID: %s is not a valid Stellar account ID", clientDomainAccountID)
 		}
 	}
 
@@ -595,9 +603,9 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 		},
 	}
 
-	if signingKey != "" {
+	if clientDomainAccountID != "" {
 		operations = append(operations, &txnbuild.ManageData{
-			SourceAccount: signingKey,
+			SourceAccount: clientDomainAccountID,
 			Name:          "client_domain",
 			Value:         []byte(clientDomain),
 		})
@@ -640,71 +648,30 @@ func (s *sep10Service) generateRandomNonce(n int) ([]byte, error) {
 }
 
 func (s *sep10Service) fetchSigningKeyFromClientDomain(clientDomain string) (string, error) {
-	url := "https://" + clientDomain + "/.well-known/stellar.toml"
+	client := &stellartoml.Client{
+		HTTP: s.HTTPClient,
+	}
 
-	signingKey, err := s.tryReadToml(url)
+	stellarToml, err := client.GetStellarToml(clientDomain)
 	if err != nil && s.AllowHTTPRetry {
-		httpURL := strings.Replace(url, "https://", "http://", 1)
-		signingKey, err = s.tryReadToml(httpURL)
+		// Fallback to HTTP if HTTPS fails and retry is allowed.
+		client.UseHTTP = true
+		stellarToml, err = client.GetStellarToml(clientDomain)
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("unable to read from %s: %w", url, err)
+		return "", fmt.Errorf("unable to fetch stellar.toml from %s: %w", clientDomain, err)
 	}
 
-	if _, parseErr := keypair.ParseAddress(signingKey); parseErr != nil {
-		return "", fmt.Errorf("SIGNING_KEY %s is not a valid Stellar account ID", signingKey)
+	if stellarToml.SigningKey == "" {
+		return "", fmt.Errorf("SIGNING_KEY not present in client_domain stellar.toml")
 	}
 
-	return signingKey, nil
-}
-
-func (s *sep10Service) tryReadToml(url string) (string, error) {
-	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("creating request: %w", err)
+	if _, parseErr := keypair.ParseAddress(stellarToml.SigningKey); parseErr != nil {
+		return "", fmt.Errorf("SIGNING_KEY %s is not a valid Stellar account ID", stellarToml.SigningKey)
 	}
 
-	resp, err := s.HTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("fetching TOML: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("reading response body: %w", err)
-	}
-
-	signingKey, err := s.extractSigningKeyFromToml(string(body))
-	if err != nil {
-		return "", fmt.Errorf("extracting SIGNING_KEY from TOML: %w", err)
-	}
-
-	if signingKey == "" {
-		return "", fmt.Errorf("SIGNING_KEY not present in client_domain TOML")
-	}
-
-	return signingKey, nil
-}
-
-func (s *sep10Service) extractSigningKeyFromToml(tomlContent string) (string, error) {
-	lines := strings.Split(tomlContent, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "SIGNING_KEY") {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				key := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
-				return key, nil
-			}
-		}
-	}
-	return "", nil
+	return stellarToml.SigningKey, nil
 }
 
 func (s *sep10Service) fetchAccountFromHorizon(accountID string) (*horizon.Account, error) {
