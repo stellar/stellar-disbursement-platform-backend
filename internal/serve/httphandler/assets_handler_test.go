@@ -30,6 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
@@ -383,10 +384,13 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(123.45, nil)
+
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
-		assert.Nil(t, balance)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 123.45, *balance)
 	})
 
 	t.Run("returns false for Circle accounts with unsupported assets", func(t *testing.T) {
@@ -394,6 +398,8 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 		account := schema.TransactionAccount{
 			Type: schema.DistributionAccountCircleDBVault,
 		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
@@ -424,7 +430,7 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, errors.New("asset not found"))
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
@@ -458,16 +464,19 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 		assert.Equal(t, 0.0, *balance)
 	})
 
-	t.Run("returns true and nil balance for Circle accounts with supported assets", func(t *testing.T) {
+	t.Run("returns true and balance for Circle accounts with supported assets", func(t *testing.T) {
 		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
 		account := schema.TransactionAccount{
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(321.0, nil)
+
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
-		assert.Nil(t, balance)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 321.0, *balance)
 	})
 
 	t.Run("returns false and nil balance for Circle accounts with unsupported assets", func(t *testing.T) {
@@ -475,6 +484,8 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 		account := schema.TransactionAccount{
 			Type: schema.DistributionAccountCircleDBVault,
 		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
@@ -506,7 +517,7 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, errors.New("asset not found"))
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)

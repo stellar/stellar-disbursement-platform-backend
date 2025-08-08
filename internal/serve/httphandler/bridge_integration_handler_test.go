@@ -203,6 +203,23 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 			}`,
 		},
 		{
+			name:        "Bridge service USDC trustline error",
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				mBridgeService.
+					On("OptInToBridge", mock.Anything, optInOptions).
+					Return(nil, bridge.ErrBridgeUSDCTrustlineRequired).
+					Once()
+			},
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "Cannot opt into Bridge integration: distribution account must have a USDC trustline"}`,
+		},
+		{
 			name:        "cannot retrieve user from context",
 			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
@@ -309,6 +326,30 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 				customOptInOptions.FullName = "Custom Name"
 				mBridgeService.
 					On("OptInToBridge", mock.Anything, customOptInOptions).
+					Return(bridgeInfo, nil).
+					Once()
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: `{
+				"status": "OPTED_IN",
+				"customer_id": "customer-123"
+			}`,
+		},
+		{
+			name:        "🎉 successfully opts in with USDC trustline - testnet",
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				bridgeInfo := &bridge.BridgeIntegrationInfo{
+					Status:     data.BridgeIntegrationStatusOptedIn,
+					CustomerID: utils.StringPtr("customer-123"),
+				}
+				mBridgeService.
+					On("OptInToBridge", mock.Anything, optInOptions).
 					Return(bridgeInfo, nil).
 					Once()
 			},

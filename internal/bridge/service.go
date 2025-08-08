@@ -7,16 +7,22 @@ import (
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // Service provides business logic for Bridge integration operations.
 type Service struct {
-	client  ClientInterface
-	baseURL string
-	apiKey  string
-	models  *data.Models
+	client                      ClientInterface
+	baseURL                     string
+	apiKey                      string
+	models                      *data.Models
+	distributionAccountResolver signing.DistributionAccountResolver
+	distributionAccountService  services.DistributionAccountServiceInterface
+	networkType                 utils.NetworkType
 }
 
 // BridgeIntegrationInfo represents the composite information about Bridge integration.
@@ -44,21 +50,33 @@ var _ ServiceInterface = (*Service)(nil)
 
 // ServiceOptions contains configuration options for the Bridge service.
 type ServiceOptions struct {
-	BaseURL string
-	APIKey  string
-	Models  *data.Models
+	BaseURL                     string
+	APIKey                      string
+	Models                      *data.Models
+	DistributionAccountResolver signing.DistributionAccountResolver
+	DistributionAccountService  services.DistributionAccountServiceInterface
+	NetworkType                 utils.NetworkType
 }
 
 // Validate validates the Bridge service options.
 func (o ServiceOptions) Validate() error {
 	if o.BaseURL == "" {
-		return fmt.Errorf("BaseURL is required")
+		return fmt.Errorf("baseURL is required")
 	}
 	if o.APIKey == "" {
-		return fmt.Errorf("APIKey is required")
+		return fmt.Errorf("apiKey is required")
 	}
 	if o.Models == nil {
-		return fmt.Errorf("Models is required")
+		return fmt.Errorf("models is required")
+	}
+	if o.DistributionAccountResolver == nil {
+		return fmt.Errorf("distributionAccountResolver is required")
+	}
+	if o.DistributionAccountService == nil {
+		return fmt.Errorf("distributionAccountService is required")
+	}
+	if err := o.NetworkType.Validate(); err != nil {
+		return fmt.Errorf("validating NetworkType: %w", err)
 	}
 	return nil
 }
@@ -78,10 +96,13 @@ func NewService(opts ServiceOptions) (*Service, error) {
 	}
 
 	return &Service{
-		client:  client,
-		baseURL: opts.BaseURL,
-		apiKey:  opts.APIKey,
-		models:  opts.Models,
+		client:                      client,
+		baseURL:                     opts.BaseURL,
+		apiKey:                      opts.APIKey,
+		models:                      opts.Models,
+		distributionAccountResolver: opts.DistributionAccountResolver,
+		distributionAccountService:  opts.DistributionAccountService,
+		networkType:                 opts.NetworkType,
 	}, nil
 }
 
@@ -92,6 +113,7 @@ var (
 	ErrBridgeKYCNotApproved              = errors.New("KYC verification is not approved, cannot create virtual account")
 	ErrBridgeTOSNotAccepted              = errors.New("terms of service not accepted, cannot create virtual account")
 	ErrBridgeKYCRejected                 = errors.New("KYC verification was rejected, cannot create virtual account")
+	ErrBridgeUSDCTrustlineRequired       = errors.New("distribution account must have a USDC trustline to opt into Bridge integration")
 )
 
 type OptInOptions struct {
@@ -127,7 +149,12 @@ func (s *Service) OptInToBridge(ctx context.Context, opts OptInOptions) (*Bridge
 		return nil, fmt.Errorf("validating opt-in options: %w", err)
 	}
 
-	// 1. Check if organization already opted in
+	// 1. Validate USDC trustline exists
+	if err := s.validateUSDCTrustline(ctx); err != nil {
+		return nil, fmt.Errorf("validating USDC trustline: %w", err)
+	}
+
+	// 2. Check if organization already opted in
 	existing, err := s.models.BridgeIntegration.Get(ctx)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		return nil, fmt.Errorf("checking existing Bridge integration: %w", err)
@@ -136,7 +163,7 @@ func (s *Service) OptInToBridge(ctx context.Context, opts OptInOptions) (*Bridge
 		return nil, ErrBridgeAlreadyOptedIn
 	}
 
-	// 2. Create KYC link via Bridge API for organization onboarding
+	// 3. Create KYC link via Bridge API for organization onboarding
 	request := KYCLinkRequest{
 		FullName:    opts.FullName,
 		Email:       opts.Email,
@@ -149,7 +176,7 @@ func (s *Service) OptInToBridge(ctx context.Context, opts OptInOptions) (*Bridge
 		return nil, fmt.Errorf("creating KYC link via Bridge API: %w", err)
 	}
 
-	// 3. Persist the Bridge integration IDs in the database
+	// 4. Persist the Bridge integration IDs in the database
 	integration, err := s.models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
 		KYCLinkID:  kycLinkInfo.ID,
 		CustomerID: kycLinkInfo.CustomerID,
@@ -321,4 +348,27 @@ func (s *Service) recordRejectedStatus(ctx context.Context, rejectionReasons []s
 		return fmt.Errorf("updating Bridge integration with error status: %w", updateErr)
 	}
 	return fmt.Errorf("%w: %v", ErrBridgeKYCRejected, rejectionReasons)
+}
+
+// validateUSDCTrustline checks if the distribution account has a USDC trustline.
+func (s *Service) validateUSDCTrustline(ctx context.Context) error {
+	distributionAccount, err := s.distributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("getting distribution account from context: %w", err)
+	}
+
+	// Get the appropriate USDC asset based on network type
+	var usdcAsset data.Asset
+	if s.networkType.IsPubnet() {
+		usdcAsset = assets.USDCAssetPubnet
+	} else {
+		usdcAsset = assets.USDCAssetTestnet
+	}
+
+	// Check if the distribution account has USDC balance (which implies trustline exists)
+	if _, err = s.distributionAccountService.GetBalance(ctx, &distributionAccount, usdcAsset); err != nil {
+		return fmt.Errorf("%w: %w", ErrBridgeUSDCTrustlineRequired, err)
+	}
+
+	return nil
 }
