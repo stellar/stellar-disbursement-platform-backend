@@ -2,18 +2,15 @@ package services
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
-	"github.com/stellar/go/hash"
-	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 //go:generate mockery --name=WalletCreationFromSubmitterServiceInterface --case=snake --structname=MockWalletCreationFromSubmitterService
@@ -44,72 +41,6 @@ func NewWalletCreationFromSubmitterService(
 		tssModel:          store.NewTransactionModel(tssDBConnectionPool),
 		networkPassphrase: networkPassphrase,
 	}
-}
-
-// calculateContractAddress calculates the contract address for a wallet creation transaction based on the distribution account and salt.
-//
-// Contract addresses can be deterministically derived from the deployer account and an optional salt. In this case, we use the salt
-// stored in the TSS transaction, and the deployer account is the distribution account from the TSS transaction.
-//
-// Read more: https://developers.stellar.org/docs/build/smart-contracts/example-contracts/deployer#how-it-works
-func (s *WalletCreationFromSubmitterService) calculateContractAddress(
-	distributionAccount, saltHex string,
-) (string, error) {
-	saltBytes, err := hex.DecodeString(saltHex)
-	if err != nil {
-		return "", fmt.Errorf("parsing contract salt: invalid hex salt: %w", err)
-	}
-	if len(saltBytes) != 32 {
-		return "", fmt.Errorf("parsing contract salt: salt must be 32 bytes, got %d", len(saltBytes))
-	}
-	var salt xdr.Uint256
-	copy(salt[:], saltBytes)
-
-	rawAddress, err := strkey.Decode(strkey.VersionByteAccountID, distributionAccount)
-	if err != nil {
-		return "", fmt.Errorf("decoding distribution account address: %w", err)
-	}
-	var uint256Val xdr.Uint256
-	copy(uint256Val[:], rawAddress)
-	distributionAccountId := xdr.AccountId{
-		Type:    xdr.PublicKeyTypePublicKeyTypeEd25519,
-		Ed25519: &uint256Val,
-	}
-
-	distributionScAddress := xdr.ScAddress{
-		Type:      xdr.ScAddressTypeScAddressTypeAccount,
-		AccountId: &distributionAccountId,
-	}
-
-	contractIdPreimage := xdr.ContractIdPreimage{
-		Type: xdr.ContractIdPreimageTypeContractIdPreimageFromAddress,
-		FromAddress: &xdr.ContractIdPreimageFromAddress{
-			Address: distributionScAddress,
-			Salt:    salt,
-		},
-	}
-
-	networkHash := hash.Hash([]byte(s.networkPassphrase))
-	hashIdPreimage := xdr.HashIdPreimage{
-		Type: xdr.EnvelopeTypeEnvelopeTypeContractId,
-		ContractId: &xdr.HashIdPreimageContractId{
-			NetworkId:          xdr.Hash(networkHash),
-			ContractIdPreimage: contractIdPreimage,
-		},
-	}
-
-	preimageXDR, err := hashIdPreimage.MarshalBinary()
-	if err != nil {
-		return "", fmt.Errorf("marshaling preimage: %w", err)
-	}
-
-	contractIdHash := hash.Hash(preimageXDR)
-	contractAddress, err := strkey.Encode(strkey.VersionByteContract, contractIdHash[:])
-	if err != nil {
-		return "", fmt.Errorf("encoding contract address: %w", err)
-	}
-
-	return contractAddress, nil
 }
 
 // SyncTransaction syncs a single completed TSS wallet creation transaction with the embedded wallet table
@@ -218,9 +149,10 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 			return fmt.Errorf("distribution account is not set for transaction %s", transaction.ID)
 		}
 
-		contractAddress, calcErr := s.calculateContractAddress(
+		contractAddress, calcErr := utils.CalculateContractAddress(
 			transaction.DistributionAccount.String,
 			transaction.WalletCreation.Salt,
+			s.networkPassphrase,
 		)
 		if calcErr != nil {
 			return fmt.Errorf("calculating contract address for transaction %s: %w", transaction.ID, calcErr)

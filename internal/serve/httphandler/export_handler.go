@@ -7,18 +7,20 @@ import (
 	"time"
 
 	"github.com/gocarina/gocsv"
-
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type ExportHandler struct {
-	Models        *data.Models
-	InviteService services.SendReceiverWalletInviteServiceInterface
+	Models            *data.Models
+	InviteService     services.SendReceiverWalletInviteServiceInterface
+	NetworkPassphrase string
 }
 
 func (e ExportHandler) ExportDisbursements(rw http.ResponseWriter, r *http.Request) {
@@ -68,6 +70,7 @@ type PaymentCSV struct {
 	ReceiverExternalID      string                     `csv:"Receiver.ExternalID"`
 	ReceiverWalletAddress   string                     `csv:"ReceiverWallet.Address"`
 	ReceiverWalletStatus    data.ReceiversWalletStatus `csv:"ReceiverWallet.Status"`
+	ReceiverContractAddress string                     `csv:"ReceiverWallet.ContractAddress"`
 	InvitationLink          string                     `csv:"ReceiverWallet.InvitationLink"`
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
@@ -150,6 +153,12 @@ func (e ExportHandler) getPaymentReceiversMap(ctx context.Context, payments []da
 
 // convertPaymentsToCSV converts the given payments and receivers to a slice of PaymentCSV.
 func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data.Payment, receiversMap map[string]data.Receiver) ([]*PaymentCSV, error) {
+	tenantInfo, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		log.Ctx(ctx).Warnf("Failed to get tenant from context for contract address calculation: %v", err)
+		tenantInfo = nil
+	}
+
 	paymentCSVs := make([]*PaymentCSV, 0, len(payments))
 	for _, payment := range payments {
 		receiver, ok := receiversMap[payment.ReceiverWallet.Receiver.ID]
@@ -162,6 +171,15 @@ func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data
 			invitationLink = link
 		} else {
 			log.Ctx(ctx).Warnf("Failed to generate invitation link for payment %s: %v", payment.ID, err)
+		}
+
+		var contractAddress string
+		if tenantInfo != nil && tenantInfo.DistributionAccountAddress != nil && payment.ReceiverWallet.Wallet.Embedded {
+			if addr, err := utils.CalculateContractAddressFromReceiver(receiver.Email, receiver.PhoneNumber, *tenantInfo.DistributionAccountAddress, e.NetworkPassphrase); err == nil {
+				contractAddress = addr
+			} else {
+				log.Ctx(ctx).Warnf("Failed to calculate contract address for payment %s (receiver %s): %v", payment.ID, receiver.ID, err)
+			}
 		}
 
 		paymentCSV := &PaymentCSV{
@@ -178,6 +196,7 @@ func (e ExportHandler) convertPaymentsToCSV(ctx context.Context, payments []data
 			ReceiverExternalID:      receiver.ExternalID,
 			ReceiverWalletAddress:   payment.ReceiverWallet.StellarAddress,
 			ReceiverWalletStatus:    payment.ReceiverWallet.Status,
+			ReceiverContractAddress: contractAddress,
 			InvitationLink:          invitationLink,
 			CreatedAt:               payment.CreatedAt,
 			UpdatedAt:               payment.UpdatedAt,
