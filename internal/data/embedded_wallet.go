@@ -200,6 +200,12 @@ func (ewu EmbeddedWalletUpdate) Validate() error {
 		}
 	}
 
+	if ewu.CredentialID != "" {
+		if len(ewu.CredentialID) > 64 {
+			return fmt.Errorf("credential ID must be 64 characters or less, got %d characters", len(ewu.CredentialID))
+		}
+	}
+
 	return nil
 }
 

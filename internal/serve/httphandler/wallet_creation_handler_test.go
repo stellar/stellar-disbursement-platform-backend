@@ -98,6 +98,15 @@ func Test_WalletCreationHandler_CreateWallet_ValidationErrors(t *testing.T) {
 			},
 			expectedField: "credential_id",
 		},
+		{
+			name: "credential id too long",
+			requestBody: CreateWalletRequest{
+				Token:        "123",
+				PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+				CredentialID: strings.Repeat("a", 65), // 65 characters, should fail
+			},
+			expectedField: "credential_id",
+		},
 	}
 
 	for _, tc := range errorCases {

@@ -32,6 +32,7 @@ func (r CreateWalletRequest) Validate() *httperror.HTTPError {
 	validator.Check(len(strings.TrimSpace(r.Token)) > 0, "token", "token should not be empty")
 	validator.Check(len(strings.TrimSpace(r.PublicKey)) > 0, "public_key", "public_key should not be empty")
 	validator.Check(len(strings.TrimSpace(r.CredentialID)) > 0, "credential_id", "credential_id should not be empty")
+	validator.Check(len(r.CredentialID) <= 64, "credential_id", "credential_id must be 64 characters or less")
 	if pk, err := hex.DecodeString(r.PublicKey); err != nil {
 		validator.AddError("public_key", "public_key is not a valid hex string")
 	} else if !isValidP256PublicKey(pk) {
