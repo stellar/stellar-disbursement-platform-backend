@@ -77,6 +77,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:     network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -95,6 +96,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:     network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -112,6 +114,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:     network.TestNetworkPassphrase,
 				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -130,6 +133,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:     network.TestNetworkPassphrase,
 				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),

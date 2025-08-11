@@ -76,6 +76,12 @@ type SEP24InteractiveResponse struct {
 func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	sep10Claims := anchorplatform.GetSEP10Claims(ctx)
+	if sep10Claims == nil {
+		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)
+		return
+	}
+
 	transactionID := r.URL.Query().Get("id")
 	if transactionID == "" {
 		httperror.BadRequest("id parameter is required", nil, nil).Render(w)
@@ -179,17 +185,10 @@ func (h SEP24Handler) GetInfo(w http.ResponseWriter, r *http.Request) {
 func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	authHeader := r.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
+	// Get SEP-10 claims from middleware
+	sep10Claims := anchorplatform.GetSEP10Claims(ctx)
+	if sep10Claims == nil {
 		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)
-		return
-	}
-
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	sep10Claims, err := h.SEP24JWTManager.ParseSEP10TokenClaims(token)
-	if err != nil {
-		log.Ctx(ctx).Errorf("Failed to parse SEP-10 token: %v", err)
-		httperror.Unauthorized("Invalid token", err, nil).Render(w)
 		return
 	}
 

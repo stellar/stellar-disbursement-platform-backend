@@ -652,8 +652,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				InteractiveBaseURL: o.BaseURL,
 			}
 			r.Get("/info", sep24Handler.GetInfo)
-			r.Get("/transaction", sep24Handler.GetTransaction)
-			r.Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
+			// Protect transaction lookup with SEP-10 auth to ensure only authorized clients can access details
+			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
+
+			// For initiating interactive deposit, allow either the new middleware (preferred) or legacy header path inside handler
+			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
 		})
 
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
