@@ -234,6 +234,10 @@ sdp:
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
       CIRCLE_API_TYPE: "TRANSFERS"
 
+      ## Anchor Platform configuration
+      ## @param sdp.configMap.data.ENABLE_ANCHOR_PLATFORM Enable Anchor Platform integration for SEP-1 TOML file. When true, SEP-1 TOML points to anchor platform URLs. When false, points to SDP SEP10/SEP24 URLs.
+      ENABLE_ANCHOR_PLATFORM: "false"
+
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
   ## @param sdp.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
@@ -339,12 +343,15 @@ sdp:
       secretName: backend-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
       # NOTE: the hosts to be used here will be the same ones as in the sdp.route section.
 
-      # =========================== START anchorPlatform ===========================
-      ## @section Anchor Platform
-      ## @descriptionStart
-      ## Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
-      ##  the recipient's registration process through the SEP-24 deposit flow.
-      ## @descriptionEnd
+        # =========================== START anchorPlatform ===========================
+        ## @section Anchor Platform
+        ## @descriptionStart
+        ## Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
+        ##  the recipient's registration process through the SEP-24 deposit flow.
+        ##
+        ## DEPRECATED: This configuration section will be removed in a future version.
+        ## Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints instead.
+        ## @descriptionEnd
 anchorPlatform:
 
   ## @extra anchorPlatform.route Configuration related to the routing of the Anchor Platform service.
