@@ -237,6 +237,7 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.configMap.data.CIRCLE_API_TYPE`                              | The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".                                                                      | `TRANSFERS`                                     |
 | `sdp.configMap.data.ENABLE_BRIDGE_INTEGRATION`                    | Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.                                                       |                                                 |
 | `sdp.configMap.data.BRIDGE_BASE_URL`                              | The base URL of the bridge API. Required if ENABLE_BRIDGE_INTEGRATION is set to true.                                                                          |                                                 |
+| `sdp.configMap.data.ENABLE_ANCHOR_PLATFORM`                       | Enable Anchor Platform integration for SEP-1 TOML file. When true, SEP-1 TOML points to anchor platform URLs. When false, points to SDP SEP10/SEP24 URLs.      | `false`                                         |
 | `sdp.kubeSecrets`                                                 | Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.              |                                                 |
 | `sdp.kubeSecrets.secretName`                                      | The name of the Kubernetes secret object. Only use this if create is false.                                                                                    | `sdp-backend-secret-name`                       |
 | `sdp.kubeSecrets.create`                                          | If true, the secret will be created. If false, it is assumed the secret already exists.                                                                        | `false`                                         |
@@ -279,6 +280,9 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 
 Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
 the recipient's registration process through the SEP-24 deposit flow.
+
+DEPRECATED: This configuration section will be removed in a future version.
+Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints instead.
 
 | Name                                                                      | Description                                                                                                                                                                                                                                                                                                              | Value                                   |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
