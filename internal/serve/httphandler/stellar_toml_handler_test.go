@@ -388,6 +388,11 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 
+	// Update organization name to match test expectations
+	orgUpdate := &data.OrganizationUpdate{Name: "AdeptusMinistorum"}
+	err = models.Organizations.Update(ctx, orgUpdate)
+	require.NoError(t, err)
+
 	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
 		AdminDBConnectionPool:            dbConnectionPool,
 		HostDistributionAccountPublicKey: "GCWFIKOB7FO6KTXUKZIPPPZ42UT2V7HVZD5STVROKVJVQU24FSP7OLZK",
@@ -423,7 +428,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
 
 			[DOCUMENTATION]
-			ORG_NAME="MyCustomAid"
+			ORG_NAME="AdeptusMinistorum"
 
 			[[CURRENCIES]]
 			code = "EURT"
@@ -475,7 +480,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
 
 			[DOCUMENTATION]
-			ORG_NAME="MyCustomAid"
+			ORG_NAME="AdeptusMinistorum"
 
 			[[CURRENCIES]]
 			code = "EURT"
@@ -592,7 +597,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
 
 			[DOCUMENTATION]
-			ORG_NAME="MyCustomAid"
+			ORG_NAME="AdeptusMinistorum"
 		`, network.PublicNetworkPassphrase, horizonPubnetURL)
 		wantToml = strings.TrimSpace(wantToml)
 		wantToml = strings.ReplaceAll(wantToml, "\t", "")
