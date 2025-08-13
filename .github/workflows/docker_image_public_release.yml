@@ -18,6 +18,12 @@ jobs:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml
     secrets: inherit # pass all secrets
 
+  anchor_platform_integration_check:
+    uses: ./.github/workflows/anchor_platform_integration_check.yml # execute the callable anchor_platform_integration_check.yml
+    needs:
+      - tests
+    secrets: inherit # pass all secrets
+
   e2e_integration_test:
     uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
     needs:
