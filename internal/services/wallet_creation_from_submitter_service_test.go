@@ -476,44 +476,6 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 	})
 }
 
-func Test_WalletCreationFromSubmitterService_calculateContractAddress(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
-
-	testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
-	networkPassphrase := "Test SDF Network ; September 2015"
-
-	service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, networkPassphrase)
-
-	t.Run("successfully calculates contract address", func(t *testing.T) {
-		distributionAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
-
-		contractAddress, err := service.calculateContractAddress(distributionAccount, testSalt)
-		require.NoError(t, err)
-		assert.NotEmpty(t, contractAddress)
-		assert.True(t, strkey.IsValidContractAddress(contractAddress), "contract address should be a valid stellar contract address")
-	})
-
-	t.Run("returns error for invalid salt", func(t *testing.T) {
-		distributionAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
-		invalidSalt := "invalid-hex"
-
-		_, err := service.calculateContractAddress(distributionAccount, invalidSalt)
-		assert.ErrorContains(t, err, "parsing contract salt")
-	})
-
-	t.Run("returns error for invalid distribution account", func(t *testing.T) {
-		invalidDistributionAccount := "invalid-account"
-
-		_, err := service.calculateContractAddress(invalidDistributionAccount, testSalt)
-		assert.ErrorContains(t, err, "decoding distribution account address")
-	})
-}
-
 // Helper functions for embedded wallet tests
 
 func createEmbeddedWalletTSSTxs(t *testing.T, testCtx *testContext, walletTokens ...string) []*txSubStore.Transaction {

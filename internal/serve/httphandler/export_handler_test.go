@@ -15,11 +15,14 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/go/strkey"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ExportHandler_ExportDisbursements(t *testing.T) {
@@ -39,8 +42,9 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 	inviteService.On("GenerateInvitationLinkForPayment", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
 	handler := &ExportHandler{
-		Models:        models,
-		InviteService: inviteService,
+		Models:            models,
+		InviteService:     inviteService,
+		NetworkPassphrase: "Test SDF Network ; September 2015",
 	}
 
 	r := chi.NewRouter()
@@ -144,30 +148,43 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
-	ctx := context.Background()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	inviteLink := "https://demo-wallet.stellar.org/invite?token=mock-invite-token"
 	inviteService := &mocks.MockSendReceiverWalletInviteService{}
-	inviteService.On("GenerateInvitationLinkForPayment", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
+	inviteService.On("GenerateInvitationLinkForPayment", mock.Anything, mock.Anything, mock.Anything).Return(inviteLink, nil)
 
 	handler := &ExportHandler{
-		Models:        models,
-		InviteService: inviteService,
+		Models:            models,
+		InviteService:     inviteService,
+		NetworkPassphrase: "Test SDF Network ; September 2015",
 	}
 
 	r := chi.NewRouter()
 	r.Get("/exports/payments", handler.ExportPayments)
 
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	embeddedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "SDP Embedded Wallet", "https://stellar.org", "stellar.org", "SELF")
+	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
+
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email:       "test@example.com",
+		PhoneNumber: "+14155551234",
+	})
+	embeddedReceiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email:       "embedded@example.com",
+		PhoneNumber: "+14155555678",
+	})
 	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+	rwEmbedded := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, embeddedReceiver.ID, embeddedWallet.ID, data.RegisteredReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 		Name:   "disbursement 1",
@@ -203,6 +220,15 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 		CreatedAt:         time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 		ExternalPaymentID: "PAY03",
 	})
+	successfulPaymentEmbedded := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet:    rwEmbedded,
+		Disbursement:      disbursement,
+		Asset:             *asset,
+		Amount:            "400",
+		Status:            data.SuccessPaymentStatus,
+		CreatedAt:         time.Date(2021, 3, 21, 23, 40, 20, 1431, time.UTC),
+		ExternalPaymentID: "PAY04",
+	})
 
 	tests := []struct {
 		name               string
@@ -220,19 +246,19 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			name:               "success - returns CSV with all payments",
 			expectedStatusCode: http.StatusOK,
 			queryParams:        "sort=created_at",
-			expectedPayments:   []*data.Payment{pendingPayment, successfulPayment, failedPayment},
+			expectedPayments:   []*data.Payment{pendingPayment, successfulPayment, failedPayment, successfulPaymentEmbedded},
 		},
 		{
 			name:               "success - return CSV with reverse order of payments",
 			expectedStatusCode: http.StatusOK,
 			queryParams:        "sort=created_at&direction=asc",
-			expectedPayments:   []*data.Payment{failedPayment, successfulPayment, pendingPayment},
+			expectedPayments:   []*data.Payment{successfulPaymentEmbedded, failedPayment, successfulPayment, pendingPayment},
 		},
 		{
 			name:               "success - return CSV with only successful payments",
 			expectedStatusCode: http.StatusOK,
 			queryParams:        "status=success",
-			expectedPayments:   []*data.Payment{successfulPayment},
+			expectedPayments:   []*data.Payment{successfulPaymentEmbedded, successfulPayment},
 		},
 	}
 
@@ -242,7 +268,7 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			if tc.queryParams != "" {
 				url += "?" + tc.queryParams
 			}
-			req, err := http.NewRequest(http.MethodGet, url, nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)
@@ -257,7 +283,7 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 				"ID", "Amount", "StellarTransactionID", "Status",
 				"Disbursement.ID", "Asset.Code", "Asset.Issuer", "Wallet.Name", "Receiver.ID",
 				"Receiver.PhoneNumber", "Receiver.Email", "Receiver.ExternalID", "ReceiverWallet.Address", "ReceiverWallet.Status",
-				"ReceiverWallet.InvitationLink", "CreatedAt", "UpdatedAt", "ExternalPaymentID", "CircleTransferRequestID",
+				"ReceiverWallet.ContractAddress", "ReceiverWallet.InvitationLink", "CreatedAt", "UpdatedAt", "ExternalPaymentID", "CircleTransferRequestID",
 			}
 			assert.Equal(t, expectedHeaders, header)
 
@@ -270,21 +296,34 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			assert.Len(t, rows, len(tc.expectedPayments))
 
 			for i, row := range rows {
-				assert.Equal(t, tc.expectedPayments[i].ID, row[0])
-				assert.Equal(t, tc.expectedPayments[i].Amount, row[1])
-				assert.Equal(t, tc.expectedPayments[i].StellarTransactionID, row[2])
-				assert.Equal(t, string(tc.expectedPayments[i].Status), row[3])
-				assert.Equal(t, tc.expectedPayments[i].Disbursement.ID, row[4])
-				assert.Equal(t, tc.expectedPayments[i].Asset.Code, row[5])
-				assert.Equal(t, tc.expectedPayments[i].Asset.Issuer, row[6])
-				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.Wallet.Name, row[7])
-				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.Receiver.ID, row[8])
-				assert.Equal(t, receiverReady.PhoneNumber, row[9])
-				assert.Equal(t, receiverReady.Email, row[10])
-				assert.Equal(t, receiverReady.ExternalID, row[11])
-				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.StellarAddress, row[12])
-				assert.Equal(t, string(tc.expectedPayments[i].ReceiverWallet.Status), row[13])
-				assert.Equal(t, tc.expectedPayments[i].ExternalPaymentID, row[17])
+				payment := tc.expectedPayments[i]
+				assert.Equal(t, payment.ID, row[0])
+				assert.Equal(t, payment.Amount, row[1])
+				assert.Equal(t, payment.StellarTransactionID, row[2])
+				assert.Equal(t, string(payment.Status), row[3])
+				assert.Equal(t, payment.Disbursement.ID, row[4])
+				assert.Equal(t, payment.Asset.Code, row[5])
+				assert.Equal(t, payment.Asset.Issuer, row[6])
+				assert.Equal(t, payment.ReceiverWallet.Wallet.Name, row[7])
+				assert.Equal(t, payment.ReceiverWallet.Receiver.ID, row[8])
+
+				if payment.ReceiverWallet.Wallet.Name == embeddedWallet.Name {
+					assert.Equal(t, embeddedReceiver.PhoneNumber, row[9])
+					assert.Equal(t, embeddedReceiver.Email, row[10])
+					assert.Equal(t, embeddedReceiver.ExternalID, row[11])
+					assert.True(t, strkey.IsValidContractAddress(row[14]))
+					assert.Equal(t, inviteLink, row[15])
+				} else {
+					assert.Equal(t, receiverReady.PhoneNumber, row[9])
+					assert.Equal(t, receiverReady.Email, row[10])
+					assert.Equal(t, receiverReady.ExternalID, row[11])
+					assert.Empty(t, row[14])
+					assert.Equal(t, inviteLink, row[15])
+				}
+
+				assert.Equal(t, payment.ReceiverWallet.StellarAddress, row[12])
+				assert.Equal(t, string(payment.ReceiverWallet.Status), row[13])
+				assert.Equal(t, payment.ExternalPaymentID, row[18])
 			}
 		})
 	}
@@ -307,8 +346,9 @@ func Test_ExportHandler_ExportReceivers(t *testing.T) {
 	inviteService.On("GenerateInvitationLinkForPayment", mock.Anything, mock.Anything, mock.Anything).Return("", nil)
 
 	handler := &ExportHandler{
-		Models:        models,
-		InviteService: inviteService,
+		Models:            models,
+		InviteService:     inviteService,
+		NetworkPassphrase: "Test SDF Network ; September 2015",
 	}
 
 	r := chi.NewRouter()

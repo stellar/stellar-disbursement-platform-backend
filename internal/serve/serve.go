@@ -641,8 +641,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}
 
 		exportHandler := httphandler.ExportHandler{
-			Models:        o.Models,
-			InviteService: inviteService,
+			Models:            o.Models,
+			InviteService:     inviteService,
+			NetworkPassphrase: o.NetworkPassphrase,
 		}
 		r.With(middleware.RequirePermission(
 			data.ReadExports,
