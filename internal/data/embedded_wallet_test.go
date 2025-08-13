@@ -147,6 +147,17 @@ func Test_EmbeddedWalletUpdate_Validate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("validates CredentialID", func(t *testing.T) {
+		update := EmbeddedWalletUpdate{CredentialID: strings.Repeat("a", 65)}
+		err := update.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "credential ID must be 64 characters or less, got 65 characters")
+
+		update = EmbeddedWalletUpdate{CredentialID: strings.Repeat("a", 64)}
+		err = update.Validate()
+		require.NoError(t, err)
+	})
+
 	t.Run("validates a full valid update", func(t *testing.T) {
 		update := EmbeddedWalletUpdate{
 			WasmHash:        "abcdef123456",
