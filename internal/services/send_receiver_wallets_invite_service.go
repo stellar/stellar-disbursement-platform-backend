@@ -280,7 +280,7 @@ func (s SendReceiverWalletInviteService) getOrCreateInvitationToken(ctx context.
 		return token, nil
 	}
 
-	if existingWallet.WalletStatus == data.PendingWalletStatus {
+	if existingWallet.WalletStatus != data.FailedWalletStatus {
 		return existingWallet.Token, nil
 	}
 
