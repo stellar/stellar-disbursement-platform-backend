@@ -31,6 +31,12 @@ const (
 	FailedWalletStatus EmbeddedWalletStatus = "FAILED"
 )
 
+const (
+	// WebAuthn credential IDs can be up to 1023 bytes, and after URL encoding they can be longer.
+	// We set this to 2048 to provide sufficient buffer for URL encoding and future compatibility.
+	MaxCredentialIDLength = 2048
+)
+
 func (status EmbeddedWalletStatus) Validate() error {
 	switch EmbeddedWalletStatus(strings.ToUpper(string(status))) {
 	case PendingWalletStatus, SuccessWalletStatus, ProcessingWalletStatus, FailedWalletStatus:
@@ -201,8 +207,8 @@ func (ewu EmbeddedWalletUpdate) Validate() error {
 	}
 
 	if ewu.CredentialID != "" {
-		if len(ewu.CredentialID) > 64 {
-			return fmt.Errorf("credential ID must be 64 characters or less, got %d characters", len(ewu.CredentialID))
+		if len(ewu.CredentialID) > MaxCredentialIDLength {
+			return fmt.Errorf("credential ID must be %d characters or less, got %d characters", MaxCredentialIDLength, len(ewu.CredentialID))
 		}
 	}
 

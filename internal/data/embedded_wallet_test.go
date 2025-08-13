@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -148,12 +149,12 @@ func Test_EmbeddedWalletUpdate_Validate(t *testing.T) {
 	})
 
 	t.Run("validates CredentialID", func(t *testing.T) {
-		update := EmbeddedWalletUpdate{CredentialID: strings.Repeat("a", 65)}
+		update := EmbeddedWalletUpdate{CredentialID: strings.Repeat("a", MaxCredentialIDLength+1)}
 		err := update.Validate()
 		require.Error(t, err)
-		assert.EqualError(t, err, "credential ID must be 64 characters or less, got 65 characters")
+		assert.EqualError(t, err, fmt.Sprintf("credential ID must be %d characters or less, got %d characters", MaxCredentialIDLength, MaxCredentialIDLength+1))
 
-		update = EmbeddedWalletUpdate{CredentialID: strings.Repeat("a", 64)}
+		update = EmbeddedWalletUpdate{CredentialID: strings.Repeat("a", MaxCredentialIDLength)}
 		err = update.Validate()
 		require.NoError(t, err)
 	})
