@@ -54,4 +54,4 @@ jobs:
       - name: Docker logs
         if: always()
         working-directory: dev
-        run: docker compose -f docker-compose-sdp-anchor.yml logs && docker compose -f docker-compose-sdp-anchor.yml down
+        run: docker compose -f docker-compose-sdp.yml logs && docker compose -f docker-compose-sdp.yml down

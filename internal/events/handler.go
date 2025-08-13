@@ -6,7 +6,7 @@ import (
 
 // Topic Names
 //
-// Note: when adding a new topic here, please, add the new topic to `kafka-init` service command on dev/docker-compose-sdp-anchor.yml.
+// Note: when adding a new topic here, please, add the new topic to `kafka-init` service command on dev/docker-compose-sdp.yml.
 //
 //	`kafka-topics.sh --create --if-not-exists --topic events.new-topic ...`
 const (
