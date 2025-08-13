@@ -4,6 +4,7 @@ import (
 	"crypto/ecdh"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -15,6 +16,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+)
+
+const (
+	// WebAuthn credential IDs can be up to 1023 bytes, and after URL encoding they can be longer.
+	// We set this to 2048 to provide sufficient buffer for URL encoding and future compatibility.
+	MaxCredentialIDLength = 2048
 )
 
 type WalletCreationHandler struct {
@@ -32,7 +39,7 @@ func (r CreateWalletRequest) Validate() *httperror.HTTPError {
 	validator.Check(len(strings.TrimSpace(r.Token)) > 0, "token", "token should not be empty")
 	validator.Check(len(strings.TrimSpace(r.PublicKey)) > 0, "public_key", "public_key should not be empty")
 	validator.Check(len(strings.TrimSpace(r.CredentialID)) > 0, "credential_id", "credential_id should not be empty")
-	validator.Check(len(r.CredentialID) <= 64, "credential_id", "credential_id must be 64 characters or less")
+	validator.Check(len(r.CredentialID) <= MaxCredentialIDLength, "credential_id", fmt.Sprintf("credential_id must be %d characters or less", MaxCredentialIDLength))
 	if pk, err := hex.DecodeString(r.PublicKey); err != nil {
 		validator.AddError("public_key", "public_key is not a valid hex string")
 	} else if !isValidP256PublicKey(pk) {
