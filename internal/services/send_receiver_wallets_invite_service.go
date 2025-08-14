@@ -587,14 +587,12 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 
 	q := u.Query()
 
-	q.Add("asset", wdl.assetName())
-
-	if !wdl.SelfHosted {
-		q.Add("domain", tomlFileDomain)
-		q.Add("name", wdl.OrganizationName)
-	}
 	if wdl.Token != "" {
 		q.Add("token", wdl.Token)
+	} else {
+		q.Add("asset", wdl.assetName())
+		q.Add("domain", tomlFileDomain)
+		q.Add("name", wdl.OrganizationName)
 	}
 
 	u.RawQuery = q.Encode()

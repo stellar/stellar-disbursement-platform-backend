@@ -422,8 +422,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, mock.MatchedBy(func(msg message.Message) bool {
 				return msg.ToPhoneNumber == receiverPhoneOnly.PhoneNumber &&
 					strings.Contains(msg.Body, "You have a payment waiting for you from the MyCustomAid") &&
-					strings.Contains(msg.Body, "wallet?asset=FOO1-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX") &&
-					strings.Contains(msg.Body, "token=") &&
+					strings.Contains(msg.Body, "wallet?token=") &&
 					strings.Contains(msg.Body, "signature=")
 			}), []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -465,7 +464,6 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Empty(t, msg.TitleEncrypted)
 
 		assert.Contains(t, msg.TextEncrypted, "You have a payment waiting for you from the MyCustomAid")
-		assert.Contains(t, msg.TextEncrypted, "wallet?asset=FOO1-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
 		assert.Contains(t, msg.TextEncrypted, "token=")
 		assert.Contains(t, msg.TextEncrypted, "signature=")
 		assert.Len(t, msg.StatusHistory, 2)
@@ -1978,7 +1976,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				Token:            "123",
 				SelfHosted:       true,
 			},
-			wantResult: "http://foo.bar:8000/wallet?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&token=123",
+			wantResult: "http://foo.bar:8000/wallet?token=123",
 		},
 		{
 			name: "🎉 successful for embedded wallet hosted elsewhere",
@@ -1990,7 +1988,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 				Token:            "123",
 			},
-			wantResult: "https://test.com?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar%3A8000&name=Foo+Bar+Org&token=123",
+			wantResult: "https://test.com?token=123",
 		},
 	}
 
@@ -2259,7 +2257,7 @@ func Test_SendReceiverWalletInviteService_GenerateInvitationLinkForPayment(t *te
 				require.NoError(t, err)
 				assert.NotEmpty(t, invitationLink)
 				assert.Contains(t, invitationLink, tenantBaseURL)
-				assert.Contains(t, invitationLink, "asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+				assert.NotContains(t, invitationLink, "asset=")
 				assert.Contains(t, invitationLink, "token="+tc.expectedToken)
 				assert.Contains(t, invitationLink, "signature=")
 				assert.NotContains(t, invitationLink, "domain=")
