@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -27,24 +28,6 @@ type GetReceiverResponse struct {
 	data.Receiver
 	Wallets       []data.ReceiverWallet       `json:"wallets"`
 	Verifications []data.ReceiverVerification `json:"verifications,omitempty"`
-}
-
-type CreateReceiverRequest struct {
-	Email         string                `json:"email"`
-	PhoneNumber   string                `json:"phone_number"`
-	ExternalID    string                `json:"external_id"`
-	Verifications []VerificationRequest `json:"verifications"`
-	Wallets       []WalletRequest       `json:"wallets"`
-}
-
-type VerificationRequest struct {
-	Type  data.VerificationType `json:"type"`
-	Value string                `json:"value"`
-}
-
-type WalletRequest struct {
-	Address string `json:"address"`
-	Memo    string `json:"memo,omitempty"`
 }
 
 func (rh ReceiverHandler) buildReceiversResponse(receivers []data.Receiver, receiversWallets []data.ReceiverWallet) []GetReceiverResponse {
@@ -165,44 +148,18 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	var err error
 
-	var req CreateReceiverRequest
+	var req dto.CreateReceiverRequest
 	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)
 		return
 	}
 
-	validatorReq := &validators.CreateReceiverRequest{
-		Email:         req.Email,
-		PhoneNumber:   req.PhoneNumber,
-		ExternalID:    req.ExternalID,
-		Verifications: make([]validators.ReceiverVerificationRequest, len(req.Verifications)),
-		Wallets:       make([]validators.ReceiverWalletRequest, len(req.Wallets)),
-	}
-
-	for i, v := range req.Verifications {
-		validatorReq.Verifications[i] = validators.ReceiverVerificationRequest{
-			Type:  v.Type,
-			Value: v.Value,
-		}
-	}
-
-	for i, w := range req.Wallets {
-		validatorReq.Wallets[i] = validators.ReceiverWalletRequest{
-			Address: w.Address,
-			Memo:    w.Memo,
-		}
-	}
-
 	validator := validators.NewReceiverValidator()
-	validator.ValidateCreateReceiverRequest(validatorReq)
+	validator.ValidateCreateReceiverRequest(&req)
 	if validator.HasErrors() {
 		httperror.BadRequest("validation error", nil, validator.Errors).Render(w)
 		return
 	}
-
-	req.Email = validatorReq.Email
-	req.PhoneNumber = validatorReq.PhoneNumber
-	req.ExternalID = validatorReq.ExternalID
 
 	var response *GetReceiverResponse
 	response, err = db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {

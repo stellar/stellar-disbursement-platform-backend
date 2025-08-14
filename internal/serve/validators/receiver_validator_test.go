@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
 )
 
 func TestNewReceiverValidator(t *testing.T) {
@@ -18,16 +19,16 @@ func TestNewReceiverValidator(t *testing.T) {
 func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 	testCases := []struct {
 		name        string
-		request     CreateReceiverRequest
+		request     dto.CreateReceiverRequest
 		expectError bool
 		errorFields []string
 	}{
 		{
 			name: "valid request with email and verifications",
-			request: CreateReceiverRequest{
-				Email:      "frodo@shire.me",
+			request: dto.CreateReceiverRequest{
+				Email:      "frodo@example.com",
 				ExternalID: "Bag-End-001",
-				Verifications: []ReceiverVerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -38,10 +39,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "valid request with phone and wallet",
-			request: CreateReceiverRequest{
+			request: dto.CreateReceiverRequest{
 				PhoneNumber: "+12345678901",
 				ExternalID:  "Rivendell-456",
-				Wallets: []ReceiverWalletRequest{
+				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
 						Memo:    "precious",
@@ -52,9 +53,9 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "missing contact information",
-			request: CreateReceiverRequest{
+			request: dto.CreateReceiverRequest{
 				ExternalID: "Mordor-Mount-Doom",
-				Verifications: []ReceiverVerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -66,9 +67,9 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "missing external ID",
-			request: CreateReceiverRequest{
-				Email: "gandalf@istari.me",
-				Verifications: []ReceiverVerificationRequest{
+			request: dto.CreateReceiverRequest{
+				Email: "gandalf@example.com",
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -80,8 +81,8 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "missing verifications and wallets",
-			request: CreateReceiverRequest{
-				Email:      "aragorn@rangers.me",
+			request: dto.CreateReceiverRequest{
+				Email:      "aragorn@test.local",
 				ExternalID: "Minas-Tirith-001",
 			},
 			expectError: true,
@@ -89,10 +90,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "invalid email format",
-			request: CreateReceiverRequest{
+			request: dto.CreateReceiverRequest{
 				Email:      "@mordor.net",
 				ExternalID: "Misty-Mountains-001",
-				Verifications: []ReceiverVerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -104,10 +105,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "invalid phone number format",
-			request: CreateReceiverRequest{
+			request: dto.CreateReceiverRequest{
 				PhoneNumber: "01-RING",
 				ExternalID:  "Isengard-001",
-				Verifications: []ReceiverVerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -119,10 +120,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "multiple wallets not allowed",
-			request: CreateReceiverRequest{
-				Email:      "legolas@mirkwood.me",
+			request: dto.CreateReceiverRequest{
+				Email:      "legolas@example.com",
 				ExternalID: "Lothlorien-001",
-				Wallets: []ReceiverWalletRequest{
+				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
 					},
@@ -136,10 +137,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "invalid stellar address",
-			request: CreateReceiverRequest{
-				Email:      "gimli@erebor.me",
+			request: dto.CreateReceiverRequest{
+				Email:      "gimli@test.local",
 				ExternalID: "Moria-001",
-				Wallets: []ReceiverWalletRequest{
+				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "invalid-address",
 					},
@@ -150,10 +151,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "invalid verification type",
-			request: CreateReceiverRequest{
-				Email:      "boromir@gondor.me",
+			request: dto.CreateReceiverRequest{
+				Email:      "boromir@example.com",
 				ExternalID: "Osgiliath-001",
-				Verifications: []ReceiverVerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  "INVALID_TYPE",
 						Value: "test-value",
@@ -165,10 +166,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 		},
 		{
 			name: "invalid date of birth format",
-			request: CreateReceiverRequest{
-				Email:      "samwise@shire.me",
+			request: dto.CreateReceiverRequest{
+				Email:      "samwise@test.local",
 				ExternalID: "Hobbiton-001",
-				Verifications: []ReceiverVerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "invalid-date",
@@ -201,17 +202,17 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 
 func TestReceiverValidator_TrimValues(t *testing.T) {
 	validator := NewReceiverValidator()
-	request := &CreateReceiverRequest{
-		Email:       "  merry@buckland.me  ",
+	request := &dto.CreateReceiverRequest{
+		Email:       "  merry@example.com  ",
 		PhoneNumber: "  +1234567890  ",
 		ExternalID:  "  Bree-001  ",
-		Verifications: []ReceiverVerificationRequest{
+		Verifications: []dto.ReceiverVerificationRequest{
 			{
 				Type:  data.VerificationTypeDateOfBirth,
 				Value: "  1990-01-01  ",
 			},
 		},
-		Wallets: []ReceiverWalletRequest{
+		Wallets: []dto.ReceiverWalletRequest{
 			{
 				Address: "  GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K  ",
 				Memo:    "  my-precious  ",
@@ -221,7 +222,7 @@ func TestReceiverValidator_TrimValues(t *testing.T) {
 
 	validator.ValidateCreateReceiverRequest(request)
 
-	assert.Equal(t, "merry@buckland.me", request.Email)
+	assert.Equal(t, "merry@example.com", request.Email)
 	assert.Equal(t, "+1234567890", request.PhoneNumber)
 	assert.Equal(t, "Bree-001", request.ExternalID)
 	assert.Equal(t, "1990-01-01", request.Verifications[0].Value)

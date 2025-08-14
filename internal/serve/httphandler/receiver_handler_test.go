@@ -18,6 +18,8 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -1587,15 +1589,15 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 
 	testCases := []struct {
 		name        string
-		request     CreateReceiverRequest
+		request     dto.CreateReceiverRequest
 		expectError bool
 		errorMsg    string
 	}{
 		{
 			name: "missing required contact information",
-			request: CreateReceiverRequest{
+			request: dto.CreateReceiverRequest{
 				ExternalID: "Cadia-Station",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1603,14 +1605,14 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "either email or phone_number must be provided",
+			errorMsg:    "email is required when phone_number is not provided",
 		},
 		{
 			name: "invalid email format",
-			request: CreateReceiverRequest{
-				Email:      "@horus.com",
+			request: dto.CreateReceiverRequest{
+				Email:      "@example.com",
 				ExternalID: "Cadia-Station",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1622,10 +1624,10 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid phone number format",
-			request: CreateReceiverRequest{
+			request: dto.CreateReceiverRequest{
 				PhoneNumber: "01-HERESY",
 				ExternalID:  "Cadia-Station",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1637,9 +1639,9 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		},
 		{
 			name: "missing external ID",
-			request: CreateReceiverRequest{
-				Email: "inquisitor@imperium.gov",
-				Verifications: []VerificationRequest{
+			request: dto.CreateReceiverRequest{
+				Email: "inquisitor@example.com",
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1651,19 +1653,19 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		},
 		{
 			name: "missing verifications and wallets",
-			request: CreateReceiverRequest{
-				Email:      "magnus@prospero.edu",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
 				ExternalID: "Prospero-001",
 			},
 			expectError: true,
-			errorMsg:    "either verifications or wallets must be provided",
+			errorMsg:    "verifications are required when wallets are not provided",
 		},
 		{
 			name: "invalid verification type",
-			request: CreateReceiverRequest{
-				Email:      "magnus@prospero.edu",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
 				ExternalID: "Prospero-001",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  "WARP_TAINT",
 						Value: "1990-01-01",
@@ -1675,10 +1677,10 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid date format",
-			request: CreateReceiverRequest{
-				Email:      "magnus@prospero.edu",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
 				ExternalID: "Prospero-001",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "30/M41",
@@ -1690,10 +1692,10 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid stellar address format",
-			request: CreateReceiverRequest{
-				Email:      "magnus@prospero.edu",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
 				ExternalID: "Prospero-001",
-				Wallets: []WalletRequest{
+				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "INVALIDADDRESS",
 					},
@@ -1704,10 +1706,10 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		},
 		{
 			name: "multiple wallets not allowed",
-			request: CreateReceiverRequest{
-				Email:      "fulgrim@prospero.edu",
+			request: dto.CreateReceiverRequest{
+				Email:      "fulgrim@example.com",
 				ExternalID: "Chemos-001",
-				Wallets: []WalletRequest{
+				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
 						Memo:    "1337",
@@ -1728,30 +1730,8 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			validatorReq := &validators.CreateReceiverRequest{
-				Email:         tc.request.Email,
-				PhoneNumber:   tc.request.PhoneNumber,
-				ExternalID:    tc.request.ExternalID,
-				Verifications: make([]validators.ReceiverVerificationRequest, len(tc.request.Verifications)),
-				Wallets:       make([]validators.ReceiverWalletRequest, len(tc.request.Wallets)),
-			}
-
-			for i, v := range tc.request.Verifications {
-				validatorReq.Verifications[i] = validators.ReceiverVerificationRequest{
-					Type:  v.Type,
-					Value: v.Value,
-				}
-			}
-
-			for i, w := range tc.request.Wallets {
-				validatorReq.Wallets[i] = validators.ReceiverWalletRequest{
-					Address: w.Address,
-					Memo:    w.Memo,
-				}
-			}
-
 			validator := validators.NewReceiverValidator()
-			validator.ValidateCreateReceiverRequest(validatorReq)
+			validator.ValidateCreateReceiverRequest(&tc.request)
 
 			if tc.expectError {
 				require.True(t, validator.HasErrors(), "Expected validation errors but none found")
@@ -1786,15 +1766,15 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		requestBody    CreateReceiverRequest
+		requestBody    dto.CreateReceiverRequest
 		expectedStatus int
 		expectedError  string
 	}{
 		{
 			name: "missing required contact information",
-			requestBody: CreateReceiverRequest{
+			requestBody: dto.CreateReceiverRequest{
 				ExternalID: "Cadia-Station",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1802,14 +1782,14 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "either email or phone_number must be provided",
+			expectedError:  "email is required when phone_number is not provided",
 		},
 		{
 			name: "invalid email format",
-			requestBody: CreateReceiverRequest{
-				Email:      "@horus.com",
+			requestBody: dto.CreateReceiverRequest{
+				Email:      "@example.com",
 				ExternalID: "Cadia-Station",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1821,9 +1801,9 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 		},
 		{
 			name: "missing external ID",
-			requestBody: CreateReceiverRequest{
-				Email: "inquisitor@imperium.gov",
-				Verifications: []VerificationRequest{
+			requestBody: dto.CreateReceiverRequest{
+				Email: "inquisitor@example.com",
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1852,14 +1832,11 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 
 			assert.Equal(t, tc.expectedStatus, w.Code)
 
-			var errorResponse struct {
-				Error  string                 `json:"error"`
-				Extras map[string]interface{} `json:"extras,omitempty"`
-			}
+			var errorResponse httperror.HTTPError
 			err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
 			require.NoError(t, err)
 
-			assert.Equal(t, "validation error", errorResponse.Error)
+			assert.Equal(t, "validation error", errorResponse.Error())
 
 			require.NotNil(t, errorResponse.Extras)
 
@@ -1892,16 +1869,16 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		requestBody     CreateReceiverRequest
+		requestBody     dto.CreateReceiverRequest
 		expectedStatus  int
 		assertCreatedFn func(t *testing.T, receiverID string)
 	}{
 		{
 			name: "create receiver with email and verifications",
-			requestBody: CreateReceiverRequest{
-				Email:      "horus.lupercal@chaos.com",
+			requestBody: dto.CreateReceiverRequest{
+				Email:      "horus.lupercal@example.com",
 				ExternalID: "Cadia-001",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
@@ -1916,7 +1893,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 			assertCreatedFn: func(t *testing.T, receiverID string) {
 				receiver, err := models.Receiver.Get(ctx, dbConnectionPool, receiverID)
 				require.NoError(t, err)
-				assert.Equal(t, "horus.lupercal@chaos.com", receiver.Email)
+				assert.Equal(t, "horus.lupercal@example.com", receiver.Email)
 				assert.Equal(t, "Cadia-001", receiver.ExternalID)
 
 				verifications, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiverID)
@@ -1930,10 +1907,10 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 		},
 		{
 			name: "create receiver with phone and wallet",
-			requestBody: CreateReceiverRequest{
+			requestBody: dto.CreateReceiverRequest{
 				PhoneNumber: "+41555511112",
 				ExternalID:  "Terra-001",
-				Wallets: []WalletRequest{
+				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
 						Memo:    "13371337",
@@ -1964,17 +1941,17 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 		},
 		{
 			name: "create complete receiver with both email/phone and verifications/wallet",
-			requestBody: CreateReceiverRequest{
-				Email:       "guilliman@ultramar.gov",
+			requestBody: dto.CreateReceiverRequest{
+				Email:       "guilliman@example.com",
 				PhoneNumber: "+41555511111",
 				ExternalID:  "Ultramar-001",
-				Verifications: []VerificationRequest{
+				Verifications: []dto.ReceiverVerificationRequest{
 					{
 						Type:  data.VerificationTypeDateOfBirth,
 						Value: "1990-01-01",
 					},
 				},
-				Wallets: []WalletRequest{
+				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
 					},
@@ -1984,7 +1961,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 			assertCreatedFn: func(t *testing.T, receiverID string) {
 				receiver, err := models.Receiver.Get(ctx, dbConnectionPool, receiverID)
 				require.NoError(t, err)
-				assert.Equal(t, "guilliman@ultramar.gov", receiver.Email)
+				assert.Equal(t, "guilliman@example.com", receiver.Email)
 				assert.Equal(t, "+41555511111", receiver.PhoneNumber)
 				assert.Equal(t, "Ultramar-001", receiver.ExternalID)
 

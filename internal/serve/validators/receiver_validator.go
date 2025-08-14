@@ -8,27 +8,9 @@ import (
 	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
-
-// CreateReceiverRequest represents the request structure for creating receivers
-type CreateReceiverRequest struct {
-	Email         string                        `json:"email"`
-	PhoneNumber   string                        `json:"phone_number"`
-	ExternalID    string                        `json:"external_id"`
-	Verifications []ReceiverVerificationRequest `json:"verifications"`
-	Wallets       []ReceiverWalletRequest       `json:"wallets"`
-}
-
-type ReceiverVerificationRequest struct {
-	Type  data.VerificationType `json:"type"`
-	Value string                `json:"value"`
-}
-
-type ReceiverWalletRequest struct {
-	Address string `json:"address"`
-	Memo    string `json:"memo,omitempty"`
-}
 
 type ReceiverValidator struct {
 	*Validator
@@ -42,14 +24,14 @@ func NewReceiverValidator() *ReceiverValidator {
 }
 
 // ValidateCreateReceiverRequest validates the CreateReceiverRequest
-func (rv *ReceiverValidator) ValidateCreateReceiverRequest(req *CreateReceiverRequest) {
+func (rv *ReceiverValidator) ValidateCreateReceiverRequest(req *dto.CreateReceiverRequest) {
 	email := strings.TrimSpace(req.Email)
 	phoneNumber := strings.TrimSpace(req.PhoneNumber)
 	externalID := strings.TrimSpace(req.ExternalID)
 
 	if email == "" && phoneNumber == "" {
-		rv.Check(false, "email", "either email or phone_number must be provided")
-		rv.Check(false, "phone_number", "either email or phone_number must be provided")
+		rv.Check(false, "email", "email is required when phone_number is not provided")
+		rv.Check(false, "phone_number", "phone_number is required when email is not provided")
 	}
 
 	if email != "" {
@@ -63,8 +45,8 @@ func (rv *ReceiverValidator) ValidateCreateReceiverRequest(req *CreateReceiverRe
 	rv.Check(externalID != "", "external_id", "external_id is required")
 
 	if len(req.Verifications) == 0 && len(req.Wallets) == 0 {
-		rv.Check(false, "verifications", "either verifications or wallets must be provided")
-		rv.Check(false, "wallets", "either verifications or wallets must be provided")
+		rv.Check(false, "verifications", "verifications are required when wallets are not provided")
+		rv.Check(false, "wallets", "wallets are required when verifications are not provided")
 	}
 
 	if len(req.Wallets) > 1 {
