@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -17,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -48,78 +45,6 @@ type VerificationRequest struct {
 type WalletRequest struct {
 	Address string `json:"address"`
 	Memo    string `json:"memo,omitempty"`
-}
-
-func (r *CreateReceiverRequest) Validate() error {
-	if r.Email == "" && r.PhoneNumber == "" {
-		return errors.New("either email or phone_number must be provided")
-	}
-
-	if r.Email != "" {
-		if err := utils.ValidateEmail(r.Email); err != nil {
-			return fmt.Errorf("validating email: %w", err)
-		}
-	}
-
-	if r.PhoneNumber != "" {
-		if err := utils.ValidatePhoneNumber(r.PhoneNumber); err != nil {
-			return fmt.Errorf("validating phone_number: %w", err)
-		}
-	}
-
-	if r.ExternalID == "" {
-		return errors.New("external_id is required")
-	}
-
-	if len(r.Verifications) == 0 && len(r.Wallets) == 0 {
-		return errors.New("either verifications or wallets must be provided")
-	}
-
-	if len(r.Wallets) > 1 {
-		return errors.New("only one wallet is allowed per receiver")
-	}
-
-	for i, v := range r.Verifications {
-		if v.Type == "" {
-			return fmt.Errorf("verification[%d].type is required", i)
-		}
-		if v.Value == "" {
-			return fmt.Errorf("verification[%d].value is required", i)
-		}
-
-		switch v.Type {
-		case data.VerificationTypeDateOfBirth:
-			if _, err := time.Parse("2006-01-02", v.Value); err != nil {
-				return fmt.Errorf("invalid date of birth format for verification[%d]: must be YYYY-MM-DD", i)
-			}
-		case data.VerificationTypePin:
-			if len(v.Value) < 4 || len(v.Value) > 8 {
-				return fmt.Errorf("invalid PIN for verification[%d]: must be between 4 and 8 characters", i)
-			}
-		case data.VerificationTypeNationalID:
-			if len(v.Value) > 50 {
-				return fmt.Errorf("invalid national ID for verification[%d]: must be at most 50 characters", i)
-			}
-		case data.VerificationTypeYearMonth:
-			if _, err := time.Parse("2006-01", v.Value); err != nil {
-				return fmt.Errorf("invalid year-month format for verification[%d]: must be YYYY-MM", i)
-			}
-		default:
-			return fmt.Errorf("invalid verification type for verification[%d]: %s", i, v.Type)
-		}
-	}
-
-	for i, w := range r.Wallets {
-		if w.Address == "" {
-			return fmt.Errorf("wallet[%d].address is required", i)
-		}
-
-		if !strkey.IsValidEd25519PublicKey(w.Address) {
-			return fmt.Errorf("invalid stellar address for wallet[%d]", i)
-		}
-	}
-
-	return nil
 }
 
 func (rh ReceiverHandler) buildReceiversResponse(receivers []data.Receiver, receiversWallets []data.ReceiverWallet) []GetReceiverResponse {
@@ -246,10 +171,38 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err = req.Validate(); err != nil {
-		httperror.BadRequest("validation error", err, nil).Render(w)
+	validatorReq := &validators.CreateReceiverRequest{
+		Email:         req.Email,
+		PhoneNumber:   req.PhoneNumber,
+		ExternalID:    req.ExternalID,
+		Verifications: make([]validators.ReceiverVerificationRequest, len(req.Verifications)),
+		Wallets:       make([]validators.ReceiverWalletRequest, len(req.Wallets)),
+	}
+
+	for i, v := range req.Verifications {
+		validatorReq.Verifications[i] = validators.ReceiverVerificationRequest{
+			Type:  v.Type,
+			Value: v.Value,
+		}
+	}
+
+	for i, w := range req.Wallets {
+		validatorReq.Wallets[i] = validators.ReceiverWalletRequest{
+			Address: w.Address,
+			Memo:    w.Memo,
+		}
+	}
+
+	validator := validators.NewReceiverValidator()
+	validator.ValidateCreateReceiverRequest(validatorReq)
+	if validator.HasErrors() {
+		httperror.BadRequest("validation error", nil, validator.Errors).Render(w)
 		return
 	}
+
+	req.Email = validatorReq.Email
+	req.PhoneNumber = validatorReq.PhoneNumber
+	req.ExternalID = validatorReq.ExternalID
 
 	var response *GetReceiverResponse
 	response, err = db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {

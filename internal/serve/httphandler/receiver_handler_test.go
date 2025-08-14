@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
@@ -1616,7 +1618,7 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "validating email: the email address provided is not valid",
+			errorMsg:    "the email address provided is not valid",
 		},
 		{
 			name: "invalid phone number format",
@@ -1631,7 +1633,7 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "validating phone_number: the provided phone number is not a valid E.164 number",
+			errorMsg:    "the provided phone number is not a valid E.164 number",
 		},
 		{
 			name: "missing external ID",
@@ -1669,7 +1671,7 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "invalid verification type for verification[0]: WARP_TAINT",
+			errorMsg:    "invalid verification type",
 		},
 		{
 			name: "invalid date format",
@@ -1684,7 +1686,7 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "invalid date of birth format for verification[0]: must be YYYY-MM-DD",
+			errorMsg:    "invalid date of birth format: must be YYYY-MM-DD",
 		},
 		{
 			name: "invalid stellar address format",
@@ -1698,7 +1700,7 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "invalid stellar address for wallet[0]",
+			errorMsg:    "invalid stellar address format",
 		},
 		{
 			name: "multiple wallets not allowed",
@@ -1725,14 +1727,150 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			err := tc.request.Validate()
+
+			validatorReq := &validators.CreateReceiverRequest{
+				Email:         tc.request.Email,
+				PhoneNumber:   tc.request.PhoneNumber,
+				ExternalID:    tc.request.ExternalID,
+				Verifications: make([]validators.ReceiverVerificationRequest, len(tc.request.Verifications)),
+				Wallets:       make([]validators.ReceiverWalletRequest, len(tc.request.Wallets)),
+			}
+
+			for i, v := range tc.request.Verifications {
+				validatorReq.Verifications[i] = validators.ReceiverVerificationRequest{
+					Type:  v.Type,
+					Value: v.Value,
+				}
+			}
+
+			for i, w := range tc.request.Wallets {
+				validatorReq.Wallets[i] = validators.ReceiverWalletRequest{
+					Address: w.Address,
+					Memo:    w.Memo,
+				}
+			}
+
+			validator := validators.NewReceiverValidator()
+			validator.ValidateCreateReceiverRequest(validatorReq)
 
 			if tc.expectError {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errorMsg)
+				require.True(t, validator.HasErrors(), "Expected validation errors but none found")
+
+				found := false
+				for _, value := range validator.Errors {
+					if str, ok := value.(string); ok && strings.Contains(str, tc.errorMsg) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error message '%s' should be present in validation errors", tc.errorMsg)
 			} else {
-				require.NoError(t, err)
+				require.False(t, validator.HasErrors(), "Expected no validation errors but found: %v", validator.Errors)
 			}
+		})
+	}
+}
+
+func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
+	dbConnectionPool := getDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	r := chi.NewRouter()
+	r.Post("/receivers", handler.CreateReceiver)
+
+	testCases := []struct {
+		name           string
+		requestBody    CreateReceiverRequest
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name: "missing required contact information",
+			requestBody: CreateReceiverRequest{
+				ExternalID: "Cadia-Station",
+				Verifications: []VerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "either email or phone_number must be provided",
+		},
+		{
+			name: "invalid email format",
+			requestBody: CreateReceiverRequest{
+				Email:      "@horus.com",
+				ExternalID: "Cadia-Station",
+				Verifications: []VerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "the email address provided is not valid",
+		},
+		{
+			name: "missing external ID",
+			requestBody: CreateReceiverRequest{
+				Email: "inquisitor@imperium.gov",
+				Verifications: []VerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "external_id is required",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			reqBody, err := json.Marshal(tc.requestBody)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest("POST", "/receivers", bytes.NewBuffer(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			var errorResponse struct {
+				Error  string                 `json:"error"`
+				Extras map[string]interface{} `json:"extras,omitempty"`
+			}
+			err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
+			require.NoError(t, err)
+
+			assert.Equal(t, "validation error", errorResponse.Error)
+
+			require.NotNil(t, errorResponse.Extras)
+
+			found := false
+			for _, value := range errorResponse.Extras {
+				if str, ok := value.(string); ok && strings.Contains(str, tc.expectedError) {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Expected error message '%s' should be present in extras", tc.expectedError)
 		})
 	}
 }
