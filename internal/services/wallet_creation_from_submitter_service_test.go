@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -150,11 +151,20 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 	t.Run("successfully syncs failed wallet creation transaction without stellar transaction hash (RPC simulation failure)", func(t *testing.T) {
 		// Create embedded wallet for RPC simulation failure test
 		rpcFailWalletToken := uuid.NewString()
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-			Token:        rpcFailWalletToken,
-			WasmHash:     testWasmHash,
-			WalletStatus: data.ProcessingWalletStatus,
+			Token:           rpcFailWalletToken,
+			WasmHash:        testWasmHash,
+			ReceiverContact: receiver.Email,
+			ContactType:     data.ContactTypeEmail,
+			ReceiverID:      receiver.ID,
+			WalletStatus:    data.ProcessingWalletStatus,
 		})
+		require.NoError(t, err)
+
+		saltHex, err := utils.GenerateSalt(receiver.Email, string(data.ContactTypeEmail))
 		require.NoError(t, err)
 
 		tssTransaction, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
@@ -163,6 +173,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      saltHex,
 			},
 			TenantID: testCtx.tenantID,
 		})
@@ -331,11 +342,20 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 
 	t.Run("returns error when SUCCESS transaction is missing stellar transaction hash", func(t *testing.T) {
 		walletToken := uuid.NewString()
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+
 		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-			Token:        walletToken,
-			WasmHash:     testWasmHash,
-			WalletStatus: data.ProcessingWalletStatus,
+			Token:           walletToken,
+			WasmHash:        testWasmHash,
+			ReceiverContact: receiver.Email,
+			ContactType:     data.ContactTypeEmail,
+			ReceiverID:      receiver.ID,
+			WalletStatus:    data.ProcessingWalletStatus,
 		})
+		require.NoError(t, err)
+
+		saltHex, err := utils.GenerateSalt(receiver.Email, string(data.ContactTypeEmail))
 		require.NoError(t, err)
 
 		tssTransaction, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
@@ -344,6 +364,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 			WalletCreation: txSubStore.WalletCreation{
 				PublicKey: testPublicKey,
 				WasmHash:  testWasmHash,
+				Salt:      saltHex,
 			},
 			TenantID: testCtx.tenantID,
 		})
@@ -556,10 +577,15 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 
 		// Create embedded wallet fixtures
 		for _, token := range rpcFailWalletTokens {
+			receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+
 			_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
-				Token:        token,
-				WasmHash:     testWasmHash,
-				WalletStatus: data.ProcessingWalletStatus,
+				Token:           token,
+				WasmHash:        testWasmHash,
+				ReceiverContact: receiver.Email,
+				ContactType:     data.ContactTypeEmail,
+				ReceiverID:      receiver.ID,
+				WalletStatus:    data.ProcessingWalletStatus,
 			})
 			require.NoError(t, err)
 		}
