@@ -103,10 +103,6 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 		Type:      xdr.ScAddressTypeScAddressTypeAccount,
 		AccountId: &distributionAccountId,
 	}
-	argAdmin := xdr.ScVal{
-		Type:    xdr.ScValTypeScvAddress,
-		Address: &distributionScAddress,
-	}
 
 	publicKeyScBytes := xdr.ScBytes(publicKeyBytes)
 	argPublicKey := xdr.ScVal{
@@ -142,7 +138,7 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 				Type:     xdr.ContractExecutableTypeContractExecutableWasm,
 				WasmHash: &wasmHash,
 			},
-			ConstructorArgs: []xdr.ScVal{argAdmin, argPublicKey, argRecovery},
+			ConstructorArgs: []xdr.ScVal{argPublicKey, argRecovery},
 		},
 	}
 

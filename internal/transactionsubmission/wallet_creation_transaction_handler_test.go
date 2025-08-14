@@ -337,21 +337,12 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		require.Equal(t, operation.HostFunction.Type, xdr.HostFunctionTypeHostFunctionTypeCreateContractV2)
 		require.NotNil(t, operation.HostFunction.CreateContractV2)
 
-		// Verify constructor arguments are in the correct order: [argAdmin, argPublicKey, argRecovery]
+		// Verify constructor arguments are in the correct order: [argPublicKey, argRecovery]
 		constructorArgs := operation.HostFunction.CreateContractV2.ConstructorArgs
-		require.Len(t, constructorArgs, 3)
+		require.Len(t, constructorArgs, 2)
 
-		// First argument should be argAdmin (distribution account address)
-		argAdmin := constructorArgs[0]
-		assert.Equal(t, xdr.ScValTypeScvAddress, argAdmin.Type)
-		require.NotNil(t, argAdmin.Address)
-		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, argAdmin.Address.Type)
-		require.NotNil(t, argAdmin.Address.AccountId)
-		distributionAccountId := xdr.MustAddress(distributionAccount)
-		assert.Equal(t, distributionAccountId, *argAdmin.Address.AccountId)
-
-		// Second argument should be argPublicKey (public key bytes)
-		argPublicKey := constructorArgs[1]
+		// First argument should be argPublicKey (public key bytes)
+		argPublicKey := constructorArgs[0]
 		assert.Equal(t, xdr.ScValTypeScvBytes, argPublicKey.Type)
 		require.NotNil(t, argPublicKey.Bytes)
 
@@ -360,8 +351,8 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, expectedPublicKeyBytes, []byte(*argPublicKey.Bytes))
 
-		// Third argument should be argRecovery (recovery account address)
-		argRecovery := constructorArgs[2]
+		// Second argument should be argRecovery (recovery account address)
+		argRecovery := constructorArgs[1]
 		assert.Equal(t, xdr.ScValTypeScvAddress, argRecovery.Type)
 		require.NotNil(t, argRecovery.Address)
 		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, argRecovery.Address.Type)
@@ -383,6 +374,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		// Verify the address in the preimage matches the distribution account
 		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, contractIdPreimage.FromAddress.Address.Type)
 		require.NotNil(t, contractIdPreimage.FromAddress.Address.AccountId)
+		distributionAccountId := xdr.MustAddress(distributionAccount)
 		assert.Equal(t, distributionAccountId, *contractIdPreimage.FromAddress.Address.AccountId)
 
 		// Verify mocks were called as expected
