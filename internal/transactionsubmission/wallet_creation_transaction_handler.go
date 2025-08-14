@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
@@ -151,7 +149,7 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	txParams := txnbuild.TransactionParams{
 		SourceAccount: &txnbuild.SimpleAccount{
 			AccountID: txJob.ChannelAccount.PublicKey,
-			Sequence:  channelAccountSequenceNum,
+			Sequence:  channelAccountSequenceNum + 1,
 		},
 		Operations: []txnbuild.Operation{operation},
 		BaseFee:    int64(h.engine.MaxBaseFee),
@@ -159,7 +157,6 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 			TimeBounds:   txnbuild.NewTimeout(300),
 			LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
 		},
-		IncrementSequenceNum: true,
 	}
 
 	initialTx, err := txnbuild.NewTransaction(txParams)
@@ -183,22 +180,11 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 
 	operation.Auth, err = h.extractAuthEntries(simulationResponse)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extracting auth entries: %w", err)
 	}
 
 	if applyErr := h.applyTransactionData(operation, simulationResponse); applyErr != nil {
-		return nil, applyErr
-	}
-
-	txParams.BaseFee = h.calculateAdjustedBaseFee(simulationResponse)
-
-	channelAccount, err := h.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
-	if err != nil {
-		return nil, utils.NewHorizonErrorWrapper(err)
-	}
-	txParams.SourceAccount = &txnbuild.SimpleAccount{
-		AccountID: txJob.ChannelAccount.PublicKey,
-		Sequence:  channelAccount.Sequence,
+		return nil, fmt.Errorf("applying transaction data: %w", applyErr)
 	}
 
 	preparedTx, err := txnbuild.NewTransaction(txParams)
@@ -239,17 +225,6 @@ func (h *WalletCreationTransactionHandler) applyTransactionData(operation *txnbu
 		SorobanData: &transactionData,
 	}
 	return nil
-}
-
-func (h *WalletCreationTransactionHandler) calculateAdjustedBaseFee(simulationResponse protocol.SimulateTransactionResponse) int64 {
-	if simulationResponse.MinResourceFee <= 0 {
-		return int64(h.engine.MaxBaseFee)
-	}
-
-	sorobanFee := simulationResponse.MinResourceFee
-	adjustedBaseFee := int64(h.engine.MaxBaseFee) - sorobanFee
-
-	return int64(math.Max(float64(adjustedBaseFee), float64(txnbuild.MinBaseFee)))
 }
 
 func (h *WalletCreationTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error) {

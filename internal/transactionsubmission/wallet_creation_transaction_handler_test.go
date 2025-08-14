@@ -3,14 +3,11 @@ package transactionsubmission
 import (
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
@@ -29,6 +26,7 @@ import (
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_NewWalletCreationTransactionHandler(t *testing.T) {
@@ -96,7 +94,7 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 	channelAccount := "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX"
 	publicKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
 	wasmHashHex := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
-	saltHex := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+	saltHex := "6381e829a7eccf79e0f7bc88a581041c69802ec18a0b1fb3b6ee9bc9716c3829"
 
 	t.Run("input validation", func(t *testing.T) {
 		engine := &engine.SubmitterEngine{
@@ -263,17 +261,8 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 	})
 
 	t.Run("🎉 successfully build a transaction", func(t *testing.T) {
-		mHorizonClient := &horizonclient.MockClient{}
-		mHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(
-			horizon.Account{
-				AccountID: channelAccount,
-				Sequence:  int64(123456789),
-			}, nil,
-		)
-
 		engine := &engine.SubmitterEngine{
-			HorizonClient: mHorizonClient,
-			MaxBaseFee:    100,
+			MaxBaseFee: 100,
 		}
 
 		authXDR := []string{"AAAAAQAAAAHw6CVqzY+dCq3myVJBo1kb3nEGE7oO6obmJeUNvYQ0ukNc84Ms0ZvgAAAAAAAAAAEAAAAAAAAAAeA7wfSg10yaQYZDRmQeyqsepsS/Mb0rbMQxRgDoSVdWAAAAD3dlYl9hdXRoX3ZlcmlmeQAAAAAGAAAADgAAADhDRFlPUUpMS1pXSFoyQ1ZONDNFVkVRTkRMRU41NDRJR0NPNUE1MlVHNFlTNktETjVRUTJMVVdLWQAAAA4AAAADMTIzAAAAAA4AAAAcaHR0cDovL2xvY2FsaG9zdDo4MDgwL2MvYXV0aAAAAA4AAAAObG9jYWxob3N0OjgwODAAAAAAAA4AAAALZXhhbXBsZS5jb20AAAAAAQAAAAA="}
@@ -313,72 +302,78 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 			LockedUntilLedgerNumber: 12345,
 		}
 
+		// Call method under test
 		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 		require.NoError(t, err)
-		require.NotNil(t, tx)
 
-		// Verify transaction structure
-		assert.Equal(t, channelAccount, tx.SourceAccount().AccountID)
-		assert.Len(t, tx.Operations(), 1)
-
-		// Verify it's an InvokeHostFunction operation
-		operation, ok := tx.Operations()[0].(*txnbuild.InvokeHostFunction)
-		require.True(t, ok)
-		assert.Equal(t, distributionAccount, operation.SourceAccount)
-
-		// Verify that auth entries were processed (should have 1 auth entry)
-		assert.Len(t, operation.Auth, 1)
-
-		// Verify that transaction data was applied
-		assert.Equal(t, 1, int(operation.Ext.V))
-		assert.NotNil(t, operation.Ext.SorobanData)
-
-		// Verify the contract invocation has correct arguments
-		require.Equal(t, operation.HostFunction.Type, xdr.HostFunctionTypeHostFunctionTypeCreateContractV2)
-		require.NotNil(t, operation.HostFunction.CreateContractV2)
-
-		// Verify constructor arguments are in the correct order: [argPublicKey, argRecovery]
-		constructorArgs := operation.HostFunction.CreateContractV2.ConstructorArgs
-		require.Len(t, constructorArgs, 2)
-
-		// First argument should be argPublicKey (public key bytes)
-		argPublicKey := constructorArgs[0]
-		assert.Equal(t, xdr.ScValTypeScvBytes, argPublicKey.Type)
-		require.NotNil(t, argPublicKey.Bytes)
-
-		// Verify the public key bytes match the expected decoded hex
-		expectedPublicKeyBytes, err := hex.DecodeString(publicKeyHex)
+		// Build the expected transaction, for assertions
+		var transactionData xdr.SorobanTransactionData
+		require.NoError(t, xdr.SafeUnmarshalBase64(simulationResponse.TransactionDataXDR, &transactionData))
+		createContractOp := txnbuild.InvokeHostFunction{
+			SourceAccount: distributionAccount,
+			HostFunction: xdr.HostFunction{
+				Type: xdr.HostFunctionTypeHostFunctionTypeCreateContractV2,
+				CreateContractV2: &xdr.CreateContractArgsV2{
+					ContractIdPreimage: xdr.ContractIdPreimage{
+						Type: xdr.ContractIdPreimageTypeContractIdPreimageFromAddress,
+						FromAddress: &xdr.ContractIdPreimageFromAddress{
+							Address: xdr.ScAddress{
+								Type:      xdr.ScAddressTypeScAddressTypeAccount,
+								AccountId: sdpUtils.Ptr(xdr.MustAddress(distributionAccount)),
+							},
+							Salt: xdr.Uint256{
+								99, 129, 232, 41, 167, 236, 207, 121, 224, 247, 188, 136, 165, 129, 4, 28, 105, 128, 46, 193, 138, 11, 31, 179, 182, 238, 155, 201, 113, 108, 56, 41,
+							},
+						},
+					},
+					Executable: xdr.ContractExecutable{
+						Type: xdr.ContractExecutableTypeContractExecutableWasm,
+						WasmHash: &xdr.Hash{
+							171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137,
+						},
+					},
+					ConstructorArgs: []xdr.ScVal{
+						{
+							Type: xdr.ScValTypeScvBytes,
+							Bytes: &xdr.ScBytes{
+								1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1,
+							},
+						},
+						{
+							Type: xdr.ScValTypeScvAddress,
+							Address: &xdr.ScAddress{
+								Type:      xdr.ScAddressTypeScAddressTypeAccount,
+								AccountId: sdpUtils.Ptr(xdr.MustAddress(recoveryAddress)),
+							},
+						},
+					},
+				},
+			},
+			Ext: xdr.TransactionExt{
+				V:           1,
+				SorobanData: &transactionData,
+			},
+		}
+		createContractOp.Auth, err = walletCreationHandler.extractAuthEntries(simulationResponse)
 		require.NoError(t, err)
-		assert.Equal(t, expectedPublicKeyBytes, []byte(*argPublicKey.Bytes))
-
-		// Second argument should be argRecovery (recovery account address)
-		argRecovery := constructorArgs[1]
-		assert.Equal(t, xdr.ScValTypeScvAddress, argRecovery.Type)
-		require.NotNil(t, argRecovery.Address)
-		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, argRecovery.Address.Type)
-		require.NotNil(t, argRecovery.Address.AccountId)
-		recoveryAccountId := xdr.MustAddress("GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB")
-		assert.Equal(t, recoveryAccountId, *argRecovery.Address.AccountId)
-
-		// Verify the WASM hash is correctly set
-		require.NotNil(t, operation.HostFunction.CreateContractV2.Executable.WasmHash)
-		expectedWasmHashBytes, err := hex.DecodeString(wasmHashHex)
+		wantTx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+			SourceAccount: &txnbuild.SimpleAccount{
+				AccountID: channelAccount,
+				Sequence:  101,
+			},
+			IncrementSequenceNum: false,
+			BaseFee:              100,
+			Operations:           []txnbuild.Operation{&createContractOp},
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds:   tx.Timebounds(),
+				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
+			},
+		})
 		require.NoError(t, err)
-		assert.Equal(t, expectedWasmHashBytes, (*operation.HostFunction.CreateContractV2.Executable.WasmHash)[:])
 
-		// Verify the contract ID preimage is correctly configured
-		contractIdPreimage := operation.HostFunction.CreateContractV2.ContractIdPreimage
-		assert.Equal(t, xdr.ContractIdPreimageTypeContractIdPreimageFromAddress, contractIdPreimage.Type)
-		require.NotNil(t, contractIdPreimage.FromAddress)
-
-		// Verify the address in the preimage matches the distribution account
-		assert.Equal(t, xdr.ScAddressTypeScAddressTypeAccount, contractIdPreimage.FromAddress.Address.Type)
-		require.NotNil(t, contractIdPreimage.FromAddress.Address.AccountId)
-		distributionAccountId := xdr.MustAddress(distributionAccount)
-		assert.Equal(t, distributionAccountId, *contractIdPreimage.FromAddress.Address.AccountId)
-
-		// Verify mocks were called as expected
-		mHorizonClient.AssertExpectations(t)
+		// Assertions
+		require.Equal(t, wantTx, tx)
+		require.InDelta(t, time.Now().Add(300*time.Second).UTC().Unix(), tx.Timebounds().MaxTime, 5)
 		rpcClient.AssertExpectations(t)
 	})
 
@@ -507,65 +502,6 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 		rpcClient.AssertExpectations(t)
 	})
 
-	t.Run("horizon client error handling", func(t *testing.T) {
-		mHorizonClient := &horizonclient.MockClient{}
-		mHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).Return(
-			horizon.Account{}, fmt.Errorf("horizon error"),
-		)
-
-		engine := &engine.SubmitterEngine{
-			HorizonClient: mHorizonClient,
-			MaxBaseFee:    100,
-		}
-
-		authXDR := []string{"AAAAAQAAAAHw6CVqzY+dCq3myVJBo1kb3nEGE7oO6obmJeUNvYQ0ukNc84Ms0ZvgAAAAAAAAAAEAAAAAAAAAAeA7wfSg10yaQYZDRmQeyqsepsS/Mb0rbMQxRgDoSVdWAAAAD3dlYl9hdXRoX3ZlcmlmeQAAAAAGAAAADgAAADhDRFlPUUpMS1pXSFoyQ1ZONDNFVkVRTkRMRU41NDRJR0NPNUE1MlVHNFlTNktETjVRUTJMVVdLWQAAAA4AAAADMTIzAAAAAA4AAAAcaHR0cDovL2xvY2FsaG9zdDo4MDgwL2MvYXV0aAAAAA4AAAAObG9jYWxob3N0OjgwODAAAAAAAA4AAAALZXhhbXBsZS5jb20AAAAAAQAAAAA="}
-		simulationResponse := protocol.SimulateTransactionResponse{
-			Error: "",
-			Results: []protocol.SimulateHostFunctionResult{
-				{
-					AuthXDR: &authXDR,
-				},
-			},
-			TransactionDataXDR: "AAAAAAAAAAUAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAABgAAAAFDEqQxRKsWsubOpgtPPKXSsdhcWDpfu/jRwXKpUugxhQAAABQAAAABAAAABgAAAAGBhvDmuHDARIUDYKVFokPXfBrz+6tx3N4D7hMpL1AiBwAAABQAAAABAAAAB1uPeA45/uPdYS9GdAZXx37bjezG+3vn4JqEwlyjIRGmAAAAB9nC+GOHmV4+xAZQ4T0I434wH3LKi+db6CM9hlRZhRZgAAAAAgAAAAYAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAAFXCHgz/4M7a3AAAAAAAAAAYAAAABQxKkMUSrFrLmzqYLTzyl0rHYXFg6X7v40cFyqVLoMYUAAAAVNIwhp30FbW4AAAAAAB8NxwAAEgAAAACUAAAAAAAY7m4=",
-			MinResourceFee:     50,
-		}
-
-		rpcClient := &mocks.MockRPCClient{}
-		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(&stellar.SimulationResult{Response: simulationResponse}, (*stellar.SimulationError)(nil))
-
-		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
-		}
-		walletCreationHandler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
-		require.NoError(t, err)
-
-		recoveryAddress := "GBYJZW5XFAI6XV73H5SAIUYK6XZI4CGGVBUBO3ANA2SV7KKDAXTV6AEB"
-		txJob := &TxJob{
-			Transaction: store.Transaction{
-				WalletCreation: store.WalletCreation{
-					PublicKey:       publicKeyHex,
-					WasmHash:        wasmHashHex,
-					Salt:            saltHex,
-					RecoveryAddress: sql.NullString{String: recoveryAddress, Valid: true},
-				},
-			},
-			ChannelAccount: store.ChannelAccount{
-				PublicKey: channelAccount,
-			},
-			LockedUntilLedgerNumber: 12345,
-		}
-
-		tx, err := walletCreationHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "horizon error")
-		assert.Nil(t, tx)
-
-		var horizonErr *utils.HorizonErrorWrapper
-		assert.ErrorAs(t, err, &horizonErr)
-
-		mHorizonClient.AssertExpectations(t)
-		rpcClient.AssertExpectations(t)
-	})
 }
 
 func Test_WalletCreationTransactionHandler_BuildSuccessEvent(t *testing.T) {
@@ -822,40 +758,6 @@ func Test_WalletCreationTransactionHandler_AddContextLoggerFields(t *testing.T) 
 	assert.Equal(t, publicKeyHex, fields["public_key"])
 	assert.Equal(t, wasmHashHex, fields["wasm_hash"])
 	assert.Len(t, fields, 2)
-}
-
-func Test_WalletCreationTransactionHandler_CalculateAdjustedBaseFee(t *testing.T) {
-	engine := &engine.SubmitterEngine{MaxBaseFee: 100}
-	rpcClient := &mocks.MockRPCClient{}
-	monitorSvc := tssMonitor.TSSMonitorService{
-		Client: &sdpMonitorMocks.MockMonitorClient{},
-	}
-	handler, err := NewWalletCreationTransactionHandler(engine, rpcClient, monitorSvc)
-	require.NoError(t, err)
-
-	t.Run("zero min resource fee", func(t *testing.T) {
-		resp := protocol.SimulateTransactionResponse{
-			MinResourceFee: 0,
-		}
-		fee := handler.calculateAdjustedBaseFee(resp)
-		assert.Equal(t, int64(100), fee)
-	})
-
-	t.Run("with resource fee within max", func(t *testing.T) {
-		resp := protocol.SimulateTransactionResponse{
-			MinResourceFee: 50,
-		}
-		fee := handler.calculateAdjustedBaseFee(resp)
-		assert.Equal(t, int64(100), fee)
-	})
-
-	t.Run("with resource fee exceeding max", func(t *testing.T) {
-		resp := protocol.SimulateTransactionResponse{
-			MinResourceFee: 200,
-		}
-		fee := handler.calculateAdjustedBaseFee(resp)
-		assert.Equal(t, int64(txnbuild.MinBaseFee), fee)
-	})
 }
 
 func Test_WalletCreationTransactionHandler_MonitoringBehavior(t *testing.T) {
