@@ -148,7 +148,7 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 		assert.ErrorIs(t, err, txSubStore.ErrRecordNotFound, "transaction should be marked as synced")
 	})
 
-	t.Run("successfully syncs failed wallet creation transaction without stellar transaction hash (RPC simulation failure)", func(t *testing.T) {
+	t.Run("successfully syncs failed wallet creation transaction (RPC simulation failure)", func(t *testing.T) {
 		// Create embedded wallet for RPC simulation failure test
 		rpcFailWalletToken := uuid.NewString()
 
@@ -179,12 +179,13 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// Simulate RPC simulation failure by updating to ERROR without stellar transaction hash
-		q := `UPDATE submitter_transactions SET status=$1, status_message=$2, distribution_account=$3, completed_at=NOW() WHERE id = $4 RETURNING ` + txSubStore.TransactionColumnNames("", "")
-		err = dbConnectionPool.GetContext(ctx, tssTransaction, q, txSubStore.TransactionStatusError, "RPC simulation failed: contract already exists", testDistributionAccount, tssTransaction.ID)
+		// Simulate RPC simulation failure by updating to ERROR without stellar transaction hash or distribution account
+		q := `UPDATE submitter_transactions SET status=$1, status_message=$2, completed_at=NOW() WHERE id = $3 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		err = dbConnectionPool.GetContext(ctx, tssTransaction, q, txSubStore.TransactionStatusError, "RPC simulation failed: contract already exists", tssTransaction.ID)
 		require.NoError(t, err)
 
 		assert.False(t, tssTransaction.StellarTransactionHash.Valid)
+		assert.False(t, tssTransaction.DistributionAccount.Valid)
 
 		err = service.SyncTransaction(ctx, tssTransaction.ID)
 		require.NoError(t, err)

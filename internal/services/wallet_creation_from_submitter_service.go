@@ -100,7 +100,7 @@ func (s *WalletCreationFromSubmitterService) syncTransactions(ctx context.Contex
 		if transaction.Status == store.TransactionStatusSuccess && !transaction.StellarTransactionHash.Valid {
 			return fmt.Errorf("expected successful transaction %s to have a stellar transaction hash", transaction.ID)
 		}
-		if !transaction.DistributionAccount.Valid {
+		if transaction.Status == store.TransactionStatusSuccess && !transaction.DistributionAccount.Valid {
 			return fmt.Errorf("expected transaction %s to have a distribution account", transaction.ID)
 		}
 		if transaction.WalletCreation.PublicKey == "" {
