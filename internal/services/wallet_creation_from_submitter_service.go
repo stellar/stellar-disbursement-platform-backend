@@ -97,8 +97,8 @@ func (s *WalletCreationFromSubmitterService) syncTransactions(ctx context.Contex
 
 	// 1. Validate all transactions
 	for _, transaction := range transactions {
-		if !transaction.StellarTransactionHash.Valid {
-			return fmt.Errorf("expected transaction %s to have a stellar transaction hash", transaction.ID)
+		if transaction.Status == store.TransactionStatusSuccess && !transaction.StellarTransactionHash.Valid {
+			return fmt.Errorf("expected successful transaction %s to have a stellar transaction hash", transaction.ID)
 		}
 		if !transaction.DistributionAccount.Valid {
 			return fmt.Errorf("expected transaction %s to have a distribution account", transaction.ID)

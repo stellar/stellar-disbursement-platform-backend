@@ -146,6 +146,46 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction(t *testing.T) {
 		_, err = testCtx.tssModel.GetTransactionPendingUpdateByID(ctx, dbConnectionPool, tssTransaction.ID, txSubStore.TransactionTypeWalletCreation)
 		assert.ErrorIs(t, err, txSubStore.ErrRecordNotFound, "transaction should be marked as synced")
 	})
+
+	t.Run("successfully syncs failed wallet creation transaction without stellar transaction hash (RPC simulation failure)", func(t *testing.T) {
+		// Create embedded wallet for RPC simulation failure test
+		rpcFailWalletToken := uuid.NewString()
+		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
+			Token:        rpcFailWalletToken,
+			WasmHash:     testWasmHash,
+			WalletStatus: data.ProcessingWalletStatus,
+		})
+		require.NoError(t, err)
+
+		tssTransaction, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
+			ExternalID:      rpcFailWalletToken,
+			TransactionType: txSubStore.TransactionTypeWalletCreation,
+			WalletCreation: txSubStore.WalletCreation{
+				PublicKey: testPublicKey,
+				WasmHash:  testWasmHash,
+			},
+			TenantID: testCtx.tenantID,
+		})
+		require.NoError(t, err)
+
+		// Simulate RPC simulation failure by updating to ERROR without stellar transaction hash
+		q := `UPDATE submitter_transactions SET status=$1, status_message=$2, distribution_account=$3, completed_at=NOW() WHERE id = $4 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		err = dbConnectionPool.GetContext(ctx, tssTransaction, q, txSubStore.TransactionStatusError, "RPC simulation failed: contract already exists", testDistributionAccount, tssTransaction.ID)
+		require.NoError(t, err)
+
+		assert.False(t, tssTransaction.StellarTransactionHash.Valid)
+
+		err = service.SyncTransaction(ctx, tssTransaction.ID)
+		require.NoError(t, err)
+
+		updatedWallet, err := testCtx.sdpModel.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, rpcFailWalletToken)
+		require.NoError(t, err)
+		assert.Equal(t, data.FailedWalletStatus, updatedWallet.WalletStatus)
+		assert.Empty(t, updatedWallet.ContractAddress)
+
+		_, err = testCtx.tssModel.GetTransactionPendingUpdateByID(ctx, dbConnectionPool, tssTransaction.ID, txSubStore.TransactionTypeWalletCreation)
+		assert.ErrorIs(t, err, txSubStore.ErrRecordNotFound, "transaction should be marked as synced")
+	})
 }
 
 func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T) {
@@ -287,6 +327,39 @@ func Test_WalletCreationFromSubmitterService_SyncTransaction_errors(t *testing.T
 		err = service.SyncTransaction(ctx, tssTransaction.ID)
 		assert.ErrorContains(t, err, "expected transaction")
 		assert.ErrorContains(t, err, "to have a distribution account")
+	})
+
+	t.Run("returns error when SUCCESS transaction is missing stellar transaction hash", func(t *testing.T) {
+		walletToken := uuid.NewString()
+		_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
+			Token:        walletToken,
+			WasmHash:     testWasmHash,
+			WalletStatus: data.ProcessingWalletStatus,
+		})
+		require.NoError(t, err)
+
+		tssTransaction, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
+			ExternalID:      walletToken,
+			TransactionType: txSubStore.TransactionTypeWalletCreation,
+			WalletCreation: txSubStore.WalletCreation{
+				PublicKey: testPublicKey,
+				WasmHash:  testWasmHash,
+			},
+			TenantID: testCtx.tenantID,
+		})
+		require.NoError(t, err)
+
+		// Update to SUCCESS without stellar transaction hash (this should fail validation)
+		q := `UPDATE submitter_transactions SET status=$1, distribution_account=$2, completed_at=NOW() WHERE id = $3 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		err = dbConnectionPool.GetContext(ctx, tssTransaction, q, txSubStore.TransactionStatusSuccess, testDistributionAccount, tssTransaction.ID)
+		require.NoError(t, err)
+
+		// Verify the transaction has no stellar transaction hash
+		assert.False(t, tssTransaction.StellarTransactionHash.Valid, "test setup: transaction should not have stellar transaction hash")
+
+		err = service.SyncTransaction(ctx, tssTransaction.ID)
+		assert.ErrorContains(t, err, "expected successful transaction")
+		assert.ErrorContains(t, err, "to have a stellar transaction hash")
 	})
 }
 
@@ -473,6 +546,63 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 		differentTenantID := uuid.NewString()
 		err := service.SyncBatchTransactions(ctx, 10, differentTenantID)
 		require.NoError(t, err) // Should not error on empty batch
+	})
+
+	t.Run("sync embedded wallet transactions with RPC failures", func(t *testing.T) {
+		// Create test embedded wallets for RPC failure scenario
+		wallet1Token := uuid.NewString()
+		wallet2Token := uuid.NewString()
+		rpcFailWalletTokens := []string{wallet1Token, wallet2Token}
+
+		// Create embedded wallet fixtures
+		for _, token := range rpcFailWalletTokens {
+			_, err := testCtx.sdpModel.EmbeddedWallets.Insert(ctx, dbConnectionPool, data.EmbeddedWalletInsert{
+				Token:        token,
+				WasmHash:     testWasmHash,
+				WalletStatus: data.ProcessingWalletStatus,
+			})
+			require.NoError(t, err)
+		}
+
+		// Create TSS wallet creation transactions
+		rpcFailTransactions := createEmbeddedWalletTSSTxs(t, testCtx, rpcFailWalletTokens...)
+
+		// Set distribution account for all transactions
+		for _, tx := range rpcFailTransactions {
+			q := `UPDATE submitter_transactions SET distribution_account=$1 WHERE id = $2`
+			_, err := testCtx.tssModel.DBConnectionPool.ExecContext(testCtx.ctx, q, testDistributionAccount, tx.ID)
+			require.NoError(t, err)
+		}
+
+		// Simulate RPC simulation failures by manually setting ERROR status without stellar transaction hash
+		for i, tx := range rpcFailTransactions {
+			errorMsg := fmt.Sprintf("RPC simulation failed: test error %d", i+1)
+			q := `UPDATE submitter_transactions SET status=$1, status_message=$2, completed_at=NOW(), stellar_transaction_hash=NULL WHERE id = $3`
+			_, err := testCtx.tssModel.DBConnectionPool.ExecContext(testCtx.ctx, q, txSubStore.TransactionStatusError, errorMsg, tx.ID)
+			require.NoError(t, err)
+		}
+
+		err := service.SyncBatchTransactions(ctx, len(rpcFailTransactions), testCtx.tenantID)
+		require.NoError(t, err)
+
+		// Check that RPC failed wallet creations are properly synced and marked as failed
+		for _, token := range rpcFailWalletTokens {
+			wallet, walletErr := testCtx.sdpModel.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token)
+			require.NoError(t, walletErr)
+			require.Equal(t, data.FailedWalletStatus, wallet.WalletStatus)
+			require.Empty(t, wallet.ContractAddress)
+		}
+
+		// Validate transactions synced_at is updated despite having no stellar transaction hash
+		txs, txErr := testCtx.tssModel.GetAllByExternalIDs(ctx, rpcFailWalletTokens)
+		require.NoError(t, txErr)
+		require.Len(t, txs, 2)
+
+		for _, tx := range txs {
+			require.NotNil(t, tx.SyncedAt)
+			require.False(t, tx.StellarTransactionHash.Valid)
+			require.Equal(t, txSubStore.TransactionStatusError, tx.Status)
+		}
 	})
 }
 
