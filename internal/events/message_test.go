@@ -75,7 +75,7 @@ func Test_NewPaymentReadyToPayMessage(t *testing.T) {
 	key := "test-key"
 	messageType := "test-type"
 
-	ctxWithTenant := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: tenantID})
+	ctxWithTenant := tenant.SaveTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	t.Run("unsupported platform", func(t *testing.T) {
 		_, err := NewPaymentReadyToPayMessage(ctxWithTenant, "unsupported-platform", key, messageType)

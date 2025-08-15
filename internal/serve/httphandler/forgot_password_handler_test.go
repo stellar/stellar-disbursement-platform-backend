@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -95,7 +96,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 	require.NoError(t, err)
 
 	uiBaseURL := "https://sdp.com"
-	tnt := tenant.Tenant{SDPUIBaseURL: &uiBaseURL}
+	tnt := schema.Tenant{SDPUIBaseURL: &uiBaseURL}
 	defaultSuccessishBody := `{"message": "If the email you provided is associated with an account, you'll receive a password reset link shortly. Check your inbox and spam folders."}`
 
 	testCases := []struct {

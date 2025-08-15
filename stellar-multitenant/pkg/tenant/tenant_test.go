@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_TenantUpdate_Validate(t *testing.T) {
@@ -17,7 +19,7 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 		assert.EqualError(t, err, "provide at least one field to be updated")
 
 		tu.SDPUIBaseURL = nil
-		tenantStatus := TenantStatus("invalid")
+		tenantStatus := schema.TenantStatus("invalid")
 		tu.Status = &tenantStatus
 		err = tu.Validate()
 		assert.EqualError(t, err, `invalid tenant status: "invalid"`)
@@ -28,7 +30,7 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 			ID:           "abc",
 			BaseURL:      &[]string{"https://myorg.backend.io"}[0],
 			SDPUIBaseURL: &[]string{"https://myorg.frontend.io"}[0],
-			Status:       &[]TenantStatus{ProvisionedTenantStatus}[0],
+			Status:       &[]schema.TenantStatus{schema.ProvisionedTenantStatus}[0],
 		}
 		err := tu.Validate()
 		assert.NoError(t, err)
@@ -44,27 +46,27 @@ func Test_TenantUpdate_areAllFieldsEmpty(t *testing.T) {
 
 func Test_TenantStatus_IsValid(t *testing.T) {
 	testCases := []struct {
-		status TenantStatus
+		status schema.TenantStatus
 		expect bool
 	}{
 		{
-			status: CreatedTenantStatus,
+			status: schema.CreatedTenantStatus,
 			expect: true,
 		},
 		{
-			status: ProvisionedTenantStatus,
+			status: schema.ProvisionedTenantStatus,
 			expect: true,
 		},
 		{
-			status: ActivatedTenantStatus,
+			status: schema.ActivatedTenantStatus,
 			expect: true,
 		},
 		{
-			status: DeactivatedTenantStatus,
+			status: schema.DeactivatedTenantStatus,
 			expect: true,
 		},
 		{
-			status: TenantStatus("invalid"),
+			status: schema.TenantStatus("invalid"),
 			expect: false,
 		},
 	}

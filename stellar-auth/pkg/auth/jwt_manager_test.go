@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,7 @@ KwH7aIbW7pvQAYvAhKtORM40xn/w/Kc1uUVzoYEIZt4xlb+P38wLU7bp0Q==
 )
 
 func Test_DefaultJWTManager_GenerateToken(t *testing.T) {
-	currentTenant := tenant.Tenant{
+	currentTenant := schema.Tenant{
 		ID:   "tenant-id",
 		Name: "tenant-name",
 	}
@@ -60,7 +61,7 @@ func Test_DefaultJWTManager_GenerateToken(t *testing.T) {
 func Test_DefaultJWTManager_ValidateToken(t *testing.T) {
 	jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
 
-	currentTenant := tenant.Tenant{
+	currentTenant := schema.Tenant{
 		ID:   "tenant-id",
 		Name: "tenant-name",
 	}
@@ -109,7 +110,7 @@ func Test_DefaultJWTManager_ValidateToken(t *testing.T) {
 func Test_DefaultJWTManager_RefreshToken(t *testing.T) {
 	jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
 
-	currentTenant := tenant.Tenant{
+	currentTenant := schema.Tenant{
 		ID:   "tenant-id",
 		Name: "tenant-name",
 	}
@@ -142,7 +143,7 @@ func Test_DefaultJWTManager_RefreshToken(t *testing.T) {
 }
 
 func Test_DefaultJWTManager_parseToken(t *testing.T) {
-	currentTenant := tenant.Tenant{
+	currentTenant := schema.Tenant{
 		ID:   "tenant-id",
 		Name: "tenant-name",
 	}
@@ -188,7 +189,7 @@ func Test_DefaultJWTManager_parseToken(t *testing.T) {
 }
 
 func Test_DefaultJWTManager_GetUserFromToken(t *testing.T) {
-	currentTenant := tenant.Tenant{
+	currentTenant := schema.Tenant{
 		ID:   "tenant-id",
 		Name: "tenant-name",
 	}

@@ -56,7 +56,7 @@ func Test_PaymentFromSubmitterJob_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			tenantInfo := &tenant.Tenant{
+			tenantInfo := &schema.Tenant{
 				ID:                      "95e788b6-c80e-4975-9d12-141001fe6e44",
 				Name:                    "aid-org-1",
 				DistributionAccountType: schema.DistributionAccountStellarEnv,

@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -301,7 +302,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 			Once()
 		mTenantManager.
 			On("GetTenantByID", mock.Anything, "test_tenant_id").
-			Return(&tenant.Tenant{
+			Return(&schema.Tenant{
 				ID:   "test_tenant_id",
 				Name: "test_tenant",
 			}, nil).
@@ -665,7 +666,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		token := "valid_token"
 		mTenantManager.
 			On("GetTenantByName", mock.Anything, tenantName).
-			Return(&tenant.Tenant{ID: tenantID, Name: tenantName}, nil).
+			Return(&schema.Tenant{ID: tenantID, Name: tenantName}, nil).
 			Once()
 		r.Use(ResolveTenantFromRequestMiddleware(mTenantManager, false))
 		r.Use(EnsureTenantMiddleware)
@@ -794,7 +795,7 @@ func Test_CSPMiddleware(t *testing.T) {
 }
 
 func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
-	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+	validTnt := &schema.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
 	testCases := []struct {
 		name              string
@@ -804,7 +805,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 		prepareMocksFn    func(mTenantManager *tenant.TenantManagerMock)
 		expectedStatus    int
 		expectedRespBody  string
-		expectedTenant    *tenant.Tenant
+		expectedTenant    *schema.Tenant
 	}{
 		{
 			name:              "🔴 tenant name from the header cannot be found in GetTenantByName",
@@ -999,14 +1000,14 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 }
 
 func Test_EnsureTenantMiddleware(t *testing.T) {
-	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+	validTnt := &schema.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
 	testCases := []struct {
 		name                 string
 		hasTenantInCtx       bool
 		expectedStatus       int
 		expectedBodyContains string
-		expectedTenant       *tenant.Tenant
+		expectedTenant       *schema.Tenant
 	}{
 		{
 			name:                 "🔴 fails if there's no tenant in the context",

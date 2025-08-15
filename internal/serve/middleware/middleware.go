@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -296,7 +297,7 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
-			var currentTenant *tenant.Tenant
+			var currentTenant *schema.Tenant
 			if singleTenantMode {
 				var err error
 				currentTenant, err = tenantManager.GetDefault(ctx)

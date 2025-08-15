@@ -158,7 +158,7 @@ func Test_CirclePaymentTransferDispatcher_DispatchPayments_success(t *testing.T)
 	defer dbConnectionPool.Close()
 
 	tenantID := "tenant-id"
-	tnt := tenant.Tenant{
+	tnt := schema.Tenant{
 		ID:      tenantID,
 		BaseURL: utils.Ptr("https://example.com"),
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -73,15 +74,15 @@ func TestMultiTenantScheduler(t *testing.T) {
 	mockTenantManager := &tenant.TenantManagerMock{}
 	scheduler.tenantManager = mockTenantManager
 
-	tenant1 := tenant.Tenant{ID: "tenant1", Name: "Tenant 1"}
-	tenant2 := tenant.Tenant{ID: "tenant2", Name: "Tenant 2"}
+	tenant1 := schema.Tenant{ID: "tenant1", Name: "Tenant 1"}
+	tenant2 := schema.Tenant{ID: "tenant2", Name: "Tenant 2"}
 
 	mockTenantManager.On("GetAllTenants", mock.Anything, &tenant.QueryParams{
 		Filters: map[tenant.FilterKey]interface{}{
-			tenant.FilterKeyStatus: []tenant.TenantStatus{tenant.ProvisionedTenantStatus, tenant.ActivatedTenantStatus},
+			tenant.FilterKeyStatus: []schema.TenantStatus{schema.ProvisionedTenantStatus, schema.ActivatedTenantStatus},
 		},
 	}).
-		Return([]tenant.Tenant{tenant1, tenant2}, nil).
+		Return([]schema.Tenant{tenant1, tenant2}, nil).
 		Once()
 
 	mockJob := &jobs.MockMultiTenantJob{

@@ -487,7 +487,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 	dbcp := models.DBConnectionPool
 	ctx := context.Background()
 
-	tnt := tenant.Tenant{
+	tnt := schema.Tenant{
 		ID:      "test-tenant",
 		BaseURL: utils.Ptr("https://example.com"),
 	}

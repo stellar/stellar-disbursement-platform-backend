@@ -889,7 +889,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
+	tnt := schema.Tenant{ID: "tenant-id"}
 
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
@@ -1262,7 +1262,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			LastSyncAttemptAt: time.Now(),
 		})
 
-		circleTnt := tenant.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
+		circleTnt := schema.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
 		circleCtx := tenant.SaveTenantInContext(context.Background(), &circleTnt)
 		circleCtx = context.WithValue(circleCtx, middleware.TokenContextKey, "mytoken")
 
@@ -1793,7 +1793,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 
 func Test_PaymentsHandler_PostPayment(t *testing.T) {
 	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = tenant.SaveTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	models, err := data.NewModels(dbConnectionPool)
@@ -2338,7 +2338,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-horus")
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = tenant.SaveTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

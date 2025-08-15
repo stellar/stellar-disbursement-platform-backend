@@ -52,7 +52,7 @@ func TestEnsureDefaultTenant(t *testing.T) {
 
 		tenantMock.
 			On("GetDefault", ctx).
-			Return(&tenant.Tenant{ID: "ultra-id", Name: "Ultramarines"}, nil).
+			Return(&schema.Tenant{ID: "ultra-id", Name: "Ultramarines"}, nil).
 			Once()
 
 		cfg := DefaultTenantConfig{
@@ -80,7 +80,7 @@ func TestEnsureDefaultTenant(t *testing.T) {
 			Return(nil, tenant.ErrTenantDoesNotExist).
 			Once()
 
-		newTenant := &tenant.Tenant{ID: "fists-id", Name: "ImperialFists"}
+		newTenant := &schema.Tenant{ID: "fists-id", Name: "ImperialFists"}
 		provMock.
 			On("ProvisionNewTenant", ctx, mock.MatchedBy(func(pt prov.ProvisionTenant) bool {
 				return pt.UserEmail == "dorn@imperialfists" && pt.Name == "default"
