@@ -24,10 +24,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -478,13 +478,15 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	disbursementID := chi.URLParam(r, "id")
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		httperror.InternalError(ctx, "Cannot get token from context", err, nil).Render(w)
+		return
 	}
 	user, err := d.AuthManager.GetUser(ctx, token)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get user from token", err, nil).Render(w)
+		return
 	}
 
 	switch toStatus {

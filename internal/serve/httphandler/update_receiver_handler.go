@@ -15,8 +15,8 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -58,8 +58,8 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
-	if !ok {
+	userID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
@@ -82,7 +82,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	}
 
 	receiverID := chi.URLParam(req, "id")
-	_, err := h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
+	_, err = h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("Receiver not found", err, nil).Render(rw)

@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
@@ -49,7 +50,7 @@ func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Ha
 				}
 
 				ctx := context.WithValue(r.Context(), APIKeyContextKey, apiKey)
-				ctx = context.WithValue(ctx, UserIDContextKey, apiKey.CreatedBy)
+				ctx = sdpcontext.SetUserIDInContext(ctx, apiKey.CreatedBy)
 				ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", apiKey.CreatedBy))
 
 				next.ServeHTTP(w, r.WithContext(ctx))

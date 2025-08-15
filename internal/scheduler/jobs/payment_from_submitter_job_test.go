@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_PaymentFromSubmitterJob_GetInterval(t *testing.T) {
@@ -61,7 +61,7 @@ func Test_PaymentFromSubmitterJob_Execute(t *testing.T) {
 				Name:                    "aid-org-1",
 				DistributionAccountType: schema.DistributionAccountStellarEnv,
 			}
-			ctx = tenant.SaveTenantInContext(ctx, tenantInfo)
+			ctx = sdpcontext.SetTenantInContext(ctx, tenantInfo)
 
 			mockPaymentFromSubmitterService := &mocks.MockPaymentFromSubmitterService{}
 			mockPaymentFromSubmitterService.On("SyncBatchTransactions", mock.Anything, paymentFromSubmitterBatchSize, tenantInfo.ID).

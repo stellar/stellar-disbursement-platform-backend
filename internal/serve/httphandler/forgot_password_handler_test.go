@@ -16,11 +16,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
@@ -290,7 +290,7 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 
 			ctx := context.Background()
 			if tc.hasTenant {
-				ctx = tenant.SaveTenantInContext(ctx, &tnt)
+				ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 			}
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/forgot-password", strings.NewReader(tc.reqBody))
 			require.NoError(t, err)

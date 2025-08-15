@@ -10,11 +10,11 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type StellarTomlHandler struct {
@@ -100,7 +100,7 @@ func (s *StellarTomlHandler) buildCurrencyInformation(assets []data.Asset) strin
 func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var stellarToml string
-	_, err := tenant.GetTenantFromContext(ctx)
+	_, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		// return a general stellar.toml file for this instance because no tenant is present.
 		networkType, innerErr := utils.GetNetworkTypeFromNetworkPassphrase(s.NetworkPassphrase)

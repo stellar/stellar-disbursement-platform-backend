@@ -17,16 +17,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PaymentsHandler struct {
@@ -150,8 +149,8 @@ func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
 func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
@@ -182,7 +181,7 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 			}
 
 			var tnt *schema.Tenant
-			if tnt, err = tenant.GetTenantFromContext(ctx); err != nil {
+			if tnt, err = sdpcontext.GetTenantFromContext(ctx); err != nil {
 				return nil, fmt.Errorf("getting tenant from context: %w", err)
 			} else if tnt.DistributionAccountType.IsCircle() {
 				_, err = p.Models.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, dbTx, reqBody.PaymentIDs...)
@@ -357,8 +356,8 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
-	if !ok {
+	userID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
 		httperror.Unauthorized("", nil, nil).Render(w)
 		return
 	}

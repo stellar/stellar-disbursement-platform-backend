@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 )
 
 // MockJob is a mock job created for testing purposes
@@ -60,7 +60,7 @@ func (m *MockMultiTenantJob) GetInterval() time.Duration {
 }
 
 func (m *MockMultiTenantJob) Execute(ctx context.Context) error {
-	tnt, err := tenant.GetTenantFromContext(ctx)
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return err
 	}

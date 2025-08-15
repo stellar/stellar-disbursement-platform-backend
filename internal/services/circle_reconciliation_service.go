@@ -13,10 +13,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 //go:generate mockery --name=CircleReconciliationServiceInterface --case=underscore --structname=MockCircleReconciliationService --filename=circle_reconciliation_service.go
@@ -36,7 +36,7 @@ type CircleReconciliationService struct {
 // reached a successful/failure status, it updates the payment status in the DB as well to reflect that.
 func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	// Step 1: Get the tenant from the context.
-	tnt, outerErr := tenant.GetTenantFromContext(ctx)
+	tnt, outerErr := sdpcontext.GetTenantFromContext(ctx)
 	if outerErr != nil {
 		return fmt.Errorf("getting tenant from context: %w", outerErr)
 	}

@@ -18,7 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -108,7 +108,7 @@ func Test_UpdateReceiverHandler_400(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
+	ctx = sdpcontext.SetUserIDInContext(ctx, "my-user-id")
 
 	user := &auth.User{
 		ID:    "my-user-id",
@@ -269,7 +269,7 @@ func Test_UpdateReceiverHandler_404(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
+	ctx = sdpcontext.SetUserIDInContext(ctx, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
@@ -305,7 +305,7 @@ func Test_UpdateReceiverHandler_409(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
+	ctx = sdpcontext.SetUserIDInContext(ctx, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
@@ -384,7 +384,7 @@ func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
+	ctx = sdpcontext.SetUserIDInContext(ctx, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
@@ -507,7 +507,7 @@ func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, middleware.UserIDContextKey, "my-user-id")
+	ctx = sdpcontext.SetUserIDInContext(ctx, "my-user-id")
 
 	// setup
 	authManager := &auth.AuthManagerMock{}

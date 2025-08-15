@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
@@ -131,7 +132,7 @@ func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPo
 	ctx := context.Background()
 	const publicKey = "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
 	tnt := CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant", publicKey)
-	return tnt, SaveTenantInContext(ctx, tnt)
+	return tnt, sdpcontext.SetTenantInContext(ctx, tnt)
 }
 
 func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string) bool {

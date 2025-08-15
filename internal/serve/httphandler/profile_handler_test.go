@@ -28,7 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
@@ -355,7 +355,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			// Inject authenticated token into context:
 			ctx := context.Background()
 			if tc.token != "" {
-				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+				ctx = sdpcontext.SetTokenInContext(ctx, tc.token)
 			}
 
 			// Setup password validator
@@ -561,7 +561,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			// Inject authenticated token into context:
 			ctx := context.Background()
 			if tc.token != "" {
-				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+				ctx = sdpcontext.SetTokenInContext(ctx, tc.token)
 			}
 
 			// Assert DB before
@@ -749,7 +749,7 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			// Inject authenticated token into context:
 			ctx := context.Background()
 			if tc.token != "" {
-				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+				ctx = sdpcontext.SetTokenInContext(ctx, tc.token)
 			}
 
 			// Setup password validator
@@ -930,7 +930,7 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 			// Inject authenticated token into context:
 			ctx := context.Background()
 			if tc.token != "" {
-				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+				ctx = sdpcontext.SetTokenInContext(ctx, tc.token)
 			}
 
 			// Setup password validator
@@ -1008,7 +1008,7 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 
 	t.Run("returns Unauthorized when AuthManager fails with ErrInvalidToken", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		expectedErr := auth.ErrInvalidToken
 		authManagerMock.
@@ -1039,7 +1039,7 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 
 	t.Run("returns BadRequest when user is not found", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 		expectedErr := fmt.Errorf("error getting user ID %s: %w", "user-id", auth.ErrUserNotFound)
 
 		authManagerMock.
@@ -1070,7 +1070,7 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 
 	t.Run("returns InternalServerError when AuthManager fails", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		expectedErr := errors.New("error getting user ID user-id: unexpected error")
 		authManagerMock.
@@ -1101,7 +1101,7 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 
 	t.Run("returns the profile info successfully", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		u := &auth.User{
 			ID:        "user-id",

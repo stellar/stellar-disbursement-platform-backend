@@ -17,10 +17,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
@@ -103,7 +103,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		Name:    "TestTenant",
 		BaseURL: &tenantBaseURL,
 	}
-	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
 	var maxInvitationSMSResendAttempts int64 = 3

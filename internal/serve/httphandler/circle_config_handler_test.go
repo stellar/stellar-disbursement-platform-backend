@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
@@ -35,7 +36,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 
 	// Creates a tenant and inserts it in the context
 	tnt := schema.Tenant{ID: "test-tenant-id"}
-	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
 
 	kp := keypair.MustRandom()
 	encryptionPassphrase := kp.Seed()
