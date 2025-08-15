@@ -267,6 +267,11 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 		}, nil
 	})
 	if err != nil {
+		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
+			httpErr.Render(w)
+			return
+		}
+
 		httperror.InternalError(ctx, "Error creating receiver", err, nil).Render(w)
 		return
 	}
