@@ -19,6 +19,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -124,7 +125,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 	t.Run("post transfer fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -158,7 +159,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 
 	t.Run("post transfer successful", func(t *testing.T) {
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -216,7 +217,7 @@ func Test_Client_GetTransferByID(t *testing.T) {
 	t.Run("get transfer by id fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -250,7 +251,7 @@ func Test_Client_GetTransferByID(t *testing.T) {
 
 	t.Run("get transfer by id successful", func(t *testing.T) {
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -321,7 +322,7 @@ func Test_Client_PostRecipient(t *testing.T) {
 	t.Run("post recipient fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -355,7 +356,7 @@ func Test_Client_PostRecipient(t *testing.T) {
 
 	t.Run("post transfer successful", func(t *testing.T) {
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -413,7 +414,7 @@ func Test_Client_GetRecipientByID(t *testing.T) {
 	t.Run("get recipient by id fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -447,7 +448,7 @@ func Test_Client_GetRecipientByID(t *testing.T) {
 
 	t.Run("get recipient by id successful", func(t *testing.T) {
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -519,7 +520,7 @@ func Test_Client_PostPayout(t *testing.T) {
 	t.Run("post payout fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -553,7 +554,7 @@ func Test_Client_PostPayout(t *testing.T) {
 
 	t.Run("post transfer successful", func(t *testing.T) {
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -611,7 +612,7 @@ func Test_Client_GetPayoutByID(t *testing.T) {
 	t.Run("get payout by id fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -645,7 +646,7 @@ func Test_Client_GetPayoutByID(t *testing.T) {
 
 	t.Run("get payout by id successful", func(t *testing.T) {
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -713,7 +714,7 @@ func Test_Client_GetBusinessBalances(t *testing.T) {
 			"message": "Malformed key. Does it contain three parts?"
 		}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id"}
+		tnt := &schema.Tenant{ID: "test-id"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -759,7 +760,7 @@ func Test_Client_GetBusinessBalances(t *testing.T) {
 			}
 		}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 		cMocks.httpClientMock.
 			On("Do", mock.Anything).
@@ -832,7 +833,7 @@ func Test_Client_GetAccountConfiguration(t *testing.T) {
 			"message": "Malformed key. Does it contain three parts?"
 		}`
 		cc, cMocks := newClientWithMocks(t)
-		tnt := &tenant.Tenant{ID: "test-id"}
+		tnt := &schema.Tenant{ID: "test-id"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cMocks.httpClientMock.
@@ -872,7 +873,7 @@ func Test_Client_GetAccountConfiguration(t *testing.T) {
 				}
 			}
 		}`
-		tnt := &tenant.Tenant{ID: "test-id", Name: "test-tenant"}
+		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
 		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		cc, cMocks := newClientWithMocks(t)
@@ -918,7 +919,7 @@ func Test_Client_GetAccountConfiguration(t *testing.T) {
 
 func Test_Client_handleError(t *testing.T) {
 	ctx := context.Background()
-	tnt := &tenant.Tenant{ID: "test-id"}
+	tnt := &schema.Tenant{ID: "test-id"}
 	ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 	cc, cMocks := newClientWithMocks(t)

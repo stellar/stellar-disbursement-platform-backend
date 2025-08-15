@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -722,7 +723,7 @@ func Test_getCurrentTenant(t *testing.T) {
 	})
 
 	t.Run("returns the default tenant as current tenant", func(t *testing.T) {
-		expectedTenant := tenant.Tenant{ID: "tenant-id"}
+		expectedTenant := schema.Tenant{ID: "tenant-id"}
 		tenantManagerMock.
 			On("GetDefault", ctx).
 			Return(&expectedTenant, nil).
@@ -749,7 +750,7 @@ func Test_getCurrentTenant(t *testing.T) {
 	})
 
 	t.Run("returns the current tenant", func(t *testing.T) {
-		expectedTenant := tenant.Tenant{ID: "tenant-id"}
+		expectedTenant := schema.Tenant{ID: "tenant-id"}
 		tenantManagerMock.
 			On("GetTenantByName", ctx, "tenant_name").
 			Return(&expectedTenant, nil).
@@ -767,7 +768,7 @@ func Test_getCurrentTenant_WithSingleTenant(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns the only tenant automatically in single tenant mode", func(t *testing.T) {
-		expectedTenant := tenant.Tenant{ID: "gotham-city-id", Name: "gotham"}
+		expectedTenant := schema.Tenant{ID: "gotham-city-id", Name: "gotham"}
 
 		// Set up mock to return our single tenant
 		tenantManagerMock.
@@ -783,7 +784,7 @@ func Test_getCurrentTenant_WithSingleTenant(t *testing.T) {
 	})
 
 	t.Run("uses the enhanced GetDefault method which handles auto-selection", func(t *testing.T) {
-		expectedTenant := tenant.Tenant{ID: "metropolis-id", Name: "metropolis", IsDefault: false}
+		expectedTenant := schema.Tenant{ID: "metropolis-id", Name: "metropolis", IsDefault: false}
 
 		tenantManagerMock.
 			On("GetDefault", ctx).

@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -180,7 +181,7 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 				return nil, fmt.Errorf("retrying failed payments: %w", err)
 			}
 
-			var tnt *tenant.Tenant
+			var tnt *schema.Tenant
 			if tnt, err = tenant.GetTenantFromContext(ctx); err != nil {
 				return nil, fmt.Errorf("getting tenant from context: %w", err)
 			} else if tnt.DistributionAccountType.IsCircle() {

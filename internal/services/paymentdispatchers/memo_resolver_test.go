@@ -22,7 +22,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := tenant.Tenant{
+	tnt := schema.Tenant{
 		ID:      "tenant-id",
 		BaseURL: utils.Ptr("https://example.com"),
 	}

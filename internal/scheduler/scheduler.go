@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/go/support/log"
@@ -162,7 +163,7 @@ func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerCli
 	if job.IsJobMultiTenant() {
 		tenants, err := tenantManager.GetAllTenants(ctx, &tenant.QueryParams{
 			Filters: map[tenant.FilterKey]interface{}{
-				tenant.FilterKeyStatus: []tenant.TenantStatus{tenant.ProvisionedTenantStatus, tenant.ActivatedTenantStatus},
+				tenant.FilterKeyStatus: []schema.TenantStatus{schema.ProvisionedTenantStatus, schema.ActivatedTenantStatus},
 			},
 		})
 		if err != nil {

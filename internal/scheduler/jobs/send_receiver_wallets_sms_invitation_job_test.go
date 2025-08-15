@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -97,7 +98,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	require.NoError(t, err)
 
 	tenantBaseURL := "http://localhost:8000"
-	tenantInfo := &tenant.Tenant{
+	tenantInfo := &schema.Tenant{
 		ID:      uuid.NewString(),
 		Name:    "TestTenant",
 		BaseURL: &tenantBaseURL,

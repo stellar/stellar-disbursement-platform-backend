@@ -86,7 +86,7 @@ func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx con
 }
 
 // getDistributionAccount extracts the distribution account from the tenant if it exists.
-func (r *DistributionAccountResolverImpl) getDistributionAccount(ctx context.Context, tnt *tenant.Tenant) (schema.TransactionAccount, error) {
+func (r *DistributionAccountResolverImpl) getDistributionAccount(ctx context.Context, tnt *schema.Tenant) (schema.TransactionAccount, error) {
 	if tnt.DistributionAccountType == schema.DistributionAccountCircleDBVault {
 		// 1. Circle Account
 		cc, circleErr := r.circleConfigModel.Get(ctx)

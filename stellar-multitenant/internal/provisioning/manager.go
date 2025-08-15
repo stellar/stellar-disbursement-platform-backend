@@ -63,7 +63,7 @@ func rollbackTenantCreationAndSchemaErrors() []error {
 
 func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, provisionTenant ProvisionTenant,
-) (*tenant.Tenant, error) {
+) (*schema.Tenant, error) {
 	log.Ctx(ctx).Infof("adding tenant %s", provisionTenant.Name)
 	t, provisionErr := m.provisionTenant(ctx, &provisionTenant)
 	if provisionErr != nil {
@@ -73,7 +73,7 @@ func (m *Manager) ProvisionNewTenant(
 	return t, nil
 }
 
-func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *tenant.Tenant) error {
+func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *schema.Tenant) error {
 	// We don't want to roll back an existing tenant
 	if errors.Is(err, tenant.ErrDuplicatedTenantName) {
 		return err
@@ -119,7 +119,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, error) {
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*schema.Tenant, error) {
 	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.Name)
 	if addTntErr != nil {
 		return t, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.Name, addTntErr)
@@ -141,7 +141,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, fmt.Errorf("provisioning distribution account: %w", err)
 	}
 
-	tenantStatus := tenant.ProvisionedTenantStatus
+	tenantStatus := schema.ProvisionedTenantStatus
 	tenantUpdate := &tenant.TenantUpdate{
 		ID:                        t.ID,
 		Status:                    &tenantStatus,
@@ -155,7 +155,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 	updatedTenant, err := m.tenantManager.UpdateTenantConfig(ctx, tenantUpdate)
 	if err != nil {
-		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.Name, tenant.ProvisionedTenantStatus, err)
+		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.Name, schema.ProvisionedTenantStatus, err)
 	}
 
 	err = m.fundTenantDistributionStellarAccountIfNeeded(ctx, *updatedTenant)
@@ -167,7 +167,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 }
 
 // fundTenantDistributionStellarAccountIfNeeded funds the tenant distribution account with native asset if necessary, based on the accountType provided.
-func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Context, tenant tenant.Tenant) error {
+func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Context, tenant schema.Tenant) error {
 	switch tenant.DistributionAccountType {
 	case schema.DistributionAccountStellarDBVault:
 		hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
@@ -193,7 +193,7 @@ func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Conte
 }
 
 // provisionDistributionAccount provisions a distribution account for the tenant if necessary, based on the accountType provided.
-func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Tenant, accountType schema.AccountType) error {
+func (m *Manager) provisionDistributionAccount(ctx context.Context, t *schema.Tenant, accountType schema.AccountType) error {
 	switch accountType {
 	case schema.DistributionAccountCircleDBVault:
 		log.Ctx(ctx).Warnf("Circle account cannot be automatically provisioned, the tenant %s will need to provision it through the UI.", t.Name)
@@ -295,7 +295,7 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 	return dsn, nil
 }
 
-func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Tenant) error {
+func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *schema.Tenant) error {
 	distAccToDelete := schema.TransactionAccount{
 		Address: *t.DistributionAccountAddress,
 		Type:    t.DistributionAccountType,

@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -502,7 +503,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	}
 
 	uiBaseURL := "https://sdp.org"
-	tnt := tenant.Tenant{
+	tnt := schema.Tenant{
 		SDPUIBaseURL: &uiBaseURL,
 	}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
@@ -837,7 +838,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("logs and reports error when joining the forgot password link", func(t *testing.T) {
-		tntInvalidUIBaseURL := tenant.Tenant{
+		tntInvalidUIBaseURL := schema.Tenant{
 			SDPUIBaseURL: &[]string{"%invalid%"}[0],
 		}
 		token := "mytoken"

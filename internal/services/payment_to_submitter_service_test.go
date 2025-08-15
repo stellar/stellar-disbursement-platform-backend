@@ -29,7 +29,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	// add tenant to context
-	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Name"}
 	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
 
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
@@ -375,7 +375,7 @@ func Test_PaymentToSubmitterService_SendMixedPayments(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(dbConnectionPool)
 
-	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Name"}
 	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "MixWallet", "https://mix.com", "mix.com", "mix://")
@@ -465,7 +465,7 @@ func Test_PaymentToSubmitterService_SendDirectPayments(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(dbConnectionPool)
-	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Name"}
 	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "DirectWallet", "https://direct.com", "direct.com", "direct://")

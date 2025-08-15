@@ -286,7 +286,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	mTenantManager := &tenant.TenantManagerMock{}
 	mTenantManager.
 		On("GetTenantByName", mock.Anything, "aid-org").
-		Return(&tenant.Tenant{ID: "tenant1"}, nil)
+		Return(&schema.Tenant{ID: "tenant1"}, nil)
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)

@@ -16,6 +16,7 @@ import (
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -91,7 +92,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting all tenants: %v", err)
 			}
-			tenantsByID := make(map[string]tenant.Tenant, len(tenants))
+			tenantsByID := make(map[string]schema.Tenant, len(tenants))
 			for _, tnt := range tenants {
 				tenantsByID[tnt.ID] = tnt
 			}

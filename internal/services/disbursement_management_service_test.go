@@ -213,7 +213,7 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 
 	// Update context with tenant and auth token
-	tnt := tenant.Tenant{ID: "tenant-id"}
+	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx = tenant.SaveTenantInContext(context.Background(), &tnt)
 	token := "token"
 	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -501,7 +501,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
+	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 	token := "token"
 	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -1047,7 +1047,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 
 	ctx := context.Background()
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
+	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
 	token := "token"
