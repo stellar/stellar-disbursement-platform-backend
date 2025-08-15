@@ -18,19 +18,19 @@ import (
 type ctxKey string
 
 const (
-	APIKeyContextKey ctxKey       = "api_key"
-	apiKeyCacheTTL                = 3 * time.Minute
-	updateTimeout                 = 5 * time.Second
-	updateQueueSize               = 1000
-	updateWorkers                 = 5
-	updateWindow                  = 1 * time.Minute // Throttle DB updates
+	APIKeyContextKey ctxKey = "api_key"
+	apiKeyCacheTTL          = 3 * time.Minute
+	updateTimeout           = 5 * time.Second
+	updateQueueSize         = 1000
+	updateWorkers           = 5
+	updateWindow            = 1 * time.Minute // Throttle DB updates
 )
 
 type apiKeyAuthenticator struct {
-	model        *data.APIKeyModel
-	cache        *ristretto.Cache
-	updates      chan string
-	lastUpdated  sync.Map
+	model       *data.APIKeyModel
+	cache       *ristretto.Cache
+	updates     chan string
+	lastUpdated sync.Map
 }
 
 func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
@@ -43,15 +43,15 @@ func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
 		log.Errorf("Failed to create API key cache: %v", err)
 		return &apiKeyAuthenticator{model: model}
 	}
-	
+
 	cache.Wait()
-	
+
 	auth := &apiKeyAuthenticator{
 		model:   model,
 		cache:   cache,
 		updates: make(chan string, updateQueueSize),
 	}
-	
+
 	auth.startWorkers()
 	return auth
 }
@@ -92,7 +92,7 @@ func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*dat
 	if a.cache == nil {
 		return a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 	}
-	
+
 	if cached, found := a.cache.Get(rawKey); found {
 		if apiKey, ok := cached.(*data.APIKey); ok && !apiKey.IsExpired() {
 			if a.shouldUpdate(apiKey.ID) {
@@ -103,17 +103,17 @@ func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*dat
 		}
 		a.cache.Del(rawKey)
 	}
-	
+
 	apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !apiKey.IsExpired() {
 		a.cache.SetWithTTL(rawKey, apiKey, 1, apiKeyCacheTTL)
 		a.lastUpdated.Store(apiKey.ID, time.Now())
 	}
-	
+
 	return apiKey, nil
 }
 
@@ -135,7 +135,7 @@ func extractClientIP(r *http.Request) string {
 			return strings.TrimSpace(ip)
 		}
 	}
-	
+
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if host == "" {
 		return r.RemoteAddr
@@ -154,27 +154,27 @@ func setAPIKeyContext(r *http.Request, apiKey *data.APIKey) *http.Request {
 // APIKeyOrJWTAuthenticate first checks for an SDP_ key, then falls back to JWT.
 func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
 	auth := newAPIKeyAuthenticator(apiKeyModel)
-	
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := extractToken(r)
-			
+
 			if !strings.HasPrefix(token, data.APIKeyPrefix) {
 				jwtAuth(next).ServeHTTP(w, r)
 				return
 			}
-			
+
 			apiKey, err := auth.validate(r.Context(), token)
 			if err != nil {
 				httperror.Unauthorized("Invalid API key", nil, nil).Render(w)
 				return
 			}
-			
+
 			if clientIP := extractClientIP(r); !apiKey.IsAllowedIP(clientIP) {
 				httperror.Forbidden("IP not allowed", nil, nil).Render(w)
 				return
 			}
-			
+
 			next.ServeHTTP(w, setAPIKeyContext(r, apiKey))
 		})
 	}
