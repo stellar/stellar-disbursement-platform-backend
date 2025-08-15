@@ -61,6 +61,9 @@ func Test_PrometheusClient_MonitorRequestTime(t *testing.T) {
 		Status: "200",
 		Route:  "/mock",
 		Method: "GET",
+		CommonLabels: CommonLabels{
+			TenantName: "test-tenant",
+		},
 	}
 
 	// initializing durations as 1 second
@@ -83,8 +86,8 @@ func Test_PrometheusClient_MonitorRequestTime(t *testing.T) {
 	assert.NotEmpty(t, data)
 	body := string(data)
 
-	sumMetric := `sdp_http_requests_duration_seconds_sum{method="GET",route="/mock",status="200"} 1`
-	countMetric := `sdp_http_requests_duration_seconds_count{method="GET",route="/mock",status="200"} 1`
+	sumMetric := `sdp_http_requests_duration_seconds_sum{method="GET",route="/mock",status="200",tenant_name="test-tenant"} 1`
+	countMetric := `sdp_http_requests_duration_seconds_count{method="GET",route="/mock",status="200",tenant_name="test-tenant"} 1`
 
 	assert.Contains(t, body, sumMetric)
 	assert.Contains(t, body, countMetric)
@@ -168,6 +171,9 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 		labels := DisbursementLabels{
 			Asset:  "USDC",
 			Wallet: "Mock Wallet",
+			CommonLabels: CommonLabels{
+				TenantName: "test-tenant",
+			},
 		}
 
 		mPrometheusClient.MonitorCounters(DisbursementsCounterTag, labels.ToMap())
@@ -184,7 +190,7 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 		assert.NotEmpty(t, data)
 		body := string(data)
 
-		metric := `sdp_business_disbursements_counter{asset="USDC",wallet="Mock Wallet"} 1`
+		metric := `sdp_business_disbursements_counter{asset="USDC",tenant_name="test-tenant",wallet="Mock Wallet"} 1`
 
 		assert.Contains(t, body, metric)
 

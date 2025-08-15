@@ -24,9 +24,10 @@ func (p *prometheusClient) GetMetricHttpHandler() http.Handler {
 
 func (p *prometheusClient) MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) {
 	SummaryVecMetrics[HttpRequestDurationTag].With(prometheus.Labels{
-		"status": labels.Status,
-		"route":  labels.Route,
-		"method": labels.Method,
+		"status":      labels.Status,
+		"route":       labels.Route,
+		"method":      labels.Method,
+		"tenant_name": labels.TenantName,
 	}).Observe(duration.Seconds())
 }
 

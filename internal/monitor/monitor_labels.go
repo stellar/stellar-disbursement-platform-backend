@@ -1,9 +1,14 @@
 package monitor
 
+type CommonLabels struct {
+	TenantName string
+}
+
 type HttpRequestLabels struct {
 	Status string
 	Route  string
 	Method string
+	CommonLabels
 }
 
 type DBQueryLabels struct {
@@ -13,12 +18,14 @@ type DBQueryLabels struct {
 type DisbursementLabels struct {
 	Asset  string
 	Wallet string
+	CommonLabels
 }
 
 func (d DisbursementLabels) ToMap() map[string]string {
 	return map[string]string{
-		"asset":  d.Asset,
-		"wallet": d.Wallet,
+		"asset":       d.Asset,
+		"wallet":      d.Wallet,
+		"tenant_name": d.TenantName,
 	}
 }
 
@@ -27,7 +34,7 @@ type CircleLabels struct {
 	Endpoint   string
 	Status     string
 	StatusCode string
-	TenantName string
+	CommonLabels
 }
 
 func (c CircleLabels) ToMap() map[string]string {

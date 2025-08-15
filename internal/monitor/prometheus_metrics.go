@@ -30,8 +30,14 @@ var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 	HttpRequestDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace: "sdp", Subsystem: "http", Name: string(HttpRequestDurationTag),
 		Help: "HTTP requests durations, sliding window = 10m",
+		Objectives: map[float64]float64{
+			0.5:  0.05,  // 50th percentile with 5% error
+			0.9:  0.01,  // 90th percentile with 1% error
+			0.95: 0.01,  // 95th percentile with 1% error
+			0.99: 0.001, // 99th percentile with 0.1% error
+		},
 	},
-		[]string{"status", "route", "method"},
+		[]string{"status", "route", "method", "tenant_name"},
 	),
 	SuccessfulQueryDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace: "sdp", Subsystem: "db", Name: string(SuccessfulQueryDurationTag),
@@ -72,7 +78,7 @@ var CounterVecMetrics = map[MetricTag]*prometheus.CounterVec{
 		Namespace: "sdp", Subsystem: "business", Name: string(DisbursementsCounterTag),
 		Help: "Disbursements Counter",
 	},
-		[]string{"asset", "wallet"},
+		[]string{"asset", "wallet", "tenant_name"},
 	),
 	CircleAPIRequestsTotalTag: prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "sdp", Subsystem: "circle", Name: string(CircleAPIRequestsTotalTag),
