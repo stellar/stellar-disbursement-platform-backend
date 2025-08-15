@@ -72,7 +72,7 @@ func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Contex
 	if err != nil {
 		return schema.TransactionAccount{}, fmt.Errorf("getting tenant: %w", err)
 	}
-	sdpcontext.SetTenantInContext(ctx, tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, tnt)
 	return r.getDistributionAccount(ctx, tnt)
 }
 
