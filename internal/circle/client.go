@@ -423,12 +423,6 @@ func parseRetryAfter(retryAfter string) time.Duration {
 }
 
 func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoint string, startTime time.Time, resp *http.Response, reqErr error) {
-	t, err := sdpcontext.GetTenantFromContext(ctx)
-	if err != nil {
-		log.Ctx(ctx).Errorf("getting tenant from context: %v", err)
-		return
-	}
-
 	duration := time.Since(startTime)
 	status, statusCode := monitor.ParseHTTPResponseStatus(resp, reqErr)
 
@@ -437,15 +431,17 @@ func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoi
 		Endpoint:   endpoint,
 		Status:     status,
 		StatusCode: statusCode,
-		TenantName: t.Name,
+		CommonLabels: monitor.CommonLabels{
+			TenantName: sdpcontext.MustGetTenantNameFromContext(ctx),
+		},
 	}.ToMap()
 
 	if monitorErr := client.monitorService.MonitorHistogram(duration.Seconds(), monitor.CircleAPIRequestDurationTag, labels); monitorErr != nil {
-		log.Ctx(ctx).Errorf("monitoring histogram: %v", err)
+		log.Ctx(ctx).Errorf("monitoring histogram: %v", monitorErr)
 	}
 
 	if monitorErr := client.monitorService.MonitorCounters(monitor.CircleAPIRequestsTotalTag, labels); monitorErr != nil {
-		log.Ctx(ctx).Errorf("monitoring counter: %v", err)
+		log.Ctx(ctx).Errorf("monitoring counter: %v", monitorErr)
 	}
 }
 

@@ -23,7 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Update PATCH endpoint to extend update capabilities [#697](https://github.com/stellar/stellar-disbursement-platform-backend/pull/697)
 - Add `supported_assets` filter to `GET /wallets` endpoint [#734](https://github.com/stellar/stellar-disbursement-platform-backend/pull/734)
 - Add OTP attempt tracking and validation with maximum attempts limit and expiration checks for receiver wallet registration [#773](https://github.com/stellar/stellar-disbursement-platform-backend/pull/773)
-
+- Improve observability for the SDP service by adding the following : 
+  - tag metrics by tenant name to differentiate between tenants
+  - configure Summary metrics with percentiles for HTTP request durations (0.5, 0.9, 0.95, 0.99)
+  - rework Grafana dashboard to include tenant tag and new metrics
+  - [#818](https://github.com/stellar/stellar-disbursement-platform-backend/pull/818)
 ### Changed
 
 - Update supported wallets for Pubnet and Testnet: 
