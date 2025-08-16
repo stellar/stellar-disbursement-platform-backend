@@ -29,7 +29,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = tenant.SaveTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -532,7 +532,7 @@ func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
 
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = tenant.SaveTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	t.Cleanup(func() {
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -722,7 +722,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = tenant.SaveTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 

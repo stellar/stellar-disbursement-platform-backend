@@ -422,7 +422,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 				}
 			}
 
-			tnt := tenant.Tenant{
+			tnt := schema.Tenant{
 				ID:           "test-tenant",
 				BaseURL:      utils.Ptr("https://example.com"),
 				SDPUIBaseURL: utils.Ptr("https://example.com"),
@@ -778,7 +778,7 @@ func Test_BridgeIntegrationHandler_Patch_createVirtualAccount(t *testing.T) {
 				}
 			}
 
-			tnt := tenant.Tenant{
+			tnt := schema.Tenant{
 				ID:      "test-tenant",
 				BaseURL: utils.Ptr("https://example.com"),
 			}

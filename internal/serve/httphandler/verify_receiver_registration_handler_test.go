@@ -594,7 +594,7 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
+	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx := context.Background()
 	ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
@@ -1519,7 +1519,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				tnt := tenant.Tenant{ID: "tenant-id"}
+				tnt := schema.Tenant{ID: "tenant-id"}
 				ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
 				// update database with the entries needed

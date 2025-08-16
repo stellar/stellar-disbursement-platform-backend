@@ -13,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -176,7 +177,7 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 	}
 }
 
-func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface, singleTenantMode bool, homeDomain string) (currentTenant *tenant.Tenant, httpError *httperror.HTTPError) {
+func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface, singleTenantMode bool, homeDomain string) (currentTenant *schema.Tenant, httpError *httperror.HTTPError) {
 	var err error
 	if singleTenantMode {
 		currentTenant, err = tenantManager.GetDefault(ctx)

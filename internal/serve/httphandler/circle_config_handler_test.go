@@ -34,7 +34,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	// Creates a tenant and inserts it in the context
-	tnt := tenant.Tenant{ID: "test-tenant-id"}
+	tnt := schema.Tenant{ID: "test-tenant-id"}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
 	kp := keypair.MustRandom()
@@ -157,7 +157,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 						ID:                        "test-tenant-id",
 						DistributionAccountStatus: schema.AccountStatusActive,
 					}).
-					Return(&tenant.Tenant{}, nil).
+					Return(&schema.Tenant{}, nil).
 					Once()
 			},
 			requestBody: string(validRequestBody),

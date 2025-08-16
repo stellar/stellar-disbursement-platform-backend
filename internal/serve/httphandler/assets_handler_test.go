@@ -115,7 +115,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		require.Equal(t, 2, len(assets))
 
-		tnt := &tenant.Tenant{
+		tnt := &schema.Tenant{
 			ID:                         "test-tenant",
 			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
@@ -182,7 +182,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		require.Equal(t, 2, len(assets))
 
-		tnt := &tenant.Tenant{
+		tnt := &schema.Tenant{
 			ID:                         "test-tenant",
 			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
@@ -248,7 +248,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		require.Equal(t, 2, len(assets))
 
-		tnt := &tenant.Tenant{
+		tnt := &schema.Tenant{
 			ID:                         "test-tenant",
 			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
@@ -295,7 +295,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		require.Equal(t, 2, len(assets))
 
-		tnt := &tenant.Tenant{
+		tnt := &schema.Tenant{
 			ID:                         "test-tenant",
 			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],

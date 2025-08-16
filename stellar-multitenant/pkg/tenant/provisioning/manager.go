@@ -12,7 +12,7 @@ import (
 
 //go:generate mockery --name=TenantProvisioningService --case=underscore --structname=MockTenantProvisioningServiceInterface --inpackage --filename=mocks.go
 type TenantProvisioningService interface {
-	ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*tenant.Tenant, error)
+	ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*schema.Tenant, error)
 }
 
 type ProvisionTenant struct {
@@ -57,7 +57,7 @@ func NewManager(opts ManagerOptions) (TenantProvisioningService, error) {
 	}, nil
 }
 
-func (m *Manager) ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*tenant.Tenant, error) {
+func (m *Manager) ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*schema.Tenant, error) {
 	internalPT := provisioning.ProvisionTenant{
 		Name:                    pt.Name,
 		UserFirstName:           pt.UserFirstName,

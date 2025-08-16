@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, adminDBConnectionPool db.DBConnectionPool) {
@@ -91,7 +92,7 @@ func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnection
 	assert.True(t, user.IsOwner)
 }
 
-func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name, distributionPubKey string) *Tenant {
+func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name, distributionPubKey string) *schema.Tenant {
 	t.Helper()
 
 	tenantName := name
@@ -114,7 +115,7 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	`
 
 	baseURL := fmt.Sprintf("http://%s.stellar.local:8000", tenantName)
-	tnt := &Tenant{
+	tnt := &schema.Tenant{
 		Name:                       tenantName,
 		DistributionAccountAddress: &distributionPubKey,
 		BaseURL:                    &baseURL,
@@ -126,7 +127,7 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	return tnt
 }
 
-func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) (*Tenant, context.Context) {
+func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) (*schema.Tenant, context.Context) {
 	ctx := context.Background()
 	const publicKey = "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
 	tnt := CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant", publicKey)

@@ -21,12 +21,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_ReceiverHandlerGet(t *testing.T) {
-	dbConnectionPool := getDBConnectionPool(t)
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -358,7 +359,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
-	dbConnectionPool := getDBConnectionPool(t)
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -459,7 +460,7 @@ func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
-	dbConnectionPool := getDBConnectionPool(t)
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1372,7 +1373,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 }
 
 func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
-	dbConnectionPool := getDBConnectionPool(t)
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1752,7 +1753,7 @@ func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
 }
 
 func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
-	dbConnectionPool := getDBConnectionPool(t)
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
@@ -1853,7 +1854,7 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 }
 
 func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
-	dbConnectionPool := getDBConnectionPool(t)
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
@@ -2003,6 +2004,91 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 				// Check created receiver details
 				tc.assertCreatedFn(t, response.Receiver.ID)
 			}
+		})
+	}
+}
+
+func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	r := chi.NewRouter()
+	r.Post("/receivers", handler.CreateReceiver)
+
+	// Create a receiver with a specific phone number and email
+	existingReceiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		PhoneNumber: "+14155556666",
+		Email:       "existing@example.com",
+	})
+
+	testCases := []struct {
+		name         string
+		request      dto.CreateReceiverRequest
+		expectedBody string
+	}{
+		{
+			name: "duplicate email conflict",
+			request: dto.CreateReceiverRequest{
+				Email:      existingReceiver.Email,
+				ExternalID: "test-external-id-1",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedBody: `{
+				"error": "The provided email is already associated with another user.",
+				"extras": {
+					"email": "email must be unique"
+				}
+			}`,
+		},
+		{
+			name: "duplicate phone number conflict",
+			request: dto.CreateReceiverRequest{
+				PhoneNumber: existingReceiver.PhoneNumber,
+				ExternalID:  "test-external-id-2",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedBody: `{
+				"error": "The provided phone_number is already associated with another user.",
+				"extras": {
+					"phone_number": "phone_number must be unique"
+				}
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reqBody, err := json.Marshal(tc.request)
+			require.NoError(t, err)
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, http.StatusConflict, rr.Code)
+			assert.JSONEq(t, tc.expectedBody, rr.Body.String())
 		})
 	}
 }

@@ -32,7 +32,7 @@ func Test_NewCircleReconciliationService_Reconcile_failure(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func Test_NewCircleReconciliationService_Reconcile_failure(t *testing.T) {
 
 	testCases := []struct {
 		name              string
-		tenant            *tenant.Tenant
+		tenant            *schema.Tenant
 		setupMocksAndDBFn func(t *testing.T, mDistAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleService *circle.MockService)
 		wantErrorContains string
 		assertLogsFn      func(entries []logrus.Entry)
@@ -159,7 +159,7 @@ func Test_NewCircleReconciliationService_Reconcile_completeDisbursement(t *testi
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
 	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
 
 	models, outerErr := data.NewModels(dbConnectionPool)
@@ -322,7 +322,7 @@ func Test_NewCircleReconciliationService_Reconcile_partialSuccess(t *testing.T) 
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
 	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
 
 	models, err := data.NewModels(dbConnectionPool)
@@ -524,7 +524,7 @@ func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) 
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
 	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
 
 	models, err := data.NewModels(dbConnectionPool)

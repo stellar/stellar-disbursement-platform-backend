@@ -210,7 +210,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 	})
 
 	t.Run("return an error if the tenant exists in the context but its distribution account is empty", func(t *testing.T) {
-		tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
 		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), tnt)
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
@@ -219,7 +219,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 	})
 
 	t.Run("correctly returns the CIRCLE response after the initial setup, when there's no entry in the circleConfigModel", func(t *testing.T) {
-		tnt := &tenant.Tenant{
+		tnt := &schema.Tenant{
 			ID:                        "95e788b6-c80e-4975-9d12-141001fe6e44",
 			Name:                      "aid-org-1",
 			DistributionAccountType:   schema.DistributionAccountCircleDBVault,
@@ -236,7 +236,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 	})
 
 	t.Run("🎉 successfully returns the CIRCLE response after it's being fully configured", func(t *testing.T) {
-		tnt := &tenant.Tenant{
+		tnt := &schema.Tenant{
 			ID:                        "95e788b6-c80e-4975-9d12-141001fe6e44",
 			Name:                      "aid-org-1",
 			DistributionAccountType:   schema.DistributionAccountCircleDBVault,
@@ -263,7 +263,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 
 	t.Run("🎉 successfully return the distribution account from the tenant stored in the context", func(t *testing.T) {
 		distributionPublicKey := keypair.MustRandom().Address()
-		ctxTenant := &tenant.Tenant{
+		ctxTenant := &schema.Tenant{
 			ID:                         "95e788b6-c80e-4975-9d12-141001fe6e44",
 			Name:                       "aid-org-1",
 			DistributionAccountAddress: &distributionPublicKey,

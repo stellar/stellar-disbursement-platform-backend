@@ -8,6 +8,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
@@ -32,7 +33,7 @@ func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
 
 	t.Run("successfully getting data source", func(t *testing.T) {
 		// Create a new context with tenant information
-		tenantInfo := &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		tenantInfo := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
 		ctx = SaveTenantInContext(ctx, tenantInfo)
 
 		dbcp, err := router.GetDataSource(ctx)
@@ -67,7 +68,7 @@ func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
 
 	t.Run("successfully getting data sources", func(t *testing.T) {
 		// Store DB Connection Pool for aid-org-1
-		tenantInfo := &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		tenantInfo := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
 		ctx := SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp1, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
@@ -75,7 +76,7 @@ func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
 		defer dbcp1.Close()
 
 		// Store DB Connection Pool for aid-org-2
-		tenantInfo = &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e45", Name: "aid-org-2"}
+		tenantInfo = &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e45", Name: "aid-org-2"}
 		ctx = SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp2, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
@@ -112,7 +113,7 @@ func TestMultiTenantDataSourceRouter_AnyDataSource(t *testing.T) {
 
 	t.Run("successfully getting data source", func(t *testing.T) {
 		// Store DB Connection Pool for aid-org-1
-		tenantInfo := &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		tenantInfo := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
 		ctx := SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp1, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
