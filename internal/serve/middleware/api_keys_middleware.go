@@ -38,7 +38,7 @@ func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
 	}
 
 	cache.Wait()
-	
+
 	return &apiKeyAuthenticator{
 		model: model,
 		cache: cache,
