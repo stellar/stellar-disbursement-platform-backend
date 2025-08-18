@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/dgraph-io/ristretto"
@@ -20,17 +19,11 @@ type ctxKey string
 const (
 	APIKeyContextKey ctxKey = "api_key"
 	apiKeyCacheTTL          = 3 * time.Minute
-	updateTimeout           = 5 * time.Second
-	updateQueueSize         = 1000
-	updateWorkers           = 5
-	updateWindow            = 1 * time.Minute // Throttle DB updates
 )
 
 type apiKeyAuthenticator struct {
-	model       *data.APIKeyModel
-	cache       *ristretto.Cache
-	updates     chan string
-	lastUpdated sync.Map
+	model *data.APIKeyModel
+	cache *ristretto.Cache
 }
 
 func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
@@ -45,46 +38,10 @@ func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
 	}
 
 	cache.Wait()
-
-	auth := &apiKeyAuthenticator{
-		model:   model,
-		cache:   cache,
-		updates: make(chan string, updateQueueSize),
-	}
-
-	auth.startWorkers()
-	return auth
-}
-
-func (a *apiKeyAuthenticator) startWorkers() {
-	for range updateWorkers {
-		go a.updateWorker()
-	}
-}
-
-func (a *apiKeyAuthenticator) updateWorker() {
-	for id := range a.updates {
-		ctx, cancel := context.WithTimeout(context.Background(), updateTimeout)
-		_ = a.model.UpdateLastUsed(ctx, id)
-		cancel()
-	}
-}
-
-func (a *apiKeyAuthenticator) shouldUpdate(keyID string) bool {
-	now := time.Now()
-	if lastUpdate, exists := a.lastUpdated.Load(keyID); exists {
-		if lastTime, ok := lastUpdate.(time.Time); ok {
-			return now.Sub(lastTime) > updateWindow
-		}
-	}
-	return true
-}
-
-func (a *apiKeyAuthenticator) queueUpdate(id string) {
-	select {
-	case a.updates <- id:
-	default:
-		log.Warn("Update queue full, skipping last_used update")
+	
+	return &apiKeyAuthenticator{
+		model: model,
+		cache: cache,
 	}
 }
 
@@ -95,10 +52,6 @@ func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*dat
 
 	if cached, found := a.cache.Get(rawKey); found {
 		if apiKey, ok := cached.(*data.APIKey); ok && !apiKey.IsExpired() {
-			if a.shouldUpdate(apiKey.ID) {
-				a.queueUpdate(apiKey.ID)
-				a.lastUpdated.Store(apiKey.ID, time.Now())
-			}
 			return apiKey, nil
 		}
 		a.cache.Del(rawKey)
@@ -111,7 +64,6 @@ func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*dat
 
 	if !apiKey.IsExpired() {
 		a.cache.SetWithTTL(rawKey, apiKey, 1, apiKeyCacheTTL)
-		a.lastUpdated.Store(apiKey.ID, time.Now())
 	}
 
 	return apiKey, nil
