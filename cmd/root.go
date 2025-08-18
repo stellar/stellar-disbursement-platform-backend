@@ -115,6 +115,7 @@ func SetupCLI(version, gitCommit string) *cobra.Command {
 	rootCmd.AddCommand((&IntegrationTestsCommand{}).Command())
 	rootCmd.AddCommand((&AuthCommand{}).Command())
 	rootCmd.AddCommand((&TenantsCommand{}).Command())
+	rootCmd.AddCommand((&MultisigSetupCommand{}).Command(&MultisigSetupCmdSvc{}))
 
 	return rootCmd
 }

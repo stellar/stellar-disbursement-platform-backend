@@ -64,7 +64,7 @@ func customSetterTester[T any](t *testing.T, tc customSetterTestCase[T], co conf
 	// check the result
 	if tc.wantErrContains != "" {
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), tc.wantErrContains)
+		assert.ErrorContains(t, err, tc.wantErrContains)
 	} else {
 		assert.NoError(t, err)
 	}
@@ -344,14 +344,11 @@ func Test_SetConfigOptionStellarPublicKey(t *testing.T) {
 		OptType:        types.String,
 		CustomSetValue: SetConfigOptionStellarPublicKey,
 		ConfigKey:      &opts.sep10SigningPublicKey,
+		Required:       true,
 	}
 	expectedPublicKey := "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 
 	testCases := []customSetterTestCase[string]{
-		{
-			name:            "returns an error if the public key is empty",
-			wantErrContains: "error validating public key in sep10-signing-public-key: strkey is 0 bytes long; minimum valid length is 5",
-		},
 		{
 			name:            "returns an error if the public key is invalid",
 			args:            []string{"--sep10-signing-public-key", "invalid_public_key"},

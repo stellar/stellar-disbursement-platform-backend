@@ -19,6 +19,39 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
+func EmbeddedWalletsRecoveryAddress(targetPointer any) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "embedded-wallets-recovery-address",
+		Usage:          "The address of the recovery account used to sign transactions for account recovery (required when --enable-embedded-wallets is true)",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStellarPublicKey,
+		ConfigKey:      targetPointer,
+		Required:       false,
+	}
+}
+
+func EmbeddedWalletsRecoveryMasterPrivateKey(targetPointer any) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "embedded-wallets-recovery-master-private-key",
+		Usage:          "The private key of the master account used to sign transactions for account recovery (required when --enable-embedded-wallets is true)",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStellarPrivateKey,
+		ConfigKey:      targetPointer,
+		Required:       false,
+	}
+}
+
+func EmbeddedWalletsRecoveryCosignerPublicKey(targetPointer any) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "embedded-wallets-recovery-cosigner-public-key",
+		Usage:          "The public key of the cosigner account used to sign transactions for account recovery (required when --enable-embedded-wallets is true)",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStellarPublicKey,
+		ConfigKey:      targetPointer,
+		Required:       false,
+	}
+}
+
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
 func TwilioConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{

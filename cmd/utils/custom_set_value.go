@@ -145,7 +145,10 @@ func SetCorsAllowedOrigins(co *config.ConfigOption) error {
 }
 
 func SetConfigOptionStellarPublicKey(co *config.ConfigOption) error {
-	publicKey := viper.GetString(co.Name)
+	publicKey := strings.TrimSpace(viper.GetString(co.Name))
+	if !co.Required && publicKey == "" {
+		return nil
+	}
 
 	kp, err := keypair.ParseAddress(publicKey)
 	if err != nil {
@@ -163,7 +166,7 @@ func SetConfigOptionStellarPublicKey(co *config.ConfigOption) error {
 
 func SetConfigOptionStellarPrivateKey(co *config.ConfigOption) error {
 	privateKey := viper.GetString(co.Name)
-	if privateKey == "" {
+	if !co.Required && privateKey == "" {
 		return nil
 	}
 

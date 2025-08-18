@@ -501,7 +501,6 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 
 		rpcClient.AssertExpectations(t)
 	})
-
 }
 
 func Test_WalletCreationTransactionHandler_BuildSuccessEvent(t *testing.T) {
