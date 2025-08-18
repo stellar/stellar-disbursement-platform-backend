@@ -14,6 +14,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -172,7 +173,7 @@ func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, 
 	if err != nil {
 		return fmt.Errorf("error getting tenant by id %s: %w", tenantID, err)
 	}
-	ctx = tenant.SaveTenantInContext(ctx, t)
+	ctx = sdpcontext.SetTenantInContext(ctx, t)
 
 	// 2. Create user using multi-tenant connection pool
 	tr := tenant.NewMultiTenantDataSourceRouter(tm)

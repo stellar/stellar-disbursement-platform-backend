@@ -10,9 +10,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_MemoResolver_GetMemo(t *testing.T) {
@@ -119,7 +119,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			name: "🟢 return tenant memo when enabled",
 			getCtxFn: func(t *testing.T) context.Context {
 				ctx := context.Background()
-				return tenant.SaveTenantInContext(ctx, &tnt)
+				return sdpcontext.SetTenantInContext(ctx, &tnt)
 			},
 			receiverWallet: data.ReceiverWallet{},
 			orgMemoEnabled: true,

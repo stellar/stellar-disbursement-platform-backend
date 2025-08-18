@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -205,13 +206,13 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 	t.Run("return an error if there's no tenant in the context", func(t *testing.T) {
 		distAccount, err := distAccResolver.DistributionAccountFromContext(context.Background())
 		assert.ErrorContains(t, err, "getting tenant")
-		assert.ErrorIs(t, err, tenant.ErrTenantNotFoundInContext)
+		assert.ErrorIs(t, err, sdpcontext.ErrTenantNotFoundInContext)
 		assert.Empty(t, distAccount)
 	})
 
 	t.Run("return an error if the tenant exists in the context but its distribution account is empty", func(t *testing.T) {
 		tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(context.Background(), tnt)
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.Empty(t, distAccount)
@@ -225,7 +226,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 			DistributionAccountType:   schema.DistributionAccountCircleDBVault,
 			DistributionAccountStatus: schema.AccountStatusPendingUserActivation,
 		}
-		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(context.Background(), tnt)
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.NoError(t, err)
@@ -242,7 +243,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 			DistributionAccountType:   schema.DistributionAccountCircleDBVault,
 			DistributionAccountStatus: schema.AccountStatusActive,
 		}
-		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(context.Background(), tnt)
 
 		circleConfigModel := circle.NewClientConfigModel(dbConnectionPool)
 		err := circleConfigModel.Upsert(context.Background(), circle.ClientConfigUpdate{
@@ -270,7 +271,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 			DistributionAccountType:    schema.DistributionAccountStellarEnv,
 			DistributionAccountStatus:  schema.AccountStatusActive,
 		}
-		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), ctxTenant)
+		ctxWithTenant := sdpcontext.SetTenantInContext(context.Background(), ctxTenant)
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.NoError(t, err)

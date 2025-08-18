@@ -18,8 +18,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
@@ -54,7 +54,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("getting tenant from context: %w", err)
 	}

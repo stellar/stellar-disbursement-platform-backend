@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
@@ -148,7 +149,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			} else {
 				mDistAccResolver.
 					On("DistributionAccountFromContext", ctx).
-					Return(schema.TransactionAccount{}, tenant.ErrTenantNotFoundInContext).
+					Return(schema.TransactionAccount{}, sdpcontext.ErrTenantNotFoundInContext).
 					Once()
 			}
 			tc.s.DistributionAccountResolver = mDistAccResolver

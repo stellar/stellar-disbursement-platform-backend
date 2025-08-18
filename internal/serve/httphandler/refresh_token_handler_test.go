@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -44,7 +44,7 @@ func Test_RefreshTokenHandler(t *testing.T) {
 	})
 
 	t.Run("returns BadRequest when token is expired", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		w := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
@@ -67,7 +67,7 @@ func Test_RefreshTokenHandler(t *testing.T) {
 	})
 
 	t.Run("returns InternalServerError when AuthManager fails", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		w := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
@@ -90,7 +90,7 @@ func Test_RefreshTokenHandler(t *testing.T) {
 	})
 
 	t.Run("returns the refreshed token", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		w := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)

@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_Message_Validate(t *testing.T) {
@@ -75,7 +75,7 @@ func Test_NewPaymentReadyToPayMessage(t *testing.T) {
 	key := "test-key"
 	messageType := "test-type"
 
-	ctxWithTenant := tenant.SaveTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
+	ctxWithTenant := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	t.Run("unsupported platform", func(t *testing.T) {
 		_, err := NewPaymentReadyToPayMessage(ctxWithTenant, "unsupported-platform", key, messageType)

@@ -9,7 +9,7 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/go/support/log"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 )
 
 // tokenRefreshWindow is the time window in minutes that we allow to refresh a token. If the token is going to expire in
@@ -78,7 +78,7 @@ func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expir
 	}
 
 	// TODO: Always throw this error after migrations are merged [SDP-953]
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		log.Ctx(ctx).Error(err)
 	} else {

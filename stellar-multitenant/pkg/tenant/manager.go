@@ -17,19 +17,17 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var (
-	ErrTenantDoesNotExist      = errors.New("tenant does not exist")
-	ErrDuplicatedTenantName    = errors.New("duplicated tenant name")
-	ErrEmptyTenantName         = errors.New("tenant name cannot be empty")
-	ErrEmptyUpdateTenant       = errors.New("provide at least one field to be updated")
-	ErrTenantNotFoundInContext = errors.New("tenant not found in context")
-	ErrTooManyDefaultTenants   = errors.New("too many default tenants. Expected at most one default tenant")
+	ErrTenantDoesNotExist    = errors.New("tenant does not exist")
+	ErrDuplicatedTenantName  = errors.New("duplicated tenant name")
+	ErrEmptyTenantName       = errors.New("tenant name cannot be empty")
+	ErrEmptyUpdateTenant     = errors.New("provide at least one field to be updated")
+	ErrTooManyDefaultTenants = errors.New("too many default tenants. Expected at most one default tenant")
 )
-
-type tenantContextKey struct{}
 
 type ManagerInterface interface {
 	GetDSNForTenant(ctx context.Context, tenantName string) (string, error)
@@ -452,18 +450,9 @@ func (*Manager) updateDistributionAccountFields(ctx context.Context, tu *TenantU
 	return fields, args
 }
 
-// GetTenantFromContext retrieves the tenant information from the context.
-func GetTenantFromContext(ctx context.Context) (*schema.Tenant, error) {
-	currentTenant, ok := ctx.Value(tenantContextKey{}).(*schema.Tenant)
-	if !ok {
-		return nil, ErrTenantNotFoundInContext
-	}
-	return currentTenant, nil
-}
-
 // GenerateMemoForTenant generates a memo for the tenant based on its base URL.
 func GenerateMemoForTenant(ctx context.Context) (schema.Memo, error) {
-	tnt, err := GetTenantFromContext(ctx)
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return schema.Memo{}, fmt.Errorf("getting tenant: %w", err)
 	}
@@ -490,11 +479,6 @@ func GenerateHashFromBaseURL(baseURL string) string {
 
 	hash := sha256.Sum256([]byte(baseURL))
 	return "sdp-" + hex.EncodeToString(hash[:])[:12]
-}
-
-// SaveTenantInContext stores the tenant information in the context.
-func SaveTenantInContext(ctx context.Context, t *schema.Tenant) context.Context {
-	return context.WithValue(ctx, tenantContextKey{}, t)
 }
 
 func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (string, []any) {

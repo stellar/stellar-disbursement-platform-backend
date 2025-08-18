@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ServiceOptions_Validate(t *testing.T) {
@@ -491,7 +491,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 		ID:      "test-tenant",
 		BaseURL: utils.Ptr("https://example.com"),
 	}
-	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 
 	t.Run("integration not found", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)

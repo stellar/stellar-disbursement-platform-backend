@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
@@ -173,7 +174,7 @@ func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerCli
 		}
 		for _, t := range tenants {
 			log.Ctx(ctx).Debugf("Processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
-			tenantCtx := tenant.SaveTenantInContext(ctx, &t)
+			tenantCtx := sdpcontext.SetTenantInContext(ctx, &t)
 			if err = job.Execute(tenantCtx); err != nil {
 				msg := fmt.Sprintf("error processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
 				crashTrackerClient.LogAndReportErrors(tenantCtx, err, msg)
