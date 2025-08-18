@@ -234,10 +234,6 @@ sdp:
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
       CIRCLE_API_TYPE: "TRANSFERS"
 
-      ## Anchor Platform configuration
-      ## @param sdp.configMap.data.ENABLE_ANCHOR_PLATFORM Enable Anchor Platform integration for SEP-1 TOML file. When true, SEP-1 TOML points to anchor platform URLs. When false, points to SDP SEP10/SEP24 URLs.
-      ENABLE_ANCHOR_PLATFORM: "false"
-
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
   ## @param sdp.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
@@ -353,6 +349,8 @@ sdp:
         ## Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints instead.
         ## @descriptionEnd
 anchorPlatform:
+  ## @param anchorPlatform.enabled If true, the Anchor Platform will be deployed.
+  enabled: true
 
   ## @extra anchorPlatform.route Configuration related to the routing of the Anchor Platform service.
   ## @param anchorPlatform.route.schema Protocol scheme used for the service. Can be "http" or "https".
