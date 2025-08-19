@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
 func Test_APIKey_HasPermission(t *testing.T) {
@@ -421,85 +422,194 @@ func Test_APIKeyModel_Update(t *testing.T) {
 	}
 }
 
-func Test_APIKeyModel_ValidateRawKey(t *testing.T) {
+func Test_APIKeyModel_ValidateRawKeyAndUpdateLastUsed(t *testing.T) {
 	t.Parallel()
 
-	pool := getConnectionPool(t)
+	pool := testutils.GetDBConnectionPool(t)
 	models, err := NewModels(pool)
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	creator := "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
-	otherUser := "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+	creator := "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+	otherUser := "ffffffff-ffff-4fff-8fff-ffffffffffff"
 
 	expiryFut := time.Now().Add(1 * time.Hour)
 	valid := createAPIKeyFixture(
 		t, ctx, pool,
-		"Ahriman", []APIKeyPermission{ReadStatistics},
+		"Magnus", []APIKeyPermission{ReadStatistics},
 		[]string{"127.0.0.1"}, &expiryFut, creator,
 	)
 
 	expiryPast := time.Now().Add(-1 * time.Hour)
 	expired := createAPIKeyFixture(
 		t, ctx, pool,
-		"Vulkan", []APIKeyPermission{ReadStatistics},
+		"Leman", []APIKeyPermission{ReadStatistics},
 		nil, &expiryPast, otherUser,
 	)
 
+	// Create a key with no expiry
+	noExpiry := createAPIKeyFixture(
+		t, ctx, pool,
+		"Rogal", []APIKeyPermission{ReadExports},
+		[]string{"192.168.1.1"}, nil, creator,
+	)
+
 	tests := []struct {
-		name   string
-		raw    string
-		wantID string
-		errMsg string
+		name           string
+		raw            string
+		wantID         string
+		wantLastUsedAt bool // whether we expect last_used_at to be updated
+		errMsg         string
+		description    string
 	}{
 		{
-			name:   "valid future key",
-			raw:    valid.Key,
-			wantID: valid.ID,
+			name:           "valid future key - should update last_used_at",
+			raw:            valid.Key,
+			wantID:         valid.ID,
+			wantLastUsedAt: true,
+			description:    "Valid key with future expiry should be accepted and last_used_at updated",
 		},
 		{
-			name:   "invalid prefix",
-			raw:    "CHS_" + strings.TrimPrefix(valid.Key, APIKeyPrefix),
-			errMsg: "invalid API key prefix",
+			name:           "valid key with no expiry - should update last_used_at",
+			raw:            noExpiry.Key,
+			wantID:         noExpiry.ID,
+			wantLastUsedAt: true,
+			description:    "Valid key with no expiry should be accepted and last_used_at updated",
 		},
 		{
-			name:   "invalid format",
-			raw:    APIKeyPrefix + "." + strings.TrimPrefix(valid.Key, APIKeyPrefix),
-			errMsg: "invalid API key format",
+			name:           "invalid prefix - should not update last_used_at",
+			raw:            "CHS_" + strings.TrimPrefix(valid.Key, APIKeyPrefix),
+			errMsg:         "invalid API key prefix",
+			wantLastUsedAt: false,
+			description:    "Key with wrong prefix should be rejected and last_used_at not updated",
 		},
 		{
-			name:   "non-existent ID",
-			raw:    fmt.Sprintf("%s%s.%s", APIKeyPrefix, "00000000-0000-0000-0000-000000000000", "anykey"),
-			errMsg: "no rows in result set",
+			name:           "invalid format - should not update last_used_at",
+			raw:            APIKeyPrefix + "." + strings.TrimPrefix(valid.Key, APIKeyPrefix),
+			errMsg:         "invalid API key format",
+			wantLastUsedAt: false,
+			description:    "Key with wrong format should be rejected and last_used_at not updated",
 		},
 		{
-			name:   "wrong secret",
-			raw:    fmt.Sprintf("%s%s.%s", APIKeyPrefix, valid.ID, "WrongSecret"),
-			errMsg: "invalid API key",
+			name:           "non-existent ID - should not update last_used_at",
+			raw:            fmt.Sprintf("%s%s.%s", APIKeyPrefix, "00000000-0000-0000-0000-000000000000", "anykey"),
+			errMsg:         "API key not found",
+			wantLastUsedAt: false,
+			description:    "Non-existent key ID should be rejected and last_used_at not updated",
 		},
 		{
-			name:   "expired key",
-			raw:    expired.Key,
-			errMsg: "API key expired",
+			name:           "wrong secret - should not update last_used_at",
+			raw:            fmt.Sprintf("%s%s.%s", APIKeyPrefix, valid.ID, "WrongSecret"),
+			errMsg:         "invalid API key",
+			wantLastUsedAt: false,
+			description:    "Key with wrong secret should be rejected and last_used_at not updated",
+		},
+		{
+			name:           "expired key - should not update last_used_at",
+			raw:            expired.Key,
+			errMsg:         "API key expired",
+			wantLastUsedAt: false,
+			description:    "Expired key should be rejected and last_used_at not updated",
+		},
+		{
+			name:           "empty string - should not update last_used_at",
+			raw:            "",
+			errMsg:         "invalid API key prefix",
+			wantLastUsedAt: false,
+			description:    "Empty string should be rejected and last_used_at not updated",
+		},
+		{
+			name:           "just prefix - should not update last_used_at",
+			raw:            APIKeyPrefix,
+			errMsg:         "invalid API key format",
+			wantLastUsedAt: false,
+			description:    "Just prefix should be rejected and last_used_at not updated",
+		},
+		{
+			name:           "prefix with dot - should not update last_used_at",
+			raw:            APIKeyPrefix + ".",
+			errMsg:         "API key not found",
+			wantLastUsedAt: false,
+			description:    "Prefix with dot should be rejected and last_used_at not updated",
+		},
+		{
+			name:           "prefix with id only - should not update last_used_at",
+			raw:            APIKeyPrefix + valid.ID,
+			errMsg:         "invalid API key format",
+			wantLastUsedAt: false,
+			description:    "Prefix with ID only should be rejected and last_used_at not updated",
+		},
+		{
+			name:           "prefix with id and dot - should not update last_used_at",
+			raw:            APIKeyPrefix + valid.ID + ".",
+			errMsg:         "invalid API key",
+			wantLastUsedAt: false,
+			description:    "Prefix with ID and dot should be rejected and last_used_at not updated",
+		},
+		{
+			name:           "too many parts - should not update last_used_at",
+			raw:            APIKeyPrefix + valid.ID + ".secret.extra",
+			errMsg:         "invalid API key format",
+			wantLastUsedAt: false,
+			description:    "Key with too many parts should be rejected and last_used_at not updated",
 		},
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := models.APIKeys.ValidateRawKey(ctx, tc.raw)
+
+			// Get initial last_used_at value
+			var initialLastUsedAt *time.Time
+			if tc.wantID != "" {
+				key, err := models.APIKeys.GetByID(ctx, tc.wantID, creator)
+				require.NoError(t, err)
+				initialLastUsedAt = key.LastUsedAt
+			}
+
+			// Record timestamp before the operation for comparison
+			beforeOperation := time.Now().UTC()
+
+			got, err := models.APIKeys.ValidateRawKeyAndUpdateLastUsed(ctx, tc.raw)
 			if tc.errMsg != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.errMsg)
+				require.Error(t, err, tc.description)
+				assert.Contains(t, err.Error(), tc.errMsg, "Error message should contain expected text")
+
+				// Verify last_used_at was NOT updated for invalid keys
+				if tc.wantID != "" {
+					key, getErr := models.APIKeys.GetByID(ctx, tc.wantID, creator)
+					require.NoError(t, getErr)
+					assert.Equal(t, initialLastUsedAt, key.LastUsedAt, "last_used_at should not be updated for invalid keys")
+				}
 				return
 			}
-			require.NoError(t, err)
-			assert.Equal(t, tc.wantID, got.ID)
-			assert.ElementsMatch(t, valid.Permissions, got.Permissions)
-			assert.ElementsMatch(t, valid.AllowedIPs, got.AllowedIPs)
-			assert.WithinDuration(t, *valid.ExpiryDate, *got.ExpiryDate, time.Second)
+
+			require.NoError(t, err, tc.description)
+			assert.Equal(t, tc.wantID, got.ID, "Returned key should have correct ID")
+
+			// Verify the returned key has the expected properties
+			switch tc.wantID {
+			case valid.ID:
+				assert.ElementsMatch(t, valid.Permissions, got.Permissions, "Permissions should match")
+				assert.ElementsMatch(t, valid.AllowedIPs, got.AllowedIPs, "Allowed IPs should match")
+				assert.WithinDuration(t, *valid.ExpiryDate, *got.ExpiryDate, time.Second, "Expiry date should match")
+			case noExpiry.ID:
+				assert.ElementsMatch(t, noExpiry.Permissions, got.Permissions, "Permissions should match")
+				assert.ElementsMatch(t, noExpiry.AllowedIPs, got.AllowedIPs, "Allowed IPs should match")
+				assert.Nil(t, got.ExpiryDate, "Expiry date should be nil")
+			}
+
+			// Verify last_used_at was updated for valid keys
+			if tc.wantLastUsedAt {
+				assert.NotNil(t, got.LastUsedAt, "last_used_at should be updated for valid keys")
+				// Allow for small timing differences between Go time.Now() and database NOW()
+				assert.WithinDuration(t, beforeOperation, *got.LastUsedAt, 5*time.Second,
+					"last_used_at should be within reasonable range of operation time")
+				if initialLastUsedAt != nil {
+					assert.True(t, got.LastUsedAt.After(*initialLastUsedAt), "last_used_at should be more recent than before")
+				}
+			}
 		})
 	}
 }
