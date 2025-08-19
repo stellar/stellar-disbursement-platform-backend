@@ -365,8 +365,7 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 	}
 	id, secret := parts[0], parts[1]
 
-	var result *APIKey
-	if err := db.RunInTransaction(ctx, m.dbConnectionPool, nil, func(tx db.DBTransaction) error {
+	result, err := db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(tx db.DBTransaction) (*APIKey, error) {
 		// 2) Fetch data and update last_used_at
 		const selectQ = `
 		SELECT 
@@ -388,7 +387,7 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 			&a.Permissions, &a.AllowedIPs, &a.CreatedBy, &a.LastUsedAt,
 		)
 		if err != nil {
-			return fmt.Errorf("API key not found: %w", err)
+			return nil, fmt.Errorf("API key not found: %w", err)
 		}
 
 		// 3) Verify hash
@@ -397,14 +396,14 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 		h.Write([]byte(secret))
 		computed := hex.EncodeToString(h.Sum(nil))
 		if subtle.ConstantTimeCompare([]byte(computed), []byte(a.KeyHash)) != 1 {
-			return fmt.Errorf("invalid API key")
+			return nil, fmt.Errorf("invalid API key")
 		}
 
 		if a.ExpiryDate != nil && time.Now().UTC().After(*a.ExpiryDate) {
-			return fmt.Errorf("API key expired")
+			return nil, fmt.Errorf("API key expired")
 		}
 
-		// 4) Check expiry
+		// 4) Update last_used_at
 		const updateQ = `
 			UPDATE api_keys 
 			SET last_used_at = NOW() 
@@ -416,12 +415,12 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 			&a.ID, &a.KeyHash, &a.Salt, &a.ExpiryDate,
 			&a.Permissions, &a.AllowedIPs, &a.CreatedBy, &a.LastUsedAt,
 		); err != nil {
-			return fmt.Errorf("failed to update last_used_at: %w", err)
+			return nil, fmt.Errorf("failed to update last_used_at: %w", err)
 		}
-		result = &a
 
-		return nil
-	}); err != nil {
+		return &a, nil
+	})
+	if err != nil {
 		return nil, fmt.Errorf("validating and updating API key: %w", err)
 	}
 

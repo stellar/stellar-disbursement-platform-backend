@@ -557,7 +557,6 @@ func Test_APIKeyModel_ValidateRawKeyAndUpdateLastUsed(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -605,9 +604,8 @@ func Test_APIKeyModel_ValidateRawKeyAndUpdateLastUsed(t *testing.T) {
 			if tc.wantLastUsedAt {
 				assert.NotNil(t, got.LastUsedAt, "last_used_at should be updated for valid keys")
 				// Allow for small timing differences between Go time.Now() and database NOW()
-				timeDiff := got.LastUsedAt.Sub(beforeOperation)
-				assert.True(t, timeDiff >= -time.Second && timeDiff <= 5*time.Second,
-					"last_used_at should be within reasonable range of operation time (got diff: %v)", timeDiff)
+				assert.WithinDuration(t, beforeOperation, *got.LastUsedAt, 5*time.Second,
+					"last_used_at should be within reasonable range of operation time")
 				if initialLastUsedAt != nil {
 					assert.True(t, got.LastUsedAt.After(*initialLastUsedAt), "last_used_at should be more recent than before")
 				}
