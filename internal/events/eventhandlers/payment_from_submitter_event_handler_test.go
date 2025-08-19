@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -60,7 +61,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 			TransactionID: "tx-id",
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		service.
 			On("SyncTransaction", ctxWithTenant, &tx).
@@ -84,7 +85,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 			TransactionID: "tx-id",
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		service.
 			On("SyncTransaction", ctxWithTenant, &tx).

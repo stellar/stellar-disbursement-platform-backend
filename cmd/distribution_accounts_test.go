@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -37,7 +38,7 @@ func Test_DistributionAccountCommand_RotateCommand(t *testing.T) {
 	tenantName := "tenant1"
 	tenant.PrepareDBForTenant(t, dbt, tenantName)
 	testTenant := tenant.CreateTenantFixture(t, ctx, adminDBConnectionPool, tenantName, oldAccount.Address)
-	ctx = tenant.SaveTenantInContext(ctx, testTenant)
+	ctx = sdpcontext.SetTenantInContext(ctx, testTenant)
 
 	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
 

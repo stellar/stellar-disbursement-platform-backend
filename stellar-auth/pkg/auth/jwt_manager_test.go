@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 // NEVER use these values in production!
@@ -31,7 +31,7 @@ func Test_DefaultJWTManager_GenerateToken(t *testing.T) {
 		Name: "tenant-name",
 	}
 
-	ctx := tenant.SaveTenantInContext(context.Background(), &currentTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &currentTenant)
 
 	t.Run("returns error when the EC Private Key is invalid", func(t *testing.T) {
 		jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, "invalid"))
@@ -66,7 +66,7 @@ func Test_DefaultJWTManager_ValidateToken(t *testing.T) {
 		Name: "tenant-name",
 	}
 
-	ctx := tenant.SaveTenantInContext(context.Background(), &currentTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &currentTenant)
 
 	t.Run("returns false when token has a invalid signature", func(t *testing.T) {
 		invalidSignatureToken := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoidXNlci1pZCIsImVtYWlsIjoiZW1haWxAZW1haWwuY29tIiwicm9sZXMiOlt7Im5hbWUiOiJTdXBlcnZpc29yIn1dfSwiZXhwIjoxNjc1OTYyOTQ3fQ.zK9Jb5EMl5rOTOO18SM-q_WOtD0TbL0f9cFfilW9tWHa_vjVMEaf6xRjold9dTPLICDBrqdw_luhKlT370EAiA"
@@ -115,7 +115,7 @@ func Test_DefaultJWTManager_RefreshToken(t *testing.T) {
 		Name: "tenant-name",
 	}
 
-	ctx := tenant.SaveTenantInContext(context.Background(), &currentTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &currentTenant)
 
 	t.Run("returns the same token when is above the refresh period", func(t *testing.T) {
 		expiresAt := time.Now().Add(time.Minute * (tokenRefreshWindow + 1))
@@ -148,7 +148,7 @@ func Test_DefaultJWTManager_parseToken(t *testing.T) {
 		Name: "tenant-name",
 	}
 
-	ctx := tenant.SaveTenantInContext(context.Background(), &currentTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &currentTenant)
 
 	t.Run("returns error when the EC Public Key is invalid", func(t *testing.T) {
 		jwtManager := newDefaultJWTManager(withECKeypair("invalid", testPrivateKey))
@@ -194,7 +194,7 @@ func Test_DefaultJWTManager_GetUserFromToken(t *testing.T) {
 		Name: "tenant-name",
 	}
 
-	ctx := tenant.SaveTenantInContext(context.Background(), &currentTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &currentTenant)
 
 	jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
 

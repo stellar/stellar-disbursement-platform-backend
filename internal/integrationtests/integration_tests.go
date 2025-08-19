@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -156,7 +157,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	if err != nil {
 		return fmt.Errorf("getting tenant %s from database: %w", opts.TenantName, err)
 	}
-	ctx = tenant.SaveTenantInContext(ctx, t)
+	ctx = sdpcontext.SetTenantInContext(ctx, t)
 
 	log.Ctx(ctx).Info("Login user to get server API auth token")
 	authToken, err := it.serverAPI.Login(ctx)
@@ -374,7 +375,7 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		return fmt.Errorf("creating tenant: %w", err)
 	}
 
-	ctx = tenant.SaveTenantInContext(ctx, t)
+	ctx = sdpcontext.SetTenantInContext(ctx, t)
 
 	// 2. Reset password for the user
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(opts.UserPassword), bcrypt.DefaultCost)

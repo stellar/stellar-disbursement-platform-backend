@@ -16,13 +16,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
@@ -30,7 +30,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 	// add tenant to context
 	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Name"}
-	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
 
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
 	nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
@@ -376,7 +376,7 @@ func Test_PaymentToSubmitterService_SendMixedPayments(t *testing.T) {
 	tssModel := txSubStore.NewTransactionModel(dbConnectionPool)
 
 	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Name"}
-	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "MixWallet", "https://mix.com", "mix.com", "mix://")
 
@@ -466,7 +466,7 @@ func Test_PaymentToSubmitterService_SendDirectPayments(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(dbConnectionPool)
 	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Name"}
-	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
 	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "DirectWallet", "https://direct.com", "direct.com", "direct://")
 

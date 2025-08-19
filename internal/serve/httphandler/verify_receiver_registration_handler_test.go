@@ -29,13 +29,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
@@ -596,7 +596,7 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 
 	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1520,7 +1520,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				tnt := schema.Tenant{ID: "tenant-id"}
-				ctx = tenant.SaveTenantInContext(ctx, &tnt)
+				ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 
 				// update database with the entries needed
 				defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)

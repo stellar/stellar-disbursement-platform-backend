@@ -9,8 +9,8 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 const (
@@ -48,7 +48,7 @@ func (d paymentFromSubmitterJob) IsJobMultiTenant() bool {
 }
 
 func (d paymentFromSubmitterJob) Execute(ctx context.Context) error {
-	t, err := tenant.GetTenantFromContext(ctx)
+	t, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting tenant from context for %s: %w", paymentFromSubmitterJobName, err)
 	}

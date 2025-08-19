@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func GetUserFromContext(ctx context.Context, authManager auth.AuthManager) (*auth.User, error) {
-	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
-	if !ok || userID == "" {
-		return nil, errors.New("user ID not found in context")
+	userID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	user, err := authManager.GetUserByID(ctx, userID)

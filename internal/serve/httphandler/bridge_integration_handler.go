@@ -15,12 +15,12 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // BridgeIntegrationHandler handles Bridge integration endpoints.
@@ -199,7 +199,7 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 
 // resolveRedirectURL resolves the redirect URL for the Bridge integration based on the tenant's SDP UI Base URL.
 func resolveRedirectURL(ctx context.Context) (*url.URL, error) {
-	t, err := tenant.GetTenantFromContext(ctx)
+	t, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting tenant from context: %w", err)
 	}

@@ -17,8 +17,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type RetryInvitationMessageResponse struct {
@@ -65,7 +65,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 			return
 		}
 
-		if errors.Is(err, tenant.ErrTenantNotFoundInContext) {
+		if errors.Is(err, sdpcontext.ErrTenantNotFoundInContext) {
 			httperror.Forbidden("", err, nil).Render(rw)
 			return
 		}

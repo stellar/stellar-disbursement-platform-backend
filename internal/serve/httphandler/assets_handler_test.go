@@ -30,6 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -37,7 +38,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 var defaultPreconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
@@ -121,7 +121,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
 			DistributionAccountStatus:  schema.AccountStatusActive,
 		}
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		distAccount := schema.TransactionAccount{
 			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
@@ -188,7 +188,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
 			DistributionAccountStatus:  schema.AccountStatusActive,
 		}
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		distAccount := schema.TransactionAccount{
 			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
@@ -254,7 +254,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
 			DistributionAccountStatus:  schema.AccountStatusActive,
 		}
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		distAccount := schema.TransactionAccount{
 			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
@@ -301,7 +301,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
 			DistributionAccountStatus:  schema.AccountStatusActive,
 		}
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		distAccount := schema.TransactionAccount{
 			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",

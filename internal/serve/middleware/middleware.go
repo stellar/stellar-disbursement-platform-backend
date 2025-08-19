@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"crypto/subtle"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -24,12 +24,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-type ContextKey string
-
 const (
-	TokenContextKey  ContextKey = "auth_token"
-	UserIDContextKey ContextKey = "user_id"
-	TenantHeaderKey  string     = "SDP-Tenant-Name"
+	TenantHeaderKey string = "SDP-Tenant-Name"
 )
 
 // RecoverHandler is a middleware that recovers from panics and logs the error.
@@ -114,15 +110,15 @@ func AuthenticateMiddleware(authManager auth.AuthManager, tenantManager tenant.M
 			}
 
 			// Add the token to the request context
-			ctx = context.WithValue(ctx, TokenContextKey, token)
-			ctx = context.WithValue(ctx, UserIDContextKey, userID)
+			ctx = sdpcontext.SetTokenInContext(ctx, token)
+			ctx = sdpcontext.SetUserIDInContext(ctx, userID)
 
 			// Attempt fetching tenant ID from token
 			tenantID, err := authManager.GetTenantID(ctx, token)
 			if err == nil && tenantID != "" {
 				currentTenant, tenantErr := tenantManager.GetTenantByID(ctx, tenantID)
 				if tenantErr == nil && currentTenant != nil {
-					ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+					ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
 				}
 			}
 
@@ -143,8 +139,8 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
-			token, ok := ctx.Value(TokenContextKey).(string)
-			if !ok {
+			token, err := sdpcontext.GetTokenFromContext(ctx)
+			if err != nil {
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
@@ -209,7 +205,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		}
 		logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
 
-		ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
+		ctxTenant, err := sdpcontext.GetTenantFromContext(reqCtx)
 		if err != nil {
 			// Log for auditing purposes when we cannot derive the tenant from the context in the case of
 			// tenant-unaware endpoints
@@ -327,7 +323,7 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 			}
 
 			if currentTenant != nil {
-				ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+				ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
 				next.ServeHTTP(rw, req.WithContext(ctx))
 			} else {
 				next.ServeHTTP(rw, req)
@@ -341,7 +337,7 @@ func EnsureTenantMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
 
-		if _, err := tenant.GetTenantFromContext(ctx); err != nil {
+		if _, err := sdpcontext.GetTenantFromContext(ctx); err != nil {
 			httperror.BadRequest("Tenant not found in context", err, nil).Render(rw)
 			return
 		}

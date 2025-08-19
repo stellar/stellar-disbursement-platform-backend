@@ -16,10 +16,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_NewPatchAnchorPlatformTransactionCompletionJob(t *testing.T) {
@@ -68,7 +68,7 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantInfo := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
 	apAPISvcMock := anchorplatform.AnchorPlatformAPIServiceMock{}
 	patchAnchorSvcMock := servicesMocks.MockPatchAnchorPlatformTransactionCompletionService{}

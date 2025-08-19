@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -113,7 +114,7 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, SEP24ClaimsContextKey, sep24Claims)
-			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+			ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)
@@ -169,7 +170,7 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, SEP24ClaimsContextKey, sep24Claims)
-			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+			ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -25,9 +26,9 @@ func NewMultiTenantDataSourceRouter(tenantManager ManagerInterface) *MultiTenant
 }
 
 func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBConnectionPool, error) {
-	currentTenant, err := GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
-		return nil, ErrTenantNotFoundInContext
+		return nil, sdpcontext.ErrTenantNotFoundInContext
 	}
 
 	return m.GetDataSourceForTenant(ctx, *currentTenant)

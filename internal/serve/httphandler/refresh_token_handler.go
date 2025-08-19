@@ -6,8 +6,8 @@ import (
 
 	"github.com/stellar/go/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -18,8 +18,8 @@ type RefreshTokenHandler struct {
 func (h RefreshTokenHandler) PostRefreshToken(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}

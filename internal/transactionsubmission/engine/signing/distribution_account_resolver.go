@@ -8,6 +8,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -71,14 +72,14 @@ func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Contex
 	if err != nil {
 		return schema.TransactionAccount{}, fmt.Errorf("getting tenant: %w", err)
 	}
-	tenant.SaveTenantInContext(ctx, tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, tnt)
 	return r.getDistributionAccount(ctx, tnt)
 }
 
 // DistributionAccountFromContext returns the tenant's distribution account from the tenant object stored in the context
 // provided.
 func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx context.Context) (schema.TransactionAccount, error) {
-	tnt, err := tenant.GetTenantFromContext(ctx)
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return schema.TransactionAccount{}, fmt.Errorf("getting tenant: %w", err)
 	}

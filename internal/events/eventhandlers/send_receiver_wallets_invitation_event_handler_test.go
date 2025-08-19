@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -65,7 +66,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 			{ReceiverWalletID: "rw-id-2"},
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		service.
 			On("SendInvite", ctxWithTenant, reqs).
@@ -90,7 +91,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 			{ReceiverWalletID: "rw-id-2"},
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		service.
 			On("SendInvite", ctxWithTenant, reqs).

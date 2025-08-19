@@ -12,15 +12,11 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
-type ctxKey string
-
-const (
-	APIKeyContextKey ctxKey = "api_key"
-	apiKeyCacheTTL          = 3 * time.Minute
-)
+const apiKeyCacheTTL = 3 * time.Minute
 
 type apiKeyAuthenticator struct {
 	model *data.APIKeyModel
@@ -96,14 +92,6 @@ func extractClientIP(r *http.Request) string {
 	return host
 }
 
-func setAPIKeyContext(r *http.Request, apiKey *data.APIKey) *http.Request {
-	ctx := r.Context()
-	ctx = context.WithValue(ctx, APIKeyContextKey, apiKey)
-	ctx = context.WithValue(ctx, UserIDContextKey, apiKey.CreatedBy)
-	ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", apiKey.CreatedBy))
-	return r.WithContext(ctx)
-}
-
 // APIKeyOrJWTAuthenticate first checks for an SDP_ key, then falls back to JWT.
 func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
 	auth := newAPIKeyAuthenticator(apiKeyModel)
@@ -128,7 +116,13 @@ func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Ha
 				return
 			}
 
-			next.ServeHTTP(w, setAPIKeyContext(r, apiKey))
+			// Set API key context
+			ctx := r.Context()
+			ctx = sdpcontext.SetAPIKeyInContext(ctx, apiKey)
+			ctx = sdpcontext.SetUserIDInContext(ctx, apiKey.CreatedBy)
+			ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", apiKey.CreatedBy))
+
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
@@ -138,7 +132,7 @@ func RequirePermission(perm data.APIKeyPermission, jwtCheck func(http.Handler) h
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// --- API key path ---
-			if apiKey, ok := r.Context().Value(APIKeyContextKey).(*data.APIKey); ok {
+			if apiKey, err := sdpcontext.GetAPIKeyFromContext(r.Context()); err == nil {
 				if !apiKey.HasPermission(perm) {
 					httperror.Forbidden("Insufficient API key permissions", nil, nil).Render(w)
 					return

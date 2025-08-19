@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -80,7 +81,7 @@ func (h *SendReceiverWalletsInvitationEventHandler) Handle(ctx context.Context, 
 		return fmt.Errorf("getting tenant by id %s: %w", message.TenantID, err)
 	}
 
-	ctx = tenant.SaveTenantInContext(ctx, t)
+	ctx = sdpcontext.SetTenantInContext(ctx, t)
 
 	if sendErr := h.service.SendInvite(ctx, receiverWalletInvitationData...); sendErr != nil {
 		return fmt.Errorf("sending receiver wallets invitation: %w", sendErr)

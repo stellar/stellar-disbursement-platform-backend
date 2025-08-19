@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -31,7 +32,7 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCannotRetrieveTenantByID, err)
 	}
-	ctx = tenant.SaveTenantInContext(ctx, tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, tnt)
 
 	// if attempting to deactivate tenant, need to check for a few conditions such as
 	// 1. whether tenant is already deactivated
