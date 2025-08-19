@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -59,7 +60,7 @@ func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*dat
 
 	apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validating API key %w", err)
 	}
 
 	if !apiKey.IsExpired() {
