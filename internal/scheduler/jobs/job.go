@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const DefaultMinimumJobIntervalSeconds = 5
+const DefaultMinimumJobIntervalSeconds = 1
 
 type Job interface {
 	Execute(context.Context) error
