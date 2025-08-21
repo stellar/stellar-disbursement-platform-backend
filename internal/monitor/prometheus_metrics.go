@@ -28,7 +28,7 @@ func PrometheusMetrics() map[MetricTag]prometheus.Collector {
 
 var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 	HttpRequestDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: "sdp", Subsystem: "http", Name: string(HttpRequestDurationTag),
+		Namespace: DefaultNamespace, Subsystem: string(HTTPSubservice), Name: string(HttpRequestDurationTag),
 		Help: "HTTP requests durations, sliding window = 10m",
 		Objectives: map[float64]float64{
 			0.5:  0.05,  // 50th percentile with 5% error
@@ -40,13 +40,13 @@ var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 		[]string{"status", "route", "method", "tenant_name"},
 	),
 	SuccessfulQueryDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: "sdp", Subsystem: "db", Name: string(SuccessfulQueryDurationTag),
+		Namespace: DefaultNamespace, Subsystem: string(DBSubservice), Name: string(SuccessfulQueryDurationTag),
 		Help: "Successful DB query durations",
 	},
 		[]string{"query_type"},
 	),
 	FailureQueryDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: "sdp", Subsystem: "db", Name: string(FailureQueryDurationTag),
+		Namespace: DefaultNamespace, Subsystem: string(DBSubservice), Name: string(FailureQueryDurationTag),
 		Help: "Failure DB query durations",
 	},
 		[]string{"query_type"},
@@ -55,18 +55,18 @@ var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 
 var CounterMetrics = map[MetricTag]prometheus.Counter{
 	AnchorPlatformAuthProtectionEnsuredCounterTag: prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "sdp", Subsystem: "anchor_platform", Name: string(AnchorPlatformAuthProtectionEnsuredCounterTag),
+		Namespace: DefaultNamespace, Subsystem: string(AnchorSubservice), Name: string(AnchorPlatformAuthProtectionEnsuredCounterTag),
 		Help: "A counter of how many times the anchor platform auth protection was ensured",
 	}),
 	AnchorPlatformAuthProtectionMissingCounterTag: prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "sdp", Subsystem: "anchor_platform", Name: string(AnchorPlatformAuthProtectionMissingCounterTag),
+		Namespace: DefaultNamespace, Subsystem: string(AnchorSubservice), Name: string(AnchorPlatformAuthProtectionMissingCounterTag),
 		Help: "A counter of how many times the anchor platform auth protection check revealed the AP is not protected",
 	}),
 }
 
 var HistogramVecMetrics = map[MetricTag]*prometheus.HistogramVec{
 	CircleAPIRequestDurationTag: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "sdp", Subsystem: "circle", Name: string(CircleAPIRequestDurationTag),
+		Namespace: DefaultNamespace, Subsystem: string(CircleSubservice), Name: string(CircleAPIRequestDurationTag),
 		Help: "A histogram of the Circle API request durations",
 	},
 		CircleLabelNames,
@@ -75,13 +75,13 @@ var HistogramVecMetrics = map[MetricTag]*prometheus.HistogramVec{
 
 var CounterVecMetrics = map[MetricTag]*prometheus.CounterVec{
 	DisbursementsCounterTag: prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "sdp", Subsystem: "business", Name: string(DisbursementsCounterTag),
+		Namespace: DefaultNamespace, Subsystem: string(BusinessSubservice), Name: string(DisbursementsCounterTag),
 		Help: "Disbursements Counter",
 	},
 		[]string{"asset", "wallet", "tenant_name"},
 	),
 	CircleAPIRequestsTotalTag: prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "sdp", Subsystem: "circle", Name: string(CircleAPIRequestsTotalTag),
+		Namespace: DefaultNamespace, Subsystem: string(CircleSubservice), Name: string(CircleAPIRequestsTotalTag),
 		Help: "A counter of the Circle API requests",
 	},
 		CircleLabelNames,

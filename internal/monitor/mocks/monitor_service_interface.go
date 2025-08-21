@@ -163,6 +163,11 @@ func (_m *MockMonitorService) MonitorHttpRequestDuration(duration time.Duration,
 	return r0
 }
 
+// RegisterFunctionMetric provides a mock function with given fields: metricType, opts
+func (_m *MockMonitorService) RegisterFunctionMetric(metricType monitor.FuncMetricType, opts monitor.FuncMetricOptions) {
+	_m.Called(metricType, opts)
+}
+
 // Start provides a mock function with given fields: opts
 func (_m *MockMonitorService) Start(opts monitor.MetricOptions) error {
 	ret := _m.Called(opts)
