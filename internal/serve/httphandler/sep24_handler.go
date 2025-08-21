@@ -1,7 +1,9 @@
 package httphandler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,10 +13,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+)
+
+const (
+	SEP24StatusIncomplete            = "incomplete"
+	SEP24StatusPendingUserInfoUpdate = "pending_user_info_update"
+	SEP24StatusCompleted             = "completed"
+	SEP24StatusError                 = "error"
+)
+
+const (
+	SEP24OperationKindDeposit = "deposit"
 )
 
 const (
@@ -73,6 +85,36 @@ type SEP24InteractiveResponse struct {
 	TransactionID string `json:"id"`
 }
 
+// generateMoreInfoURL creates a secure more_info_url with JWT token for SEP-24 transactions
+func (h SEP24Handler) generateMoreInfoURL(ctx context.Context, sep10Claims *anchorplatform.Sep10JWTClaims, transactionID, status string) (string, error) {
+	sep24Token, err := h.SEP24JWTManager.GenerateSEP24MoreInfoToken(
+		sep10Claims.Subject,
+		"",
+		sep10Claims.ClientDomain,
+		sep10Claims.HomeDomain,
+		transactionID,
+		"en",
+		map[string]string{
+			"kind":   SEP24OperationKindDeposit,
+			"status": status,
+		},
+	)
+	if err != nil {
+		log.Ctx(ctx).Errorf("Failed to generate SEP-24 more info token: %v", err)
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	baseURLParsed, err := url.Parse(h.InteractiveBaseURL)
+	if err != nil {
+		log.Ctx(ctx).Errorf("Failed to parse base URL %s: %v", h.InteractiveBaseURL, err)
+		return "", fmt.Errorf("failed to parse base URL: %w", err)
+	}
+
+	tenantBaseURL := fmt.Sprintf("%s://%s", baseURLParsed.Scheme, sep10Claims.HomeDomain)
+	return fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s&token=%s",
+		tenantBaseURL, transactionID, sep24Token), nil
+}
+
 func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -90,20 +132,22 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 
 	transaction := map[string]any{
 		"id":       transactionID,
-		"kind":     "deposit",
+		"kind":     SEP24OperationKindDeposit,
 		"refunded": false, // Always false for registration
 	}
 
 	receiverWallet, err := h.Models.ReceiverWallet.GetByAnchorPlatformTransactionID(ctx, transactionID)
-
 	if err != nil {
-		if err == data.ErrRecordNotFound {
-			transaction["status"] = "incomplete"
+		if errors.Is(err, data.ErrRecordNotFound) {
+			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
 
-			// Build more_info_url for incomplete transactions
-			transaction["more_info_url"] = fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s",
-				h.InteractiveBaseURL, transactionID)
+			moreInfoURL, err := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusIncomplete)
+			if err != nil {
+				httperror.InternalError(ctx, "Failed to generate more info URL", err, nil).Render(w)
+				return
+			}
+			transaction["more_info_url"] = moreInfoURL
 		} else {
 			log.Ctx(ctx).Errorf("Error fetching receiver wallet: %v", err)
 			httperror.InternalError(ctx, "Failed to get transaction", err, nil).Render(w)
@@ -112,7 +156,7 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	} else {
 		switch receiverWallet.Status {
 		case data.RegisteredReceiversWalletStatus:
-			transaction["status"] = "completed"
+			transaction["status"] = SEP24StatusCompleted
 			transaction["completed_at"] = receiverWallet.UpdatedAt.UTC().Format(time.RFC3339)
 			transaction["stellar_transaction_id"] = ""
 			transaction["to"] = receiverWallet.StellarAddress
@@ -121,11 +165,16 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 				transaction["deposit_memo_type"] = receiverWallet.StellarMemoType
 			}
 		case data.ReadyReceiversWalletStatus:
-			transaction["status"] = "pending_user_info_update"
-			transaction["more_info_url"] = fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s",
-				h.InteractiveBaseURL, transactionID)
+			transaction["status"] = SEP24StatusPendingUserInfoUpdate
+
+			moreInfoURL, err := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
+			if err != nil {
+				httperror.InternalError(ctx, "Failed to generate more info URL", err, nil).Render(w)
+				return
+			}
+			transaction["more_info_url"] = moreInfoURL
 		default:
-			transaction["status"] = "error"
+			transaction["status"] = SEP24StatusError
 		}
 
 		transaction["started_at"] = receiverWallet.CreatedAt.UTC().Format(time.RFC3339)

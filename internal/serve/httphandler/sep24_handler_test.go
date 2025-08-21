@@ -25,8 +25,13 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 	t.Parallel()
 	models := data.SetupModels(t)
 	ctx := context.Background()
+
+	jwtManager, err := anchorplatform.NewJWTManager("test_secret_1234567890", 15000)
+	require.NoError(t, err)
+
 	handler := &SEP24Handler{
 		Models:             models,
+		SEP24JWTManager:    jwtManager,
 		InteractiveBaseURL: "https://example.com",
 	}
 
@@ -37,6 +42,8 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 				ID:      "jti-123",
 			},
+			ClientDomain: "example.com",
+			HomeDomain:   "example.com",
 		}
 
 		rr := httptest.NewRecorder()
@@ -59,6 +66,8 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 				ID:      "jti-123",
 			},
+			ClientDomain: "example.com",
+			HomeDomain:   "example.com",
 		}
 
 		rr := httptest.NewRecorder()
@@ -77,7 +86,8 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.Equal(t, "deposit", transaction["kind"])
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "incomplete", transaction["status"])
-		assert.Contains(t, transaction["more_info_url"], "https://example.com/wallet-registration/start?transaction_id=non-existent-id")
+		moreInfoURL := transaction["more_info_url"].(string)
+		assert.Contains(t, moreInfoURL, "https://example.com/wallet-registration/start?transaction_id=non-existent-id&token=")
 		assert.NotEmpty(t, transaction["started_at"])
 	})
 
@@ -102,6 +112,8 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 				ID:      "jti-123",
 			},
+			ClientDomain: "example.com",
+			HomeDomain:   "example.com",
 		}
 
 		rr := httptest.NewRecorder()
@@ -146,6 +158,8 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 				ID:      "jti-123",
 			},
+			ClientDomain: "example.com",
+			HomeDomain:   "example.com",
 		}
 
 		rr := httptest.NewRecorder()
@@ -164,7 +178,8 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.Equal(t, "deposit", transaction["kind"])
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "pending_user_info_update", transaction["status"])
-		assert.Contains(t, transaction["more_info_url"], "https://example.com/wallet-registration/start?transaction_id=test-transaction-id-2")
+		moreInfoURL := transaction["more_info_url"].(string)
+		assert.Contains(t, moreInfoURL, "https://example.com/wallet-registration/start?transaction_id=test-transaction-id-2&token=")
 		assert.NotEmpty(t, transaction["started_at"])
 	})
 
@@ -186,6 +201,8 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 				ID:      "jti-123",
 			},
+			ClientDomain: "example.com",
+			HomeDomain:   "example.com",
 		}
 
 		rr := httptest.NewRecorder()

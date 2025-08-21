@@ -1,6 +1,7 @@
 package anchorplatform
 
 import (
+	"maps"
 	"fmt"
 	"strings"
 	"time"
@@ -94,6 +95,41 @@ func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clien
 	token, err := manager.signToken(claims)
 	if err != nil {
 		return "", fmt.Errorf("generating SEP24 token: %w", err)
+	}
+	return token, nil
+}
+
+// GenerateSEP24MoreInfoToken will generate a JWT token string for more info URLs with transaction data.
+// This matches the original Anchor Platform implementation for more info URL generation.
+func (manager *JWTManager) GenerateSEP24MoreInfoToken(stellarAccount, stellarMemo, clientDomain, homeDomain, transactionID, lang string, transactionData map[string]string) (string, error) {
+	subject := stellarAccount
+	if stellarMemo != "" {
+		subject = fmt.Sprintf("%s:%s", stellarAccount, stellarMemo)
+	}
+
+	// Prepare transaction data including language
+	data := make(map[string]string)
+	if lang != "" {
+		data["lang"] = lang
+	}
+
+	// Add provided transaction data
+	maps.Copy(data, transactionData)
+
+	claims := SEP24JWTClaims{
+		ClientDomainClaim: clientDomain,
+		HomeDomainClaim:   homeDomain,
+		TransactionData:   data,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        transactionID,
+			Subject:   subject,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Millisecond * time.Duration(manager.expirationMiliseconds))),
+		},
+	}
+
+	token, err := manager.signToken(claims)
+	if err != nil {
+		return "", fmt.Errorf("generating SEP24 more info token: %w", err)
 	}
 	return token, nil
 }
