@@ -4,6 +4,16 @@
 
 Check out the [Stellar Contribution Guide](https://github.com/stellar/.github/blob/master/CONTRIBUTING.md) that applies to all Stellar projects.
 
+## Contribution Quality Standards
+
+We welcome meaningful contributions that add real value to the project. To maintain code quality and project integrity, please note:
+
+* **No trivial contributions for credit farming** - We do not accept PRs that make minimal changes solely to gain contribution credits or build activity history (e.g., whitespace-only changes, single character fixes, unnecessary formatting changes).
+* **Substantial contributions only** - All contributions should address real issues, add meaningful functionality, or provide genuine improvements to the codebase.
+* **Genuine engagement** - Contributors should demonstrate understanding of the codebase and the problem they're solving.
+
+Contributions that appear to be made solely for gaining credits or building fake activity may be closed without review.
+
 ## Style guides
 
 ### Issues
