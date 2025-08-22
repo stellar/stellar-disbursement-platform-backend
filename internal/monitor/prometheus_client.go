@@ -12,6 +12,7 @@ import (
 
 type prometheusClient struct {
 	httpHandler http.Handler
+	registry    *prometheus.Registry
 }
 
 func (p *prometheusClient) GetMetricType() MetricType {
@@ -64,6 +65,36 @@ func (p *prometheusClient) MonitorHistogram(value float64, tag MetricTag, labels
 	histogram.With(labels).Observe(value)
 }
 
+func (p *prometheusClient) RegisterFunctionMetric(metricType FuncMetricType, opts FuncMetricOptions) {
+	var metric prometheus.Collector
+
+	switch metricType {
+	case FuncGaugeType:
+		metric = prometheus.NewGaugeFunc(
+			prometheus.GaugeOpts{
+				Namespace: opts.Namespace, Subsystem: opts.Subservice, Name: opts.Name,
+				Help:        opts.Help,
+				ConstLabels: opts.Labels,
+			},
+			opts.Function,
+		)
+	case FuncCounterType:
+		metric = prometheus.NewCounterFunc(
+			prometheus.CounterOpts{
+				Namespace: opts.Namespace, Subsystem: opts.Subservice, Name: opts.Name,
+				Help:        opts.Help,
+				ConstLabels: opts.Labels,
+			},
+			opts.Function,
+		)
+	default:
+		log.Errorf("Error Registering Function %s metric %s: unsupported metric type", metricType, opts.Name)
+		return
+	}
+
+	p.registry.MustRegister(metric)
+}
+
 func newPrometheusClient() (*prometheusClient, error) {
 	// register Prometheus metrics
 	metricsRegistry := prometheus.NewRegistry()
@@ -76,7 +107,10 @@ func newPrometheusClient() (*prometheusClient, error) {
 		metricsRegistry.MustRegister(metric)
 	}
 
-	return &prometheusClient{httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})}, nil
+	return &prometheusClient{
+		httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}),
+		registry:    metricsRegistry,
+	}, nil
 }
 
 // Ensuring that promtheusClient is implementing MonitorClient interface
