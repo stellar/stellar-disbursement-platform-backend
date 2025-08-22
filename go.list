@@ -95,7 +95,7 @@ github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.2
 github.com/go-logr/stdr v1.2.2
 github.com/go-sql-driver/mysql v1.8.1
-github.com/go-viper/mapstructure/v2 v2.3.0
+github.com/go-viper/mapstructure/v2 v2.4.0
 github.com/gobuffalo/packd v1.0.2
 github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
 github.com/godror/godror v0.40.4
