@@ -10,6 +10,11 @@ use soroban_sdk::{
 mod base64_url;
 mod webauthn;
 
+pub const DAY_IN_LEDGERS: u32 = 17280;
+
+pub const INSTANCE_EXTEND_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
+pub const INSTANCE_TTL_THRESHOLD: u32 = INSTANCE_EXTEND_AMOUNT - (7 * DAY_IN_LEDGERS);
+
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[contracttype]
 pub enum DataKey {
@@ -76,6 +81,10 @@ impl CustomAccountInterface for AccountContract {
         signatures: Self::Signature,
         _auth_contexts: Vec<Context>,
     ) -> Result<(), Self::Error> {
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_EXTEND_AMOUNT);
+
         let public_key = env
             .storage()
             .instance()
