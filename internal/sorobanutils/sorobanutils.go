@@ -19,7 +19,7 @@ func MakeScContract(contractID string) (xdr.ScAddress, error) {
 
 	return xdr.ScAddress{
 		Type:       xdr.ScAddressTypeScAddressTypeContract,
-		ContractId: utils.Ptr(xdr.Hash(decoded)),
+		ContractId: utils.Ptr(xdr.ContractId(decoded)),
 	}, nil
 }
 
