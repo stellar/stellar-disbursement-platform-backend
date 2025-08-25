@@ -1934,7 +1934,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 				assert.Len(t, receiverWallets, 1)
 
 				wallet := receiverWallets[0]
-				assert.Equal(t, data.ReadyReceiversWalletStatus, wallet.Status)
+				assert.Equal(t, data.RegisteredReceiversWalletStatus, wallet.Status)
 				assert.Equal(t, "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K", wallet.StellarAddress)
 				assert.Equal(t, "13371337", wallet.StellarMemo)
 				assert.Equal(t, schema.MemoTypeID, wallet.StellarMemoType)
