@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -81,7 +82,7 @@ func (h *CirclePaymentToSubmitterEventHandler) Handle(ctx context.Context, messa
 		return fmt.Errorf("getting tenant by id %s: %w", message.TenantID, err)
 	}
 
-	ctx = tenant.SaveTenantInContext(ctx, t)
+	ctx = sdpcontext.SetTenantInContext(ctx, t)
 
 	distAccount, err := h.distAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {

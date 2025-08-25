@@ -314,7 +314,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 			// STEP 6: assert the result
 			assert.Equal(t, tc.tenantName, tnt.Name)
-			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+			assert.Equal(t, schema.ProvisionedTenantStatus, tnt.Status)
 			assert.Equal(t, sdpUIBaseURL, *tnt.SDPUIBaseURL)
 			assert.Equal(t, baseURL, *tnt.BaseURL)
 			switch tc.accountType {
@@ -453,6 +453,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"auth_user_mfa_codes",
 		"auth_user_password_reset",
 		"auth_users",
+		"bridge_integration",
 		"circle_client_config",
 		"circle_recipients",
 		"circle_transfer_requests",
@@ -463,6 +464,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"receiver_verifications",
 		"receiver_verifications_audit",
 		"receiver_wallets",
+		"receiver_wallets_audit",
 		"receivers",
 		"receivers_audit",
 		"sdp_migrations",
@@ -470,6 +472,8 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"wallets",
 		"wallets_assets",
 		"receiver_registration_attempts",
+		"api_keys",
+		"api_keys_audit",
 	}
 }
 
@@ -489,7 +493,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	lastName := "Last"
 	email := "first.last@email.com"
 	networkType := sdpUtils.TestnetNetworkType
-	tnt := tenant.Tenant{Name: tenantName, ID: "abc"}
+	tnt := schema.Tenant{Name: tenantName, ID: "abc"}
 	sdpUIBaseURL := "https://sdp-ui.stellar.org"
 	baseURL := "https://sdp-api.stellar.org"
 
@@ -551,7 +555,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Return([]schema.TransactionAccount{distAccount}, nil)
 
 				// Needed for UpdateTenantConfig:
-				tStatus := tenant.ProvisionedTenantStatus
+				tStatus := schema.ProvisionedTenantStatus
 				updatedTnt := tnt
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
@@ -599,7 +603,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Return([]schema.TransactionAccount{distAccount}, nil)
 
 				// Needed for UpdateTenantConfig:
-				tStatus := tenant.ProvisionedTenantStatus
+				tStatus := schema.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAccAddress
 				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarDBVault
@@ -661,7 +665,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Return([]schema.TransactionAccount{distAccount}, nil)
 
 				// Needed for UpdateTenantConfig:
-				tStatus := tenant.ProvisionedTenantStatus
+				tStatus := schema.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAccAddress
 				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarDBVault
@@ -846,7 +850,7 @@ func Test_Manager_fundTenantDistributionStellarAccountIfNeeded(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := Manager{}
-			tnt := tenant.Tenant{
+			tnt := schema.Tenant{
 				ID:                         "foo-bar",
 				Name:                       "test",
 				DistributionAccountAddress: &distAccAddress,
@@ -900,18 +904,18 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 		prepareMocksFn    func(t *testing.T, mSigRouter *mocks.MockSignerRouter)
 		wantErrorContains string
 		wantLogContains   string
-		wantTnt           tenant.Tenant
+		wantTnt           schema.Tenant
 	}{
 		{
 			name:              "HOST.STELLAR.ENV is not supported",
 			accountType:       schema.HostStellarEnv,
-			wantTnt:           tenant.Tenant{ID: "foo-bar", Name: "test"},
+			wantTnt:           schema.Tenant{ID: "foo-bar", Name: "test"},
 			wantErrorContains: fmt.Sprintf("%v: unsupported accountType=%s", ErrProvisionTenantDistributionAccountFailed, schema.HostStellarEnv),
 		},
 		{
 			name:              "CHANNEL_ACCOUNT.STELLAR.DB is not supported",
 			accountType:       schema.ChannelAccountStellarDB,
-			wantTnt:           tenant.Tenant{ID: "foo-bar", Name: "test"},
+			wantTnt:           schema.Tenant{ID: "foo-bar", Name: "test"},
 			wantErrorContains: fmt.Sprintf("%v: unsupported accountType=%s", ErrProvisionTenantDistributionAccountFailed, schema.ChannelAccountStellarDB),
 		},
 		{
@@ -926,7 +930,7 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 					Return([]schema.TransactionAccount{distAccount}, signing.ErrUnsupportedCommand).
 					Once()
 			},
-			wantTnt: tenant.Tenant{
+			wantTnt: schema.Tenant{
 				ID:                         "foo-bar",
 				Name:                       "test",
 				DistributionAccountAddress: &distAccAddress,
@@ -946,7 +950,7 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 					Return([]schema.TransactionAccount{distAccount}, nil).
 					Once()
 			},
-			wantTnt: tenant.Tenant{
+			wantTnt: schema.Tenant{
 				ID:                         "foo-bar",
 				Name:                       "test",
 				DistributionAccountAddress: &distAccAddress,
@@ -957,7 +961,7 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 		{
 			name:        "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT is NO-OP and logs warnings accordingly",
 			accountType: schema.DistributionAccountCircleDBVault,
-			wantTnt: tenant.Tenant{
+			wantTnt: schema.Tenant{
 				ID:                        "foo-bar",
 				Name:                      "test",
 				DistributionAccountType:   schema.DistributionAccountCircleDBVault,
@@ -969,7 +973,7 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := Manager{}
-			tnt := &tenant.Tenant{ID: "foo-bar", Name: "test"}
+			tnt := &schema.Tenant{ID: "foo-bar", Name: "test"}
 
 			if tc.prepareMocksFn != nil {
 				mSigRouter := mocks.NewMockSignerRouter(t)

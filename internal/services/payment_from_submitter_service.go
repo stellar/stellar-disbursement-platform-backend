@@ -141,10 +141,12 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 		return fmt.Errorf("updating payment ID %s for transaction ID %s: %w", payment.ID, transaction.ID, err)
 	}
 
-	// Update the disbursement to complete if it has all payments in the end state.
-	err = s.sdpModels.Disbursements.CompleteDisbursements(ctx, sdpDBTx, []string{payment.Disbursement.ID})
-	if err != nil {
-		return fmt.Errorf("completing disbursement: %w", err)
+	if payment.Type == data.PaymentTypeDisbursement {
+		// Update the disbursement to complete if it has all payments in the end state.
+		err = s.sdpModels.Disbursements.CompleteDisbursements(ctx, sdpDBTx, []string{payment.Disbursement.ID})
+		if err != nil {
+			return fmt.Errorf("completing disbursement: %w", err)
+		}
 	}
 
 	return nil

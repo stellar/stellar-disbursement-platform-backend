@@ -49,6 +49,7 @@ const (
 	FilterKeyCreatedAtAfter   FilterKey = "created_at_after"
 	FilterKeyCreatedAtBefore  FilterKey = "created_at_before"
 	FilterKeySyncAttempts     FilterKey = "sync_attempts"
+	FilterKeyPaymentType      FilterKey = "type"
 )
 
 func (fk FilterKey) Equals() string {

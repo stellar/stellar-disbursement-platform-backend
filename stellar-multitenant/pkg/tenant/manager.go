@@ -2,47 +2,50 @@ package tenant
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/lib/pq"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var (
-	ErrTenantDoesNotExist      = errors.New("tenant does not exist")
-	ErrDuplicatedTenantName    = errors.New("duplicated tenant name")
-	ErrEmptyTenantName         = errors.New("tenant name cannot be empty")
-	ErrEmptyUpdateTenant       = errors.New("provide at least one field to be updated")
-	ErrTenantNotFoundInContext = errors.New("tenant not found in context")
-	ErrTooManyDefaultTenants   = errors.New("too many default tenants. Expected at most one default tenant")
+	ErrTenantDoesNotExist    = errors.New("tenant does not exist")
+	ErrDuplicatedTenantName  = errors.New("duplicated tenant name")
+	ErrEmptyTenantName       = errors.New("tenant name cannot be empty")
+	ErrEmptyUpdateTenant     = errors.New("provide at least one field to be updated")
+	ErrTooManyDefaultTenants = errors.New("too many default tenants. Expected at most one default tenant")
 )
-
-type tenantContextKey struct{}
 
 type ManagerInterface interface {
 	GetDSNForTenant(ctx context.Context, tenantName string) (string, error)
 	GetDSNForTenantByID(ctx context.Context, id string) (string, error)
-	GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error)
-	GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error)
-	GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error)
-	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
-	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
-	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
-	GetDefault(ctx context.Context) (*Tenant, error)
-	SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error)
-	AddTenant(ctx context.Context, name string) (*Tenant, error)
+	GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]schema.Tenant, error)
+	GetTenant(ctx context.Context, queryParams *QueryParams) (*schema.Tenant, error)
+	GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*schema.Tenant, error)
+	GetTenantByID(ctx context.Context, id string) (*schema.Tenant, error)
+	GetTenantByName(ctx context.Context, name string) (*schema.Tenant, error)
+	GetTenantByIDOrName(ctx context.Context, arg string) (*schema.Tenant, error)
+	GetDefault(ctx context.Context) (*schema.Tenant, error)
+	SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*schema.Tenant, error)
+	AddTenant(ctx context.Context, name string) (*schema.Tenant, error)
 	DeleteTenantByName(ctx context.Context, name string) error
 	CreateTenantSchema(ctx context.Context, tenantName string) error
 	DropTenantSchema(ctx context.Context, tenantName string) error
-	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
-	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error)
+	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*schema.Tenant, error)
+	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*schema.Tenant, error)
 	DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error
 }
 
@@ -77,7 +80,7 @@ var selectQuery = `
 `
 
 // GetAllTenants returns all tenants in the database.
-func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
+func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]schema.Tenant, error) {
 	if queryParams == nil {
 		queryParams = &QueryParams{
 			Filters:   excludeInactiveTenantsFilters(),
@@ -86,7 +89,7 @@ func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) (
 		}
 	}
 
-	tnts := []Tenant{}
+	tnts := []schema.Tenant{}
 	query, params := m.newManagerQuery(selectQuery, queryParams)
 	err := m.db.SelectContext(ctx, &tnts, query, params...)
 	if err != nil {
@@ -97,8 +100,8 @@ func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) (
 }
 
 // GetTenant is a generic method that fetches a tenant based on queryParams.
-func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error) {
-	var t Tenant
+func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*schema.Tenant, error) {
+	var t schema.Tenant
 	q, params := m.newManagerQuery(selectQuery, queryParams)
 	if err := m.db.GetContext(ctx, &t, q, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -110,7 +113,7 @@ func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Ten
 }
 
 // GetTenantByIDIncludingDeactivated returns the tenant with a given id, including deactivated tenants.
-func (m *Manager) GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*Tenant, error) {
+func (m *Manager) GetTenantByIDIncludingDeactivated(ctx context.Context, id string) (*schema.Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: map[FilterKey]interface{}{
 			FilterKeyID:      id,
@@ -121,7 +124,7 @@ func (m *Manager) GetTenantByIDIncludingDeactivated(ctx context.Context, id stri
 	return m.GetTenant(ctx, queryParams)
 }
 
-func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
+func (m *Manager) GetTenantByID(ctx context.Context, id string) (*schema.Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: excludeInactiveTenantsFilters(),
 	}
@@ -130,7 +133,7 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	return m.GetTenant(ctx, queryParams)
 }
 
-func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
+func (m *Manager) GetTenantByName(ctx context.Context, name string) (*schema.Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: excludeInactiveTenantsFilters(),
 	}
@@ -140,7 +143,7 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, er
 }
 
 // GetTenantByIDOrName returns the tenant with a given id or name.
-func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
+func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*schema.Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: excludeInactiveTenantsFilters(),
 	}
@@ -151,12 +154,12 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 
 // GetDefault returns the tenant where is_default is true.
 // In single tenant mode, if no default exists and there's only one tenant, it returns that tenant.
-func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
+func (m *Manager) GetDefault(ctx context.Context) (*schema.Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: excludeInactiveTenantsFilters(),
 	}
 
-	tnts := []Tenant{}
+	tnts := []schema.Tenant{}
 	query, params := m.newManagerQuery(selectQuery, queryParams)
 	err := m.db.SelectContext(ctx, &tnts, query, params...)
 	if err != nil {
@@ -171,7 +174,7 @@ func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 		return &tnts[0], nil
 	}
 
-	var defaultTenant *Tenant
+	var defaultTenant *schema.Tenant
 	defaultCount := 0
 
 	for i, tnt := range tnts {
@@ -192,7 +195,7 @@ func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 }
 
 // SetDefault sets the is_default = true for the given tenant id.
-func (m *Manager) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error) {
+func (m *Manager) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*schema.Tenant, error) {
 	const q = `
 		WITH remove_old_default_tenant AS (
 			UPDATE tenants SET is_default = false WHERE is_default = true
@@ -200,7 +203,7 @@ func (m *Manager) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id str
 		UPDATE tenants SET is_default = true WHERE id = $1 AND status != 'TENANT_DEACTIVATED' RETURNING *
 	`
 
-	var tnt Tenant
+	var tnt schema.Tenant
 	err := sqlExec.GetContext(ctx, &tnt, q, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -212,13 +215,13 @@ func (m *Manager) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id str
 	return &tnt, nil
 }
 
-func (m *Manager) AddTenant(ctx context.Context, name string) (*Tenant, error) {
+func (m *Manager) AddTenant(ctx context.Context, name string) (*schema.Tenant, error) {
 	if name == "" {
 		return nil, ErrEmptyTenantName
 	}
 
 	const q = "INSERT INTO tenants (name) VALUES ($1) RETURNING *"
-	var t Tenant
+	var t schema.Tenant
 	if err := m.db.GetContext(ctx, &t, q, name); err != nil {
 		if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "idx_unique_name" {
 			return nil, ErrDuplicatedTenantName
@@ -241,7 +244,7 @@ func (m *Manager) DeleteTenantByName(ctx context.Context, name string) error {
 	return nil
 }
 
-func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error) {
+func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*schema.Tenant, error) {
 	updateQuery := `
 		UPDATE tenants t
 		SET
@@ -254,7 +257,7 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*T
 	}
 	queryParams.Filters[FilterKeyID] = tenantID
 
-	var t Tenant
+	var t schema.Tenant
 	query, params := m.newManagerQuery(q, queryParams)
 	query += " RETURNING *"
 
@@ -307,7 +310,69 @@ func (m *Manager) DropTenantSchema(ctx context.Context, tenantName string) error
 	return nil
 }
 
-func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error) {
+type TenantUpdate struct {
+	ID                         string
+	BaseURL                    *string
+	SDPUIBaseURL               *string
+	Status                     *schema.TenantStatus
+	DistributionAccountAddress string
+	DistributionAccountType    schema.AccountType
+	DistributionAccountStatus  schema.AccountStatus
+}
+
+func (tu *TenantUpdate) Validate() error {
+	if tu.ID == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
+
+	if tu.areAllFieldsEmpty() {
+		return ErrEmptyUpdateTenant
+	}
+
+	if tu.BaseURL != nil && !isValidURL(*tu.BaseURL) {
+		return fmt.Errorf("invalid base URL")
+	}
+
+	if tu.SDPUIBaseURL != nil && !isValidURL(*tu.SDPUIBaseURL) {
+		return fmt.Errorf("invalid SDP UI base URL")
+	}
+
+	if tu.Status != nil && !tu.Status.IsValid() {
+		return fmt.Errorf("invalid tenant status: %q", *tu.Status)
+	}
+
+	if tu.DistributionAccountAddress != "" && !strkey.IsValidEd25519PublicKey(tu.DistributionAccountAddress) {
+		return fmt.Errorf("invalid distribution account: %q", tu.DistributionAccountAddress)
+	}
+	return nil
+}
+
+func (tu *TenantUpdate) areAllFieldsEmpty() bool {
+	return tu.BaseURL == nil &&
+		tu.SDPUIBaseURL == nil &&
+		tu.Status == nil &&
+		tu.DistributionAccountAddress == "" &&
+		tu.DistributionAccountType == "" &&
+		tu.DistributionAccountStatus == ""
+}
+
+func isValidURL(u string) bool {
+	_, err := url.ParseRequestURI(u)
+	return err == nil
+}
+
+const (
+	// MinTenantDistributionAccountAmount is the minimum amount of the native asset that the host distribution account is allowed to
+	// send to the tenant distribution account at a time. It is also used as the default amount to bootstrap a tenant distribution account,
+	// when non is specified.
+	MinTenantDistributionAccountAmount = 5
+
+	// MaxTenantDistributionAccountAmount is the maximum amount of the native asset that the host distribution account is allowed to
+	// send to the tenant distribution account at a time.
+	MaxTenantDistributionAccountAmount = 50
+)
+
+func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*schema.Tenant, error) {
 	if tu == nil {
 		return nil, fmt.Errorf("tenant update cannot be nil")
 	}
@@ -349,7 +414,7 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	q = fmt.Sprintf(q, strings.Join(fields, ",\n"))
 	q = m.db.Rebind(q)
 
-	var t Tenant
+	var t schema.Tenant
 	if err := m.db.GetContext(ctx, &t, q, args...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
@@ -385,18 +450,35 @@ func (*Manager) updateDistributionAccountFields(ctx context.Context, tu *TenantU
 	return fields, args
 }
 
-// GetTenantFromContext retrieves the tenant information from the context.
-func GetTenantFromContext(ctx context.Context) (*Tenant, error) {
-	currentTenant, ok := ctx.Value(tenantContextKey{}).(*Tenant)
-	if !ok {
-		return nil, ErrTenantNotFoundInContext
+// GenerateMemoForTenant generates a memo for the tenant based on its base URL.
+func GenerateMemoForTenant(ctx context.Context) (schema.Memo, error) {
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		return schema.Memo{}, fmt.Errorf("getting tenant: %w", err)
 	}
-	return currentTenant, nil
+
+	baseURLMemo := GenerateHashFromBaseURL(*tnt.BaseURL)
+	return schema.Memo{
+		Value: baseURLMemo,
+		Type:  schema.MemoTypeText,
+	}, nil
 }
 
-// SaveTenantInContext stores the tenant information in the context.
-func SaveTenantInContext(ctx context.Context, t *Tenant) context.Context {
-	return context.WithValue(ctx, tenantContextKey{}, t)
+// GenerateHashFromBaseURL generates a hash from the base URL and returns the first 12 hex chars (6 bytes) prefixed with
+// "sdp-". This is used to create a unique memo for each tenant that fits within the Stellar memo limit of 28 bytes for
+// a `MEMO_TEXT`.
+func GenerateHashFromBaseURL(baseURL string) string {
+	// Trim any whitespace
+	baseURL = strings.TrimSpace(baseURL)
+	u, err := url.Parse(baseURL)
+	if err == nil {
+		// Remove trailing slash if it's the only path component
+		u.Path = strings.TrimRight(u.Path, "/")
+		baseURL = u.String()
+	}
+
+	hash := sha256.Sum256([]byte(baseURL))
+	return "sdp-" + hex.EncodeToString(hash[:])[:12]
 }
 
 func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (string, []any) {
@@ -417,13 +499,13 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 	}
 
 	if queryParams.Filters[FilterKeyStatus] != nil {
-		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
+		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]schema.TenantStatus); ok && len(statusSlice) > 0 {
 			qb.AddCondition("t.status = ANY(?)", pq.Array(statusSlice))
 		} else {
 			qb.AddCondition("t.status = ?", queryParams.Filters[FilterKeyStatus])
 		}
 	} else if queryParams.Filters[FilterKeyOutStatus] != nil {
-		if statusSlice, ok := queryParams.Filters[FilterKeyOutStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
+		if statusSlice, ok := queryParams.Filters[FilterKeyOutStatus].([]schema.TenantStatus); ok && len(statusSlice) > 0 {
 			qb.AddCondition("NOT (t.status = ANY(?))", pq.Array(statusSlice))
 		} else {
 			qb.AddCondition("t.status != ?", queryParams.Filters[FilterKeyOutStatus])

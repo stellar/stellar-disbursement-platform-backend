@@ -11,11 +11,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PaymentToSubmitterServiceInterface interface {
@@ -75,7 +75,7 @@ func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, p
 
 // SendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
 func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchSize int) error {
-	t, tenantErr := tenant.GetTenantFromContext(ctx)
+	t, tenantErr := sdpcontext.GetTenantFromContext(ctx)
 	if tenantErr != nil {
 		return fmt.Errorf("getting tenant from context: %w", tenantErr)
 	}
@@ -175,8 +175,12 @@ func validatePaymentReadyForSending(p *data.Payment) error {
 	if p.ReceiverWallet.Status != data.RegisteredReceiversWalletStatus {
 		return fmt.Errorf("receiver wallet %s for payment %s is not in %s state", p.ReceiverWallet.ID, p.ID, data.RegisteredReceiversWalletStatus)
 	}
-	if p.Disbursement.Status != data.StartedDisbursementStatus {
-		return fmt.Errorf("disbursement %s for payment %s is not in %s state", p.Disbursement.ID, p.ID, data.StartedDisbursementStatus)
+
+	if p.Type == data.PaymentTypeDisbursement {
+		if p.Disbursement.Status != data.StartedDisbursementStatus {
+			return fmt.Errorf("disbursement %s for payment %s is not in %s state",
+				p.Disbursement.ID, p.ID, data.StartedDisbursementStatus)
+		}
 	}
 
 	// verify that transaction required fields are not empty

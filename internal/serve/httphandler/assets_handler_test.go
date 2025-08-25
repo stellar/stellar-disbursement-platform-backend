@@ -30,6 +30,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -51,8 +54,20 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 
 	ctx := context.Background()
 
+	horizonClientMock := &horizonclient.MockClient{}
+	signatureService, _, distAccResolver := signing.NewMockSignatureService(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	mockDistAccService := &mocks.MockDistributionAccountService{}
+
 	handler := &AssetsHandler{
 		Models: models,
+		SubmitterEngine: engine.SubmitterEngine{
+			SignatureService:    signatureService,
+			HorizonClient:       horizonClientMock,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          txnbuild.MinBaseFee,
+		},
+		DistributionAccountService: mockDistAccService,
 	}
 
 	t.Run("successfully returns a list of assets", func(t *testing.T) {
@@ -93,6 +108,421 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		require.Equal(t, assets[0].ID, assetsResponse[0].ID)
 		require.Equal(t, assets[0].Code, assetsResponse[0].Code)
 		require.Equal(t, assets[0].Issuer, assetsResponse[0].Issuer)
+	})
+
+	t.Run("returns assets with trustline information", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &schema.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "EURT",
+						Issuer: "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU",
+					},
+					Balance: "50.0000000",
+				},
+			},
+		}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		// Mock DistributionAccountService to return success only for EURT (indicating trustline exists)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "EURT" && asset.Issuer == "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU"
+		})).Return(50.0, nil)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "USDC" && asset.Issuer == "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE"
+		})).Return(0.0, errors.New("asset not found"))
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithEnabledInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+		require.Len(t, responseAssets, 1)
+
+		for _, asset := range responseAssets {
+			assert.NotNil(t, asset.Enabled)
+			if asset.Code == "EURT" {
+				assert.NotNil(t, asset.Balance)
+				assert.Equal(t, 50.0, *asset.Balance)
+			}
+		}
+	})
+
+	t.Run("filters assets by enabled=true", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &schema.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "EURT",
+						Issuer: "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU",
+					},
+					Balance: "50.0000000",
+				},
+			},
+		}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		// Mock DistributionAccountService to return success only for EURT (indicating trustline exists)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "EURT" && asset.Issuer == "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU"
+		})).Return(50.0, nil)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
+			return asset.Code == "USDC" && asset.Issuer == "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE"
+		})).Return(0.0, errors.New("asset not found"))
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithEnabledInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+
+		for _, asset := range responseAssets {
+			assert.True(t, asset.Enabled)
+			if asset.Code == "EURT" {
+				assert.NotNil(t, asset.Balance)
+				assert.Equal(t, 50.0, *asset.Balance)
+			}
+		}
+	})
+
+	t.Run("filters assets by enabled=false", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &schema.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		// Mock DistributionAccountService to return error (indicating no trustline)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, errors.New("asset not found"))
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?enabled=false", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithEnabledInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+
+		for _, asset := range responseAssets {
+			assert.False(t, asset.Enabled)
+		}
+	})
+
+	t.Run("returns error for invalid enabled parameter", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?enabled=invalid", nil)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("correctly identifies assets with zero balance trustlines", func(t *testing.T) {
+		horizonClientMock.ExpectedCalls = nil
+		distAccResolver.ExpectedCalls = nil
+
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		tnt := &schema.Tenant{
+			ID:                         "test-tenant",
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountAddress: &[]string{"GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"}[0],
+			DistributionAccountStatus:  schema.AccountStatusActive,
+		}
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
+
+		distAccount := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
+		}
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
+
+		// Mock DistributionAccountService to return a balance (indicating trustline exists)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, nil)
+
+		// Mock Horizon account with USDC trustline but zero balance
+		horizonAccount := &horizon.Account{
+			AccountID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "USDC",
+						Issuer: "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE",
+					},
+					Balance: "0.0000000",
+				},
+			},
+		}
+		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
+		req = req.WithContext(ctxWithTenant)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var responseAssets []AssetWithEnabledInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+
+		for _, asset := range responseAssets {
+			if asset.Code == "USDC" {
+				assert.True(t, asset.Enabled)
+				assert.NotNil(t, asset.Balance)
+				assert.Equal(t, 0.0, *asset.Balance)
+			}
+		}
+	})
+}
+
+func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
+	ctx := context.Background()
+
+	mockDistAccService := &mocks.MockDistributionAccountService{}
+
+	handler := &AssetsHandler{
+		DistributionAccountService: mockDistAccService,
+	}
+
+	t.Run("returns true and balance for native assets", func(t *testing.T) {
+		asset := data.Asset{Code: "XLM", Issuer: ""}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(100.0, nil)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 100.0, *balance)
+	})
+
+	t.Run("returns true for Circle accounts with supported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(123.45, nil)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 123.45, *balance)
+	})
+
+	t.Run("returns false for Circle accounts with unsupported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
+	})
+
+	t.Run("returns true for Stellar accounts with trustline but zero balance", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, nil)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 0.0, *balance)
+	})
+
+	t.Run("returns false for Stellar accounts without trustline", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
+	})
+}
+
+func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
+	ctx := context.Background()
+
+	mockDistAccService := &mocks.MockDistributionAccountService{}
+
+	handler := &AssetsHandler{
+		DistributionAccountService: mockDistAccService,
+	}
+
+	t.Run("returns true and balance for native assets", func(t *testing.T) {
+		asset := data.Asset{Code: "XLM", Issuer: ""}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, nil)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 0.0, *balance)
+	})
+
+	t.Run("returns true and balance for Circle accounts with supported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(321.0, nil)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, 321.0, *balance)
+	})
+
+	t.Run("returns false and nil balance for Circle accounts with unsupported assets", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Type: schema.DistributionAccountCircleDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
+	})
+
+	t.Run("returns true and balance for Stellar accounts with trustline", func(t *testing.T) {
+		asset := data.Asset{Code: "USDC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		expectedBalance := 100.5
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(expectedBalance, nil)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.True(t, hasTrustline)
+		assert.NotNil(t, balance)
+		assert.Equal(t, expectedBalance, *balance)
+	})
+
+	t.Run("returns false and nil balance for Stellar accounts without trustline", func(t *testing.T) {
+		asset := data.Asset{Code: "BTC", Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"}
+		account := schema.TransactionAccount{
+			Address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			Type:    schema.DistributionAccountStellarDBVault,
+		}
+
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+
+		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
+		require.NoError(t, err)
+		assert.False(t, hasTrustline)
+		assert.Nil(t, balance)
 	})
 }
 
@@ -1439,27 +1869,6 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 
-	// matchPreconditionsTimeboundsFn is a function meant to be used with mock.MatchedBy to check that the preconditions are set as expected.
-	assertExpectedPreconditionsWithTimeboundsTolerance := func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
-		creationTime := time.Now()
-		return func(args mock.Arguments) {
-			actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
-			require.True(t, ok)
-
-			expectedPreconditions := expectedTx.ToXDR().Preconditions()
-			actualPreconditions := actualTx.ToXDR().Preconditions()
-
-			require.Equal(t, expectedPreconditions.TimeBounds.MinTime, actualPreconditions.TimeBounds.MinTime)
-
-			expectedMaxTime := time.Unix(int64(expectedPreconditions.TimeBounds.MaxTime), 0).UTC()
-			actualMaxTime := time.Unix(int64(actualPreconditions.TimeBounds.MaxTime), 0).UTC()
-			timeSinceCreation := time.Since(creationTime)
-
-			expectedAdjustedMaxTime := expectedMaxTime.Add(timeSinceCreation)
-			require.WithinDuration(t, expectedAdjustedMaxTime, actualMaxTime, 10*time.Second)
-		}
-	}
-
 	const code = "USDC"
 	const issuer = "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
 	acc := &horizon.Account{}
@@ -1508,13 +1917,45 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 
 		mocks.SignatureRouter.
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 1)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
 
 		mocks.HorizonClientMock.
 			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 0)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 0)).
 			Return(horizon.Transaction{}, nil).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
@@ -1538,14 +1979,46 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 
 		mocks.SignatureRouter.
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 1)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
 
 		mocks.HorizonClientMock.
 			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 0)).
+			Run(func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+				return func(args mock.Arguments) {
+					actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
+					require.True(t, ok, actualTxIndex)
+
+					expXDR := expectedTx.ToXDR().Preconditions().TimeBounds
+					actXDR := actualTx.ToXDR().Preconditions().TimeBounds
+
+					require.Equal(t, expXDR.MinTime, actXDR.MinTime)
+
+					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
+					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
+
+					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
+				}
+			}(t, signedTx, 0)).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
 

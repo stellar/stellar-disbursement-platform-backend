@@ -89,11 +89,7 @@ func Test_WalletColumnNamesWhenNested(t *testing.T) {
 }
 
 func Test_WalletModelGet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -124,11 +120,7 @@ func Test_WalletModelGet(t *testing.T) {
 }
 
 func Test_WalletModelGetByWalletName(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -159,11 +151,7 @@ func Test_WalletModelGetByWalletName(t *testing.T) {
 }
 
 func Test_WalletModelGetAll(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -216,30 +204,56 @@ func Test_WalletModelGetAll(t *testing.T) {
 }
 
 func Test_WalletModelFindWallets(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	models := SetupModels(t)
+	dbConnectionPool := models.DBConnectionPool
 
 	ctx := context.Background()
 	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
 
+	usdc, outerErr := models.Assets.GetOrCreate(ctx, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+	require.NoError(t, outerErr)
+	xlm, outerErr := models.Assets.GetOrCreate(ctx, "XLM", "")
+	require.NoError(t, outerErr)
+	eurc, outerErr := models.Assets.GetOrCreate(ctx, "EURC", "GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO")
+	require.NoError(t, outerErr)
+
+	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+	createTestWallets := func() []*Wallet {
+		// Create wallets
+		wallet0 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet0", "https://wallet0.com", "wallet0.com", "wallet0://")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "wallet1.com", "wallet1://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "wallet2.com", "wallet2://")
+
+		// Associate assets with wallets
+		// wallet0: USDC, XLM
+		CreateWalletAssets(t, ctx, dbConnectionPool, wallet0.ID, []string{usdc.ID, xlm.ID})
+		// wallet1: USDC, EURC
+		CreateWalletAssets(t, ctx, dbConnectionPool, wallet1.ID, []string{usdc.ID, eurc.ID})
+		// wallet2: XLM only
+		CreateWalletAssets(t, ctx, dbConnectionPool, wallet2.ID, []string{xlm.ID})
+
+		return []*Wallet{wallet0, wallet1, wallet2}
+	}
+
 	t.Run("returns only enabled wallets", func(t *testing.T) {
-		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
 
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
-		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[1].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[1].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[2].ID)
 
 		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterEnabledWallets, true))
 		require.NoError(t, err)
 
 		require.Len(t, actual, 1)
-		require.Equal(t, wallets[1].ID, actual[0].ID)
+		require.Equal(t, wallets[2].ID, actual[0].ID)
 	})
 
 	t.Run("returns only disabled wallets", func(t *testing.T) {
-		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
 
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[1].ID)
@@ -252,7 +266,8 @@ func Test_WalletModelFindWallets(t *testing.T) {
 	})
 
 	t.Run("returns user_managed wallet", func(t *testing.T) {
-		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
 
 		MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
 
@@ -264,7 +279,8 @@ func Test_WalletModelFindWallets(t *testing.T) {
 	})
 
 	t.Run("returns user_managed and enabled wallet", func(t *testing.T) {
-		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
 
 		MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
 		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[0].ID)
@@ -278,21 +294,105 @@ func Test_WalletModelFindWallets(t *testing.T) {
 	})
 
 	t.Run("returns empty array when no wallets", func(t *testing.T) {
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+
 		actual, err := walletModel.FindWallets(ctx)
 		require.NoError(t, err)
 
 		require.Equal(t, []Wallet{}, actual)
 	})
+
+	t.Run("returns wallets filtered by supported assets - single asset code", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Test filtering by single asset code
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterSupportedAssets, []string{"USDC"}))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 2) // wallet1 and wallet2 support USDC
+		walletIDs := []string{actual[0].ID, actual[1].ID}
+		assert.Contains(t, walletIDs, wallets[0].ID)
+		assert.Contains(t, walletIDs, wallets[1].ID)
+	})
+
+	t.Run("returns wallets filtered by supported assets - multiple asset codes", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Only wallet0 supports both USDC and XLM
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterSupportedAssets, []string{"USDC", "XLM"}))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 1)
+		assert.Equal(t, wallets[0].Name, actual[0].Name)
+	})
+
+	t.Run("returns wallets filtered by supported assets - asset ID", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		createTestWallets()
+
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterSupportedAssets, []string{usdc.ID}))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 2) // wallet0 and wallet1 support USDC
+		for _, wallet := range actual {
+			assert.Contains(t, []string{"Wallet0", "Wallet1"}, wallet.Name)
+		}
+	})
+
+	t.Run("returns wallets filtered by supported assets - mixed codes and IDs", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		createTestWallets()
+
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterSupportedAssets, []string{usdc.ID, "XLM"}))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 1) // Only wallet0 supports both USDC (by ID) and XLM (by code)
+		assert.Equal(t, "Wallet0", actual[0].Name)
+	})
+
+	t.Run("returns empty array when no wallets support specified assets", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		createTestWallets()
+
+		bizant := CreateAssetFixture(t, ctx, dbConnectionPool, "BIZANT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterSupportedAssets, []string{bizant.Code}))
+		require.NoError(t, err)
+
+		assert.Empty(t, actual)
+	})
+
+	t.Run("combines asset filtering with other filters", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Disable wallet2
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[1].ID)
+
+		actual, err := walletModel.FindWallets(ctx,
+			NewFilter(FilterSupportedAssets, []string{"USDC"}),
+			NewFilter(FilterEnabledWallets, true))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 1) // Only wallet0 is enabled and supports USDC
+		assert.Equal(t, "Wallet0", actual[0].Name)
+	})
+
+	t.Run("handles empty asset list in FilterSupportedAssets", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+		// Empty asset list should be ignored and return all wallets
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterSupportedAssets, []string{}))
+		require.NoError(t, err)
+
+		assert.GreaterOrEqual(t, len(actual), len(wallets))
+	})
 }
 
 func Test_WalletModelInsert(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	ctx := context.Background()
 
@@ -658,46 +758,163 @@ func Test_WalletModelSoftDelete(t *testing.T) {
 }
 
 func Test_WalletModelUpdate(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	ctx := context.Background()
-
 	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
+	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+	xlm := CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+	usdc := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
 
-	_, err = walletModel.Update(ctx, "unknown", true)
-	assert.Equal(t, ErrRecordNotFound, err)
+	t.Run("updates all fields successfully", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
+			"Mechanicus Wallet",
+			"https://mars.forge",
+			"mars.forge",
+			"omnissiah://")
 
-	wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
-		"NewWallet",
-		"https://newwallet.com",
-		"newwallet.com",
-		"newalletapp://")
+		newName := "Cawl's Digital Vault"
+		newHomepage := "https://cawl.mechanicus"
+		newDeepLink := "archmagos://sdp"
+		newSEP10 := "cawl.mechanicus"
+		newEnabled := false
 
-	assert.True(t, wallet.Enabled)
+		update := WalletUpdate{
+			Name:              &newName,
+			Homepage:          &newHomepage,
+			DeepLinkSchema:    &newDeepLink,
+			SEP10ClientDomain: &newSEP10,
+			Enabled:           &newEnabled,
+			AssetsIDs:         &[]string{xlm.ID, usdc.ID},
+		}
 
-	updatedWallet, err := walletModel.Update(ctx, wallet.ID, false)
-	require.NoError(t, err)
+		updatedWallet, err := walletModel.Update(ctx, wallet.ID, update)
+		require.NoError(t, err)
 
-	wallet, err = walletModel.Get(ctx, wallet.ID)
-	require.NoError(t, err)
-	wallet.Assets = nil
-	assert.False(t, wallet.Enabled)
-	assert.Equal(t, wallet, updatedWallet)
+		assert.Equal(t, newName, updatedWallet.Name)
+		assert.Equal(t, newHomepage, updatedWallet.Homepage)
+		assert.Equal(t, newDeepLink, updatedWallet.DeepLinkSchema)
+		assert.Equal(t, newSEP10, updatedWallet.SEP10ClientDomain)
+		assert.Equal(t, newEnabled, updatedWallet.Enabled)
+		assert.Len(t, updatedWallet.Assets, 2)
+	})
 
-	updatedWallet, err = walletModel.Update(ctx, wallet.ID, true)
-	require.NoError(t, err)
-	updatedWallet.Assets = nil
+	t.Run("returns error for non-existent wallet", func(t *testing.T) {
+		b := true
+		update := WalletUpdate{
+			Enabled: &b,
+		}
 
-	wallet, err = walletModel.Get(ctx, wallet.ID)
-	require.NoError(t, err)
-	wallet.Assets = nil
-	assert.True(t, wallet.Enabled)
-	assert.Equal(t, wallet, updatedWallet)
+		_, err := walletModel.Update(ctx, "lost-in-the-warp", update)
+		assert.ErrorContains(t, err, "record not found")
+	})
+
+	t.Run("returns error for duplicate name", func(t *testing.T) {
+		inquisitorWallet := CreateWalletFixture(t, ctx, dbConnectionPool,
+			"Inquisition Funds",
+			"https://ordo.hereticus",
+			"ordo.hereticus",
+			"emperor://")
+
+		astartesPurse := CreateWalletFixture(t, ctx, dbConnectionPool,
+			"Astartes Treasury",
+			"https://ultramar.savings",
+			"ultramar.savings",
+			"guilliman://")
+
+		duplicateName := inquisitorWallet.Name
+		update := WalletUpdate{
+			Name: &duplicateName,
+		}
+
+		_, err := walletModel.Update(ctx, astartesPurse.ID, update)
+		assert.ErrorIs(t, err, ErrWalletNameAlreadyExists)
+	})
+}
+
+func Test_WalletModelUpdate_AssetHandling(t *testing.T) {
+	dbConnectionPool := getConnectionPool(t)
+
+	ctx := context.Background()
+	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
+	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+
+	xlm := CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+	usdc := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5")
+	bolt := CreateAssetFixture(t, ctx, dbConnectionPool, "BOLT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	t.Run("replaces assets when assets field is provided", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
+			"Rogue Trader Vault",
+			"https://von.ravensburg",
+			"von.ravensburg",
+			"tradervault://")
+
+		CreateWalletAssets(t, ctx, dbConnectionPool, wallet.ID, []string{xlm.ID, usdc.ID})
+
+		newAssets := []string{bolt.ID}
+		update := WalletUpdate{
+			AssetsIDs: &newAssets,
+		}
+
+		updatedWallet, err := walletModel.Update(ctx, wallet.ID, update)
+		require.NoError(t, err)
+
+		assert.Len(t, updatedWallet.Assets, 1)
+		assert.Equal(t, bolt.ID, updatedWallet.Assets[0].ID)
+	})
+
+	t.Run("clears assets when empty array is provided", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
+			"Tau Commerce Node",
+			"https://tau.empire",
+			"tau.empire",
+			"greatergood://")
+		CreateWalletAssets(t, ctx, dbConnectionPool, wallet.ID, []string{xlm.ID, usdc.ID})
+
+		emptyAssets := []string{}
+		update := WalletUpdate{
+			AssetsIDs: &emptyAssets,
+		}
+
+		updatedWallet, err := walletModel.Update(ctx, wallet.ID, update)
+		require.NoError(t, err)
+
+		assert.Len(t, updatedWallet.Assets, 0)
+	})
+
+	t.Run("preserves assets when assets field is not provided", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
+			"Ecclesiarchy Treasury",
+			"https://terra.sanctum",
+			"terra.sanctum",
+			"imperator://")
+		CreateWalletAssets(t, ctx, dbConnectionPool, wallet.ID, []string{xlm.ID, usdc.ID})
+
+		newName := "High Lords' Reserve"
+		update := WalletUpdate{
+			Name: &newName,
+		}
+
+		updatedWallet, err := walletModel.Update(ctx, wallet.ID, update)
+		require.NoError(t, err)
+
+		assert.Equal(t, newName, updatedWallet.Name)
+		assert.Len(t, updatedWallet.Assets, 2)
+	})
+
+	t.Run("returns error when no fields provided", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
+			"Silent King's Hoard",
+			"https://necron.dynasties",
+			"necron.dynasties",
+			"szarekh://")
+
+		update := WalletUpdate{}
+
+		_, err := walletModel.Update(ctx, wallet.ID, update)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no fields provided for update")
+	})
 }

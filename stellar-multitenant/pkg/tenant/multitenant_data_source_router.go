@@ -7,6 +7,8 @@ import (
 	"sync"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var ErrNoDataSourcesAvailable = errors.New("no data sources are available")
@@ -24,9 +26,9 @@ func NewMultiTenantDataSourceRouter(tenantManager ManagerInterface) *MultiTenant
 }
 
 func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBConnectionPool, error) {
-	currentTenant, err := GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
-		return nil, ErrTenantNotFoundInContext
+		return nil, sdpcontext.ErrTenantNotFoundInContext
 	}
 
 	return m.GetDataSourceForTenant(ctx, *currentTenant)
@@ -35,7 +37,7 @@ func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBC
 // GetDataSourceForTenant returns the database connection pool for the given tenant if it exists, otherwise create a new one.
 func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(
 	ctx context.Context,
-	currentTenant Tenant,
+	currentTenant schema.Tenant,
 ) (db.DBConnectionPool, error) {
 	value, exists := m.dataSources.Load(currentTenant.ID)
 	if exists {
@@ -47,7 +49,7 @@ func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(
 
 func (m *MultiTenantDataSourceRouter) getOrCreateDataSourceForTenantWithLock(
 	ctx context.Context,
-	currentTenant Tenant,
+	currentTenant schema.Tenant,
 ) (db.DBConnectionPool, error) {
 	// Acquire the lock only if the data source was not found.
 	m.mu.Lock()

@@ -22,6 +22,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -60,11 +61,7 @@ Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 )
 
 func Test_Serve(t *testing.T) {
-	dbt := dbtest.OpenWithoutMigrations(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -114,11 +111,7 @@ func Test_Serve(t *testing.T) {
 }
 
 func Test_Serve_callsValidateSecurity(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
@@ -127,7 +120,7 @@ func Test_Serve_callsValidateSecurity(t *testing.T) {
 
 	// Make sure MFA is enforced in pubnet
 	serveOptions.DisableMFA = true
-	err = Serve(serveOptions, &mHTTPServer)
+	err := Serve(serveOptions, &mHTTPServer)
 	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
 }
 
@@ -174,11 +167,7 @@ func Test_ServeOptions_ValidateSecurity(t *testing.T) {
 }
 
 func Test_handleHTTP_Health(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -276,7 +265,6 @@ func Test_staticFileServer(t *testing.T) {
 }
 
 // getServeOptionsForTests returns an instance of ServeOptions for testing purposes.
-// 🚨 Don't forget to call `defer serveOptions.dbConnectionPool.Close()` in your test 🚨.
 func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool) ServeOptions {
 	t.Helper()
 
@@ -298,7 +286,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	mTenantManager := &tenant.TenantManagerMock{}
 	mTenantManager.
 		On("GetTenantByName", mock.Anything, "aid-org").
-		Return(&tenant.Tenant{ID: "tenant1"}, nil)
+		Return(&schema.Tenant{ID: "tenant1"}, nil)
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
@@ -343,6 +331,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
 		EventProducer:                   producerMock,
+		BridgeService:                   bridge.NewMockService(t),
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -353,11 +342,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 }
 
 func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 	data.CreateShortURLFixture(t, context.Background(), dbConnectionPool, "123", "https://stellar.org")
@@ -393,11 +378,7 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 }
 
 func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
@@ -430,14 +411,17 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodDelete, "/disbursements/1234"},
 		// Payments
 		{http.MethodGet, "/payments"},
+		{http.MethodPost, "/payments/"},
 		{http.MethodGet, "/payments/1234"},
 		{http.MethodPatch, "/payments/retry"},
 		{http.MethodPatch, "/payments/1234/status"},
 		// Receivers
 		{http.MethodGet, "/receivers"},
+		{http.MethodPost, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/wallets/1234"},
+		{http.MethodPatch, "/receivers/wallets/1234/status"},
 		{http.MethodGet, "/receivers/verification-types"},
 		// Receiver Contact Types
 		{http.MethodGet, "/registration-contact-types"},
@@ -470,6 +454,15 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/sep24-interactive-deposit/info"},
 		{http.MethodPost, "/sep24-interactive-deposit/otp"},
 		{http.MethodPost, "/sep24-interactive-deposit/verification"},
+		// api-keys
+		{http.MethodPost, "/api-keys"},
+		{http.MethodGet, "/api-keys"},
+		{http.MethodGet, "/api-keys/12345"},
+		{http.MethodPatch, "/api-keys/12345"},
+		{http.MethodDelete, "/api-keys/12345"},
+		// bridge
+		{http.MethodGet, "/bridge-integration"},
+		{http.MethodPatch, "/bridge-integration"},
 	}
 
 	// Expect 401 as a response:
@@ -488,11 +481,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 }
 
 func Test_handleHTTP_rateLimit(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
@@ -525,11 +514,7 @@ func Test_handleHTTP_rateLimit(t *testing.T) {
 }
 
 func Test_createAuthManager(t *testing.T) {
-	dbt := dbtest.OpenWithoutMigrations(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := getConnectionPool(t)
 
 	// creates the expected auth manager
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
@@ -581,4 +566,15 @@ func Test_createAuthManager(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getConnectionPool(t *testing.T) db.DBConnectionPool {
+	t.Helper()
+	dbt := dbtest.Open(t)
+	t.Cleanup(func() { dbt.Close() })
+
+	pool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
+	return pool
 }

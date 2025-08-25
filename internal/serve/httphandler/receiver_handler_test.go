@@ -1,12 +1,14 @@
 package httphandler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,20 +16,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_ReceiverHandlerGet(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -359,12 +359,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -465,12 +460,7 @@ func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1383,12 +1373,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 }
 
 func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -1595,4 +1580,515 @@ func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
 	]`
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.JSONEq(t, expectedBody, string(respBody))
+}
+
+func Test_ReceiverHandler_CreateReceiver_Validation(t *testing.T) {
+	r := chi.NewRouter()
+
+	handler := &ReceiverHandler{}
+	r.Post("/receivers", handler.CreateReceiver)
+
+	testCases := []struct {
+		name        string
+		request     dto.CreateReceiverRequest
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "missing required contact information",
+			request: dto.CreateReceiverRequest{
+				ExternalID: "Cadia-Station",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "email is required when phone_number is not provided",
+		},
+		{
+			name: "invalid email format",
+			request: dto.CreateReceiverRequest{
+				Email:      "@example.com",
+				ExternalID: "Cadia-Station",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "the email address provided is not valid",
+		},
+		{
+			name: "invalid phone number format",
+			request: dto.CreateReceiverRequest{
+				PhoneNumber: "01-HERESY",
+				ExternalID:  "Cadia-Station",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "the provided phone number is not a valid E.164 number",
+		},
+		{
+			name: "missing external ID",
+			request: dto.CreateReceiverRequest{
+				Email: "inquisitor@example.com",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "external_id is required",
+		},
+		{
+			name: "missing verifications and wallets",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
+				ExternalID: "Prospero-001",
+			},
+			expectError: true,
+			errorMsg:    "verifications are required when wallets are not provided",
+		},
+		{
+			name: "invalid verification type",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
+				ExternalID: "Prospero-001",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  "WARP_TAINT",
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid verification type",
+		},
+		{
+			name: "invalid date format",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
+				ExternalID: "Prospero-001",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "30/M41",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid date of birth format: must be YYYY-MM-DD",
+		},
+		{
+			name: "invalid stellar address format",
+			request: dto.CreateReceiverRequest{
+				Email:      "magnus@example.com",
+				ExternalID: "Prospero-001",
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "INVALIDADDRESS",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid stellar address format",
+		},
+		{
+			name: "multiple wallets not allowed",
+			request: dto.CreateReceiverRequest{
+				Email:      "fulgrim@example.com",
+				ExternalID: "Chemos-001",
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
+						Memo:    "1337",
+					},
+					{
+						Address: "GDQNY3PBOJOKYZSRMK2S7LHHGWZIUISD4QORETLMXEWXBI7KFZZMKTL3",
+						Memo:    "1338",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "only one wallet is allowed per receiver",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			validator := validators.NewReceiverValidator()
+			validator.ValidateCreateReceiverRequest(&tc.request)
+
+			if tc.expectError {
+				require.True(t, validator.HasErrors(), "Expected validation errors but none found")
+
+				found := false
+				for _, value := range validator.Errors {
+					if str, ok := value.(string); ok && strings.Contains(str, tc.errorMsg) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error message '%s' should be present in validation errors", tc.errorMsg)
+			} else {
+				require.False(t, validator.HasErrors(), "Expected no validation errors but found: %v", validator.Errors)
+			}
+		})
+	}
+}
+
+func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	r := chi.NewRouter()
+	r.Post("/receivers", handler.CreateReceiver)
+
+	testCases := []struct {
+		name           string
+		requestBody    dto.CreateReceiverRequest
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name: "missing required contact information",
+			requestBody: dto.CreateReceiverRequest{
+				ExternalID: "Cadia-Station",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "email is required when phone_number is not provided",
+		},
+		{
+			name: "invalid email format",
+			requestBody: dto.CreateReceiverRequest{
+				Email:      "@example.com",
+				ExternalID: "Cadia-Station",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "the email address provided is not valid",
+		},
+		{
+			name: "missing external ID",
+			requestBody: dto.CreateReceiverRequest{
+				Email: "inquisitor@example.com",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "external_id is required",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			reqBody, err := json.Marshal(tc.requestBody)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest("POST", "/receivers", bytes.NewBuffer(reqBody))
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Code)
+
+			var errorResponse httperror.HTTPError
+			err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
+			require.NoError(t, err)
+
+			assert.Equal(t, "validation error", errorResponse.Error())
+
+			require.NotNil(t, errorResponse.Extras)
+
+			found := false
+			for _, value := range errorResponse.Extras {
+				if str, ok := value.(string); ok && strings.Contains(str, tc.expectedError) {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Expected error message '%s' should be present in extras", tc.expectedError)
+		})
+	}
+}
+
+func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	// Setup router
+	r := chi.NewRouter()
+	r.Post("/receivers", handler.CreateReceiver)
+
+	testCases := []struct {
+		name            string
+		requestBody     dto.CreateReceiverRequest
+		expectedStatus  int
+		assertCreatedFn func(t *testing.T, receiverID string)
+	}{
+		{
+			name: "create receiver with email and verifications",
+			requestBody: dto.CreateReceiverRequest{
+				Email:      "horus.lupercal@example.com",
+				ExternalID: "Cadia-001",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+					{
+						Type:  data.VerificationTypePin,
+						Value: "40401",
+					},
+				},
+			},
+			expectedStatus: http.StatusCreated,
+			assertCreatedFn: func(t *testing.T, receiverID string) {
+				receiver, err := models.Receiver.Get(ctx, dbConnectionPool, receiverID)
+				require.NoError(t, err)
+				assert.Equal(t, "horus.lupercal@example.com", receiver.Email)
+				assert.Equal(t, "Cadia-001", receiver.ExternalID)
+
+				verifications, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiverID)
+				require.NoError(t, err)
+				assert.Len(t, verifications, 2)
+
+				receiverWallets, err := models.ReceiverWallet.GetWithReceiverIDs(ctx, dbConnectionPool, data.ReceiverIDs{receiverID})
+				require.NoError(t, err)
+				assert.Len(t, receiverWallets, 0)
+			},
+		},
+		{
+			name: "create receiver with phone and wallet",
+			requestBody: dto.CreateReceiverRequest{
+				PhoneNumber: "+41555511112",
+				ExternalID:  "Terra-001",
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
+						Memo:    "13371337",
+					},
+				},
+			},
+			expectedStatus: http.StatusCreated,
+			assertCreatedFn: func(t *testing.T, receiverID string) {
+				receiver, err := models.Receiver.Get(ctx, dbConnectionPool, receiverID)
+				require.NoError(t, err)
+				assert.Equal(t, "+41555511112", receiver.PhoneNumber)
+				assert.Equal(t, "Terra-001", receiver.ExternalID)
+
+				verifications, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiverID)
+				require.NoError(t, err)
+				assert.Len(t, verifications, 0)
+
+				receiverWallets, err := models.ReceiverWallet.GetWithReceiverIDs(ctx, dbConnectionPool, data.ReceiverIDs{receiverID})
+				require.NoError(t, err)
+				assert.Len(t, receiverWallets, 1)
+
+				wallet := receiverWallets[0]
+				assert.Equal(t, data.RegisteredReceiversWalletStatus, wallet.Status)
+				assert.Equal(t, "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K", wallet.StellarAddress)
+				assert.Equal(t, "13371337", wallet.StellarMemo)
+				assert.Equal(t, schema.MemoTypeID, wallet.StellarMemoType)
+			},
+		},
+		{
+			name: "create complete receiver with both email/phone and verifications/wallet",
+			requestBody: dto.CreateReceiverRequest{
+				Email:       "guilliman@example.com",
+				PhoneNumber: "+41555511111",
+				ExternalID:  "Ultramar-001",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
+					},
+				},
+			},
+			expectedStatus: http.StatusCreated,
+			assertCreatedFn: func(t *testing.T, receiverID string) {
+				receiver, err := models.Receiver.Get(ctx, dbConnectionPool, receiverID)
+				require.NoError(t, err)
+				assert.Equal(t, "guilliman@example.com", receiver.Email)
+				assert.Equal(t, "+41555511111", receiver.PhoneNumber)
+				assert.Equal(t, "Ultramar-001", receiver.ExternalID)
+
+				verifications, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiverID)
+				require.NoError(t, err)
+				assert.Len(t, verifications, 1)
+
+				receiverWallets, err := models.ReceiverWallet.GetWithReceiverIDs(ctx, dbConnectionPool, data.ReceiverIDs{receiverID})
+				require.NoError(t, err)
+				assert.Len(t, receiverWallets, 1)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
+			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+
+			jsonBody, err := json.Marshal(tc.requestBody)
+			require.NoError(t, err)
+
+			req, err := http.NewRequest("POST", "/receivers", bytes.NewBuffer(jsonBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+
+			if tc.expectedStatus == http.StatusCreated {
+				var response GetReceiverResponse
+				err = json.Unmarshal(rr.Body.Bytes(), &response)
+				require.NoError(t, err)
+
+				// Check created receiver details
+				tc.assertCreatedFn(t, response.Receiver.ID)
+			}
+		})
+	}
+}
+
+func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	r := chi.NewRouter()
+	r.Post("/receivers", handler.CreateReceiver)
+
+	// Create a receiver with a specific phone number and email
+	existingReceiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		PhoneNumber: "+14155556666",
+		Email:       "existing@example.com",
+	})
+
+	testCases := []struct {
+		name         string
+		request      dto.CreateReceiverRequest
+		expectedBody string
+	}{
+		{
+			name: "duplicate email conflict",
+			request: dto.CreateReceiverRequest{
+				Email:      existingReceiver.Email,
+				ExternalID: "test-external-id-1",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedBody: `{
+				"error": "The provided email is already associated with another user.",
+				"extras": {
+					"email": "email must be unique"
+				}
+			}`,
+		},
+		{
+			name: "duplicate phone number conflict",
+			request: dto.CreateReceiverRequest{
+				PhoneNumber: existingReceiver.PhoneNumber,
+				ExternalID:  "test-external-id-2",
+				Verifications: []dto.ReceiverVerificationRequest{
+					{
+						Type:  data.VerificationTypeDateOfBirth,
+						Value: "1990-01-01",
+					},
+				},
+			},
+			expectedBody: `{
+				"error": "The provided phone_number is already associated with another user.",
+				"extras": {
+					"phone_number": "phone_number must be unique"
+				}
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reqBody, err := json.Marshal(tc.request)
+			require.NoError(t, err)
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, http.StatusConflict, rr.Code)
+			assert.JSONEq(t, tc.expectedBody, rr.Body.String())
+		})
+	}
 }

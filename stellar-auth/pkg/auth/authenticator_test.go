@@ -538,7 +538,7 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now().Add(-time.Hour*25))
 
 		err := authenticator.ResetPassword(ctx, token, newPassword)
-		require.ErrorIs(t, err, ErrInvalidResetPasswordToken)
+		require.ErrorIs(t, err, ErrExpiredResetPasswordToken)
 	})
 
 	passwordEncrypterMock.AssertExpectations(t)

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -20,6 +21,9 @@ type DistributionAccountServiceInterface interface {
 	GetBalances(context context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error)
 	GetBalance(context context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error)
 }
+
+// ErrNoBalanceForAsset signals that the distribution account has no balance for the requested asset.
+var ErrNoBalanceForAsset = errors.New("no balance for asset")
 
 type DistributionAccountServiceOptions struct {
 	HorizonClient horizonclient.ClientInterface
@@ -142,7 +146,7 @@ func (s *StellarDistributionAccountService) GetBalance(ctx context.Context, acco
 		return assetBalance, nil
 	}
 
-	return 0, fmt.Errorf("balance for asset %s not found for distribution account", asset)
+	return 0, fmt.Errorf("%w: balance for asset %s not found for distribution account", ErrNoBalanceForAsset, asset)
 }
 
 type CircleDistributionAccountService struct {
@@ -193,7 +197,7 @@ func (s *CircleDistributionAccountService) GetBalance(ctx context.Context, accou
 	asset = data.Asset{Code: asset.Code, Issuer: asset.Issuer} // scrub the other fields
 	assetBalance, ok := accBalances[asset]
 	if !ok {
-		return 0, fmt.Errorf("balance for asset %v not found for distribution account", asset)
+		return 0, fmt.Errorf("%w: balance for asset %v not found for distribution account", ErrNoBalanceForAsset, asset)
 	}
 
 	return assetBalance, nil

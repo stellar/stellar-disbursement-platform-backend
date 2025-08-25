@@ -47,33 +47,31 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		wallets, err := models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
 
-		// Test only on Vibrant Assist and Vibrant Assist RC. This will help adding wallets without breaking tests.
-		var vibrantAssist, vibrantAssistRC data.Wallet
+		// Test only on Vesseo and Beans App. This will help adding wallets without breaking tests.
+		var vesseo, beansApp data.Wallet
 
 		for _, w := range wallets {
-			if w.Name == "Vibrant Assist" {
-				vibrantAssist = w
-			} else if w.Name == "Vibrant Assist RC" {
-				vibrantAssistRC = w
+			if w.Name == "Vesseo" {
+				vesseo = w
+			} else if w.Name == "Beans App" {
+				beansApp = w
 			}
 		}
 
-		require.NotNil(t, vibrantAssist, "Vibrant Assist wallet not found")
-		require.NotNil(t, vibrantAssistRC, "Vibrant Assist RC wallet not found")
+		require.NotNil(t, vesseo, "Vesseo wallet not found")
+		require.NotNil(t, beansApp, "Beans App wallet not found")
 
-		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
-		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
+		assert.Equal(t, "Vesseo", vesseo.Name)
+		assert.Equal(t, "Beans App", beansApp.Name)
 
 		expectedLogs := []string{
 			"updating/inserting wallets for the 'pubnet' network",
-			// "Name: Beans App",
-			// "Homepage: https://www.beansapp.com/disbursements",
-			// "Deep Link Schema: https://www.beansapp.com/disbursements/registration?redirect=true",
-			// "SEP-10 Client Domain: api.beansapp.com",
-			"Name: Vibrant Assist",
-			"Homepage: https://vibrantapp.com/vibrant-assist",
-			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: vibrantapp.com",
+			"Name: Vesseo",
+			"Homepage: https://vesseoapp.com",
+			"Deep Link Schema: https://vesseoapp.com/disbursement",
+			"SEP-10 Client Domain: vesseoapp.com",
+			"Name: Beans App",
+			"Homepage: https://beansapp.com",
 		}
 
 		logs := buf.String()
@@ -85,30 +83,30 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 	t.Run("updates and inserts wallets", func(t *testing.T) {
 		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 
-		data.CreateWalletFixture(t, ctx, dbConnectionPool, "Vibrant Assist", "https://vibrantapp.com", "api-dev.vibrantapp.com", "https://vibrantapp.com/sdp-dev")
+		data.CreateWalletFixture(t, ctx, dbConnectionPool, "Vesseo", "https://vesseoapp.com/old", "vesseoapp-old.com", "https://vesseoapp.com/old-disbursement")
 
 		wallets, err := models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
 
 		assert.Len(t, wallets, 1)
-		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
-		assert.Equal(t, "https://vibrantapp.com", wallets[0].Homepage)
-		assert.Equal(t, "api-dev.vibrantapp.com", wallets[0].SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp-dev", wallets[0].DeepLinkSchema)
+		assert.Equal(t, "Vesseo", wallets[0].Name)
+		assert.Equal(t, "https://vesseoapp.com/old", wallets[0].Homepage)
+		assert.Equal(t, "vesseoapp-old.com", wallets[0].SEP10ClientDomain)
+		assert.Equal(t, "https://vesseoapp.com/old-disbursement", wallets[0].DeepLinkSchema)
 
 		walletsNetworkMap := WalletsNetworkMapType{
 			utils.PubnetNetworkType: {
 				{
-					Name:              "Vibrant Assist",
-					Homepage:          "https://vibrantapp.com/vibrant-assist",
-					DeepLinkSchema:    "https://vibrantapp.com/sdp-dev",
-					SEP10ClientDomain: "vibrantapp.com",
+					Name:              "Vesseo",
+					Homepage:          "https://vesseoapp.com",
+					DeepLinkSchema:    "https://vesseoapp.com/disbursement",
+					SEP10ClientDomain: "vesseoapp.com",
 				},
 				{
-					Name:              "BOSS Money",
-					Homepage:          "https://www.walletbyboss.com",
-					DeepLinkSchema:    "https://www.walletbyboss.com",
-					SEP10ClientDomain: "www.walletbyboss.com",
+					Name:              "Beans App",
+					Homepage:          "https://beansapp.com",
+					DeepLinkSchema:    "https://www.beansapp.com/disbursements/registration?env=prod",
+					SEP10ClientDomain: "api.beansapp.com",
 				},
 			},
 		}
@@ -124,26 +122,33 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Len(t, wallets, 2)
-		assert.Equal(t, "BOSS Money", wallets[0].Name)
-		assert.Equal(t, "https://www.walletbyboss.com", wallets[0].Homepage)
-		assert.Equal(t, "www.walletbyboss.com", wallets[0].SEP10ClientDomain)
-		assert.Equal(t, "https://www.walletbyboss.com", wallets[0].DeepLinkSchema)
 
-		assert.Equal(t, "Vibrant Assist", wallets[1].Name)
-		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[1].Homepage)
-		assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp-dev", wallets[1].DeepLinkSchema)
+		// Find Beans App and Vesseo in the results (order might vary)
+		var beansApp, vesseo data.Wallet
+		for _, w := range wallets {
+			if w.Name == "Beans App" {
+				beansApp = w
+			} else if w.Name == "Vesseo" {
+				vesseo = w
+			}
+		}
+
+		assert.Equal(t, "Beans App", beansApp.Name)
+		assert.Equal(t, "https://beansapp.com", beansApp.Homepage)
+		assert.Equal(t, "api.beansapp.com", beansApp.SEP10ClientDomain)
+		assert.Equal(t, "https://www.beansapp.com/disbursements/registration?env=prod", beansApp.DeepLinkSchema)
+
+		assert.Equal(t, "Vesseo", vesseo.Name)
+		assert.Equal(t, "https://vesseoapp.com", vesseo.Homepage)
+		assert.Equal(t, "vesseoapp.com", vesseo.SEP10ClientDomain)
+		assert.Equal(t, "https://vesseoapp.com/disbursement", vesseo.DeepLinkSchema)
 
 		expectedLogs := []string{
 			"updating/inserting wallets for the 'pubnet' network",
-			"Name: BOSS Money",
-			"Homepage: https://www.walletbyboss.com",
-			"Deep Link Schema: https://www.walletbyboss.com",
-			"SEP-10 Client Domain: www.walletbyboss.com",
-			"Name: Vibrant Assist",
-			"Homepage: https://vibrantapp.com/vibrant-assist",
-			"Deep Link Schema: https://vibrantapp.com/sdp-dev",
-			"SEP-10 Client Domain: vibrantapp.com",
+			"Name: Beans App",
+			"Homepage: https://beansapp.com",
+			"Name: Vesseo",
+			"Homepage: https://vesseoapp.com",
 		}
 
 		logs := buf.String()

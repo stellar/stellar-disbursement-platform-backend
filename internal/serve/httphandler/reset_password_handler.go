@@ -63,9 +63,12 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	// Step 2: Reset password with a valid token
 	err = h.AuthManager.ResetPassword(ctx, resetPasswordRequest.ResetToken, resetPasswordRequest.Password)
 	if err != nil {
-		if errors.Is(err, auth.ErrInvalidResetPasswordToken) {
-			httperror.BadRequest("invalid reset password token", err, nil).Render(w)
-		} else {
+		switch {
+		case errors.Is(err, auth.ErrExpiredResetPasswordToken):
+			httperror.BadRequest("Reset password token expired, please request a new token through the forgot password flow.", err, nil).Render(w)
+		case errors.Is(err, auth.ErrInvalidResetPasswordToken):
+			httperror.BadRequest("Invalid reset password token.", err, nil).Render(w)
+		default:
 			httperror.InternalError(ctx, "Cannot reset password", err, nil).Render(w)
 		}
 		return

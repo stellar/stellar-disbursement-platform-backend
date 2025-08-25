@@ -108,6 +108,14 @@ global:
   recaptchaSiteKey: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
   recaptchaSiteSecretKey: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
 
+  ## @param global.bridgeIntegration.enabled Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.
+  ## @param global.bridgeIntegration.baseUrl The base URL of the bridge api.
+  ## @param global.bridgeIntegration.apiKey The API key for the bridge integration.
+  bridgeIntegration:
+      enabled: false
+      baseUrl: #required if bridgeIntegration.enabled is true
+      apiKey: #required if bridgeIntegration.enabled is true
+
 
 # =========================== START sdp ===========================
 ## @section Stellar Disbursement Platform (SDP) parameters
@@ -142,7 +150,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "3.7.3"
+    tag: "4.0.0"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -188,6 +196,8 @@ sdp:
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
   ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
   ## @param sdp.configMap.data.CIRCLE_API_TYPE The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".
+  ## @extra sdp.configMap.data.ENABLE_BRIDGE_INTEGRATION Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.
+  ## @extra sdp.configMap.data.BRIDGE_BASE_URL The base URL of the bridge API. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
   configMap:
     annotations:
     data:
@@ -255,6 +265,7 @@ sdp:
   ## @extra sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
   ## @extra sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   ## @extra sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+  ## @extra sdp.kubeSecrets.data.BRIDGE_API_KEY The API key for the bridge integration. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
   kubeSecrets:
     secretName: "sdp-backend-secret-name"
     create: false
@@ -306,12 +317,15 @@ sdp:
 #      ADMIN_ACCOUNT: #required
 #      ADMIN_API_KEY: #required
 
-      ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
-      ## @param sdp.ingress.enabled If true, an ingress controller will be created for the SDP service.
-      ## @param sdp.ingress.className Name of the IngressClass to be used for the ingress controller.
-      ## @skip sdp.ingress.annotations
-      ## @param sdp.ingress.tls[0].hosts List of hosts covered by the TLS certificate.
-      ## @param sdp.ingress.tls[0].secretName The name of the Kubernetes TLS secret. You need to create this secret manually.
+      ## Bridge Integration configuration
+#      BRIDGE_API_KEY: #optional, depends on the value of ENABLE_BRIDGE_INTEGRATION.
+
+  ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
+  ## @param sdp.ingress.enabled If true, an ingress controller will be created for the SDP service.
+  ## @param sdp.ingress.className Name of the IngressClass to be used for the ingress controller.
+  ## @skip sdp.ingress.annotations
+  ## @param sdp.ingress.tls[0].hosts List of hosts covered by the TLS certificate.
+  ## @param sdp.ingress.tls[0].secretName The name of the Kubernetes TLS secret. You need to create this secret manually.
   ingress:
     enabled: true
     className: "nginx"
@@ -586,7 +600,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:3.7.0
+    fullName: stellar/stellar-disbursement-platform-frontend:4.0.0
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.

@@ -9,6 +9,10 @@ on:
   push:
     branches:
       - develop
+
+permissions:
+  contents: read
+
 jobs:
   tests:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml
@@ -51,16 +55,16 @@ jobs:
             echo "TAGS=stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Login to DockerHub
-        uses: docker/login-action@v3.4.0
+        uses: docker/login-action@v3.5.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push to DockerHub (release prd)
-        uses: docker/build-push-action@v6.16.0
+        uses: docker/build-push-action@v6.18.0
         with:
           push: true
           build-args: |
@@ -77,10 +81,10 @@ jobs:
       - anchor_platform_integration_check
       - e2e_integration_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Login to DockerHub
-        uses: docker/login-action@v3.4.0
+        uses: docker/login-action@v3.5.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -95,7 +99,7 @@ jobs:
         run: echo "SHA=$(git rev-parse --short ${{ github.sha }} )" >> $GITHUB_OUTPUT
 
       - name: Build and push to DockerHub (develop branch)
-        uses: docker/build-push-action@v6.16.0
+        uses: docker/build-push-action@v6.18.0
         with:
           push: true
           build-args: |

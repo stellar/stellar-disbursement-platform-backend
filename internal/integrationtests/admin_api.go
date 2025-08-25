@@ -12,7 +12,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type AdminApiIntegrationTests struct {
@@ -23,7 +22,7 @@ type AdminApiIntegrationTests struct {
 }
 
 type AdminApiIntegrationTestsInterface interface {
-	CreateTenant(ctx context.Context, body CreateTenantRequest) (*tenant.Tenant, error)
+	CreateTenant(ctx context.Context, body CreateTenantRequest) (*schema.Tenant, error)
 }
 
 type CreateTenantRequest struct {
@@ -37,7 +36,7 @@ type CreateTenantRequest struct {
 	SDPUIBaseURL            string             `json:"sdp_ui_base_url"`
 }
 
-func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body CreateTenantRequest) (*tenant.Tenant, error) {
+func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body CreateTenantRequest) (*schema.Tenant, error) {
 	reqURL, err := url.JoinPath(aa.AdminApiBaseURL, "tenants")
 	if err != nil {
 		return nil, fmt.Errorf("building url to create tenant: %w", err)
@@ -70,7 +69,7 @@ func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body Create
 		return nil, fmt.Errorf("unexpected status code when creating tenant: %d", resp.StatusCode)
 	}
 
-	var t tenant.Tenant
+	var t schema.Tenant
 	if err = json.NewDecoder(resp.Body).Decode(&t); err != nil {
 		return nil, fmt.Errorf("decoding response when creating tenant: %w", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -58,7 +59,7 @@ func (s *DistributionAccountService) rotateDistributionAccount(ctx context.Conte
 	}
 
 	// 3. Update the tenant with the new distribution account
-	t, err := tenant.GetTenantFromContext(ctx)
+	t, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't get tenant from context: %w", err)
 	}

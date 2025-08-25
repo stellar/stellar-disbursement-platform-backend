@@ -11,6 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -47,7 +48,7 @@ func (r PatchCircleConfigRequest) validate() error {
 func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	tnt, err := tenant.GetTenantFromContext(ctx)
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(w)
 		return

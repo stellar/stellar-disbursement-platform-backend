@@ -22,14 +22,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) {
@@ -213,10 +212,10 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 
 	// Update context with tenant and auth token
-	tnt := tenant.Tenant{ID: "tenant-id"}
-	ctx = tenant.SaveTenantInContext(context.Background(), &tnt)
+	tnt := schema.Tenant{ID: "tenant-id"}
+	ctx = sdpcontext.SetTenantInContext(context.Background(), &tnt)
 	token := "token"
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+	ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 	// Create distribution accounts
 	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
@@ -501,10 +500,10 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
-	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+	tnt := schema.Tenant{ID: "tenant-id"}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
 	token := "token"
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+	ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 	// Create fixtures: asset, wallet
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
@@ -1047,11 +1046,11 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 
 	ctx := context.Background()
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
-	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+	tnt := schema.Tenant{ID: "tenant-id"}
+	ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 
 	token := "token"
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+	ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 	user := &auth.User{
 		ID:    "user-id",

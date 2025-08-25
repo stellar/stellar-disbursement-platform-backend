@@ -24,9 +24,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -85,13 +86,7 @@ type PatchDisbursementStatusRequest struct {
 func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Grab token and user
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		httperror.Unauthorized("", nil, nil).Render(w)
-		return
-	}
-	user, err := d.AuthManager.GetUser(ctx, token)
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
 		return
@@ -105,7 +100,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		disbursement, httpErr = d.postDisbursementWithInstructions(ctx, r, user)
 	} else {
 		var req PostDisbursementRequest
-		if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			httperror.BadRequest(err.Error(), err, nil).Render(w)
 			return
 		}
@@ -283,20 +278,14 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	disbursementID := chi.URLParam(r, "id")
 	ctx := r.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		msg := fmt.Sprintf("Cannot get token from context when processing instructions for disbursement with ID %s", disbursementID)
-		httperror.InternalError(ctx, msg, nil, nil).Render(w)
-		return
-	}
-	user, err := d.AuthManager.GetUser(ctx, token)
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot get user from context token when processing instructions for disbursement with ID %s", disbursementID)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
 	}
 
-	err = db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+	if err := db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// check if disbursement exists
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if getErr != nil {
@@ -309,8 +298,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		}
 
 		return d.validateAndProcessInstructions(ctx, r, dbTx, user, disbursement)
-	})
-	if err != nil {
+	}); err != nil {
 		var httpErr *httperror.HTTPError
 		if errors.As(err, &httpErr) {
 			httpErr.Render(w)
@@ -490,13 +478,15 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	disbursementID := chi.URLParam(r, "id")
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		httperror.InternalError(ctx, "Cannot get token from context", err, nil).Render(w)
+		return
 	}
 	user, err := d.AuthManager.GetUser(ctx, token)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get user from token", err, nil).Render(w)
+		return
 	}
 
 	switch toStatus {

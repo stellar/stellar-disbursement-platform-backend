@@ -10,9 +10,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_MemoResolver_GetMemo(t *testing.T) {
@@ -22,7 +22,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := tenant.Tenant{
+	tnt := schema.Tenant{
 		ID:      "tenant-id",
 		BaseURL: utils.Ptr("https://example.com"),
 	}
@@ -119,7 +119,7 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			name: "🟢 return tenant memo when enabled",
 			getCtxFn: func(t *testing.T) context.Context {
 				ctx := context.Background()
-				return tenant.SaveTenantInContext(ctx, &tnt)
+				return sdpcontext.SetTenantInContext(ctx, &tnt)
 			},
 			receiverWallet: data.ReceiverWallet{},
 			orgMemoEnabled: true,
@@ -150,45 +150,6 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedMemo, memo)
 			}
-		})
-	}
-}
-
-func Test_generateHashFromBaseURL(t *testing.T) {
-	testCases := []struct {
-		baseURL      string
-		expectedHash string
-	}{
-		{
-			baseURL:      "https://example.com",
-			expectedHash: "sdp-100680ad546c",
-		},
-		{
-			baseURL:      "   https://example.com   ",
-			expectedHash: "sdp-100680ad546c",
-		},
-		{
-			baseURL:      "https://example.com/",
-			expectedHash: "sdp-100680ad546c",
-		},
-		{
-			baseURL:      "  https://example.com/  ",
-			expectedHash: "sdp-100680ad546c",
-		},
-		{
-			baseURL:      "https://example.com/path?query=param",
-			expectedHash: "sdp-58821f845568",
-		},
-		{
-			baseURL:      "https://test.com",
-			expectedHash: "sdp-396936bd0bf0",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.baseURL, func(t *testing.T) {
-			hash := GenerateHashFromBaseURL(tc.baseURL)
-			assert.Equal(t, tc.expectedHash, hash)
 		})
 	}
 }

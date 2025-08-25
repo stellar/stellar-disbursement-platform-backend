@@ -10,9 +10,9 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type ReceiverRegistrationHandler struct {
@@ -62,7 +62,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		privacyPolicyLink = *organization.PrivacyPolicyLink
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil || currentTenant == nil {
 		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).WithErrorCode(httperror.Code500_2).Render(w)
 		return
@@ -82,7 +82,8 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		ReCAPTCHASiteKey:    h.ReCAPTCHASiteKey,
 	}
 
-	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.SEP10StellarMemo(), sep24Claims.ClientDomain())
+	memo := sep24Claims.SEP10StellarMemo()
+	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.ClientDomain(), &memo)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		httperror.InternalError(ctx, "Cannot register receiver wallet", err, nil).WithErrorCode(httperror.Code500_4).Render(w)
 		return
