@@ -70,10 +70,12 @@ func MetricsRequestHandler(monitorService monitor.MonitorServiceInterface) func(
 				Status: fmt.Sprintf("%d", mw.Status()),
 				Route:  utils.GetRoutePattern(req),
 				Method: req.Method,
+				CommonLabels: monitor.CommonLabels{
+					TenantName: sdpcontext.MustGetTenantNameFromContext(req.Context()),
+				},
 			}
 
-			err := monitorService.MonitorHttpRequestDuration(duration, labels)
-			if err != nil {
+			if err := monitorService.MonitorHttpRequestDuration(duration, labels); err != nil {
 				log.Ctx(req.Context()).Errorf("Error trying to monitor request time: %s", err)
 			}
 		})

@@ -13,14 +13,13 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
 func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
-	mMonitorClient := sdpMonitorMocks.MockMonitorClient{}
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	tssMonitorSvc := TSSMonitorService{
-		Client:        &mMonitorClient,
+		Client:        mMonitorClient,
 		GitCommitHash: "0xABC",
 		Version:       "0.01",
 	}

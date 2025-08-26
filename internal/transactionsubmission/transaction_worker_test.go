@@ -31,7 +31,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
@@ -476,7 +475,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				tw.txModel = mockTxStore
 
 				// PART 2: mock deferred LogAndMonitorTransaction
-				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 					Return(nil).
@@ -520,7 +519,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				tw.chAccModel = mockChAccStore
 
 				// PART 3: mock deferred LogAndMonitorTransaction
-				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 					Return(nil).
@@ -642,7 +641,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			assert.Equal(t, 100, txProcessingLimiter.LimitValue())
 			tw.txProcessingLimiter = txProcessingLimiter
 			// PART 4: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -815,7 +814,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			}
 
 			// PART 4: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -894,7 +893,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 	tw.crashTrackerClient = mockCrashTrackerClient
 
 	// PART 3: mock deferred LogAndMonitorTransaction
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 		Return(nil).
@@ -991,7 +990,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 			}
 
 			// PART 2: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
