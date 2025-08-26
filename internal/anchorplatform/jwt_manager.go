@@ -2,12 +2,56 @@ package anchorplatform
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
 var ErrInvalidToken = fmt.Errorf("invalid token")
+
+type Sep10JWTClaims struct {
+	jwt.RegisteredClaims
+	ClientDomain string `json:"client_domain,omitempty"`
+	HomeDomain   string `json:"home_domain,omitempty"`
+}
+
+func (c Sep10JWTClaims) Valid() error {
+	if c.Issuer == "" {
+		return fmt.Errorf("issuer is required")
+	}
+
+	if c.Subject == "" {
+		return fmt.Errorf("subject is required")
+	}
+
+	if c.ID == "" {
+		return fmt.Errorf("jti (JWT ID) is required")
+	}
+
+	if c.IssuedAt == nil {
+		return fmt.Errorf("iat (issued at) is required")
+	}
+
+	if c.ExpiresAt == nil {
+		return fmt.Errorf("exp (expires at) is required")
+	}
+
+	err := c.RegisteredClaims.Valid()
+	if err != nil {
+		return fmt.Errorf("validating registered claims: %w", err)
+	}
+
+	if c.ClientDomain != "" && len(strings.TrimSpace(c.ClientDomain)) == 0 {
+		return fmt.Errorf("client_domain cannot be empty if provided")
+	}
+
+	if c.HomeDomain != "" && len(strings.TrimSpace(c.HomeDomain)) == 0 {
+		return fmt.Errorf("home_domain cannot be empty if provided")
+	}
+
+	return nil
+}
 
 type JWTManager struct {
 	secret                []byte
@@ -46,36 +90,32 @@ func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clien
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Millisecond * time.Duration(manager.expirationMiliseconds))),
 		},
 	}
-	err := claims.Valid()
-	if err != nil {
-		return "", fmt.Errorf("validating SEP24 token claims: %w", err)
-	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedToken, err := token.SignedString(manager.secret)
+	token, err := manager.signToken(claims)
 	if err != nil {
-		return "", fmt.Errorf("signing SEP24 token: %w", err)
+		return "", fmt.Errorf("generating SEP24 token: %w", err)
 	}
-
-	return signedToken, nil
+	return token, nil
 }
 
-// ParseSEP24TokenClaims will parse the provided token string and return the SEP24JWTClaims, if possible.
-// If the token is not a valid SEP-24 token, an error is returned instead.
-func (manager *JWTManager) ParseSEP24TokenClaims(tokenString string) (*SEP24JWTClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &SEP24JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return manager.secret, nil
-	})
+func (manager *JWTManager) GenerateSEP10Token(issuer, subject, jti, clientDomain, homeDomain string, iat, exp time.Time) (string, error) {
+	claims := Sep10JWTClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    issuer,
+			Subject:   subject,
+			ID:        jti,
+			IssuedAt:  jwt.NewNumericDate(iat),
+			ExpiresAt: jwt.NewNumericDate(exp),
+		},
+		ClientDomain: clientDomain,
+		HomeDomain:   homeDomain,
+	}
+
+	token, err := manager.signToken(claims)
 	if err != nil {
-		return nil, fmt.Errorf("parsing SEP24 token: %w", err)
+		return "", fmt.Errorf("generating SEP10 token: %w", err)
 	}
-
-	claims, ok := token.Claims.(*SEP24JWTClaims)
-	if !ok || !token.Valid {
-		return nil, ErrInvalidToken
-	}
-
-	return claims, nil
+	return token, nil
 }
 
 // GenerateDefaultToken will generate a JWT token string using the token manager and only the default claims.
@@ -85,33 +125,61 @@ func (manager *JWTManager) GenerateDefaultToken(id string) (string, error) {
 		Subject:   "stellar-disbursement-platform-backend",
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Millisecond * time.Duration(manager.expirationMiliseconds))),
 	}
-	err := claims.Valid()
+
+	token, err := manager.signToken(claims)
 	if err != nil {
-		return "", fmt.Errorf("validating token claims: %w", err)
+		return "", fmt.Errorf("generating default token: %w", err)
+	}
+	return token, nil
+}
+
+// ParseDefaultTokenClaims will parse the default claims from a JWT token string.
+func (manager *JWTManager) ParseDefaultTokenClaims(tokenString string) (*jwt.RegisteredClaims, error) {
+	return parseTokenClaims(manager.secret, tokenString, &jwt.RegisteredClaims{}, "default")
+}
+
+// ParseSEP10TokenClaims will parse the provided token string and return the Sep10JWTClaims, if possible.
+// If the token is not a valid SEP-10 token, an error is returned instead.
+func (manager *JWTManager) ParseSEP10TokenClaims(tokenString string) (*Sep10JWTClaims, error) {
+	return parseTokenClaims(manager.secret, tokenString, &Sep10JWTClaims{}, "SEP10")
+}
+
+// ParseSEP24TokenClaims will parse the provided token string and return the SEP24JWTClaims, if possible.
+// If the token is not a valid SEP-24 token, an error is returned instead.
+func (manager *JWTManager) ParseSEP24TokenClaims(tokenString string) (*SEP24JWTClaims, error) {
+	return parseTokenClaims(manager.secret, tokenString, &SEP24JWTClaims{}, "SEP24")
+}
+
+func (manager *JWTManager) signToken(claims jwt.Claims) (string, error) {
+	if validator, ok := claims.(interface{ Valid() error }); ok {
+		if err := validator.Valid(); err != nil {
+			return "", fmt.Errorf("validating token claims: %w", err)
+		}
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString(manager.secret)
 	if err != nil {
-		return "", fmt.Errorf("signing default token: %w", err)
+		return "", fmt.Errorf("signing token: %w", err)
 	}
 
 	return signedToken, nil
 }
 
-// ParseDefaultTokenClaims will parse the default claims from a JWT token string.
-func (manager *JWTManager) ParseDefaultTokenClaims(tokenString string) (*jwt.RegisteredClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return manager.secret, nil
+func parseTokenClaims[T jwt.Claims](secret []byte, tokenString string, claims T, operation string) (T, error) {
+	var zero T
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		return secret, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("parsing default token: %w", err)
+		return zero, fmt.Errorf("parsing %s token: %w", operation, err)
 	}
 
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	parsedClaims, ok := token.Claims.(T)
 	if !ok || !token.Valid {
-		return nil, ErrInvalidToken
+		return zero, ErrInvalidToken
 	}
 
-	return claims, nil
+	return parsedClaims, nil
 }

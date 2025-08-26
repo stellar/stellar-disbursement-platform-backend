@@ -55,9 +55,17 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	tenantDistAccPublicKey := "GDEWLTJMGKABNF3GBA3VTVBYPES3FXQHHJVJVI6X3CRKKFH5EMLRT5JZ"
 	distAccount := schema.NewDefaultStellarTransactionAccount(tenantDistAccPublicKey)
 
+	// Create a tenant with BaseURL for testing
+	testTenant := &tenant.Tenant{
+		ID:      "test-tenant-id",
+		Name:    "test-tenant",
+		BaseURL: func() *string { s := "https://tenant.example.com"; return &s }(),
+	}
+
 	testCases := []struct {
 		name              string
 		isTenantInContext bool
+		tenantInContext   *tenant.Tenant
 		s                 StellarTomlHandler
 		wantLines         []string
 	}{
@@ -69,31 +77,34 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				NetworkPassphrase:        network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`WEB_AUTH_ENDPOINT="https://test.com/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
 			},
 		},
 		{
 			name:              "pubnet (with tenant in context)",
 			isTenantInContext: true,
+			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
 			},
 		},
@@ -105,31 +116,34 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				NetworkPassphrase:        network.TestNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`WEB_AUTH_ENDPOINT="https://test.com/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
 			},
 		},
 		{
 			name:              "testnet (with tenant in context)",
 			isTenantInContext: true,
+			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.TestNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+				BaseURL:                  "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
 			},
 		},
@@ -137,6 +151,11 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
+
+			// Add tenant to context if needed
+			if tc.isTenantInContext && tc.tenantInContext != nil {
+				ctx = tenant.SaveTenantInContext(ctx, tc.tenantInContext)
+			}
 
 			// Prepare mock
 			mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
@@ -288,7 +307,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	tenant, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 
 	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
@@ -304,6 +323,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
+			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
 
 		r := chi.NewRouter()
@@ -311,6 +331,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		req, err := http.NewRequestWithContext(ctx, "GET", "/.well-known/stellar.toml", nil)
 		require.NoError(t, err)
+		req.Host = *tenant.BaseURL
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -320,7 +341,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
-			WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"
+			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/auth"
 			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
 
 			[DOCUMENTATION]
@@ -354,6 +375,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
+			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
 
 		r := chi.NewRouter()
@@ -361,6 +383,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		req, err := http.NewRequestWithContext(ctx, "GET", "/.well-known/stellar.toml", nil)
 		require.NoError(t, err)
+		req.Host = *tenant.BaseURL
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -370,7 +393,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
-			WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"
+			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/auth"
 			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
 
 			[DOCUMENTATION]
@@ -405,6 +428,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
 			InstanceName:                "SDP Pubnet",
+			BaseURL:                     "https://instance.example.com",
 		}
 
 		r := chi.NewRouter()
@@ -412,6 +436,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		req, err := http.NewRequest("GET", "/.well-known/stellar.toml", nil)
 		require.NoError(t, err)
+		req.Host = "instance.example.com" // Set host for request
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -421,7 +446,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
-			WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"
+			WEB_AUTH_ENDPOINT="https://instance.example.com/auth"
 			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
 
 			[DOCUMENTATION]
@@ -474,6 +499,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		req, err := http.NewRequestWithContext(ctx, "GET", "/.well-known/stellar.toml", nil)
 		require.NoError(t, err)
+		req.Host = *tenant.BaseURL
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -483,7 +509,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
-			WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"
+			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/auth"
 			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
 
 			[DOCUMENTATION]

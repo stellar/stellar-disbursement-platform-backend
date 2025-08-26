@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/stellar/go/network"
@@ -18,12 +19,13 @@ import (
 )
 
 type StellarTomlHandler struct {
-	AnchorPlatformBaseSepURL    string
-	DistributionAccountResolver signing.DistributionAccountResolver
-	NetworkPassphrase           string
 	Models                      *data.Models
+	DistributionAccountResolver signing.DistributionAccountResolver
+	AnchorPlatformBaseSepURL    string
+	NetworkPassphrase           string
 	Sep10SigningPublicKey       string
 	InstanceName                string
+	BaseURL                     string
 }
 
 const (
@@ -47,7 +49,20 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.Address, s.Sep10SigningPublicKey)
 	}
 
-	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
+	parsedBaseURL, err := url.Parse(s.BaseURL)
+	if err != nil {
+		log.Ctx(ctx).Warnf("Invalid environment BaseURL %s: %v", s.BaseURL, err)
+		parsedBaseURL = &url.URL{Scheme: "https"}
+	}
+
+	var webAuthEndpoint string
+	t, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		webAuthEndpoint = fmt.Sprintf("%s://%s/auth", parsedBaseURL.Scheme, req.Host)
+	} else {
+		webAuthEndpoint = *t.BaseURL + "/auth"
+	}
+
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
 
 	return fmt.Sprintf(`

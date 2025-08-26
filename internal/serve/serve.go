@@ -75,6 +75,7 @@ type ServeOptions struct {
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
+	Sep10Service                    services.SEP10Service
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
@@ -138,6 +139,23 @@ func (opts *ServeOptions) SetupDependencies() error {
 	if err != nil {
 		return fmt.Errorf("error initializing password validator: %w", err)
 	}
+
+	// Determine allow retry based on network passphrase
+	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
+
+	sep10Service, err := services.NewSEP10Service(
+		sep24JWTManager,
+		opts.NetworkPassphrase,
+		opts.Sep10SigningPrivateKey,
+		opts.BaseURL,
+		allowHTTPRetry,
+		opts.SubmitterEngine.HorizonClient,
+	)
+	if err != nil {
+		return fmt.Errorf("initializing SEP 10 Service: %w", err)
+	}
+
+	opts.Sep10Service = sep10Service
 
 	return nil
 }
@@ -597,6 +615,15 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 	})
 
+	mux.Group(func(r chi.Router) {
+		sep10Handler := httphandler.SEP10Handler{
+			SEP10Service: o.Sep10Service,
+		}
+
+		r.Get("/auth", sep10Handler.GetChallenge)
+		r.Post("/auth", sep10Handler.PostChallenge)
+	})
+
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
@@ -615,6 +642,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
 			InstanceName:                o.InstanceName,
+			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
 
 		r.Get("/sep24/info", httphandler.SEP24InfoHandler{
