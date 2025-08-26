@@ -19,10 +19,10 @@ import (
 )
 
 type StellarTomlHandler struct {
-	AnchorPlatformBaseSepURL    string
-	DistributionAccountResolver signing.DistributionAccountResolver
-	NetworkPassphrase           string
 	Models                      *data.Models
+	DistributionAccountResolver signing.DistributionAccountResolver
+	AnchorPlatformBaseSepURL    string
+	NetworkPassphrase           string
 	Sep10SigningPublicKey       string
 	InstanceName                string
 	EnableAnchorPlatform        bool
@@ -53,11 +53,9 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	var webAuthEndpoint, transferServerSep0024 string
 
 	if s.EnableAnchorPlatform {
-		// Use Anchor Platform URLs
 		webAuthEndpoint = s.AnchorPlatformBaseSepURL + "/auth"
 		transferServerSep0024 = s.AnchorPlatformBaseSepURL + "/sep24"
 	} else {
-		// Use SDP native URLs
 		parsedBaseURL, err := url.Parse(s.BaseURL)
 		if err != nil {
 			log.Ctx(ctx).Warnf("Invalid environment BaseURL %s: %v", s.BaseURL, err)
@@ -66,10 +64,10 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 
 		t, err := tenant.GetTenantFromContext(ctx)
 		if err != nil {
-			webAuthEndpoint = fmt.Sprintf("%s://%s/sep10/auth", parsedBaseURL.Scheme, req.Host)
+			webAuthEndpoint = fmt.Sprintf("%s://%s/auth", parsedBaseURL.Scheme, req.Host)
 			transferServerSep0024 = fmt.Sprintf("%s://%s/sep24", parsedBaseURL.Scheme, req.Host)
 		} else {
-			webAuthEndpoint = *t.BaseURL + "/sep10/auth"
+			webAuthEndpoint = *t.BaseURL + "/auth"
 			transferServerSep0024 = *t.BaseURL + "/sep24"
 		}
 	}

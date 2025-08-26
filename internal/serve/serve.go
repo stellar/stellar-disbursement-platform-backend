@@ -75,6 +75,7 @@ type ServeOptions struct {
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
+	Sep10Service                    services.SEP10Service
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
@@ -139,6 +140,23 @@ func (opts *ServeOptions) SetupDependencies() error {
 	if err != nil {
 		return fmt.Errorf("error initializing password validator: %w", err)
 	}
+
+	// Determine allow retry based on network passphrase
+	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
+
+	sep10Service, err := services.NewSEP10Service(
+		sep24JWTManager,
+		opts.NetworkPassphrase,
+		opts.Sep10SigningPrivateKey,
+		opts.BaseURL,
+		allowHTTPRetry,
+		opts.SubmitterEngine.HorizonClient,
+	)
+	if err != nil {
+		return fmt.Errorf("initializing SEP 10 Service: %w", err)
+	}
+
+	opts.Sep10Service = sep10Service
 
 	return nil
 }
@@ -614,6 +632,15 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 	})
 
+	mux.Group(func(r chi.Router) {
+		sep10Handler := httphandler.SEP10Handler{
+			SEP10Service: o.Sep10Service,
+		}
+
+		r.Get("/auth", sep10Handler.GetChallenge)
+		r.Post("/auth", sep10Handler.PostChallenge)
+	})
+
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
@@ -636,9 +663,19 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
 
-		r.Get("/sep24/info", httphandler.SEP24InfoHandler{
-			Models: o.Models,
-		}.ServeHTTP)
+		r.Route("/sep24", func(r chi.Router) {
+			sep24Handler := httphandler.SEP24Handler{
+				Models:             o.Models,
+				SEP24JWTManager:    o.sep24JWTManager,
+				InteractiveBaseURL: o.BaseURL,
+			}
+			r.Get("/info", sep24Handler.GetInfo)
+			// Protect transaction lookup with SEP-10 auth to ensure only authorized clients can access details
+			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
+
+			// For initiating interactive deposit, allow either the new middleware (preferred) or legacy header path inside handler
+			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
+		})
 
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/wallet-registration/*", httphandler.SEP24InteractiveDepositHandler{
@@ -662,7 +699,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 			}.ServeHTTP)
 			r.Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
 				Models:                      o.Models,
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
 				ReCAPTCHADisabled:           o.DisableReCAPTCHA,

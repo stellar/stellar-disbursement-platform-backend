@@ -13,8 +13,9 @@ import (
 
 type SEP24JWTClaims struct {
 	// Fields expected according with https://github.com/stellar/java-stellar-anchor-sdk/blob/bfa9b1d735f099bc6a21f0b9c55bd381a50c16b8/platform/src/main/java/org/stellar/anchor/platform/service/SimpleInteractiveUrlConstructor.java#L47-L56
-	ClientDomainClaim string `json:"client_domain"`
-	HomeDomainClaim   string `json:"home_domain"`
+	ClientDomainClaim string            `json:"client_domain"`
+	HomeDomainClaim   string            `json:"home_domain"`
+	TransactionData   map[string]string `json:"data,omitempty"` // Transaction data including lang, kind, status, etc.
 	jwt.RegisteredClaims
 }
 

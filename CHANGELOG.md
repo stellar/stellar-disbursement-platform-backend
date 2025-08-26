@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Update wallet POST to allow accept new asset references [#696](https://github.com/stellar/stellar-disbursement-platform-backend/pull/696)
 - Update PATCH endpoint to extend update capabilities [#697](https://github.com/stellar/stellar-disbursement-platform-backend/pull/697)
 - Add `supported_assets` filter to `GET /wallets` endpoint [#734](https://github.com/stellar/stellar-disbursement-platform-backend/pull/734)
+- Add SEP10 /auth endpoints [#770](https://github.com/stellar/stellar-disbursement-platform-backend/pull/770)
+- Add SEP24 /info endpoints [#773](https://github.com/stellar/stellar-disbursement-platform-backend/pull/773)
+- Add SEP24 interactive deposit endpoint [#802](https://github.com/stellar/stellar-disbursement-platform-backend/pull/802)
+- Add Anchor Platform enabled FF and remove docker support [#803](https://github.com/stellar/stellar-disbursement-platform-backend/pull/803)
+[#802](https://github.com/stellar/stellar-disbursement-platform-backend/pull/802)
+
 
 ### Changed
 
