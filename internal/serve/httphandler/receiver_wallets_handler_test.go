@@ -23,7 +23,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_RetryInvitation(t *testing.T) {
@@ -36,8 +37,8 @@ func Test_RetryInvitation(t *testing.T) {
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	tnt := tenant.Tenant{ID: "tenant-id"}
-	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+	tnt := schema.Tenant{ID: "tenant-id"}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
 		handler := ReceiverWalletsHandler{Models: models}

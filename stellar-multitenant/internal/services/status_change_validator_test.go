@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -36,7 +37,7 @@ func Test_ValidateStatus(t *testing.T) {
 		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock)
 		createFixtures   func()
 		deleteFixtures   func()
-		reqStatus        tenant.TenantStatus
+		reqStatus        schema.TenantStatus
 		expectedErr      error
 	}{
 		{
@@ -48,7 +49,7 @@ func Test_ValidateStatus(t *testing.T) {
 					},
 				}).Return(nil, errors.New("foobar")).Once()
 			},
-			reqStatus:   tenant.DeactivatedTenantStatus,
+			reqStatus:   schema.DeactivatedTenantStatus,
 			expectedErr: fmt.Errorf("%w: %w", ErrCannotRetrieveTenantByID, errors.New("foobar")),
 		},
 		{
@@ -58,9 +59,9 @@ func Test_ValidateStatus(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{
 						tenant.FilterKeyID: tntID,
 					},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus, IsDefault: true}, nil).Once()
+				}).Return(&schema.Tenant{ID: tntID, Status: schema.ActivatedTenantStatus, IsDefault: true}, nil).Once()
 			},
-			reqStatus:   tenant.DeactivatedTenantStatus,
+			reqStatus:   schema.DeactivatedTenantStatus,
 			expectedErr: ErrCannotDeactivateDefaultTenant,
 		},
 		{
@@ -70,7 +71,7 @@ func Test_ValidateStatus(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{
 						tenant.FilterKeyID: tntID,
 					},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus}, nil).Once()
+				}).Return(&schema.Tenant{ID: tntID, Status: schema.ActivatedTenantStatus}, nil).Once()
 			},
 			createFixtures: func() {
 				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
@@ -93,7 +94,7 @@ func Test_ValidateStatus(t *testing.T) {
 			deleteFixtures: func() {
 				data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 			},
-			reqStatus:   tenant.DeactivatedTenantStatus,
+			reqStatus:   schema.DeactivatedTenantStatus,
 			expectedErr: ErrCannotDeactivateTenantWithActivePayments,
 		},
 		{
@@ -103,9 +104,9 @@ func Test_ValidateStatus(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{
 						tenant.FilterKeyID: tntID,
 					},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
+				}).Return(&schema.Tenant{ID: tntID, Status: schema.DeactivatedTenantStatus}, nil).Once()
 			},
-			reqStatus:   tenant.DeactivatedTenantStatus,
+			reqStatus:   schema.DeactivatedTenantStatus,
 			expectedErr: nil,
 		},
 		{
@@ -115,9 +116,9 @@ func Test_ValidateStatus(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{
 						tenant.FilterKeyID: tntID,
 					},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus}, nil).Once()
+				}).Return(&schema.Tenant{ID: tntID, Status: schema.ActivatedTenantStatus}, nil).Once()
 			},
-			reqStatus:   tenant.ActivatedTenantStatus,
+			reqStatus:   schema.ActivatedTenantStatus,
 			expectedErr: nil,
 		},
 		{
@@ -127,9 +128,9 @@ func Test_ValidateStatus(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{
 						tenant.FilterKeyID: tntID,
 					},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus}, nil).Once()
+				}).Return(&schema.Tenant{ID: tntID, Status: schema.CreatedTenantStatus}, nil).Once()
 			},
-			reqStatus:   tenant.ActivatedTenantStatus,
+			reqStatus:   schema.ActivatedTenantStatus,
 			expectedErr: ErrCannotActivateTenant,
 		},
 		{
@@ -139,9 +140,9 @@ func Test_ValidateStatus(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{
 						tenant.FilterKeyID: tntID,
 					},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
+				}).Return(&schema.Tenant{ID: tntID, Status: schema.DeactivatedTenantStatus}, nil).Once()
 			},
-			reqStatus:   tenant.CreatedTenantStatus,
+			reqStatus:   schema.CreatedTenantStatus,
 			expectedErr: ErrCannotPerformStatusUpdate,
 		},
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -67,7 +68,7 @@ func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx contex
 		return fmt.Errorf("getting tenant by id: %w", err)
 	}
 
-	ctx = tenant.SaveTenantInContext(ctx, tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, tnt)
 	err = h.service.PatchAPTransactionForPaymentEvent(ctx, payment)
 	if err != nil {
 		return fmt.Errorf("patching anchor platform transaction for payment event: %w", err)

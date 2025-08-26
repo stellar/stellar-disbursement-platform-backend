@@ -57,7 +57,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 		{
 			name: "error if phone number and email are provided",
 			receiverInfo: data.ReceiverRegistrationRequest{
-				Email:             "test@stellar.com",
+				Email:             "test@example.com",
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",

@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,7 +45,15 @@ func (e *ErrorVerificationAttemptsExceeded) Error() string {
 }
 
 const (
+	OTPExpirationTimeMinutes    = 5
+	OTPMaxAttempts              = 5
 	InformationNotFoundOnServer = "The information you provided could not be found"
+)
+
+var (
+	ErrOTPMaxAttemptsExceeded = errors.New("the number of attempts to confirm the OTP exceeded the max attempts")
+	ErrOTPExpired             = errors.New("the OTP is expired, please request a new one")
+	ErrOTPDoesNotMatch        = errors.New("the OTP does not match the one saved in the database")
 )
 
 type VerifyReceiverRegistrationHandler struct {
@@ -217,10 +226,14 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	}
 
 	// STEP 4: verify receiver wallet OTP
-	err = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *rw, otp)
-	if err != nil {
-		err = fmt.Errorf("receiver wallet OTP is not valid: %w", err)
-		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
+	if err = verifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *rw, otp); err != nil {
+		if errors.Is(err, ErrOTPDoesNotMatch) {
+			log.Ctx(ctx).Errorf("receiver wallet OTP does not match for receiver wallet ID %s", rw.ID)
+			return *rw, false, v.incrementOTPAttempts(ctx, rw)
+		} else {
+			err = fmt.Errorf("unable to verify receiver wallet OTP for receiver wallet ID %s: %w", rw.ID, err)
+			return receiverWallet, false, fmt.Errorf("verifying receiver wallet OTP: %w", err)
+		}
 	}
 
 	// STEP 5: update receiver wallet status to "REGISTERED"
@@ -306,18 +319,18 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 				err = fmt.Errorf("receiver with contact info %s not found in our server", truncatedContactInfo)
 				return nil, &ErrorInformationNotFound{cause: err}
 			}
-
-			// STEP 3: process receiverVerification PII info that matches the pair [receiverID, verificationType]
 			receiver := receivers[0]
-			err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
-			if err != nil {
-				return nil, fmt.Errorf("processing receiver verification entry for receiver with contact info %s: %w", truncatedContactInfo, err)
-			}
 
-			// STEP 4: process OTP
+			// STEP 3: process OTP
 			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
 			if err != nil {
 				return nil, fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, err)
+			}
+
+			// STEP 4: process receiverVerification PII info that matches the pair [receiverID, verificationType]
+			err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
+			if err != nil {
+				return nil, fmt.Errorf("processing receiver verification entry for receiver with contact info %s: %w", truncatedContactInfo, err)
 			}
 
 			// STEP 5: build event message to trigger a transaction in the TSS
@@ -345,25 +358,41 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			return postCommitFn, nil
 		},
 	}
-	atomicFnErr := db.RunInTransactionWithPostCommit(ctx, &opts)
-	if atomicFnErr != nil {
+
+	if atomicFnErr := db.RunInTransactionWithPostCommit(ctx, &opts); atomicFnErr != nil {
 		var errorInformationNotFound *ErrorInformationNotFound
-		if errors.As(atomicFnErr, &errorInformationNotFound) {
-			log.Ctx(ctx).Error(errorInformationNotFound.cause)
-			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).WithErrorCode(httperror.Code400_2).Render(w)
-			return
-		}
 		// if error is due to verification attempts being exceeded, we want to display the message with what that limit is clearly
 		// to the user
 		var errorVerficationAttemptsExceeded *ErrorVerificationAttemptsExceeded
-		if errors.As(atomicFnErr, &errorVerficationAttemptsExceeded) {
+
+		switch {
+		case errors.Is(atomicFnErr, ErrOTPMaxAttemptsExceeded):
+			httperror.BadRequest("Maximum OTP verification attempts exceeded. Please request a new OTP.", atomicFnErr, nil).
+				WithErrorCode(httperror.Code400_4).
+				Render(w)
+			return
+		case errors.Is(atomicFnErr, ErrOTPExpired):
+			httperror.BadRequest("OTP has expired. Please request a new one.", atomicFnErr, nil).
+				WithErrorCode(httperror.Code400_5).
+				Render(w)
+			return
+		case errors.Is(atomicFnErr, ErrOTPDoesNotMatch):
+			httperror.BadRequest("Invalid OTP. Please check and try again.", atomicFnErr, nil).
+				WithErrorCode(httperror.Code400_6).
+				Render(w)
+			return
+		case errors.As(atomicFnErr, &errorInformationNotFound):
+			log.Ctx(ctx).Error(errorInformationNotFound.cause)
+			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).WithErrorCode(httperror.Code400_2).Render(w)
+			return
+		case errors.As(atomicFnErr, &errorVerficationAttemptsExceeded):
 			log.Ctx(ctx).Error(errorVerficationAttemptsExceeded.cause)
 			httperror.BadRequest(errorVerficationAttemptsExceeded.Error(), atomicFnErr, nil).WithErrorCode(httperror.Code400_3).Render(w)
 			return
+		default:
+			httperror.InternalError(ctx, "", atomicFnErr, nil).WithErrorCode(httperror.Code500_0).Render(w)
+			return
 		}
-
-		httperror.InternalError(ctx, "", atomicFnErr, nil).WithErrorCode(httperror.Code500_0).Render(w)
-		return
 	}
 
 	httpjson.Render(w, map[string]string{"message": "ok"}, httpjson.JSON)
@@ -402,4 +431,73 @@ func (v VerifyReceiverRegistrationHandler) buildPaymentsReadyToPayEventMessage(c
 	}
 
 	return msg, nil
+}
+
+// incrementOTPAttempts increments the OTP attempts counter and returns the appropriate error.
+func (v VerifyReceiverRegistrationHandler) incrementOTPAttempts(ctx context.Context, receiverWallet *data.ReceiverWallet) error {
+	receiverWallet.OTPAttempts++
+
+	err := v.Models.ReceiverWallet.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
+		OTPAttempts: &receiverWallet.OTPAttempts,
+	}, v.Models.DBConnectionPool)
+	if err != nil {
+		return fmt.Errorf("updating receiver wallet OTP attempts: %w", err)
+	}
+
+	// Check if max attempts reached after increment
+	if receiverWallet.OTPAttempts >= OTPMaxAttempts {
+		return ErrOTPMaxAttemptsExceeded
+	}
+
+	return ErrOTPDoesNotMatch
+}
+
+// verifyReceiverWalletOTP validates the receiver wallet OTP.
+func verifyReceiverWalletOTP(ctx context.Context, networkPassphrase string, receiverWallet data.ReceiverWallet, providedOTP string) error {
+	// Validation
+	if providedOTP == "" {
+		return fmt.Errorf("otp cannot be empty")
+	}
+
+	// 1. Check if OTP max attempts exceeded
+	if receiverWallet.OTPAttempts >= OTPMaxAttempts {
+		return ErrOTPMaxAttemptsExceeded
+	}
+
+	// 2. Verify special testnet OTPs
+	if utils.IsTestNetwork(networkPassphrase) {
+		switch providedOTP {
+		case data.TestnetAlwaysValidOTP:
+			log.Ctx(ctx).Warnf("OTP is being approved because TestnetAlwaysValidOTP (%s) was used", data.TestnetAlwaysValidOTP)
+			return nil
+		case data.TestnetAlwaysInvalidOTP:
+			log.Ctx(ctx).Errorf("OTP is being denied because TestnetAlwaysInvalidOTP (%s) was used", data.TestnetAlwaysInvalidOTP)
+			return ErrOTPDoesNotMatch
+		}
+	}
+
+	// 3. Check if OTP is expired
+	if receiverWallet.OTPCreatedAt == nil || receiverWallet.OTPCreatedAt.IsZero() {
+		return fmt.Errorf("otp does not have a valid created_at time")
+	}
+	otpExpirationTime := receiverWallet.OTPCreatedAt.UTC().Add(time.Minute * OTPExpirationTimeMinutes)
+	if time.Now().UTC().After(otpExpirationTime) {
+		return ErrOTPExpired
+	}
+
+	// 4. Verify the OTP against the one saved in the database
+	if !isOTPValid(receiverWallet.OTP, providedOTP) {
+		return ErrOTPDoesNotMatch
+	}
+
+	return nil
+}
+
+// isOTPValid performs a constant-time comparison of OTPs to prevent timing attacks.
+func isOTPValid(storedOTP, providedOTP string) bool {
+	if len(storedOTP) != len(providedOTP) {
+		return false
+	}
+	// Use subtle.ConstantTimeCompare for timing-attack resistant comparison
+	return subtle.ConstantTimeCompare([]byte(storedOTP), []byte(providedOTP)) == 1
 }

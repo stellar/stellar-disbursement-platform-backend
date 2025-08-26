@@ -21,7 +21,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -164,7 +166,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Assert that the tenant is properly saved to the context
 				ctx := r.Context()
-				savedTenant, err := tenant.GetTenantFromContext(ctx)
+				savedTenant, err := sdpcontext.GetTenantFromContext(ctx)
 				require.NoError(t, err)
 				assert.Equal(t, "test_tenant_id", savedTenant.ID)
 				assert.Equal(t, "test_tenant", savedTenant.Name)
@@ -301,7 +303,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 			Once()
 		mTenantManager.
 			On("GetTenantByID", mock.Anything, "test_tenant_id").
-			Return(&tenant.Tenant{
+			Return(&schema.Tenant{
 				ID:   "test_tenant_id",
 				Name: "test_tenant",
 			}, nil).
@@ -383,7 +385,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	t.Run("returns Unauthorized when the token is expired and (no error is returned)", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -409,7 +411,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	t.Run("returns Unauthorized when the token is expired and (no auth.ErrInvalidToken error is returned)", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -435,7 +437,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	t.Run("returns Unauthorized when the token is expired and (no auth.ErrUserNotFound error is returned)", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -461,7 +463,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	t.Run("returns Internal Server Error when an unexpected error occurs", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -487,7 +489,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	t.Run("returns Forbidden error when the user does not have the required roles", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -529,7 +531,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	t.Run("returns Status Ok when user has the required roles", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -571,7 +573,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	t.Run("returns Status Ok when no roles is required", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -665,7 +667,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		token := "valid_token"
 		mTenantManager.
 			On("GetTenantByName", mock.Anything, tenantName).
-			Return(&tenant.Tenant{ID: tenantID, Name: tenantName}, nil).
+			Return(&schema.Tenant{ID: tenantID, Name: tenantName}, nil).
 			Once()
 		r.Use(ResolveTenantFromRequestMiddleware(mTenantManager, false))
 		r.Use(EnsureTenantMiddleware)
@@ -679,7 +681,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		require.NoError(t, err)
 		req.Header.Set(TenantHeaderKey, tenantName)
 
-		ctx := context.WithValue(req.Context(), TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(req.Context(), token)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()
@@ -794,7 +796,7 @@ func Test_CSPMiddleware(t *testing.T) {
 }
 
 func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
-	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+	validTnt := &schema.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
 	testCases := []struct {
 		name              string
@@ -804,7 +806,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 		prepareMocksFn    func(mTenantManager *tenant.TenantManagerMock)
 		expectedStatus    int
 		expectedRespBody  string
-		expectedTenant    *tenant.Tenant
+		expectedTenant    *schema.Tenant
 	}{
 		{
 			name:              "🔴 tenant name from the header cannot be found in GetTenantByName",
@@ -986,7 +988,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			assert.JSONEq(t, tc.expectedRespBody, string(respBody))
 
 			// assert tenant in context
-			tnt, err := tenant.GetTenantFromContext(updatedCtx)
+			tnt, err := sdpcontext.GetTenantFromContext(updatedCtx)
 			if tc.expectedTenant != nil {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedTenant, tnt)
@@ -999,14 +1001,14 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 }
 
 func Test_EnsureTenantMiddleware(t *testing.T) {
-	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+	validTnt := &schema.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
 	testCases := []struct {
 		name                 string
 		hasTenantInCtx       bool
 		expectedStatus       int
 		expectedBodyContains string
-		expectedTenant       *tenant.Tenant
+		expectedTenant       *schema.Tenant
 	}{
 		{
 			name:                 "🔴 fails if there's no tenant in the context",
@@ -1040,7 +1042,7 @@ func Test_EnsureTenantMiddleware(t *testing.T) {
 			req, err := http.NewRequest(http.MethodGet, "/test", nil)
 			require.NoError(t, err)
 			if tc.hasTenantInCtx {
-				ctx := tenant.SaveTenantInContext(req.Context(), validTnt)
+				ctx := sdpcontext.SetTenantInContext(req.Context(), validTnt)
 				req = req.WithContext(ctx)
 			}
 

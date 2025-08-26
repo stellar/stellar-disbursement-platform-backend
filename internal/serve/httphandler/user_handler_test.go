@@ -22,10 +22,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_UserHandler_UserActivation(t *testing.T) {
@@ -60,7 +60,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 
 		ctx := context.Background()
 		if token != "" {
-			ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+			ctx = sdpcontext.SetTokenInContext(ctx, token)
 		}
 
 		var bodyReader io.Reader
@@ -502,10 +502,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	}
 
 	uiBaseURL := "https://sdp.org"
-	tnt := tenant.Tenant{
+	tnt := schema.Tenant{
 		SDPUIBaseURL: &uiBaseURL,
 	}
-	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
 
 	const url = "/users"
 
@@ -513,7 +513,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
@@ -633,7 +633,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns error when Auth Manager fails", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		authManagerMock.
 			On("GetUserID", mock.Anything, token).
@@ -708,7 +708,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns Bad Request when user is duplicated", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -751,7 +751,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("logs and reports error when sending email fails", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -837,12 +837,12 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("logs and reports error when joining the forgot password link", func(t *testing.T) {
-		tntInvalidUIBaseURL := tenant.Tenant{
+		tntInvalidUIBaseURL := schema.Tenant{
 			SDPUIBaseURL: &[]string{"%invalid%"}[0],
 		}
 		token := "mytoken"
-		ctxTenantWithInvalidUIBaseURL := tenant.SaveTenantInContext(context.Background(), &tntInvalidUIBaseURL)
-		ctxTenantWithInvalidUIBaseURL = context.WithValue(ctxTenantWithInvalidUIBaseURL, middleware.TokenContextKey, token)
+		ctxTenantWithInvalidUIBaseURL := sdpcontext.SetTenantInContext(context.Background(), &tntInvalidUIBaseURL)
+		ctxTenantWithInvalidUIBaseURL = sdpcontext.SetTokenInContext(ctxTenantWithInvalidUIBaseURL, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -913,7 +913,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("creates user successfully", func(t *testing.T) {
 		token := "mytoken"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
@@ -1103,7 +1103,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 	})
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, "mytoken")
+		ctx := sdpcontext.SetTokenInContext(context.Background(), "mytoken")
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
@@ -1223,7 +1223,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			Return(false, nil).
 			Once()
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		reqBody := `
 			{	
@@ -1263,7 +1263,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			Return(auth.ErrNoRowsAffected).
 			Once()
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		reqBody := `
 			{
@@ -1304,7 +1304,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		reqBody := `
 			{
@@ -1345,7 +1345,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			Return(nil).
 			Once()
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		reqBody := `
 			{
@@ -1401,7 +1401,7 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
 		token := "mytoken"
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
@@ -1430,7 +1430,7 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
@@ -1462,7 +1462,7 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	t.Run("returns all users ordered by email ASC", func(t *testing.T) {
 		token := "mytoken"
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByEmailAscURL, nil)
 		require.NoError(t, err)
@@ -1556,7 +1556,7 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	t.Run("returns all users ordered by email DESC", func(t *testing.T) {
 		token := "mytoken"
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByEmailDescURL, nil)
 		require.NoError(t, err)
@@ -1650,7 +1650,7 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	t.Run("returns all users ordered by is_active ASC", func(t *testing.T) {
 		token := "mytoken"
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByIsActiveAscURL, nil)
 		require.NoError(t, err)
@@ -1725,7 +1725,7 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	t.Run("returns all users ordered by is_active DESC", func(t *testing.T) {
 		token := "mytoken"
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByIsActiveDescURL, nil)
 		require.NoError(t, err)

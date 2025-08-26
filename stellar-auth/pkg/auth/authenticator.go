@@ -20,6 +20,7 @@ var (
 	ErrInvalidCredentials        = errors.New("invalid credentials")
 	ErrNoRowsAffected            = errors.New("no rows affected")
 	ErrInvalidResetPasswordToken = errors.New("invalid reset password token")
+	ErrExpiredResetPasswordToken = errors.New("expired reset password token")
 	ErrUserNotFound              = errors.New("user not found")
 	ErrUserEmailAlreadyExists    = errors.New("a user with this email already exists")
 	ErrUserHasValidToken         = errors.New("user has a valid token")
@@ -339,7 +340,7 @@ func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, pa
 
 		// Token is only valid for 20 minutes
 		if aupr.CreatedAt.Add(time.Minute * 20).Before(time.Now()) {
-			return ErrInvalidResetPasswordToken
+			return ErrExpiredResetPasswordToken
 		}
 
 		encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, password)

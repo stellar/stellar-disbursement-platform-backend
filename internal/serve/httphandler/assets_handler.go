@@ -21,8 +21,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -33,7 +35,8 @@ var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 type AssetsHandler struct {
 	Models *data.Models
 	engine.SubmitterEngine
-	GetPreconditionsFn func() txnbuild.Preconditions
+	GetPreconditionsFn         func() txnbuild.Preconditions
+	DistributionAccountService services.DistributionAccountServiceInterface
 }
 
 type AssetRequest struct {
@@ -41,10 +44,17 @@ type AssetRequest struct {
 	Issuer string `json:"issuer"`
 }
 
+type AssetWithEnabledInfo struct {
+	data.Asset
+	Enabled bool     `json:"enabled"`
+	Balance *float64 `json:"balance,omitempty"`
+}
+
 // GetAssets returns a list of assets.
 func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	walletID := strings.TrimSpace(r.URL.Query().Get("wallet"))
+	enabledParam, errParse := utils.ParseBoolQueryParam(r, "enabled")
 
 	var assets []data.Asset
 	var err error
@@ -57,14 +67,66 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
 		return
 	}
+
+	// If enabled parameter is provided, filter assets by availability for the distribution account.
+	if errParse != nil {
+		httperror.BadRequest("invalid 'enabled' parameter value", errParse, nil).Render(w)
+		return
+	}
+	if enabledParam != nil {
+		enabled := *enabledParam
+
+		distributionAccount, err := c.DistributionAccountFromContext(ctx)
+		if err != nil {
+			httperror.InternalError(ctx, "Cannot resolve distribution account from context", err, nil).Render(w)
+			return
+		}
+
+		responseAssets := make([]AssetWithEnabledInfo, 0)
+		for _, asset := range assets {
+			isEnabled, balance, err := c.getBalanceInfo(ctx, &distributionAccount, asset)
+			if err != nil {
+				log.Ctx(ctx).Warnf("Error getting balance for asset %s:%s: %v", asset.Code, asset.Issuer, err)
+				continue
+			}
+
+			if isEnabled == enabled {
+				responseAssets = append(responseAssets, AssetWithEnabledInfo{
+					Asset:   asset,
+					Enabled: isEnabled,
+					Balance: balance,
+				})
+			}
+		}
+
+		httpjson.Render(w, responseAssets, httpjson.JSON)
+		return
+	}
+
 	httpjson.Render(w, assets, httpjson.JSON)
+}
+
+// getBalanceInfo retrieves the availability information for a given asset and account.
+func (c AssetsHandler) getBalanceInfo(
+	ctx context.Context,
+	account *schema.TransactionAccount,
+	asset data.Asset,
+) (bool, *float64, error) {
+	balance, err := c.DistributionAccountService.GetBalance(ctx, account, asset)
+	if err != nil {
+		if errors.Is(err, services.ErrNoBalanceForAsset) {
+			return false, nil, nil
+		}
+		return false, nil, fmt.Errorf("getting balance for asset %s-%s %w", asset.Code, asset.Issuer, err)
+	}
+	return true, &balance, nil
 }
 
 // CreateAsset adds a new asset.
 func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	distributionAccount, err := c.DistributionAccountFromContext(ctx)
 	if err != nil {
 		err = fmt.Errorf("resolving distribution account from context: %w", err)
 		httperror.InternalError(ctx, "Cannot resolve distribution account from context", err, nil).Render(w)
@@ -122,7 +184,7 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	distributionAccount, err := c.DistributionAccountFromContext(ctx)
 	if err != nil {
 		err = fmt.Errorf("resolving distribution account from context: %w", err)
 		httperror.InternalError(ctx, "Cannot resolve distribution account from context", err, nil).Render(w)

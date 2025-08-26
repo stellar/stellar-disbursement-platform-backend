@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -28,12 +29,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
@@ -414,7 +416,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			name:                        "returns an error if the OTPs don't match",
 			sep24Claims:                 sep24JWTClaims,
 			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
-			wantErrContains:             []string{"receiver wallet OTP is not valid: otp does not match with value saved in the database"},
+			wantErrContains:             []string{ErrOTPDoesNotMatch.Error()},
 		},
 		{
 			name:                        "🎉 successfully updates a receiverWallet to REGISTERED",
@@ -427,14 +429,10 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// dbTX
-			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
-			require.NoError(t, err)
-			defer func() {
-				err = dbTx.Rollback()
-				require.NoError(t, err)
-			}()
-
+			t.Cleanup(func() {
+				data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+			})
 			// OTP
 			const correctOTP = "123456"
 			const wrongOTP = "111111"
@@ -445,10 +443,10 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			receiverEmail := "test@stellar.org"
 
 			// receiver & receiver wallet
-			receiver := data.CreateReceiverFixture(t, ctx, dbTx, &data.Receiver{PhoneNumber: "+380445555555"})
+			receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
 			var receiverWallet *data.ReceiverWallet
 			if tc.currentReceiverWalletStatus.State() != "" {
-				receiverWallet = data.CreateReceiverWalletFixture(t, ctx, dbTx, receiver.ID, wallet.ID, tc.currentReceiverWalletStatus)
+				receiverWallet = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, tc.currentReceiverWalletStatus)
 				var stellarAddress string
 				var otpConfirmedAt *time.Time
 				var otpConfirmedWith string
@@ -464,11 +462,12 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 					SET otp = $1, otp_created_at = NOW(), stellar_address = $2, otp_confirmed_at = $3, otp_confirmed_with = $4
 					WHERE id = $5
 				`
-				_, err = dbTx.ExecContext(ctx, q, correctOTP, sql.NullString{String: stellarAddress, Valid: stellarAddress != ""}, otpConfirmedAt, otpConfirmedWith, receiverWallet.ID)
+				_, err = dbConnectionPool.ExecContext(ctx, q, correctOTP, sql.NullString{String: stellarAddress, Valid: stellarAddress != ""}, otpConfirmedAt, otpConfirmedWith, receiverWallet.ID)
 				require.NoError(t, err)
 			}
 
 			// assertions
+			dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 			rwUpdated, wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, *tc.sep24Claims, *receiver, otp, receiverEmail)
 			if tc.wantErrContains == nil {
 				require.NoError(t, err)
@@ -504,9 +503,9 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
+	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -682,15 +681,9 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 }
 
 func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
 	ctx := context.Background()
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
+	models := data.SetupModels(t)
+	dbConnectionPool := models.DBConnectionPool
 
 	// create valid sep24 token
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
@@ -711,8 +704,8 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "token",
 	}
-	reqBody, err := json.Marshal(receiverRegistrationRequestWithPhone)
-	require.NoError(t, err)
+	reqBody, outerErr := json.Marshal(receiverRegistrationRequestWithPhone)
+	require.NoError(t, outerErr)
 
 	email := "test@stellar.org"
 	receiverRegistrationRequestWithEmail := data.ReceiverRegistrationRequest{
@@ -722,8 +715,8 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "token",
 	}
-	reqBodyEmail, err := json.Marshal(receiverRegistrationRequestWithEmail)
-	require.NoError(t, err)
+	reqBodyEmail, outerErr := json.Marshal(receiverRegistrationRequestWithEmail)
+	require.NoError(t, outerErr)
 
 	r := chi.NewRouter()
 
@@ -754,9 +747,11 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 	t.Run("returns an error if the receiver cannot be found", func(t *testing.T) {
 		// mocks
-		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-		defer reCAPTCHAValidator.AssertExpectations(t)
-		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
 
 		// create handler
 		handler := &VerifyReceiverRegistrationHandler{
@@ -790,9 +785,11 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 	t.Run("returns an error when processReceiverVerificationPII() fails - testing case where no receiverVerification is found", func(t *testing.T) {
 		// mocks
-		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-		defer reCAPTCHAValidator.AssertExpectations(t)
-		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
 
 		// create handler
 		handler := &VerifyReceiverRegistrationHandler{
@@ -801,8 +798,14 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		}
 
 		// update database with the entries needed
-		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		t.Cleanup(func() {
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		})
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, reqErr := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, phoneNumber, wallet.SEP10ClientDomain, receiverRegistrationRequestWithPhone.OTP)
+		require.NoError(t, reqErr)
 
 		// set the logger to a buffer so we can check the error message
 		buf := new(strings.Builder)
@@ -831,9 +834,11 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 	t.Run("returns an error when processReceiverVerificationPII() fails - testing case where maximum number of verification attempts exceeded", func(t *testing.T) {
 		// mocks
-		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-		defer reCAPTCHAValidator.AssertExpectations(t)
-		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
 
 		// create handler
 		handler := &VerifyReceiverRegistrationHandler{
@@ -841,17 +846,23 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			ReCAPTCHAValidator: reCAPTCHAValidator,
 		}
 
-		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		t.Cleanup(func() {
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		})
 
 		// receiver with a receiverVerification row that's exceeded the maximum number of attempts:
 		receiverWithExceededAttempts := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithExceededAttempts.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, reqErr := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, phoneNumber, wallet.SEP10ClientDomain, receiverRegistrationRequestWithPhone.OTP)
+		require.NoError(t, reqErr)
 		receiverVerificationExceededAttempts := data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiverWithExceededAttempts.ID,
 			VerificationField: data.VerificationTypeDateOfBirth,
 			VerificationValue: "1990-01-01",
 		})
 		receiverVerificationExceededAttempts.Attempts = data.MaxAttemptsAllowed
-		err = models.ReceiverVerification.UpdateReceiverVerification(ctx, data.ReceiverVerificationUpdate{
+		err := models.ReceiverVerification.UpdateReceiverVerification(ctx, data.ReceiverVerificationUpdate{
 			ReceiverID:          receiverWithExceededAttempts.ID,
 			VerificationField:   data.VerificationTypeDateOfBirth,
 			Attempts:            utils.IntPtr(data.MaxAttemptsAllowed),
@@ -886,9 +897,11 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 	t.Run("returns an error when processReceiverWalletOTP() fails - testing case where no receiverWallet is found", func(t *testing.T) {
 		// mocks
-		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-		defer reCAPTCHAValidator.AssertExpectations(t)
-		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
 
 		// create handler
 		handler := &VerifyReceiverRegistrationHandler{
@@ -952,9 +965,11 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				sep24Claims.RegisteredClaims.Subject += ":" + tc.inputMemo
 
 				// mocks
-				reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-				defer reCAPTCHAValidator.AssertExpectations(t)
-				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+				reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+				reCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(true, nil).
+					Maybe()
 
 				// create handler
 				handler := &VerifyReceiverRegistrationHandler{
@@ -1047,9 +1062,11 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				sep24Claims.RegisteredClaims.Subject += ":" + tc.inputMemo
 
 				// mocks
-				reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-				defer reCAPTCHAValidator.AssertExpectations(t)
-				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil)
+				reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+				reCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(true, nil).
+					Maybe()
 
 				// create handler
 				handler := &VerifyReceiverRegistrationHandler{
@@ -1150,6 +1167,165 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		}
 	})
 
+	t.Run("returns OTP max attempts exceeded error", func(t *testing.T) {
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+			NetworkPassphrase:  network.TestNetworkPassphrase,
+		}
+
+		// update database with the entries needed
+		t.Cleanup(func() {
+			data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		})
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		// Set OTP attempts to max
+		_, err := dbConnectionPool.ExecContext(ctx,
+			"UPDATE receiver_wallets SET otp = $1, otp_created_at = NOW(), otp_attempts = $2 WHERE id = $3",
+			"123456", OTPMaxAttempts, receiverWallet.ID)
+		require.NoError(t, err)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := `{"error": "Maximum OTP verification attempts exceeded. Please request a new OTP.", "error_code": "400_4"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+	})
+
+	t.Run("returns OTP expired error", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+			NetworkPassphrase:  network.TestNetworkPassphrase,
+		}
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		// Set OTP with expired created_at time
+		expiredTime := time.Now().Add(-OTPExpirationTimeMinutes*time.Minute - time.Minute)
+		_, err := dbConnectionPool.ExecContext(ctx,
+			"UPDATE receiver_wallets SET otp = $1, otp_created_at = $2, otp_attempts = 0 WHERE id = $3",
+			"123456", expiredTime, receiverWallet.ID)
+		require.NoError(t, err)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := `{"error": "OTP has expired. Please request a new one.", "error_code": "400_5"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+	})
+
+	t.Run("returns OTP does not match error", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+			NetworkPassphrase:  network.TestNetworkPassphrase,
+		}
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		// Set OTP to different value than in request
+		_, err := dbConnectionPool.ExecContext(ctx,
+			"UPDATE receiver_wallets SET otp = $1, otp_created_at = NOW(), otp_attempts = 0 WHERE id = $2",
+			"622141", receiverWallet.ID) // Different from "123456" in reqBody
+		require.NoError(t, err)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := `{"error": "Invalid OTP. Please check and try again.", "error_code": "400_6"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// Verify OTP attempts were incremented in database
+		var otpAttempts int
+		err = dbConnectionPool.GetContext(ctx, &otpAttempts, "SELECT otp_attempts FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 1, otpAttempts)
+	})
+
 	t.Run("🎉 successfully register receiver's stellar address and produce event", func(t *testing.T) {
 		testCases := []struct {
 			name                       string
@@ -1167,8 +1343,8 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				tnt := tenant.Tenant{ID: "tenant-id"}
-				ctx = tenant.SaveTenantInContext(ctx, &tnt)
+				tnt := schema.Tenant{ID: "tenant-id"}
+				ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 
 				// update database with the entries needed
 				defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
@@ -1206,9 +1382,11 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				sep24Claims := *validClaims
 
 				// mocks
-				reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-				defer reCAPTCHAValidator.AssertExpectations(t)
-				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+				reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+				reCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(true, nil).
+					Once()
 
 				mockCrashTracker := &crashtracker.MockCrashTrackerClient{}
 				defer mockCrashTracker.AssertExpectations(t)
@@ -1295,4 +1473,169 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			})
 		}
 	})
+}
+
+func Test_verifyReceiverWalletOTP(t *testing.T) {
+	ctx := context.Background()
+
+	expiredOTPCreatedAt := time.Now().Add(-OTPExpirationTimeMinutes * time.Minute).Add(-time.Second) // expired 1 second ago
+	validOTPTime := time.Now()
+
+	testCases := []struct {
+		name              string
+		networkPassphrase string
+		attemptedOTP      string
+		otp               string
+		otpCreatedAt      time.Time
+		otpAttempts       int
+		wantErr           error
+	}{
+		// mismatching OTP fails:
+		{
+			name:              "mismatching OTP fails",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      "123123",
+			otp:               "123456",
+			otpCreatedAt:      validOTPTime,
+			wantErr:           ErrOTPDoesNotMatch,
+		},
+		{
+			name:              "mismatching OTP fails when passing the TestnetAlwaysValidOTP in Pubnet",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               "123456",
+			otpCreatedAt:      validOTPTime,
+			wantErr:           ErrOTPDoesNotMatch,
+		},
+		{
+			name:              "mismatching OTP succeeds when passing the TestnetAlwaysValidOTP in Testnet",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               "123456",
+			otpCreatedAt:      validOTPTime,
+			wantErr:           nil,
+		},
+
+		// matching OTP fails when its created_at date is invalid:
+		{
+			name:              "matching OTP fails when its created_at date is invalid",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      "123456",
+			otp:               "123456",
+			otpCreatedAt:      time.Time{}, // invalid created_at
+			wantErr:           fmt.Errorf("otp does not have a valid created_at time"),
+		},
+		{
+			name:              "matching OTP fails when its created_at date is invalid and we pass TestnetAlwaysValidOTP in Pubnet",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               data.TestnetAlwaysValidOTP,
+			otpCreatedAt:      time.Time{}, // invalid created_at
+			wantErr:           fmt.Errorf("otp does not have a valid created_at time"),
+		},
+		{
+			name:              "matching OTP succeeds when its created_at date is invalid but we pass TestnetAlwaysValidOTP in Testnet",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               "123456",
+			otpCreatedAt:      time.Time{}, // invalid created_at
+			wantErr:           nil,
+		},
+
+		// returns error when otp is expired:
+		{
+			name:              "matching OTP fails when OTP is expired",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      "123456",
+			otp:               "123456",
+			otpCreatedAt:      expiredOTPCreatedAt,
+			wantErr:           ErrOTPExpired,
+		},
+		{
+			name:              "matching OTP fails when OTP is expired and we pass TestnetAlwaysValidOTP in Pubnet",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               data.TestnetAlwaysValidOTP,
+			otpCreatedAt:      expiredOTPCreatedAt,
+			wantErr:           ErrOTPExpired,
+		},
+		{
+			name:              "matching OTP fails when OTP is expired but we pass TestnetAlwaysValidOTP in Testnet",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               "123456",
+			otpCreatedAt:      expiredOTPCreatedAt,
+			wantErr:           nil,
+		},
+		{
+			name:              "matching OTP fails when OTP is expired but we pass TestnetAlwaysValidOTP in Futurenet",
+			networkPassphrase: network.FutureNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               "123456",
+			otpCreatedAt:      expiredOTPCreatedAt,
+			wantErr:           nil,
+		},
+
+		// returns error when otp attempts exceeded:
+		{
+			name:              "matching OTP fails when OTP attempts exceeded",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      "123456",
+			otp:               "123456",
+			otpCreatedAt:      validOTPTime,
+			otpAttempts:       OTPMaxAttempts,
+			wantErr:           ErrOTPMaxAttemptsExceeded,
+		},
+
+		// OTP is valid 🎉
+		{
+			name:              "OTP is valid 🎉",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      "123456",
+			otp:               "123456",
+			otpCreatedAt:      validOTPTime,
+			wantErr:           nil,
+		},
+		{
+			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Pubnet",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               data.TestnetAlwaysValidOTP,
+			otpCreatedAt:      validOTPTime,
+			wantErr:           nil,
+		},
+		{
+			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Testnet",
+			networkPassphrase: network.TestNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               data.TestnetAlwaysValidOTP,
+			otpCreatedAt:      validOTPTime,
+			wantErr:           nil,
+		},
+		{
+			name:              "OTP is valid 🎉 also when we pass TestnetAlwaysValidOTP in Futurenet",
+			networkPassphrase: network.FutureNetworkPassphrase,
+			attemptedOTP:      data.TestnetAlwaysValidOTP,
+			otp:               data.TestnetAlwaysValidOTP,
+			otpCreatedAt:      validOTPTime,
+			wantErr:           nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			receiverWallet := data.ReceiverWallet{
+				OTP:          tc.otp,
+				OTPCreatedAt: &tc.otpCreatedAt,
+				OTPAttempts:  tc.otpAttempts,
+			}
+
+			err := verifyReceiverWalletOTP(ctx, tc.networkPassphrase, receiverWallet, tc.attemptedOTP)
+			if tc.wantErr != nil {
+				assert.Equal(t, tc.wantErr, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

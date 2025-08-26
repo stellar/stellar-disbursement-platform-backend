@@ -17,12 +17,11 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_BridgeIntegrationHandler_Get(t *testing.T) {
@@ -203,6 +202,23 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 			}`,
 		},
 		{
+			name:        "Bridge service USDC trustline error",
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				mBridgeService.
+					On("OptInToBridge", mock.Anything, optInOptions).
+					Return(nil, bridge.ErrBridgeUSDCTrustlineRequired).
+					Once()
+			},
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "Cannot opt into Bridge integration: distribution account must have a USDC trustline"}`,
+		},
+		{
 			name:        "cannot retrieve user from context",
 			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
@@ -319,6 +335,30 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 			}`,
 		},
 		{
+			name:        "🎉 successfully opts in with USDC trustline - testnet",
+			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				bridgeInfo := &bridge.BridgeIntegrationInfo{
+					Status:     data.BridgeIntegrationStatusOptedIn,
+					CustomerID: utils.StringPtr("customer-123"),
+				}
+				mBridgeService.
+					On("OptInToBridge", mock.Anything, optInOptions).
+					Return(bridgeInfo, nil).
+					Once()
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: `{
+				"status": "OPTED_IN",
+				"customer_id": "customer-123"
+			}`,
+		},
+		{
 			name:        "🎉 successfully opts in with user defaults",
 			requestBody: PatchRequest{Status: data.BridgeIntegrationStatusOptedIn},
 			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
@@ -381,12 +421,12 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 				}
 			}
 
-			tnt := tenant.Tenant{
+			tnt := schema.Tenant{
 				ID:           "test-tenant",
 				BaseURL:      utils.Ptr("https://example.com"),
 				SDPUIBaseURL: utils.Ptr("https://example.com"),
 			}
-			ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+			ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
 
 			rr := httptest.NewRecorder()
 			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/bridge-integration", bodyReader)
@@ -394,7 +434,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 
 			// Add user context if needed for auth
 			if !strings.Contains(tc.name, "not enabled") && !strings.Contains(tc.name, "invalid JSON") {
-				ctx := context.WithValue(req.Context(), middleware.UserIDContextKey, testUser.ID)
+				ctx := sdpcontext.SetUserIDInContext(req.Context(), testUser.ID)
 				req = req.WithContext(ctx)
 			}
 
@@ -737,12 +777,12 @@ func Test_BridgeIntegrationHandler_Patch_createVirtualAccount(t *testing.T) {
 				}
 			}
 
-			tnt := tenant.Tenant{
+			tnt := schema.Tenant{
 				ID:      "test-tenant",
 				BaseURL: utils.Ptr("https://example.com"),
 			}
-			ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
-			ctx = context.WithValue(ctx, middleware.UserIDContextKey, testUser.ID)
+			ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
+			ctx = sdpcontext.SetUserIDInContext(ctx, testUser.ID)
 
 			rr := httptest.NewRecorder()
 			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/bridge-integration", bodyReader)

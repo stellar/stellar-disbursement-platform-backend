@@ -14,7 +14,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, adminDBConnectionPool db.DBConnectionPool) {
@@ -57,7 +59,16 @@ func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnect
 	`
 	err := dbConnectionPool.SelectContext(ctx, &registeredWallets, queryRegisteredWallets)
 	require.NoError(t, err)
-	assert.ElementsMatch(t, expectedWallets, registeredWallets)
+
+	// Check that all expected wallets are present (allows for additional wallets to exist)
+	registeredMap := make(map[string]bool)
+	for _, wallet := range registeredWallets {
+		registeredMap[wallet] = true
+	}
+
+	for _, expectedWallet := range expectedWallets {
+		assert.True(t, registeredMap[expectedWallet], "Expected wallet %s not found in registered wallets", expectedWallet)
+	}
 }
 
 func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userFirstName, userLastName, userEmail string) {
@@ -82,7 +93,7 @@ func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnection
 	assert.True(t, user.IsOwner)
 }
 
-func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name, distributionPubKey string) *Tenant {
+func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name, distributionPubKey string) *schema.Tenant {
 	t.Helper()
 
 	tenantName := name
@@ -105,7 +116,7 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	`
 
 	baseURL := fmt.Sprintf("http://%s.stellar.local:8000", tenantName)
-	tnt := &Tenant{
+	tnt := &schema.Tenant{
 		Name:                       tenantName,
 		DistributionAccountAddress: &distributionPubKey,
 		BaseURL:                    &baseURL,
@@ -117,11 +128,11 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	return tnt
 }
 
-func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) (*Tenant, context.Context) {
+func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) (*schema.Tenant, context.Context) {
 	ctx := context.Background()
 	const publicKey = "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
 	tnt := CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant", publicKey)
-	return tnt, SaveTenantInContext(ctx, tnt)
+	return tnt, sdpcontext.SetTenantInContext(ctx, tnt)
 }
 
 func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string) bool {

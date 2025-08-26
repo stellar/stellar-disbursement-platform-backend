@@ -23,14 +23,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Update PATCH endpoint to extend update capabilities [#697](https://github.com/stellar/stellar-disbursement-platform-backend/pull/697)
 - Add `supported_assets` filter to `GET /wallets` endpoint [#734](https://github.com/stellar/stellar-disbursement-platform-backend/pull/734)
 - Add SEP10 /auth endpoints [#770](https://github.com/stellar/stellar-disbursement-platform-backend/pull/770)
+- Add OTP attempt tracking and validation with maximum attempts limit and expiration checks for receiver wallet registration [#773](https://github.com/stellar/stellar-disbursement-platform-backend/pull/773)
 
 ### Changed
 
+- Update supported wallets for Pubnet and Testnet: 
+  - Removed Vibrant Assist wallets from pubnet and test configuration
+  - Added Vesseo and Beans App on Pubnet
+  - Added XLM as a supported asset for Decaf 
+  - [#793](https://github.com/stellar/stellar-disbursement-platform-backend/pull/793)
 - Optimize the Dockerfile to reduce the image size. [#692](https://github.com/stellar/stellar-disbursement-platform-backend/pull/692)
+
+### Fixed
+
+- Fix scheduler to only run jobs for provisioned and activated tenants, preventing execution for pending or deactivated tenants. [#795](https://github.com/stellar/stellar-disbursement-platform-backend/pull/795)
+- Display clear error message during reset password when token is expired. [#783](https://github.com/stellar/stellar-disbursement-platform-backend/pull/783)
 
 ### Security and Dependencies
 
 - Bump the minor-and-patch group across 1 directory with 6 updates. [#690](https://github.com/stellar/stellar-disbursement-platform-backend/pull/690)
+
+## [3.7.3](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.3) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.2...3.7.3))
+
+### Fixed
+- Fix balance calculation for resumed disbursements by subtracting amount already disbursed. [#787](https://github.com/stellar/stellar-disbursement-platform-backend/pull/787)
 
 ## [3.7.2](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/3.7.2) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.1...3.7.2))
 

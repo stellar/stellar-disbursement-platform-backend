@@ -6,11 +6,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_ServiceOptions_Validate(t *testing.T) {
@@ -24,24 +29,54 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 		{
 			name:                "BaseURL validation fails",
 			opts:                ServiceOptions{},
-			expectedErrContains: "BaseURL is required",
+			expectedErrContains: "baseURL is required",
 		},
 		{
 			name:                "APIKey validation fails",
 			opts:                ServiceOptions{BaseURL: "https://api.bridge.example.com"},
-			expectedErrContains: "APIKey is required",
+			expectedErrContains: "apiKey is required",
 		},
 		{
 			name:                "Models validation fails",
 			opts:                ServiceOptions{BaseURL: "https://api.bridge.example.com", APIKey: "test-key"},
-			expectedErrContains: "Models is required",
+			expectedErrContains: "models is required",
+		},
+		{
+			name:                "DistributionAccountResolver validation fails",
+			opts:                ServiceOptions{BaseURL: "https://api.bridge.example.com", APIKey: "test-key", Models: models},
+			expectedErrContains: "distributionAccountResolver is required",
+		},
+		{
+			name: "DistributionAccountService validation fails",
+			opts: ServiceOptions{
+				BaseURL:                     "https://api.bridge.example.com",
+				APIKey:                      "test-key",
+				Models:                      models,
+				DistributionAccountResolver: sigMocks.NewMockDistributionAccountResolver(t),
+			},
+			expectedErrContains: "distributionAccountService is required",
+		},
+		{
+			name: "NetworkType validation fails",
+			opts: ServiceOptions{
+				BaseURL:                     "https://api.bridge.example.com",
+				APIKey:                      "test-key",
+				Models:                      models,
+				DistributionAccountResolver: sigMocks.NewMockDistributionAccountResolver(t),
+				DistributionAccountService:  mocks.NewMockDistributionAccountService(t),
+				NetworkType:                 "",
+			},
+			expectedErrContains: "validating NetworkType",
 		},
 		{
 			name: "🎉 successfully validates options",
 			opts: ServiceOptions{
-				BaseURL: "https://api.bridge.example.com",
-				APIKey:  "test-api-key",
-				Models:  models,
+				BaseURL:                     "https://api.bridge.example.com",
+				APIKey:                      "test-api-key",
+				Models:                      models,
+				DistributionAccountResolver: sigMocks.NewMockDistributionAccountResolver(t),
+				DistributionAccountService:  mocks.NewMockDistributionAccountService(t),
+				NetworkType:                 utils.TestnetNetworkType,
 			},
 		},
 	}
@@ -197,6 +232,122 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
+	t.Run("USDC trustline validation fails - distribution account resolver error", func(t *testing.T) {
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
+		mockClient := NewMockClient(t)
+		svc := createService(t, mockClient, models)
+
+		// Create service with failing distribution account resolver
+		mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mockDistAccountResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{}, errors.New("failed to get distribution account")).
+			Once()
+		svc.distributionAccountResolver = mockDistAccountResolver
+
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
+		assert.ErrorContains(t, err, "validating USDC trustline: getting distribution account from context: failed to get distribution account")
+		assert.Nil(t, result)
+	})
+
+	t.Run("USDC trustline validation fails - no trustline", func(t *testing.T) {
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
+		mockClient := NewMockClient(t)
+		svc := createService(t, mockClient, models)
+
+		// Create service with no USDC trustline
+		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+		mockDistAccountService.
+			On("GetBalance", mock.Anything, mock.Anything, assets.USDCAssetTestnet).
+			Return(0.0, errors.New("no trustline found")).
+			Once()
+		svc.distributionAccountService = mockDistAccountService
+
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
+		assert.ErrorIs(t, err, ErrBridgeUSDCTrustlineRequired)
+		assert.ErrorContains(t, err, "distribution account must have a USDC trustline to opt into Bridge integration")
+		assert.Nil(t, result)
+	})
+
+	t.Run("USDC trustline validation succeeds with pubnet asset", func(t *testing.T) {
+		data.CleanupBridgeIntegration(t, ctx, dbcp)
+		mockClient := NewMockClient(t)
+
+		// Create service with pubnet network type
+		mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+		testDistAccount := schema.TransactionAccount{
+			Address: "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
+		}
+
+		mockDistAccountResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(testDistAccount, nil).
+			Once()
+
+		mockDistAccountService.
+			On("GetBalance", mock.Anything, &testDistAccount, assets.USDCAssetPubnet).
+			Return(50.0, nil).
+			Once()
+
+		kycResponse := &KYCLinkInfo{
+			ID:         "kyc-link-123",
+			CustomerID: "customer-123",
+			FullName:   fullName,
+			Email:      email,
+			Type:       KYCTypeBusiness,
+			KYCStatus:  KYCStatusNotStarted,
+			TOSStatus:  TOSStatusPending,
+		}
+
+		mockClient.
+			On("PostKYCLink", ctx, KYCLinkRequest{
+				FullName:    fullName,
+				Email:       email,
+				Type:        KYCTypeBusiness,
+				RedirectURI: redirectURL,
+			}).
+			Return(kycResponse, nil).
+			Once()
+
+		svc := &Service{
+			client:                      mockClient,
+			baseURL:                     "https://api.bridge.example.com",
+			apiKey:                      "test-api-key",
+			models:                      models,
+			distributionAccountResolver: mockDistAccountResolver,
+			distributionAccountService:  mockDistAccountService,
+			networkType:                 utils.PubnetNetworkType,
+		}
+
+		result, err := svc.OptInToBridge(ctx, OptInOptions{
+			UserID:      "user-123",
+			FullName:    fullName,
+			Email:       email,
+			RedirectURL: redirectURL,
+			KYCType:     KYCTypeBusiness,
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.Equal(t, data.BridgeIntegrationStatusOptedIn, result.Status)
+		assert.Equal(t, "customer-123", *result.CustomerID)
+		assert.Equal(t, "user-123", *result.OptedInBy)
+		assert.NotNil(t, result.OptedInAt)
+		assert.Equal(t, kycResponse, result.KYCLinkInfo)
+	})
+
 	t.Run("🎉 successfully opts in to Bridge", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
@@ -336,11 +487,11 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 	dbcp := models.DBConnectionPool
 	ctx := context.Background()
 
-	tnt := tenant.Tenant{
+	tnt := schema.Tenant{
 		ID:      "test-tenant",
 		BaseURL: utils.Ptr("https://example.com"),
 	}
-	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+	ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
 
 	t.Run("integration not found", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
@@ -544,13 +695,166 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 	})
 }
 
+func Test_Service_validateUSDCTrustline(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("distribution account resolver fails", func(t *testing.T) {
+		mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+
+		mockDistAccountResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return(schema.TransactionAccount{}, errors.New("resolver error")).
+			Once()
+
+		svc := &Service{
+			distributionAccountResolver: mockDistAccountResolver,
+			distributionAccountService:  mockDistAccountService,
+			networkType:                 utils.TestnetNetworkType,
+		}
+
+		err := svc.validateUSDCTrustline(ctx)
+		assert.ErrorContains(t, err, "getting distribution account from context: resolver error")
+	})
+
+	t.Run("USDC trustline check fails on testnet", func(t *testing.T) {
+		mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+		testDistAccount := schema.TransactionAccount{
+			Address: "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
+		}
+
+		mockDistAccountResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return(testDistAccount, nil).
+			Once()
+
+		mockDistAccountService.
+			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetTestnet).
+			Return(0.0, errors.New("trustline not found")).
+			Once()
+
+		svc := &Service{
+			distributionAccountResolver: mockDistAccountResolver,
+			distributionAccountService:  mockDistAccountService,
+			networkType:                 utils.TestnetNetworkType,
+		}
+
+		err := svc.validateUSDCTrustline(ctx)
+		assert.ErrorIs(t, err, ErrBridgeUSDCTrustlineRequired)
+		assert.ErrorContains(t, err, "trustline not found")
+	})
+
+	t.Run("USDC trustline check fails on pubnet", func(t *testing.T) {
+		mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+		testDistAccount := schema.TransactionAccount{
+			Address: "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
+		}
+
+		mockDistAccountResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return(testDistAccount, nil).
+			Once()
+
+		mockDistAccountService.
+			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetPubnet).
+			Return(0.0, errors.New("no trustline exists")).
+			Once()
+
+		svc := &Service{
+			distributionAccountResolver: mockDistAccountResolver,
+			distributionAccountService:  mockDistAccountService,
+			networkType:                 utils.PubnetNetworkType,
+		}
+
+		err := svc.validateUSDCTrustline(ctx)
+		assert.ErrorIs(t, err, ErrBridgeUSDCTrustlineRequired)
+		assert.ErrorContains(t, err, "no trustline exists")
+	})
+
+	t.Run("🎉 successfully validates USDC trustline on testnet with 0 balance", func(t *testing.T) {
+		mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+		testDistAccount := schema.TransactionAccount{
+			Address: "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
+		}
+
+		mockDistAccountResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return(testDistAccount, nil).
+			Once()
+
+		mockDistAccountService.
+			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetTestnet).
+			Return(0.0, nil).
+			Once()
+
+		svc := &Service{
+			distributionAccountResolver: mockDistAccountResolver,
+			distributionAccountService:  mockDistAccountService,
+			networkType:                 utils.TestnetNetworkType,
+		}
+
+		err := svc.validateUSDCTrustline(ctx)
+		assert.NoError(t, err)
+	})
+
+	t.Run("🎉 successfully validates USDC trustline on pubnet", func(t *testing.T) {
+		mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+		testDistAccount := schema.TransactionAccount{
+			Address: "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
+		}
+
+		mockDistAccountResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return(testDistAccount, nil).
+			Once()
+
+		mockDistAccountService.
+			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetPubnet).
+			Return(250.5, nil).
+			Once()
+
+		svc := &Service{
+			distributionAccountResolver: mockDistAccountResolver,
+			distributionAccountService:  mockDistAccountService,
+			networkType:                 utils.PubnetNetworkType,
+		}
+
+		err := svc.validateUSDCTrustline(ctx)
+		assert.NoError(t, err)
+	})
+}
+
 func createService(t *testing.T, mockClient *MockClient, models *data.Models) *Service {
 	t.Helper()
 
+	// Create mock distribution account resolver that returns a test account
+	mockDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	testDistAccount := schema.TransactionAccount{
+		Address: "GCKFBEIYTKP5RDBPFKWYFVQNMZ5KMGMW3RFKAWJ3CCDQPWXEMFXH7YDN",
+	}
+	mockDistAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(testDistAccount, nil).
+		Maybe()
+
+	// Create mock distribution account service that allows USDC balance check
+	mockDistAccountService := mocks.NewMockDistributionAccountService(t)
+	mockDistAccountService.
+		On("GetBalance", mock.Anything, mock.Anything, assets.USDCAssetTestnet).
+		Return(100.0, nil).
+		Maybe()
+
 	return &Service{
-		client:  mockClient,
-		baseURL: "https://api.bridge.example.com",
-		apiKey:  "test-api-key",
-		models:  models,
+		client:                      mockClient,
+		baseURL:                     "https://api.bridge.example.com",
+		apiKey:                      "test-api-key",
+		models:                      models,
+		distributionAccountResolver: mockDistAccountResolver,
+		distributionAccountService:  mockDistAccountService,
+		networkType:                 utils.TestnetNetworkType,
 	}
 }

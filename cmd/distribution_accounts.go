@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -127,7 +128,7 @@ func (c *DistributionAccountCommand) RotateCommand(cmdService DistAccCmdServiceI
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error getting tenant by ID: %v", err)
 			}
-			ctx = tenant.SaveTenantInContext(ctx, t)
+			ctx = sdpcontext.SetTenantInContext(ctx, t)
 			cmd.SetContext(ctx)
 
 			// Prepare the signature service

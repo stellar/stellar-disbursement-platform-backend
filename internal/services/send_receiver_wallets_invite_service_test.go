@@ -19,8 +19,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
@@ -60,8 +61,8 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantBaseURL := "http://localhost:8000"
-	tenantInfo := &tenant.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL}
-	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+	tenantInfo := &schema.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
 	messageDispatcherMock := message.NewMockMessageDispatcher(t)
