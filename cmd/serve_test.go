@@ -167,6 +167,7 @@ func Test_serve(t *testing.T) {
 		AnchorPlatformBaseSepURL:        "localhost:8080",
 		AnchorPlatformBasePlatformURL:   "localhost:8085",
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
+		EnableAnchorPlatform:            false,
 		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
 		DisableMFA:                      false,
