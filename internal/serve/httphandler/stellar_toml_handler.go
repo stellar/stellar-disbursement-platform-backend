@@ -62,7 +62,7 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 			parsedBaseURL = &url.URL{Scheme: "https"}
 		}
 
-		t, err := tenant.GetTenantFromContext(ctx)
+		t, err := sdpcontext.GetTenantFromContext(ctx)
 		if err != nil {
 			webAuthEndpoint = fmt.Sprintf("%s://%s/auth", parsedBaseURL.Scheme, req.Host)
 			transferServerSep0024 = fmt.Sprintf("%s://%s/sep24", parsedBaseURL.Scheme, req.Host)

@@ -19,9 +19,9 @@ import (
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 //go:generate mockery --name=SEP10Service --case=underscore --structname=MockSEP10Service --filename=sep10_service_mock.go --inpackage
@@ -493,7 +493,7 @@ func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) []string {
 
 	allowedDomains := []string{baseDomain}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
 		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
 		if parseErr == nil && parsedURL.Host != "" {
@@ -505,7 +505,7 @@ func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) []string {
 }
 
 func (s *sep10Service) getWebAuthDomain(ctx context.Context) string {
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
 		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
 		if parseErr == nil {

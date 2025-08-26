@@ -58,7 +58,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	distAccount := schema.NewDefaultStellarTransactionAccount(tenantDistAccPublicKey)
 
 	// Create a tenant with BaseURL for testing
-	testTenant := &tenant.Tenant{
+	testTenant := &schema.Tenant{
 		ID:      "test-tenant-id",
 		Name:    "test-tenant",
 		BaseURL: func() *string { s := "https://tenant.example.com"; return &s }(),
@@ -67,7 +67,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	testCases := []struct {
 		name              string
 		isTenantInContext bool
-		tenantInContext   *tenant.Tenant
+		tenantInContext   *schema.Tenant
 		s                 StellarTomlHandler
 		wantLines         []string
 	}{
@@ -241,13 +241,13 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			// Set up tenant context if needed
 			if tc.isTenantInContext {
 				if tc.tenantInContext != nil {
-					ctx = tenant.SaveTenantInContext(ctx, tc.tenantInContext)
+					ctx = sdpcontext.SetTenantInContext(ctx, tc.tenantInContext)
 				} else {
 					tenantBaseURL := "https://tenant.example.com"
-					mockTenant := &tenant.Tenant{
+					mockTenant := &schema.Tenant{
 						BaseURL: &tenantBaseURL,
 					}
-					ctx = tenant.SaveTenantInContext(ctx, mockTenant)
+					ctx = sdpcontext.SetTenantInContext(ctx, mockTenant)
 				}
 			}
 
