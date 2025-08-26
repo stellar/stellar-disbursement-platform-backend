@@ -87,6 +87,7 @@ type ServeOptions struct {
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
 	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
+	EnableAnchorPlatform            bool
 	tenantManager                   tenant.ManagerInterface
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
@@ -175,6 +176,22 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	}
 	if opts.DisableReCAPTCHA {
 		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+
+	// Validate Anchor Platform configuration
+	if opts.EnableAnchorPlatform {
+		if opts.AnchorPlatformBaseSepURL == "" {
+			return fmt.Errorf("anchor-platform-base-sep-url is required when enable-anchor-platform is true")
+		}
+		if opts.AnchorPlatformBasePlatformURL == "" {
+			return fmt.Errorf("anchor-platform-base-platform-url is required when enable-anchor-platform is true")
+		}
+		if opts.AnchorPlatformOutgoingJWTSecret == "" {
+			return fmt.Errorf("anchor-platform-outgoing-jwt-secret is required when enable-anchor-platform is true")
+		}
+		log.Warnf("Anchor Platform integration is enabled. SEP-1 TOML will point to Anchor Platform URLs.")
+	} else {
+		log.Infof("Anchor Platform integration is disabled. SEP-1 TOML will point to SDP native SEP10/SEP24 URLs.")
 	}
 
 	return nil
@@ -643,6 +660,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
 			InstanceName:                o.InstanceName,
+			EnableAnchorPlatform:        o.EnableAnchorPlatform,
 			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
 

@@ -63,6 +63,7 @@ sdp:
         secretName: sdp-backend-cert
 # ============================= anchorPlatform ===================================
 anchorPlatform:
+  enabled: true
   route:
     domain: ap-sdp-backend.example.org
   deployment:
@@ -144,7 +145,7 @@ anchorPlatform:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'ap-sdp-backend.example.org'
+          - "ap-sdp-backend.example.org"
         secretName: sdp-ap-cert
 
 # ============================= tss ===================================
@@ -205,6 +206,6 @@ dashboard:
       cert-manager.io/cluster-issuer: letsencrypt-prod
     tls:
       - hosts:
-          - 'dashboard.example.org'
-          - '*.dashboard.example.org'
+          - "dashboard.example.org"
+          - "*.dashboard.example.org"
         secretName: sdp-dashboard-cert

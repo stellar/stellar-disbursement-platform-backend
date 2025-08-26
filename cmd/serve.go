@@ -285,7 +285,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		{
 			Name: "anchor-platform-base-platform-url",
 			Usage: "The Base URL of the platform server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint.",
+				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint. " +
+				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformBasePlatformURL,
 			Required:  true,
@@ -293,17 +294,27 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		{
 			Name: "anchor-platform-base-sep-url",
 			Usage: "The Base URL of the sep server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file.",
+				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file. " +
+				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformBaseSepURL,
 			Required:  true,
 		},
 		{
-			Name:      "anchor-platform-outgoing-jwt-secret",
-			Usage:     "The JWT secret used to create a JWT token used to send requests to the anchor platform.",
+			Name: "anchor-platform-outgoing-jwt-secret",
+			Usage: "The JWT secret used to create a JWT token used to send requests to the anchor platform. " +
+				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformOutgoingJWTSecret,
 			Required:  true,
+		},
+		{
+			Name:        "enable-anchor-platform",
+			Usage:       "Enable Anchor Platform integration for SEP-1 TOML file. When true, SEP-1 TOML points to anchor platform URLs. When false, points to SDP SEP10/SEP24 URLs.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableAnchorPlatform,
+			FlagDefault: false,
+			Required:    false,
 		},
 		{
 			Name:        "reset-token-expiration-hours",
