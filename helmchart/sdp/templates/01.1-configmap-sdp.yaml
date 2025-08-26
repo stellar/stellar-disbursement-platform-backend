@@ -26,6 +26,11 @@ data:
   ADMIN_PORT: {{ include "sdp.adminPort" . | quote }}
   ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.baseURL" . | quote }}
   ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . | quote }}
+  {{- if .Values.anchorPlatform.enabled }}
+  ENABLE_ANCHOR_PLATFORM: "true"
+  {{- else }}
+  ENABLE_ANCHOR_PLATFORM: "false"
+  {{- end }}
   {{- /*
 Values from the `global` section
   */}}
