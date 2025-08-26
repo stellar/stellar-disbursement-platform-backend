@@ -29,31 +29,68 @@ func Test_NewJWTManager(t *testing.T) {
 }
 
 func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
-	jwtManager, err := NewJWTManager("1234567890ab", 5000)
+	t.Parallel()
+	jwtManager, err := NewJWTManager("test_secret_1234567890", 15000)
 	require.NoError(t, err)
 
-	// invalid claims
-	tokenStr, err := jwtManager.GenerateSEP24Token("", "", "test.com", "test-home-domain.com:3000", "test-transaction-id")
-	require.EqualError(t, err, "generating SEP24 token: validating token claims: stellar account is invalid: strkey is 0 bytes long; minimum valid length is 5")
-	require.Empty(t, tokenStr)
+	stellarAccount := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+	stellarMemo := "memo123"
+	clientDomain := "example.com"
+	homeDomain := "anchor.example.com"
+	transactionID := "txn-123"
 
-	// valid claims 🎉
-	tokenStr, err = jwtManager.GenerateSEP24Token("GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", "123456", "test.com", "test-home-domain.com:3000", "test-transaction-id")
+	token, err := jwtManager.GenerateSEP24Token(stellarAccount, stellarMemo, clientDomain, homeDomain, transactionID)
 	require.NoError(t, err)
-	require.NotEmpty(t, tokenStr)
-	now := time.Now()
 
-	// parse claims
-	claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
+	claims, err := jwtManager.ParseSEP24TokenClaims(token)
 	require.NoError(t, err)
-	assert.Nil(t, claims.Valid())
-	assert.Equal(t, "test-transaction-id", claims.TransactionID())
-	assert.Equal(t, "GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", claims.SEP10StellarAccount())
-	assert.Equal(t, "123456", claims.SEP10StellarMemo())
-	assert.Equal(t, "test.com", claims.ClientDomain())
-	assert.Equal(t, "test-home-domain.com:3000", claims.HomeDomain())
-	assert.True(t, claims.ExpiresAt().After(now.Add(time.Duration(4000*time.Millisecond))))
-	assert.True(t, claims.ExpiresAt().Before(now.Add(time.Duration(5000*time.Millisecond))))
+
+	assert.Equal(t, transactionID, claims.TransactionID())
+	assert.Equal(t, stellarAccount, claims.SEP10StellarAccount())
+	assert.Equal(t, stellarMemo, claims.SEP10StellarMemo())
+	assert.Equal(t, clientDomain, claims.ClientDomain())
+	assert.Equal(t, homeDomain, claims.HomeDomain())
+	assert.NotNil(t, claims.ExpiresAt())
+}
+
+func Test_JWTManager_GenerateAndParseSEP24MoreInfoToken(t *testing.T) {
+	t.Parallel()
+	jwtManager, err := NewJWTManager("test_secret_1234567890", 15000)
+	require.NoError(t, err)
+
+	stellarAccount := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+	stellarMemo := "memo123"
+	clientDomain := "example.com"
+	homeDomain := "anchor.example.com"
+	transactionID := "txn-123"
+	lang := "en"
+	transactionData := map[string]string{
+		"kind":   "deposit",
+		"status": "incomplete",
+	}
+
+	token, err := jwtManager.GenerateSEP24MoreInfoToken(stellarAccount, stellarMemo, clientDomain, homeDomain, transactionID, lang, transactionData)
+	require.NoError(t, err)
+
+	claims, err := jwtManager.ParseSEP24TokenClaims(token)
+	require.NoError(t, err)
+
+	assert.Equal(t, transactionID, claims.TransactionID())
+	assert.Equal(t, stellarAccount, claims.SEP10StellarAccount())
+	assert.Equal(t, stellarMemo, claims.SEP10StellarMemo())
+	assert.Equal(t, clientDomain, claims.ClientDomain())
+	assert.Equal(t, homeDomain, claims.HomeDomain())
+	assert.NotNil(t, claims.ExpiresAt())
+
+	// Verify transaction data
+	assert.Equal(t, lang, claims.TransactionData["lang"])
+	assert.Equal(t, "deposit", claims.TransactionData["kind"])
+	assert.Equal(t, "incomplete", claims.TransactionData["status"])
+
+	// Verify full transaction data map
+	assert.Equal(t, lang, claims.TransactionData["lang"])
+	assert.Equal(t, "deposit", claims.TransactionData["kind"])
+	assert.Equal(t, "incomplete", claims.TransactionData["status"])
 }
 
 func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {

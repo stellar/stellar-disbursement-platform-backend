@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/stellar/go/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,10 +75,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				BaseURL:                  "https://test.com",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -85,7 +85,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
 				`WEB_AUTH_ENDPOINT="https://test.com/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`TRANSFER_SERVER_SEP0024="https://test.com/sep24"`,
 			},
 		},
 		{
@@ -94,10 +94,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				BaseURL:                  "https://test.com",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -105,7 +104,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
 				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`TRANSFER_SERVER_SEP0024="https://tenant.example.com/sep24"`,
 			},
 		},
 		{
@@ -113,10 +112,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				BaseURL:                  "https://test.com",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -124,7 +122,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
 				`WEB_AUTH_ENDPOINT="https://test.com/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`TRANSFER_SERVER_SEP0024="https://test.com/sep24"`,
 			},
 		},
 		{
@@ -133,10 +131,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				BaseURL:                  "https://test.com",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://test.com",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -144,7 +141,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
 				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`TRANSFER_SERVER_SEP0024="https://tenant.example.com/sep24"`,
 			},
 		},
 	}
@@ -321,7 +318,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			DistributionAccountResolver: distAccResolver,
 			NetworkPassphrase:           network.TestNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
 			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
@@ -342,7 +338,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
 			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/auth"
-			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
+			TRANSFER_SERVER_SEP0024="http://default-tenant.stellar.local:8000/sep24"
 
 			[DOCUMENTATION]
 			ORG_NAME="MyCustomAid"
@@ -373,7 +369,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			DistributionAccountResolver: distAccResolver,
 			NetworkPassphrase:           network.PublicNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
 			BaseURL:                     "http://default-tenant.stellar.local:8000",
 		}
@@ -394,7 +389,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
 			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/auth"
-			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
+			TRANSFER_SERVER_SEP0024="http://default-tenant.stellar.local:8000/sep24"
 
 			[DOCUMENTATION]
 			ORG_NAME="MyCustomAid"
@@ -425,7 +420,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			DistributionAccountResolver: distAccResolver,
 			NetworkPassphrase:           network.PublicNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
 			InstanceName:                "SDP Pubnet",
 			BaseURL:                     "https://instance.example.com",
@@ -447,7 +441,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
 			WEB_AUTH_ENDPOINT="https://instance.example.com/auth"
-			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
+			TRANSFER_SERVER_SEP0024="https://instance.example.com/sep24"
 
 			[DOCUMENTATION]
 			ORG_NAME="SDP Pubnet"
@@ -490,7 +484,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			DistributionAccountResolver: distAccResolver,
 			NetworkPassphrase:           network.PublicNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
 		}
 
@@ -510,7 +503,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
 			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/auth"
-			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
+			TRANSFER_SERVER_SEP0024="http://default-tenant.stellar.local:8000/sep24"
 
 			[DOCUMENTATION]
 			ORG_NAME="MyCustomAid"
