@@ -100,13 +100,11 @@ func (h SEP24Handler) generateMoreInfoURL(ctx context.Context, sep10Claims *anch
 		},
 	)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Failed to generate SEP-24 more info token: %v", err)
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
 	baseURLParsed, err := url.Parse(h.InteractiveBaseURL)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Failed to parse base URL %s: %v", h.InteractiveBaseURL, err)
 		return "", fmt.Errorf("failed to parse base URL: %w", err)
 	}
 
@@ -142,14 +140,13 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
 
-			moreInfoURL, err := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusIncomplete)
-			if err != nil {
-				httperror.InternalError(ctx, "Failed to generate more info URL", err, nil).Render(w)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusIncomplete)
+			if moreInfoErr != nil {
+				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return
 			}
 			transaction["more_info_url"] = moreInfoURL
 		} else {
-			log.Ctx(ctx).Errorf("Error fetching receiver wallet: %v", err)
 			httperror.InternalError(ctx, "Failed to get transaction", err, nil).Render(w)
 			return
 		}
@@ -167,9 +164,9 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		case data.ReadyReceiversWalletStatus:
 			transaction["status"] = SEP24StatusPendingUserInfoUpdate
 
-			moreInfoURL, err := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
-			if err != nil {
-				httperror.InternalError(ctx, "Failed to generate more info URL", err, nil).Render(w)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
+			if moreInfoErr != nil {
+				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return
 			}
 			transaction["more_info_url"] = moreInfoURL
@@ -284,14 +281,12 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		txnID,
 	)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Failed to generate SEP-24 token: %v", err)
 		httperror.InternalError(ctx, "Failed to generate token", err, nil).Render(w)
 		return
 	}
 
 	baseURLParsed, err := url.Parse(h.InteractiveBaseURL)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Failed to parse base URL %s: %v", h.InteractiveBaseURL, err)
 		httperror.InternalError(ctx, "Failed to parse base URL", err, nil).Render(w)
 		return
 	}

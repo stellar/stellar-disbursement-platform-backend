@@ -421,6 +421,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
 			EnableAnchorPlatform:        true,
+			AnchorPlatformBaseSepURL:    "http://default-tenant.stellar.local:8000",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -473,6 +474,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
 			EnableAnchorPlatform:        true,
+			AnchorPlatformBaseSepURL:    "http://default-tenant.stellar.local:8000",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -526,6 +528,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Models:                      models,
 			InstanceName:                "SDP Pubnet",
 			EnableAnchorPlatform:        true,
+			AnchorPlatformBaseSepURL:    "https://instance.example.com",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -590,6 +593,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
 			EnableAnchorPlatform:        true,
+			AnchorPlatformBaseSepURL:    "http://default-tenant.stellar.local:8000",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -646,7 +650,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
-			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/sep10/auth"
+			WEB_AUTH_ENDPOINT="http://default-tenant.stellar.local:8000/auth"
 			TRANSFER_SERVER_SEP0024="http://default-tenant.stellar.local:8000/sep24"
 
 			[DOCUMENTATION]
