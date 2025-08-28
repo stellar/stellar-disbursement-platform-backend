@@ -163,7 +163,9 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 	if reqBody.ReceiverRegistrationMessageTemplate != nil {
 		validator.CheckError(utils.ValidateNoHTML(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
-		validator.CheckError(utils.ValidateStringLength(*reqBody.ReceiverRegistrationMessageTemplate, "receiver_registration_message_template", 255), "receiver_registration_message_template", "")
+		if *reqBody.ReceiverRegistrationMessageTemplate != "" {
+			validator.CheckError(utils.ValidateStringLength(*reqBody.ReceiverRegistrationMessageTemplate, "receiver_registration_message_template", 255), "receiver_registration_message_template", "")
+		}
 	}
 
 	if reqBody.OrganizationName != "" {
