@@ -21,6 +21,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
+const (
+	// PostgreSQL error codes
+	pgUniqueViolation = "23505"
+	pgRaiseException  = "P0001"
+)
+
 type UpdateReceiverHandler struct {
 	Models           *data.Models
 	DBConnectionPool db.DBConnectionPool
@@ -148,22 +154,27 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 
 func parseHttpConflictErrorIfNeeded(err error) *httperror.HTTPError {
 	var pqErr *pq.Error
-	if err == nil || !errors.As(err, &pqErr) {
+	if !errors.As(err, &pqErr) {
 		return nil
 	}
 
-	if pqErr.Code == "23505" {
+	// Handle unique constraint violations (email, phone number)
+	if pqErr.Code == pgUniqueViolation {
 		allowedConstraints := []string{"receiver_unique_email", "receiver_unique_phone_number"}
-		if slices.Contains(allowedConstraints, pqErr.Constraint) {
-			fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
-			msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
-			return httperror.Conflict(msg, err, map[string]interface{}{
-				fieldName: fieldName + " must be unique",
-			})
+		if !slices.Contains(allowedConstraints, pqErr.Constraint) {
+			return nil
 		}
+
+		fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
+		msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
+		return httperror.Conflict(msg, err, map[string]interface{}{
+			fieldName: fieldName + " must be unique",
+		})
 	}
 
-	if pqErr.Code == "P0001" && strings.Contains(pqErr.Message, "Stellar address") &&
+	// Handle custom database trigger exceptions for wallet address conflicts
+	if pqErr.Code == pgRaiseException &&
+		strings.Contains(pqErr.Message, "Stellar address") &&
 		strings.Contains(pqErr.Message, "already belongs to another receiver") {
 		return httperror.Conflict("The provided wallet address is already associated with another receiver.", err, map[string]interface{}{
 			"wallet_address": "wallet address must be unique",
