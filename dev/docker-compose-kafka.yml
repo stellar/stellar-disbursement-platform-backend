@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   kafka:
-    image: docker.io/bitnami/kafka:3.6
+    image: docker.io/bitnamilegacy/kafka:3.6
     ports:
       - "9094:9094"
       - "9092:9092"
@@ -26,7 +26,7 @@ services:
       retries: 5
 
   kafka-init:
-    image: docker.io/bitnami/kafka:3.6
+    image: docker.io/bitnamilegacy/kafka:3.6
     entrypoint: [ "/bin/bash", "-c" ]
     command: |
       "

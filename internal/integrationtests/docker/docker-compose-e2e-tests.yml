@@ -253,7 +253,7 @@ services:
 
   kafka:
     container_name: e2e-kafka
-    image: docker.io/bitnami/kafka:3.6
+    image: docker.io/bitnamilegacy/kafka:3.6
     ports:
       - "9094:9094"
       - "9092:9092"
@@ -278,7 +278,7 @@ services:
 
   kafka-init:
     container_name: e2e-kafka-init
-    image: docker.io/bitnami/kafka:3.6
+    image: docker.io/bitnamilegacy/kafka:3.6
     entrypoint: [ "/bin/bash", "-c" ]
     command: |
       "
