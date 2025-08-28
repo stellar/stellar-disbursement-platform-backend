@@ -2024,11 +2024,27 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 	r := chi.NewRouter()
 	r.Post("/receivers", handler.CreateReceiver)
 
+	wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
+	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+
 	// Create a receiver with a specific phone number and email
 	existingReceiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
 		PhoneNumber: "+14155556666",
 		Email:       "existing@example.com",
 	})
+
+	existingWalletAddress := "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K"
+	receiverWalletID, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, data.ReceiverWalletInsert{
+		ReceiverID: existingReceiver.ID,
+		WalletID:   wallets[0].ID,
+	})
+	require.NoError(t, err)
+
+	err = models.ReceiverWallet.Update(ctx, receiverWalletID, data.ReceiverWalletUpdate{
+		Status:         data.RegisteredReceiversWalletStatus,
+		StellarAddress: existingWalletAddress,
+	}, dbConnectionPool)
+	require.NoError(t, err)
 
 	testCases := []struct {
 		name         string
@@ -2070,6 +2086,25 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 				"error": "The provided phone_number is already associated with another user.",
 				"extras": {
 					"phone_number": "phone_number must be unique"
+				}
+			}`,
+		},
+		{
+			name: "duplicate wallet address conflict",
+			request: dto.CreateReceiverRequest{
+				PhoneNumber: "+14155557777",
+				ExternalID:  "test-external-id-3",
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: existingWalletAddress,
+						Memo:    "12345678",
+					},
+				},
+			},
+			expectedBody: `{
+				"error": "The provided wallet address is already associated with another receiver.",
+				"extras": {
+					"wallet_address": "wallet address must be unique"
 				}
 			}`,
 		},
