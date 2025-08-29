@@ -109,13 +109,13 @@ The main.sh setup script will print Login information for each tenant.
 🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉  
 Login URLs for each tenant:
 🔗Tenant `redcorp`: [http://redcorp.stellar.local:3000](http://redcorp.stellar.local:3000)
-  username: `init_owner@redcorp.local`
+  username: `owner@redcorp.local`
   password: `Password123!`
 🔗Tenant `bluecorp`: [http://bluecorp.stellar.local:3000](http://bluecorp.stellar.local:3000)
-  username: `init_owner@bluecorp.local`
+  username: `owner@bluecorp.local`
   password: `Password123!`
 🔗Tenant `pinkcorp`: [http://pinkcorp.stellar.local:3000](http://pinkcorp.stellar.local:3000)
-  username: `init_owner@pinkcorp.local`
+  username: `owner@pinkcorp.local`
   password: `Password123!`
 ```
 
