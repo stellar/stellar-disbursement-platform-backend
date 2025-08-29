@@ -365,7 +365,12 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 	}
 
 	for _, ip := range incompletePayments {
-		if ip.Disbursement.ID == disbursement.ID || !ip.Asset.Equals(*disbursement.Asset) {
+		// Skip payments that belong to this disbursement
+		if ip.Type == data.PaymentTypeDisbursement && ip.Disbursement != nil && ip.Disbursement.ID == disbursement.ID {
+			continue
+		}
+		// Skip payments that are for a different asset
+		if !ip.Asset.Equals(*disbursement.Asset) {
 			continue
 		}
 

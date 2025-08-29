@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Disbursement remaining balance calculation fails when there are pending Direct Payments [#842](https://github.com/stellar/stellar-disbursement-platform-backend/pull/842)
+
 ### Changed
 
 - Validate length of message template and organization name for organization patch request. [#839](https://github.com/stellar/stellar-disbursement-platform-backend/pull/839)
