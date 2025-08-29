@@ -79,7 +79,7 @@ func WithDefaultAuthenticatorOption(dbConnectionPool db.DBConnectionPool, passwo
 	}
 }
 
-// WithDefaultAuthenticatorOption sets a custom authentication method that implements the `Authenticator` interface.
+// WithCustomAuthenticatorOption sets a custom authentication method that implements the `Authenticator` interface.
 func WithCustomAuthenticatorOption(authenticator Authenticator) AuthManagerOption {
 	return func(am *defaultAuthManager) {
 		am.authenticator = authenticator
@@ -93,7 +93,7 @@ func WithDefaultJWTManagerOption(ECPublicKey, ECPrivateKey string) AuthManagerOp
 	}
 }
 
-// WithDefaultJWTManagerOption sets a custom JWT Manager that implements the `JWTManager` interface.
+// WithCustomJWTManagerOption sets a custom JWT Manager that implements the `JWTManager` interface.
 func WithCustomJWTManagerOption(jwtManager JWTManager) AuthManagerOption {
 	return func(am *defaultAuthManager) {
 		am.jwtManager = jwtManager
