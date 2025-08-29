@@ -299,6 +299,13 @@ Returns: ECDSA private key in PEM format
 {{- end -}}
 
 {{/*
+Is Anchor Platform enabled?
+*/}}
+{{- define "isAnchorPlatformEnabled" -}}
+{{- eq .Values.global.enableAnchorPlatform true | default false }}
+{{- end }}
+
+{{/*
 SDP base URL with schema and domain
 */}}
 {{- define "sdp.baseURL" -}}

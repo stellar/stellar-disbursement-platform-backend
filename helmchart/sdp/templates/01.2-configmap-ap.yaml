@@ -1,3 +1,4 @@
+{{- if .Values.global.enableAnchorPlatform }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -99,3 +100,4 @@ data:
 Values from the ap configmap section - These will override the global values
   */}}
     {{- tpl (toYaml .Values.anchorPlatform.configMap.data | nindent 2) . }}
+{{- end }}
