@@ -172,6 +172,7 @@ These parameters are shared by all charts.
 | `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |                                            |
 | `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `nil`                                      |
 | `global.singleTenantMode`                              | Determines if the SDP service is running in single-tenant mode.                                                                     | `false`                                    |
+| `global.enableAnchorPlatform`                          | Determines if the Anchor Platform service should be deployed. When disabled, SDP will not have Anchor Platform integration.         | `false`                                    |
 | `global.distributionPublicKey`                         | The public key of the HOST's Stellar distribution account, used to create channel accounts.                                         | `nil`                                      |
 | `global.distributionPrivateKey`                        | The private key of the root Stellar distribution account                                                                            | `nil`                                      |
 | `global.sep10PublicKey`                                | Anchor platform SEP10 signing public key.                                                                                           | `nil`                                      |
@@ -181,7 +182,6 @@ These parameters are shared by all charts.
 | `global.bridgeIntegration.enabled`                     | Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.                            | `false`                                    |
 | `global.bridgeIntegration.baseUrl`                     | The base URL of the bridge api.                                                                                                     | `nil`                                      |
 | `global.bridgeIntegration.apiKey`                      | The API key for the bridge integration.                                                                                             | `nil`                                      |
-| `global.enableAnchorPlatform`                         | Determines if the Anchor Platform service should be deployed. When disabled, SDP will not have Anchor Platform integration.         | `false`                                    |
 
 ### Stellar Disbursement Platform (SDP) parameters
 
@@ -236,7 +236,6 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS`               | The maximum number of times an invitation can be resent. 0 or negative values disable the job.                                                                 | `3`                                             |
 | `sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT`                  | The amount of XLM to be sent to a newly created tenant distribution account.                                                                                   | `5`                                             |
 | `sdp.configMap.data.CIRCLE_API_TYPE`                              | The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".                                                                      | `TRANSFERS`                                     |
-| `sdp.configMap.data.ENABLE_ANCHOR_PLATFORM`                      | Determines if Anchor Platform integration is enabled. This is automatically set based on `global.enableAnchorPlatform`.                                           | `false`                                         |
 | `sdp.configMap.data.ENABLE_BRIDGE_INTEGRATION`                    | Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.                                                       |                                                 |
 | `sdp.configMap.data.BRIDGE_BASE_URL`                              | The base URL of the bridge API. Required if ENABLE_BRIDGE_INTEGRATION is set to true.                                                                          |                                                 |
 | `sdp.kubeSecrets`                                                 | Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.              |                                                 |
@@ -282,7 +281,9 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
 the recipient's registration process through the SEP-24 deposit flow.
 
-**Note**: This section is only used when `global.enableAnchorPlatform` is set to `true`. When disabled, SDP will not have Anchor Platform integration and related configurations will not be included in the SDP configmap.
+Note: This section is only used when `global.enableAnchorPlatform` is set to `true`.
+When disabled, SDP will not have Anchor Platform integration and related configurations
+will not be included in the SDP configmap.
 
 | Name                                                                      | Description                                                                                                                                                                                                                                                                                                              | Value                                   |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
