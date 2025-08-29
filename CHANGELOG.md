@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed
+
+- Validate length of message template and organization name for organization patch request. [#839](https://github.com/stellar/stellar-disbursement-platform-backend/pull/839)
+
+
 ## [4.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/3.7.3...4.0.0))
 
 > [!WARNING]
