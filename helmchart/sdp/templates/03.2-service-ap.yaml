@@ -1,3 +1,4 @@
+{{- if .Values.global.enableAnchorPlatform }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -19,3 +20,4 @@ spec:
     
   selector:
     {{- include "sdp.selectorLabelsWithSuffix" (list . "-ap") | nindent 4 }}
+{{- end }}
