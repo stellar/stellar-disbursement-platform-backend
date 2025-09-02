@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- Replace Bitnami Kafka image with Apache Kafka official image due to Bitnami discontinuing support. [#844](https://github.com/stellar/stellar-disbursement-platform-backend/pull/844)
 - Validate length of message template and organization name for organization patch request. [#839](https://github.com/stellar/stellar-disbursement-platform-backend/pull/839)
 
 
