@@ -1351,8 +1351,16 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 		ReceiverWallet: rwReady,
 		Disbursement:   disbursementOld,
 		Asset:          *asset,
-		Amount:         "10",
+		Amount:         "8",
 		Status:         data.PendingPaymentStatus,
+	})
+	// Direct Payment
+	_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Asset:          *asset,
+		Amount:         "2",
+		Type:           data.PaymentTypeDirect,
+		Status:         data.ReadyPaymentStatus,
 	})
 	disbursementNew := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Wallet: wallet,
