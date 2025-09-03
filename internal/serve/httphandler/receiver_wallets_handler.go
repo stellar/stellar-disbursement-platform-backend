@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -19,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type RetryInvitationMessageResponse struct {
@@ -159,4 +161,108 @@ func (h ReceiverWalletsHandler) validateAndUpdateStatus(ctx context.Context, rec
 	default:
 		return ErrUnsupportedStatusTransition
 	}
+}
+
+type PatchReceiverWalletRequest struct {
+	StellarAddress string `json:"stellar_address"`
+	StellarMemo    string `json:"stellar_memo,omitempty"`
+}
+
+// PatchReceiverWallet updates a receiver wallet's Stellar address and memo for user-managed wallets
+func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	receiverWalletID := chi.URLParam(req, "receiver_wallet_id")
+	if strings.TrimSpace(receiverWalletID) == "" {
+		httperror.BadRequest("receiver_wallet_id is required", nil, nil).Render(rw)
+		return
+	}
+
+	receiverID := chi.URLParam(req, "receiver_id")
+	if strings.TrimSpace(receiverID) == "" {
+		httperror.BadRequest("receiver_id is required", nil, nil).Render(rw)
+		return
+	}
+
+	// Parse the request body into our DTO structure
+	var patchRequest PatchReceiverWalletRequest
+	err := json.NewDecoder(req.Body).Decode(&patchRequest)
+	if err != nil {
+		httperror.BadRequest("invalid request body", err, nil).Render(rw)
+		return
+	}
+
+	// Validate required fields in the request body
+	if strings.TrimSpace(patchRequest.StellarAddress) == "" {
+		httperror.BadRequest("stellar_address is required", nil, nil).Render(rw)
+		return
+	}
+
+	// Validate that stellar_address is a valid Stellar public key
+	if !strkey.IsValidEd25519PublicKey(patchRequest.StellarAddress) {
+		httperror.BadRequest("stellar_address must be a valid Stellar public key", nil, nil).Render(rw)
+		return
+	}
+
+	updatedReceiverWallet, err := db.RunInTransactionWithResult(ctx, h.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.ReceiverWallet, error) {
+		// 1: Validate existing receiver wallet
+		currentReceiverWallet, txErr := h.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
+		if txErr != nil {
+			return nil, fmt.Errorf("getting receiver wallet by ID %s: %w", receiverWalletID, txErr)
+		}
+
+		if currentReceiverWallet.Receiver.ID != receiverID {
+			return nil, httperror.BadRequest("Receiver wallet does not belong to the specified receiver", nil, nil)
+		}
+
+		if !currentReceiverWallet.Wallet.UserManaged {
+			return nil, httperror.BadRequest("Cannot edit stellar address for non-user-managed wallet", nil, nil)
+		}
+
+		// 2: Prepare the wallet update with new address and optional memo
+		walletUpdate := data.ReceiverWalletUpdate{
+			StellarAddress: patchRequest.StellarAddress,
+		}
+
+		if strings.TrimSpace(patchRequest.StellarMemo) != "" {
+			memoType := schema.MemoTypeID
+			walletUpdate.StellarMemo = &patchRequest.StellarMemo
+			walletUpdate.StellarMemoType = &memoType
+		} else {
+			walletUpdate.StellarMemo = nil
+			walletUpdate.StellarMemoType = nil
+		}
+
+		// 3: Update the receiver wallet
+		if txErr = h.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); txErr != nil {
+			return nil, fmt.Errorf("updating receiver wallet %s: %w", receiverWalletID, txErr)
+		}
+
+		// 4: Retrieve the updated receiver wallet
+		updatedWallet, txErr := h.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
+		if txErr != nil {
+			return nil, fmt.Errorf("getting updated receiver wallet %s: %w", receiverWalletID, txErr)
+		}
+
+		return updatedWallet, nil
+	})
+
+	if err != nil {
+		var httpErr *httperror.HTTPError
+		if errors.As(err, &httpErr) {
+			httpErr.Render(rw)
+			return
+		}
+
+		// Handle duplicate wallet addresses
+		if httpErr := httperror.HandlePostgreSQLConflictErrors(err); httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
+
+		httperror.InternalError(ctx, "Error updating receiver wallet", err, nil).Render(rw)
+		return
+	}
+
+	httpjson.RenderStatus(rw, http.StatusOK, updatedReceiverWallet, httpjson.JSON)
 }
