@@ -1,0 +1,98 @@
+name: Internal SEP Services Validation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  internal-sep-validation:
+    runs-on: ubuntu-latest
+    environment: "Internal SEP Tests"
+    env:
+      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      ENABLE_ANCHOR_PLATFORM: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run Docker Compose for SDP with Internal SEP
+        working-directory: internal/integrationtests/docker
+        run: |
+          export BASE_URL="http://stellar.local:8000"
+          docker compose -f docker-compose-e2e-tests.yml down
+          docker compose -f docker-compose-e2e-tests.yml up --build -d
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y curl jq
+
+      - name: Wait for SDP to be ready
+        timeout-minutes: 5
+        run: |
+          until curl --output /dev/null --silent --head --fail http://localhost:8000/health; do
+            echo 'Waiting for SDP to be up and running...'
+            sleep 5
+          done
+          echo 'SDP is up and running.'
+
+      - name: Test SEP-10 authentication
+        run: |
+          # Test SEP-10 challenge/response flow (client_domain is now optional)
+          echo "Testing SEP-10 without client_domain (should work)..."
+          CHALLENGE=$(curl -s "http://localhost:8000/auth?account=GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU")
+          echo "SEP-10 Challenge received"
+          
+          # Verify challenge structure
+          echo $CHALLENGE | jq -e '.transaction'
+          echo $CHALLENGE | jq -e '.network_passphrase'
+          
+          # Also test with client_domain (should still work)
+          echo "Testing SEP-10 with client_domain..."
+          CHALLENGE_WITH_CLIENT=$(curl -s "http://localhost:8000/auth?account=GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU&client_domain=demo-wallet-server.stellar.org")
+          echo $CHALLENGE_WITH_CLIENT | jq -e '.transaction'
+
+      - name: Test SEP-24 info endpoint
+        run: |
+          INFO=$(curl -s "http://localhost:8000/sep24/info")
+          echo "SEP-24 Info received:"
+          echo $INFO | jq '.'
+          
+          # Verify required fields
+          echo $INFO | jq -e '.deposit'
+          echo $INFO | jq -e '.withdraw'
+
+      - name: Test stellar.toml
+        run: |
+          TOML=$(curl -s "http://localhost:8000/.well-known/stellar.toml")
+          echo "Stellar TOML received"
+          
+          # Verify it points to internal endpoints when AP is disabled
+          if echo "$TOML" | grep -q "TRANSFER_SERVER.*localhost:8000"; then
+            echo "✅ TOML correctly points to internal SEP-24 endpoints"
+          else
+            echo "❌ TOML does not point to internal endpoints"
+            exit 1
+          fi
+          
+          if echo "$TOML" | grep -q "WEB_AUTH_ENDPOINT.*localhost:8000/auth"; then
+            echo "✅ TOML correctly points to internal SEP-10 endpoint"
+          else
+            echo "❌ TOML does not point to internal SEP-10 endpoint"
+            exit 1
+          fi
+
+      - name: Docker logs
+        if: always()
+        working-directory: internal/integrationtests/docker
+        run: |
+          docker compose -f docker-compose-e2e-tests.yml logs
+          docker compose -f docker-compose-e2e-tests.yml down

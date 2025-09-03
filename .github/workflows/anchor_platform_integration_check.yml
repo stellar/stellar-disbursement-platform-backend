@@ -1,4 +1,6 @@
-name: SDP<>AnchorPlatform Integration
+name: SDP<>AnchorPlatform Integration (Legacy)
+# Note: This workflow tests the legacy Anchor Platform integration.
+# For internal SEP services tests, see internal_sep_validation.yml
 
 on:
   push:

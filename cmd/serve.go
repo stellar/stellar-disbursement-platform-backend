@@ -283,6 +283,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
+			Name:        "sep10-client-attribution-required",
+			Usage:       "If true, SEP-10 authentication requires client_domain to be provided and validated. If false, client_domain is optional.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.Sep10ClientAttributionRequired,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
 			Name: "anchor-platform-base-platform-url",
 			Usage: "The Base URL of the platform server of the anchor platform. This is the base URL where the Anchor Platform " +
 				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint. " +

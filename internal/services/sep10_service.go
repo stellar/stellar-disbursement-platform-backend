@@ -31,15 +31,16 @@ type SEP10Service interface {
 }
 
 type sep10Service struct {
-	SEP10SigningKeypair *keypair.Full
-	JWTManager          *anchorplatform.JWTManager
-	HorizonClient       horizonclient.ClientInterface
-	HTTPClient          httpclient.HttpClientInterface
-	NetworkPassphrase   string
-	BaseURL             string
-	JWTExpiration       time.Duration
-	AuthTimeout         time.Duration
-	AllowHTTPRetry      bool
+	SEP10SigningKeypair    *keypair.Full
+	JWTManager             *anchorplatform.JWTManager
+	HorizonClient          horizonclient.ClientInterface
+	HTTPClient             httpclient.HttpClientInterface
+	NetworkPassphrase      string
+	BaseURL                string
+	JWTExpiration          time.Duration
+	AuthTimeout            time.Duration
+	AllowHTTPRetry         bool
+	ClientAttributionRequired bool
 }
 
 type ChallengeRequest struct {
@@ -56,10 +57,6 @@ func (req *ChallengeRequest) Validate() error {
 
 	if !strkey.IsValidEd25519PublicKey(req.Account) {
 		return fmt.Errorf("invalid account not a valid ed25519 public key")
-	}
-
-	if strings.TrimSpace(req.ClientDomain) == "" {
-		return fmt.Errorf("client_domain is required")
 	}
 
 	if req.Memo != "" {
@@ -110,6 +107,7 @@ func NewSEP10Service(
 	baseURL string,
 	allowHTTPRetry bool,
 	horizonClient horizonclient.ClientInterface,
+	clientAttributionRequired bool,
 ) (SEP10Service, error) {
 	kp, err := keypair.ParseFull(sep10SigningPrivateKey)
 	if err != nil {
@@ -126,6 +124,7 @@ func NewSEP10Service(
 		AllowHTTPRetry:      allowHTTPRetry,
 		HTTPClient:          httpclient.DefaultClient(),
 		HorizonClient:       horizonClient,
+		ClientAttributionRequired: clientAttributionRequired,
 	}, nil
 }
 
@@ -134,6 +133,11 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 	req.ClientDomain = strings.TrimSpace(req.ClientDomain)
 	req.HomeDomain = strings.TrimSpace(req.HomeDomain)
+	
+	// Only require client_domain if ClientAttributionRequired is true for the backwards compatibility
+	if s.ClientAttributionRequired && strings.TrimSpace(req.ClientDomain) == "" {
+		return nil, fmt.Errorf("client_domain is required")
+	}
 
 	if req.HomeDomain == "" {
 		req.HomeDomain = s.getBaseDomain()
@@ -150,9 +154,13 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		return nil, fmt.Errorf("%s is not a valid account id", req.Account)
 	}
 
-	clientSigningKey, err := s.fetchSigningKeyFromClientDomain(req.ClientDomain)
-	if err != nil {
-		return nil, fmt.Errorf("fetching client domain signing key: %w", err)
+	var clientSigningKey string
+	if req.ClientDomain != "" {
+		var err error
+		clientSigningKey, err = s.fetchSigningKeyFromClientDomain(req.ClientDomain)
+		if err != nil {
+			return nil, fmt.Errorf("fetching client domain signing key: %w", err)
+		}
 	}
 
 	var memoParam *txnbuild.MemoID
@@ -329,7 +337,7 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 		}
 	}
 
-	if !foundClientDomain {
+	if s.ClientAttributionRequired && !foundClientDomain {
 		return nil, fmt.Errorf("client_domain manage_data operation is required")
 	}
 
@@ -385,12 +393,14 @@ func (s *sep10Service) verifySignaturesWithThreshold(
 		return fmt.Errorf("verifying client signature: %w", err)
 	}
 
-	clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
-	if err != nil {
-		return fmt.Errorf("fetching client domain signing key: %w", err)
-	}
-	if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientDomainAccountID); err != nil {
-		return fmt.Errorf("verifying client domain signature: %w", err)
+	if clientDomain != "" {
+		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
+		if err != nil {
+			return fmt.Errorf("fetching client domain signing key: %w", err)
+		}
+		if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientDomainAccountID); err != nil {
+			return fmt.Errorf("verifying client domain signature: %w", err)
+		}
 	}
 
 	threshold := int(account.Thresholds.MedThreshold)

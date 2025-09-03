@@ -22,7 +22,13 @@ jobs:
     uses: ./.github/workflows/anchor_platform_integration_check.yml # execute the callable anchor_platform_integration_check.yml
     needs:
       - tests
-    secrets: inherit # pass all secrets
+    secrets: inherit
+
+  internal_sep_validation:  # Add this new job
+    uses: ./.github/workflows/internal_sep_validation.yml
+    needs:
+      - tests
+    secrets: inherit
 
   e2e_integration_test:
     uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
@@ -37,6 +43,7 @@ jobs:
     needs:
       - tests
       - e2e_integration_test
+      - internal_sep_validation 
     steps:
       - name: Check if tag is not empty
         run: |

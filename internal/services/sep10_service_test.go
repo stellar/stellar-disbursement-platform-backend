@@ -77,6 +77,7 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 		createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
 		}),
+		true,
 	)
 	if err != nil {
 		return nil, err

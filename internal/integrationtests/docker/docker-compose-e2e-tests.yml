@@ -21,8 +21,11 @@ services:
     ports:
       - "8000:8000"
       - "8003:8003"
+    extra_hosts:
+      - "stellar.local:127.0.0.1"
+      - "integration-tests.stellar.local:127.0.0.1"
     environment:
-      BASE_URL: http://localhost:8000
+      BASE_URL: ${BASE_URL:-http://localhost:8000}
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable
       ENVIRONMENT: localhost
       LOG_LEVEL: TRACE
@@ -34,13 +37,21 @@ services:
       NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
       HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
-      ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
-      ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
+      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
+      SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false"
+
+      # Toggle between Anchor Platform and Internal SEP
+      ENABLE_ANCHOR_PLATFORM: ${ENABLE_ANCHOR_PLATFORM:-true}
+      
+      # Anchor Platform URLs (only used when ENABLE_ANCHOR_PLATFORM=true)
+      ANCHOR_PLATFORM_BASE_SEP_URL: ${ANCHOR_PLATFORM_BASE_SEP_URL:-http://anchor-platform:8080}
+      ANCHOR_PLATFORM_BASE_PLATFORM_URL: ${ANCHOR_PLATFORM_BASE_PLATFORM_URL:-http://anchor-platform:8085}
+      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: ${ANCHOR_PLATFORM_OUTGOING_JWT_SECRET:-mySdpToAnchorPlatformSecret}
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
@@ -63,11 +74,13 @@ services:
       DISBURSED_ASSET_ISSUER: ${DISBURSED_ASSET_ISSUER} # e.g. GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
       RECEIVER_ACCOUNT_PUBLIC_KEY: GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU
       RECEIVER_ACCOUNT_PRIVATE_KEY: SDSAVUWVNOFG2JEHKIWEUHAYIA6PLGEHLMHX2TMVKEQGZKOFQ7XXKDFE
+      # Test wallet signing key for client domain validation
+      CLIENT_DOMAIN_SIGNING_KEY: ${CLIENT_DOMAIN_SIGNING_KEY:-SCOISU5ODOKTMC2EUKH7BUGUKYVSRW4O5Q5LDP7GZRW2RODP2OPHLWKU}
       DISTRIBUTION_ACCOUNT_TYPE: ${DISTRIBUTION_ACCOUNT_TYPE}
       DISBURSEMENT_CSV_FILE_PATH: resources
       DISBURSEMENT_CSV_FILE_NAME: ${DISBURSEMENT_CSV_FILE_NAME}
       REGISTRATION_CONTACT_TYPE: ${REGISTRATION_CONTACT_TYPE}
-      SERVER_API_BASE_URL: http://localhost:8000
+      SERVER_API_BASE_URL: http://e2e-sdp-api:8000
       ADMIN_SERVER_BASE_URL: http://localhost:8003
       ADMIN_SERVER_ACCOUNT_ID: SDP-admin
       ADMIN_SERVER_API_KEY: api_key_1234567890
@@ -82,10 +95,8 @@ services:
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
       EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
-      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       SEP24_JWT_SECRET: jwt_secret_1234567890
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
-      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
@@ -151,9 +162,11 @@ services:
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
 
+  # Anchor Platform containers - only started when ENABLE_ANCHOR_PLATFORM=true
   db-anchor-platform:
     container_name: e2e-anchor-platform-postgres-db
     image: postgres:14-alpine
+    profiles: ["anchor-platform"]  # Only start when profile is activated
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -167,6 +180,7 @@ services:
   anchor-platform:
     container_name: e2e-anchor-platform
     image: stellar/anchor-platform:2.6.0
+    profiles: ["anchor-platform"]  # Only start when profile is activated
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
