@@ -80,7 +80,7 @@ services:
       DISBURSEMENT_CSV_FILE_PATH: resources
       DISBURSEMENT_CSV_FILE_NAME: ${DISBURSEMENT_CSV_FILE_NAME}
       REGISTRATION_CONTACT_TYPE: ${REGISTRATION_CONTACT_TYPE}
-      SERVER_API_BASE_URL: http://e2e-sdp-api:8000
+      SERVER_API_BASE_URL: http://localhost:8000
       ADMIN_SERVER_BASE_URL: http://localhost:8003
       ADMIN_SERVER_ACCOUNT_ID: SDP-admin
       ADMIN_SERVER_API_KEY: api_key_1234567890
@@ -166,7 +166,7 @@ services:
   db-anchor-platform:
     container_name: e2e-anchor-platform-postgres-db
     image: postgres:14-alpine
-    profiles: ["anchor-platform"]  # Only start when profile is activated
+    profiles: ["anchor-platform"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -180,7 +180,7 @@ services:
   anchor-platform:
     container_name: e2e-anchor-platform
     image: stellar/anchor-platform:2.6.0
-    profiles: ["anchor-platform"]  # Only start when profile is activated
+    profiles: ["anchor-platform"]
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server

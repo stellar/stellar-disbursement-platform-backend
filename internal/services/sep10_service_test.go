@@ -196,8 +196,7 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				Account:    keypair.MustRandom().Address(),
 				HomeDomain: "fenris.imperium.com",
 			},
-			expectError: true,
-			errMsg:      "client_domain is required",
+			expectError: false,
 		},
 		{
 			name: "client_domain with only whitespace",
@@ -206,8 +205,7 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				HomeDomain:   "fenris.imperium.com",
 				ClientDomain: "   ",
 			},
-			expectError: true,
-			errMsg:      "client_domain is required",
+			expectError: false,
 		},
 		{
 			name: "client_domain with leading/trailing whitespace",

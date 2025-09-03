@@ -245,7 +245,6 @@ func (it *IntegrationTestsService) createAndValidateDisbursement(ctx context.Con
 		return nil, fmt.Errorf("validating data after process disbursement: %w", err)
 	}
 
-	// Create receiver wallets for SEP-24 flow if not using wallet addresses
 	if !opts.RegistrationContactType.IncludesWalletAddress {
 		log.Ctx(ctx).Info("Creating receiver wallets for SEP-24 registration flow...")
 		if err = it.createReceiverWalletsForSEP24(ctx, disbursement.ID, walletID); err != nil {
@@ -332,7 +331,7 @@ func (it *IntegrationTestsService) registerWithInternalSEP(ctx context.Context, 
 		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
 	}
 
-	if err := it.sdpSepServices.CompleteReceiverRegistration(ctx, depositResp.Token, registrationData); err != nil {
+	if err = it.sdpSepServices.CompleteReceiverRegistration(ctx, depositResp.Token, registrationData); err != nil {
 		return fmt.Errorf("completing receiver registration: %w", err)
 	}
 	log.Ctx(ctx).Info("Completed receiver registration")
@@ -348,7 +347,7 @@ func (it *IntegrationTestsService) registerWithInternalSEP(ctx context.Context, 
 	}
 
 	// Step 9: Validate registration in database
-	if err := validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain); err != nil {
+	if err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain); err != nil {
 		return fmt.Errorf("validating receiver after registration: %w", err)
 	}
 
@@ -389,7 +388,7 @@ func (it *IntegrationTestsService) registerWithAnchorPlatform(ctx context.Contex
 	}
 
 	log.Ctx(ctx).Info("Completing receiver registration using server API")
-	if err := it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
+	if err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
 		OTP:               data.TestnetAlwaysValidOTP,
 		PhoneNumber:       disbursementInstructions[0].Phone,
 		Email:             disbursementInstructions[0].Email,
@@ -513,7 +512,7 @@ func (it *IntegrationTestsService) createReceiverWalletsForSEP24(ctx context.Con
 func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts IntegrationTestsOpts) error {
 	// 1. Create new tenant and add owner user
 	distributionAccType := schema.AccountType(opts.DistributionAccountType)
-	
+
 	// Use appropriate base URL based on whether we're using Anchor Platform or Internal SEP
 	// For Internal SEP, use 3-part domain with tenant name for proper tenant extraction in SEP-24
 	// For Anchor Platform, use the standard localhost URL
@@ -523,7 +522,7 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 	} else {
 		baseURL = fmt.Sprintf("http://%s.stellar.local:8000", opts.TenantName)
 	}
-	
+
 	t, err := it.adminAPI.CreateTenant(ctx, CreateTenantRequest{
 		Name:                    opts.TenantName,
 		OwnerEmail:              opts.UserEmail,

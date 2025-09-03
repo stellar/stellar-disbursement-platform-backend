@@ -31,15 +31,15 @@ type SEP10Service interface {
 }
 
 type sep10Service struct {
-	SEP10SigningKeypair    *keypair.Full
-	JWTManager             *anchorplatform.JWTManager
-	HorizonClient          horizonclient.ClientInterface
-	HTTPClient             httpclient.HttpClientInterface
-	NetworkPassphrase      string
-	BaseURL                string
-	JWTExpiration          time.Duration
-	AuthTimeout            time.Duration
-	AllowHTTPRetry         bool
+	SEP10SigningKeypair       *keypair.Full
+	JWTManager                *anchorplatform.JWTManager
+	HorizonClient             horizonclient.ClientInterface
+	HTTPClient                httpclient.HttpClientInterface
+	NetworkPassphrase         string
+	BaseURL                   string
+	JWTExpiration             time.Duration
+	AuthTimeout               time.Duration
+	AllowHTTPRetry            bool
 	ClientAttributionRequired bool
 }
 
@@ -115,15 +115,15 @@ func NewSEP10Service(
 	}
 
 	return &sep10Service{
-		JWTManager:          jwtManager,
-		JWTExpiration:       time.Hour * 2,
-		NetworkPassphrase:   networkPassphrase,
-		SEP10SigningKeypair: kp,
-		AuthTimeout:         time.Minute * 15,
-		BaseURL:             baseURL,
-		AllowHTTPRetry:      allowHTTPRetry,
-		HTTPClient:          httpclient.DefaultClient(),
-		HorizonClient:       horizonClient,
+		JWTManager:                jwtManager,
+		JWTExpiration:             time.Hour * 2,
+		NetworkPassphrase:         networkPassphrase,
+		SEP10SigningKeypair:       kp,
+		AuthTimeout:               time.Minute * 15,
+		BaseURL:                   baseURL,
+		AllowHTTPRetry:            allowHTTPRetry,
+		HTTPClient:                httpclient.DefaultClient(),
+		HorizonClient:             horizonClient,
 		ClientAttributionRequired: clientAttributionRequired,
 	}, nil
 }
@@ -133,7 +133,7 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 	req.ClientDomain = strings.TrimSpace(req.ClientDomain)
 	req.HomeDomain = strings.TrimSpace(req.HomeDomain)
-	
+
 	// Only require client_domain if ClientAttributionRequired is true for the backwards compatibility
 	if s.ClientAttributionRequired && strings.TrimSpace(req.ClientDomain) == "" {
 		return nil, fmt.Errorf("client_domain is required")

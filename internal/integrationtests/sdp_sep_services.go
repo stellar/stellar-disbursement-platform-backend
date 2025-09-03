@@ -136,7 +136,7 @@ func (s *SDPSepServicesIntegrationTests) GetSEP10Challenge(ctx context.Context) 
 	}
 
 	var challenge SEP10ChallengeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&challenge); err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&challenge); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 
@@ -174,7 +174,8 @@ func (s *SDPSepServicesIntegrationTests) SignSEP10Challenge(challengeResp *SEP10
 
 	// If we have a client domain private key, also sign with it
 	if s.ClientDomainPrivateKey != "" {
-		clientDomainKP, err := keypair.ParseFull(s.ClientDomainPrivateKey)
+		var clientDomainKP *keypair.Full
+		clientDomainKP, err = keypair.ParseFull(s.ClientDomainPrivateKey)
 		if err != nil {
 			return nil, fmt.Errorf("parsing client domain private key: %w", err)
 		}
@@ -236,7 +237,7 @@ func (s *SDPSepServicesIntegrationTests) ValidateSEP10Challenge(ctx context.Cont
 	}
 
 	var token SEP10AuthToken
-	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(&token); err != nil {
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 

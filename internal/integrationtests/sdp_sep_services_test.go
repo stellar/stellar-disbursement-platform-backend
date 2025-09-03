@@ -92,7 +92,7 @@ func createTestChallengeTransaction(t *testing.T, receiverAccount, clientDomainA
 func TestSDPSepServicesIntegrationTests_GetSEP10Challenge(t *testing.T) {
 	t.Parallel()
 
-	receiverKP, clientDomainKP:= createTestKeypairs()
+	receiverKP, clientDomainKP := createTestKeypairs()
 
 	testCases := []struct {
 		name           string
@@ -156,9 +156,9 @@ func TestSDPSepServicesIntegrationTests_GetSEP10Challenge(t *testing.T) {
 				SDPBaseURL:               "https://test.stellar.local:8000",
 				TenantName:               "test",
 				ReceiverAccountPublicKey: receiverKP.Address(),
-				ClientDomain:             "test.stellar.local", 
-				ClientDomainPrivateKey:   "",                   
-				HomeDomain:               "localhost:8000",     
+				ClientDomain:             "test.stellar.local",
+				ClientDomainPrivateKey:   "",
+				HomeDomain:               "localhost:8000",
 			}
 
 			ctx := context.Background()
@@ -603,10 +603,10 @@ func TestSDPSepServicesIntegrationTests_Configuration(t *testing.T) {
 		TenantName:                "test",
 		ReceiverAccountPublicKey:  receiverKP.Address(),
 		ReceiverAccountPrivateKey: receiverKP.Seed(),
-		ClientDomain:              "test.stellar.local", 
-		ClientDomainPrivateKey:    "",                   
+		ClientDomain:              "test.stellar.local",
+		ClientDomainPrivateKey:    "",
 		DisbursedAssetCode:        "USDC",
-		HomeDomain:                "test.stellar.local:8000", 
+		HomeDomain:                "test.stellar.local:8000",
 	}
 
 	// Test configuration validation

@@ -24,7 +24,7 @@ jobs:
       - tests
     secrets: inherit
 
-  internal_sep_validation:  # Add this new job
+  internal_sep_validation:
     uses: ./.github/workflows/internal_sep_validation.yml
     needs:
       - tests
