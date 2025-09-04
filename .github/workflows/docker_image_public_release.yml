@@ -44,6 +44,7 @@ jobs:
       - tests
       - e2e_integration_test
       - internal_sep_validation 
+      - anchor_platform_integration_check
     steps:
       - name: Check if tag is not empty
         run: |
@@ -85,6 +86,8 @@ jobs:
     needs:
       - tests
       - e2e_integration_test
+      - anchor_platform_integration_check
+      - internal_sep_validation
     steps:
       - uses: actions/checkout@v5
 
