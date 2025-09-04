@@ -4,6 +4,19 @@ set -eu
 
 export DIVIDER="----------------------------------------"
 
+# Load environment variables from .env file
+load_env_file() {
+  if [ -f ".env" ]; then
+    echo "📋 Loading environment variables from .env file..."
+    set -a
+    source .env
+    set +a  
+    echo "Environment variables loaded successfully"
+  else
+    echo "Warning: .env file not found in current directory"
+  fi
+}
+
 # Check command line arguments
 if [ $# -eq 0 ]; then
   echo "❌ Error: Please specify which tests to run"
@@ -26,6 +39,7 @@ echo "🚀 E2E Integration Test Script"
 echo "📋 Test Mode: $TEST_MODE"
 echo "🔧 Configuration: $([ "$TEST_MODE" = "ap" ] && echo "Anchor Platform ONLY" || echo "Internal SEP ONLY")"
 echo $DIVIDER
+load_env_file
 
 wait_for_server() {
   local endpoint=$1
@@ -82,14 +96,9 @@ Config_Internal_Stellar_Env_Phone_XLM_Testnet=(
   "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
   "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
   "HORIZON_URL=https://horizon-testnet.stellar.org"
-  "SEP10_SIGNING_PUBLIC_KEY=GASJFPGBOIC2KEIZB57OGHKWVOOJJ2IXELSP6HZTIRRCQN2O3CGHZYON"
-  "SEP10_SIGNING_PRIVATE_KEY=SC2WWCBFSGB5O66TQ2XMXJUY7KONHCJXGMIPKJBPIVE5IJPEFRKIRZVA"
-  "DISTRIBUTION_PUBLIC_KEY=GDTHBM4X7MOTYXJBUT43MFRDREJ4XFIFYP5XTWKAZCJJGXHKQRGRSN3X"
-  "DISTRIBUTION_SEED=SCOISU5ODOKTMC2EUKH7BUGUKYVSRW4O5Q5LDP7GZRW2RODP2OPHLWKU"
   "USER_EMAIL=integration-test-user@stellar.local"
   "USER_PASSWORD=Password123!"
   "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
-  "CLIENT_DOMAIN_SIGNING_KEY=SBFJYZCBUEEU3C47INA23C72J3D2KJH3G26ILLGQESVX5H5ABREWRGF6"
   "BASE_URL=http://stellar.local:8000"
 )
 
@@ -103,14 +112,9 @@ Config_Internal_Stellar_Env_Email_XLM_Testnet=(
   "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
   "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
   "HORIZON_URL=https://horizon-testnet.stellar.org"
-  "SEP10_SIGNING_PUBLIC_KEY=GASJFPGBOIC2KEIZB57OGHKWVOOJJ2IXELSP6HZTIRRCQN2O3CGHZYON"
-  "SEP10_SIGNING_PRIVATE_KEY=SC2WWCBFSGB5O66TQ2XMXJUY7KONHCJXGMIPKJBPIVE5IJPEFRKIRZVA"
-  "DISTRIBUTION_PUBLIC_KEY=GDTHBM4X7MOTYXJBUT43MFRDREJ4XFIFYP5XTWKAZCJJGXHKQRGRSN3X"
-  "DISTRIBUTION_SEED=SCOISU5ODOKTMC2EUKH7BUGUKYVSRW4O5Q5LDP7GZRW2RODP2OPHLWKU"
   "USER_EMAIL=integration-test-user@stellar.local"
   "USER_PASSWORD=Password123!"
   "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
-  "CLIENT_DOMAIN_SIGNING_KEY=SBFJYZCBUEEU3C47INA23C72J3D2KJH3G26ILLGQESVX5H5ABREWRGF6"
   "BASE_URL=http://stellar.local:8000"
 )
 
@@ -124,14 +128,9 @@ Config_Internal_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
   "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
   "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
   "HORIZON_URL=https://horizon-testnet.stellar.org"
-  "SEP10_SIGNING_PUBLIC_KEY=GASJFPGBOIC2KEIZB57OGHKWVOOJJ2IXELSP6HZTIRRCQN2O3CGHZYON"
-  "SEP10_SIGNING_PRIVATE_KEY=SC2WWCBFSGB5O66TQ2XMXJUY7KONHCJXGMIPKJBPIVE5IJPEFRKIRZVA"
-  "DISTRIBUTION_PUBLIC_KEY=GDTHBM4X7MOTYXJBUT43MFRDREJ4XFIFYP5XTWKAZCJJGXHKQRGRSN3X"
-  "DISTRIBUTION_SEED=SCOISU5ODOKTMC2EUKH7BUGUKYVSRW4O5Q5LDP7GZRW2RODP2OPHLWKU"
   "USER_EMAIL=integration-test-user@stellar.local"
   "USER_PASSWORD=Password123!"
   "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
-  "CLIENT_DOMAIN_SIGNING_KEY=SBFJYZCBUEEU3C47INA23C72J3D2KJH3G26ILLGQESVX5H5ABREWRGF6"
   "BASE_URL=http://stellar.local:8000"
 )
 
@@ -180,7 +179,7 @@ for config_name in "${options[@]}"; do
 
   echo $DIVIDER
   echo "====> 👀Step 1: start preparation"
-  docker compose -f ../docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE down -v
+  docker compose -f docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE down -v
   docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v
   docker volume ls -f name='e2e' --format '{{.Name}}' | xargs docker volume rm
   echo "====> ✅Step 1: finish preparation"
@@ -188,7 +187,7 @@ for config_name in "${options[@]}"; do
   # Run docker compose
   echo $DIVIDER
   echo "====> 👀Step 2: build sdp-api, tss, and optionally anchor-platform ($DESCRIPTION)"
-  docker compose -f ../docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE up --build -d
+  docker compose -f docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE up --build -d
   wait_for_server "http://localhost:8000/health" 20
   echo "====> ✅Step 2: finishing build"
 
@@ -221,7 +220,7 @@ for config_name in "${options[@]}"; do
   # Cleanup container and volumes
   echo $DIVIDER
   echo "====> 👀Step 6: cleaning up e2e containers and volumes"
-  docker compose -f ../docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE down -v
+  docker compose -f docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE down -v
   docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v
   docker volume ls -f name='e2e' --format '{{.Name}}' | xargs docker volume rm
   echo "====> ✅Step 6: finish cleaning up containers and volumes"
