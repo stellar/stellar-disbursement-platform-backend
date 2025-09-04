@@ -4,24 +4,25 @@ on:
   push:
     branches:
       - main
-      - develop
   pull_request:
   workflow_call:
 
 permissions:
   contents: read
 
-env:
-  DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
-  DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
-  SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
-  SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
-  ENABLE_ANCHOR_PLATFORM: "false"
-
 jobs:
   internal-sep-validation:
     runs-on: ubuntu-latest
-    environment: "Internal SEP Tests"
+    # environment: "Internal SEP Tests"
+    environment: "Anchor Integration Tests"
+    env:
+      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      ENABLE_ANCHOR_PLATFORM: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -47,16 +48,13 @@ jobs:
 
       - name: Test SEP-10 authentication
         run: |
-          # Test SEP-10 challenge/response flow (client_domain is now optional)
           echo "Testing SEP-10 without client_domain (should work)..."
           CHALLENGE=$(curl -s "http://localhost:8000/auth?account=GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU")
           echo "SEP-10 Challenge received"
           
-          # Verify challenge structure
           echo $CHALLENGE | jq -e '.transaction'
           echo $CHALLENGE | jq -e '.network_passphrase'
           
-          # Also test with client_domain (should still work)
           echo "Testing SEP-10 with client_domain..."
           CHALLENGE_WITH_CLIENT=$(curl -s "http://localhost:8000/auth?account=GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU&client_domain=demo-wallet-server.stellar.org")
           echo $CHALLENGE_WITH_CLIENT | jq -e '.transaction'
@@ -67,7 +65,6 @@ jobs:
           echo "SEP-24 Info received:"
           echo $INFO | jq '.'
           
-          # Verify required fields
           echo $INFO | jq -e '.deposit'
           echo $INFO | jq -e '.withdraw'
 
