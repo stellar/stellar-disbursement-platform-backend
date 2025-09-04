@@ -100,5 +100,21 @@ const emailStyle = template.HTML(`
 		.button:hover {
 			background-color: #404040;
 		}
+		/* Email client overrides */
+		a.button {
+			color: #ffffff !important;
+		}
+		a.button:link {
+			color: #ffffff !important;
+		}
+		a.button:visited {
+			color: #ffffff !important;
+		}
+		a.button:hover {
+			color: #ffffff !important;
+		}
+		a.button:active {
+			color: #ffffff !important;
+		}
     </style>
 `)
