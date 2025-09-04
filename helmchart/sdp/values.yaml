@@ -93,6 +93,9 @@ global:
   ## @param global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
   singleTenantMode: false
 
+  ## @param global.enableAnchorPlatform Determines if the Anchor Platform service should be deployed. When disabled, SDP will not have Anchor Platform integration.
+  enableAnchorPlatform: false
+
   ## @param global.distributionPublicKey The public key of the HOST's Stellar distribution account, used to create channel accounts.
   ## @param global.distributionPrivateKey The private key of the root Stellar distribution account
   distributionPublicKey: #required
@@ -340,11 +343,15 @@ sdp:
       # NOTE: the hosts to be used here will be the same ones as in the sdp.route section.
 
       # =========================== START anchorPlatform ===========================
-      ## @section Anchor Platform
-      ## @descriptionStart
-      ## Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
-      ##  the recipient's registration process through the SEP-24 deposit flow.
-      ## @descriptionEnd
+## @section Anchor Platform
+## @descriptionStart
+## Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
+##  the recipient's registration process through the SEP-24 deposit flow.
+## 
+## Note: This section is only used when `global.enableAnchorPlatform` is set to `true`.
+## When disabled, SDP will not have Anchor Platform integration and related configurations
+## will not be included in the SDP configmap.
+## @descriptionEnd
 anchorPlatform:
 
   ## @extra anchorPlatform.route Configuration related to the routing of the Anchor Platform service.

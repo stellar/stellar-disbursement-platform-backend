@@ -23,7 +23,7 @@ This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a [Kub
 
 The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP consists of the following services:
 - Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions.
-- Anchor Platform: the API server that the wallet uses to authenticate and initiate the recipient’s registration process through the SEP-24 deposit flow.
+- Anchor Platform (optional): the API server that the wallet uses to authenticate and initiate the recipient's registration process through the SEP-24 deposit flow. **Note**: Anchor Platform can be disabled via `global.enableAnchorPlatform` (default: `false`).
 - Transaction Submission Service (TSS): the service that submits all payment transactions to the Stellar network.
 - Dashboard: the user interface administrators use to initiate and track the progress of disbursements.
 
@@ -172,6 +172,7 @@ These parameters are shared by all charts.
 | `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |                                            |
 | `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `nil`                                      |
 | `global.singleTenantMode`                              | Determines if the SDP service is running in single-tenant mode.                                                                     | `false`                                    |
+| `global.enableAnchorPlatform`                          | Determines if the Anchor Platform service should be deployed. When disabled, SDP will not have Anchor Platform integration.         | `false`                                    |
 | `global.distributionPublicKey`                         | The public key of the HOST's Stellar distribution account, used to create channel accounts.                                         | `nil`                                      |
 | `global.distributionPrivateKey`                        | The private key of the root Stellar distribution account                                                                            | `nil`                                      |
 | `global.sep10PublicKey`                                | Anchor platform SEP10 signing public key.                                                                                           | `nil`                                      |
@@ -279,6 +280,10 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 
 Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
 the recipient's registration process through the SEP-24 deposit flow.
+
+Note: This section is only used when `global.enableAnchorPlatform` is set to `true`.
+When disabled, SDP will not have Anchor Platform integration and related configurations
+will not be included in the SDP configmap.
 
 | Name                                                                      | Description                                                                                                                                                                                                                                                                                                              | Value                                   |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |

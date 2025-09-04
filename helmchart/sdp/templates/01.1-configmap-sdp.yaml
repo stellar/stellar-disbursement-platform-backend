@@ -24,8 +24,10 @@ data:
   PORT: {{ include "sdp.port" . | quote }}
   METRICS_PORT: {{ include "sdp.metricsPort" . | quote }}
   ADMIN_PORT: {{ include "sdp.adminPort" . | quote }}
+  {{- if .Values.global.enableAnchorPlatform }}
   ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.baseURL" . | quote }}
   ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . | quote }}
+  {{- end }}
   {{- /*
 Values from the `global` section
   */}}
@@ -37,6 +39,7 @@ Values from the `global` section
   KAFKA_SECURITY_PROTOCOL: {{ .eventBroker.kafka.securityProtocol | quote }}
   {{- end }}
   SINGLE_TENANT_MODE: {{ .singleTenantMode | quote }}
+  ENABLE_ANCHOR_PLATFORM: {{ .enableAnchorPlatform | quote }}
   {{- if .distributionPublicKey }}
   DISTRIBUTION_PUBLIC_KEY: {{ .distributionPublicKey | quote }}
   {{- end }}
