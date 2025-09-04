@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -444,4 +445,107 @@ func Test_ReceiverWalletsHandler_PatchReceiverWalletStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_ReceiverWalletsHandler_PatchReceiverWallet_DuplicateStellarAddress(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	tnt := schema.Tenant{ID: "tenant-id"}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
+
+	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+
+	// user managed wallet for receiver1
+	userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
+	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
+
+	// wallet for receiver2
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+
+	// Create receiver wallets
+	rw1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, userManagedWallet.ID, data.DraftReceiversWalletStatus)
+	rw2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	handler := ReceiverWalletsHandler{Models: models}
+	router := chi.NewRouter()
+	router.Patch("/receivers/{receiver_id}/wallets/{receiver_wallet_id}", handler.PatchReceiverWallet)
+
+	t.Run("patch receiver1 with new stellar address succeeds", func(t *testing.T) {
+		newStellarAddress := "GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"
+		reqBody := fmt.Sprintf(`{"stellar_address": "%s"}`, newStellarAddress)
+		route := fmt.Sprintf("/receivers/%s/wallets/%s", receiver1.ID, rw1.ID)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, strings.NewReader(reqBody))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		var responseData map[string]interface{}
+		err = json.Unmarshal(respBody, &responseData)
+		require.NoError(t, err)
+
+		assert.Equal(t, newStellarAddress, responseData["stellar_address"])
+	})
+
+	t.Run("patch receiver1 with receiver2's stellar address triggers conflict", func(t *testing.T) {
+		reqBody := fmt.Sprintf(`{"stellar_address": "%s"}`, rw2.StellarAddress)
+		route := fmt.Sprintf("/receivers/%s/wallets/%s", receiver1.ID, rw1.ID)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, strings.NewReader(reqBody))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusConflict, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		expectedJSON := `{
+			"error": "The provided wallet address is already associated with another receiver.",
+			"extras": {
+				"wallet_address": "wallet address must be unique"
+			}
+		}`
+		assert.JSONEq(t, expectedJSON, string(respBody))
+	})
+
+	t.Run("receiver_wallet_id doesn't belong to receiver_id returns error", func(t *testing.T) {
+		reqBody := fmt.Sprintf(`{"stellar_address": "%s"}`, rw2.StellarAddress)
+		route := fmt.Sprintf("/receivers/%s/wallets/%s", receiver1.ID, rw2.ID)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, strings.NewReader(reqBody))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Contains(t, string(respBody), "Receiver wallet does not belong to the specified receiver")
+	})
 }
