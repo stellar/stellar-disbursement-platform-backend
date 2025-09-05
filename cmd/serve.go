@@ -84,13 +84,16 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	}
 
 	sj := []scheduler.SchedulerJobRegisterOption{
-		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
 			Models:              models,
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:       serveOpts.CircleService,
 		}),
+	}
+
+	if serveOpts.EnableAnchorPlatform {
+		sj = append(sj, scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()))
 	}
 
 	if serveOpts.EnableScheduler {
@@ -623,12 +626,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating message dispatcher: %s", err.Error())
 			}
 
-			// Setup the AP Auth enforcer
-			apAPIService, err := di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
+			// Setup the AP Auth enforcer (only if Anchor Platform is enabled)
+			var apAPIService anchorplatform.AnchorPlatformAPIServiceInterface
+			if serveOpts.EnableAnchorPlatform {
+				apAPIService, err = di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
+				}
+				serveOpts.AnchorPlatformAPIService = apAPIService
 			}
-			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Setup Distribution Account Resolver
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
