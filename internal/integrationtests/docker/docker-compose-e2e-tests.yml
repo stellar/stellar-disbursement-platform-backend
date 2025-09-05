@@ -21,11 +21,8 @@ services:
     ports:
       - "8000:8000"
       - "8003:8003"
-    extra_hosts:
-      - "stellar.local:127.0.0.1"
-      - "integration-tests.stellar.local:127.0.0.1"
     environment:
-      BASE_URL: ${BASE_URL:-http://localhost:8000}
+      BASE_URL: http://localhost:8000
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable
       ENVIRONMENT: localhost
       LOG_LEVEL: TRACE
@@ -74,8 +71,6 @@ services:
       DISBURSED_ASSET_ISSUER: ${DISBURSED_ASSET_ISSUER} # e.g. GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
       RECEIVER_ACCOUNT_PUBLIC_KEY: GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU
       RECEIVER_ACCOUNT_PRIVATE_KEY: SDSAVUWVNOFG2JEHKIWEUHAYIA6PLGEHLMHX2TMVKEQGZKOFQ7XXKDFE
-      # Test wallet signing key for client domain validation
-      CLIENT_DOMAIN_SIGNING_KEY: ${CLIENT_DOMAIN_SIGNING_KEY:-SCOISU5ODOKTMC2EUKH7BUGUKYVSRW4O5Q5LDP7GZRW2RODP2OPHLWKU}
       DISTRIBUTION_ACCOUNT_TYPE: ${DISTRIBUTION_ACCOUNT_TYPE}
       DISBURSEMENT_CSV_FILE_PATH: resources
       DISBURSEMENT_CSV_FILE_NAME: ${DISBURSEMENT_CSV_FILE_NAME}
@@ -166,7 +161,6 @@ services:
   db-anchor-platform:
     container_name: e2e-anchor-platform-postgres-db
     image: postgres:14-alpine
-    profiles: ["anchor-platform"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -180,7 +174,6 @@ services:
   anchor-platform:
     container_name: e2e-anchor-platform
     image: stellar/anchor-platform:2.6.0
-    profiles: ["anchor-platform"]
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
