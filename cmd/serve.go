@@ -90,11 +90,12 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:       serveOpts.CircleService,
 		}),
+		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 	}
 
-	if serveOpts.EnableAnchorPlatform {
-		sj = append(sj, scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()))
-	}
+	// if serveOpts.EnableAnchorPlatform {
+	// 	sj = append(sj, scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()))
+	// }
 
 	if serveOpts.EnableScheduler {
 		if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
