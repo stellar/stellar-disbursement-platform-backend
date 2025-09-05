@@ -188,14 +188,6 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Required:       true,
 		},
 		{
-			Name:           "sep10-signing-private-key",
-			Usage:          "SEP10 signing private key for internal SEP implementation",
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &integrationTestsOpts.Sep10SigningPrivateKey,
-			Required:       false,
-		},
-		{
 			Name:      "disbursement-csv-file-name",
 			Usage:     "File name of the integration test disbursement file.",
 			OptType:   types.String,

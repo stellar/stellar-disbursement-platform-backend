@@ -297,7 +297,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformBasePlatformURL,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name: "anchor-platform-base-sep-url",
@@ -306,7 +306,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformBaseSepURL,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name: "anchor-platform-outgoing-jwt-secret",
@@ -314,7 +314,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformOutgoingJWTSecret,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name:        "enable-anchor-platform",

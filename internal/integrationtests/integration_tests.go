@@ -47,7 +47,6 @@ type IntegrationTestsOpts struct {
 	ReceiverAccountPrivateKey  string
 	ReceiverAccountStellarMemo string
 	Sep10SigningPublicKey      string
-	Sep10SigningPrivateKey     string
 	RecaptchaSiteKey           string
 	AnchorPlatformBaseSepURL   string
 	ServerApiBaseURL           string
