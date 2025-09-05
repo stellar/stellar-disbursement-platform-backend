@@ -53,7 +53,7 @@ jobs:
       - name: Anchor Validation Tests (@stellar/anchor-tests)
         run: |
           npm install -g @stellar/anchor-tests
-          stellar-anchor-tests --home-domain http://localhost:8000 --seps 1 10
+          stellar-anchor-tests --home-domain http://localhost:8080 --seps 1 10
 
       - name: Docker logs
         if: always()
