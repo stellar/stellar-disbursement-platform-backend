@@ -42,6 +42,7 @@ services:
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
       CORS_ALLOWED_ORIGINS: "*"
+      ENABLE_ANCHOR_PLATFORM: "true"
 
       # multi-tenant
       ADMIN_PORT: "8003"
