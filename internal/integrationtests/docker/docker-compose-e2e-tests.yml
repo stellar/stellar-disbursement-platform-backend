@@ -34,13 +34,21 @@ services:
       NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
       HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
-      ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
-      ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
+      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
+      SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false"
+
+      # Toggle between Anchor Platform and Internal SEP
+      ENABLE_ANCHOR_PLATFORM: ${ENABLE_ANCHOR_PLATFORM:-true}
+      
+      # Anchor Platform URLs (only used when ENABLE_ANCHOR_PLATFORM=true)
+      ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
+      ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
+      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
@@ -82,10 +90,8 @@ services:
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
       EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
-      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       SEP24_JWT_SECRET: jwt_secret_1234567890
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
-      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
@@ -151,6 +157,7 @@ services:
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
 
+  # Anchor Platform containers - only started when ENABLE_ANCHOR_PLATFORM=true
   db-anchor-platform:
     container_name: e2e-anchor-platform-postgres-db
     image: postgres:14-alpine

@@ -84,13 +84,16 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	}
 
 	sj := []scheduler.SchedulerJobRegisterOption{
-		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
 			Models:              models,
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:       serveOpts.CircleService,
 		}),
+	}
+
+	if serveOpts.EnableAnchorPlatform {
+		sj = append(sj, scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()))
 	}
 
 	if serveOpts.EnableScheduler {
@@ -283,13 +286,21 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
+			Name:        "sep10-client-attribution-required",
+			Usage:       "If true, SEP-10 authentication requires client_domain to be provided and validated. If false, client_domain is optional.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.Sep10ClientAttributionRequired,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
 			Name: "anchor-platform-base-platform-url",
 			Usage: "The Base URL of the platform server of the anchor platform. This is the base URL where the Anchor Platform " +
 				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint. " +
 				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformBasePlatformURL,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name: "anchor-platform-base-sep-url",
@@ -298,7 +309,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformBaseSepURL,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name: "anchor-platform-outgoing-jwt-secret",
@@ -306,7 +317,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformOutgoingJWTSecret,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name:        "enable-anchor-platform",
@@ -615,12 +626,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating message dispatcher: %s", err.Error())
 			}
 
-			// Setup the AP Auth enforcer
-			apAPIService, err := di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
+			// Setup the AP Auth enforcer (only if Anchor Platform is enabled)
+			var apAPIService anchorplatform.AnchorPlatformAPIServiceInterface
+			if serveOpts.EnableAnchorPlatform {
+				apAPIService, err = di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
+				}
+				serveOpts.AnchorPlatformAPIService = apAPIService
 			}
-			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Setup Distribution Account Resolver
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool

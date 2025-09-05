@@ -1,4 +1,6 @@
-name: SDP<>AnchorPlatform Integration
+name: SDP<>AnchorPlatform Integration (Legacy)
+# Note: This workflow tests the legacy Anchor Platform integration.
+# For internal SEP services tests, see internal_sep_validation.yml
 
 on:
   push:
@@ -21,13 +23,14 @@ jobs:
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      ENABLE_ANCHOR_PLATFORM: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Run Docker Compose for SDP and Anchor Platform
         working-directory: dev
-        run: docker compose -f docker-compose-sdp.yml down && docker compose -f docker-compose-sdp.yml up --build -d
+        run: docker compose -f docker-compose-sdp-anchor.yml down && docker compose -f docker-compose-sdp-anchor.yml up --build -d
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
@@ -54,4 +57,4 @@ jobs:
       - name: Docker logs
         if: always()
         working-directory: dev
-        run: docker compose -f docker-compose-sdp.yml logs && docker compose -f docker-compose-sdp.yml down
+        run: docker compose -f docker-compose-sdp-anchor.yml logs && docker compose -f docker-compose-sdp-anchor.yml down
