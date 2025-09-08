@@ -120,7 +120,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
-			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 			scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
 				Models:                      models,
 				MessageDispatcher:           serveOpts.MessageDispatcher,
@@ -130,6 +129,10 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 				JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
 			}),
 		)
+
+		if serveOpts.EnableAnchorPlatform {
+			sj = append(sj, scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models))
+		}
 	}
 
 	return sj, nil
@@ -162,20 +165,27 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		return fmt.Errorf("creating Receiver Invitation Kafka Consumer: %w", err)
 	}
 
-	paymentCompletedConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.PaymentCompletedTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-		}),
+	handlers := []events.EventHandler{
 		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
 		}),
+	}
+
+	if o.ServeOpts.EnableAnchorPlatform {
+		handlers = append(handlers, eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
+			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
+			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
+		}))
+	}
+
+	paymentCompletedConsumer, err := events.NewKafkaConsumer(
+		kafkaConfig,
+		events.PaymentCompletedTopic,
+		o.EventBrokerOptions.ConsumerGroupID,
+		handlers...,
 	)
 	if err != nil {
 		return fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
