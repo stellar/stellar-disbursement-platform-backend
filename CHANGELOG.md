@@ -4,10 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [4.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.0...4.0.1))
+
+### Fixed
+
+- Disbursement remaining balance calculation fails when there are pending Direct Payments [#842](https://github.com/stellar/stellar-disbursement-platform-backend/pull/842)
+- Return proper error when calling `POST /receivers` with a duplicate wallet address. [#836](https://github.com/stellar/stellar-disbursement-platform-backend/pull/836)
 
 ### Changed
 
+- Replace Bitnami Kafka image with Apache Kafka official image due to Bitnami discontinuing support. [#844](https://github.com/stellar/stellar-disbursement-platform-backend/pull/844)
 - Validate length of message template and organization name for organization patch request. [#839](https://github.com/stellar/stellar-disbursement-platform-backend/pull/839)
 
 
