@@ -158,14 +158,14 @@ jobs:
             exit 1
           fi
           
-          # Test 2: SEP-24 /transactions endpoint without auth
-          echo -e "\nTest 2: SEP-24 /transactions without auth"
-          TRANS_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/sep24/transactions?id=test-id")
+          # Test 2: SEP-24 /transaction endpoint without auth
+          echo -e "\nTest 2: SEP-24 /transaction without auth"
+          TRANS_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/sep24/transaction?id=test-id")
           HTTP_STATUS=$(echo "$TRANS_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
           if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
             echo "✅ Correctly rejected unauthorized request with $HTTP_STATUS"
           else
-            echo "❌ Should have returned 401/403 for unauthorized request, got $HTTP_STATUS"
+            echo "❌ Should have returned 401/403 for unauthorized transaction request, got $HTTP_STATUS"
             exit 1
           fi
           
