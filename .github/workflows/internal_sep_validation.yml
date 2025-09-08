@@ -1,4 +1,6 @@
 name: Internal SEP Services Validation
+# this workflow tests basic internal SEP services of SDP
+# more advanced tests are done in the e2e_integration_test.yml workflow
 
 on:
   push:
@@ -47,24 +49,130 @@ jobs:
           done
           echo 'SDP is up and running.'
 
-      - name: Test SEP-10 authentication
+      - name: Test SEP-10 authentication endpoints
         run: |
-          echo "Testing SEP-10 without client_domain"
+          echo "=== Testing SEP-10 GET /auth endpoint ==="
+          
+          # Test 1: Valid request without client_domain
+          echo "Test 1: Valid request without client_domain"
           CHALLENGE=$(curl -s "http://localhost:8000/auth?account=GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU")
-          echo "SEP-10 Challenge received"
+          if echo $CHALLENGE | jq -e '.transaction' > /dev/null 2>&1; then
+            echo "✅ Transaction field present"
+          else
+            echo "❌ Transaction field missing"
+            echo "Response: $CHALLENGE"
+            exit 1
+          fi
+          if echo $CHALLENGE | jq -e '.network_passphrase' > /dev/null 2>&1; then
+            echo "✅ Network passphrase field present"
+          else
+            echo "❌ Network passphrase field missing"
+            exit 1
+          fi
           
-          echo $CHALLENGE | jq -e '.transaction'
-          echo $CHALLENGE | jq -e '.network_passphrase'
-          
-          echo "Testing SEP-10 with client_domain..."
+          # Test 2: Valid request with client_domain
+          echo -e "\nTest 2: Valid request with client_domain"
           CHALLENGE_WITH_CLIENT=$(curl -s "http://localhost:8000/auth?account=GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU&client_domain=demo-wallet-server.stellar.org")
-          echo $CHALLENGE_WITH_CLIENT | jq -e '.transaction'
+          if echo $CHALLENGE_WITH_CLIENT | jq -e '.transaction' > /dev/null 2>&1; then
+            echo "✅ Transaction with client_domain received"
+          else
+            echo "❌ Failed to get transaction with client_domain"
+            exit 1
+          fi
+          
+          # Test 3: Invalid account format
+          echo -e "\nTest 3: Invalid account format (should fail)"
+          INVALID_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "http://localhost:8000/auth?account=invalid_account")
+          HTTP_STATUS=$(echo "$INVALID_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          if [ "$HTTP_STATUS" = "400" ]; then
+            echo "✅ Correctly rejected invalid account with 400"
+          else
+            echo "❌ Should have returned 400 for invalid account, got $HTTP_STATUS"
+            exit 1
+          fi
+          
+          # Test 4: Missing account parameter
+          echo -e "\nTest 4: Missing account parameter (should fail)"
+          MISSING_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "http://localhost:8000/auth")
+          HTTP_STATUS=$(echo "$MISSING_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          if [ "$HTTP_STATUS" = "400" ]; then
+            echo "✅ Correctly rejected missing account with 400"
+          else
+            echo "❌ Should have returned 400 for missing account, got $HTTP_STATUS"
+            exit 1
+          fi
+          
+          # Test 5: Test with memo parameter
+          echo -e "\nTest 5: Request with memo parameter"
+          CHALLENGE_WITH_MEMO=$(curl -s "http://localhost:8000/auth?account=GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU&memo=12345")
+          if echo $CHALLENGE_WITH_MEMO | jq -e '.transaction' > /dev/null 2>&1; then
+            echo "✅ Transaction with memo received"
+          else
+            echo "❌ Failed to get transaction with memo"
+            exit 1
+          fi
 
-      - name: Test SEP-24 info endpoint
+      - name: Test SEP-24 endpoints
         run: |
+          echo "=== Testing SEP-24 endpoints ==="
+          
+          # Test 1: SEP-24 /info endpoint
+          echo "Test 1: SEP-24 /info endpoint"
           INFO=$(curl -s -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/sep24/info")
-          echo "SEP-24 Info received:"
-          echo $INFO | jq '.'
+          
+          # Validate info response structure
+          if echo $INFO | jq -e '.deposit' > /dev/null 2>&1; then
+            echo "✅ Deposit field present in info"
+          else
+            echo "❌ Deposit field missing in info"
+            echo "Response: $INFO"
+            exit 1
+          fi
+          
+          if echo $INFO | jq -e '.withdraw' > /dev/null 2>&1; then
+            echo "✅ Withdraw field present in info"
+          else
+            echo "❌ Withdraw field missing in info"
+            exit 1
+          fi
+          
+          if echo $INFO | jq -e '.fee' > /dev/null 2>&1; then
+            echo "✅ Fee field present in info"
+          else
+            echo "❌ Fee field missing in info"
+            exit 1
+          fi
+          
+          # Check if deposit is enabled for at least one asset
+          DEPOSIT_ENABLED=$(echo $INFO | jq -r '.deposit | to_entries | map(.value.enabled) | any')
+          if [ "$DEPOSIT_ENABLED" = "true" ]; then
+            echo "✅ At least one deposit asset is enabled"
+          else
+            echo "❌ No deposit assets are enabled"
+            exit 1
+          fi
+          
+          # Test 2: SEP-24 /transactions endpoint without auth (should fail)
+          echo -e "\nTest 2: SEP-24 /transactions without auth (should fail)"
+          TRANS_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/sep24/transactions?id=test-id")
+          HTTP_STATUS=$(echo "$TRANS_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
+            echo "✅ Correctly rejected unauthorized request with $HTTP_STATUS"
+          else
+            echo "❌ Should have returned 401/403 for unauthorized request, got $HTTP_STATUS"
+            exit 1
+          fi
+          
+          # Test 3: SEP-24 /transactions/deposit/interactive without auth (should fail)
+          echo -e "\nTest 3: SEP-24 deposit without auth (should fail)"
+          DEPOSIT_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST -H "SDP-Tenant-Name: integration-tests" -H "Content-Type: application/json" -d '{"asset_code":"USDC","account":"GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU"}' "http://localhost:8000/sep24/transactions/deposit/interactive")
+          HTTP_STATUS=$(echo "$DEPOSIT_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
+            echo "✅ Correctly rejected unauthorized deposit with $HTTP_STATUS"
+          else
+            echo "❌ Should have returned 401/403 for unauthorized deposit, got $HTTP_STATUS"
+            exit 1
+          fi
 
       - name: Test stellar.toml
         run: |
