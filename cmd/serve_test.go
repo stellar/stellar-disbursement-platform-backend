@@ -164,6 +164,7 @@ func Test_serve(t *testing.T) {
 		NetworkType:                     utils.TestnetNetworkType,
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		Sep10SigningPrivateKey:          "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
+		Sep10ClientAttributionRequired:  true,
 		AnchorPlatformBaseSepURL:        "localhost:8080",
 		AnchorPlatformBasePlatformURL:   "localhost:8085",
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
