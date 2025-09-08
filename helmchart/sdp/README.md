@@ -22,10 +22,14 @@
 This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
 
 The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP consists of the following services:
-- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions.
-- Anchor Platform: the API server that the wallet uses to authenticate and initiate the recipient’s registration process through the SEP-24 deposit flow.
+- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions, including native SEP10/SEP24 implementations.
+- Anchor Platform (Optional): the API server that the wallet uses to authenticate and initiate the recipient's registration process through the SEP-24 deposit flow. Can be disabled in favor of native SEP10/SEP24 endpoints.
 - Transaction Submission Service (TSS): the service that submits all payment transactions to the Stellar network.
 - Dashboard: the user interface administrators use to initiate and track the progress of disbursements.
+
+### SEP10/SEP24 Implementation
+
+The SDP now includes native implementations of SEP10 and SEP24 protocols, providing wallet authentication and interactive deposit flows without requiring external Anchor Platform integration. This is controlled by the `ENABLE_ANCHOR_PLATFORM` configuration parameter.
 
 ## Installing the Chart
 
