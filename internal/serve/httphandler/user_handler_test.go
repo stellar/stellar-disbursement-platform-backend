@@ -788,9 +788,16 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := message.Message{
+			Type:    message.MessageTypeUserInvitation,
 			ToEmail: u.Email,
 			Title:   "Welcome to Stellar Disbursement Platform",
 			Body:    content,
+			TemplateVariables: map[string]string{
+				"FirstName":          u.FirstName,
+				"Role":               u.Roles[0],
+				"ForgotPasswordLink": forgotPasswordLink,
+				"OrganizationName":   "MyCustomAid",
+			},
 		}
 		messengerClientMock.
 			On("SendMessage", mock.Anything, msg).
@@ -955,9 +962,16 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := message.Message{
+			Type:    message.MessageTypeUserInvitation,
 			ToEmail: u.Email,
 			Title:   "Welcome to Stellar Disbursement Platform",
 			Body:    content,
+			TemplateVariables: map[string]string{
+				"FirstName":          u.FirstName,
+				"Role":               u.Roles[0],
+				"ForgotPasswordLink": forgotPasswordLink,
+				"OrganizationName":   "MyCustomAid",
+			},
 		}
 		messengerClientMock.
 			On("SendMessage", mock.Anything, msg).
