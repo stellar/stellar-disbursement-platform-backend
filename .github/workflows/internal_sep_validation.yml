@@ -40,7 +40,7 @@ jobs:
       - name: Wait for SDP to be ready
         timeout-minutes: 5
         run: |
-          until curl --output /dev/null --silent --head --fail \
+          until curl --output /dev/null --silent --fail \
             -H "SDP-Tenant-Name: integration-tests" \
             http://localhost:8000/health; do
             echo 'Waiting for SDP to be up and running...'
