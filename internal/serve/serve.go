@@ -75,6 +75,7 @@ type ServeOptions struct {
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
+	Sep10ClientAttributionRequired  bool
 	Sep10Service                    services.SEP10Service
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
@@ -151,6 +152,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 		opts.BaseURL,
 		allowHTTPRetry,
 		opts.SubmitterEngine.HorizonClient,
+		opts.Sep10ClientAttributionRequired,
 	)
 	if err != nil {
 		return fmt.Errorf("initializing SEP 10 Service: %w", err)

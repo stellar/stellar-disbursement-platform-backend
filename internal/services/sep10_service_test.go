@@ -77,6 +77,7 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 		createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
 		}),
+		true,
 	)
 	if err != nil {
 		return nil, err
@@ -195,8 +196,7 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				Account:    keypair.MustRandom().Address(),
 				HomeDomain: "fenris.imperium.com",
 			},
-			expectError: true,
-			errMsg:      "client_domain is required",
+			expectError: false,
 		},
 		{
 			name: "client_domain with only whitespace",
@@ -205,8 +205,7 @@ func TestChallengeRequest_Validate(t *testing.T) {
 				HomeDomain:   "fenris.imperium.com",
 				ClientDomain: "   ",
 			},
-			expectError: true,
-			errMsg:      "client_domain is required",
+			expectError: false,
 		},
 		{
 			name: "client_domain with leading/trailing whitespace",
