@@ -300,7 +300,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Usage:       "If true, SEP-10 authentication requires client_domain to be provided and validated. If false, client_domain is optional.",
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.Sep10ClientAttributionRequired,
-			FlagDefault: false,
+			FlagDefault: true,
 			Required:    false,
 		},
 		{
