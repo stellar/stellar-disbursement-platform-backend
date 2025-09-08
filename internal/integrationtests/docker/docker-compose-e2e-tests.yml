@@ -105,6 +105,11 @@ services:
         sleep 5
         ./stellar-disbursement-platform db admin migrate up
         ./stellar-disbursement-platform db tss migrate up
+        ./stellar-disbursement-platform tenants ensure-default \
+          --default-tenant-owner-email "owner@stellar.org" \
+          --default-tenant-owner-first-name "Owner" \
+          --default-tenant-owner-last-name "Name" \
+          --distribution-public-key "${DISTRIBUTION_PUBLIC_KEY}"
         ./stellar-disbursement-platform db auth migrate up --all
         ./stellar-disbursement-platform db sdp migrate up --all
         ./stellar-disbursement-platform db setup-for-network --all
