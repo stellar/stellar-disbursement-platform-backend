@@ -166,10 +166,10 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 	}
 
 	handlers := []events.EventHandler{
-		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
+		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
+			TSSDBConnectionPool:   o.TSSDBConnectionPool,
 		}),
 	}
 
