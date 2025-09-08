@@ -63,7 +63,7 @@ jobs:
 
       - name: Test SEP-24 info endpoint
         run: |
-          INFO=$(curl -s "http://localhost:8000/sep24/info")
+          INFO=$(curl -s -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/sep24/info")
           echo "SEP-24 Info received:"
           echo $INFO | jq '.'
           
