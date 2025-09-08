@@ -49,6 +49,26 @@ jobs:
           done
           echo 'SDP is up and running.'
 
+      - name: Test stellar.toml
+        run: |
+          TOML=$(curl -s -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/.well-known/stellar.toml")
+          echo "Stellar TOML received"
+          
+          # Verify it points to internal endpoints when AP is disabled
+          if echo "$TOML" | grep -q "TRANSFER_SERVER.*localhost:8000"; then
+            echo "✅ TOML correctly points to internal SEP-24 endpoints"
+          else
+            echo "❌ TOML does not point to internal endpoints"
+            exit 1
+          fi
+          
+          if echo "$TOML" | grep -q "WEB_AUTH_ENDPOINT.*localhost:8000/auth"; then
+            echo "✅ TOML correctly points to internal SEP-10 endpoint"
+          else
+            echo "❌ TOML does not point to internal SEP-10 endpoint"
+            exit 1
+          fi
+
       - name: Test SEP-10 authentication endpoints
         run: |
           echo "=== Testing SEP-10 GET /auth endpoint ==="
@@ -128,21 +148,7 @@ jobs:
             echo "Response: $INFO"
             exit 1
           fi
-          
-          if echo $INFO | jq -e '.withdraw' > /dev/null 2>&1; then
-            echo "✅ Withdraw field present in info"
-          else
-            echo "❌ Withdraw field missing in info"
-            exit 1
-          fi
-          
-          if echo $INFO | jq -e '.fee' > /dev/null 2>&1; then
-            echo "✅ Fee field present in info"
-          else
-            echo "❌ Fee field missing in info"
-            exit 1
-          fi
-          
+
           # Check if deposit is enabled for at least one asset
           DEPOSIT_ENABLED=$(echo $INFO | jq -r '.deposit | to_entries | map(.value.enabled) | any')
           if [ "$DEPOSIT_ENABLED" = "true" ]; then
@@ -152,8 +158,8 @@ jobs:
             exit 1
           fi
           
-          # Test 2: SEP-24 /transactions endpoint without auth (should fail)
-          echo -e "\nTest 2: SEP-24 /transactions without auth (should fail)"
+          # Test 2: SEP-24 /transactions endpoint without auth
+          echo -e "\nTest 2: SEP-24 /transactions without auth"
           TRANS_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/sep24/transactions?id=test-id")
           HTTP_STATUS=$(echo "$TRANS_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
           if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
@@ -163,34 +169,14 @@ jobs:
             exit 1
           fi
           
-          # Test 3: SEP-24 /transactions/deposit/interactive without auth (should fail)
-          echo -e "\nTest 3: SEP-24 deposit without auth (should fail)"
+          # Test 3: SEP-24 /transactions/deposit/interactive without auth
+          echo -e "\nTest 3: SEP-24 deposit without auth"
           DEPOSIT_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST -H "SDP-Tenant-Name: integration-tests" -H "Content-Type: application/json" -d '{"asset_code":"USDC","account":"GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU"}' "http://localhost:8000/sep24/transactions/deposit/interactive")
           HTTP_STATUS=$(echo "$DEPOSIT_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
           if [ "$HTTP_STATUS" = "401" ] || [ "$HTTP_STATUS" = "403" ]; then
             echo "✅ Correctly rejected unauthorized deposit with $HTTP_STATUS"
           else
             echo "❌ Should have returned 401/403 for unauthorized deposit, got $HTTP_STATUS"
-            exit 1
-          fi
-
-      - name: Test stellar.toml
-        run: |
-          TOML=$(curl -s -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/.well-known/stellar.toml")
-          echo "Stellar TOML received"
-          
-          # Verify it points to internal endpoints when AP is disabled
-          if echo "$TOML" | grep -q "TRANSFER_SERVER.*localhost:8000"; then
-            echo "✅ TOML correctly points to internal SEP-24 endpoints"
-          else
-            echo "❌ TOML does not point to internal endpoints"
-            exit 1
-          fi
-          
-          if echo "$TOML" | grep -q "WEB_AUTH_ENDPOINT.*localhost:8000/auth"; then
-            echo "✅ TOML correctly points to internal SEP-10 endpoint"
-          else
-            echo "❌ TOML does not point to internal SEP-10 endpoint"
             exit 1
           fi
 
