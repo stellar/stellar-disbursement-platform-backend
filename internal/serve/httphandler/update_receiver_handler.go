@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-
 type UpdateReceiverHandler struct {
 	Models           *data.Models
 	DBConnectionPool db.DBConnectionPool
@@ -151,14 +150,14 @@ func parseConflictErrorIfNeeded(err error) *httperror.HTTPError {
 			"wallet_address": "wallet address must be unique",
 		})
 	}
-	
+
 	// Handle email conflicts
 	if errors.Is(err, data.ErrDuplicateEmail) {
 		return httperror.Conflict("The provided email is already associated with another user.", err, map[string]interface{}{
 			"email": "email must be unique",
 		})
 	}
-	
+
 	// Handle phone number conflicts
 	if errors.Is(err, data.ErrDuplicatePhoneNumber) {
 		return httperror.Conflict("The provided phone_number is already associated with another user.", err, map[string]interface{}{
