@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -97,13 +98,18 @@ func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context, recei
 		return "", fmt.Errorf("validating contact type: %w", err)
 	}
 
+	normalizedContact := receiverContact
+	if data.ContactType(contactType) == data.ContactTypeEmail {
+		normalizedContact = strings.ToLower(receiverContact)
+	}
+
 	token := uuid.New().String()
 
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
 		insert := data.EmbeddedWalletInsert{
 			Token:           token,
 			WasmHash:        e.wasmHash,
-			ReceiverContact: receiverContact,
+			ReceiverContact: normalizedContact,
 			ContactType:     data.ContactType(contactType),
 			ReceiverID:      receiverID,
 			WalletStatus:    data.PendingWalletStatus,
@@ -250,7 +256,12 @@ func (e *EmbeddedWalletService) GetWalletByReceiverContact(ctx context.Context, 
 }
 
 func (e *EmbeddedWalletService) ResendInvite(ctx context.Context, receiverContact, contactType string) error {
-	embeddedWallet, err := e.GetWalletByReceiverContact(ctx, receiverContact, contactType)
+	normalizedContact := receiverContact
+	if data.ContactType(contactType) == data.ContactTypeEmail {
+		normalizedContact = strings.ToLower(receiverContact)
+	}
+
+	embeddedWallet, err := e.GetWalletByReceiverContact(ctx, normalizedContact, contactType)
 	if err != nil {
 		return err
 	}

@@ -145,7 +145,19 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 }
 
 func (ew *EmbeddedWalletModel) GetByReceiverContact(ctx context.Context, sqlExec db.SQLExecuter, receiverContact string, contactType ContactType) (*EmbeddedWallet, error) {
-	query := fmt.Sprintf(`
+	var query string
+	if contactType == ContactTypeEmail {
+		query = fmt.Sprintf(`
+        SELECT
+            %s
+        FROM embedded_wallets ew
+        WHERE
+            LOWER(ew.receiver_contact) = LOWER($1) AND ew.contact_type = $2
+        ORDER BY ew.created_at DESC
+        LIMIT 1
+        `, EmbeddedWalletColumnNames("ew", ""))
+	} else {
+		query = fmt.Sprintf(`
         SELECT
             %s
         FROM embedded_wallets ew
@@ -154,6 +166,7 @@ func (ew *EmbeddedWalletModel) GetByReceiverContact(ctx context.Context, sqlExec
         ORDER BY ew.created_at DESC
         LIMIT 1
         `, EmbeddedWalletColumnNames("ew", ""))
+	}
 
 	var wallet EmbeddedWallet
 	err := sqlExec.GetContext(ctx, &wallet, query, receiverContact, contactType)

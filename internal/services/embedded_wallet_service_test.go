@@ -168,6 +168,27 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 		_, err := service.CreateInvitationToken(ctx, "test@example.com", "EMAIL", "")
 		assert.EqualError(t, err, "receiver ID cannot be empty")
 	})
+
+	t.Run("normalizes email to lowercase during storage", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+			Email: "Test5@Example.com",
+		})
+
+		token, err := service.CreateInvitationToken(ctx, "Test5@Example.com", "EMAIL", receiver.ID)
+		require.NoError(t, err)
+		require.NotNil(t, token)
+
+		assert.NotEmpty(t, token)
+
+		wallet, err := sdpModels.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, token)
+		require.NoError(t, err)
+		assert.Equal(t, token, wallet.Token)
+		assert.Equal(t, "test5@example.com", wallet.ReceiverContact)
+		assert.Equal(t, data.ContactTypeEmail, wallet.ContactType)
+	})
 }
 
 func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
@@ -700,5 +721,39 @@ func Test_EmbeddedWalletService_ResendInvite(t *testing.T) {
 		err = service.ResendInvite(ctx, "test3@example.com", "EMAIL")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no embedded wallet found for receiver")
+	})
+
+	t.Run("successfully resends invite with case-insensitive email matching", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "", "test-credential-case", "test4@example.com", "EMAIL", data.PendingWalletStatus)
+
+		receivers, getErr := sdpModels.Receiver.GetByContacts(ctx, dbConnectionPool, "test4@example.com")
+		require.NoError(t, getErr)
+		require.Len(t, receivers, 1)
+		receiver := receivers[0]
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "SDP Embedded Wallet", "https://stellar.org", "SELF", "")
+		data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
+
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		_, err = sdpModels.ReceiverWallet.UpdateInvitationSentAt(ctx, sdpModels.DBConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+
+		testCases := []string{
+			"test4@example.com",
+			"Test4@Example.com",
+			"TEST4@EXAMPLE.COM",
+			"TeSt4@ExAmPlE.CoM",
+		}
+
+		for _, email := range testCases {
+			testErr := service.ResendInvite(ctx, email, "EMAIL")
+			require.NoError(t, testErr)
+		}
 	})
 }
