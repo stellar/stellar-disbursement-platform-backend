@@ -866,8 +866,8 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 	}
 
 	t.Run("creates_receiver_wallet_for_verified_receiver_with_sep24_wallet", func(t *testing.T) {
-		receiverWallets, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver.ID}, sep24Wallet.ID)
-		require.NoError(t, err)
+		receiverWallets, getErr := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver.ID}, sep24Wallet.ID)
+		require.NoError(t, getErr)
 		require.Len(t, receiverWallets, 0, "No receiver wallet should exist initially")
 
 		req := CreateDirectPaymentRequest{
@@ -883,8 +883,8 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 			},
 		}
 
-		payment, err := service.CreateDirectPayment(ctx, req, user, distAccount)
-		require.NoError(t, err)
+		payment, paymentErr := service.CreateDirectPayment(ctx, req, user, distAccount)
+		require.NoError(t, paymentErr)
 		require.NotNil(t, payment)
 
 		assert.Equal(t, receiver.ID, payment.ReceiverWallet.Receiver.ID)
@@ -892,8 +892,8 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 		assert.Equal(t, "100.0000000", payment.Amount)
 		assert.Equal(t, data.PaymentTypeDirect, payment.Type)
 
-		receiverWallets, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver.ID}, sep24Wallet.ID)
-		require.NoError(t, err)
+		receiverWallets, getErr2 := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver.ID}, sep24Wallet.ID)
+		require.NoError(t, getErr2)
 		require.Len(t, receiverWallets, 1, "Receiver wallet should have been created")
 
 		createdRW := receiverWallets[0]
@@ -904,8 +904,8 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 
 	t.Run("does_not_create_receiver_wallet_for_user_managed_wallet", func(t *testing.T) {
 		userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Wallet", "https://user.com", "user.com", "user://")
-		_, err = dbConnectionPool.ExecContext(ctx, "UPDATE wallets SET user_managed = true WHERE id = $1", userManagedWallet.ID)
-		require.NoError(t, err)
+		_, updateErr := dbConnectionPool.ExecContext(ctx, "UPDATE wallets SET user_managed = true WHERE id = $1", userManagedWallet.ID)
+		require.NoError(t, updateErr)
 
 		req := CreateDirectPaymentRequest{
 			Amount: "100.00",
@@ -920,11 +920,11 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 			},
 		}
 
-		payment, err := service.CreateDirectPayment(ctx, req, user, distAccount)
-		require.Error(t, err)
+		payment, paymentErr := service.CreateDirectPayment(ctx, req, user, distAccount)
+		require.Error(t, paymentErr)
 		require.Nil(t, payment)
 
-		require.Contains(t, err.Error(), "no receiver wallet")
+		require.Contains(t, paymentErr.Error(), "no receiver wallet")
 	})
 
 	t.Run("does_not_create_receiver_wallet_for_receiver_without_verifications", func(t *testing.T) {
@@ -945,11 +945,11 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 			},
 		}
 
-		payment, err := service.CreateDirectPayment(ctx, req, user, distAccount)
-		require.Error(t, err)
+		payment, paymentErr := service.CreateDirectPayment(ctx, req, user, distAccount)
+		require.Error(t, paymentErr)
 		require.Nil(t, payment)
 
-		require.Contains(t, err.Error(), "no receiver wallet")
+		require.Contains(t, paymentErr.Error(), "no receiver wallet")
 	})
 
 	mockDistAccountService.AssertExpectations(t)
