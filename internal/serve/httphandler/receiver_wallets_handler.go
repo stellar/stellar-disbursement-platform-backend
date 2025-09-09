@@ -225,9 +225,9 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 		}
 
 		memo := strings.TrimSpace(patchRequest.StellarMemo)
-		_, memoType, err := schema.ParseMemo(memo)
-		if err != nil {
-			return nil, fmt.Errorf("parsing memo %s: %w", patchRequest.StellarMemo, err)
+		_, memoType, parseErr := schema.ParseMemo(memo)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing memo %s: %w", patchRequest.StellarMemo, parseErr)
 		}
 		walletUpdate.StellarMemo = &memo
 		walletUpdate.StellarMemoType = &memoType
@@ -258,7 +258,9 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 
 		// Handle duplicate stellar address
 		if errors.Is(err, data.ErrDuplicateStellarAddress) {
-			httperror.Conflict("duplicate stellar address", nil, nil).Render(rw)
+			httperror.Conflict("The provided wallet address is already associated with another receiver.", err, map[string]interface{}{
+				"wallet_address": "wallet address must be unique",
+			}).Render(rw)
 			return
 		}
 

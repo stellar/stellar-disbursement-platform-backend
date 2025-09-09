@@ -520,7 +520,12 @@ func Test_ReceiverWalletsHandler_PatchReceiverWallet_DuplicateStellarAddress(t *
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		expectedJSON := `{"error":"duplicate stellar address"}`
+		expectedJSON := `{
+			"error": "The provided wallet address is already associated with another receiver.",
+			"extras": {
+				"wallet_address": "wallet address must be unique"
+			}
+		}`
 
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
