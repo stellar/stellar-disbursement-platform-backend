@@ -68,6 +68,9 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 
 To automatically create Stellar accounts for SEP10 authentication and a distribution wallet, and to set up the necessary configuration values in a .env file, follow these steps:
 
+> [!NOTE]
+> The SDP now includes native SEP10 and SEP24 implementations. When `ENABLE_ANCHOR_PLATFORM=false` (default in development), the SDP serves its own SEP10/SEP24 endpoints without requiring external Anchor Platform services.
+
 1. Navigate to the dev directory:
 
 ```sh
@@ -163,6 +166,22 @@ Login URLs for each tenant:
    Navigate to Disbursement Details and see the payment in the disbursement is currently in a `Ready` state. This means the receiver has yet to accept the invitation and deposit the funds.
 
    <img src="images/disbursement_detail.png" alt="Disbursement Details" width="40%">
+
+### SEP10/SEP24 Endpoints
+
+The SDP now provides native SEP10 and SEP24 endpoints for wallet integration:
+
+**SEP10 Authentication Endpoints:**
+- `GET /auth` - Generate authentication challenge
+- `POST /auth` - Validate challenge and receive JWT token
+
+**SEP24 Interactive Deposit Endpoints:**
+- `GET /sep24/info` - Get supported assets and capabilities  
+- `POST /sep24/transactions/deposit/interactive` - Initiate interactive deposit
+- `GET /sep24/transactions` - Get transaction status
+
+**Stellar.toml Configuration:**
+The SDP automatically generates `stellar.toml` files that point to the native SEP10/SEP24 endpoints when `ENABLE_ANCHOR_PLATFORM=false`.
 
 ### Receive Payment to Digital Wallet (Deposit Flow)
 
