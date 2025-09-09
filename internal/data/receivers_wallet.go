@@ -707,7 +707,7 @@ var (
 	ErrWalletNotRegistered         = errors.New("receiver wallet not registered")
 	ErrPaymentsInProgressForWallet = errors.New("receiver wallet has payments in progress")
 	ErrUnregisterUserManagedWallet = errors.New("user managed wallet cannot be unregistered")
-	ErrDuplicateStellarAddress     = errors.New("stellar address already exists")
+	ErrDuplicateStellarAddress     = errors.New("stellar address already belongs to another receiver")
 )
 
 // UpdateStatusToReady updates the status of a receiver wallet to "READY" and clears the stellar address and memo.
