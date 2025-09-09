@@ -384,10 +384,15 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
 
+	hostAccount := schema.NewDefaultHostAccount(distributionKP.Address())
+
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
 		Return(distAccount, nil)
+	mDistAccResolver.
+		On("HostDistributionAccount").
+		Return(hostAccount)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		NetworkPassphrase:         network.TestNetworkPassphrase,
