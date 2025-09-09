@@ -5,10 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 
-	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 )
@@ -135,42 +132,4 @@ func UnprocessableEntity(msg string, originalErr error, extras map[string]interf
 		msg = "Unprocessable entity."
 	}
 	return NewHTTPError(http.StatusUnprocessableEntity, msg, originalErr, extras)
-}
-
-const (
-	// PostgreSQL error codes
-	pgUniqueViolation = "23505"
-	pgRaiseException  = "P0001"
-)
-
-func HandlePostgreSQLConflictErrors(err error) *HTTPError {
-	var pqErr *pq.Error
-	if !errors.As(err, &pqErr) {
-		return nil
-	}
-
-	// Handle unique constraint violations (email, phone number)
-	if pqErr.Code == pgUniqueViolation {
-		allowedConstraints := []string{"receiver_unique_email", "receiver_unique_phone_number"}
-		if !slices.Contains(allowedConstraints, pqErr.Constraint) {
-			return nil
-		}
-
-		fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
-		msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
-		return Conflict(msg, err, map[string]interface{}{
-			fieldName: fieldName + " must be unique",
-		})
-	}
-
-	// Handle custom database trigger exceptions for wallet address conflicts
-	if pqErr.Code == pgRaiseException &&
-		strings.Contains(pqErr.Message, "Stellar address") &&
-		strings.Contains(pqErr.Message, "already belongs to another receiver") {
-		return Conflict("The provided wallet address is already associated with another receiver.", err, map[string]interface{}{
-			"wallet_address": "wallet address must be unique",
-		})
-	}
-
-	return nil
 }

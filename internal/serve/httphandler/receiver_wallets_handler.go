@@ -224,17 +224,19 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 			StellarAddress: patchRequest.StellarAddress,
 		}
 
-		if strings.TrimSpace(patchRequest.StellarMemo) != "" {
-			memoType := schema.MemoTypeID
-			walletUpdate.StellarMemo = &patchRequest.StellarMemo
-			walletUpdate.StellarMemoType = &memoType
-		} else {
-			walletUpdate.StellarMemo = nil
-			walletUpdate.StellarMemoType = nil
+		memo := strings.TrimSpace(patchRequest.StellarMemo)
+		_, memoType, err := schema.ParseMemo(memo)
+		if err != nil {
+			return nil, fmt.Errorf("parsing memo %s: %w", patchRequest.StellarMemo, err)
 		}
+		walletUpdate.StellarMemo = &memo
+		walletUpdate.StellarMemoType = &memoType
 
 		// 3: Update the receiver wallet
 		if txErr = h.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); txErr != nil {
+			if errors.Is(txErr, data.ErrDuplicateStellarAddress) {
+				return nil, txErr
+			}
 			return nil, fmt.Errorf("updating receiver wallet %s: %w", receiverWalletID, txErr)
 		}
 
@@ -254,9 +256,9 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 			return
 		}
 
-		// Handle duplicate wallet addresses
-		if httpErr := httperror.HandlePostgreSQLConflictErrors(err); httpErr != nil {
-			httpErr.Render(rw)
+		// Handle duplicate stellar address
+		if errors.Is(err, data.ErrDuplicateStellarAddress) {
+			httperror.Conflict("duplicate stellar address", nil, nil).Render(rw)
 			return
 		}
 
