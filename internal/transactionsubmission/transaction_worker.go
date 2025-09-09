@@ -477,11 +477,14 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("signing transaction in job=%v: %w", txJob, err)
 	}
 
+	// Get host distribution account for fee bump
+	hostDistributionAccount := tw.engine.DistributionAccountResolver.HostDistributionAccount()
+
 	// build the outer fee-bump transaction
 	feeBumpTx, err := txnbuild.NewFeeBumpTransaction(
 		txnbuild.FeeBumpTransactionParams{
 			Inner:      innerTx,
-			FeeAccount: distributionAccount.Address,
+			FeeAccount: hostDistributionAccount.Address,
 			BaseFee:    int64(tw.engine.MaxBaseFee),
 		},
 	)
@@ -489,8 +492,8 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("building fee-bump transaction for job %v: %w", txJob, err)
 	}
 
-	// Sign fee-bump tx for the distribution account:
-	feeBumpTx, err = tw.engine.SignerRouter.SignFeeBumpStellarTransaction(ctx, feeBumpTx, distributionAccount)
+	// Sign fee-bump tx for the host distribution account:
+	feeBumpTx, err = tw.engine.SignerRouter.SignFeeBumpStellarTransaction(ctx, feeBumpTx, hostDistributionAccount)
 	if err != nil {
 		return nil, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
 	}

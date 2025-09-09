@@ -1912,10 +1912,16 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
 
+	// Use the same keypair for host account since signature service is configured with the same private key
+	hostAccount := schema.NewDefaultHostAccount(distributionKP.Address())
+
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
 		Return(distAccount, nil)
+	mDistAccResolver.
+		On("HostDistributionAccount").
+		Return(hostAccount)
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -2009,7 +2015,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	wantFeeBumpTx, err = sigService.SignerRouter.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distAccount)
+	wantFeeBumpTx, err = sigService.SignerRouter.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, hostAccount)
 	require.NoError(t, err)
 	assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
 }
@@ -2029,10 +2035,17 @@ func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) 
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
 
+	// Use the same keypair for host account since signature service is configured with the same private key
+	hostAccount := schema.NewDefaultHostAccount(distributionKP.Address())
+
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
 		Return(distAccount, nil)
+	mDistAccResolver.
+		On("HostDistributionAccount").
+		Return(hostAccount).
+		Maybe()
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
