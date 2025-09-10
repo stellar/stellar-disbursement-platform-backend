@@ -1302,7 +1302,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
-				"message_channel_priority": ["SMS", "EMAIL"]
+				"message_channel_priority": ["SMS", "EMAIL"],
+				"mfa_enabled": null,
+				"captcha_enabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1342,7 +1344,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
-				"message_channel_priority": ["SMS", "EMAIL"]
+				"message_channel_priority": ["SMS", "EMAIL"],
+				"mfa_enabled": null,
+				"captcha_enabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1381,7 +1385,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
-				"message_channel_priority": ["SMS", "EMAIL"]
+				"message_channel_priority": ["SMS", "EMAIL"],
+				"mfa_enabled": null,
+				"captcha_enabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1422,7 +1428,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"receiver_invitation_resend_interval_days": 2,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null,
-				"message_channel_priority": ["SMS", "EMAIL"]
+				"message_channel_priority": ["SMS", "EMAIL"],
+				"mfa_enabled": null,
+				"captcha_enabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1463,7 +1471,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 5,
 				"privacy_policy_link": null,
-				"message_channel_priority": ["SMS", "EMAIL"]
+				"message_channel_priority": ["SMS", "EMAIL"],
+				"mfa_enabled": null,
+				"captcha_enabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1504,7 +1514,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"receiver_invitation_resend_interval_days": 0,
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": "https://example.com/privacy-policy",
-				"message_channel_priority": ["SMS", "EMAIL"]
+				"message_channel_priority": ["SMS", "EMAIL"],
+				"mfa_enabled": null,
+				"captcha_enabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
