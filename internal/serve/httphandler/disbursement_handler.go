@@ -353,7 +353,7 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrWalletAddressAlreadyInUse):
-			return httperror.BadRequest(err.Error(), err, nil)
+			return httperror.Conflict(err.Error(), err, nil)
 		default:
 			return httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursement.ID), err, nil)
 		}
