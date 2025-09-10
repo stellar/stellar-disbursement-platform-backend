@@ -1,4 +1,5 @@
 version: '3'
+name: stellar-disbursement-platform
 services:
   db:
     extends:
@@ -41,10 +42,6 @@ services:
     depends_on:
       - db
       - sdp-api
-  demo-wallet:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: demo-wallet
 
 volumes:
   postgres-db:
