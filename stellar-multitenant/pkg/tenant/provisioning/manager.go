@@ -25,6 +25,8 @@ type ProvisionTenant struct {
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
+	MFAEnabled              *bool
+	CAPTCHAEnabled          *bool
 }
 
 type ManagerOptions struct {
@@ -68,6 +70,8 @@ func (m *Manager) ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*
 		BaseURL:                 pt.BaseURL,
 		NetworkType:             pt.NetworkType,
 		DistributionAccountType: pt.DistributionAccountType,
+		MFAEnabled:              pt.MFAEnabled,
+		CAPTCHAEnabled:          pt.CAPTCHAEnabled,
 	}
 
 	return m.internalManager.ProvisionNewTenant(ctx, internalPT)

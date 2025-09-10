@@ -39,6 +39,8 @@ type ProvisionTenant struct {
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
+	MFAEnabled              *bool
+	CAPTCHAEnabled          *bool
 }
 
 var (
@@ -243,9 +245,13 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		return fmt.Errorf("running setup wallets for proper network: %w", err)
 	}
 
-	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: pt.OrgName})
+	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+		Name:           pt.OrgName,
+		MFAEnabled:     pt.MFAEnabled,
+		CAPTCHAEnabled: pt.CAPTCHAEnabled,
+	})
 	if err != nil {
-		return fmt.Errorf("updating organization's name: %w", err)
+		return fmt.Errorf("updating organization's name and settings: %w", err)
 	}
 
 	// Creating new user and sending invitation email

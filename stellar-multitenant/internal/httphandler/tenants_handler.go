@@ -41,6 +41,8 @@ type TenantsHandler struct {
 	SingleTenantMode            bool
 	BaseURL                     string
 	SDPUIBaseURL                string
+	DisableMFA                  bool
+	DisableReCAPTCHA            bool
 }
 
 const MaxNativeAssetBalanceForDeletion = 100
@@ -110,6 +112,10 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Convert DISABLE flags to ENABLED settings for organization
+	mfaEnabled := !h.DisableMFA
+	captchaEnabled := !h.DisableReCAPTCHA
+
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
 		Name:                    reqBody.Name,
 		UserFirstName:           reqBody.OwnerFirstName,
@@ -120,6 +126,8 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		UiBaseURL:               tntSDPUIBaseURL,
 		BaseURL:                 tntBaseURL,
 		DistributionAccountType: schema.AccountType(reqBody.DistributionAccountType),
+		MFAEnabled:              &mfaEnabled,
+		CAPTCHAEnabled:          &captchaEnabled,
 	})
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {

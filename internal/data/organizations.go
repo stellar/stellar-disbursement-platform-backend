@@ -52,6 +52,8 @@ type Organization struct {
 	IsLinkShortenerEnabled bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
 	IsMemoTracingEnabled   bool                   `json:"is_memo_tracing_enabled" db:"is_memo_tracing_enabled"`
 	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
+	MFAEnabled             *bool                  `json:"mfa_enabled" db:"mfa_enabled"`
+	CAPTCHAEnabled         *bool                  `json:"captcha_enabled" db:"captcha_enabled"`
 	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
 }
@@ -70,6 +72,10 @@ type OrganizationUpdate struct {
 	ReceiverRegistrationMessageTemplate *string `json:",omitempty"`
 	OTPMessageTemplate                  *string `json:",omitempty"`
 	PrivacyPolicyLink                   *string `json:",omitempty"`
+
+	// MFA and CAPTCHA settings
+	MFAEnabled     *bool `json:",omitempty"`
+	CAPTCHAEnabled *bool `json:",omitempty"`
 }
 
 type LogoType string
@@ -251,6 +257,16 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		} else {
 			fields = append(fields, "payment_cancellation_period_days = NULL")
 		}
+	}
+
+	if ou.MFAEnabled != nil {
+		fields = append(fields, "mfa_enabled = ?")
+		args = append(args, *ou.MFAEnabled)
+	}
+
+	if ou.CAPTCHAEnabled != nil {
+		fields = append(fields, "captcha_enabled = ?")
+		args = append(args, *ou.CAPTCHAEnabled)
 	}
 
 	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))

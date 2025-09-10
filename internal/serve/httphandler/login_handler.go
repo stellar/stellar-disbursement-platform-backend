@@ -40,15 +40,57 @@ type LoginHandler struct {
 	MFADisabled        bool
 }
 
-func (h LoginHandler) validateRequest(req LoginRequest, headers http.Header) *httperror.HTTPError {
+// isMFADisabled checks if MFA is disabled considering both org and environment settings
+func (h LoginHandler) isMFADisabled(ctx context.Context) bool {
+	// If environment disables MFA globally, it's disabled
+	if h.MFADisabled {
+		return true
+	}
+
+	org, err := h.Models.Organizations.Get(ctx)
+	if err != nil {
+		return h.MFADisabled
+	}
+
+	// If organization has explicit setting, use it
+	if org.MFAEnabled != nil {
+		return !*org.MFAEnabled
+	}
+
+	return h.MFADisabled
+}
+
+// isCAPTCHADisabled checks if CAPTCHA is disabled considering both org and environment settings
+func (h LoginHandler) isCAPTCHADisabled(ctx context.Context) bool {
+	// If environment disables CAPTCHA globally, it's disabled
+	if h.ReCAPTCHADisabled {
+		return true
+	}
+
+	org, err := h.Models.Organizations.Get(ctx)
+	if err != nil {
+		return h.ReCAPTCHADisabled
+	}
+
+	if org.CAPTCHAEnabled != nil {
+		return !*org.CAPTCHAEnabled
+	}
+
+	return h.ReCAPTCHADisabled
+}
+
+func (h LoginHandler) validateRequest(ctx context.Context, req LoginRequest, headers http.Header) *httperror.HTTPError {
 	lv := validators.NewValidator()
 
 	lv.Check(req.Email != "", "email", "email is required")
 	lv.Check(req.Password != "", "password", "password is required")
-	lv.Check(h.ReCAPTCHADisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
 
+	captchaDisabled := h.isCAPTCHADisabled(ctx)
+	lv.Check(captchaDisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
+
+	mfaDisabled := h.isMFADisabled(ctx)
 	deviceID := headers.Get(DeviceIDHeader)
-	lv.Check(h.MFADisabled || deviceID != "", DeviceIDHeader, "Device-ID header is required")
+	lv.Check(mfaDisabled || deviceID != "", DeviceIDHeader, "Device-ID header is required")
 
 	if lv.HasErrors() {
 		return httperror.BadRequest("", nil, lv.Errors)
@@ -68,7 +110,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
 	}
-	if httpErr := h.validateRequest(reqBody, req.Header); httpErr != nil {
+	if httpErr := h.validateRequest(ctx, reqBody, req.Header); httpErr != nil {
 		httpErr.Render(rw)
 		return
 	}
@@ -76,7 +118,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	truncatedEmail := utils.TruncateString(reqBody.Email, 3)
 
 	// Step 2: Run the reCAPTCHA validation if it is enabled
-	if !h.ReCAPTCHADisabled {
+	if !h.isCAPTCHADisabled(ctx) {
 		// validating reCAPTCHA Token
 		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if err != nil {
@@ -130,7 +172,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 func (h LoginHandler) handleMFA(ctx context.Context, req *http.Request, user *auth.User) (canSkipMFA bool, httpErr *httperror.HTTPError) {
 	truncatedEmail := utils.TruncateString(user.Email, 3)
 	// 1: If MFA is disabled, return the token
-	if h.MFADisabled {
+	if h.isMFADisabled(ctx) {
 		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 		return true, nil
 	}
