@@ -52,7 +52,6 @@ func (h LoginHandler) isMFADisabled(ctx context.Context) bool {
 		return h.MFADisabled
 	}
 
-	// If organization has explicit setting, use it
 	if org.MFAEnabled != nil {
 		return !*org.MFAEnabled
 	}

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [4.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.0...4.0.1))
 
+### Added
+
+- Add organization level MFA and ReCAPTCHA settings [#861](https://github.com/stellar/stellar-disbursement-platform-backend/pull/861)
+
 ### Fixed
 
 - Disbursement remaining balance calculation fails when there are pending Direct Payments [#842](https://github.com/stellar/stellar-disbursement-platform-backend/pull/842)

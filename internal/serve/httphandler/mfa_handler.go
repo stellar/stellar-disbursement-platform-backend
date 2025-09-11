@@ -39,7 +39,6 @@ func (h MFAHandler) isCAPTCHADisabled(ctx context.Context) bool {
 		return true
 	}
 
-	// Get organization settings
 	org, err := h.Models.Organizations.Get(ctx)
 	if err != nil {
 		return h.ReCAPTCHADisabled
