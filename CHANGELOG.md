@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Disbursement remaining balance calculation fails when there are pending Direct Payments [#842](https://github.com/stellar/stellar-disbursement-platform-backend/pull/842)
 - Return proper error when calling `POST /receivers` with a duplicate wallet address. [#836](https://github.com/stellar/stellar-disbursement-platform-backend/pull/836)
+- Return proper error when calling `POST /disbursements` with a duplicate wallet address. [#862](https://github.com/stellar/stellar-disbursement-platform-backend/pull/862)
 
 ### Changed
 
