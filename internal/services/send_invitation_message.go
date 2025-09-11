@@ -72,6 +72,13 @@ func SendInvitationMessage(ctx context.Context, messengerClient message.Messenge
 		ToEmail: opts.Email,
 		Body:    messageContent,
 		Title:   invitationMessageTitle,
+		Type:    message.MessageTypeUserInvitation,
+		TemplateVariables: map[string]string{
+			"FirstName":          opts.FirstName,
+			"Role":               opts.Role,
+			"ForgotPasswordLink": forgotPasswordLink,
+			"OrganizationName":   organization.Name,
+		},
 	}
 
 	if sendMsgErr := messengerClient.SendMessage(ctx, msg); sendMsgErr != nil {

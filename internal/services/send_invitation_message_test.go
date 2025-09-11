@@ -90,6 +90,8 @@ func Test_SendInvitationMessage(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	invitationMessageTitle := "Welcome to Stellar Disbursement Platform"
+
 	testCases := []struct {
 		name        string
 		options     SendInvitationMessageOptions
@@ -121,9 +123,16 @@ func Test_SendInvitationMessage(t *testing.T) {
 			mockSetup: func(t *testing.T, msgClientMock *message.MessengerClientMock) {
 				msgClientMock.
 					On("SendMessage", mock.Anything, message.Message{
+						Type:    message.MessageTypeUserInvitation,
 						ToEmail: email,
 						Title:   invitationMessageTitle,
 						Body:    content,
+						TemplateVariables: map[string]string{
+							"FirstName":          firstName,
+							"Role":               roles[0],
+							"ForgotPasswordLink": forgotPasswordLink,
+							"OrganizationName":   "MyCustomAid",
+						},
 					}).
 					Return(errors.New("foobar")).
 					Once()
@@ -141,9 +150,16 @@ func Test_SendInvitationMessage(t *testing.T) {
 			mockSetup: func(t *testing.T, msgClientMock *message.MessengerClientMock) {
 				msgClientMock.
 					On("SendMessage", mock.Anything, message.Message{
+						Type:    message.MessageTypeUserInvitation,
 						ToEmail: email,
 						Title:   invitationMessageTitle,
 						Body:    content,
+						TemplateVariables: map[string]string{
+							"FirstName":          firstName,
+							"Role":               roles[0],
+							"ForgotPasswordLink": forgotPasswordLink,
+							"OrganizationName":   "MyCustomAid",
+						},
 					}).
 					Return(nil).
 					Once()

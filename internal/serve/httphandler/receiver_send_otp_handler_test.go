@@ -534,11 +534,28 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 				var messengerType message.MessengerType
 				switch contactType {
 				case data.ReceiverContactTypeSMS:
-					expectedMsg = message.Message{ToPhoneNumber: phoneNumber, Body: tc.wantMessage}
+					expectedMsg = message.Message{
+						Type:          message.MessageTypeReceiverOTP,
+						ToPhoneNumber: phoneNumber,
+						Body:          tc.wantMessage,
+						TemplateVariables: map[string]string{
+							"OTP":              otp,
+							"OrganizationName": organization.Name,
+						},
+					}
 					contactInfo = phoneNumber
 					messengerType = message.MessengerTypeTwilioSMS
 				case data.ReceiverContactTypeEmail:
-					expectedMsg = message.Message{ToEmail: email, Body: tc.wantMessage, Title: "Your One-Time Password: " + otp}
+					expectedMsg = message.Message{
+						Type:    message.MessageTypeReceiverOTP,
+						ToEmail: email,
+						Body:    tc.wantMessage,
+						Title:   "Your One-Time Password: " + otp,
+						TemplateVariables: map[string]string{
+							"OTP":              otp,
+							"OrganizationName": organization.Name,
+						},
+					}
 					contactInfo = email
 					messengerType = message.MessengerTypeAWSEmail
 				}
