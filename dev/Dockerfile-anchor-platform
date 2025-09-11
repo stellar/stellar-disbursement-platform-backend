@@ -1,4 +1,4 @@
-FROM stellar/anchor-platform:2.6.0
+FROM --platform=linux/amd64 stellar/anchor-platform:2.6.0
 
 # Update package list and install the latest OpenJDK 17
 # Ubuntu 22.04 should have OpenJDK 17.0.16+ available
