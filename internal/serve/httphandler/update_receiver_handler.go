@@ -154,7 +154,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 
 func parseHttpConflictErrorIfNeeded(err error) *httperror.HTTPError {
 	if errors.Is(err, data.ErrWalletAddressAlreadyInUse) {
-		return httperror.Conflict("The provided wallet address is already associated with another receiver.", err, map[string]interface{}{
+		return httperror.Conflict("The provided wallet address is already associated with another receiver.", err, map[string]any{
 			"wallet_address": "wallet address must be unique",
 		})
 	}
