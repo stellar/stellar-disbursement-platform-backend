@@ -31,9 +31,9 @@ var TestnetWallets = []data.Wallet{
 		UserManaged: true,
 	},
 	{
-		Name:           "SDP Embedded Wallet",
-		DeepLinkSchema: "SELF",
-		Homepage:       "https://stellar.org",
+		Name:           "Meridian Pay",
+		DeepLinkSchema: "http://localhost:3000",
+		Homepage:       "http://localhost:3000",
 		Assets:         assets.AllAssetsTestnet,
 		Embedded:       true,
 	},
