@@ -31,7 +31,7 @@ var TestnetWallets = []data.Wallet{
 		UserManaged: true,
 	},
 	{
-		Name:           "Meridian Pay",
+		Name:           "SDP Embedded Wallet",
 		DeepLinkSchema: "http://localhost:3000",
 		Homepage:       "http://localhost:3000",
 		Assets:         assets.AllAssetsTestnet,
