@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  db:
+  sdp-db:
     container_name: sdp_v2_database-mtn
     image: postgres:14-alpine
     environment:
@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-db:/data/postgres
+      - postgres-sdp-db:/data/postgres
   sdp-api:
     container_name: sdp-api-mtn
     image: stellar/sdp-v2:development
@@ -24,8 +24,8 @@ services:
       - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
-      DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
-      ENVIRONMENT: localhost
+      DATABASE_URL: postgres://postgres@sdp-db:5432/sdp_mtn?sslmode=disable
+      ENVIRONMENT: docker-compose
       LOG_LEVEL: INFO
       PORT: "8000"
       METRICS_PORT: "8002"
@@ -51,7 +51,6 @@ services:
       ADMIN_PORT: "8003"
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
-      SINGLE_TENANT_MODE: "false"
 
       # scheduler options
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
@@ -65,8 +64,8 @@ services:
       SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID:-}
 
       # Embedded wallet configuration
-      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-false}
-      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-}
+      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-true}
+      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-7ac3713a1df2919fc76d50539bbbadf7fc9758cedb5fe7d322c93dd5d5fb42f2}
       EMBEDDED_WALLETS_RECOVERY_ADDRESS: ${EMBEDDED_WALLETS_RECOVERY_ADDRESS:-}
       EMBEDDED_WALLETS_RECOVERY_MASTER_PRIVATE_KEY: ${EMBEDDED_WALLETS_RECOVERY_MASTER_PRIVATE_KEY:-}
       EMBEDDED_WALLETS_RECOVERY_COSIGNER_PUBLIC_KEY: ${EMBEDDED_WALLETS_RECOVERY_COSIGNER_PUBLIC_KEY:-}
@@ -79,6 +78,13 @@ services:
       ADMIN_API_KEY: api_key_1234567890
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE}
+
+      # Default Tenant:
+      DEFAULT_TENANT_OWNER_EMAIL: ${DEFAULT_TENANT_OWNER_EMAIL:-admin@example.com}
+      DEFAULT_TENANT_OWNER_FIRST_NAME: ${DEFAULT_TENANT_OWNER_FIRST_NAME:-Admin}
+      DEFAULT_TENANT_OWNER_LAST_NAME: ${DEFAULT_TENANT_OWNER_LAST_NAME:-User}
+      DEFAULT_TENANT_DISTRIBUTION_ACCOUNT_TYPE: ${DEFAULT_TENANT_DISTRIBUTION_ACCOUNT_TYPE:-DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT}
+      SINGLE_TENANT_MODE: ${SINGLE_TENANT_MODE:-true}
 
       # secrets:
       AWS_ACCESS_KEY_ID: MY_AWS_ACCESS_KEY_ID
@@ -106,8 +112,8 @@ services:
         ./stellar-disbursement-platform db auth migrate up --all
         ./stellar-disbursement-platform db sdp migrate up --all
         ./stellar-disbursement-platform db setup-for-network --all
-        echo "starting dlv stellar-disbursement-platform"
-        /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
+        ./stellar-disbursement-platform tenants ensure-default
+        ./stellar-disbursement-platform serve
     volumes:
       - ./scripts/add_test_users.sh:/app/github.com/stellar/stellar-disbursement-platform/dev/scripts/add_test_users.sh
 
@@ -128,7 +134,7 @@ services:
     container_name: anchor-platform
     image: stellar/anchor-platform:3.2.0-beta.1
     depends_on:
-      - db
+      - sdp-db
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
@@ -228,7 +234,7 @@ services:
       - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
 
 volumes:
-  postgres-db:
+  postgres-sdp-db:
     driver: local
   postgres-ap-db:
     driver: local

@@ -1,17 +1,18 @@
 version: '3'
+name: stellar-disbursement-platform
 services:
-  db:
+  sdp-db:
     extends:
       file: docker-compose-sdp-anchor.yml
-      service: db
+      service: sdp-db
     volumes:
-      - postgres-db:/data/postgres
+      - postgres-sdp-db:/data/postgres
   sdp-api:
     extends:
       file: docker-compose-sdp-anchor.yml
       service: sdp-api
     depends_on:
-      db:
+      sdp-db:
         condition: service_started
   db-anchor-platform:
     extends:
@@ -32,22 +33,18 @@ services:
       file: docker-compose-tss.yml
       service: sdp-tss
     depends_on:
-      - db
+      - sdp-db
       - sdp-api
   sdp-frontend:
     extends:
       file: docker-compose-frontend.yml
       service: sdp-frontend
     depends_on:
-      - db
+      - sdp-db
       - sdp-api
-  demo-wallet:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: demo-wallet
 
 volumes:
-  postgres-db:
+  postgres-sdp-db:
     driver: local
   postgres-ap-db:
     driver: local
