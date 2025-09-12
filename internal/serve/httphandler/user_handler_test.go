@@ -440,16 +440,36 @@ func Test_CreateUserRequest_validate(t *testing.T) {
 			},
 			expectError: true,
 			errorExtras: map[string]interface{}{
-				"roles": "unexpected value for roles[0]=invalid_role. Expect one of these values: [owner financial_controller developer business]",
+				"roles": "unexpected value for roles[0]=invalid_role. Expect one of these values: [owner financial_controller developer business initiator approver]",
 			},
 		},
 		{
-			name: "🟢success - valid request",
+			name: "🟢success - valid request with developer role",
 			request: CreateUserRequest{
 				FirstName: "First",
 				LastName:  "Last",
 				Email:     "email@email.com",
 				Roles:     []data.UserRole{data.DeveloperUserRole},
+			},
+			expectError: false,
+		},
+		{
+			name: "🟢success - valid request with initiator role",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.InitiatorUserRole},
+			},
+			expectError: false,
+		},
+		{
+			name: "🟢success - valid request with approver role",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.ApproverUserRole},
 			},
 			expectError: false,
 		},
@@ -598,7 +618,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			{
 				"error": "Request invalid",
 				"extras": {
-					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [owner financial_controller developer business]"
+					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [owner financial_controller developer business initiator approver]"
 				}
 			}
 		`
@@ -1069,6 +1089,23 @@ func Test_UpdateRolesRequest_validate(t *testing.T) {
 
 	err = upr.validate()
 	assert.Nil(t, err)
+
+	// Test new roles are accepted
+	upr = UpdateRolesRequest{
+		UserID: "user_id",
+		Roles:  []data.UserRole{data.InitiatorUserRole},
+	}
+
+	err = upr.validate()
+	assert.Nil(t, err)
+
+	upr = UpdateRolesRequest{
+		UserID: "user_id",
+		Roles:  []data.UserRole{data.ApproverUserRole},
+	}
+
+	err = upr.validate()
+	assert.Nil(t, err)
 }
 
 func Test_UserHandler_UpdateUserRoles(t *testing.T) {
@@ -1182,7 +1219,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			{
 				"error": "Request invalid",
 				"extras": {
-					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [owner financial_controller developer business]"
+					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [owner financial_controller developer business initiator approver]"
 				}
 			}
 		`
