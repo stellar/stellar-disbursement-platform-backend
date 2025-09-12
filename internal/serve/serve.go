@@ -75,6 +75,8 @@ type ServeOptions struct {
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
+	Sep10ClientAttributionRequired  bool
+	Sep10Service                    services.SEP10Service
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
@@ -86,6 +88,7 @@ type ServeOptions struct {
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
 	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
+	EnableAnchorPlatform            bool
 	tenantManager                   tenant.ManagerInterface
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
@@ -139,6 +142,24 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error initializing password validator: %w", err)
 	}
 
+	// Determine allow retry based on network passphrase
+	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
+
+	sep10Service, err := services.NewSEP10Service(
+		sep24JWTManager,
+		opts.NetworkPassphrase,
+		opts.Sep10SigningPrivateKey,
+		opts.BaseURL,
+		allowHTTPRetry,
+		opts.SubmitterEngine.HorizonClient,
+		opts.Sep10ClientAttributionRequired,
+	)
+	if err != nil {
+		return fmt.Errorf("initializing SEP 10 Service: %w", err)
+	}
+
+	opts.Sep10Service = sep10Service
+
 	return nil
 }
 
@@ -157,6 +178,22 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	}
 	if opts.DisableReCAPTCHA {
 		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+
+	// Validate Anchor Platform configuration
+	if opts.EnableAnchorPlatform {
+		if opts.AnchorPlatformBaseSepURL == "" {
+			return fmt.Errorf("anchor-platform-base-sep-url is required when enable-anchor-platform is true")
+		}
+		if opts.AnchorPlatformBasePlatformURL == "" {
+			return fmt.Errorf("anchor-platform-base-platform-url is required when enable-anchor-platform is true")
+		}
+		if opts.AnchorPlatformOutgoingJWTSecret == "" {
+			return fmt.Errorf("anchor-platform-outgoing-jwt-secret is required when enable-anchor-platform is true")
+		}
+		log.Warnf("Anchor Platform integration is enabled. SEP-1 TOML will point to Anchor Platform URLs.")
+	} else {
+		log.Infof("Anchor Platform integration is disabled. SEP-1 TOML will point to SDP native SEP10/SEP24 URLs.")
 	}
 
 	return nil
@@ -598,6 +635,15 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 	})
 
+	mux.Group(func(r chi.Router) {
+		sep10Handler := httphandler.SEP10Handler{
+			SEP10Service: o.Sep10Service,
+		}
+
+		r.Get("/auth", sep10Handler.GetChallenge)
+		r.Post("/auth", sep10Handler.PostChallenge)
+	})
+
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
@@ -616,7 +662,23 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
 			InstanceName:                o.InstanceName,
+			EnableAnchorPlatform:        o.EnableAnchorPlatform,
+			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
+
+		r.Route("/sep24", func(r chi.Router) {
+			sep24Handler := httphandler.SEP24Handler{
+				Models:             o.Models,
+				SEP24JWTManager:    o.sep24JWTManager,
+				InteractiveBaseURL: o.BaseURL,
+			}
+			r.Get("/info", sep24Handler.GetInfo)
+			// Protect transaction lookup with SEP-10 auth to ensure only authorized clients can access details
+			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
+
+			// For initiating interactive deposit, allow either the new middleware (preferred) or legacy header path inside handler
+			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
+		})
 
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/wallet-registration/*", httphandler.SEP24InteractiveDepositHandler{
@@ -640,7 +702,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 			}.ServeHTTP)
 			r.Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
 				Models:                      o.Models,
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
 				ReCAPTCHADisabled:           o.DisableReCAPTCHA,

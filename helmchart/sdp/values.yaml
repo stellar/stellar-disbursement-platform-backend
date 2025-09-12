@@ -339,13 +339,18 @@ sdp:
       secretName: backend-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
       # NOTE: the hosts to be used here will be the same ones as in the sdp.route section.
 
-      # =========================== START anchorPlatform ===========================
-      ## @section Anchor Platform
-      ## @descriptionStart
-      ## Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
-      ##  the recipient's registration process through the SEP-24 deposit flow.
-      ## @descriptionEnd
+        # =========================== START anchorPlatform ===========================
+        ## @section Anchor Platform
+        ## @descriptionStart
+        ## Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
+        ##  the recipient's registration process through the SEP-24 deposit flow.
+        ##
+        ## DEPRECATED: This configuration section will be removed in a future version.
+        ## Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints instead.
+        ## @descriptionEnd
 anchorPlatform:
+  ## @param anchorPlatform.enabled If true, the Anchor Platform will be deployed.
+  enabled: true
 
   ## @extra anchorPlatform.route Configuration related to the routing of the Anchor Platform service.
   ## @param anchorPlatform.route.schema Protocol scheme used for the service. Can be "http" or "https".

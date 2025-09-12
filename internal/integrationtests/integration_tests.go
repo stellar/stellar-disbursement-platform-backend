@@ -57,6 +57,8 @@ type IntegrationTestsOpts struct {
 	CircleAPIKey               string
 	HorizonURL                 string
 	NetworkPassphrase          string
+	EnableAnchorPlatform       bool
+	SingleTenantMode           bool
 }
 
 type IntegrationTestsService struct {
@@ -69,6 +71,7 @@ type IntegrationTestsService struct {
 	adminAPI              AdminApiIntegrationTestsInterface
 	anchorPlatform        AnchorPlatformIntegrationTestsInterface
 	horizonClient         horizonclient.ClientInterface
+	sdpSepServices        SDPSepServicesIntegrationTestsInterface
 }
 
 // NewIntegrationTestsService is a function that create a new IntegrationTestsService instance.
@@ -123,6 +126,20 @@ func (it *IntegrationTestsService) initServices(_ context.Context, opts Integrat
 	it.horizonClient = &horizonclient.Client{
 		HorizonURL: opts.HorizonURL,
 		HTTP:       httpclient.DefaultClient(),
+	}
+
+	if !opts.EnableAnchorPlatform {
+		it.sdpSepServices = &SDPSepServicesIntegrationTests{
+			HTTPClient:                httpclient.DefaultClient(),
+			SDPBaseURL:                opts.ServerApiBaseURL,
+			TenantName:                opts.TenantName,
+			ReceiverAccountPublicKey:  opts.ReceiverAccountPublicKey,
+			ReceiverAccountPrivateKey: opts.ReceiverAccountPrivateKey,
+			Sep10SigningPublicKey:     opts.Sep10SigningPublicKey,
+			DisbursedAssetCode:        opts.DisbursedAssetCode,
+			NetworkPassphrase:         opts.NetworkPassphrase,
+			SingleTenantMode:          opts.SingleTenantMode,
+		}
 	}
 
 	// initialize anchor platform integration tests service
@@ -227,6 +244,13 @@ func (it *IntegrationTestsService) createAndValidateDisbursement(ctx context.Con
 		return nil, fmt.Errorf("validating data after process disbursement: %w", err)
 	}
 
+	if !opts.RegistrationContactType.IncludesWalletAddress {
+		log.Ctx(ctx).Info("Creating receiver wallets for SEP-24 registration flow...")
+		if err = it.createReceiverWalletsForSEP24(ctx, disbursement.ID, walletID); err != nil {
+			return nil, fmt.Errorf("creating receiver wallets for SEP-24: %w", err)
+		}
+	}
+
 	log.Ctx(ctx).Info("Starting disbursement using server API...")
 	if err = it.serverAPI.StartDisbursement(ctx, authToken, disbursement.ID, &httphandler.PatchDisbursementStatusRequest{Status: "STARTED"}); err != nil {
 		return nil, fmt.Errorf("starting disbursement: %w", err)
@@ -239,14 +263,100 @@ func (it *IntegrationTestsService) createAndValidateDisbursement(ctx context.Con
 	return disbursement, nil
 }
 
-// registerReceiverWalletIfNeeded is a function that registers the receiver wallet through the SEP-24 flow if needed,
-// i.e. if the registration contact type does not include the wallet address.
 func (it *IntegrationTestsService) registerReceiverWalletIfNeeded(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
 	if disbursement.RegistrationContactType.IncludesWalletAddress {
 		log.Ctx(ctx).Infof("⏭ Skipping SEP-24 flow because registrationContactType=%q", disbursement.RegistrationContactType)
 		return nil
 	}
 
+	if opts.EnableAnchorPlatform {
+		return it.registerWithAnchorPlatform(ctx, opts, disbursement)
+	} else {
+		return it.registerWithInternalSEP(ctx, opts, disbursement)
+	}
+}
+
+func (it *IntegrationTestsService) registerWithInternalSEP(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
+	log.Ctx(ctx).Info("Starting SEP-10 authentication with SDP internal service")
+
+	// Step 1: Get SEP-10 challenge
+	challenge, err := it.sdpSepServices.GetSEP10Challenge(ctx)
+	if err != nil {
+		return fmt.Errorf("getting SEP-10 challenge: %w", err)
+	}
+	log.Ctx(ctx).Info("Received SEP-10 challenge from SDP")
+
+	// Step 2: Sign challenge
+	signedChallenge, err := it.sdpSepServices.SignSEP10Challenge(challenge)
+	if err != nil {
+		return fmt.Errorf("signing SEP-10 challenge: %w", err)
+	}
+	log.Ctx(ctx).Info("Signed SEP-10 challenge")
+
+	// Step 3: Validate and get JWT token
+	sep10Token, err := it.sdpSepServices.ValidateSEP10Challenge(ctx, signedChallenge)
+	if err != nil {
+		return fmt.Errorf("validating SEP-10 challenge: %w", err)
+	}
+	log.Ctx(ctx).Info("Received SEP-10 JWT token")
+
+	// Step 4: Initiate SEP-24 deposit
+	depositResp, err := it.sdpSepServices.InitiateSEP24Deposit(ctx, sep10Token)
+	if err != nil {
+		return fmt.Errorf("initiating SEP-24 deposit: %w", err)
+	}
+	log.Ctx(ctx).Infof("Initiated SEP-24 deposit, transaction ID: %s", depositResp.TransactionID)
+
+	// Step 5: Check transaction status (should be incomplete initially)
+	txStatus, err := it.sdpSepServices.GetSEP24Transaction(ctx, sep10Token, depositResp.TransactionID)
+	if err != nil {
+		return fmt.Errorf("checking transaction status: %w", err)
+	}
+	log.Ctx(ctx).Infof("Transaction status: %s", txStatus.Transaction.Status)
+
+	// Step 6: Read disbursement instructions
+	disbursementInstructions, err := readDisbursementCSV(opts.DisbursementCSVFilePath, opts.DisbursementCSVFileName)
+	if err != nil {
+		return fmt.Errorf("reading disbursement CSV: %w", err)
+	}
+
+	// Step 7: Complete registration
+	registrationData := &ReceiverRegistrationRequest{
+		OTP:               data.TestnetAlwaysValidOTP,
+		PhoneNumber:       disbursementInstructions[0].Phone,
+		Email:             disbursementInstructions[0].Email,
+		VerificationValue: disbursementInstructions[0].VerificationValue,
+		VerificationField: string(disbursement.VerificationField),
+		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
+	}
+
+	if err = it.sdpSepServices.CompleteReceiverRegistration(ctx, depositResp.Token, registrationData); err != nil {
+		return fmt.Errorf("completing receiver registration: %w", err)
+	}
+	log.Ctx(ctx).Info("Completed receiver registration")
+
+	// Step 8: Verify transaction is completed
+	txStatus, err = it.sdpSepServices.GetSEP24Transaction(ctx, sep10Token, depositResp.TransactionID)
+	if err != nil {
+		return fmt.Errorf("checking final transaction status: %w", err)
+	}
+
+	if txStatus.Transaction.Status != "completed" {
+		return fmt.Errorf("transaction not completed, status: %s", txStatus.Transaction.Status)
+	}
+
+	// Step 9: Validate registration in database
+	if err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain); err != nil {
+		return fmt.Errorf("validating receiver after registration: %w", err)
+	}
+
+	log.Ctx(ctx).Info("✅ SEP-24 registration completed successfully")
+	return nil
+}
+
+// registerWithAnchorPlatform is a function that registers the receiver wallet through the SEP-24 flow if needed,
+// i.e. if the registration contact type does not include the wallet address, used with Anchor Platform
+func (it *IntegrationTestsService) registerWithAnchorPlatform(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
 	log.Ctx(ctx).Info("Starting challenge transaction on anchor platform")
 	challengeTx, err := it.anchorPlatform.StartChallengeTransaction()
 	if err != nil {
@@ -277,21 +387,19 @@ func (it *IntegrationTestsService) registerReceiverWalletIfNeeded(ctx context.Co
 	}
 
 	log.Ctx(ctx).Info("Completing receiver registration using server API")
-	err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
+	if err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
 		OTP:               data.TestnetAlwaysValidOTP,
 		PhoneNumber:       disbursementInstructions[0].Phone,
 		Email:             disbursementInstructions[0].Email,
 		VerificationValue: disbursementInstructions[0].VerificationValue,
 		VerificationField: disbursement.VerificationField,
 		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
-	})
-	if err != nil {
-		return fmt.Errorf("registring receiver: %w", err)
+	}); err != nil {
+		return fmt.Errorf("registering receiver: %w", err)
 	}
 
 	log.Ctx(ctx).Info("Validating receiver data after completing registration")
-	err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain)
-	if err != nil {
+	if err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain); err != nil {
 		return fmt.Errorf("validating receiver after registration: %w", err)
 	}
 
@@ -358,9 +466,62 @@ func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Conte
 	return nil
 }
 
+// createReceiverWalletsForSEP24 creates receiver wallet records for each receiver in the disbursement
+// to enable SEP-24 registration flow
+func (it *IntegrationTestsService) createReceiverWalletsForSEP24(ctx context.Context, disbursementID, walletID string) error {
+	// Get all receivers from the disbursement
+	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursementID)
+	if err != nil {
+		return fmt.Errorf("getting receivers from disbursement: %w", err)
+	}
+
+	// Create receiver wallet for each receiver
+	for _, receiver := range receivers {
+		// Check if receiver wallet already exists
+		existingWallets, err := it.models.ReceiverWallet.GetWithReceiverIDs(ctx, it.mtnDbConnectionPool, data.ReceiverIDs{receiver.ID})
+		if err != nil {
+			return fmt.Errorf("checking existing receiver wallets for receiver %s: %w", receiver.ID, err)
+		}
+
+		// If no receiver wallet exists for this receiver and wallet, create one
+		walletExists := false
+		for _, existingWallet := range existingWallets {
+			if existingWallet.Wallet.ID == walletID {
+				walletExists = true
+				break
+			}
+		}
+
+		if !walletExists {
+			log.Ctx(ctx).Infof("Creating receiver wallet for receiver %s with wallet %s", receiver.ID, walletID)
+			_, err = it.models.ReceiverWallet.Insert(ctx, it.mtnDbConnectionPool, data.ReceiverWalletInsert{
+				ReceiverID: receiver.ID,
+				WalletID:   walletID,
+			})
+			if err != nil {
+				return fmt.Errorf("creating receiver wallet for receiver %s: %w", receiver.ID, err)
+			}
+		}
+	}
+
+	log.Ctx(ctx).Infof("Successfully created receiver wallets for %d receivers", len(receivers))
+	return nil
+}
+
 func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts IntegrationTestsOpts) error {
 	// 1. Create new tenant and add owner user
 	distributionAccType := schema.AccountType(opts.DistributionAccountType)
+
+	// Use appropriate base URL based on whether we're using Anchor Platform or Internal SEP
+	// For Internal SEP, use 3-part domain with tenant name for proper tenant extraction in SEP-24
+	// For Anchor Platform, use the standard localhost URL
+	var baseURL string
+	if opts.EnableAnchorPlatform {
+		baseURL = "http://localhost:8000"
+	} else {
+		baseURL = fmt.Sprintf("http://%s.stellar.local:8000", opts.TenantName)
+	}
+
 	t, err := it.adminAPI.CreateTenant(ctx, CreateTenantRequest{
 		Name:                    opts.TenantName,
 		OwnerEmail:              opts.UserEmail,
@@ -368,7 +529,7 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		OwnerLastName:           "Doe",
 		OrganizationName:        "Integration Tests Organization",
 		DistributionAccountType: distributionAccType,
-		BaseURL:                 "http://localhost:8000",
+		BaseURL:                 baseURL,
 		SDPUIBaseURL:            "http://localhost:3000",
 	})
 	if err != nil {

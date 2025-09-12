@@ -105,6 +105,74 @@ The [SDP Dashboard][sdp-dashboard] and [Anchor Platform] components are separate
 
 In a future iteration of this project, the Transaction Submission Service (TSS) will also be moved to its own repository to be used as an independent service. At that point, this project will include the services contained in the Core module shown in the diagram above.
 
+### SEP10 and SEP24 Implementation
+
+The SDP now includes native implementations of Stellar Enhancement Proposals SEP10 and SEP24, providing wallet authentication and interactive deposit flows without requiring external Anchor Platform integration.
+
+#### SEP10 Authentication
+
+SEP10 provides a secure way for wallets to authenticate with the SDP using Stellar transactions. The implementation includes:
+
+- **Challenge Generation**: Creates cryptographically secure challenge transactions
+- **Transaction Validation**: Validates signed challenge transactions from wallets
+- **JWT Token Generation**: Issues JWT tokens for authenticated sessions
+- **Multi-tenant Support**: Handles authentication across different tenant domains
+- **Client Domain Verification**: Validates client domain signatures for enhanced security
+
+**Endpoints:**
+- `GET /auth` - Generate authentication challenge
+- `POST /auth` - Validate challenge and receive JWT token
+
+#### SEP24 Interactive Deposit Flow
+
+SEP24 enables interactive deposit flows for wallet registration and payment processing:
+
+- **Interactive Registration**: Guides users through wallet registration process
+- **OTP Verification**: Handles one-time password verification for recipients
+- **Transaction Status Tracking**: Monitors deposit transaction status
+- **Multi-language Support**: Supports multiple languages for the registration UI
+- **JWT-based Security**: Uses JWT tokens for secure transaction handling
+
+**Endpoints:**
+- `GET /sep24/info` - Get supported assets and capabilities
+- `POST /sep24/transactions/deposit/interactive` - Initiate interactive deposit
+- `GET /sep24/transactions` - Get transaction status
+- `/wallet-registration/start` - Interactive registration UI
+
+#### Configuration
+
+The SEP10/SEP24 implementation can be configured using the following environment variables:
+
+```bash
+# SEP10 Configuration
+SEP10_SIGNING_PUBLIC_KEY=G...  # Public key for SEP10 signing
+SEP10_SIGNING_PRIVATE_KEY=S... # Private key for SEP10 signing
+
+# SEP24 Configuration  
+SEP24_JWT_SECRET=jwt_secret_... # JWT secret for SEP24 tokens
+
+# Anchor Platform Integration (Optional)
+ENABLE_ANCHOR_PLATFORM=false   # Set to false to use native SEP10/SEP24
+```
+
+When `ENABLE_ANCHOR_PLATFORM=false`, the SDP serves its own SEP10/SEP24 endpoints and the `stellar.toml` file points to these native endpoints instead of external Anchor Platform URLs.
+
+#### Environment Variables
+
+The following environment variables are required for SEP10/SEP24 functionality:
+
+**Required Variables:**
+- `SEP10_SIGNING_PUBLIC_KEY` - Public key for SEP10 challenge signing
+- `SEP10_SIGNING_PRIVATE_KEY` - Private key for SEP10 challenge signing  
+- `SEP24_JWT_SECRET` - JWT secret for SEP24 token signing
+
+**Optional Variables:**
+- `ENABLE_ANCHOR_PLATFORM` - Set to `false` to use native SEP10/SEP24 (default: `false`)
+- `BASE_URL` - Base URL for generating SEP endpoint URLs in stellar.toml
+
+**Development Setup:**
+The `make_env.sh` script automatically generates SEP10 signing keys and creates the necessary `.env` file with proper configuration for development environments.
+
 ### Core
 
 The SDP Core service include several components started using a single command.
@@ -141,6 +209,18 @@ If you're using the `AWS_EMAIL` or `TWILIO_EMAIL` sender types, you'll need to v
 #### Wallet Registration UI
 
 The Wallet Registration UI is also hosted by the Core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recipients registered Stellar account.
+
+#### SEP10/SEP24 Endpoints
+
+The Core service now includes native implementations of SEP10 and SEP24 protocols:
+
+- **SEP10 Authentication**: Provides secure wallet authentication using Stellar transactions
+- **SEP24 Interactive Deposits**: Handles interactive deposit flows for wallet registration
+- **Stellar.toml Generation**: Dynamically generates stellar.toml files with appropriate SEP endpoints
+- **Multi-tenant Support**: Supports SEP10/SEP24 across different tenant domains
+- **JWT Token Management**: Handles authentication tokens for secure API access
+
+These endpoints are available when `ENABLE_ANCHOR_PLATFORM=false` and provide a complete wallet integration solution without requiring external Anchor Platform services.
 
 #### Core + Anchor Platform Integration
 
