@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  db:
+  sdp-db:
     container_name: sdp_v2_database-mtn
     image: postgres:14-alpine
     environment:
@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-db:/data/postgres
+      - postgres-sdp-db:/data/postgres
   sdp-api:
     container_name: sdp-api-mtn
     image: stellar/sdp-v2:development
@@ -24,7 +24,7 @@ services:
       - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
-      DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
+      DATABASE_URL: postgres://postgres@sdp-db:5432/sdp_mtn?sslmode=disable
       ENVIRONMENT: docker-compose
       LOG_LEVEL: INFO
       PORT: "8000"
@@ -134,7 +134,7 @@ services:
     container_name: anchor-platform
     image: stellar/anchor-platform:3.2.0-beta.1
     depends_on:
-      - db
+      - sdp-db
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
@@ -234,7 +234,7 @@ services:
       - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
 
 volumes:
-  postgres-db:
+  postgres-sdp-db:
     driver: local
   postgres-ap-db:
     driver: local
