@@ -348,6 +348,54 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 				}
 			}`,
 		},
+		{
+			name:  "returns BadRequest when receiver_registration_message_template exceeds 255 characters",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_message_template": "This is a very long test string designed to reach exactly two hundred and fifty six characters in length, which is one more than the common maximum of two hundred and fifty five, so it can be used to test proper validation, truncation, or error handling logic correctly."
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"receiver_registration_message_template": "receiver_registration_message_template cannot exceed 255 characters"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when organization_name exceeds 64 characters",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"organization_name": "This organization name is way too long and exceeds the maximum length of 64 characters"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"organization_name": "organization_name cannot exceed 64 characters"
+				}
+			}`,
+		},
 	}
 
 	for _, tc := range testCases {

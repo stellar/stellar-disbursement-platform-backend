@@ -68,6 +68,9 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 
 To automatically create Stellar accounts for SEP10 authentication and a distribution wallet, and to set up the necessary configuration values in a .env file, follow these steps:
 
+> [!NOTE]
+> The SDP now includes native SEP10 and SEP24 implementations. When `ENABLE_ANCHOR_PLATFORM=false` (default in development), the SDP serves its own SEP10/SEP24 endpoints without requiring external Anchor Platform services.
+
 1. Navigate to the dev directory:
 
 ```sh
@@ -118,13 +121,13 @@ The main.sh setup script will print Login information for each tenant.
 🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉
 Login URLs for each tenant:
 🔗Tenant `redcorp`: [http://redcorp.stellar.local:3000](http://redcorp.stellar.local:3000)
-  username: `init_owner@redcorp.local`
+  username: `owner@redcorp.local`
   password: `Password123!`
 🔗Tenant `bluecorp`: [http://bluecorp.stellar.local:3000](http://bluecorp.stellar.local:3000)
-  username: `init_owner@bluecorp.local`
+  username: `owner@bluecorp.local`
   password: `Password123!`
 🔗Tenant `pinkcorp`: [http://pinkcorp.stellar.local:3000](http://pinkcorp.stellar.local:3000)
-  username: `init_owner@pinkcorp.local`
+  username: `owner@pinkcorp.local`
   password: `Password123!`
 ```
 
@@ -164,6 +167,22 @@ Login URLs for each tenant:
 
    <img src="images/disbursement_detail.png" alt="Disbursement Details" width="40%">
 
+### SEP10/SEP24 Endpoints
+
+The SDP now provides native SEP10 and SEP24 endpoints for wallet integration:
+
+**SEP10 Authentication Endpoints:**
+- `GET /auth` - Generate authentication challenge
+- `POST /auth` - Validate challenge and receive JWT token
+
+**SEP24 Interactive Deposit Endpoints:**
+- `GET /sep24/info` - Get supported assets and capabilities  
+- `POST /sep24/transactions/deposit/interactive` - Initiate interactive deposit
+- `GET /sep24/transactions` - Get transaction status
+
+**Stellar.toml Configuration:**
+The SDP automatically generates `stellar.toml` files that point to the native SEP10/SEP24 endpoints when `ENABLE_ANCHOR_PLATFORM=false`.
+
 ### Receive Payment to Digital Wallet (Deposit Flow)
 
 Now deposit the disbursement payment into the digital wallet using the SEP-24 deposit flow from the Wallet Client Wallet to SDP.
@@ -175,32 +194,27 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
 
    <img src="images/demo_wallet.png" alt="Demo Wallet" width="40%">
 
-5. Add `USDC` by clicking `Add from preset assets` link, selecting the `USDC` Checkbox and clicking `Override Home Domain` to edit the home domain.
-Enter `http://bluecorp.stellar.local:8000` and click the `Confirm` button.
+5. Clicking `Add Home Domain`  to edit the home domain. Enter `http://bluecorp.stellar.local:8000` and click the `Override` button.
 
    <img src="images/demo_wallet1.png" alt="Demo Wallet" width="40%">
 
-6. Click the `Add trustline` link next to the `Select Action` dropdown.
-
-   <img src="images/demo_wallet2.png" alt="Add Trustline" width="40%">
-
-7. In the `USDC` `Select action` dropdown, select `SEP-24 Deposit` and then click the `Start` button.
-
+6. In the `Select action` dropdown, select `SEP-24 Deposit` and then click the `Start` button.
+   
    <img src="images/sep24_deposit1.png" alt="SEP-24 Deposit" width="40%">
 
-8. In the new window, enter the phone number `+13163955627` from the disbursement CSV payment.
+7.  In the new window, enter the phone number `+13163955627` from the disbursement CSV payment.
+    
+    <img src="images/sep24_deposit2.png" alt="Enter Phone Number" width="40%">
 
-   <img src="images/sep24_deposit2.png" alt="Enter Phone Number" width="40%">
-
-9. To verify the payment, enter the passcode and date of birth. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
+8. To verify the payment, enter the passcode and date of birth. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
 
 <img src="images/sep24_deposit3.png" alt="Verify Payment" width="40%">
 
-10. The SEP-24 interactive pop-up will confirm the registration was successful. At this point, the SDP can associate the wallet address with the receiver phone number. It should then start processing the transaction to send the payment. If you check the dashboard, the payment should be in a `PENDING` state.
+9. The SEP-24 interactive pop-up will confirm the registration was successful. At this point, the SDP can associate the wallet address with the receiver phone number. It should then start processing the transaction to send the payment. If you check the dashboard, the payment should be in a `PENDING` state.
 
     <img src="images/payment1.png" alt="Pending Payment" width="55%">
 
-11. Once complete, the payment status will be `Success` and your wallet will have the USDC.
+10. Once complete, the payment status will be `Success` and your wallet will have the USDC.
 
     <img src="images/payment2.png" alt="Successful Payment" width="55%">
 

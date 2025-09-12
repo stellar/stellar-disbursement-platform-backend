@@ -22,10 +22,14 @@
 This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
 
 The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP consists of the following services:
-- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions.
-- Anchor Platform: the API server that the wallet uses to authenticate and initiate the recipient’s registration process through the SEP-24 deposit flow.
+- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions, including native SEP10/SEP24 implementations.
+- Anchor Platform (Optional): the API server that the wallet uses to authenticate and initiate the recipient's registration process through the SEP-24 deposit flow. Can be disabled in favor of native SEP10/SEP24 endpoints.
 - Transaction Submission Service (TSS): the service that submits all payment transactions to the Stellar network.
 - Dashboard: the user interface administrators use to initiate and track the progress of disbursements.
+
+### SEP10/SEP24 Implementation
+
+The SDP now includes native implementations of SEP10 and SEP24 protocols, providing wallet authentication and interactive deposit flows without requiring external Anchor Platform integration. This is controlled by the `ENABLE_ANCHOR_PLATFORM` configuration parameter.
 
 ## Installing the Chart
 
@@ -202,7 +206,7 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.image`                                                       | Configuration related to the Docker image used by the SDP service.                                                                                             |                                                 |
 | `sdp.image.repository`                                            | Docker image repository for the SDP backend service.                                                                                                           | `stellar/stellar-disbursement-platform-backend` |
 | `sdp.image.pullPolicy`                                            | Image pull policy for the SDP service. For locally built images, consider using "Never" or "IfNotPresent".                                                     | `Always`                                        |
-| `sdp.image.tag`                                                   | Docker image tag for the SDP service. If set, this overrides the default value from `.Chart.AppVersion`.                                                       | `3.7.3`                                         |
+| `sdp.image.tag`                                                   | Docker image tag for the SDP service. If set, this overrides the default value from `.Chart.AppVersion`.                                                       | `4.0.1`                                         |
 | `sdp.deployment`                                                  | Configuration related to the deployment of the SDP service.                                                                                                    |                                                 |
 | `sdp.deployment.annotations`                                      | Annotations to be added to the deployment.                                                                                                                     | `nil`                                           |
 | `sdp.deployment.podAnnotations`                                   | Annotations specific to the pods.                                                                                                                              | `{}`                                            |
@@ -401,7 +405,7 @@ Configuration parameters for the Dashboard. This is the user interface administr
 | `dashboard.route.mtnDomain`                      | Public domain/address of the multi-tenant Dashboard. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp-dashboard.localhost.com". | `nil`                                                  |
 | `dashboard.route.port`                           | Primary port on which the Dashboard listens.                                                                                                       | `80`                                                   |
 | `dashboard.image`                                | Configuration related to the Docker image used by the Dashboard.                                                                                   |                                                        |
-| `dashboard.image.fullName`                       | Full name of the Docker image.                                                                                                                     | `stellar/stellar-disbursement-platform-frontend:3.7.0` |
+| `dashboard.image.fullName`                       | Full name of the Docker image.                                                                                                                     | `stellar/stellar-disbursement-platform-frontend:4.0.1` |
 | `dashboard.image.pullPolicy`                     | Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".                                           | `Always`                                               |
 | `dashboard.deployment`                           | Configuration related to the deployment of the Dashboard.                                                                                          |                                                        |
 | `dashboard.deployment.annotations`               | Annotations to be added to the deployment.                                                                                                         | `{}`                                                   |
