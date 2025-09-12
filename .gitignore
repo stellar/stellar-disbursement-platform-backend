@@ -23,6 +23,7 @@ stellar-disbursement-platform-backend
 # Text Editors
 .vscode
 .idea
+.cursor
 
 # Rust & Soroban
 target/
