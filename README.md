@@ -65,17 +65,25 @@ Security is a critical aspect of the SDP. The measures outlined in this document
 
 Google's reCAPTCHA has been integrated into the SDP to prevent automated attacks and ensure that interactions are performed by humans, not bots.
 
-ReCAPTCHA is enabled by default and can be disabled in the development environment by setting the `DISABLE_RECAPTCHA` environment variable to `true`.
+ReCAPTCHA can be configured at two levels:
+1. **Environment level (default)**: Set the `DISABLE_RECAPTCHA` environment variable to `true` to disable for all tenants
+2. **Organization level**: Each tenant can override the environment default through the organization settings (via API or UI)
 
-**Note:** Disabling reCAPTCHA is supported for pubnet environments but this might reduce security!.
+The organization-level setting takes precedence over the environment default when explicitly set. If not set at the organization level, the environment default is used.
+
+**Note:** Disabling reCAPTCHA is supported for pubnet environments but this might reduce security!
 
 ### Enforcement of Multi-Factor Authentication
 
 Multi-Factor Authentication (MFA) provides an additional layer of security to user accounts. It is enforced by default on the SDP and it relies on OTPs sent to the account's email.
 
-MFA is enabled by default and can be disabled in the development environment by setting the `DISABLE_MFA` environment variable to `true`.
+MFA can be configured at two levels:
+1. **Environment level (default)**: Set the `DISABLE_MFA` environment variable to `true` to disable for all tenants
+2. **Organization level**: Each tenant can override the environment default through the organization settings (via API or UI)
 
-**Note:** Disabling MFA is not supported for production environments due to security risks.
+The organization-level setting takes precedence over the environment default when explicitly set. If not set at the organization level, the environment default is used.
+
+**Note:** Disabling MFA is not recommended for production environments due to security risks.
 
 ### Best Practices for Wallet Management
 
