@@ -21,23 +21,23 @@ export DOMAIN_NAME=example.org  # Your registered domain
 ## Cloudformation Stacks
 This guide walks through deploying the Stellar Disbursement Platform (SDP) infrastructure on AWS. The deployment consists of four CloudFormation stacks that create the necessary infrastructure in a specific order:
 
-- Network Stack (sdp-network-eks.yaml)
+- [Network Stack](sdp-network-eks.yaml)
   - Creates or uses existing VPC and subnets
   - Sets up networking for both public and private resources
   - Exports used (imported) by database and EKS stack to deploy resources
 
-- Database Stack (sdp-database-eks.yaml)
+- [Database Stack](sdp-database-eks.yaml)
   - Deploys RDS PostgreSQL database in private subnet
   - Creates necessary database secrets in AWS Secrets Manager
 
-- Keys Stack (sdp-keys-eks.yaml) [Optional]
+- [Keys Stack](sdp-keys-eks.yaml) (Optional)
   - Manages Stellar and encryption keys by either:
     - Using provided keys via parameters, or
     - Auto-generating keys using Lambda function for dev/test environments
   - Stores all keys and secrets in AWS Secrets Manager under /sdp/${ENVIRONMENT}/ path
   - Keys include SEP-10 signing keys, distribution account keys, JWT secrets, etc.
 
-- EKS Stack (sdp-eks.yaml)
+- [EKS Stack](sdp-eks.yaml)
   - Creates EKS cluster and node group
   - Sets up IAM roles and security groups
   - Configures IRSA (IAM Roles for Service Accounts)
@@ -91,7 +91,7 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region ${AWS_REGION}
 ```
-For mainnet (or using pre-created Stellar accounts), you will need to provide (at a minimum)the necessary parameters. Example:
+For mainnet (or using pre-created Stellar accounts), you will need to provide (at a minimum) the necessary parameters. Example:
 ```bash
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME_PREFIX}-keys-eks \
