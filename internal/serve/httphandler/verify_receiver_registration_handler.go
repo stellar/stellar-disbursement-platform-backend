@@ -57,7 +57,6 @@ var (
 )
 
 type VerifyReceiverRegistrationHandler struct {
-	AnchorPlatformAPIService    anchorplatform.AnchorPlatformAPIServiceInterface
 	Models                      *data.Models
 	ReCAPTCHAValidator          validators.ReCAPTCHAValidator
 	ReCAPTCHADisabled           bool
@@ -264,27 +263,17 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	return *rw, false, nil
 }
 
-// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the "pending_anchor" status, and updates
-// the receiver wallet with the anchor platform transaction ID.
-func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
-	// STEP 1: update receiver wallet with the anchor platform transaction ID.
+// processTransactionID patches the receiver wallet with the anchor platform transaction ID.
+func (v VerifyReceiverRegistrationHandler) processTransactionID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
 	err := v.Models.ReceiverWallet.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
 		AnchorPlatformTransactionID: sep24Claims.TransactionID(),
 	}, dbTx)
 	if err != nil {
-		return fmt.Errorf("updating receiver wallet with anchor platform transaction ID: %w", err)
+		return fmt.Errorf("updating receiver wallet with transaction ID: %w", err)
 	}
 
-	// STEP 2: PATCH transaction on the AnchorPlatform, signaling that it is pending anchor
-	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-		ID:     sep24Claims.TransactionID(),
-		SEP:    "24",
-		Status: anchorplatform.APTransactionStatusPendingAnchor,
-	}
-	err = v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
-	if err != nil {
-		return fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), err)
-	}
+	log.Ctx(ctx).Infof("Updated receiver wallet %s with SEP-24 transaction ID %s",
+		receiverWallet.ID, sep24Claims.TransactionID())
 
 	return nil
 }
@@ -358,11 +347,11 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 				return nil
 			}
 
-			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
+			// STEP 6: update the receiver wallet with the tx ID
 			if !wasAlreadyRegistered {
-				err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
+				err = v.processTransactionID(ctx, dbTx, *sep24Claims, receiverWallet)
 				if err != nil {
-					return nil, fmt.Errorf("processing anchor platform transaction ID: %w", err)
+					return nil, fmt.Errorf("processing transaction ID: %w", err)
 				}
 			}
 

@@ -29,6 +29,7 @@ sdp:
 
 # =========================== START Anchor ========================
 anchorPlatform:
+  enabled: true
   route:
     schema: "http"
     domain: "ap.local"

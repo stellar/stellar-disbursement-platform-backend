@@ -27,6 +27,9 @@ data:
   {{- if .Values.global.enableAnchorPlatform }}
   ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.baseURL" . | quote }}
   ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . | quote }}
+  ENABLE_ANCHOR_PLATFORM: "true"
+  {{- else }}
+  ENABLE_ANCHOR_PLATFORM: "false"
   {{- end }}
   {{- /*
 Values from the `global` section
