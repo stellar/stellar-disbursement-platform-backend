@@ -233,6 +233,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Use(middleware.APIKeyOrJWTAuthenticate(o.Models.APIKeys, middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
 		r.Use(middleware.EnsureTenantMiddleware)
 
+		// API Key management endpoints
 		r.With(middleware.RequirePermission(
 			data.WriteAll,
 			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
@@ -247,6 +248,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
 		})
 
+		// Statistics endpoints
 		r.With(middleware.RequirePermission(
 			data.ReadStatistics,
 			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
@@ -256,6 +258,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/{id}", h.GetStatisticsByDisbursement)
 		})
 
+		// User management endpoints
 		r.Route("/users", func(r chi.Router) {
 			userHandler := httphandler.UserHandler{
 				AuthManager:        authManager,
@@ -281,12 +284,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				r.Patch("/activation", userHandler.UserActivation)
 			})
 		})
-
 		r.With(middleware.RequirePermission(
 			data.ReadAll,
 			middleware.AnyRoleMiddleware(authManager),
 		)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager}.PostRefreshToken)
 
+		// Disbursement endpoints
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
 				Models:                      o.Models,
@@ -305,7 +308,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Group all READ operations
 			r.With(middleware.RequirePermission(
 				data.ReadDisbursements,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...),
 			)).Group(func(r chi.Router) {
 				r.Get("/", handler.GetDisbursements)
 				r.Get("/{id}", handler.GetDisbursement)
@@ -313,18 +316,26 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				r.Get("/{id}/instructions", handler.GetDisbursementInstructions)
 			})
 
-			// Group all WRITE operations
+			// Group CREATE/EDIT operations (accessible to initiators)
 			r.With(middleware.RequirePermission(
 				data.WriteDisbursements,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.InitiatorUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", handler.PostDisbursement)
 				r.Delete("/{id}", handler.DeleteDisbursement)
 				r.Post("/{id}/instructions", handler.PostDisbursementInstructions)
+			})
+
+			// Group STATUS operations (accessible to approvers)
+			r.With(middleware.RequirePermission(
+				data.WriteDisbursements,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole),
+			)).Group(func(r chi.Router) {
 				r.Patch("/{id}/status", handler.PatchDisbursementStatus)
 			})
 		})
 
+		// Payment endpoints
 		r.Route("/payments", func(r chi.Router) {
 			paymentsHandler := httphandler.PaymentsHandler{
 				Models:                      o.Models,
@@ -344,7 +355,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Read operations
 			r.With(middleware.RequirePermission(
 				data.ReadPayments,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...),
 			)).Group(func(r chi.Router) {
 				r.Get("/", paymentsHandler.GetPayments)
 				r.Get("/{id}", paymentsHandler.GetPayment)
@@ -365,6 +376,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			)).Patch("/{id}/status", paymentsHandler.PatchPaymentStatus)
 		})
 
+		// Receiver endpoints
 		r.Route("/receivers", func(r chi.Router) {
 			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
 
@@ -376,7 +388,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.RequirePermission(
 				data.ReadReceivers,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...),
 			)).Group(func(r chi.Router) {
 				r.Get("/", receiversHandler.GetReceivers)
 				r.Get("/{id}", receiversHandler.GetReceiver)
@@ -396,7 +408,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.RequirePermission(
 				data.WriteReceivers,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole, data.InitiatorUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", receiversHandler.CreateReceiver)
 				r.Patch("/{id}", updateReceiverHandler.UpdateReceiver)
@@ -551,7 +563,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}
 		r.With(middleware.RequirePermission(
 			data.ReadExports,
-			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole, data.InitiatorUserRole),
 		)).Route("/exports", func(r chi.Router) {
 			r.Get("/disbursements", exportHandler.ExportDisbursements)
 			r.Get("/payments", exportHandler.ExportPayments)
