@@ -234,7 +234,7 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 
 		// 3: Update the receiver wallet
 		if txErr = h.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); txErr != nil {
-			if errors.Is(txErr, data.ErrDuplicateStellarAddress) {
+			if errors.Is(txErr, data.ErrDuplicateWalletAddress) {
 				return nil, txErr
 			}
 			return nil, fmt.Errorf("updating receiver wallet %s: %w", receiverWalletID, txErr)
@@ -257,8 +257,8 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 		}
 
 		// Handle duplicate stellar address
-		if errors.Is(err, data.ErrDuplicateStellarAddress) {
-			httperror.Conflict("The provided wallet address is already associated with another receiver.", err, map[string]interface{}{
+		if errors.Is(err, data.ErrDuplicateWalletAddress) {
+			httperror.Conflict("The provided wallet address is already associated with another user.", err, map[string]interface{}{
 				"wallet_address": "wallet address must be unique",
 			}).Render(rw)
 			return

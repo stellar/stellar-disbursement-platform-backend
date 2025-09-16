@@ -521,7 +521,7 @@ func Test_ReceiverWalletsHandler_PatchReceiverWallet_DuplicateStellarAddress(t *
 		require.NoError(t, err)
 
 		expectedJSON := `{
-			"error": "The provided wallet address is already associated with another receiver.",
+			"error": "The provided wallet address is already associated with another user.",
 			"extras": {
 				"wallet_address": "wallet address must be unique"
 			}
