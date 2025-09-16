@@ -1,0 +1,355 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Master template for deploying the Stellar Disbursement Platform stacks in a specific order'
+
+Parameters:
+  # Core environment parameters
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues: 
+      - dev
+      - staging
+      - prod
+    Description: The environment to deploy the stacks to
+  
+  DomainName:
+    Type: String
+    Description: Domain name for the SDP deployment (must be registered in Route53)
+  
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for the domain
+  
+  # Certificate parameter
+  CertificateArn:
+    Type: String
+    Description: ARN of the ACM certificate for your domain
+  
+  # Database parameters
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.small
+    AllowedValues:
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+      - db.r5.large
+    Description: Database instance size
+  
+  DBUsername:
+    Type: String
+    Default: postgres
+    Description: PostgreSQL database admin username
+  
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: PostgreSQL database admin password
+  
+  BackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    Description: Number of days to retain automated DB backups
+  
+  MultiAZ:
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    Description: Enable Multi-AZ deployment for database
+  
+  # Stellar account parameters
+  Sep10SigningPrivateKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "SEP10 signing private key (leave empty to auto-generate)"
+  
+  Sep10SigningPublicKey:
+    Type: String
+    Default: ""
+    Description: "SEP10 signing public key (leave empty to auto-generate)"
+  
+  DistributionSeed:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "Distribution account seed (leave empty to auto-generate)"
+  
+  DistributionPublicKey:
+    Type: String
+    Default: ""
+    Description: "Distribution account public key (leave empty to auto-generate)"
+  
+  # SDP deployment parameters
+  BackendImage:
+    Type: String
+    Default: "stellar/stellar-disbursement-platform:latest"
+    Description: Docker image for the SDP backend
+  
+  FrontendImage:
+    Type: String
+    Default: "stellar/stellar-disbursement-platform-frontend:latest"
+    Description: Docker image for the SDP frontend
+  
+  AnchorImage:
+    Type: String
+    Default: "stellar/anchor-platform:latest"
+    Description: Docker image for the Anchor Platform
+  
+  # SDP access controls
+  AdminApiKey:
+    Type: String
+    Default: "admin-api-key-change-me"
+    NoEcho: true
+    Description: Admin API key for the SDP
+  
+  # S3 bucket for Stellar Lambda layer
+  StellarLayerS3Bucket:
+    Type: String
+    Default: "stellar-layer-bucket"
+    Description: S3 bucket containing the Stellar SDK Lambda layer
+  
+  # Tenant creation parameters
+  TenantName:
+    Type: String
+    Default: "default"
+    Description: Name of the default tenant to create
+  
+  TenantOwnerEmail:
+    Type: String
+    Default: "admin@example.com"
+    Description: Email for the tenant owner
+  
+  TenantOwnerFirstName:
+    Type: String
+    Default: "Admin"
+    Description: First name of the tenant owner
+  
+  TenantOwnerLastName:
+    Type: String
+    Default: "User"
+    Description: Last name of the tenant owner
+  
+  TenantOrganizationName:
+    Type: String
+    Default: "Default Organization"
+    Description: Organization name for the tenant
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair for SSH access to the bastion host
+  
+  RecaptchaSiteKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: "Google reCAPTCHA site key"
+
+  RecaptchaSiteSecretKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: "Google reCAPTCHA secret key"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Core Environment Configuration"
+        Parameters:
+          - Environment
+          - DomainName
+          - HostedZoneId
+          - CertificateArn
+      - Label:
+          default: "Database Configuration"
+        Parameters:
+          - DBInstanceClass
+          - DBUsername
+          - DBPassword
+          - BackupRetentionPeriod
+          - MultiAZ
+      - Label:
+          default: "Docker Image Configuration"
+        Parameters:
+          - BackendImage
+          - FrontendImage
+          - AnchorImage
+      - Label:
+          default: "Stellar Account Configuration"
+        Parameters:
+          - Sep10SigningPrivateKey
+          - Sep10SigningPublicKey
+          - DistributionSeed
+          - DistributionPublicKey
+      - Label:
+          default: "Default Tenant Configuration"
+        Parameters:
+          - TenantName
+          - TenantOwnerEmail
+          - TenantOwnerFirstName
+          - TenantOwnerLastName
+          - TenantOrganizationName
+
+Resources:
+  # 1. Network Stack
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${StellarLayerS3Bucket}.s3.amazonaws.com/templates/sdp-network-ecs.yaml"
+      Parameters:
+        env: !Ref Environment
+        VPCCidr: "10.0.0.0/16"
+        PublicSubnet1CIDR: "10.0.0.0/24"
+        PublicSubnet2CIDR: "10.0.1.0/24"
+        PrivateSubnet1CIDR: "10.0.2.0/24"
+        PrivateSubnet2CIDR: "10.0.3.0/24"
+        CertificateArn: !Ref CertificateArn
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 2. Database Stack
+  DatabaseStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: !Sub "https://${StellarLayerS3Bucket}.s3.amazonaws.com/templates/sdp-database-ecs.yaml"
+      Parameters:
+        NetworkStackName: !GetAtt NetworkStack.Outputs.StackName
+        env: !Ref Environment
+        namespace: "sdp"
+        DBInstanceClass: !Ref DBInstanceClass
+        DBAllocatedStorage: "20"
+        DBUsername: !Ref DBUsername
+        DBPassword: !Ref DBPassword
+        BackupRetentionPeriod: !Ref BackupRetentionPeriod
+        MultiAZ: !Ref MultiAZ
+        DeletionProtection: "false"
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 3. Keys Stack
+  KeysStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${StellarLayerS3Bucket}.s3.amazonaws.com/templates/sdp-keys-ecs.yaml"
+      Parameters:
+        env: !Ref Environment
+        namespace: "sdp"
+        StellarLayerS3Bucket: !Ref StellarLayerS3Bucket
+        Sep10SigningPrivateKey: !Ref Sep10SigningPrivateKey
+        SecretSep10SigningSeed: !Ref Sep10SigningPrivateKey
+        Sep10SigningPublicKey: !Ref Sep10SigningPublicKey
+        DistributionSeed: !Ref DistributionSeed
+        DistributionPublicKey: !Ref DistributionPublicKey
+        RecaptchaSiteKey: !Ref RecaptchaSiteKey
+        RecaptchaSiteSecretKey: !Ref RecaptchaSiteSecretKey
+        AdminApiKey: !Ref AdminApiKey
+      TimeoutInMinutes: 20
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 4. SDP-ECS Stack
+  ECSStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: 
+      - NetworkStack
+      - DatabaseStack
+      - KeysStack
+    Properties:
+      TemplateURL: !Sub "https://${StellarLayerS3Bucket}.s3.amazonaws.com/templates/sdp-ecs.yaml"
+      Parameters:
+        env: !Ref Environment
+        DomainName: !Ref DomainName
+        HostedZoneId: !Ref HostedZoneId
+        FrontendImage: !Ref FrontendImage
+        BackendImage: !Ref BackendImage
+        AnchorImage: !Ref AnchorImage
+        EmailSenderType: "AWS_EMAIL"
+        SmsSenderType: "DRY_RUN"
+        KeysStackName: !GetAtt KeysStack.Outputs.StackName
+        DatabaseStackName: !GetAtt DatabaseStack.Outputs.StackName
+        NetworkStackName: !GetAtt NetworkStack.Outputs.StackName
+      TimeoutInMinutes: 40
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 5. Tenant Creator Lambda Stack
+  TenantCreatorStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: ECSStack
+    Properties:
+      TemplateURL: !Sub "https://${StellarLayerS3Bucket}.s3.amazonaws.com/templates/tenant-creator.yaml"
+      Parameters:
+        NetworkStackName: !GetAtt NetworkStack.Outputs.StackName
+        DomainName: !Ref DomainName
+        AdminApiKey: !Ref AdminApiKey
+        TenantName: !Ref TenantName
+        DistributionAccountType: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
+        OwnerEmail: !Ref TenantOwnerEmail
+        OwnerFirstName: !Ref TenantOwnerFirstName
+        OwnerLastName: !Ref TenantOwnerLastName
+        OrganizationName: !Ref TenantOrganizationName
+      TimeoutInMinutes: 15
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 6. Bastion Host (internal network access)
+  BastionStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: ECSStack
+    Properties:
+      TemplateURL: !Sub "https://${StellarLayerS3Bucket}.s3.amazonaws.com/templates/bastion.yaml"
+      Parameters:
+        env: !Ref Environment
+        KeyName: !Ref KeyName
+        DomainName: !Ref DomainName
+        NetworkStackName: !GetAtt NetworkStack.Outputs.StackName
+        DatabaseStackName: !GetAtt DatabaseStack.Outputs.StackName
+        AppStackName: !GetAtt ECSStack.Outputs.StackName
+      TimeoutInMinutes: 15
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  NetworkStackName:
+    Description: Name of the network stack
+    Value: !GetAtt NetworkStack.Outputs.StackName
+  
+  DatabaseStackName:
+    Description: Name of the database stack
+    Value: !GetAtt DatabaseStack.Outputs.StackName
+  
+  KeysStackName:
+    Description: Name of the keys stack
+    Value: !GetAtt KeysStack.Outputs.StackName
+  
+  ECSStackName:
+    Description: Name of the SDP ECS stack
+    Value: !GetAtt ECSStack.Outputs.StackName
+  
+  TenantCreatorStackName:
+    Description: Name of the tenant creator stack
+    Value: !GetAtt TenantCreatorStack.Outputs.StackName
+  
+  FrontendURL:
+    Description: URL for the SDP Frontend
+    Value: !GetAtt ECSStack.Outputs.FrontendURL
+  
+  BackendURL:
+    Description: URL for the SDP Backend
+    Value: !GetAtt ECSStack.Outputs.BackendURL
+  
+  AnchorURL:
+    Description: URL for the Anchor Platform
+    Value: !GetAtt ECSStack.Outputs.AnchorURL
