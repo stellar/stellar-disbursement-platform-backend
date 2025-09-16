@@ -73,6 +73,36 @@ func (_m *MockService) GetBridgeIntegration(ctx context.Context) (*BridgeIntegra
 	return r0, r1
 }
 
+// OptInForExistingCustomer provides a mock function with given fields: ctx, customerID, userID
+func (_m *MockService) OptInForExistingCustomer(ctx context.Context, customerID string, userID string) (*BridgeIntegrationInfo, error) {
+	ret := _m.Called(ctx, customerID, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for OptInForExistingCustomer")
+	}
+
+	var r0 *BridgeIntegrationInfo
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (*BridgeIntegrationInfo, error)); ok {
+		return rf(ctx, customerID, userID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) *BridgeIntegrationInfo); ok {
+		r0 = rf(ctx, customerID, userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*BridgeIntegrationInfo)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, customerID, userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // OptInToBridge provides a mock function with given fields: ctx, opts
 func (_m *MockService) OptInToBridge(ctx context.Context, opts OptInOptions) (*BridgeIntegrationInfo, error) {
 	ret := _m.Called(ctx, opts)

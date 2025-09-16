@@ -113,7 +113,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.EqualError(t, err, "validating opt-in options: userID is required to opt into Bridge integration")
 		assert.Nil(t, result)
@@ -129,7 +129,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    "",
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.EqualError(t, err, "validating opt-in options: fullName is required to opt into Bridge integration")
 		assert.Nil(t, result)
@@ -144,7 +144,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: "",
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.EqualError(t, err, "validating opt-in options: redirectURL is required to opt into Bridge integration")
 		assert.Nil(t, result)
@@ -160,13 +160,13 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       "",
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.EqualError(t, err, "validating opt-in options: email is required to opt into Bridge integration")
 		assert.Nil(t, result)
 	})
 
-	t.Run("missing KYCType", func(t *testing.T) {
+	t.Run("missing CustomerType", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
 		svc := createService(t, mockClient, models)
@@ -177,7 +177,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			RedirectURL: redirectURL,
 			KYCType:     "",
 		})
-		assert.EqualError(t, err, "validating opt-in options: KYCType must be either 'individual' or 'business'")
+		assert.EqualError(t, err, "validating opt-in options: CustomerType must be either 'individual' or 'business'")
 		assert.Nil(t, result)
 	})
 
@@ -188,7 +188,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 
 		// Insert existing integration
 		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
-			KYCLinkID:  "existing-kyc-id",
+			KYCLinkID:  utils.StringPtr("existing-kyc-id"),
 			CustomerID: "existing-customer-id",
 			OptedInBy:  "existing-user",
 		})
@@ -199,7 +199,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.EqualError(t, err, ErrBridgeAlreadyOptedIn.Error())
 		assert.Nil(t, result)
@@ -213,7 +213,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			On("PostKYCLink", ctx, KYCLinkRequest{
 				FullName:    fullName,
 				Email:       email,
-				Type:        KYCTypeBusiness,
+				Type:        CustomerTypeBusiness,
 				RedirectURI: redirectURL,
 			}).
 			Return(nil, bridgeErr).
@@ -226,7 +226,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.EqualError(t, err, "creating KYC link via Bridge API: bridge API error")
 		assert.Nil(t, result)
@@ -250,7 +250,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.ErrorContains(t, err, "validating USDC trustline: getting distribution account from context: failed to get distribution account")
 		assert.Nil(t, result)
@@ -274,7 +274,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.ErrorIs(t, err, ErrBridgeUSDCTrustlineRequired)
 		assert.ErrorContains(t, err, "distribution account must have a USDC trustline to opt into Bridge integration")
@@ -307,7 +307,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			CustomerID: "customer-123",
 			FullName:   fullName,
 			Email:      email,
-			Type:       KYCTypeBusiness,
+			Type:       CustomerTypeBusiness,
 			KYCStatus:  KYCStatusNotStarted,
 			TOSStatus:  TOSStatusPending,
 		}
@@ -316,7 +316,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			On("PostKYCLink", ctx, KYCLinkRequest{
 				FullName:    fullName,
 				Email:       email,
-				Type:        KYCTypeBusiness,
+				Type:        CustomerTypeBusiness,
 				RedirectURI: redirectURL,
 			}).
 			Return(kycResponse, nil).
@@ -337,7 +337,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -356,7 +356,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			CustomerID: "customer-123",
 			FullName:   fullName,
 			Email:      email,
-			Type:       KYCTypeBusiness,
+			Type:       CustomerTypeBusiness,
 			KYCStatus:  KYCStatusNotStarted,
 			TOSStatus:  TOSStatusPending,
 		}
@@ -365,7 +365,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			On("PostKYCLink", ctx, KYCLinkRequest{
 				FullName:    fullName,
 				Email:       email,
-				Type:        KYCTypeBusiness,
+				Type:        CustomerTypeBusiness,
 				RedirectURI: redirectURL,
 			}).
 			Return(kycResponse, nil).
@@ -378,7 +378,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 			FullName:    fullName,
 			Email:       email,
 			RedirectURL: redirectURL,
-			KYCType:     KYCTypeBusiness,
+			KYCType:     CustomerTypeBusiness,
 		})
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -411,24 +411,36 @@ func Test_Service_GetBridgeIntegration(t *testing.T) {
 	t.Run("integration exists with KYC info", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
-		kycResponse := &KYCLinkInfo{
-			ID:         "kyc-link-123",
+
+		customerResponse := &CustomerInfo{
+			ID:        "customer-123",
+			Status:    CustomerStatusActive,
+			Email:     "john.doe@example.com",
+			FirstName: "John",
+			LastName:  "Doe",
+			Type:      CustomerTypeBusiness,
+		}
+
+		expectedKYCInfo := &KYCLinkInfo{
 			CustomerID: "customer-123",
+			Email:      "john.doe@example.com",
+			FullName:   "John Doe",
+			Type:       CustomerTypeBusiness,
 			KYCStatus:  KYCStatusApproved,
 			TOSStatus:  TOSStatusApproved,
 		}
 
 		// Insert integration
 		integration, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-123",
+			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
 		})
 		require.NoError(t, err)
 
 		mockClient.
-			On("GetKYCLink", ctx, "kyc-link-123").
-			Return(kycResponse, nil).
+			On("GetCustomer", ctx, "customer-123").
+			Return(customerResponse, nil).
 			Once()
 
 		svc := createService(t, mockClient, models)
@@ -438,7 +450,7 @@ func Test_Service_GetBridgeIntegration(t *testing.T) {
 		assert.Equal(t, integration.Status, result.Status)
 		assert.Equal(t, integration.CustomerID, result.CustomerID)
 		assert.Equal(t, integration.OptedInBy, result.OptedInBy)
-		assert.Equal(t, kycResponse, result.KYCLinkInfo)
+		assert.Equal(t, expectedKYCInfo, result.KYCLinkInfo)
 	})
 
 	t.Run("integration exists with virtual account", func(t *testing.T) {
@@ -462,9 +474,18 @@ func Test_Service_GetBridgeIntegration(t *testing.T) {
 		`)
 		require.NoError(t, err)
 
+		customerResponse := &CustomerInfo{
+			ID:        "customer-123",
+			Status:    CustomerStatusActive,
+			Email:     "john.doe@example.com",
+			FirstName: "John",
+			LastName:  "Doe",
+			Type:      CustomerTypeBusiness,
+		}
+
 		mockClient.
-			On("GetKYCLink", ctx, "kyc-link-123").
-			Return(&KYCLinkInfo{ID: "kyc-link-123"}, nil).
+			On("GetCustomer", ctx, "customer-123").
+			Return(customerResponse, nil).
 			Once()
 
 		mockClient.
@@ -534,7 +555,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 
 		// Insert integration
 		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-123",
+			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
 		})
@@ -563,7 +584,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 
 		// Insert integration
 		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-123",
+			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
 		})
@@ -586,15 +607,22 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 	t.Run("Bridge API error creating virtual account", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
+
+		// KYC Approved
 		kycResponse := &KYCLinkInfo{
 			ID:        "kyc-link-123",
 			KYCStatus: KYCStatusApproved,
 			TOSStatus: TOSStatusApproved,
 		}
+		// Customer is active
+		customerResponse := &CustomerInfo{
+			ID:     "customer-123",
+			Status: CustomerStatusActive,
+		}
 
 		// Insert integration
 		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-123",
+			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
 		})
@@ -618,6 +646,10 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 			On("GetKYCLink", ctx, "kyc-link-123").
 			Return(kycResponse, nil).
 			Once()
+		mockClient.
+			On("GetCustomer", ctx, "customer-123").
+			Return(customerResponse, nil).
+			Once()
 
 		mockClient.
 			On("PostVirtualAccount", ctx, "customer-123", vaRequest).
@@ -634,11 +666,6 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 	t.Run("🎉 successfully creates virtual account", func(t *testing.T) {
 		data.CleanupBridgeIntegration(t, ctx, dbcp)
 		mockClient := NewMockClient(t)
-		kycResponse := &KYCLinkInfo{
-			ID:        "kyc-link-123",
-			KYCStatus: KYCStatusApproved,
-			TOSStatus: TOSStatusApproved,
-		}
 
 		vaResponse := &VirtualAccountInfo{
 			ID:         "va-123",
@@ -654,7 +681,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 
 		// Insert integration
 		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-123",
+			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
 		})
@@ -672,9 +699,25 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 			},
 		}
 
+		// KYC Approved
+		kycResponse := &KYCLinkInfo{
+			ID:        "kyc-link-123",
+			KYCStatus: KYCStatusApproved,
+			TOSStatus: TOSStatusApproved,
+		}
+		// Customer is active
+		customerResponse := &CustomerInfo{
+			ID:     "customer-123",
+			Status: CustomerStatusActive,
+		}
+
 		mockClient.
 			On("GetKYCLink", ctx, "kyc-link-123").
 			Return(kycResponse, nil).
+			Once()
+		mockClient.
+			On("GetCustomer", ctx, "customer-123").
+			Return(customerResponse, nil).
 			Once()
 
 		mockClient.
@@ -857,4 +900,62 @@ func createService(t *testing.T, mockClient *MockClient, models *data.Models) *S
 		distributionAccountService:  mockDistAccountService,
 		networkType:                 utils.TestnetNetworkType,
 	}
+}
+
+func Test_Service_OptInForExistingCustomer_Validation(t *testing.T) {
+	service := &Service{}
+	ctx := context.Background()
+
+	t.Run("empty customer ID", func(t *testing.T) {
+		result, err := service.OptInForExistingCustomer(ctx, "", "user-123")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "customer ID is required")
+		assert.Nil(t, result)
+	})
+
+	t.Run("empty user ID", func(t *testing.T) {
+		result, err := service.OptInForExistingCustomer(ctx, "customer-123", "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "user ID is required")
+		assert.Nil(t, result)
+	})
+}
+
+func Test_Service_OptInForExistingCustomer_Integration(t *testing.T) {
+	models := data.SetupModels(t)
+	ctx := context.Background()
+
+	t.Run("successful manual opt-in", func(t *testing.T) {
+		_, err := models.DBConnectionPool.ExecContext(ctx, "DELETE FROM bridge_integration")
+		require.NoError(t, err)
+
+		// Mock client
+		mockClient := NewMockClient(t)
+		mockClient.
+			On("GetCustomer", mock.Anything, "customer-456").
+			Return(&CustomerInfo{
+				ID:     "customer-456",
+				Status: CustomerStatusActive,
+			}, nil).
+			Once()
+
+		service := createService(t, mockClient, models)
+
+		result, err := service.OptInForExistingCustomer(ctx, "customer-456", "user-123")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, data.BridgeIntegrationStatusOptedIn, result.Status)
+		assert.Equal(t, "customer-456", *result.CustomerID)
+		assert.Equal(t, "user-123", *result.OptedInBy)
+		assert.Nil(t, result.KYCLinkInfo) // Should be nil for manual onboarding
+
+		// Verify it was actually stored
+		retrieved, err := models.BridgeIntegration.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, data.BridgeIntegrationStatusOptedIn, retrieved.Status)
+		assert.Equal(t, "customer-456", *retrieved.CustomerID)
+		assert.Equal(t, "user-123", *retrieved.OptedInBy)
+		// For manual onboarding, KYCLinkID should be nil since no KYC link is created
+		assert.Nil(t, retrieved.KYCLinkID)
+	})
 }

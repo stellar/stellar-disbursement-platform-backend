@@ -54,7 +54,7 @@ func Test_Client_PostKYCLink(t *testing.T) {
 	validKYCRequest := KYCLinkRequest{
 		FullName: "John Doe",
 		Email:    "john@example.com",
-		Type:     KYCTypeIndividual,
+		Type:     CustomerTypeIndividual,
 	}
 
 	t.Run("post kyc link error", func(t *testing.T) {

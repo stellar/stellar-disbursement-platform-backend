@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Add Support For Twilio WhatsApp messaging [#855](https://github.com/stellar/stellar-disbursement-platform-backend/pull/855)
 - Added initiator and approver user roles with mutual exclusivity validation for separation of duties in disbursement workflows. [#865](https://github.com/stellar/stellar-disbursement-platform-backend/pull/865)
+- Ability to Onboard existing customers to Bridge integration via `PATCH /bridge-integration` endpoint. [#867](https://github.com/stellar/stellar-disbursement-platform-backend/pull/867)
 
 ### Fixed
 
