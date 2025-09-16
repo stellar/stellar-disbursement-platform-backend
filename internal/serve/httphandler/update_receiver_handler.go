@@ -144,26 +144,23 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 }
 
 func parseConflictErrorIfNeeded(err error) *httperror.HTTPError {
+	switch {
 	// Handle wallet address conflicts
-	if errors.Is(err, data.ErrDuplicateStellarAddress) {
-		return httperror.Conflict("The provided wallet address is already associated with another receiver.", err, map[string]interface{}{
+	case errors.Is(err, data.ErrDuplicateStellarAddress):
+		return httperror.Conflict("The provided wallet address is already associated with another user.", err, map[string]interface{}{
 			"wallet_address": "wallet address must be unique",
 		})
-	}
-
 	// Handle email conflicts
-	if errors.Is(err, data.ErrDuplicateEmail) {
+	case errors.Is(err, data.ErrDuplicateEmail):
 		return httperror.Conflict("The provided email is already associated with another user.", err, map[string]interface{}{
 			"email": "email must be unique",
 		})
-	}
-
 	// Handle phone number conflicts
-	if errors.Is(err, data.ErrDuplicatePhoneNumber) {
-		return httperror.Conflict("The provided phone_number is already associated with another user.", err, map[string]interface{}{
-			"phone_number": "phone_number must be unique",
+	case errors.Is(err, data.ErrDuplicatePhoneNumber):
+		return httperror.Conflict("The provided phone number is already associated with another user.", err, map[string]interface{}{
+			"phone_number": "phone number must be unique",
 		})
+	default:
+		return nil
 	}
-
-	return nil
 }

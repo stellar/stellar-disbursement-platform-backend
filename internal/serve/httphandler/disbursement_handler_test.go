@@ -1243,7 +1243,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				{"user2@example.com", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "987654321", "200.0"},
 			},
 			expectedStatus:  http.StatusConflict,
-			expectedMessage: "wallet address GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 is already registered to another receiver: wallet address already in use",
+			expectedMessage: "wallet address GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 is already registered to another receiver: stellar address already exists",
 		},
 	}
 
