@@ -147,6 +147,13 @@ func (a *AuthCommand) Command() *cobra.Command {
 					ToEmail: email,
 					Title:   "Welcome to Stellar Disbursement Platform",
 					Body:    msgBody,
+					Type:    message.MessageTypeUserInvitation,
+					TemplateVariables: map[string]string{
+						"FirstName":          firstName,
+						"Role":               role,
+						"ForgotPasswordLink": forgotPasswordLink,
+						"OrganizationName":   organization.Name,
+					},
 				})
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error sending invitation message: %s", err.Error())

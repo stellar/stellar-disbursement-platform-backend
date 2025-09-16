@@ -12,6 +12,8 @@ type MessengerType string
 const (
 	// MessengerTypeTwilioSMS is used to send SMS messages using Twilio.
 	MessengerTypeTwilioSMS MessengerType = "TWILIO_SMS"
+	// MessengerTypeTwilioWhatsApp is used to send WhatsApp messages using Twilio.
+	MessengerTypeTwilioWhatsApp MessengerType = "TWILIO_WHATSAPP"
 	// MessengerTypeTwilioEmail is used to send emails using Twilio SendGrid.
 	MessengerTypeTwilioEmail MessengerType = "TWILIO_EMAIL"
 	// MessengerTypeAWSSMS is used to send SMS messages using AWS SNS.
@@ -23,7 +25,7 @@ const (
 )
 
 func (mt MessengerType) All() []MessengerType {
-	return []MessengerType{MessengerTypeTwilioSMS, MessengerTypeTwilioEmail, MessengerTypeAWSSMS, MessengerTypeAWSEmail, MessengerTypeDryRun}
+	return []MessengerType{MessengerTypeTwilioSMS, MessengerTypeTwilioWhatsApp, MessengerTypeTwilioEmail, MessengerTypeAWSSMS, MessengerTypeAWSEmail, MessengerTypeDryRun}
 }
 
 func ParseMessengerType(messengerTypeStr string) (MessengerType, error) {
@@ -38,7 +40,7 @@ func ParseMessengerType(messengerTypeStr string) (MessengerType, error) {
 }
 
 func (mt MessengerType) ValidSMSTypes() []MessengerType {
-	return []MessengerType{MessengerTypeDryRun, MessengerTypeTwilioSMS, MessengerTypeAWSSMS}
+	return []MessengerType{MessengerTypeDryRun, MessengerTypeTwilioSMS, MessengerTypeTwilioWhatsApp, MessengerTypeAWSSMS}
 }
 
 func (mt MessengerType) ValidEmailTypes() []MessengerType {
@@ -60,7 +62,19 @@ type MessengerOptions struct {
 	// Twilio
 	TwilioAccountSID string
 	TwilioAuthToken  string
+
+	// Twilio SMS
 	TwilioServiceSID string
+
+	// Twilio WhatsApp
+	TwilioWhatsAppFromNumber string
+	// Twilio WhatsApp Templates
+	TwilioWhatsAppReceiverInvitationTemplateSID string
+	TwilioWhatsAppReceiverOTPTemplateSID        string
+	TwilioWhatsAppUserInvitationTemplateSID     string
+	TwilioWhatsAppUserForgotPasswordTemplateSID string
+	TwilioWhatsAppUserMFATemplateSID            string
+
 	// Twilio Email (SendGrid)
 	TwilioSendGridAPIKey        string
 	TwilioSendGridSenderAddress string
@@ -79,6 +93,15 @@ func GetClient(opts MessengerOptions) (MessengerClient, error) {
 	switch opts.MessengerType {
 	case MessengerTypeTwilioSMS:
 		return NewTwilioClient(opts.TwilioAccountSID, opts.TwilioAuthToken, opts.TwilioServiceSID)
+	case MessengerTypeTwilioWhatsApp:
+		templates := map[MessageType]string{
+			MessageTypeReceiverInvitation: opts.TwilioWhatsAppReceiverInvitationTemplateSID,
+			MessageTypeReceiverOTP:        opts.TwilioWhatsAppReceiverOTPTemplateSID,
+			MessageTypeUserInvitation:     opts.TwilioWhatsAppUserInvitationTemplateSID,
+			MessageTypeUserForgotPassword: opts.TwilioWhatsAppUserForgotPasswordTemplateSID,
+			MessageTypeUserMFA:            opts.TwilioWhatsAppUserMFATemplateSID,
+		}
+		return NewTwilioWhatsAppClient(opts.TwilioAccountSID, opts.TwilioAuthToken, opts.TwilioWhatsAppFromNumber, templates)
 	case MessengerTypeTwilioEmail:
 		return NewTwilioSendGridClient(opts.TwilioSendGridAPIKey, opts.TwilioSendGridSenderAddress)
 

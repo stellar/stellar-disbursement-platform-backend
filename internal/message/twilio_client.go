@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/stellar/go/support/log"
@@ -12,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+//go:generate mockery --name=twilioApiInterface --structname=mockTwilioApiInterface --filename=mock_twilio_api_interface.go --inpackage --with-expecter
 type twilioApiInterface interface {
 	CreateMessage(params *twilioApi.CreateMessageParams) (*twilioApi.ApiV2010Message, error)
 }
@@ -45,21 +47,25 @@ func (t *twilioClient) SendMessage(_ context.Context, message Message) error {
 	}
 
 	if resp.ErrorCode != nil || resp.ErrorMessage != nil {
-		var errorCode string
-		if resp.ErrorCode != nil {
-			errorCode = fmt.Sprintf("%d", *resp.ErrorCode)
-		}
-
-		var errorMessage string
-		if resp.ErrorMessage != nil {
-			errorMessage = *resp.ErrorMessage
-		}
-
-		return fmt.Errorf("sending Twilio SMS responded an error {code: %q, message: %q}", errorCode, errorMessage)
+		return parseTwilioErr(resp)
 	}
 
 	log.Debugf("Twilio sent an SMS to the phoneNumber %q", utils.TruncateString(message.ToPhoneNumber, 3))
 	return nil
+}
+
+func parseTwilioErr(resp *twilioApi.ApiV2010Message) error {
+	var errorCode string
+	if resp.ErrorCode != nil {
+		errorCode = strconv.Itoa(*resp.ErrorCode)
+	}
+
+	var errorMessage string
+	if resp.ErrorMessage != nil {
+		errorMessage = *resp.ErrorMessage
+	}
+
+	return fmt.Errorf("sending Twilio message returned an error {code= %q, message= %q}", errorCode, errorMessage)
 }
 
 func NewTwilioClient(accountSid, authToken, senderID string) (*twilioClient, error) {
