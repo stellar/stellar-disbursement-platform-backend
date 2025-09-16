@@ -16,6 +16,7 @@ func Test_ParseMessengerType(t *testing.T) {
 		{wantErr: fmt.Errorf("invalid message sender type \"\"")},
 		{messengerType: "foo_BAR", wantErr: fmt.Errorf("invalid message sender type \"FOO_BAR\"")},
 		{messengerType: "TWILIO_SMS"},
+		{messengerType: "TWILIO_WHATSAPP"},
 		{messengerType: "TWILIO_EMAIL"},
 		{messengerType: "tWiLiO_SMS"},
 		{messengerType: "AWS_SMS"},
@@ -63,6 +64,23 @@ func Test_GetClient(t *testing.T) {
 	gotAWSSNSClient, ok := gotClient.(*awsSNSClient)
 	require.True(t, ok)
 	require.NotNil(t, gotAWSSNSClient.snsService)
+
+	// MessengerTypeTwilioWhatsApp
+	messengerType = MessengerTypeTwilioWhatsApp
+	opts = MessengerOptions{
+		MessengerType:            messengerType,
+		TwilioAccountSID:         "AC123456789",
+		TwilioAuthToken:          "auth-token",
+		TwilioWhatsAppFromNumber: "+14155238886",
+		TwilioWhatsAppReceiverInvitationTemplateSID: "HXabcdef123456784",
+		TwilioWhatsAppReceiverOTPTemplateSID:        "HXabcdef123456783",
+		TwilioWhatsAppUserInvitationTemplateSID:     "HXabcdef123456782",
+		TwilioWhatsAppUserForgotPasswordTemplateSID: "HXabcdef123456781",
+		TwilioWhatsAppUserMFATemplateSID:            "HXabcdef123456780",
+	}
+	gotClient, err = GetClient(opts)
+	require.NoError(t, err)
+	assert.IsType(t, &twilioWhatsAppClient{}, gotClient)
 
 	// MessengerTypeAWSEmail
 	messengerType = MessengerTypeAWSEmail
