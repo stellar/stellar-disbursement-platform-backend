@@ -110,9 +110,10 @@ services:
   anchor-platform:
     container_name: anchor-platform
     image: stellar/anchor-platform:2.6.0
+    platform: linux/amd64
     depends_on:
       - db
-    command: --sep-server --platform-server --platform linux/amd64
+    command: --sep-server --platform-server
     ports:
       - "8080:8080" # sep-server
       - "8085:8085" # platform-server

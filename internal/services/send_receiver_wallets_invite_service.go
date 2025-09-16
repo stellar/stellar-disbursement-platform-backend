@@ -152,7 +152,14 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			return fmt.Errorf("executing registration message template: %w", err)
 		}
 
-		msg := message.Message{Body: content.String()}
+		msg := message.Message{
+			Type: message.MessageTypeReceiverInvitation,
+			Body: content.String(),
+			TemplateVariables: map[string]string{
+				"OrganizationName": organization.Name,
+				"RegistrationLink": registrationLink,
+			},
+		}
 		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
 			msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
 		}
