@@ -1,5 +1,4 @@
-{{- if .Values.anchorPlatform.enabled -}}
----
+{{- if .Values.global.enableAnchorPlatform }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

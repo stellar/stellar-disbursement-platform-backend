@@ -1,4 +1,4 @@
-{{- if .Values.anchorPlatform.enabled -}}
+{{- if .Values.global.enableAnchorPlatform }}
 ---
 apiVersion: v1
 kind: ConfigMap

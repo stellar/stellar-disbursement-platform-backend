@@ -93,6 +93,9 @@ global:
   ## @param global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
   singleTenantMode: false
 
+  ## @param global.enableAnchorPlatform Determines if the Anchor Platform service should be deployed. When disabled, SDP will not have Anchor Platform integration.
+  enableAnchorPlatform: false
+
   ## @param global.distributionPublicKey The public key of the HOST's Stellar distribution account, used to create channel accounts.
   ## @param global.distributionPrivateKey The private key of the root Stellar distribution account
   distributionPublicKey: #required
@@ -363,9 +366,6 @@ sdp:
         ## Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints instead.
         ## @descriptionEnd
 anchorPlatform:
-  ## @param anchorPlatform.enabled If true, the Anchor Platform will be deployed.
-  enabled: true
-
   ## @extra anchorPlatform.route Configuration related to the routing of the Anchor Platform service.
   ## @param anchorPlatform.route.schema Protocol scheme used for the service. Can be "http" or "https".
   ## @param anchorPlatform.route.domain Public domain/address of the Anchor Platform service. If using localhost, consider including the port as part of the domain.
