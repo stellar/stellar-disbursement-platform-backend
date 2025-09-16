@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	ErrDuplicateEmail       = errors.New("email already exists")
-	ErrDuplicatePhoneNumber = errors.New("phone number already exists")
+	ErrDuplicateEmail       = errors.New("email already in use")
+	ErrDuplicatePhoneNumber = errors.New("phone number already in use")
 )
 
 type Receiver struct {

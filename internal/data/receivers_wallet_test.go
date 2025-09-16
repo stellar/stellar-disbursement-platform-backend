@@ -1905,7 +1905,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 
 		err = models.ReceiverWallet.Update(ctx, rwID2, update2, dbConnectionPool)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "stellar address already exists")
+		require.Contains(t, err.Error(), "wallet address already in use")
 
 		DeleteAllFixtures(t, ctx, dbConnectionPool)
 	})
@@ -2004,7 +2004,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 
 		err = models.ReceiverWallet.Update(ctx, rwID2, update2, dbConnectionPool)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "stellar address already exists")
+		require.Contains(t, err.Error(), "wallet address already in use")
 
 		DeleteAllFixtures(t, ctx, dbConnectionPool)
 	})
