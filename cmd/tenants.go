@@ -274,9 +274,8 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		return fmt.Errorf("network type: %w", err)
 	}
 
-	// Convert DISABLE flags to ENABLED settings for organization
-	mfaEnabled := !cfg.DisableMFA
-	captchaEnabled := !cfg.DisableReCAPTCHA
+	orgMFADisabled := cfg.DisableMFA
+	orgCAPTCHADisabled := cfg.DisableReCAPTCHA
 
 	newTenant, err := s.tenantProvisioning.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
 		Name:                    "default",
@@ -288,8 +287,8 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		BaseURL:                 opts.BaseURL,
 		NetworkType:             string(netType),
 		DistributionAccountType: schema.AccountType(cfg.DefaultTenantDistributionAccountType),
-		MFAEnabled:              &mfaEnabled,
-		CAPTCHAEnabled:          &captchaEnabled,
+		MFADisabled:             &orgMFADisabled,
+		CAPTCHADisabled:         &orgCAPTCHADisabled,
 	})
 	if err != nil {
 		return fmt.Errorf("provision new tenant: %w", err)

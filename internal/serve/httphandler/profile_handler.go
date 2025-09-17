@@ -59,8 +59,8 @@ type PatchOrganizationProfileRequest struct {
 	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
 	OTPMessageTemplate                  *string `json:"otp_message_template"`
 	PrivacyPolicyLink                   *string `json:"privacy_policy_link"`
-	MFAEnabled                          *bool   `json:"mfa_enabled"`
-	CAPTCHAEnabled                      *bool   `json:"captcha_enabled"`
+	MFADisabled                         *bool   `json:"mfa_disabled"`
+	CAPTCHADisabled                     *bool   `json:"captcha_disabled"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
@@ -191,8 +191,8 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
 		PaymentCancellationPeriodDays:        reqBody.PaymentCancellationPeriodDays,
 		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
-		MFAEnabled:                           reqBody.MFAEnabled,
-		CAPTCHAEnabled:                       reqBody.CAPTCHAEnabled,
+		MFADisabled:                          reqBody.MFADisabled,
+		CAPTCHADisabled:                      reqBody.CAPTCHADisabled,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
 	if err != nil {
@@ -376,8 +376,8 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"payment_cancellation_period_days":         0,
 		"privacy_policy_link":                      org.PrivacyPolicyLink,
 		"message_channel_priority":                 org.MessageChannelPriority,
-		"mfa_enabled":                              org.MFAEnabled,
-		"captcha_enabled":                          org.CAPTCHAEnabled,
+		"mfa_disabled":                             org.MFADisabled,
+		"captcha_disabled":                         org.CAPTCHADisabled,
 	}
 
 	if org.ReceiverRegistrationMessageTemplate != data.DefaultReceiverRegistrationMessageTemplate {

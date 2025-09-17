@@ -95,7 +95,13 @@ func Test_MFAHandler_validateRequest(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			err := tc.handler.validateRequest(ctx, tc.req.body, tc.req.deviceID)
+			captchaDisabled := tc.handler.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
+			err = tc.handler.validateRequest(ctx, tc.req.body, tc.req.deviceID)
 			if tc.expected == nil {
 				require.Nil(t, err)
 			} else {
@@ -284,6 +290,13 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			captchaDisabled := tc.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManager := auth.NewAuthManagerMock(t)
 			if tc.prepareMocks != nil {

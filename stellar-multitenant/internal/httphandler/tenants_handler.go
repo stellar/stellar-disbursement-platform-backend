@@ -112,9 +112,8 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Convert DISABLE flags to ENABLED settings for organization
-	mfaEnabled := !h.DisableMFA
-	captchaEnabled := !h.DisableReCAPTCHA
+	orgMFADisabled := h.DisableMFA
+	orgCAPTCHADisabled := h.DisableReCAPTCHA
 
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
 		Name:                    reqBody.Name,
@@ -126,8 +125,8 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		UiBaseURL:               tntSDPUIBaseURL,
 		BaseURL:                 tntBaseURL,
 		DistributionAccountType: schema.AccountType(reqBody.DistributionAccountType),
-		MFAEnabled:              &mfaEnabled,
-		CAPTCHAEnabled:          &captchaEnabled,
+		MFADisabled:             &orgMFADisabled,
+		CAPTCHADisabled:         &orgCAPTCHADisabled,
 	})
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {

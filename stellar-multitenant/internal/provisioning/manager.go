@@ -39,8 +39,8 @@ type ProvisionTenant struct {
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
-	MFAEnabled              *bool
-	CAPTCHAEnabled          *bool
+	MFADisabled             *bool
+	CAPTCHADisabled         *bool
 }
 
 var (
@@ -246,9 +246,9 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 	}
 
 	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
-		Name:           pt.OrgName,
-		MFAEnabled:     pt.MFAEnabled,
-		CAPTCHAEnabled: pt.CAPTCHAEnabled,
+		Name:            pt.OrgName,
+		MFADisabled:     pt.MFADisabled,
+		CAPTCHADisabled: pt.CAPTCHADisabled,
 	})
 	if err != nil {
 		return fmt.Errorf("updating organization's name and settings: %w", err)

@@ -99,13 +99,21 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			mfaDisabled := tc.handler.MFADisabled
+			captchaDisabled := tc.handler.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				MFADisabled:     &mfaDisabled,
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			headers := http.Header{}
 			for k, v := range tc.req.headers {
 				headers.Set(k, v)
 			}
 
-			ctx := context.Background()
-			err := tc.handler.validateRequest(ctx, tc.req.body, headers)
+			err = tc.handler.validateRequest(ctx, tc.req.body, headers)
 			if tc.expected == nil {
 				require.Nil(t, err)
 			} else {
@@ -432,6 +440,16 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Set up organization settings to match handler expectations
+			ctx := context.Background()
+			mfaDisabled := tc.MFAADisabled
+			captchaDisabled := tc.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				MFADisabled:     &mfaDisabled,
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManagerMock := auth.NewAuthManagerMock(t)
 			messengerClientMock := message.NewMessengerClientMock(t)
