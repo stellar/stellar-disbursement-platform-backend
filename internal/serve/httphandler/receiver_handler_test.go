@@ -2127,3 +2127,114 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 		})
 	}
 }
+
+func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	// Create user-managed wallet for testing
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "user-managed-wallet", "https://example.com", "home.com", "wallet.stellar.org")
+	// Mark wallet as user-managed
+	_, err = dbConnectionPool.ExecContext(ctx, `UPDATE wallets SET user_managed = TRUE WHERE id = $1`, wallet.ID)
+	require.NoError(t, err)
+
+	// Setup router
+	r := chi.NewRouter()
+	r.Post("/receivers", handler.CreateReceiver)
+
+	testCases := []struct {
+		name                 string
+		memo                 string
+		expectedMemoType     schema.MemoType
+		expectedStatus       int
+		expectError          bool
+	}{
+		{
+			name:             "numeric memo should be detected as ID type",
+			memo:             "12345678",
+			expectedMemoType: schema.MemoTypeID,
+			expectedStatus:   http.StatusCreated,
+			expectError:      false,
+		},
+		{
+			name:             "text memo should be detected as TEXT type",
+			memo:             "thisisthememo",
+			expectedMemoType: schema.MemoTypeText,
+			expectedStatus:   http.StatusCreated,
+			expectError:      false,
+		},
+		{
+			name:           "memo longer than 28 characters should return validation error",
+			memo:           "this-string-is-longer-than-28-chars",
+			expectedStatus: http.StatusBadRequest,
+			expectError:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Clean up for each test - order matters due to foreign key constraints
+			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+			// Recreate user-managed wallet for each test
+			wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "user-managed-wallet", "https://example.com", "home.com", "wallet.stellar.org")
+			// Mark wallet as user-managed
+			_, err := dbConnectionPool.ExecContext(ctx, `UPDATE wallets SET user_managed = TRUE WHERE id = $1`, wallet.ID)
+			require.NoError(t, err)
+
+			requestBody := dto.CreateReceiverRequest{
+				PhoneNumber: "+14155551234",
+				ExternalID:  "test-external-" + tc.name,
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
+						Memo:    tc.memo,
+					},
+				},
+			}
+
+			reqBody, err := json.Marshal(requestBody)
+			require.NoError(t, err)
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+
+			if tc.expectError {
+				// For error cases, just verify we get an error response
+				var errorResponse map[string]interface{}
+				err = json.Unmarshal(rr.Body.Bytes(), &errorResponse)
+				require.NoError(t, err)
+				assert.Contains(t, errorResponse, "error")
+			} else {
+				// For success cases, verify the memo type was correctly detected
+				var response GetReceiverResponse
+				err = json.Unmarshal(rr.Body.Bytes(), &response)
+				require.NoError(t, err)
+
+				// Verify the receiver was created
+				assert.NotEmpty(t, response.Receiver.ID)
+				assert.Len(t, response.Wallets, 1)
+
+				// Verify the memo and memo type were set correctly
+				wallet := response.Wallets[0]
+				assert.Equal(t, tc.memo, wallet.StellarMemo)
+				assert.Equal(t, tc.expectedMemoType, wallet.StellarMemoType)
+			}
+		})
+	}
+}
