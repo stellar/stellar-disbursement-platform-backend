@@ -135,3 +135,16 @@ func IsStaticAsset(path string) bool {
 	// Check if the last part contains a dot (has an extension)
 	return filepath.Ext(lastPart) != ""
 }
+
+// IsBaseURL checks if the provided URL is a base URL.
+func IsBaseURL(urlStr string) (bool, error) {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return false, err
+	}
+
+	// Check if path is empty or just "/" AND no query params AND no fragment
+	return (u.Path == "" || u.Path == "/") &&
+		u.RawQuery == "" &&
+		u.Fragment == "", nil
+}
