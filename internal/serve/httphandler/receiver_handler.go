@@ -267,7 +267,7 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 		}, nil
 	})
 	if err != nil {
-		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
+		if httpErr := parseConflictErrorIfNeeded(err); httpErr != nil {
 			httpErr.Render(rw)
 			return
 		}

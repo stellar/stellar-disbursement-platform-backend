@@ -2083,9 +2083,9 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 				},
 			},
 			expectedBody: `{
-				"error": "The provided phone_number is already associated with another user.",
+				"error": "The provided phone number is already associated with another user.",
 				"extras": {
-					"phone_number": "phone_number must be unique"
+					"phone_number": "phone number must be unique"
 				}
 			}`,
 		},
@@ -2102,7 +2102,7 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 				},
 			},
 			expectedBody: `{
-				"error": "The provided wallet address is already associated with another receiver.",
+				"error": "The provided wallet address is already associated with another user.",
 				"extras": {
 					"wallet_address": "wallet address must be unique"
 				}
