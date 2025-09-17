@@ -369,7 +369,7 @@ func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Contex
 				ReceiverID: receiverID,
 				WalletID:   disbursement.Wallet.ID,
 			}
-			rwID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
+			rwID, insertErr := di.receiverWalletModel.GetOrInsertReceiverWallet(ctx, dbTx, receiverWalletInsert)
 			if insertErr != nil {
 				return nil, fmt.Errorf("inserting receiver wallet for receiver id %s: %w", receiverID, insertErr)
 			}

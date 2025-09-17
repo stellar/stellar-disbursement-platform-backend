@@ -328,7 +328,7 @@ func (s *DirectPaymentService) getReceiverWallet(
 		WalletID:   walletID,
 	}
 
-	newReceiverWalletID, err := s.Models.ReceiverWallet.Insert(ctx, dbTx, rwInsert)
+	newReceiverWalletID, err := s.Models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbTx, rwInsert)
 	if err != nil {
 		return nil, fmt.Errorf("creating receiver wallet: %w", err)
 	}
