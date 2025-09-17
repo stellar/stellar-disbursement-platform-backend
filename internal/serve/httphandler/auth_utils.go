@@ -24,7 +24,7 @@ func IsCAPTCHADisabled(ctx context.Context, config CAPTCHAConfig) bool {
 
 // MFAConfig holds the configuration for MFA validation.
 type MFAConfig struct {
-	Models     *data.Models
+	Models      *data.Models
 	MFADisabled bool
 }
 
