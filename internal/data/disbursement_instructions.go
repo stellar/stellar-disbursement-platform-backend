@@ -64,7 +64,6 @@ var (
 	ErrMaxInstructionsExceeded       = errors.New("maximum number of instructions exceeded")
 	ErrReceiverVerificationMismatch  = errors.New("receiver verification mismatch")
 	ErrReceiverWalletAddressMismatch = errors.New("receiver wallet address mismatch")
-	ErrWalletAddressAlreadyInUse     = errors.New("wallet address already in use")
 )
 
 type DisbursementInstructionsOpts struct {
@@ -115,7 +114,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.D
 	// Step 3: Register supplied wallets or process receiver verifications based on the registration contact type
 	if registrationContactType.IncludesWalletAddress {
 		if err = di.registerSuppliedWallets(ctx, dbTx, opts.Instructions, receiversByIDMap, receiverIDToReceiverWalletIDMap); err != nil {
-			if errors.Is(err, ErrWalletAddressAlreadyInUse) {
+			if errors.Is(err, ErrDuplicateWalletAddress) {
 				return err
 			}
 			return fmt.Errorf("registering supplied wallets: %w", err)
@@ -192,8 +191,8 @@ func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Conte
 			receiverWalletUpdate.StellarMemoType = &memoType
 		}
 		if updateErr := di.receiverWalletModel.Update(ctx, receiverWalletID, receiverWalletUpdate, dbTx); updateErr != nil {
-			if errors.Is(updateErr, ErrWalletAddressAlreadyInUse) {
-				return fmt.Errorf("wallet address %s is already registered to another receiver: %w", instruction.WalletAddress, ErrWalletAddressAlreadyInUse)
+			if errors.Is(updateErr, ErrDuplicateWalletAddress) {
+				return fmt.Errorf("wallet address %s is already registered to another receiver: %w", instruction.WalletAddress, ErrDuplicateWalletAddress)
 			}
 			return fmt.Errorf("marking receiver wallet as registered: %w", updateErr)
 		}
