@@ -82,6 +82,8 @@ type ServeOptions struct {
 	CrashTrackerClient              crashtracker.CrashTrackerClient
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
+	CAPTCHAType                     validators.CAPTCHAType
+	ReCAPTCHAV3MinScore             float64
 	DisableMFA                      bool
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
@@ -558,7 +560,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 	})
 
-	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())
+	captchaFactory := validators.NewCAPTCHAValidatorFactory()
+	reCAPTCHAValidator, err := captchaFactory.CreateValidator(o.CAPTCHAType, o.ReCAPTCHASiteSecretKey, o.ReCAPTCHAV3MinScore)
+	if err != nil {
+		log.Errorf("Error creating CAPTCHA validator: %v. Falling back to reCAPTCHA v2.", err)
+		reCAPTCHAValidator = validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())
+	}
 
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
