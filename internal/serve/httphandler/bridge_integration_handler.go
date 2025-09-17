@@ -312,6 +312,9 @@ func bridgeErrorToExtras(bridgeError bridge.BridgeErrorResponse) map[string]inte
 		"bridge_error_code": bridgeError.Code,
 		"bridge_error_type": bridgeError.Type,
 	}
+	if bridgeError.Message != "" {
+		extras["bridge_error_message"] = bridgeError.Message
+	}
 	if bridgeError.Details != "" {
 		extras["bridge_error_details"] = bridgeError.Details
 	}
