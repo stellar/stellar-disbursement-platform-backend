@@ -1,12 +1,12 @@
 package validators
 
 import (
-	"slices"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -60,8 +60,8 @@ func (v *GoogleReCAPTCHAV3Validator) IsTokenValid(ctx context.Context, token str
 	}
 
 	if slices.Contains(respBody.ErrorCodes, timeoutOrDuplicateErrorCode) {
-			return false, nil
-		}
+		return false, nil
+	}
 
 	if len(respBody.ErrorCodes) > 0 {
 		return false, fmt.Errorf("error returned by verify reCAPTCHA v3 token: %v", respBody.ErrorCodes)
