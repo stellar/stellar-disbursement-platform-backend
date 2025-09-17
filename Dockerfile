@@ -3,7 +3,7 @@
 # To push:
 #    make docker-push
 
-FROM golang:1.25.0-alpine AS build
+FROM golang:1.25.1-alpine AS build
 ARG GIT_COMMIT
 
 ENV CGO_ENABLED=0 GOOS=linux
