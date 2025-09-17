@@ -2141,22 +2141,15 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 		DBConnectionPool: dbConnectionPool,
 	}
 
-	// Create user-managed wallet for testing
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "user-managed-wallet", "https://example.com", "home.com", "wallet.stellar.org")
-	// Mark wallet as user-managed
-	_, err = dbConnectionPool.ExecContext(ctx, `UPDATE wallets SET user_managed = TRUE WHERE id = $1`, wallet.ID)
-	require.NoError(t, err)
-
-	// Setup router
 	r := chi.NewRouter()
 	r.Post("/receivers", handler.CreateReceiver)
 
 	testCases := []struct {
-		name                 string
-		memo                 string
-		expectedMemoType     schema.MemoType
-		expectedStatus       int
-		expectError          bool
+		name             string
+		memo             string
+		expectedMemoType schema.MemoType
+		expectedStatus   int
+		expectError      bool
 	}{
 		{
 			name:             "numeric memo should be detected as ID type",
@@ -2167,33 +2160,35 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 		},
 		{
 			name:             "text memo should be detected as TEXT type",
-			memo:             "thisisthememo",
+			memo:             "hello",
 			expectedMemoType: schema.MemoTypeText,
 			expectedStatus:   http.StatusCreated,
 			expectError:      false,
 		},
 		{
-			name:           "memo longer than 28 characters should return validation error",
-			memo:           "this-string-is-longer-than-28-chars",
+			name:             "hash memo should be detected as HASH type",
+			memo:             "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+			expectedMemoType: schema.MemoTypeHash,
+			expectedStatus:   http.StatusCreated,
+			expectError:      false,
+		},
+		{
+			name:           "invalid memo that cannot be parsed should return error",
+			memo:           "this-is-a-very-long-string-also-not-valid-hex",
 			expectedStatus: http.StatusBadRequest,
 			expectError:    true,
 		},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Clean up for each test - order matters due to foreign key constraints
-			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
-			// Recreate user-managed wallet for each test
-			wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "user-managed-wallet", "https://example.com", "home.com", "wallet.stellar.org")
-			// Mark wallet as user-managed
-			_, err := dbConnectionPool.ExecContext(ctx, `UPDATE wallets SET user_managed = TRUE WHERE id = $1`, wallet.ID)
-			require.NoError(t, err)
+			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
+			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
 
 			requestBody := dto.CreateReceiverRequest{
-				PhoneNumber: "+14155551234",
-				ExternalID:  "test-external-" + tc.name,
+				PhoneNumber: fmt.Sprintf("+41555511%03d", 100+i),
+				ExternalID:  fmt.Sprintf("MemoTest-%d", i),
 				Wallets: []dto.ReceiverWalletRequest{
 					{
 						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
@@ -2215,13 +2210,11 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, rr.Code)
 
 			if tc.expectError {
-				// For error cases, just verify we get an error response
 				var errorResponse map[string]interface{}
 				err = json.Unmarshal(rr.Body.Bytes(), &errorResponse)
 				require.NoError(t, err)
 				assert.Contains(t, errorResponse, "error")
 			} else {
-				// For success cases, verify the memo type was correctly detected
 				var response GetReceiverResponse
 				err = json.Unmarshal(rr.Body.Bytes(), &response)
 				require.NoError(t, err)
@@ -2230,10 +2223,13 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 				assert.NotEmpty(t, response.Receiver.ID)
 				assert.Len(t, response.Wallets, 1)
 
-				// Verify the memo and memo type were set correctly
+				// Verify the memo and memo type
 				wallet := response.Wallets[0]
 				assert.Equal(t, tc.memo, wallet.StellarMemo)
 				assert.Equal(t, tc.expectedMemoType, wallet.StellarMemoType)
+
+				// Clean up
+				data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 			}
 		})
 	}

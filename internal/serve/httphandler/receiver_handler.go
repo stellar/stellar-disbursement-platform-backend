@@ -236,9 +236,9 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 
 				// Only set memo and memo type if memo is provided
 				if w.Memo != "" {
-					_, memoType, txErr := schema.ParseMemo(w.Memo)
-					if txErr != nil {
-						return nil, fmt.Errorf("parsing memo value: %w", txErr)
+					_, memoType, parseErr := schema.ParseMemo(w.Memo)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parsing memo value: %w", parseErr)
 					}
 					walletUpdate.StellarMemo = &w.Memo
 					walletUpdate.StellarMemoType = &memoType
