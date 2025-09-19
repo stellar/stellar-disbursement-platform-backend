@@ -38,25 +38,25 @@ func (v *GoogleReCAPTCHAV3Validator) IsTokenValid(ctx context.Context, token str
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.VerifyTokenURL, strings.NewReader(payload))
 	if err != nil {
-		return false, fmt.Errorf("error creating request: %w", err)
+		return false, fmt.Errorf("creating request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := v.HTTPClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("error requesting verify reCAPTCHA v3 token: %w", err)
+		return false, fmt.Errorf("requesting verify reCAPTCHA v3 token: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("error reading body response: %w", err)
+		return false, fmt.Errorf("reading body response: %w", err)
 	}
 
 	var respBody reCAPTCHAV3VerifyResponse
 	if err := json.Unmarshal(respBodyBytes, &respBody); err != nil {
-		return false, fmt.Errorf("error unmarshalling body response: %w", err)
+		return false, fmt.Errorf("unmarshalling body response: %w", err)
 	}
 
 	if slices.Contains(respBody.ErrorCodes, timeoutOrDuplicateErrorCode) {
@@ -64,7 +64,7 @@ func (v *GoogleReCAPTCHAV3Validator) IsTokenValid(ctx context.Context, token str
 	}
 
 	if len(respBody.ErrorCodes) > 0 {
-		return false, fmt.Errorf("error returned by verify reCAPTCHA v3 token: %v", respBody.ErrorCodes)
+		return false, fmt.Errorf("verify reCAPTCHA v3 token returned: %v", respBody.ErrorCodes)
 	}
 
 	if !respBody.Success {
@@ -91,3 +91,6 @@ func NewGoogleReCAPTCHAV3Validator(siteSecretKey string, minScore float64, httpC
 		HTTPClient:     httpClient,
 	}
 }
+
+// Compile-time interface compliance check
+var _ ReCAPTCHAValidator = (*GoogleReCAPTCHAV3Validator)(nil)

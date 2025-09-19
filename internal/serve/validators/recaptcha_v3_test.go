@@ -7,16 +7,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
+	"github.com/stretchr/testify/mock"
 )
-
-type mockHTTPClient struct {
-	response *http.Response
-	err      error
-}
-
-func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	return m.response, m.err
-}
 
 func TestGoogleReCAPTCHAV3Validator_IsTokenValid(t *testing.T) {
 	tests := []struct {
@@ -88,19 +82,18 @@ func TestGoogleReCAPTCHAV3Validator_IsTokenValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var mockClient *mockHTTPClient
+			httpClientMock := httpclientMocks.NewHttpClientMock(t)
+
 			if tt.mockError != nil {
-				mockClient = &mockHTTPClient{err: tt.mockError}
+				httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(nil, tt.mockError)
 			} else {
-				mockClient = &mockHTTPClient{
-					response: &http.Response{
-						StatusCode: tt.mockStatusCode,
-						Body:       io.NopCloser(strings.NewReader(tt.mockResponse)),
-					},
-				}
+				httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(&http.Response{
+					StatusCode: tt.mockStatusCode,
+					Body:       io.NopCloser(strings.NewReader(tt.mockResponse)),
+				}, nil)
 			}
 
-			validator := NewGoogleReCAPTCHAV3Validator("test-secret", tt.minScore, mockClient)
+			validator := NewGoogleReCAPTCHAV3Validator("test-secret", tt.minScore, httpClientMock)
 
 			valid, err := validator.IsTokenValid(context.Background(), tt.token)
 
@@ -153,7 +146,8 @@ func TestNewGoogleReCAPTCHAV3Validator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			validator := NewGoogleReCAPTCHAV3Validator("test-secret", tt.minScore, &mockHTTPClient{})
+			httpClientMock := httpclientMocks.NewHttpClientMock(t)
+			validator := NewGoogleReCAPTCHAV3Validator("test-secret", tt.minScore, httpClientMock)
 
 			if validator.MinScore != tt.want {
 				t.Errorf("NewGoogleReCAPTCHAV3Validator() MinScore = %v, want %v", validator.MinScore, tt.want)
