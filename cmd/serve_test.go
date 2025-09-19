@@ -29,6 +29,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
@@ -169,6 +170,8 @@ func Test_serve(t *testing.T) {
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
 		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
+		CAPTCHAType:                     validators.GoogleReCAPTCHAV2,
+		ReCAPTCHAV3MinScore:             0.5,
 		DisableMFA:                      false,
 		DisableReCAPTCHA:                false,
 		EnableScheduler:                 false,
