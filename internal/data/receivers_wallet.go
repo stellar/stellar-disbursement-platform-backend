@@ -305,6 +305,30 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	return receiverWallets, nil
 }
 
+func (rw *ReceiverWalletModel) GetByAnchorPlatformTransactionID(ctx context.Context, transactionID string) (*ReceiverWallet, error) {
+	var receiverWallet ReceiverWallet
+
+	query := `
+		SELECT
+			` + ReceiverWalletColumnNames("rw", "") + `
+		FROM
+			receiver_wallets rw
+		WHERE
+			rw.anchor_platform_transaction_id = $1
+		LIMIT 1
+	`
+
+	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallet, query, transactionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("error querying receiver wallet by transaction ID: %w", err)
+	}
+
+	return &receiverWallet, nil
+}
+
 const getPendingRegistrationReceiverWalletsBaseQuery = `
 	SELECT
 		rw.id,

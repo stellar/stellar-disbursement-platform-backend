@@ -42,13 +42,12 @@ services:
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
       CORS_ALLOWED_ORIGINS: "*"
-      ENABLE_ANCHOR_PLATFORM: "true"
 
       # multi-tenant
       ADMIN_PORT: "8003"
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
-      SINGLE_TENANT_MODE: "false"
+      SINGLE_TENANT_MODE: "true"
 
       # scheduler options
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
@@ -93,103 +92,6 @@ services:
         /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
     volumes:
       - ./scripts/add_test_users.sh:/app/github.com/stellar/stellar-disbursement-platform/dev/scripts/add_test_users.sh
-
-  db-anchor-platform:
-    container_name: anchor-platform-postgres-db-mtn
-    image: postgres:14-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-      PGPORT: 5433
-    ports:
-      - "5433:5433"
-    volumes:
-      - postgres-ap-db:/data/postgres
-
-  anchor-platform:
-    container_name: anchor-platform
-    image: stellar/anchor-platform:2.6.0
-    platform: linux/amd64
-    depends_on:
-      - db
-    command: --sep-server --platform-server
-    ports:
-      - "8080:8080" # sep-server
-      - "8085:8085" # platform-server
-      - "8082:8082" # metrics
-    environment:
-      HOST_URL: http://localhost:8080
-      SEP_SERVER_PORT: 8080
-      CALLBACK_API_BASE_URL: http://sdp-api:8000
-      CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
-      PLATFORM_SERVER_AUTH_TYPE: JWT
-      APP_LOGGING_LEVEL: INFO
-      DATA_TYPE: postgres
-      DATA_SERVER: db-anchor-platform:5433
-      DATA_DATABASE: postgres
-      DATA_FLYWAY_ENABLED: "true"
-      DATA_DDL_AUTO: update
-      METRICS_ENABLED: "true"  # Metrics would be available at port 8082
-      METRICS_EXTRAS_ENABLED: "false"
-      SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local:8000" # Comma separated list of home domains
-      SEP10_HOME_DOMAIN: ""
-      SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
-      SEP24_ENABLED: "true"
-      SEP24_INTERACTIVE_URL_BASE_URL: http://localhost:8000/wallet-registration/start
-      SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
-      SEP24_MORE_INFO_URL_BASE_URL: http://localhost:8000/wallet-registration/start
-      SEP1_ENABLED: "true"
-      SEP1_TOML_TYPE: url
-      SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
-      ASSETS_TYPE: json
-      ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
-        {
-          "assets": [
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "USDC",
-              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            },
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "native",
-              "issuer": "",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            }
-          ]
-        }
-
-      # secrets:
-      SECRET_DATA_USERNAME: postgres
-      SECRET_DATA_PASSWORD: postgres
-      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
-      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
 
   demo-wallet:
     build:
