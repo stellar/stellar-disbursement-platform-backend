@@ -65,9 +65,25 @@ Security is a critical aspect of the SDP. The measures outlined in this document
 
 Google's reCAPTCHA has been integrated into the SDP to prevent automated attacks and ensure that interactions are performed by humans, not bots.
 
+
 ReCAPTCHA can be configured at two levels:
 1. **Environment level (default)**: Set the `DISABLE_RECAPTCHA` environment variable to `true` to disable for all tenants
 2. **Organization level**: Each tenant can override the environment default through the organization settings (via API or UI)
+
+The SDP supports both reCAPTCHA v2 ("I'm not a robot") and reCAPTCHA v3 (invisible, score-based) implementations:
+
+- **reCAPTCHA v2**: Traditional checkbox-based verification
+- **reCAPTCHA v3**: Invisible verification that returns a score (0.0 to 1.0) indicating the likelihood of human interaction
+
+#### Configuration
+
+- **CAPTCHA_TYPE**: Specifies the type of CAPTCHA to use. Options: `GOOGLE_RECAPTCHA_V2` (default) or `GOOGLE_RECAPTCHA_V3`
+- **RECAPTCHA_SITE_KEY**: The Google reCAPTCHA site key
+- **RECAPTCHA_SITE_SECRET_KEY**: The Google reCAPTCHA site secret key
+- **RECAPTCHA_V3_MIN_SCORE**: Minimum score threshold for reCAPTCHA v3 (0.0 to 1.0, default: 0.5). Only used when CAPTCHA_TYPE is `GOOGLE_RECAPTCHA_V3`
+- **DISABLE_RECAPTCHA**: Set to `true` to disable reCAPTCHA entirely
+
+ReCAPTCHA is enabled by default and can be disabled in the development environment by setting the `DISABLE_RECAPTCHA` environment variable to `true`.
 
 The organization-level setting takes precedence over the environment default when explicitly set. If not set at the organization level, the environment default is used.
 
