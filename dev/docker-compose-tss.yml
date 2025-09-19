@@ -1,7 +1,6 @@
 version: '3.8'
 services:
   sdp-tss:
-    container_name: sdp-tss-mtn
     image: stellar/sdp-v2:latest
     build:
       context: ../
@@ -9,9 +8,9 @@ services:
     ports:
       - "9000:9000"
     environment:
-      DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-      HORIZON_URL: "https://horizon-testnet.stellar.org"
+      DATABASE_URL: postgres://postgres@db:5432/${DATABASE_NAME:-sdp_mtn}?sslmode=disable
+      NETWORK_PASSPHRASE: "${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
+      HORIZON_URL: "${HORIZON_URL:-https://horizon-testnet.stellar.org}"
       NUM_CHANNEL_ACCOUNTS: "3"
       MAX_BASE_FEE: "1000000"
       TSS_METRICS_PORT: "9002"
@@ -32,4 +31,3 @@ services:
         ./stellar-disbursement-platform channel-accounts delete --delete-all-accounts
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
-

@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - rework Grafana dashboard to include tenant tag and new metrics
   - [#818](https://github.com/stellar/stellar-disbursement-platform-backend/pull/818)
 - Add organization level MFA and ReCAPTCHA settings [#861](https://github.com/stellar/stellar-disbursement-platform-backend/pull/861)
+- Added Launch Wizard through `make setup` command to simplify initial setup and mainnet configuration for docker compose [#875](https://github.com/stellar/stellar-disbursement-platform-backend/pull/875)
 
 ## [4.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.1...4.1.0))
 
