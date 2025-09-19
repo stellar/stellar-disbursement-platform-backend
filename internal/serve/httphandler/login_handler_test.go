@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -17,10 +18,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func Test_LoginHandler_validateRequest(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
 	type Req struct {
 		body    LoginRequest
 		headers map[string]string
@@ -33,6 +39,11 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 	}{
 		{
 			name: "🔴 invalid body and headers fields",
+			handler: LoginHandler{
+				ReCAPTCHADisabled: false,
+				MFADisabled:       false,
+				Models:            models,
+			},
 			expected: httperror.BadRequest("", nil, map[string]interface{}{
 				"email":           "email is required",
 				"password":        "password is required",
@@ -45,6 +56,7 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 			handler: LoginHandler{
 				ReCAPTCHADisabled: true,
 				MFADisabled:       true,
+				Models:            models,
 			},
 			expected: httperror.BadRequest("", nil, map[string]interface{}{
 				"email":    "email is required",
@@ -53,6 +65,11 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 		},
 		{
 			name: "🟢 valid request with mfa & reCAPTCHA enabled",
+			handler: LoginHandler{
+				ReCAPTCHADisabled: false,
+				MFADisabled:       false,
+				Models:            models,
+			},
 			req: Req{
 				body: LoginRequest{
 					Email:          "foobar@test.com",
@@ -74,6 +91,7 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 			handler: LoginHandler{
 				ReCAPTCHADisabled: true,
 				MFADisabled:       true,
+				Models:            models,
 			},
 			expected: nil,
 		},
@@ -81,12 +99,21 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			mfaDisabled := tc.handler.MFADisabled
+			captchaDisabled := tc.handler.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				MFADisabled:     &mfaDisabled,
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			headers := http.Header{}
 			for k, v := range tc.req.headers {
 				headers.Set(k, v)
 			}
 
-			err := tc.handler.validateRequest(tc.req.body, headers)
+			err = tc.handler.validateRequest(ctx, tc.req.body, headers)
 			if tc.expected == nil {
 				require.Nil(t, err)
 			} else {
@@ -413,6 +440,16 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Set up organization settings to match handler expectations
+			ctx := context.Background()
+			mfaDisabled := tc.MFAADisabled
+			captchaDisabled := tc.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				MFADisabled:     &mfaDisabled,
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManagerMock := auth.NewAuthManagerMock(t)
 			messengerClientMock := message.NewMessengerClientMock(t)

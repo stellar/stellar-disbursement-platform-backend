@@ -766,6 +766,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			log.Ctx(ctx).Info("Starting Tenant Server...")
 			adminServeOpts.SingleTenantMode = serveOpts.SingleTenantMode
+			adminServeOpts.DisableMFA = serveOpts.DisableMFA
+			adminServeOpts.DisableReCAPTCHA = serveOpts.DisableReCAPTCHA
 			go serverService.StartAdminServe(adminServeOpts, &serveadmin.HTTPServer{})
 
 			// Starting Application Server

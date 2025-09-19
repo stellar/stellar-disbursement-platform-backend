@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -16,12 +17,17 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 const mfaEndpoint = "/mfa"
 
 func Test_MFAHandler_validateRequest(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
 	type Req struct {
 		body     MFARequest
 		deviceID string
@@ -34,6 +40,10 @@ func Test_MFAHandler_validateRequest(t *testing.T) {
 	}{
 		{
 			name: "🔴 invalid body and headers fields",
+			handler: MFAHandler{
+				ReCAPTCHADisabled: false,
+				Models:            models,
+			},
 			expected: httperror.BadRequest("", nil, map[string]interface{}{
 				"mfa_code":        "MFA Code is required",
 				"recaptcha_token": "reCAPTCHA token is required",
@@ -44,6 +54,7 @@ func Test_MFAHandler_validateRequest(t *testing.T) {
 			name: "🔴 invalid body fields with reCAPTCHA disabled",
 			handler: MFAHandler{
 				ReCAPTCHADisabled: true,
+				Models:            models,
 			},
 			expected: httperror.BadRequest("", nil, map[string]interface{}{
 				"mfa_code":  "MFA Code is required",
@@ -52,6 +63,10 @@ func Test_MFAHandler_validateRequest(t *testing.T) {
 		},
 		{
 			name: "🟢 valid request with reCAPTCHA enabled",
+			handler: MFAHandler{
+				ReCAPTCHADisabled: false,
+				Models:            models,
+			},
 			req: Req{
 				body: MFARequest{
 					MFACode:        "123456",
@@ -71,6 +86,7 @@ func Test_MFAHandler_validateRequest(t *testing.T) {
 			},
 			handler: MFAHandler{
 				ReCAPTCHADisabled: true,
+				Models:            models,
 			},
 			expected: nil,
 		},
@@ -78,7 +94,14 @@ func Test_MFAHandler_validateRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.handler.validateRequest(tc.req.body, tc.req.deviceID)
+			ctx := context.Background()
+			captchaDisabled := tc.handler.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
+			err = tc.handler.validateRequest(ctx, tc.req.body, tc.req.deviceID)
 			if tc.expected == nil {
 				require.Nil(t, err)
 			} else {
@@ -267,6 +290,13 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			captchaDisabled := tc.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManager := auth.NewAuthManagerMock(t)
 			if tc.prepareMocks != nil {
