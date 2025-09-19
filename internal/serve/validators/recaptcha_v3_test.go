@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stretchr/testify/mock"
+
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 )
 
 func TestGoogleReCAPTCHAV3Validator_IsTokenValid(t *testing.T) {
