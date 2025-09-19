@@ -2083,9 +2083,9 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 				},
 			},
 			expectedBody: `{
-				"error": "The provided phone_number is already associated with another user.",
+				"error": "The provided phone number is already associated with another user.",
 				"extras": {
-					"phone_number": "phone_number must be unique"
+					"phone_number": "phone number must be unique"
 				}
 			}`,
 		},
@@ -2102,7 +2102,7 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 				},
 			},
 			expectedBody: `{
-				"error": "The provided wallet address is already associated with another receiver.",
+				"error": "The provided wallet address is already associated with another user.",
 				"extras": {
 					"wallet_address": "wallet address must be unique"
 				}
@@ -2124,6 +2124,113 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 
 			assert.Equal(t, http.StatusConflict, rr.Code)
 			assert.JSONEq(t, tc.expectedBody, rr.Body.String())
+		})
+	}
+}
+
+func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	r := chi.NewRouter()
+	r.Post("/receivers", handler.CreateReceiver)
+
+	testCases := []struct {
+		name             string
+		memo             string
+		expectedMemoType schema.MemoType
+		expectedStatus   int
+		expectError      bool
+	}{
+		{
+			name:             "numeric memo should be detected as ID type",
+			memo:             "12345678",
+			expectedMemoType: schema.MemoTypeID,
+			expectedStatus:   http.StatusCreated,
+			expectError:      false,
+		},
+		{
+			name:             "text memo should be detected as TEXT type",
+			memo:             "hello",
+			expectedMemoType: schema.MemoTypeText,
+			expectedStatus:   http.StatusCreated,
+			expectError:      false,
+		},
+		{
+			name:             "hash memo should be detected as HASH type",
+			memo:             "12f37f82eb6708daa0ac372a1a67a0f33efa6a9cd213ed430517e45fefb51577",
+			expectedMemoType: schema.MemoTypeHash,
+			expectedStatus:   http.StatusCreated,
+			expectError:      false,
+		},
+		{
+			name:           "invalid memo that cannot be parsed should return error",
+			memo:           "this-is-a-very-long-string-also-not-valid-hex",
+			expectedStatus: http.StatusBadRequest,
+			expectError:    true,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
+			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
+
+			requestBody := dto.CreateReceiverRequest{
+				PhoneNumber: fmt.Sprintf("+41555511%03d", 100+i),
+				ExternalID:  fmt.Sprintf("MemoTest-%d", i),
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K",
+						Memo:    tc.memo,
+					},
+				},
+			}
+
+			reqBody, err := json.Marshal(requestBody)
+			require.NoError(t, err)
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+
+			if tc.expectError {
+				var errorResponse map[string]interface{}
+				err = json.Unmarshal(rr.Body.Bytes(), &errorResponse)
+				require.NoError(t, err)
+				assert.Contains(t, errorResponse, "error")
+			} else {
+				var response GetReceiverResponse
+				err = json.Unmarshal(rr.Body.Bytes(), &response)
+				require.NoError(t, err)
+
+				// Verify the receiver was created
+				assert.NotEmpty(t, response.Receiver.ID)
+				assert.Len(t, response.Wallets, 1)
+
+				// Verify the memo and memo type
+				wallet := response.Wallets[0]
+				assert.Equal(t, tc.memo, wallet.StellarMemo)
+				assert.Equal(t, tc.expectedMemoType, wallet.StellarMemoType)
+
+				// Clean up
+				data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+			}
 		})
 	}
 }
