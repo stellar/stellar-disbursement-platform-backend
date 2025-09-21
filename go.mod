@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sns v1.38.3
 	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dimchansky/utfbom v1.1.1
-	github.com/getsentry/sentry-go v0.35.2
+	github.com/getsentry/sentry-go v0.35.3
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/httprate v0.15.0
@@ -36,7 +36,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stellar/go v0.0.0-20250822224526-9397ce4b6da2
 	github.com/stretchr/testify v1.11.1
-	github.com/twilio/twilio-go v1.28.0
+	github.com/twilio/twilio-go v1.28.1
 	golang.org/x/crypto v0.42.0
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 	golang.org/x/net v0.44.0
