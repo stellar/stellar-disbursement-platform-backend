@@ -11,10 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add Support For Twilio WhatsApp messaging [#855](https://github.com/stellar/stellar-disbursement-platform-backend/pull/855)
 - Added initiator and approver user roles with mutual exclusivity validation for separation of duties in disbursement workflows. [#865](https://github.com/stellar/stellar-disbursement-platform-backend/pull/865)
 - Ability to Onboard existing customers to Bridge integration via `PATCH /bridge-integration` endpoint. [#867](https://github.com/stellar/stellar-disbursement-platform-backend/pull/867)
+- Add endpoint for patch receiver wallet. [#848](https://github.com/stellar/stellar-disbursement-platform-backend/pull/848)
 
 ### Fixed
 
 - Return proper error when calling `POST /disbursements` with a duplicate wallet address. [#862](https://github.com/stellar/stellar-disbursement-platform-backend/pull/862)
+- Properly detect memo type in receiver creation. [#870](https://github.com/stellar/stellar-disbursement-platform-backend/pull/870)
 
 ## [4.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.0...4.0.1))
 
