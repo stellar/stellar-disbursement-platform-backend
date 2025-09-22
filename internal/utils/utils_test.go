@@ -80,37 +80,37 @@ func Test_IsEmpty(t *testing.T) {
 	// Define test cases
 	testCases := []testCase{
 		// String
-		{name: "String empty", isEmptyFn: func() bool { return IsEmpty[string]("") }, expected: true},
-		{name: "String non-empty", isEmptyFn: func() bool { return IsEmpty[string]("not empty") }, expected: false},
+		{name: "String empty", isEmptyFn: func() bool { return IsEmpty("") }, expected: true},
+		{name: "String non-empty", isEmptyFn: func() bool { return IsEmpty("not empty") }, expected: false},
 		// Int
-		{name: "Int zero", isEmptyFn: func() bool { return IsEmpty[int](0) }, expected: true},
-		{name: "Int non-zero", isEmptyFn: func() bool { return IsEmpty[int](1) }, expected: false},
+		{name: "Int zero", isEmptyFn: func() bool { return IsEmpty(0) }, expected: true},
+		{name: "Int non-zero", isEmptyFn: func() bool { return IsEmpty(1) }, expected: false},
 		// Slice:
 		{name: "Slice nil", isEmptyFn: func() bool { return IsEmpty[[]string](nil) }, expected: true},
-		{name: "Slice empty", isEmptyFn: func() bool { return IsEmpty[[]string]([]string{}) }, expected: false},
-		{name: "Slice non-empty", isEmptyFn: func() bool { return IsEmpty[[]string]([]string{"not empty"}) }, expected: false},
+		{name: "Slice empty", isEmptyFn: func() bool { return IsEmpty([]string{}) }, expected: false},
+		{name: "Slice non-empty", isEmptyFn: func() bool { return IsEmpty([]string{"not empty"}) }, expected: false},
 		// Struct:
-		{name: "Struct zero", isEmptyFn: func() bool { return IsEmpty[testStruct](testStruct{}) }, expected: true},
-		{name: "Struct non-zero", isEmptyFn: func() bool { return IsEmpty[testStruct](testStruct{Name: "not empty"}) }, expected: false},
+		{name: "Struct zero", isEmptyFn: func() bool { return IsEmpty(testStruct{}) }, expected: true},
+		{name: "Struct non-zero", isEmptyFn: func() bool { return IsEmpty(testStruct{Name: "not empty"}) }, expected: false},
 		// Pointer:
 		{name: "Pointer nil", isEmptyFn: func() bool { return IsEmpty[*string](nil) }, expected: true},
-		{name: "Pointer non-nil", isEmptyFn: func() bool { return IsEmpty[*string](new(string)) }, expected: false},
+		{name: "Pointer non-nil", isEmptyFn: func() bool { return IsEmpty(new(string)) }, expected: false},
 		// Function:
 		{name: "Function nil", isEmptyFn: func() bool { return IsEmpty[func() string](nil) }, expected: true},
-		{name: "Function non-nil", isEmptyFn: func() bool { return IsEmpty[func() string](func() string { return "not empty" }) }, expected: false},
+		{name: "Function non-nil", isEmptyFn: func() bool { return IsEmpty(func() string { return "not empty" }) }, expected: false},
 		// Interface:
-		{name: "Interface nil", isEmptyFn: func() bool { return IsEmpty[interface{}](nil) }, expected: true},
-		{name: "Interface non-nil", isEmptyFn: func() bool { return IsEmpty[interface{}](new(string)) }, expected: false},
+		{name: "Interface nil", isEmptyFn: func() bool { return IsEmpty[any](nil) }, expected: true},
+		{name: "Interface non-nil", isEmptyFn: func() bool { return IsEmpty[any](new(string)) }, expected: false},
 		// Any:
 		{name: "Any nil", isEmptyFn: func() bool { return IsEmpty[any](nil) }, expected: true},
 		{name: "Any non-nil", isEmptyFn: func() bool { return IsEmpty[any](new(string)) }, expected: false},
 		// Map:
 		{name: "Map nil", isEmptyFn: func() bool { return IsEmpty[map[string]string](nil) }, expected: true},
-		{name: "Map empty", isEmptyFn: func() bool { return IsEmpty[map[string]string](map[string]string{}) }, expected: false},
-		{name: "Map non-empty", isEmptyFn: func() bool { return IsEmpty[map[string]string](map[string]string{"not empty": "not empty"}) }, expected: false},
+		{name: "Map empty", isEmptyFn: func() bool { return IsEmpty(map[string]string{}) }, expected: false},
+		{name: "Map non-empty", isEmptyFn: func() bool { return IsEmpty(map[string]string{"not empty": "not empty"}) }, expected: false},
 		// Channel:
 		{name: "Channel nil", isEmptyFn: func() bool { return IsEmpty[chan string](nil) }, expected: true},
-		{name: "Channel non-nil", isEmptyFn: func() bool { return IsEmpty[chan string](make(chan string)) }, expected: false},
+		{name: "Channel non-nil", isEmptyFn: func() bool { return IsEmpty(make(chan string)) }, expected: false},
 	}
 
 	// Run test cases
