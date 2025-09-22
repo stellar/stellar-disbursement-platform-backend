@@ -52,8 +52,8 @@ type Organization struct {
 	IsLinkShortenerEnabled bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
 	IsMemoTracingEnabled   bool                   `json:"is_memo_tracing_enabled" db:"is_memo_tracing_enabled"`
 	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
-	MFADisabled            bool                   `json:"mfa_disabled" db:"mfa_disabled"`
-	CAPTCHADisabled        bool                   `json:"captcha_disabled" db:"captcha_disabled"`
+	MFADisabled            *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
+	CAPTCHADisabled        *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
 	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
 }

@@ -19,7 +19,11 @@ func IsCAPTCHADisabled(ctx context.Context, config CAPTCHAConfig) bool {
 		return config.ReCAPTCHADisabled
 	}
 
-	return org.CAPTCHADisabled
+	if org.CAPTCHADisabled != nil {
+		return *org.CAPTCHADisabled
+	}
+
+	return config.ReCAPTCHADisabled
 }
 
 // MFAConfig holds the configuration for MFA validation.
@@ -35,5 +39,9 @@ func IsMFADisabled(ctx context.Context, config MFAConfig) bool {
 		return config.MFADisabled
 	}
 
-	return org.MFADisabled
+	if org.MFADisabled != nil {
+		return *org.MFADisabled
+	}
+
+	return config.MFADisabled
 }

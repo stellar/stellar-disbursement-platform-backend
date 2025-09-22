@@ -1,8 +1,8 @@
 -- +migrate Up
 
 ALTER TABLE organizations
-ADD COLUMN mfa_disabled BOOLEAN DEFAULT FALSE,
-ADD COLUMN captcha_disabled BOOLEAN DEFAULT FALSE;
+ADD COLUMN mfa_disabled BOOLEAN,
+ADD COLUMN captcha_disabled BOOLEAN;
 
 COMMENT ON COLUMN organizations.mfa_disabled IS 'Organization-level MFA setting.';
 
