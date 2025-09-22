@@ -440,11 +440,11 @@ func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoi
 		TenantName: t.Name,
 	}.ToMap()
 
-	if monitorErr := client.monitorService.MonitorHistogram(duration.Seconds(), monitor.CircleAPIRequestDurationTag, labels); monitorErr != nil {
+	if err = client.monitorService.MonitorHistogram(duration.Seconds(), monitor.CircleAPIRequestDurationTag, labels); err != nil {
 		log.Ctx(ctx).Errorf("monitoring histogram: %v", err)
 	}
 
-	if monitorErr := client.monitorService.MonitorCounters(monitor.CircleAPIRequestsTotalTag, labels); monitorErr != nil {
+	if err = client.monitorService.MonitorCounters(monitor.CircleAPIRequestsTotalTag, labels); err != nil {
 		log.Ctx(ctx).Errorf("monitoring counter: %v", err)
 	}
 }
