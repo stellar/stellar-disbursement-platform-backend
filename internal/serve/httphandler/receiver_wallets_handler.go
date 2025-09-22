@@ -248,7 +248,6 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 
 		return updatedWallet, nil
 	})
-
 	if err != nil {
 		var httpErr *httperror.HTTPError
 		if errors.As(err, &httpErr) {
