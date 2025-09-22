@@ -266,7 +266,7 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 				t.Helper()
 
 				assert.Equal(t, http.StatusInternalServerError, responseStatus)
-				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, string(response))
+				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, response)
 			},
 		},
 		{

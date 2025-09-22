@@ -21,7 +21,7 @@ func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationR
 	defer dbConnectionPool.Close()
 
 	ms := migrate.MigrationSet{
-		TableName: string(migrationRouter.TableName),
+		TableName: migrationRouter.TableName,
 	}
 
 	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(migrationRouter.FS)}

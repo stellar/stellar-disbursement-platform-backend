@@ -76,7 +76,7 @@ func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostRegistration(ctx c
 		if err != nil {
 			return fmt.Errorf("converting apTxPostRegistrationPatch into apTxPatch: %w", err)
 		}
-		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
+		apTxPatches = append(apTxPatches, apTxPatch)
 	}
 
 	return a.updateAnchorTransactions(ctx, apTxPatches...)
@@ -89,7 +89,7 @@ func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostSuccessCompletion(
 		if err != nil {
 			return fmt.Errorf("converting apTxPostSuccessCompletion into apTxPatch: %w", err)
 		}
-		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
+		apTxPatches = append(apTxPatches, apTxPatch)
 	}
 	return a.updateAnchorTransactions(ctx, apTxPatches...)
 }
@@ -101,7 +101,7 @@ func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostErrorCompletion(ct
 		if err != nil {
 			return fmt.Errorf("converting apTxPostErrorCompletion into apTxPatch: %w", err)
 		}
-		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
+		apTxPatches = append(apTxPatches, apTxPatch)
 	}
 	return a.updateAnchorTransactions(ctx, apTxPatches...)
 }

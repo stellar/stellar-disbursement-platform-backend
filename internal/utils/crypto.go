@@ -20,7 +20,7 @@ func Encrypt(message string, passphrase string) (string, error) {
 	key := make([]byte, keyBytes)
 	copy(key, passHash.Sum(nil))
 
-	block, err := aes.NewCipher([]byte(key))
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +51,7 @@ func Decrypt(message string, passphrase string) (string, error) {
 	key := make([]byte, keyBytes)
 	copy(key, passHash.Sum(nil))
 
-	block, err := aes.NewCipher([]byte(key))
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
