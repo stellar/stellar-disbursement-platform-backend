@@ -2,8 +2,10 @@ version: '3.8'
 services:
   sdp-frontend:
     container_name: sdp-frontend-mtn
-    image: stellar/stellar-disbursement-platform-frontend:edge
+    build:
+      context: https://github.com/stellar/stellar-disbursement-platform-frontend.git#feature/smart-wallet-demo
+      dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3001:80"
     volumes:
       - ./env-config.js:/usr/share/nginx/html/settings/env-config.js
