@@ -647,7 +647,8 @@ func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.
 			assert.Equal(t, 1, count)
 
 			// cleanup
-			_, _ = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
+			_, err = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
+			require.NoError(t, err)
 		})
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -136,28 +137,31 @@ func createInstructionsRequest(ctx context.Context, tenantName, reqURL, disburse
 
 	csvBytes, err := fs.ReadFile(DisbursementCSVFiles, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error reading csv file: %w", err)
+		return nil, fmt.Errorf("reading csv file: %w", err)
 	}
 
 	b := &bytes.Buffer{}
 	w := multipart.NewWriter(b)
-	defer w.Close()
+	defer utils.DeferredClose(ctx, w, "closing multipart writer")
 
 	fileWriter, err := w.CreateFormFile("file", disbursementCSVFileName)
 	if err != nil {
-		return nil, fmt.Errorf("error creating form file with disbursement csv file: %w", err)
+		return nil, fmt.Errorf("creating form file with disbursement csv file: %w", err)
 	}
 
 	_, err = io.Copy(fileWriter, bytes.NewReader(csvBytes))
 	if err != nil {
-		return nil, fmt.Errorf("error copying file: %w", err)
+		return nil, fmt.Errorf("copying file: %w", err)
 	}
 	// we need to close *multipart.Writter before pass as parameter in http.NewRequestWithContext
-	w.Close()
+	err = w.Close()
+	if err != nil {
+		return nil, fmt.Errorf("closing multipart writer: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, b)
 	if err != nil {
-		return nil, fmt.Errorf("error creating new request: %w", err)
+		return nil, fmt.Errorf("creating new request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", w.FormDataContentType())

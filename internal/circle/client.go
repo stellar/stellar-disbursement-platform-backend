@@ -98,7 +98,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -301,7 +301,7 @@ func (client *Client) GetBusinessBalances(ctx context.Context) (*Balances, error
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusOK {
 		handleErr := client.handleError(ctx, resp)
@@ -324,7 +324,7 @@ func (client *Client) GetAccountConfiguration(ctx context.Context) (*AccountConf
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusOK {
 		handleErr := client.handleError(ctx, resp)

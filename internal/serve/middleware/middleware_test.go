@@ -695,8 +695,18 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, expectedRespBody, string(respBody))
 
 		logEntries := debugEntries()
-		assert.Len(t, logEntries, 2)
-		for i, e := range logEntries {
+		assert.Len(t, logEntries, 3)
+
+		// Find the request start and finish logs (skip the warning log)
+		var requestLogs []logrus.Entry
+		for _, e := range logEntries {
+			if e.Message == "starting request" || e.Message == "finished request" {
+				requestLogs = append(requestLogs, e)
+			}
+		}
+
+		assert.Len(t, requestLogs, 2)
+		for i, e := range requestLogs {
 			entry, err := e.String()
 			require.NoError(t, err)
 
@@ -708,7 +718,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 			} else if i == 1 {
 				assert.Contains(t, e.Message, "finished request")
 			}
-			assert.Equal(t, log.InfoLevel, e.Level)
+			assert.Equal(t, logrus.InfoLevel, e.Level)
 		}
 	})
 
@@ -1149,7 +1159,8 @@ func Test_BasicAuthMiddleware(t *testing.T) {
 func Test_ExtractTenantNameFromRequest(t *testing.T) {
 	t.Run("extract tenant name from header", func(t *testing.T) {
 		expectedTenant := "tenant123"
-		r, _ := http.NewRequest("GET", "http://example.com", nil)
+		r, err := http.NewRequest("GET", "http://example.com", nil)
+		require.NoError(t, err)
 		r.Header.Add(TenantHeaderKey, expectedTenant)
 
 		tenantName, err := extractTenantNameFromRequest(r)
@@ -1159,7 +1170,8 @@ func Test_ExtractTenantNameFromRequest(t *testing.T) {
 
 	t.Run("extract tenant name from hostname", func(t *testing.T) {
 		expectedTenant := "tenantfromhost"
-		r, _ := http.NewRequest("GET", "http://tenantfromhost.example.com", nil)
+		r, err := http.NewRequest("GET", "http://tenantfromhost.example.com", nil)
+		require.NoError(t, err)
 
 		tenantName, err := extractTenantNameFromRequest(r)
 		require.NoError(t, err)
@@ -1167,7 +1179,8 @@ func Test_ExtractTenantNameFromRequest(t *testing.T) {
 	})
 
 	t.Run("error extracting tenant from hostname", func(t *testing.T) {
-		r, _ := http.NewRequest("GET", "http://example.com", nil)
+		r, err := http.NewRequest("GET", "http://example.com", nil)
+		require.NoError(t, err)
 
 		name, err := extractTenantNameFromRequest(r)
 		require.ErrorIs(t, err, utils.ErrTenantNameNotFound)
@@ -1176,7 +1189,8 @@ func Test_ExtractTenantNameFromRequest(t *testing.T) {
 
 	t.Run("extract tenant name with port", func(t *testing.T) {
 		expectedTenant := "tenantwithport"
-		r, _ := http.NewRequest("GET", "http://tenantwithport.example.com:8080", nil)
+		r, err := http.NewRequest("GET", "http://tenantwithport.example.com:8080", nil)
+		require.NoError(t, err)
 
 		tenantName, err := extractTenantNameFromRequest(r)
 		require.NoError(t, err)

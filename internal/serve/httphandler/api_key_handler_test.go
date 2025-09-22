@@ -57,7 +57,8 @@ func Test_CreateAPIKey_WithAllFields(t *testing.T) {
 		"allowed_ips": data.IPList{"198.51.100.0/24"},
 		"expiry_date": expiry,
 	}
-	b, _ := json.Marshal(reqBody)
+	b, err := json.Marshal(reqBody)
+	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api-keys", bytes.NewReader(b))
 	rr := httptest.NewRecorder()
 
@@ -67,7 +68,8 @@ func Test_CreateAPIKey_WithAllFields(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	var out data.APIKey
-	dataBytes, _ := io.ReadAll(resp.Body)
+	dataBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(dataBytes, &out))
 
 	assert.NotEmpty(t, out.ID)
@@ -88,7 +90,8 @@ func Test_CreateAPIKey_WithMinimumFields(t *testing.T) {
 		"name":        "Magos Dominus Access Key",
 		"permissions": []string{"read:all"},
 	}
-	b, _ := json.Marshal(reqBody)
+	b, err := json.Marshal(reqBody)
+	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api-keys", bytes.NewReader(b))
 	rr := httptest.NewRecorder()
 
@@ -153,7 +156,8 @@ func TestUpdateKey_AllowedIPsHandling(t *testing.T) {
 				"permissions": []string{"read:statistics", "read:exports"},
 				"allowed_ips": tc.allowedIPs,
 			}
-			b, _ := json.Marshal(reqBody)
+			b, err := json.Marshal(reqBody)
+			require.NoError(t, err)
 
 			req := httptest.NewRequestWithContext(
 				ctx,
@@ -217,7 +221,8 @@ func Test_CreateAPIKey_ValidationErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			handler, ctx := setupHandler(t)
 
-			b, _ := json.Marshal(tc.requestBody)
+			b, err := json.Marshal(tc.requestBody)
+			require.NoError(t, err)
 			req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api-keys", bytes.NewReader(b))
 			rr := httptest.NewRecorder()
 
@@ -266,7 +271,8 @@ func TestCreateAPIKey_IPValidationErrors(t *testing.T) {
 				"permissions": []string{"read:statistics"},
 				"allowed_ips": tc.allowedIPs,
 			}
-			b, _ := json.Marshal(reqBody)
+			b, err := json.Marshal(reqBody)
+			require.NoError(t, err)
 			req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api-keys", bytes.NewReader(b))
 			rr := httptest.NewRecorder()
 
@@ -309,7 +315,8 @@ func TestCreateAPIKey_MissingUserID(t *testing.T) {
 		"name":        "Adeptus Mechanicus Key",
 		"permissions": []string{"read:statistics"},
 	}
-	b, _ := json.Marshal(reqBody)
+	b, err := json.Marshal(reqBody)
+	require.NoError(t, err)
 	req := httptest.NewRequestWithContext(emptyCtx, http.MethodPost, "/api-keys", bytes.NewReader(b))
 	rr := httptest.NewRecorder()
 
@@ -510,7 +517,8 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 			"permissions": []string{"read:statistics", "read:exports"},
 			"allowed_ips": []string{"192.168.1.0/24", "203.0.113.42"},
 		}
-		b, _ := json.Marshal(reqBody)
+		b, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
 		rr := httptest.NewRecorder()
@@ -531,7 +539,8 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 			"permissions": []string{},
 			"allowed_ips": []string{"192.168.1.0/24"},
 		}
-		b, _ := json.Marshal(reqBody)
+		b, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
 		rr := httptest.NewRecorder()
@@ -545,7 +554,8 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 			"permissions": []string{"read:statistics", "heresy:purge"},
 			"allowed_ips": []string{"192.168.1.0/24"},
 		}
-		b, _ := json.Marshal(reqBody)
+		b, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
 		rr := httptest.NewRecorder()
@@ -559,7 +569,8 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 			"permissions": []string{"read:statistics"},
 			"allowed_ips": []string{"192.168.1.0/24", "not-an-ip"},
 		}
-		b, _ := json.Marshal(reqBody)
+		b, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
 		rr := httptest.NewRecorder()
@@ -573,7 +584,8 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 			"permissions": []string{"read:statistics"},
 			"allowed_ips": []string{"192.168.1.0/24"},
 		}
-		b, _ := json.Marshal(reqBody)
+		b, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		req := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api-keys/00000000-0000-0000-0000-000000000000", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
@@ -587,7 +599,8 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 			"permissions": []string{"read:statistics"},
 			"allowed_ips": []string{"192.168.1.0/24"},
 		}
-		b, _ := json.Marshal(reqBody)
+		b, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		otherUserID := "11111111-2222-3333-4444-555555555555"
 		otherCtx := sdpcontext.SetUserIDInContext(context.Background(), otherUserID)
@@ -612,7 +625,8 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 			"permissions": []string{"read:statistics"},
 			"allowed_ips": []string{"192.168.1.0/24"},
 		}
-		b, _ := json.Marshal(reqBody)
+		b, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		emptyCtx := context.Background()
 		req := httptest.NewRequestWithContext(emptyCtx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))

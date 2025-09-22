@@ -26,6 +26,7 @@ func main() {
 	flag.BoolVar(&fundUSDC, "fundusdc", false, "Set to true to fund the account with USDC and establish a trustline")
 	flag.StringVar(&xlmAmount, "xlm_amount", "10", "The amount of XLM to fund the account with (default is 10).")
 
+	//nolint:errcheck // Not handling error on flag.Usage
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
 		fmt.Fprintln(flag.CommandLine.Output(), "  This program creates and manages funding for Stellar accounts.")

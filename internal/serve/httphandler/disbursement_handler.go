@@ -370,7 +370,7 @@ func parseCsvFromMultipartRequest(r *http.Request) (*bytes.Buffer, *multipart.Fi
 	if err != nil {
 		return nil, nil, httperror.BadRequest("could not parse file", err, nil)
 	}
-	defer file.Close()
+	defer utils.DeferredClose(r.Context(), file, "closing file")
 
 	if err = utils.ValidatePathIsNotTraversal(header.Filename); err != nil {
 		return nil, nil, httperror.BadRequest("file name contains invalid traversal pattern", nil, nil)

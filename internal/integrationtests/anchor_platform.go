@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -194,7 +195,7 @@ func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken
 	// creates the multipart/form-data with the necessary fields to complete the request on the anchor platform
 	b := &bytes.Buffer{}
 	w := multipart.NewWriter(b)
-	defer w.Close()
+	defer utils.DeferredClose(context.Background(), w, "closing multipart writer")
 	formValues := map[string]string{
 		"asset_code":                  ap.DisbursedAssetCode,
 		"account":                     ap.ReceiverAccountPublicKey,
@@ -204,16 +205,19 @@ func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken
 	for k, v := range formValues {
 		err = w.WriteField(k, v)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error writing %q field to form data: %w", k, err)
+			return nil, nil, fmt.Errorf("writing %q field to form data: %w", k, err)
 		}
 	}
 	// we need to close *multipart.Writter before pass as parameter in http.NewRequestWithContext
-	w.Close()
+	err = w.Close()
+	if err != nil {
+		return nil, nil, fmt.Errorf("closing multipart writer: %w", err)
+	}
 
 	ctx := context.Background()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, depositUrl, b)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating new request: %w", err)
+		return nil, nil, fmt.Errorf("creating new request: %w", err)
 	}
 
 	// POST sep24/transactions/deposit/interactive endpoint on anchor platform expects the content-type to be multipart/form-data

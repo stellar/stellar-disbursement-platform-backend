@@ -318,7 +318,8 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 			} else {
 				// Attempt fetching tenant name from request
 				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
-					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
+					currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
+					log.Ctx(ctx).Warnf("could not find tenant with name %s: %v", tenantName, err)
 				}
 			}
 

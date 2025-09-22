@@ -165,7 +165,7 @@ func (h TenantsHandler) sendInvitationMessage(
 	if err != nil {
 		return fmt.Errorf("opening database connection on tenant schema and getting model: %w", err)
 	}
-	defer tenantSchemaConnectionPool.Close()
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool")
 
 	if err = coreSvc.SendInvitationMessage(ctx, h.MessengerClient, models, opts); err != nil {
 		return fmt.Errorf("creating and sending invitation message: %w", err)

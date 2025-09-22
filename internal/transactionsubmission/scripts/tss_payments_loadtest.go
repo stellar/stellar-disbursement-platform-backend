@@ -24,7 +24,11 @@ func calculateAndPrintMetrics(ctx context.Context, horizonClient *horizonclient.
 	transactionLatencies := make([]time.Duration, 0, len(transactionIDs))
 	uniqueLedgers := make(map[int32]bool)
 	for _, transactionID := range transactionIDs {
-		tx, _ := txModel.Get(ctx, transactionID)
+		tx, err := txModel.Get(ctx, transactionID)
+		if err != nil {
+			fmt.Printf("failed to get transaction %s from tss", transactionID)
+			continue
+		}
 		transactionsTSS[transactionID] = tx
 	}
 

@@ -62,7 +62,8 @@ func CreateTransactionFixtureNew(
 
 	completedAt := pq.NullTime{}
 	if txFixture.Status == TransactionStatusSuccess || txFixture.Status == TransactionStatusError {
-		timeElapsed, _ := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
+		timeElapsed, err := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
+		require.NoError(t, err)
 		randomCompletedAt := time.Unix(timeElapsed.Int64(), 0)
 		completedAt = pq.NullTime{Time: randomCompletedAt, Valid: true}
 	}

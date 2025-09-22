@@ -11,6 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -59,7 +60,7 @@ func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body Create
 	if err != nil {
 		return nil, fmt.Errorf("making request to create tenant: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusCreated {
 		var httpErr httperror.HTTPError

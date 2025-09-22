@@ -68,7 +68,8 @@ func TestInsertReceiverRegistrationAttempt(t *testing.T) {
 			assert.WithinDuration(t, now, ts.UTC(), time.Second)
 
 			// clean up for next subtest
-			_, _ = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
+			_, err = models.DBConnectionPool.ExecContext(ctx, `DELETE FROM receiver_registration_attempts`)
+			require.NoError(t, err)
 		})
 	}
 }

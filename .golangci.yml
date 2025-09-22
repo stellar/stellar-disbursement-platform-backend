@@ -13,7 +13,7 @@ linters:
     - nilnesserr
     # - errname
     - errorlint
-    # - errcheck
+    - errcheck
     # - wrapcheck
     - unused
     - unconvert
@@ -41,9 +41,9 @@ linters:
       - path: _test\.go
         linters: [wrapcheck]
 
-      - path: (_test\.go|dbtest\.go)$
+      - path: (_test\.go|dbtest\.go|fixtures\.go|test_utils\.go|.*/testutils/.*)$
         linters: [errcheck]
-        text: '\.Close()|\.Rollback()'
+        text: '\.Close()|\.Rollback()|\.Execute()'
 
       # Exclude some `staticcheck` messages.
       - linters: [staticcheck]

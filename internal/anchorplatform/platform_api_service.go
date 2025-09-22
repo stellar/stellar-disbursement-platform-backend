@@ -141,7 +141,7 @@ func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context,
 	if err != nil {
 		log.Ctx(ctx).Errorf("reading response body: %v", err)
 	}
-	defer response.Body.Close()
+	defer utils.DeferredClose(ctx, response.Body, "closing response body")
 
 	if response.StatusCode/100 != 2 {
 		return fmt.Errorf("updating transaction on anchor platform, response.StatusCode=%d, response.body=%v", response.StatusCode, string(body))
@@ -199,7 +199,7 @@ func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) 
 	if err != nil {
 		return false, fmt.Errorf("getting anchor transactions from platform API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode >= 500 {
 		return false, fmt.Errorf("platform API is returning an unexpected response statusCode=%d: %w", resp.StatusCode, ErrServiceUnavailable)

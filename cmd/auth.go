@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/cli"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -105,7 +106,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error opening Admin DB connection pool: %s", err.Error())
 				}
-				defer adminDBConnectionPool.Close()
+				defer utils.DeferredClose(ctx, adminDBConnectionPool, "closing admin db connection pool")
 				tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 				t, err := tm.GetTenantByID(ctx, tenantID)
 				if err != nil {
@@ -119,7 +120,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting dbConnectionPool in execAddUser: %s", err.Error())
 				}
-				defer dbConnectionPool.Close()
+				defer utils.DeferredClose(ctx, dbConnectionPool, "closing db connection pool")
 
 				models, err := data.NewModels(dbConnectionPool)
 				if err != nil {

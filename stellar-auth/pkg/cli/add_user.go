@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -167,7 +168,7 @@ func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, 
 	if err != nil {
 		return fmt.Errorf("opening Admin DB connection pool: %w", err)
 	}
-	defer adminDBConnectionPool.Close()
+	defer sdpUtils.DeferredClose(ctx, adminDBConnectionPool, "closing admin db connection pool")
 	tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 	t, err := tm.GetTenantByID(ctx, tenantID)
 	if err != nil {
@@ -181,7 +182,7 @@ func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, 
 	if err != nil {
 		return fmt.Errorf("getting dbConnectionPool in execAddUser: %w", err)
 	}
-	defer dbConnectionPool.Close()
+	defer sdpUtils.DeferredClose(ctx, dbConnectionPool, "closing db connection pool")
 
 	authManager := auth.NewAuthManager(
 		auth.WithDefaultAuthenticatorOption(dbConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),

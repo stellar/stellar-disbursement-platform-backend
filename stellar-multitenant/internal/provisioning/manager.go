@@ -231,7 +231,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 	if err != nil {
 		return fmt.Errorf("opening database connection on tenant schema and getting models: %w", err)
 	}
-	defer tenantSchemaConnectionPool.Close()
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool")
 
 	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.NetworkType), pt.DistributionAccountType.Platform())
 	if err != nil {
