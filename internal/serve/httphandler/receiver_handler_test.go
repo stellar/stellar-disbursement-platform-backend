@@ -2182,7 +2182,6 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
 			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
 
