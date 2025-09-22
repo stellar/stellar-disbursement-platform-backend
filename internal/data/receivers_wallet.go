@@ -683,10 +683,9 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	query = sqlExec.Rebind(query)
 	result, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
-		if pqError, ok := err.(*pq.Error); ok {
-			if pqError.Code == "P0001" && strings.Contains(pqError.Message, "already belongs to another receiver") {
-				return ErrDuplicateWalletAddress
-			}
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Code == "P0001" && strings.Contains(pqError.Message, "already belongs to another receiver") {
+			return ErrDuplicateWalletAddress
 		}
 		return fmt.Errorf("updating receiver wallet: %w", err)
 	}

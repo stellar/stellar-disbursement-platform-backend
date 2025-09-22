@@ -139,7 +139,8 @@ func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, passw
 	var userID string
 	err = a.dbConnectionPool.GetContext(ctx, &userID, query, user.Email, encryptedPassword, user.FirstName, user.LastName, pq.Array(user.Roles), user.IsOwner)
 	if err != nil {
-		if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "auth_users_email_key" {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Constraint == "auth_users_email_key" {
 			return nil, ErrUserEmailAlreadyExists
 		}
 		return nil, fmt.Errorf("inserting user: %w", err)

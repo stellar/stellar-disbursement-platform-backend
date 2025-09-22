@@ -248,7 +248,7 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		log.Ctx(ctx).Infof("Default tenant exists: %s (%s)", existing.Name, existing.ID)
 		return nil
 	}
-	if err != tenant.ErrTenantDoesNotExist {
+	if !errors.Is(err, tenant.ErrTenantDoesNotExist) {
 		return fmt.Errorf("checking default tenant: %w", err)
 	}
 

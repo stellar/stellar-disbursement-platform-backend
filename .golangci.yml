@@ -12,7 +12,7 @@ linters:
     - nilerr
     - nilnesserr
     # - errname
-    # - errorlint
+    - errorlint
     # - errcheck
     # - wrapcheck
     - unused

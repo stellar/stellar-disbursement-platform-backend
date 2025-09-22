@@ -323,7 +323,8 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 	var receiver Receiver
 	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalId)
 	if err != nil {
-		if pqError, ok := err.(*pq.Error); ok && pqError.Code == "23505" {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Code == "23505" {
 			switch pqError.Constraint {
 			case "receiver_unique_email":
 				return nil, ErrDuplicateEmail
@@ -379,7 +380,8 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 
 	_, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
-		if pqError, ok := err.(*pq.Error); ok && pqError.Code == "23505" {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Code == "23505" {
 			switch pqError.Constraint {
 			case "receiver_unique_email":
 				return ErrDuplicateEmail

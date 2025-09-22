@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -479,7 +480,8 @@ func (s *DirectPaymentService) checkTrustlineExists(
 		AccountID: account.Address,
 	})
 	if err != nil {
-		if horizonErr, ok := err.(*horizonclient.Error); ok {
+		var horizonErr *horizonclient.Error
+		if errors.As(err, &horizonErr) {
 			if horizonErr.Response.StatusCode == 404 {
 				return false, AccountNotFoundError{Address: account.Address}
 			}

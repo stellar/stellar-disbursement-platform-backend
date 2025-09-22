@@ -32,7 +32,7 @@ func (o SendInvitationMessageOptions) Validate() error {
 	} else {
 		_, err := url.Parse(o.UIBaseURL)
 		if err != nil {
-			return fmt.Errorf("UI base URL is not a valid URL: %s", err)
+			return fmt.Errorf("UI base URL is not a valid URL: %w", err)
 		}
 	}
 

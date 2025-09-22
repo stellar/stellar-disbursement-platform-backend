@@ -223,7 +223,8 @@ func (m *Manager) AddTenant(ctx context.Context, name string) (*schema.Tenant, e
 	const q = "INSERT INTO tenants (name) VALUES ($1) RETURNING *"
 	var t schema.Tenant
 	if err := m.db.GetContext(ctx, &t, q, name); err != nil {
-		if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "idx_unique_name" {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Constraint == "idx_unique_name" {
 			return nil, ErrDuplicatedTenantName
 		}
 		return nil, fmt.Errorf("inserting tenant %s: %w", name, err)
