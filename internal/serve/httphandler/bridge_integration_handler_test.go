@@ -280,6 +280,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 				"extras": {
 					"bridge_error_code": "VALIDATION_ERROR",
 					"bridge_error_type": "validation_error",
+					"bridge_error_message": "Invalid request",
 					"bridge_error_details": "Field 'customer_id' is required",
 					"bridge_error_source_location": "body",
 					"bridge_error_source_key": {"customer_id": "required"}
@@ -436,7 +437,8 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 				"error": "Direct opt-in to Bridge integration failed",
 				"extras": {
 					"bridge_error_code": "NOT_FOUND",
-					"bridge_error_type": "not_found_error"
+					"bridge_error_type": "not_found_error",
+					"bridge_error_message": "Customer not found"
 				}
 			}`,
 		},
@@ -746,7 +748,8 @@ func Test_BridgeIntegrationHandler_Patch_createVirtualAccount(t *testing.T) {
 				"error": "Virtual account creation failed",
 				"extras": {
 					"bridge_error_code": "INVALID_CUSTOMER",
-					"bridge_error_type": "validation_error"
+					"bridge_error_type": "validation_error",
+					"bridge_error_message": "Customer not found"
 				}
 			}`,
 		},
@@ -960,6 +963,7 @@ func Test_bridgeErrorToExtras(t *testing.T) {
 			expectedExtras: map[string]interface{}{
 				"bridge_error_code":            "VALIDATION_ERROR",
 				"bridge_error_type":            "validation_error",
+				"bridge_error_message":         "Invalid request",
 				"bridge_error_details":         "Field 'customer_id' is required",
 				"bridge_error_source_location": "body",
 				"bridge_error_source_key":      map[string]string{"customer_id": "required"},
@@ -973,8 +977,9 @@ func Test_bridgeErrorToExtras(t *testing.T) {
 				Type:    "server_error",
 			},
 			expectedExtras: map[string]interface{}{
-				"bridge_error_code": "SERVER_ERROR",
-				"bridge_error_type": "server_error",
+				"bridge_error_code":    "SERVER_ERROR",
+				"bridge_error_type":    "server_error",
+				"bridge_error_message": "Internal error",
 			},
 		},
 	}
