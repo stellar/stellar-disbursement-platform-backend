@@ -42,14 +42,14 @@ jobs:
           echo 'Anchor-platform is up and running.'
 
       - name: Install NodeJs
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 14
 
       - name: Anchor Validation Tests (@stellar/anchor-tests)
         run: |
-          npm install -g @stellar/anchor-tests
-          stellar-anchor-tests --home-domain http://localhost:8000 --seps 1 10
+          docker pull stellar/anchor-tests:latest
+          docker run --network host stellar/anchor-tests:latest --home-domain http://localhost:8000 --seps 1 10
 
       - name: Docker logs
         if: always()

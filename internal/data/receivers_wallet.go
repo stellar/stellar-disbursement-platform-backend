@@ -683,6 +683,11 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	query = sqlExec.Rebind(query)
 	result, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
+		if pqError, ok := err.(*pq.Error); ok {
+			if pqError.Code == "P0001" && strings.Contains(pqError.Message, "already belongs to another receiver") {
+				return ErrDuplicateWalletAddress
+			}
+		}
 		return fmt.Errorf("updating receiver wallet: %w", err)
 	}
 
@@ -702,6 +707,7 @@ var (
 	ErrWalletNotRegistered         = errors.New("receiver wallet not registered")
 	ErrPaymentsInProgressForWallet = errors.New("receiver wallet has payments in progress")
 	ErrUnregisterUserManagedWallet = errors.New("user managed wallet cannot be unregistered")
+	ErrDuplicateWalletAddress      = errors.New("wallet address already in use")
 )
 
 // UpdateStatusToReady updates the status of a receiver wallet to "READY" and clears the stellar address and memo.

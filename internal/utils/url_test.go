@@ -320,3 +320,95 @@ func Test_IsStaticAsset(t *testing.T) {
 		})
 	}
 }
+
+func Test_IsBaseURL(t *testing.T) {
+	testCases := []struct {
+		name     string
+		url      string
+		expected bool
+	}{
+		{
+			name:     "valid base URL with https",
+			url:      "https://api.bridge.xyz",
+			expected: true,
+		},
+		{
+			name:     "valid base URL with trailing slash",
+			url:      "https://api.bridge.xyz/",
+			expected: true,
+		},
+		{
+			name:     "valid base URL with http",
+			url:      "http://api.bridge.xyz",
+			expected: true,
+		},
+		{
+			name:     "URL with path parameter",
+			url:      "https://api.bridge.xyz/v0/",
+			expected: false,
+		},
+		{
+			name:     "URL with multiple path segments",
+			url:      "https://api.bridge.xyz/v0/users",
+			expected: false,
+		},
+		{
+			name:     "URL with query parameters",
+			url:      "https://api.bridge.xyz?param=value",
+			expected: false,
+		},
+		{
+			name:     "URL with fragment",
+			url:      "https://api.bridge.xyz#section",
+			expected: false,
+		},
+		{
+			name:     "URL with path and query",
+			url:      "https://api.bridge.xyz/api?key=123",
+			expected: false,
+		},
+		{
+			name:     "URL with path and fragment",
+			url:      "https://api.bridge.xyz/docs#intro",
+			expected: false,
+		},
+		{
+			name:     "URL with subdomain",
+			url:      "https://api.sub.bridge.xyz",
+			expected: true,
+		},
+		{
+			name:     "URL with port",
+			url:      "https://api.bridge.xyz:8080",
+			expected: true,
+		},
+		{
+			name:     "URL with port and trailing slash",
+			url:      "https://api.bridge.xyz:8080/",
+			expected: true,
+		},
+		{
+			name:     "localhost URL",
+			url:      "http://localhost",
+			expected: true,
+		},
+		{
+			name:     "localhost with port",
+			url:      "http://localhost:3000",
+			expected: true,
+		},
+		{
+			name:     "localhost with path",
+			url:      "http://localhost:3000/api",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := IsBaseURL(tc.url)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}

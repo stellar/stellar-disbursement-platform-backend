@@ -144,20 +144,20 @@ func (rh ReceiverHandler) GetReceiverVerificationTypes(w http.ResponseWriter, r 
 	httpjson.Render(w, data.GetAllVerificationTypes(), httpjson.JSON)
 }
 
-func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request) {
+func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var err error
 
 	var req dto.CreateReceiverRequest
 	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		httperror.BadRequest("invalid request body", err, nil).Render(rw)
 		return
 	}
 
 	validator := validators.NewReceiverValidator()
 	validator.ValidateCreateReceiverRequest(&req)
 	if validator.HasErrors() {
-		httperror.BadRequest("validation error", nil, validator.Errors).Render(w)
+		httperror.BadRequest("validation error", nil, validator.Errors).Render(rw)
 		return
 	}
 
@@ -230,13 +230,16 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 
 				// Update wallet with Stellar address and memo details
 				walletUpdate := data.ReceiverWalletUpdate{
-					Status:         data.ReadyReceiversWalletStatus,
+					Status:         data.RegisteredReceiversWalletStatus,
 					StellarAddress: w.Address,
 				}
 
 				// Only set memo and memo type if memo is provided
 				if w.Memo != "" {
-					memoType := schema.MemoTypeID
+					_, memoType, parseErr := schema.ParseMemo(w.Memo)
+					if parseErr != nil {
+						return nil, fmt.Errorf("parsing memo value: %w", parseErr)
+					}
 					walletUpdate.StellarMemo = &w.Memo
 					walletUpdate.StellarMemoType = &memoType
 				}
@@ -267,14 +270,14 @@ func (rh ReceiverHandler) CreateReceiver(w http.ResponseWriter, r *http.Request)
 		}, nil
 	})
 	if err != nil {
-		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
-			httpErr.Render(w)
+		if httpErr := parseConflictErrorIfNeeded(err); httpErr != nil {
+			httpErr.Render(rw)
 			return
 		}
 
-		httperror.InternalError(ctx, "Error creating receiver", err, nil).Render(w)
+		httperror.InternalError(ctx, "Error creating receiver", err, nil).Render(rw)
 		return
 	}
 
-	httpjson.RenderStatus(w, http.StatusCreated, response, httpjson.JSON)
+	httpjson.RenderStatus(rw, http.StatusCreated, response, httpjson.JSON)
 }

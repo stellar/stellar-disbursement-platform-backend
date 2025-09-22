@@ -7,30 +7,22 @@ import (
 
 // KYCLinkInfo represents the response from creating a KYC link
 type KYCLinkInfo struct {
-	ID               string    `json:"id"`
-	FullName         string    `json:"full_name"`
-	Email            string    `json:"email"`
-	Type             KYCType   `json:"type"`
-	KYCLink          string    `json:"kyc_link"`
-	TOSLink          string    `json:"tos_link"`
-	KYCStatus        KYCStatus `json:"kyc_status"`
-	TOSStatus        TOSStatus `json:"tos_status"`
-	RejectionReasons []string  `json:"rejection_reasons,omitempty"`
-	CreatedAt        string    `json:"created_at,omitempty"`
-	CustomerID       string    `json:"customer_id"`
+	ID               string       `json:"id"`
+	FullName         string       `json:"full_name"`
+	Email            string       `json:"email"`
+	Type             CustomerType `json:"type"`
+	KYCLink          string       `json:"kyc_link"`
+	TOSLink          string       `json:"tos_link"`
+	KYCStatus        KYCStatus    `json:"kyc_status"`
+	TOSStatus        TOSStatus    `json:"tos_status"`
+	RejectionReasons []string     `json:"rejection_reasons,omitempty"`
+	CreatedAt        string       `json:"created_at,omitempty"`
+	CustomerID       string       `json:"customer_id"`
 }
 
-// KYCType represents the type of KYC verification
-type KYCType string
-
-const (
-	KYCTypeIndividual KYCType = "individual"
-	KYCTypeBusiness   KYCType = "business"
-)
-
-func (kycType KYCType) Validate() error {
-	switch KYCType(strings.ToLower(string(kycType))) {
-	case KYCTypeIndividual, KYCTypeBusiness:
+func (kycType CustomerType) Validate() error {
+	switch CustomerType(strings.ToLower(string(kycType))) {
+	case CustomerTypeIndividual, CustomerTypeBusiness:
 		return nil
 	default:
 		return fmt.Errorf("invalid KYC type %s, must be either 'individual' or 'business'", kycType)
@@ -61,11 +53,11 @@ const (
 
 // KYCLinkRequest represents the request payload for creating a KYC link
 type KYCLinkRequest struct {
-	FullName     string   `json:"full_name"`
-	Email        string   `json:"email"`
-	Type         KYCType  `json:"type"`
-	Endorsements []string `json:"endorsements,omitempty"`
-	RedirectURI  string   `json:"redirect_uri,omitempty"`
+	FullName     string       `json:"full_name"`
+	Email        string       `json:"email"`
+	Type         CustomerType `json:"type"`
+	Endorsements []string     `json:"endorsements,omitempty"`
+	RedirectURI  string       `json:"redirect_uri,omitempty"`
 }
 
 // Validate validates the KYC link request
@@ -79,7 +71,7 @@ func (r KYCLinkRequest) Validate() error {
 	if r.Type == "" {
 		return fmt.Errorf("type is required")
 	}
-	if r.Type != KYCTypeIndividual && r.Type != KYCTypeBusiness {
+	if r.Type != CustomerTypeIndividual && r.Type != CustomerTypeBusiness {
 		return fmt.Errorf("type must be either 'individual' or 'business'")
 	}
 	return nil

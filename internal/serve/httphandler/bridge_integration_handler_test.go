@@ -58,7 +58,7 @@ func Test_BridgeIntegrationHandler_Get(t *testing.T) {
 					CustomerID: utils.StringPtr("customer-123"),
 					KYCLinkInfo: &bridge.KYCLinkInfo{
 						ID:         "kyc-link-123",
-						Type:       bridge.KYCTypeBusiness,
+						Type:       bridge.CustomerTypeBusiness,
 						FullName:   "John Doe",
 						Email:      "john.doe@example.com",
 						KYCStatus:  bridge.KYCStatusApproved,
@@ -142,7 +142,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 		FullName:    "John Doe",
 		Email:       "user@example.com",
 		RedirectURL: redirectURL,
-		KYCType:     bridge.KYCTypeBusiness,
+		KYCType:     bridge.CustomerTypeBusiness,
 	}
 	testCases := []struct {
 		name             string
@@ -280,6 +280,7 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 				"extras": {
 					"bridge_error_code": "VALIDATION_ERROR",
 					"bridge_error_type": "validation_error",
+					"bridge_error_message": "Invalid request",
 					"bridge_error_details": "Field 'customer_id' is required",
 					"bridge_error_source_location": "body",
 					"bridge_error_source_key": {"customer_id": "required"}
@@ -380,6 +381,100 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 			expectedResponse: `{
 				"status": "OPTED_IN",
 				"customer_id": "customer-123"
+			}`,
+		},
+		{
+			name: "🎉 direct onboarding with valid customer_id",
+			requestBody: PatchRequest{
+				Status:     data.BridgeIntegrationStatusOptedIn,
+				CustomerID: "customer-456",
+			},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				bridgeInfo := &bridge.BridgeIntegrationInfo{
+					Status:     data.BridgeIntegrationStatusOptedIn,
+					CustomerID: utils.StringPtr("customer-456"),
+				}
+				mBridgeService.
+					On("OptInForExistingCustomer", mock.Anything, "customer-456", testUser.ID).
+					Return(bridgeInfo, nil).
+					Once()
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: `{
+				"status": "OPTED_IN",
+				"customer_id": "customer-456"
+			}`,
+		},
+		{
+			name: "direct onboarding with invalid customer_id",
+			requestBody: PatchRequest{
+				Status:     data.BridgeIntegrationStatusOptedIn,
+				CustomerID: "invalid-customer",
+			},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				bridgeError := bridge.BridgeErrorResponse{
+					Code:    "NOT_FOUND",
+					Message: "Customer not found",
+					Type:    "not_found_error",
+				}
+				mBridgeService.
+					On("OptInForExistingCustomer", mock.Anything, "invalid-customer", testUser.ID).
+					Return(nil, bridgeError).
+					Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedResponse: `{
+				"error": "Direct opt-in to Bridge integration failed",
+				"extras": {
+					"bridge_error_code": "NOT_FOUND",
+					"bridge_error_type": "not_found_error",
+					"bridge_error_message": "Customer not found"
+				}
+			}`,
+		},
+		{
+			name: "manual onboarding when already opted in",
+			requestBody: PatchRequest{
+				Status:     data.BridgeIntegrationStatusOptedIn,
+				CustomerID: "customer-456",
+			},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				mBridgeService.
+					On("OptInForExistingCustomer", mock.Anything, "customer-456", testUser.ID).
+					Return(nil, bridge.ErrBridgeAlreadyOptedIn).
+					Once()
+			},
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "Your organization has already opted into Bridge integration"}`,
+		},
+		{
+			name: "validation error - empty customer_id",
+			requestBody: PatchRequest{
+				Status:     data.BridgeIntegrationStatusOptedIn,
+				CustomerID: "   ",
+			},
+			prepareMocks:   func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedResponse: `{
+				"error": "Invalid request",
+				"extras": {
+					"validation_error": "customer_id cannot be empty or whitespace only"
+				}
 			}`,
 		},
 	}
@@ -653,7 +748,8 @@ func Test_BridgeIntegrationHandler_Patch_createVirtualAccount(t *testing.T) {
 				"error": "Virtual account creation failed",
 				"extras": {
 					"bridge_error_code": "INVALID_CUSTOMER",
-					"bridge_error_type": "validation_error"
+					"bridge_error_type": "validation_error",
+					"bridge_error_message": "Customer not found"
 				}
 			}`,
 		},
@@ -867,6 +963,7 @@ func Test_bridgeErrorToExtras(t *testing.T) {
 			expectedExtras: map[string]interface{}{
 				"bridge_error_code":            "VALIDATION_ERROR",
 				"bridge_error_type":            "validation_error",
+				"bridge_error_message":         "Invalid request",
 				"bridge_error_details":         "Field 'customer_id' is required",
 				"bridge_error_source_location": "body",
 				"bridge_error_source_key":      map[string]string{"customer_id": "required"},
@@ -880,8 +977,9 @@ func Test_bridgeErrorToExtras(t *testing.T) {
 				Type:    "server_error",
 			},
 			expectedExtras: map[string]interface{}{
-				"bridge_error_code": "SERVER_ERROR",
-				"bridge_error_type": "server_error",
+				"bridge_error_code":    "SERVER_ERROR",
+				"bridge_error_type":    "server_error",
+				"bridge_error_message": "Internal error",
 			},
 		},
 	}

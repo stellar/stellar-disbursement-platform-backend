@@ -348,9 +348,9 @@ func Test_UpdateReceiverHandler_409(t *testing.T) {
 				PhoneNumber: receiverStatic.PhoneNumber,
 			},
 			expectedBody: `{
-				"error": "The provided phone_number is already associated with another user.",
+				"error": "The provided phone number is already associated with another user.",
 				"extras": {
-					"phone_number": "phone_number must be unique"
+					"phone_number": "phone number must be unique"
 				}
 			}`,
 		},
