@@ -76,14 +76,14 @@ func (m *BridgeIntegrationModel) Get(ctx context.Context) (*BridgeIntegration, e
 }
 
 type BridgeIntegrationInsert struct {
-	KYCLinkID  string
+	KYCLinkID  *string
 	CustomerID string
 	OptedInBy  string
 }
 
 func (bii BridgeIntegrationInsert) Validate() error {
-	if bii.KYCLinkID == "" {
-		return fmt.Errorf("KYCLinkID is required")
+	if bii.KYCLinkID != nil && strings.TrimSpace(*bii.KYCLinkID) == "" {
+		return fmt.Errorf("KYCLinkID is empty")
 	}
 	if bii.CustomerID == "" {
 		return fmt.Errorf("CustomerID is required")
