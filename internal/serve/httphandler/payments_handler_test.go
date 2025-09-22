@@ -27,8 +27,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -37,7 +37,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_PaymentsHandlerGet(t *testing.T) {
@@ -889,9 +888,9 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	tnt := tenant.Tenant{ID: "tenant-id"}
+	tnt := schema.Tenant{ID: "tenant-id"}
 
-	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
 
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
@@ -930,7 +929,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	})
 
 	t.Run("returns InternalServerError when fails getting user from token", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
 		require.NoError(t, err)
@@ -961,7 +960,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	})
 
 	t.Run("returns BadRequest when fails decoding body request", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		payload := strings.NewReader("invalid")
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
@@ -993,7 +992,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	})
 
 	t.Run("returns BadRequest when fails when payload is invalid", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		payload := strings.NewReader("{}")
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
@@ -1067,7 +1066,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1157,7 +1156,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1262,9 +1261,9 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			LastSyncAttemptAt: time.Now(),
 		})
 
-		circleTnt := tenant.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
-		circleCtx := tenant.SaveTenantInContext(context.Background(), &circleTnt)
-		circleCtx = context.WithValue(circleCtx, middleware.TokenContextKey, "mytoken")
+		circleTnt := schema.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
+		circleCtx := sdpcontext.SetTenantInContext(context.Background(), &circleTnt)
+		circleCtx = sdpcontext.SetTokenInContext(circleCtx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`{ "payment_ids": [%q] } `, failedPayment.ID))
 		req, err := http.NewRequestWithContext(circleCtx, http.MethodPatch, "/retry", payload)
@@ -1355,7 +1354,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctxWithoutTenant := context.WithValue(context.Background(), middleware.TokenContextKey, "mytoken")
+		ctxWithoutTenant := sdpcontext.SetTokenInContext(context.Background(), "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1403,7 +1402,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1491,7 +1490,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1792,8 +1791,8 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 }
 
 func Test_PaymentsHandler_PostPayment(t *testing.T) {
-	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	models, err := data.NewModels(dbConnectionPool)
@@ -2337,8 +2336,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
-	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-horus")
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-horus")
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

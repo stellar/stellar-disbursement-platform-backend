@@ -5,6 +5,9 @@ const (
 	Code400_1 = "400_1" // ReCAPTCHA token is invalid.
 	Code400_2 = "400_2" // The information you provided could not be found.
 	Code400_3 = "400_3" // The number of attempts to confirm the verification value exceeded the max attempts.
+	Code400_4 = "400_4" // Max OTP attempts exceeded.
+	Code400_5 = "400_5" // OTP expired.
+	Code400_6 = "400_6" // OTP does not match.
 	Code401_0 = "401_0" // Not authorized.
 	Code500_0 = "500_0" // An internal error occurred while processing this request.
 	Code500_1 = "500_1" // Cannot get organization.

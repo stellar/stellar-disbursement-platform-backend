@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -74,7 +75,7 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 			},
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		service.
 			On("SendPaymentsReadyToPay", ctxWithTenant, paymentsReadyToPay).
@@ -103,7 +104,7 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 			},
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, tnt)
 
 		service.
 			On("SendPaymentsReadyToPay", ctxWithTenant, paymentsReadyToPay).

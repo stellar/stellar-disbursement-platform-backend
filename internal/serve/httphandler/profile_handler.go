@@ -26,14 +26,13 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // DefaultMaxMemoryAllocation limits the max of memory allocation up to 2MB
@@ -164,7 +163,15 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 	if reqBody.ReceiverRegistrationMessageTemplate != nil {
 		validator.CheckError(utils.ValidateNoHTML(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+		if *reqBody.ReceiverRegistrationMessageTemplate != "" {
+			validator.CheckError(utils.ValidateStringLength(*reqBody.ReceiverRegistrationMessageTemplate, "receiver_registration_message_template", 255), "receiver_registration_message_template", "")
+		}
 	}
+
+	if reqBody.OrganizationName != "" {
+		validator.CheckError(utils.ValidateStringLength(reqBody.OrganizationName, "organization_name", 64), "organization_name", "")
+	}
+
 	if validator.HasErrors() {
 		httperror.BadRequest("", nil, validator.Errors).Render(rw)
 		return
@@ -333,7 +340,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil || currentTenant == nil {
 		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(rw)
 		return
@@ -450,12 +457,12 @@ func (h OrganizationLogoHandler) GetOrganizationLogo(rw http.ResponseWriter, req
 }
 
 func getTokenAndUser(ctx context.Context, authManager auth.AuthManager) (token string, user *auth.User, httpErr *httperror.HTTPError) {
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		return "", nil, httperror.Unauthorized("", nil, nil)
 	}
 
-	user, err := authManager.GetUser(ctx, token)
+	user, err = authManager.GetUser(ctx, token)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) {
 			err = fmt.Errorf("getting user profile: %w", err)

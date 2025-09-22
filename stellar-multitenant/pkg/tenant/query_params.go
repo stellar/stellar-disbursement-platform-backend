@@ -1,6 +1,9 @@
 package tenant
 
-import "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+import (
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+)
 
 type QueryParams struct {
 	Query     string
@@ -25,13 +28,13 @@ const (
 
 func excludeInactiveTenantsFilters() map[FilterKey]interface{} {
 	return map[FilterKey]interface{}{
-		FilterKeyOutStatus: DeactivatedTenantStatus,
+		FilterKeyOutStatus: schema.DeactivatedTenantStatus,
 		FilterKeyDeleted:   true,
 	}
 }
 
 func getDeactivatedTenantsFilters() map[FilterKey]interface{} {
 	return map[FilterKey]interface{}{
-		FilterKeyStatus: DeactivatedTenantStatus,
+		FilterKeyStatus: schema.DeactivatedTenantStatus,
 	}
 }

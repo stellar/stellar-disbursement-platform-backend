@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/go/support/log"
@@ -160,7 +162,11 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface) {
 	// Handle multi-tenant jobs.
 	if job.IsJobMultiTenant() {
-		tenants, err := tenantManager.GetAllTenants(ctx, nil)
+		tenants, err := tenantManager.GetAllTenants(ctx, &tenant.QueryParams{
+			Filters: map[tenant.FilterKey]interface{}{
+				tenant.FilterKeyStatus: []schema.TenantStatus{schema.ProvisionedTenantStatus, schema.ActivatedTenantStatus},
+			},
+		})
 		if err != nil {
 			msg := fmt.Sprintf("error getting all tenants for job %s on worker %d", job.GetName(), workerID)
 			crashTrackerClient.LogAndReportErrors(ctx, err, msg)
@@ -168,7 +174,7 @@ func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerCli
 		}
 		for _, t := range tenants {
 			log.Ctx(ctx).Debugf("Processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
-			tenantCtx := tenant.SaveTenantInContext(ctx, &t)
+			tenantCtx := sdpcontext.SetTenantInContext(ctx, &t)
 			if err = job.Execute(tenantCtx); err != nil {
 				msg := fmt.Sprintf("error processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
 				crashTrackerClient.LogAndReportErrors(tenantCtx, err, msg)

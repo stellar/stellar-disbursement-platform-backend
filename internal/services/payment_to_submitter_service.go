@@ -11,11 +11,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PaymentToSubmitterServiceInterface interface {
@@ -75,7 +75,7 @@ func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, p
 
 // SendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
 func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchSize int) error {
-	t, tenantErr := tenant.GetTenantFromContext(ctx)
+	t, tenantErr := sdpcontext.GetTenantFromContext(ctx)
 	if tenantErr != nil {
 		return fmt.Errorf("getting tenant from context: %w", tenantErr)
 	}

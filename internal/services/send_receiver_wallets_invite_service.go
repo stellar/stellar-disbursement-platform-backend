@@ -18,8 +18,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
@@ -55,7 +55,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("getting tenant from context: %w", err)
 	}
@@ -161,7 +161,14 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			return fmt.Errorf("executing registration message template: %w", err)
 		}
 
-		msg := message.Message{Body: content.String()}
+		msg := message.Message{
+			Type: message.MessageTypeReceiverInvitation,
+			Body: content.String(),
+			TemplateVariables: map[string]string{
+				"OrganizationName": organization.Name,
+				"RegistrationLink": registrationLink,
+			},
+		}
 		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
 			msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
 		}

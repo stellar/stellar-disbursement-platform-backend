@@ -264,44 +264,52 @@ services:
 
   kafka:
     container_name: e2e-kafka
-    image: docker.io/bitnami/kafka:3.6
+    image: apache/kafka:3.7.0
     ports:
       - "9094:9094"
       - "9092:9092"
     volumes:
-      - "kafka-data:/bitnami"
+      - "kafka-data:/var/lib/kafka/data"
     environment:
       # KRaft settings
-      - KAFKA_CFG_NODE_ID=0
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_NODE_ID=0
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
       # Listeners
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - CLUSTER_ID=e2e-test-cluster
     healthcheck:
-      test: kafka-topics.sh --bootstrap-server kafka:9092 --list || exit -1
-      start_period: 10s
+      test: /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1
+      start_period: 15s
       interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 10
 
   kafka-init:
     container_name: e2e-kafka-init
-    image: docker.io/bitnami/kafka:3.6
+    image: apache/kafka:3.7.0
     entrypoint: [ "/bin/bash", "-c" ]
     command: |
       "
-        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
-        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
-        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
-        kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay --bootstrap-server kafka:9092
+        # Create consumer offsets topic explicitly
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic __consumer_offsets --partitions 50 --replication-factor 1 --bootstrap-server kafka:9092 || echo 'Consumer offsets topic may already exist'
+        
+        # Wait a bit for the topic to be fully created
+        sleep 2
+        
+        # Create application topics
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay --bootstrap-server kafka:9092
       
-        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
-        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
-        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
-        kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay.dlq --bootstrap-server kafka:9092
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay.dlq --bootstrap-server kafka:9092
       "
     depends_on:
       kafka:

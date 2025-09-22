@@ -9,7 +9,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 )
 
 func Test_PaymentManagementService_CancelPayment(t *testing.T) {
@@ -24,7 +24,7 @@ func Test_PaymentManagementService_CancelPayment(t *testing.T) {
 	require.NoError(t, outerErr)
 
 	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
 	service := NewPaymentManagementService(models, models.DBConnectionPool)
 

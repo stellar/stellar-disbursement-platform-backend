@@ -37,7 +37,7 @@ func Test_Manager_AddTenant(t *testing.T) {
 		assert.NotNil(t, tnt)
 		assert.NotEmpty(t, tnt.ID)
 		assert.Equal(t, "myorg-ukraine", tnt.Name)
-		assert.Equal(t, CreatedTenantStatus, tnt.Status)
+		assert.Equal(t, schema.CreatedTenantStatus, tnt.Status)
 	})
 
 	t.Run("returns error when tenant name is duplicated", func(t *testing.T) {
@@ -46,7 +46,7 @@ func Test_Manager_AddTenant(t *testing.T) {
 		assert.NotNil(t, tnt)
 		assert.NotEmpty(t, tnt.ID)
 		assert.Equal(t, "myorg", tnt.Name)
-		assert.Equal(t, CreatedTenantStatus, tnt.Status)
+		assert.Equal(t, schema.CreatedTenantStatus, tnt.Status)
 
 		tnt, err = m.AddTenant(ctx, "MyOrg")
 		assert.Equal(t, ErrDuplicatedTenantName, err)
@@ -70,34 +70,34 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 
 	testCases := []struct {
 		name                   string
-		tenantUpdateFn         func(tnt Tenant) *TenantUpdate
+		tenantUpdateFn         func(tnt schema.Tenant) *TenantUpdate
 		expectedErrorContains  string
 		expectedFieldsToAssert map[string]interface{}
 	}{
 		{
 			name: "returns error when tenant update is nil",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return nil
 			},
 			expectedErrorContains: "tenant update cannot be nil",
 		},
 		{
 			name: "returns error when no field has changed",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{ID: tnt.ID}
 			},
 			expectedErrorContains: "provide at least one field to be updated",
 		},
 		{
 			name: "returns error when the tenant ID does not exist",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{ID: "abc", BaseURL: pointerTo("https://myorg.test.com")}
 			},
 			expectedErrorContains: ErrTenantDoesNotExist.Error(),
 		},
 		{
 			name: "🎉 successfully updates the tenant [BaseURL]",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{ID: tnt.ID, BaseURL: pointerTo("https://myorg.test.com")}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
@@ -106,7 +106,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully updates the tenant [SDPUIBaseURL]",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{ID: tnt.ID, SDPUIBaseURL: pointerTo("https://ui.myorg.test.com")}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
@@ -115,16 +115,16 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully updates the tenant [Status]",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
-				return &TenantUpdate{ID: tnt.ID, Status: pointerTo(DeactivatedTenantStatus)}
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
+				return &TenantUpdate{ID: tnt.ID, Status: pointerTo(schema.DeactivatedTenantStatus)}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
-				"status": string(DeactivatedTenantStatus),
+				"status": string(schema.DeactivatedTenantStatus),
 			},
 		},
 		{
 			name: "🎉 successfully updates the tenant [DistributionAccountAddress]",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{ID: tnt.ID, DistributionAccountAddress: "GCK6GPKFTIGJJM7OHSQH7O7ORSKTUK37ZUDEUXZRFMIQNBUBZDEPU5KS"}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
@@ -133,7 +133,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully updates the tenant [DistributionAccountType]",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{ID: tnt.ID, DistributionAccountType: schema.DistributionAccountStellarEnv}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
@@ -142,7 +142,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully updates the tenant [DistributionAccountStatus]",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{ID: tnt.ID, DistributionAccountStatus: schema.AccountStatusPendingUserActivation}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
@@ -151,12 +151,12 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully updates the tenant (ALL FIELDS)",
-			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
+			tenantUpdateFn: func(tnt schema.Tenant) *TenantUpdate {
 				return &TenantUpdate{
 					ID:                         tnt.ID,
 					BaseURL:                    pointerTo("https://myorg.test.com"),
 					SDPUIBaseURL:               pointerTo("https://ui.myorg.test.com"),
-					Status:                     pointerTo(DeactivatedTenantStatus),
+					Status:                     pointerTo(schema.DeactivatedTenantStatus),
 					DistributionAccountAddress: "GCK6GPKFTIGJJM7OHSQH7O7ORSKTUK37ZUDEUXZRFMIQNBUBZDEPU5KS",
 					DistributionAccountType:    schema.DistributionAccountStellarEnv,
 					DistributionAccountStatus:  schema.AccountStatusPendingUserActivation,
@@ -165,7 +165,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 			expectedFieldsToAssert: map[string]interface{}{
 				"base_url":                     "https://myorg.test.com",
 				"sdp_ui_base_url":              "https://ui.myorg.test.com",
-				"status":                       string(DeactivatedTenantStatus),
+				"status":                       string(schema.DeactivatedTenantStatus),
 				"distribution_account_address": "GCK6GPKFTIGJJM7OHSQH7O7ORSKTUK37ZUDEUXZRFMIQNBUBZDEPU5KS",
 				"distribution_account_type":    string(schema.DistributionAccountStellarEnv),
 				"distribution_account_status":  string(schema.AccountStatusPendingUserActivation),
@@ -232,13 +232,13 @@ func Test_Manager_GetAllTenants(t *testing.T) {
 	tenants, err := m.GetAllTenants(ctx, nil)
 	require.NoError(t, err)
 
-	assert.ElementsMatch(t, tenants, []Tenant{*tnt1, *tnt2})
+	assert.ElementsMatch(t, tenants, []schema.Tenant{*tnt1, *tnt2})
 
 	deactivateTenant(t, ctx, m, tnt1)
 	tenants, err = m.GetAllTenants(ctx, nil)
 	require.NoError(t, err)
 
-	assert.ElementsMatch(t, tenants, []Tenant{*tnt2})
+	assert.ElementsMatch(t, tenants, []schema.Tenant{*tnt2})
 }
 
 func Test_Manager_GetTenant(t *testing.T) {
@@ -327,13 +327,13 @@ func Test_Manager_GetTenantByIDIncludingDeactivated(t *testing.T) {
 	// deactivated Tenant
 	deactivatedTenant, outerErr := m.AddTenant(ctx, "deactivated-tenant")
 	require.NoError(t, outerErr)
-	deactivatedTenant, outerErr = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: deactivatedTenant.ID, Status: pointerTo(DeactivatedTenantStatus)})
+	deactivatedTenant, outerErr = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: deactivatedTenant.ID, Status: pointerTo(schema.DeactivatedTenantStatus)})
 	require.NoError(t, outerErr)
 
 	// deleted Tenant
 	deletedTenant, outerErr := m.AddTenant(ctx, "deleted-tenant")
 	require.NoError(t, outerErr)
-	deletedTenant, outerErr = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: deletedTenant.ID, Status: pointerTo(DeactivatedTenantStatus)})
+	deletedTenant, outerErr = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: deletedTenant.ID, Status: pointerTo(schema.DeactivatedTenantStatus)})
 	require.NoError(t, outerErr)
 	deletedTenant, outerErr = m.SoftDeleteTenantByID(ctx, deletedTenant.ID)
 	require.NoError(t, outerErr)
@@ -445,13 +445,13 @@ func Test_Manager_GetTenantByIDOrName(t *testing.T) {
 	})
 }
 
-func activateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *Tenant) {
-	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: pointerTo(ActivatedTenantStatus)})
+func activateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *schema.Tenant) {
+	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: pointerTo(schema.ActivatedTenantStatus)})
 	require.NoError(t, err)
 }
 
-func deactivateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *Tenant) {
-	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: pointerTo(DeactivatedTenantStatus)})
+func deactivateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *schema.Tenant) {
+	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: pointerTo(schema.DeactivatedTenantStatus)})
 	require.NoError(t, err)
 }
 
@@ -629,7 +629,7 @@ func Test_Manager_SetDefault(t *testing.T) {
 	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt1.ID, true)
 
 	t.Run("ensures the default tenant is not changed when an error occurs", func(t *testing.T) {
-		tnt, dbErr := db.RunInTransactionWithResult(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) (*Tenant, error) {
+		tnt, dbErr := db.RunInTransactionWithResult(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) (*schema.Tenant, error) {
 			dTnt, innerErr := m.SetDefault(ctx, dbTx, "some-id")
 			return dTnt, innerErr
 		})

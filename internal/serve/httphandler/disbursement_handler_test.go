@@ -27,9 +27,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -190,7 +190,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
 	user := &auth.User{
 		ID:    "user-id",
 		Email: "email@email.com",
@@ -908,7 +908,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
-	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
 		On("GetUserByID", mock.Anything, mock.Anything).
@@ -918,7 +918,8 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
-			val := mockCtx.Value(middleware.UserIDContextKey)
+			val, err := sdpcontext.GetUserIDFromContext(mockCtx)
+			assert.NoError(t, err)
 			assert.Equal(t, "user-id", val)
 		})
 
@@ -1232,6 +1233,17 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			csvRecords:      maxCSVRecords,
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "number of instructions exceeds maximum of 10000",
+		},
+		{
+			name:           "🔴 wallet address already in use by another receiver",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"email", "walletAddress", "id", "amount"},
+				{"user1@example.com", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "123456789", "100.5"},
+				{"user2@example.com", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "987654321", "200.0"},
+			},
+			expectedStatus:  http.StatusConflict,
+			expectedMessage: "wallet address GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 is already registered to another receiver: wallet address already in use",
 		},
 	}
 
@@ -1553,7 +1565,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	token := "token"
 	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
-	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+	ctx = sdpcontext.SetTokenInContext(ctx, token)
 	userID := "valid-user-id"
 	user := &auth.User{
 		ID:    userID,
@@ -2154,7 +2166,7 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, "user-id")
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
 
 	// Setup fixtures
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
@@ -2182,7 +2194,8 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
-			val := mockCtx.Value(middleware.UserIDContextKey)
+			val, err := sdpcontext.GetUserIDFromContext(mockCtx)
+			assert.NoError(t, err)
 			assert.Equal(t, "user-id", val)
 		})
 

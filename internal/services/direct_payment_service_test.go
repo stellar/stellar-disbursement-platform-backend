@@ -16,12 +16,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
@@ -29,7 +29,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -532,7 +532,7 @@ func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
 
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	t.Cleanup(func() {
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -722,7 +722,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
-	ctx = tenant.SaveTenantInContext(ctx, &tenant.Tenant{ID: "battle-barge-001"})
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 

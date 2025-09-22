@@ -258,7 +258,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tnt.Status != tenant.DeactivatedTenantStatus {
+	if tnt.Status != schema.DeactivatedTenantStatus {
 		httperror.BadRequest("Tenant must be deactivated to be eligible for deletion", nil, nil).Render(w)
 		return
 	}
@@ -325,7 +325,7 @@ func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	defaultTnt, err := db.RunInTransactionWithResult(ctx, t.AdminDBConnectionPool, nil, func(dbTx db.DBTransaction) (*tenant.Tenant, error) {
+	defaultTnt, err := db.RunInTransactionWithResult(ctx, t.AdminDBConnectionPool, nil, func(dbTx db.DBTransaction) (*schema.Tenant, error) {
 		tnt, err := t.Manager.SetDefault(ctx, dbTx, reqBody.ID)
 		if err != nil {
 			return nil, fmt.Errorf("setting tenant id %s as default: %w", reqBody.ID, err)

@@ -50,3 +50,9 @@ func GetNetworkTypeFromNetworkPassphrase(networkPassphrase string) (NetworkType,
 		return "", fmt.Errorf("invalid network passphrase provided %q", networkPassphrase)
 	}
 }
+
+// IsTestNetwork checks if the given network passphrase is a test network
+func IsTestNetwork(networkPassphrase string) bool {
+	testNetworks := []string{network.TestNetworkPassphrase, network.FutureNetworkPassphrase}
+	return slices.Contains(testNetworks, networkPassphrase)
+}

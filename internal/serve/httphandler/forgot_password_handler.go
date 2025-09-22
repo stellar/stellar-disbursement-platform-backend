@@ -16,11 +16,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 const forgotPasswordMessageTitle = "Reset Account Password"
@@ -57,7 +57,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 
 	// Step 1: Get tenant from context
-	tnt, err := tenant.GetTenantFromContext(ctx)
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		err = fmt.Errorf("getting tenant from context: %w", err)
 		httperror.Unauthorized("", err, nil).Render(w)
@@ -153,6 +153,11 @@ func (h ForgotPasswordHandler) SendForgotPasswordMessage(ctx context.Context, ui
 		ToEmail: email,
 		Title:   forgotPasswordMessageTitle,
 		Body:    messageContent,
+		Type:    message.MessageTypeUserForgotPassword,
+		TemplateVariables: map[string]string{
+			"ResetPasswordLink": resetPasswordURL.String(),
+			"OrganizationName":  organization.Name,
+		},
 	}
 	err = h.MessengerClient.SendMessage(ctx, msg)
 	if err != nil {

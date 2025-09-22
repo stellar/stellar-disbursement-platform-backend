@@ -5,23 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twilio/twilio-go"
 	twilioAPI "github.com/twilio/twilio-go/rest/api/v2010"
 )
-
-type mockTwilioApi struct {
-	mock.Mock
-}
-
-func (m *mockTwilioApi) CreateMessage(params *twilioAPI.CreateMessageParams) (*twilioAPI.ApiV2010Message, error) {
-	args := m.Called(params)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*twilioAPI.ApiV2010Message), args.Error(1)
-}
 
 func Test_NewTwilioClient(t *testing.T) {
 	// Declare types in advance to make sure these are the types being returned
@@ -72,7 +60,7 @@ func Test_Twilio_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 	testPhoneNumber := "+14155111111"
 	testMessage := "foo bar"
 	testSenderID := "senderID"
-	mTwilioApi := mockTwilioApi{}
+	mTwilioApi := newMockTwilioApiInterface(t)
 	mTwilioApi.
 		On("CreateMessage", &twilioAPI.CreateMessageParams{
 			To:                  &testPhoneNumber,
@@ -82,11 +70,9 @@ func Test_Twilio_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Return(nil, fmt.Errorf("test twilio error")).
 		Once()
 
-	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
+	mTwilio := twilioClient{apiService: mTwilioApi, senderID: "senderID"}
 	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14155111111", Body: "foo bar"})
-	require.EqualError(t, err, "sending Twilio SMS: test twilio error")
-
-	mTwilioApi.AssertExpectations(t)
+	assert.EqualError(t, err, "sending Twilio SMS: test twilio error")
 }
 
 func Test_Twilio_SendMessage_doesntReturnErrorButResponseContainsErrorEmbedded(t *testing.T) {
@@ -99,7 +85,7 @@ func Test_Twilio_SendMessage_doesntReturnErrorButResponseContainsErrorEmbedded(t
 	wantErrCode := 12345
 	wantErrMessage := "Foo bar error message"
 
-	mTwilioApi := mockTwilioApi{}
+	mTwilioApi := newMockTwilioApiInterface(t)
 	mTwilioApi.
 		On("CreateMessage", &twilioAPI.CreateMessageParams{
 			To:                  &testPhoneNumber2,
@@ -112,9 +98,9 @@ func Test_Twilio_SendMessage_doesntReturnErrorButResponseContainsErrorEmbedded(t
 		}, nil).
 		Once()
 
-	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
+	mTwilio := twilioClient{apiService: mTwilioApi, senderID: "senderID"}
 	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
-	require.EqualError(t, err, `sending Twilio SMS responded an error {code: "12345", message: "Foo bar error message"}`)
+	assert.EqualError(t, err, `sending Twilio message returned an error {code= "12345", message= "Foo bar error message"}`)
 }
 
 func Test_Twilio_SendMessage_success(t *testing.T) {
@@ -122,7 +108,7 @@ func Test_Twilio_SendMessage_success(t *testing.T) {
 	testPhoneNumber := "+14153333333"
 	testMessage := "foo bar"
 	testSenderID := "senderID"
-	mTwilioApi := mockTwilioApi{}
+	mTwilioApi := newMockTwilioApiInterface(t)
 	mTwilioApi.
 		On("CreateMessage", &twilioAPI.CreateMessageParams{
 			To:                  &testPhoneNumber,
@@ -132,9 +118,7 @@ func Test_Twilio_SendMessage_success(t *testing.T) {
 		Return(&twilioAPI.ApiV2010Message{}, nil).
 		Once()
 
-	mTwilio := twilioClient{apiService: &mTwilioApi, senderID: "senderID"}
+	mTwilio := twilioClient{apiService: mTwilioApi, senderID: "senderID"}
 	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14153333333", Body: "foo bar"})
 	require.NoError(t, err)
-
-	mTwilioApi.AssertExpectations(t)
 }

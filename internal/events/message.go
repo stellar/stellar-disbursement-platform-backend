@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type Message struct {
@@ -42,7 +42,7 @@ type HandlerSuccess struct {
 // NewMessage returns a new message with values passed by parameters. It also parses the `TenantID` from the context and inject it into the message.
 // Returns error if the tenant is not found in the context.
 func NewMessage(ctx context.Context, topic, key, messageType string, data any) (*Message, error) {
-	tnt, err := tenant.GetTenantFromContext(ctx)
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting tenant from context: %w", err)
 	}

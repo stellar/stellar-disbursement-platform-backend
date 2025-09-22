@@ -15,12 +15,12 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // BridgeIntegrationHandler handles Bridge integration endpoints.
@@ -54,10 +54,11 @@ func (h BridgeIntegrationHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // PatchRequest represents the request to opt into Bridge integration
 type PatchRequest struct {
-	Status   data.BridgeIntegrationStatus `json:"status"`
-	Email    string                       `json:"email,omitempty"`
-	FullName string                       `json:"full_name,omitempty"`
-	KYCType  bridge.KYCType               `json:"kyc_type,omitempty"`
+	Status     data.BridgeIntegrationStatus `json:"status"`
+	Email      string                       `json:"email,omitempty"`
+	FullName   string                       `json:"full_name,omitempty"`
+	KYCType    bridge.CustomerType          `json:"kyc_type,omitempty"`
+	CustomerID string                       `json:"customer_id,omitempty"`
 }
 
 var validPatchStatuses = []data.BridgeIntegrationStatus{
@@ -75,6 +76,14 @@ func (r PatchRequest) Validate() error {
 		return nil
 	}
 
+	// Validate customer_id if provided (for direct onboarding)
+	if r.CustomerID != "" {
+		if strings.TrimSpace(r.CustomerID) == "" {
+			return fmt.Errorf("customer_id cannot be empty or whitespace only")
+		}
+	}
+
+	// Standard onboarding validation (when customer_id is not provided)
 	if r.Email != "" {
 		if err := utils.ValidateEmail(r.Email); err != nil {
 			return fmt.Errorf("invalid email: %w", err)
@@ -137,6 +146,44 @@ func (h BridgeIntegrationHandler) Patch(w http.ResponseWriter, r *http.Request) 
 
 // optInToBridge handles the opt-in process for Bridge integration.
 func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.User, patchRequest PatchRequest, w http.ResponseWriter) {
+	if patchRequest.CustomerID != "" {
+		h.optInForExistingCustomer(ctx, user.ID, patchRequest.CustomerID, w)
+		return
+	}
+
+	h.optInWithKYCLinks(ctx, user, patchRequest, w)
+}
+
+// optInForExistingCustomer handles direct onboarding with provided customer ID.
+func (h BridgeIntegrationHandler) optInForExistingCustomer(ctx context.Context, userID, customerID string, w http.ResponseWriter) {
+	bridgeInfo, err := h.BridgeService.OptInForExistingCustomer(ctx, customerID, userID)
+	if err != nil {
+		var bridgeError bridge.BridgeErrorResponse
+		switch {
+		case errors.Is(err, bridge.ErrBridgeAlreadyOptedIn):
+			httperror.BadRequest("Your organization has already opted into Bridge integration", nil, nil).Render(w)
+			return
+		case errors.Is(err, bridge.ErrBridgeInvalidCustomerID):
+			httperror.BadRequest("The provided customer_id is invalid", err, nil).Render(w)
+			return
+		case errors.Is(err, bridge.ErrBridgeCustomerNotActive):
+			httperror.BadRequest("The provided customer_id is not active", err, nil).Render(w)
+			return
+		case errors.As(err, &bridgeError):
+			extras := bridgeErrorToExtras(bridgeError)
+			httperror.BadRequest("Direct opt-in to Bridge integration failed", err, extras).Render(w)
+			return
+		}
+		// For other errors, treat as internal server error
+		httperror.InternalError(ctx, "Failed to opt into Bridge integration", err, nil).Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, bridgeInfo, httpjson.JSON)
+}
+
+// optInWithKYCLinks handles standard onboarding flow with KYC Link creation.
+func (h BridgeIntegrationHandler) optInWithKYCLinks(ctx context.Context, user *auth.User, patchRequest PatchRequest, w http.ResponseWriter) {
 	// Use provided email/fullName or default to user info
 	email := patchRequest.Email
 	if email == "" {
@@ -150,14 +197,14 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 		fullName = fmt.Sprintf("%s %s", firstName, lastName)
 	}
 
-	var kycType bridge.KYCType
+	var kycType bridge.CustomerType
 	switch strings.ToLower(string(patchRequest.KYCType)) {
-	case string(bridge.KYCTypeIndividual):
-		kycType = bridge.KYCTypeIndividual
-	case string(bridge.KYCTypeBusiness):
-		kycType = bridge.KYCTypeBusiness
+	case string(bridge.CustomerTypeIndividual):
+		kycType = bridge.CustomerTypeIndividual
+	case string(bridge.CustomerTypeBusiness):
+		kycType = bridge.CustomerTypeBusiness
 	default:
-		kycType = bridge.KYCTypeBusiness
+		kycType = bridge.CustomerTypeBusiness
 	}
 
 	// Resolve Redirect URI
@@ -178,6 +225,9 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 	if err != nil {
 		var bridgeError bridge.BridgeErrorResponse
 		switch {
+		case errors.Is(err, bridge.ErrBridgeUSDCTrustlineRequired):
+			httperror.BadRequest("Cannot opt into Bridge integration: distribution account must have a USDC trustline", err, nil).Render(w)
+			return
 		case errors.Is(err, bridge.ErrBridgeAlreadyOptedIn):
 			httperror.BadRequest("Your organization has already opted into Bridge integration", nil, nil).Render(w)
 			return
@@ -196,7 +246,7 @@ func (h BridgeIntegrationHandler) optInToBridge(ctx context.Context, user *auth.
 
 // resolveRedirectURL resolves the redirect URL for the Bridge integration based on the tenant's SDP UI Base URL.
 func resolveRedirectURL(ctx context.Context) (*url.URL, error) {
-	t, err := tenant.GetTenantFromContext(ctx)
+	t, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting tenant from context: %w", err)
 	}
@@ -235,6 +285,9 @@ func (h BridgeIntegrationHandler) createVirtualAccount(ctx context.Context, user
 		case errors.Is(err, bridge.ErrBridgeVirtualAccountAlreadyExists):
 			httperror.BadRequest("Virtual account already exists for this organization", nil, nil).Render(w)
 			return
+		case errors.Is(err, bridge.ErrBridgeCustomerNotActive):
+			httperror.BadRequest("Cannot create virtual account: associated customer is not active", nil, nil).Render(w)
+			return
 		case errors.Is(err, bridge.ErrBridgeKYCNotApproved):
 			httperror.BadRequest("KYC verification must be approved before creating a virtual account", nil, nil).Render(w)
 			return
@@ -258,6 +311,9 @@ func bridgeErrorToExtras(bridgeError bridge.BridgeErrorResponse) map[string]inte
 	extras := map[string]interface{}{
 		"bridge_error_code": bridgeError.Code,
 		"bridge_error_type": bridgeError.Type,
+	}
+	if bridgeError.Message != "" {
+		extras["bridge_error_message"] = bridgeError.Message
 	}
 	if bridgeError.Details != "" {
 		extras["bridge_error_details"] = bridgeError.Details

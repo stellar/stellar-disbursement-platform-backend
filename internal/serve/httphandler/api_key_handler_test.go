@@ -17,7 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 )
 
 const adminUserID = "b9c29a1a-4d30-4b99-8c5f-0546054be91b"
@@ -42,7 +42,7 @@ func setupHandler(t *testing.T) (APIKeyHandler, context.Context) {
 	require.NoError(t, err)
 
 	handler := APIKeyHandler{Models: models}
-	ctx := context.WithValue(context.Background(), middleware.UserIDContextKey, adminUserID)
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), adminUserID)
 
 	return handler, ctx
 }
@@ -408,9 +408,7 @@ func Test_DeleteApiKeyEndpoints(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		otherCtx := context.WithValue(context.Background(), middleware.UserIDContextKey,
-			"11111111-2222-3333-4444-555555555555",
-		)
+		otherCtx := sdpcontext.SetUserIDInContext(context.Background(), "11111111-2222-3333-4444-555555555555")
 		req := httptest.NewRequestWithContext(otherCtx, http.MethodDelete, "/api-keys/"+key.ID, nil)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -482,9 +480,7 @@ func Test_GetApiKeyByIDEndpoints(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		otherCtx := context.WithValue(context.Background(), middleware.UserIDContextKey,
-			"11111111-2222-3333-4444-555555555555",
-		)
+		otherCtx := sdpcontext.SetUserIDInContext(context.Background(), "11111111-2222-3333-4444-555555555555")
 		req := httptest.NewRequestWithContext(otherCtx, http.MethodGet, "/api-keys/"+key.ID, nil)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -594,7 +590,7 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 		b, _ := json.Marshal(reqBody)
 
 		otherUserID := "11111111-2222-3333-4444-555555555555"
-		otherCtx := context.WithValue(context.Background(), middleware.UserIDContextKey, otherUserID)
+		otherCtx := sdpcontext.SetUserIDInContext(context.Background(), otherUserID)
 		req := httptest.NewRequestWithContext(otherCtx, http.MethodPut, "/api-keys/"+originalKey.ID, bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
