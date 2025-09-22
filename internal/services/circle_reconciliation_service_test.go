@@ -17,11 +17,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_NewCircleReconciliationService_Reconcile_failure(t *testing.T) {
@@ -32,7 +32,7 @@ func Test_NewCircleReconciliationService_Reconcile_failure(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func Test_NewCircleReconciliationService_Reconcile_failure(t *testing.T) {
 
 	testCases := []struct {
 		name              string
-		tenant            *tenant.Tenant
+		tenant            *schema.Tenant
 		setupMocksAndDBFn func(t *testing.T, mDistAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleService *circle.MockService)
 		wantErrorContains string
 		assertLogsFn      func(entries []logrus.Entry)
@@ -130,7 +130,7 @@ func Test_NewCircleReconciliationService_Reconcile_failure(t *testing.T) {
 			// inject tenant in context if configured
 			updatedCtx := ctx
 			if tc.tenant != nil {
-				updatedCtx = tenant.SaveTenantInContext(ctx, tc.tenant)
+				updatedCtx = sdpcontext.SetTenantInContext(ctx, tc.tenant)
 			}
 
 			// run test
@@ -159,8 +159,8 @@ func Test_NewCircleReconciliationService_Reconcile_completeDisbursement(t *testi
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
-	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tnt)
 
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
@@ -322,8 +322,8 @@ func Test_NewCircleReconciliationService_Reconcile_partialSuccess(t *testing.T) 
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
-	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tnt)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -524,8 +524,8 @@ func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) 
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
-	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
+	tnt := &schema.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tnt)
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -326,5 +327,17 @@ func SetRegistrationContactType(co *config.ConfigOption) error {
 	}
 
 	*(co.ConfigKey.(*data.RegistrationContactType)) = regAccountType
+	return nil
+}
+
+func SetConfigOptionCAPTCHAType(co *config.ConfigOption) error {
+	captchaTypeStr := viper.GetString(co.Name)
+
+	captchaType := validators.CAPTCHAType(captchaTypeStr)
+	if !captchaType.IsValid() {
+		return fmt.Errorf("couldn't parse CAPTCHA type in %s: %s is not a valid CAPTCHA type. Valid options are: %v", co.Name, captchaTypeStr, validators.ValidCAPTCHATypes())
+	}
+
+	*(co.ConfigKey.(*validators.CAPTCHAType)) = captchaType
 	return nil
 }

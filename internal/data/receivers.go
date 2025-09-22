@@ -15,6 +15,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+var (
+	ErrDuplicateEmail       = errors.New("email already in use")
+	ErrDuplicatePhoneNumber = errors.New("phone number already in use")
+)
+
 type Receiver struct {
 	ID          string     `json:"id" db:"id"`
 	Email       string     `json:"email,omitempty" db:"email"`
@@ -318,6 +323,14 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 	var receiver Receiver
 	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalId)
 	if err != nil {
+		if pqError, ok := err.(*pq.Error); ok && pqError.Code == "23505" {
+			switch pqError.Constraint {
+			case "receiver_unique_email":
+				return nil, ErrDuplicateEmail
+			case "receiver_unique_phone_number":
+				return nil, ErrDuplicatePhoneNumber
+			}
+		}
 		return nil, fmt.Errorf("inserting receiver: %w", err)
 	}
 
@@ -366,6 +379,14 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 
 	_, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
+		if pqError, ok := err.(*pq.Error); ok && pqError.Code == "23505" {
+			switch pqError.Constraint {
+			case "receiver_unique_email":
+				return ErrDuplicateEmail
+			case "receiver_unique_phone_number":
+				return ErrDuplicatePhoneNumber
+			}
+		}
 		return fmt.Errorf("updating receiver: %w", err)
 	}
 

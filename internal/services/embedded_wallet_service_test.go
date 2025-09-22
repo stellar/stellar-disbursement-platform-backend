@@ -12,8 +12,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_NewEmbeddedWalletService(t *testing.T) {
@@ -119,7 +120,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	defaultTenantID := "test-tenant-id"
-	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: defaultTenantID})
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: defaultTenantID})
 
 	sdpModels, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -322,7 +323,7 @@ func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	defaultTenantID := "test-tenant-id"
-	ctx := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: defaultTenantID})
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: defaultTenantID})
 
 	sdpModels, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)

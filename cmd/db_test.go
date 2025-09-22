@@ -559,25 +559,25 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		wallets, wErr := models.Wallets.GetAll(ctx)
 		require.NoError(t, wErr)
 
-		// Test only on Vibrant Assist and Vibrant Assist RC. This will help adding wallets without breaking tests.
-		var vibrantAssist, vibrantAssistRC data.Wallet
+		// Test only on Vesseo and Beans App. This will help adding wallets without breaking tests.
+		var vesseo, beansApp data.Wallet
 
 		for _, w := range wallets {
-			if w.Name == "Vibrant Assist" {
-				vibrantAssist = w
-			} else if w.Name == "Vibrant Assist RC" {
-				vibrantAssistRC = w
+			if w.Name == "Vesseo" {
+				vesseo = w
+			} else if w.Name == "Beans App" {
+				beansApp = w
 			}
 		}
-		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
-		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
-		assert.Equal(t, "vibrantapp.com", vibrantAssist.SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
+		assert.Equal(t, "Vesseo", vesseo.Name)
+		assert.Equal(t, "https://vesseoapp.com", vesseo.Homepage)
+		assert.Equal(t, "vesseoapp.com", vesseo.SEP10ClientDomain)
+		assert.Equal(t, "https://vesseoapp.com/disbursement", vesseo.DeepLinkSchema)
 
-		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
-		assert.Equal(t, "vibrantapp.com/vibrant-assist", vibrantAssistRC.Homepage)
-		assert.Equal(t, "vibrantapp.com", vibrantAssistRC.SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp-rc", vibrantAssistRC.DeepLinkSchema)
+		assert.Equal(t, "Beans App", beansApp.Name)
+		assert.Equal(t, "https://beansapp.com", beansApp.Homepage)
+		assert.Equal(t, "api.beansapp.com", beansApp.SEP10ClientDomain)
+		assert.Equal(t, "https://www.beansapp.com/disbursements/registration?env=prod", beansApp.DeepLinkSchema)
 
 		expectedLogs := []string{
 			fmt.Sprintf("running for tenant ID %s", tnt1.ID),
@@ -586,10 +586,10 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
-			"Name: Vibrant Assist",
-			"Homepage: https://vibrantapp.com/vibrant-assist",
-			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: vibrantapp.com",
+			"Name: Vesseo",
+			"Homepage: https://vesseoapp.com",
+			"Name: Beans App",
+			"Homepage: https://beansapp.com",
 		}
 
 		logs := buf.String()
@@ -617,28 +617,29 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		wallets, err = models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
 
-		// Test only on Vibrant Assist and Vibrant Assist RC. This will help adding wallets without breaking tests.
+		// Test only on Vesseo and Beans App. This will help adding wallets without breaking tests.
+		vesseo, beansApp = data.Wallet{}, data.Wallet{} // Reset for second tenant
 		for _, w := range wallets {
-			if w.Name == "Vibrant Assist" {
-				vibrantAssist = w
-			} else if w.Name == "Vibrant Assist RC" {
-				vibrantAssistRC = w
+			if w.Name == "Vesseo" {
+				vesseo = w
+			} else if w.Name == "Beans App" {
+				beansApp = w
 			}
 		}
 
-		require.NotNil(t, vibrantAssist, "Vibrant Assist wallet not found")
-		require.NotNil(t, vibrantAssistRC, "Vibrant Assist RC wallet not found")
+		require.NotEmpty(t, vesseo.Name, "Vesseo wallet not found")
+		require.NotEmpty(t, beansApp.Name, "Beans App wallet not found")
 
 		// Test the two wallets
-		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
-		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
-		assert.Equal(t, "vibrantapp.com", vibrantAssist.SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
+		assert.Equal(t, "Vesseo", vesseo.Name)
+		assert.Equal(t, "https://vesseoapp.com", vesseo.Homepage)
+		assert.Equal(t, "vesseoapp.com", vesseo.SEP10ClientDomain)
+		assert.Equal(t, "https://vesseoapp.com/disbursement", vesseo.DeepLinkSchema)
 
-		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
-		assert.Equal(t, "vibrantapp.com/vibrant-assist", vibrantAssistRC.Homepage)
-		assert.Equal(t, "vibrantapp.com", vibrantAssistRC.SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp-rc", vibrantAssistRC.DeepLinkSchema)
+		assert.Equal(t, "Beans App", beansApp.Name)
+		assert.Equal(t, "https://beansapp.com", beansApp.Homepage)
+		assert.Equal(t, "api.beansapp.com", beansApp.SEP10ClientDomain)
+		assert.Equal(t, "https://www.beansapp.com/disbursements/registration?env=prod", beansApp.DeepLinkSchema)
 
 		expectedLogs = []string{
 			fmt.Sprintf("running for tenant ID %s", tnt2.ID),
@@ -647,10 +648,10 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
-			"Name: Vibrant Assist",
-			"Homepage: https://vibrantapp.com/vibrant-assist",
-			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: vibrantapp.com",
+			"Name: Vesseo",
+			"Homepage: https://vesseoapp.com",
+			"Name: Beans App",
+			"Homepage: https://beansapp.com",
 		}
 
 		for _, expectedLog := range expectedLogs {
@@ -722,24 +723,24 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		wallets, err = models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
 
-		// Test only on Vibrant Assist and Vibrant Assist RC. This will help adding wallets without breaking tests.
-		var vibrantAssist, vibrantAssistRC data.Wallet
+		// Test only on Vesseo and Beans App. This will help adding wallets without breaking tests.
+		var vesseoTenant, beansAppTenant data.Wallet
 		for _, w := range wallets {
-			if w.Name == "Vibrant Assist" {
-				vibrantAssist = w
-			} else if w.Name == "Vibrant Assist RC" {
-				vibrantAssistRC = w
+			if w.Name == "Vesseo" {
+				vesseoTenant = w
+			} else if w.Name == "Beans App" {
+				beansAppTenant = w
 			}
 		}
-		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
-		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
-		assert.Equal(t, "vibrantapp.com", vibrantAssist.SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
+		assert.Equal(t, "Vesseo", vesseoTenant.Name)
+		assert.Equal(t, "https://vesseoapp.com", vesseoTenant.Homepage)
+		assert.Equal(t, "vesseoapp.com", vesseoTenant.SEP10ClientDomain)
+		assert.Equal(t, "https://vesseoapp.com/disbursement", vesseoTenant.DeepLinkSchema)
 
-		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
-		assert.Equal(t, "vibrantapp.com/vibrant-assist", vibrantAssistRC.Homepage)
-		assert.Equal(t, "vibrantapp.com", vibrantAssistRC.SEP10ClientDomain)
-		assert.Equal(t, "https://vibrantapp.com/sdp-rc", vibrantAssistRC.DeepLinkSchema)
+		assert.Equal(t, "Beans App", beansAppTenant.Name)
+		assert.Equal(t, "https://beansapp.com", beansAppTenant.Homepage)
+		assert.Equal(t, "api.beansapp.com", beansAppTenant.SEP10ClientDomain)
+		assert.Equal(t, "https://www.beansapp.com/disbursements/registration?env=prod", beansAppTenant.DeepLinkSchema)
 
 		expectedLogs := []string{
 			fmt.Sprintf("running for tenant ID %s", tnt2.ID),
@@ -748,10 +749,10 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
-			"Name: Vibrant Assist",
-			"Homepage: https://vibrantapp.com/vibrant-assist",
-			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: vibrantapp.com",
+			"Name: Vesseo",
+			"Homepage: https://vesseoapp.com",
+			"Name: Beans App",
+			"Homepage: https://beansapp.com",
 		}
 
 		for _, expectedLog := range expectedLogs {

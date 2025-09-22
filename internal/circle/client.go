@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -422,7 +423,7 @@ func parseRetryAfter(retryAfter string) time.Duration {
 }
 
 func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoint string, startTime time.Time, resp *http.Response, reqErr error) {
-	t, err := tenant.GetTenantFromContext(ctx)
+	t, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		log.Ctx(ctx).Errorf("getting tenant from context: %v", err)
 		return
@@ -450,7 +451,7 @@ func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoi
 
 func (client *Client) handleError(ctx context.Context, resp *http.Response) error {
 	if slices.Contains(authErrorStatusCodes, resp.StatusCode) {
-		tnt, getCtxTntErr := tenant.GetTenantFromContext(ctx)
+		tnt, getCtxTntErr := sdpcontext.GetTenantFromContext(ctx)
 		if getCtxTntErr != nil {
 			return fmt.Errorf("getting tenant from context: %w", getCtxTntErr)
 		}

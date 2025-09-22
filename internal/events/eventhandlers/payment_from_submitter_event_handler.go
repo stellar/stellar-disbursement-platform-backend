@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -63,7 +64,7 @@ func (h *PaymentFromSubmitterEventHandler) Handle(ctx context.Context, message *
 		return fmt.Errorf("getting tenant by id %s: %w", message.TenantID, err)
 	}
 
-	ctx = tenant.SaveTenantInContext(ctx, t)
+	ctx = sdpcontext.SetTenantInContext(ctx, t)
 
 	if syncErr := h.service.SyncTransaction(ctx, &tx); syncErr != nil {
 		return fmt.Errorf("syncing transaction completion for transaction ID %q: %w", tx.TransactionID, syncErr)

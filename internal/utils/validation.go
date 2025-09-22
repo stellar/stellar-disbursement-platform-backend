@@ -35,7 +35,7 @@ const (
 
 // https://github.com/firebase/firebase-admin-go/blob/cef91acd46f2fc5d0b3408d8154a0005db5bdb0b/auth/user_mgt.go#L449-L457
 func ValidatePhoneNumber(phoneNumberStr string) error {
-	if phoneNumberStr == "" {
+	if strings.TrimSpace(phoneNumberStr) == "" {
 		return ErrEmptyPhoneNumber
 	}
 

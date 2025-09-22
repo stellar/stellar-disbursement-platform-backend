@@ -9,7 +9,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
@@ -28,7 +27,7 @@ type TenantRequest struct {
 type UpdateTenantRequest struct {
 	BaseURL      *string              `json:"base_url"`
 	SDPUIBaseURL *string              `json:"sdp_ui_base_url"`
-	Status       *tenant.TenantStatus `json:"status"`
+	Status       *schema.TenantStatus `json:"status"`
 }
 
 type DefaultTenantRequest struct {

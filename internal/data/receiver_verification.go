@@ -194,6 +194,8 @@ func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context,
 		ON CONFLICT (receiver_id, verification_field)
 		DO UPDATE SET
 			hashed_value = EXCLUDED.hashed_value,
+			-- Resetting the attempts to 0 on upsert. 
+			attempts = 0,
 			-- If the verification is already confirmed, the USER is updating it:
 			confirmed_by_type = CASE
 				WHEN receiver_verifications.confirmed_at IS NOT NULL THEN 'USER'

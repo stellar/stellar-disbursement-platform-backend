@@ -341,6 +341,19 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 		)
 	}
 
+	if disbursement.AmountDisbursed != "" {
+		amountDisbursed, parseErr := strconv.ParseFloat(disbursement.AmountDisbursed, 64)
+		if parseErr != nil {
+			return fmt.Errorf(
+				"cannot convert amount disbursed %s for disbursement id %s into float: %w",
+				disbursement.AmountDisbursed,
+				disbursement.ID,
+				parseErr,
+			)
+		}
+		disbursementAmount -= amountDisbursed
+	}
+
 	totalPendingAmount := 0.0
 	incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 		Filters: map[data.FilterKey]interface{}{
@@ -352,7 +365,12 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 	}
 
 	for _, ip := range incompletePayments {
-		if ip.Disbursement.ID == disbursement.ID || !ip.Asset.Equals(*disbursement.Asset) {
+		// Skip payments that belong to this disbursement
+		if ip.Type == data.PaymentTypeDisbursement && ip.Disbursement != nil && ip.Disbursement.ID == disbursement.ID {
+			continue
+		}
+		// Skip payments that are for a different asset
+		if !ip.Asset.Equals(*disbursement.Asset) {
 			continue
 		}
 

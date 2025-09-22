@@ -13,6 +13,36 @@ type MockClient struct {
 	mock.Mock
 }
 
+// GetCustomer provides a mock function with given fields: ctx, customerID
+func (_m *MockClient) GetCustomer(ctx context.Context, customerID string) (*CustomerInfo, error) {
+	ret := _m.Called(ctx, customerID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCustomer")
+	}
+
+	var r0 *CustomerInfo
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*CustomerInfo, error)); ok {
+		return rf(ctx, customerID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *CustomerInfo); ok {
+		r0 = rf(ctx, customerID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*CustomerInfo)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, customerID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetKYCLink provides a mock function with given fields: ctx, kycLinkID
 func (_m *MockClient) GetKYCLink(ctx context.Context, kycLinkID string) (*KYCLinkInfo, error) {
 	ret := _m.Called(ctx, kycLinkID)

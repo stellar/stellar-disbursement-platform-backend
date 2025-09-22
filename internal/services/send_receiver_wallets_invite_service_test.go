@@ -20,9 +20,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
@@ -62,8 +63,8 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantBaseURL := "http://localhost:8000"
-	tenantInfo := &tenant.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL}
-	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+	tenantInfo := &schema.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
 	messageDispatcherMock := message.NewMockMessageDispatcher(t)
@@ -172,18 +173,28 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		mockErr := errors.New("unexpected error")
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink1.OrganizationName,
+					"RegistrationLink": deepLink1,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, errors.New("unexpected error")).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink2.OrganizationName,
+					"RegistrationLink": deepLink2,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
@@ -317,15 +328,25 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
 				Body:          contentWallet1,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink1.OrganizationName,
+					"RegistrationLink": deepLink1,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
+				Type:    message.MessageTypeReceiverInvitation,
 				ToEmail: receiverEmailOnly.Email,
 				Body:    contentWallet2,
 				Title:   titleWallet2,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink2.OrganizationName,
+					"RegistrationLink": deepLink2,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeAWSEmail, nil).
 			Once()
@@ -571,18 +592,28 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink1.OrganizationName,
+					"RegistrationLink": deepLink1,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink2.OrganizationName,
+					"RegistrationLink": deepLink2,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
@@ -869,10 +900,15 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink1.OrganizationName,
+					"RegistrationLink": deepLink1,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
@@ -989,18 +1025,28 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement3,
 				Title:         titleDisbursement3,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink1.OrganizationName,
+					"RegistrationLink": deepLink1,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver2.PhoneNumber,
 				ToEmail:       receiver2.Email,
 				Body:          contentDisbursement4,
 				Title:         titleDisbursement4,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink2.OrganizationName,
+					"RegistrationLink": deepLink2,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
@@ -1122,10 +1168,15 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
+				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiver1.PhoneNumber,
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement,
 				Title:         titleDisbursement,
+				TemplateVariables: map[string]string{
+					"OrganizationName": walletDeepLink1.OrganizationName,
+					"RegistrationLink": deepLink1,
+				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()

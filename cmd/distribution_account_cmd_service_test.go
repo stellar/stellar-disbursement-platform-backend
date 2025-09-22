@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -160,7 +161,7 @@ func Test_DistAccCmdService_RotateDistributionAccount(t *testing.T) {
 			// Create the service under test
 			tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 			testTenant := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, fmt.Sprintf("tenant-%d", i), oldAccount.Address)
-			ctx = tenant.SaveTenantInContext(ctx, testTenant)
+			ctx = sdpcontext.SetTenantInContext(ctx, testTenant)
 
 			service := DistributionAccountService{
 				distAccService:             distAccServiceMock,

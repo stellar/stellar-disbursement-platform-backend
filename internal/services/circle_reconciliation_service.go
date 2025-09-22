@@ -13,10 +13,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 //go:generate mockery --name=CircleReconciliationServiceInterface --case=underscore --structname=MockCircleReconciliationService --filename=circle_reconciliation_service.go
@@ -36,7 +36,7 @@ type CircleReconciliationService struct {
 // reached a successful/failure status, it updates the payment status in the DB as well to reflect that.
 func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	// Step 1: Get the tenant from the context.
-	tnt, outerErr := tenant.GetTenantFromContext(ctx)
+	tnt, outerErr := sdpcontext.GetTenantFromContext(ctx)
 	if outerErr != nil {
 		return fmt.Errorf("getting tenant from context: %w", outerErr)
 	}
@@ -102,7 +102,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 
 // reconcilePaymentRequest reconciles a Circle transfer request with the status from the Circle payout/transfer, and updates the
 // payment status in the DB. It returns an error if the reconciliation fails.
-func (s *CircleReconciliationService) reconcilePaymentRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
+func (s *CircleReconciliationService) reconcilePaymentRequest(ctx context.Context, dbTx db.DBTransaction, tnt *schema.Tenant, circleRequest *data.CircleTransferRequest) error {
 	// 4.1. get the circle_transfer_request from our DB by transfer/payout ID
 	cObjData, err := s.fetchCircleData(ctx, circleRequest)
 	if err != nil {
@@ -216,7 +216,7 @@ func (s *CircleReconciliationService) fetchCircleData(ctx context.Context, circl
 	}
 }
 
-func (s *CircleReconciliationService) updateCircleTransferRequest(ctx context.Context, cObjData *circleObjectData, circleRequest *data.CircleTransferRequest, tnt *tenant.Tenant, dbTx db.DBTransaction) (*data.CircleTransferRequest, error) {
+func (s *CircleReconciliationService) updateCircleTransferRequest(ctx context.Context, cObjData *circleObjectData, circleRequest *data.CircleTransferRequest, tnt *schema.Tenant, dbTx db.DBTransaction) (*data.CircleTransferRequest, error) {
 	newStatus := data.CircleTransferStatus(cObjData.Status)
 	if *circleRequest.Status == newStatus {
 		// this condition should be unrechable, but we're adding this log just in case...

@@ -4,19 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lib/pq"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -58,14 +55,14 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	userID, ok := ctx.Value(middleware.UserIDContextKey).(string)
-	if !ok {
+	userID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
 
 	var reqBody validators.UpdateReceiverRequest
-	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
@@ -82,7 +79,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	}
 
 	receiverID := chi.URLParam(req, "id")
-	_, err := h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
+	_, err = h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("Receiver not found", err, nil).Render(rw)
@@ -134,7 +131,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 		return receiver, nil
 	})
 	if err != nil {
-		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
+		if httpErr := parseConflictErrorIfNeeded(err); httpErr != nil {
 			httpErr.Render(rw)
 			return
 		}
@@ -146,20 +143,24 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	httpjson.Render(rw, receiver, httpjson.JSON)
 }
 
-func parseHttpConflictErrorIfNeeded(err error) *httperror.HTTPError {
-	var pqErr *pq.Error
-	if err == nil || !errors.As(err, &pqErr) || pqErr.Code != "23505" {
+func parseConflictErrorIfNeeded(err error) *httperror.HTTPError {
+	switch {
+	// Handle wallet address conflicts
+	case errors.Is(err, data.ErrDuplicateWalletAddress):
+		return httperror.Conflict("The provided wallet address is already associated with another user.", err, map[string]interface{}{
+			"wallet_address": "wallet address must be unique",
+		})
+	// Handle email conflicts
+	case errors.Is(err, data.ErrDuplicateEmail):
+		return httperror.Conflict("The provided email is already associated with another user.", err, map[string]interface{}{
+			"email": "email must be unique",
+		})
+	// Handle phone number conflicts
+	case errors.Is(err, data.ErrDuplicatePhoneNumber):
+		return httperror.Conflict("The provided phone number is already associated with another user.", err, map[string]interface{}{
+			"phone_number": "phone number must be unique",
+		})
+	default:
 		return nil
 	}
-
-	allowedConstraints := []string{"receiver_unique_email", "receiver_unique_phone_number"}
-	if !slices.Contains(allowedConstraints, pqErr.Constraint) {
-		return nil
-	}
-	fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
-	msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
-
-	return httperror.Conflict(msg, err, map[string]interface{}{
-		fieldName: fieldName + " must be unique",
-	})
 }

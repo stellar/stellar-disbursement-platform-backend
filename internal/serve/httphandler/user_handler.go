@@ -14,13 +14,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type UserHandler struct {
@@ -105,6 +104,9 @@ func validateRoles(validator *validators.Validator, roles []data.UserRole) {
 	// NOTE: in the MVP, users should have only one role.
 	validator.Check(len(roles) == 1, "roles", "the number of roles required is exactly one")
 
+	// Check for mutually exclusive roles
+	validator.CheckError(data.ValidateRoleMutualExclusivity(roles), "roles", "")
+
 	// Validating the role of the request is a valid value
 	if _, ok := validator.Errors["roles"]; !ok {
 		role := roles[0]
@@ -115,15 +117,15 @@ func validateRoles(validator *validators.Validator, roles []data.UserRole) {
 func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		log.Ctx(ctx).Warn("token not found when updating user activation")
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
 
 	var reqBody UserActivationRequest
-	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
@@ -176,15 +178,15 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	tnt, err := tenant.GetTenantFromContext(ctx)
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		err = fmt.Errorf("getting tenant from context: %w", err)
 		httperror.Unauthorized("", err, nil).Render(rw)
 		return
 	}
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		log.Ctx(ctx).Warn("token not found when updating user activation")
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
@@ -247,15 +249,15 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		log.Ctx(ctx).Warn("token not found when updating user roles")
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
 
 	var reqBody UpdateRolesRequest
-	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
@@ -305,8 +307,8 @@ func (h UserHandler) GetAllUsers(rw http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
+	token, err := sdpcontext.GetTokenFromContext(ctx)
+	if err != nil {
 		log.Ctx(ctx).Warn("token not found when getting all users")
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return

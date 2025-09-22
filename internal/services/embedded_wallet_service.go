@@ -9,8 +9,8 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 var (
@@ -96,7 +96,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 		return ErrMissingCredentialID
 	}
 
-	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("getting tenant from context: %w", err)
 	}
