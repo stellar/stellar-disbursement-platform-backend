@@ -87,7 +87,7 @@ func Test_APIKeyOrJWTAuthenticate_IPRestriction(t *testing.T) {
 	require.NoError(t, err)
 
 	r := chi.NewRouter()
-	r.Use(APIKeyOrJWTAuthenticate(apiKeyModel, jwtAuthWithID("jwt-user")))
+	r.Use(APIKeyOrJWTAuthenticate(apiKeyModel, jwtAuthWithID("user")))
 	r.Get("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

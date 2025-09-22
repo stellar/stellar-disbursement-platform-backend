@@ -63,7 +63,7 @@ func (p *prometheusClient) MonitorHistogram(value float64, tag MetricTag, labels
 	histogram.With(labels).Observe(value)
 }
 
-func newPrometheusClient() (*prometheusClient, error) {
+func newPrometheusClient() *prometheusClient {
 	// register Prometheus metrics
 	metricsRegistry := prometheus.NewRegistry()
 
@@ -75,7 +75,7 @@ func newPrometheusClient() (*prometheusClient, error) {
 		metricsRegistry.MustRegister(metric)
 	}
 
-	return &prometheusClient{httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})}, nil
+	return &prometheusClient{httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})}
 }
 
 // Ensuring that promtheusClient is implementing MonitorClient interface

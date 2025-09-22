@@ -354,7 +354,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 	const url = "/restricted"
 
-	setRestrictedEndpoint := func(ctx context.Context, r *chi.Mux, roles ...data.UserRole) {
+	setRestrictedEndpoint := func(r *chi.Mux, roles ...data.UserRole) {
 		r.With(AnyRoleMiddleware(authManager, roles...)).
 			Get(url, func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
@@ -371,7 +371,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, "role1", "role2")
+		setRestrictedEndpoint(r, "role1", "role2")
 
 		r.ServeHTTP(w, req)
 
@@ -392,7 +392,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, "role1", "role2")
+		setRestrictedEndpoint(r, "role1", "role2")
 
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
@@ -418,7 +418,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, "role1", "role2")
+		setRestrictedEndpoint(r, "role1", "role2")
 
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
@@ -444,7 +444,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, "role1", "role2")
+		setRestrictedEndpoint(r, "role1", "role2")
 
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
@@ -470,7 +470,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, "role1", "role2")
+		setRestrictedEndpoint(r, "role1", "role2")
 
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
@@ -498,7 +498,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		requiredRoles := []data.UserRole{data.BusinessUserRole, data.FinancialControllerUserRole}
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, requiredRoles...)
+		setRestrictedEndpoint(r, requiredRoles...)
 
 		user := &auth.User{
 			ID:    "user-id",
@@ -540,7 +540,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		requiredRoles := []data.UserRole{data.BusinessUserRole, data.DeveloperUserRole}
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, requiredRoles...)
+		setRestrictedEndpoint(r, requiredRoles...)
 
 		user := &auth.User{
 			ID:    "user-id",
@@ -582,7 +582,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		requiredRoles := []data.UserRole{}
 
 		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, requiredRoles...)
+		setRestrictedEndpoint(r, requiredRoles...)
 
 		r.ServeHTTP(w, req)
 

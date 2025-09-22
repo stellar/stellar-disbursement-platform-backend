@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -371,7 +370,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	}
 }
 
-func Test_Manager_RunMigrationsForTenant(t *testing.T) {
+func Test_Manager_applyTenantMigrations(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
@@ -428,9 +427,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 	})
 	require.NoError(t, err)
-	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant1DSN, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
-	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.AuthMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant1DSN, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt1SchemaName, getExpectedTablesAfterMigrationsApplied())
@@ -438,9 +437,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	// Asserting if the Tenant 2 DB Schema wasn't affected by Tenant 1 schema migrations
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, []string{})
 
-	err = p.runMigrationsForTenant(ctx, tenant2DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant2DSN, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
-	err = p.runMigrationsForTenant(ctx, tenant2DSN, migrate.Up, 0, migrations.AuthMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant2DSN, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, getExpectedTablesAfterMigrationsApplied())

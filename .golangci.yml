@@ -17,7 +17,7 @@ linters:
     # - wrapcheck
     - unused
     - unconvert
-    # - unparam
+    - unparam
 
   default: none
 
