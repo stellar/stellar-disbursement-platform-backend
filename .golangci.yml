@@ -8,7 +8,7 @@ formatters:
 linters:
   enable:
     - govet
-    # - rowserrcheck
+    - rowserrcheck
     # - nilerr
     # - nilnesserr
     # - errname
