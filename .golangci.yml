@@ -15,7 +15,7 @@ linters:
     # - errorlint
     # - errcheck
     # - wrapcheck
-    # - unused
+    - unused
     # - unconvert
     # - unparam
 
