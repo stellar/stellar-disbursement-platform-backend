@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -283,22 +284,97 @@ func (s *DirectPaymentService) getReceiverWallet(
 		return nil, fmt.Errorf("checking for existing receiver wallet: %w", err)
 	}
 
-	if len(receiverWallets) == 0 {
+	// If receiver wallet exists, return it
+	if len(receiverWallets) > 0 {
+		receiverWallet := receiverWallets[0]
+
+		if walletAddress != nil && *walletAddress != "" {
+			if receiverWallet.StellarAddress != *walletAddress {
+				return nil, fmt.Errorf("wallet address mismatch - receiver is registered with a different address for this wallet")
+			}
+		}
+
+		return receiverWallet, nil
+	}
+
+	// No receiver wallet exists - check if this is a SEP-24 wallet and receiver has verifications
+	wallet, err := s.Models.Wallets.Get(ctx, walletID)
+	if err != nil {
+		return nil, fmt.Errorf("getting wallet: %w", err)
+	}
+
+	if wallet.UserManaged {
 		return nil, &ReceiverWalletNotFoundError{
 			ReceiverID: receiverID,
 			WalletID:   walletID,
 		}
 	}
 
-	receiverWallet := receiverWallets[0]
+	// Check if receiver has any verifications
+	receiverVerifications, err := s.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiverID)
+	if err != nil {
+		return nil, fmt.Errorf("checking receiver verifications: %w", err)
+	}
 
-	if walletAddress != nil && *walletAddress != "" {
-		if receiverWallet.StellarAddress != *walletAddress {
-			return nil, fmt.Errorf("wallet address mismatch - receiver is registered with a different address for this wallet")
+	if len(receiverVerifications) == 0 {
+		return nil, &ReceiverWalletNotFoundError{
+			ReceiverID: receiverID,
+			WalletID:   walletID,
 		}
 	}
 
-	return receiverWallet, nil
+	rwInsert := data.ReceiverWalletInsert{
+		ReceiverID: receiverID,
+		WalletID:   walletID,
+	}
+
+	newReceiverWalletID, err := s.Models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbTx, rwInsert)
+	if err != nil {
+		return nil, fmt.Errorf("creating receiver wallet: %w", err)
+	}
+
+	// Update the status to READY using the data package method
+	rwUpdate := data.ReceiverWalletUpdate{
+		Status: data.ReadyReceiversWalletStatus,
+	}
+
+	err = s.Models.ReceiverWallet.Update(ctx, newReceiverWalletID, rwUpdate, dbTx)
+	if err != nil {
+		return nil, fmt.Errorf("updating receiver wallet status to READY: %w", err)
+	}
+
+	createdReceiverWallet, err := s.Models.ReceiverWallet.GetByID(ctx, dbTx, newReceiverWalletID)
+	if err != nil {
+		return nil, fmt.Errorf("getting created receiver wallet: %w", err)
+	}
+
+	// Dispatch invitation event for the newly created wallet
+	// This will trigger the invitation flow to get the receiver onboarded
+	if s.EventProducer != nil {
+		tenant, tenantErr := sdpcontext.GetTenantFromContext(ctx)
+		if tenantErr != nil {
+			log.Ctx(ctx).Errorf("failed to get tenant from context for invitation event: %v", tenantErr)
+		} else {
+			eventData := schemas.EventReceiverWalletInvitationData{
+				ReceiverWalletID: newReceiverWalletID,
+			}
+
+			msg := events.Message{
+				Topic:    events.ReceiverWalletNewInvitationTopic,
+				Key:      newReceiverWalletID,
+				TenantID: tenant.ID,
+				Type:     events.BatchReceiverWalletInvitationType,
+				Data:     eventData,
+			}
+
+			writeErr := s.EventProducer.WriteMessages(ctx, msg)
+			if writeErr != nil {
+				log.Ctx(ctx).Errorf("failed to dispatch receiver wallet invitation event: %v", writeErr)
+			}
+		}
+	}
+
+	return createdReceiverWallet, nil
 }
 
 func (s *DirectPaymentService) validateBalance(
