@@ -7,24 +7,24 @@ formatters:
 
 linters:
   enable:
-    - govet
-    - rowserrcheck
-    - nilerr
-    - nilnesserr
+    - errcheck
     - errname
     - errorlint
-    - errcheck
-    - wrapcheck
-    - unused
+    - govet
+    - nilerr
+    - nilnesserr
+    - rowserrcheck
     - unconvert
     - unparam
+    - unused
+    - wrapcheck
 
   settings:
     staticcheck:
       checks:
         - all
-        - -ST1000
         - -QF1008
+        - -ST1000
 
     errcheck:
       # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`.
@@ -33,9 +33,9 @@ linters:
     wrapcheck:
       extra-ignore-sigs:
         - .Close()
+        - .Ping(
         - .Rollback()
         - .Value()
-        - .Ping(
         - db.OpenDBConnectionPool
         - db.RunInTransaction
         - json.Marshal
@@ -56,7 +56,7 @@ linters:
 
       # Exclude some `staticcheck` messages.
       - linters: [staticcheck]
-        text: '(QF1008|SqlDB should be SQLDB)'
+        text: '(SqlDB should be SQLDB)' # allow SqlDB because some dependencies (sql & sqlx) use SqlDB.
 
       - linters: [staticcheck]
         path: _test\.go
