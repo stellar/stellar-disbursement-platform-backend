@@ -1,4 +1,6 @@
-name: SDP<>AnchorPlatform Integration
+name: SDP<>AnchorPlatform Integration (Legacy)
+# Note: This workflow tests the legacy Anchor Platform integration.
+# For internal SEP services tests, see internal_sep_validation.yml
 
 on:
   push:
@@ -21,6 +23,7 @@ jobs:
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      ENABLE_ANCHOR_PLATFORM: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v5

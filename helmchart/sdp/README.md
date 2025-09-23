@@ -22,10 +22,14 @@
 This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
 
 The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP consists of the following services:
-- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions.
-- Anchor Platform: the API server that the wallet uses to authenticate and initiate the recipient’s registration process through the SEP-24 deposit flow.
+- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions, including native SEP10/SEP24 implementations.
+- Anchor Platform (Optional): the API server that the wallet uses to authenticate and initiate the recipient's registration process through the SEP-24 deposit flow. Can be disabled in favor of native SEP10/SEP24 endpoints.
 - Transaction Submission Service (TSS): the service that submits all payment transactions to the Stellar network.
 - Dashboard: the user interface administrators use to initiate and track the progress of disbursements.
+
+### SEP10/SEP24 Implementation
+
+The SDP now includes native implementations of SEP10 and SEP24 protocols, providing wallet authentication and interactive deposit flows without requiring external Anchor Platform integration. This is controlled by the `ENABLE_ANCHOR_PLATFORM` configuration parameter.
 
 ## Installing the Chart
 
@@ -172,6 +176,7 @@ These parameters are shared by all charts.
 | `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |                                            |
 | `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `nil`                                      |
 | `global.singleTenantMode`                              | Determines if the SDP service is running in single-tenant mode.                                                                     | `false`                                    |
+| `global.enableAnchorPlatform`                          | Determines if the Anchor Platform service should be deployed. When disabled, SDP will not have Anchor Platform integration.         | `false`                                    |
 | `global.distributionPublicKey`                         | The public key of the HOST's Stellar distribution account, used to create channel accounts.                                         | `nil`                                      |
 | `global.distributionPrivateKey`                        | The private key of the root Stellar distribution account                                                                            | `nil`                                      |
 | `global.sep10PublicKey`                                | Anchor platform SEP10 signing public key.                                                                                           | `nil`                                      |
@@ -285,6 +290,9 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 
 Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
 the recipient's registration process through the SEP-24 deposit flow.
+
+DEPRECATED: This configuration section will be removed in a future version.
+Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints instead.
 
 | Name                                                                      | Description                                                                                                                                                                                                                                                                                                              | Value                                   |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
