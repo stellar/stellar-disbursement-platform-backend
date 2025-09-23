@@ -14,13 +14,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-//go:generate mockery --name=twilioApiInterface --structname=mockTwilioApiInterface --filename=mock_twilio_api_interface.go --inpackage --with-expecter
-type twilioApiInterface interface {
+//go:generate mockery --name=twilioAPIInterface --structname=mockTwilioAPIInterface --filename=mock_twilio_api_interface.go --inpackage --with-expecter
+type twilioAPIInterface interface {
 	CreateMessage(params *twilioApi.CreateMessageParams) (*twilioApi.ApiV2010Message, error)
 }
 
 type twilioClient struct {
-	apiService twilioApiInterface
+	apiService twilioAPIInterface
 	senderID   string
 }
 

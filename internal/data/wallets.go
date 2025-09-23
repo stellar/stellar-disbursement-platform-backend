@@ -302,7 +302,7 @@ func (wm *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset,
 	return assets, nil
 }
 
-func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
+func (wm *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
 	const query = `
 		UPDATE
 			wallets
@@ -315,7 +315,7 @@ func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet,
 	`
 
 	var wallet Wallet
-	err := w.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
+	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound

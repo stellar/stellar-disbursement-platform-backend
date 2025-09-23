@@ -53,9 +53,9 @@ func Test_SentryClient_LogAndReportErrors(t *testing.T) {
 
 	t.Run("LogAndReportErrors without message", func(t *testing.T) {
 		e := fmt.Errorf("%s: %w", mMsgError, mError)
-		sentryId := sentry.EventID("id-1")
+		sentryID := sentry.EventID("id-1")
 
-		mHubSentry.On("CaptureException", e).Return(&sentryId).Once()
+		mHubSentry.On("CaptureException", e).Return(&sentryID).Once()
 		mSentryClient.LogAndReportErrors(ctx, mError, mMsgError)
 
 		mHubSentry.AssertExpectations(t)
@@ -63,9 +63,9 @@ func Test_SentryClient_LogAndReportErrors(t *testing.T) {
 
 	t.Run("LogAndReportErrors with message", func(t *testing.T) {
 		mMsgError = ""
-		sentryId := sentry.EventID("id-1")
+		sentryID := sentry.EventID("id-1")
 
-		mHubSentry.On("CaptureException", mError).Return(&sentryId).Once()
+		mHubSentry.On("CaptureException", mError).Return(&sentryID).Once()
 		mSentryClient.LogAndReportErrors(ctx, mError, mMsgError)
 
 		mHubSentry.AssertExpectations(t)
@@ -94,9 +94,9 @@ func Test_SentryClient_LogAndReportMessages(t *testing.T) {
 	}
 	mMsgError := "crash error"
 
-	sentryId := sentry.EventID("id-1")
+	sentryID := sentry.EventID("id-1")
 
-	mHubSentry.On("CaptureMessage", mMsgError).Return(&sentryId).Once()
+	mHubSentry.On("CaptureMessage", mMsgError).Return(&sentryID).Once()
 	mSentryClient.LogAndReportMessages(context.Background(), mMsgError)
 
 	mHubSentry.AssertExpectations(t)
@@ -124,9 +124,9 @@ func Test_SentryClient_Recover(t *testing.T) {
 	}
 
 	mockErr := fmt.Errorf("error test")
-	sentryId := sentry.EventID("id-1")
+	sentryID := sentry.EventID("id-1")
 
-	mHubSentry.On("Recover", mockErr).Return(&sentryId).Once()
+	mHubSentry.On("Recover", mockErr).Return(&sentryID).Once()
 
 	defer mHubSentry.AssertExpectations(t)
 	defer mSentryClient.Recover()

@@ -44,7 +44,7 @@ func TestInsertReceiverRegistrationAttempt(t *testing.T) {
 			models := SetupModels(t)
 
 			now := time.Now().UTC()
-			tc.attempt.AttemptTs = now
+			tc.attempt.AttemptTS = now
 
 			err := models.ReceiverRegistrationAttempt.InsertReceiverRegistrationAttempt(ctx, tc.attempt)
 			require.NoError(t, err)

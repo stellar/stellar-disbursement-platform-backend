@@ -688,7 +688,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 		prepareMocksFn        func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher)
 		assertLogsFn          func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry)
 		wantVerificationField data.VerificationType
-		wantHttpErr           func(contactType data.ReceiverContactType, r data.Receiver) *httperror.HTTPError
+		wantHTTPErr           func(contactType data.ReceiverContactType, r data.Receiver) *httperror.HTTPError
 	}{
 		{
 			name: "🟡 false positive if GetLatestByContactInfo returns no results",
@@ -747,7 +747,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 					Once()
 			},
 			wantVerificationField: data.VerificationTypeDateOfBirth,
-			wantHttpErr: func(contactType data.ReceiverContactType, r data.Receiver) *httperror.HTTPError {
+			wantHTTPErr: func(contactType data.ReceiverContactType, r data.Receiver) *httperror.HTTPError {
 				contactTypeStr := utils.Humanize(string(contactType))
 				truncatedContactInfo := utils.TruncateString(r.ContactByType(contactType), 3)
 				err := fmt.Errorf("sending OTP message: %w", fmt.Errorf("cannot send OTP message through %s to %s: %w", contactTypeStr, truncatedContactInfo, errors.New("error sending message")))
@@ -770,7 +770,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 					Once()
 			},
 			wantVerificationField: data.VerificationTypePin,
-			wantHttpErr:           nil,
+			wantHTTPErr:           nil,
 		},
 	}
 
@@ -817,8 +817,8 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 
 				contactInfo := tc.contactInfo(*receiverWithWallet, contactType)
 				verificationField, httpErr := handler.handleOTPForReceiver(ctx, contactType, contactInfo, tc.sep24ClientDomain)
-				if tc.wantHttpErr != nil {
-					wantHTTPErr := tc.wantHttpErr(contactType, *receiverWithWallet)
+				if tc.wantHTTPErr != nil {
+					wantHTTPErr := tc.wantHTTPErr(contactType, *receiverWithWallet)
 					require.NotNil(t, httpErr)
 					assert.Equal(t, *wantHTTPErr, *httpErr)
 					assert.Equal(t, tc.wantVerificationField, verificationField)

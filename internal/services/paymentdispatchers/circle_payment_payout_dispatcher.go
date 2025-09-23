@@ -20,7 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-var ErrCircleRecipientCreationFailedTooManyTimes = errors.New("Circle recipient creation failed too many times")
+var ErrCircleRecipientCreationFailedTooManyTimes = errors.New("circle recipient creation failed too many times")
 
 const (
 	// maxCircleRecipientCreationAttempts is the maximum number of attempts to create a Circle recipient before giving up.
@@ -268,7 +268,7 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 		return nil, fmt.Errorf("creating Circle recipient: %w", err)
 	}
 
-	recipientJson, err := json.Marshal(recipient)
+	recipientJSON, err := json.Marshal(recipient)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling Circle recipient: %w", err)
 	}
@@ -284,7 +284,7 @@ func (c *CirclePaymentPayoutDispatcher) submitRecipientToCircle(ctx context.Cont
 		StellarAddress:    receiverWallet.StellarAddress,
 		StellarMemo:       memo.Value,
 		Status:            dataRecipientStatus,
-		ResponseBody:      recipientJson,
+		ResponseBody:      recipientJSON,
 		SyncAttempts:      dataRecipient.SyncAttempts + 1,
 		LastSyncAttemptAt: time.Now(),
 	})

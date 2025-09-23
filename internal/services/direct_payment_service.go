@@ -312,7 +312,7 @@ func (s *DirectPaymentService) getReceiverWallet(
 	}
 
 	// Check if receiver has any verifications
-	receiverVerifications, err := s.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiverID)
+	receiverVerifications, err := s.Models.ReceiverVerification.GetAllByReceiverID(ctx, dbTx, receiverID)
 	if err != nil {
 		return nil, fmt.Errorf("checking receiver verifications: %w", err)
 	}

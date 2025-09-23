@@ -176,7 +176,7 @@ func Test_handleHTTP_authenticatedAdminEndpoints(t *testing.T) {
 
 	serveOptions := ServeOptions{
 		AdminAccount: "SDP-admin",
-		AdminApiKey:  "api_key_1234567890",
+		AdminAPIKey:  "api_key_1234567890",
 	}
 
 	handlerMux := handleHTTP(&serveOptions)

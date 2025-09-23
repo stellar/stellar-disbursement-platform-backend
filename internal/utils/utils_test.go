@@ -21,7 +21,7 @@ func Test_GetRoutePattern(t *testing.T) {
 		{expectedRoutePattern: "undefined", method: "POST"},
 	}
 
-	mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	mHTTPHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -38,7 +38,7 @@ func Test_GetRoutePattern(t *testing.T) {
 
 			r := chi.NewRouter()
 			r.Use(mAssertRoutePattern)
-			r.Get("/mock", mHttpHandler.ServeHTTP)
+			r.Get("/mock", mHTTPHandler.ServeHTTP)
 
 			req, err := http.NewRequest(tc.method, "/mock", nil)
 			require.NoError(t, err)

@@ -23,18 +23,18 @@ func Test_PrometheusClient_GetMetricType(t *testing.T) {
 	assert.Equal(t, MetricTypePrometheus, metricType)
 }
 
-func Test_PrometheusClient_GetMetricHttpHandler(t *testing.T) {
+func Test_PrometheusClient_GetMetricHTTPHandler(t *testing.T) {
 	mPrometheusClient := &prometheusClient{}
 
-	mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	mHTTPHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{"status": "OK"}`))
 		require.NoError(t, err)
 	})
 
-	mPrometheusClient.httpHandler = mHttpHandler
+	mPrometheusClient.httpHandler = mHTTPHandler
 
-	httpHandler := mPrometheusClient.GetMetricHttpHandler()
+	httpHandler := mPrometheusClient.GetMetricHTTPHandler()
 
 	r := chi.NewRouter()
 	r.Get("/metrics", httpHandler.ServeHTTP)
@@ -45,19 +45,19 @@ func Test_PrometheusClient_GetMetricHttpHandler(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	wantJson := `{"status": "OK"}`
-	assert.JSONEq(t, wantJson, rr.Body.String())
+	wantJSON := `{"status": "OK"}`
+	assert.JSONEq(t, wantJSON, rr.Body.String())
 }
 
 func Test_PrometheusClient_MonitorRequestTime(t *testing.T) {
 	mPrometheusClient := &prometheusClient{}
 
 	metricsRegistry := prometheus.NewRegistry()
-	metricsRegistry.MustRegister(SummaryVecMetrics[HttpRequestDurationTag])
+	metricsRegistry.MustRegister(SummaryVecMetrics[HTTPRequestDurationTag])
 
 	mPrometheusClient.httpHandler = promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
 
-	mLabels := HttpRequestLabels{
+	mLabels := HTTPRequestLabels{
 		Status: "200",
 		Route:  "/mock",
 		Method: "GET",
@@ -66,7 +66,7 @@ func Test_PrometheusClient_MonitorRequestTime(t *testing.T) {
 	// initializing durations as 1 second
 	mDuration := time.Second * 1
 
-	mPrometheusClient.MonitorHttpRequestDuration(mDuration, mLabels)
+	mPrometheusClient.MonitorHTTPRequestDuration(mDuration, mLabels)
 
 	r := chi.NewRouter()
 	r.Get("/metrics", mPrometheusClient.httpHandler.ServeHTTP)

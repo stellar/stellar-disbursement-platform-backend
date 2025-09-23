@@ -22,7 +22,7 @@ type ProvisionTenant struct {
 	UserLastName            string
 	UserEmail               string
 	OrgName                 string
-	UiBaseURL               string
+	UIBaseURL               string
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
@@ -65,7 +65,7 @@ func (m *Manager) ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*
 		UserLastName:            pt.UserLastName,
 		UserEmail:               pt.UserEmail,
 		OrgName:                 pt.OrgName,
-		UiBaseURL:               pt.UiBaseURL,
+		UIBaseURL:               pt.UIBaseURL,
 		BaseURL:                 pt.BaseURL,
 		NetworkType:             pt.NetworkType,
 		DistributionAccountType: pt.DistributionAccountType,

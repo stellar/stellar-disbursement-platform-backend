@@ -61,7 +61,7 @@ func (sqlExec *SQLExecuterWithMetrics) monitorDBQueryDuration(duration time.Dura
 	}
 }
 
-// QueryContext is a wrapper around QueryerContext interface QueryContext that includes monitoring the db query.
+// GetContext is a wrapper around QueryerContext interface GetContext that includes monitoring the db query.
 func (sqlExec *SQLExecuterWithMetrics) GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	then := time.Now()
 

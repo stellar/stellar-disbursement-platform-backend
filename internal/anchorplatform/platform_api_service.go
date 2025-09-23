@@ -39,12 +39,12 @@ type AnchorPlatformAPIServiceInterface interface {
 }
 
 type AnchorPlatformAPIService struct {
-	HttpClient                    httpclient.HttpClientInterface
+	HTTPClient                    httpclient.HTTPClientInterface
 	AnchorPlatformBasePlatformURL string
 	jwtManager                    *JWTManager
 }
 
-func NewAnchorPlatformAPIService(httpClient httpclient.HttpClientInterface, anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret string) (*AnchorPlatformAPIService, error) {
+func NewAnchorPlatformAPIService(httpClient httpclient.HTTPClientInterface, anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret string) (*AnchorPlatformAPIService, error) {
 	// validation
 	if httpClient == nil {
 		return nil, fmt.Errorf("http client cannot be nil")
@@ -63,7 +63,7 @@ func NewAnchorPlatformAPIService(httpClient httpclient.HttpClientInterface, anch
 	}
 
 	return &AnchorPlatformAPIService{
-		HttpClient:                    httpClient,
+		HTTPClient:                    httpClient,
 		AnchorPlatformBasePlatformURL: anchorPlatformBasePlatformURL,
 		jwtManager:                    jwtManager,
 	}, nil
@@ -132,7 +132,7 @@ func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context,
 	}
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
-	response, err := a.HttpClient.Do(request)
+	response, err := a.HTTPClient.Do(request)
 	if err != nil {
 		return fmt.Errorf("making request to anchor platform: %w", err)
 	}
@@ -185,7 +185,7 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 	}
 
 	// Do request
-	response, err := a.HttpClient.Do(request)
+	response, err := a.HTTPClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("making getAnchorTransactions request to anchor platform: %w", err)
 	}

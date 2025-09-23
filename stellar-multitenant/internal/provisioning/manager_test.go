@@ -305,7 +305,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				UserEmail:               userEmail,
 				OrgName:                 userOrgName,
 				NetworkType:             string(networkType),
-				UiBaseURL:               sdpUIBaseURL,
+				UIBaseURL:               sdpUIBaseURL,
 				BaseURL:                 baseURL,
 				DistributionAccountType: tc.accountType,
 			})
@@ -750,7 +750,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				UserEmail:               email,
 				OrgName:                 orgName,
 				NetworkType:             string(networkType),
-				UiBaseURL:               sdpUIBaseURL,
+				UIBaseURL:               sdpUIBaseURL,
 				BaseURL:                 baseURL,
 				DistributionAccountType: accountType,
 			})

@@ -327,7 +327,7 @@ func TestCreateAPIKey_MissingUserID(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
-func Test_GetAllApiKeys_Success(t *testing.T) {
+func Test_GetAllAPIKeys_Success(t *testing.T) {
 	t.Parallel()
 	handler, ctx := setupHandler(t)
 	userID := adminUserID
@@ -352,7 +352,7 @@ func Test_GetAllApiKeys_Success(t *testing.T) {
 
 	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api-keys", nil)
 	rr := httptest.NewRecorder()
-	handler.GetAllApiKeys(rr, req)
+	handler.GetAllAPIKeys(rr, req)
 	res := rr.Result()
 	defer res.Body.Close()
 
@@ -374,12 +374,12 @@ func Test_GetAllApiKeys_Success(t *testing.T) {
 	assert.Empty(t, list[1].AllowedIPs)
 }
 
-func Test_DeleteApiKeyEndpoints(t *testing.T) {
+func Test_DeleteAPIKeyEndpoints(t *testing.T) {
 	t.Parallel()
 	handler, ctx := setupHandler(t)
 
 	r := chi.NewRouter()
-	r.Delete("/api-keys/{id}", handler.DeleteApiKey)
+	r.Delete("/api-keys/{id}", handler.DeleteAPIKey)
 
 	t.Run("success", func(t *testing.T) {
 		key, err := handler.Models.APIKeys.Insert(
@@ -430,12 +430,12 @@ func Test_DeleteApiKeyEndpoints(t *testing.T) {
 	})
 }
 
-func Test_GetApiKeyByIDEndpoints(t *testing.T) {
+func Test_GetAPIKeyByIDEndpoints(t *testing.T) {
 	t.Parallel()
 	handler, ctx := setupHandler(t)
 
 	r := chi.NewRouter()
-	r.Get("/api-keys/{id}", handler.GetApiKeyByID)
+	r.Get("/api-keys/{id}", handler.GetAPIKeyByID)
 
 	t.Run("success", func(t *testing.T) {
 		expiry := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)

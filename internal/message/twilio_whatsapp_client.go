@@ -14,7 +14,7 @@ import (
 )
 
 type twilioWhatsAppClient struct {
-	apiService twilioApiInterface
+	apiService twilioAPIInterface
 	fromNumber string
 	templates  map[MessageType]string
 }

@@ -66,13 +66,13 @@ func MetricsRequestHandler(monitorService monitor.MonitorServiceInterface) func(
 
 			duration := time.Since(then)
 
-			labels := monitor.HttpRequestLabels{
+			labels := monitor.HTTPRequestLabels{
 				Status: fmt.Sprintf("%d", mw.Status()),
 				Route:  utils.GetRoutePattern(req),
 				Method: req.Method,
 			}
 
-			err := monitorService.MonitorHttpRequestDuration(duration, labels)
+			err := monitorService.MonitorHTTPRequestDuration(duration, labels)
 			if err != nil {
 				log.Ctx(req.Context()).Errorf("Error trying to monitor request time: %s", err)
 			}
@@ -347,12 +347,12 @@ func EnsureTenantMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) http.Handler {
+func BasicAuthMiddleware(adminAccount, adminAPIKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
-			if adminAccount == "" || adminApiKey == "" {
+			if adminAccount == "" || adminAPIKey == "" {
 				httperror.InternalError(ctx, "Admin account and API key are not set", nil, nil).Render(rw)
 				return
 			}
@@ -364,7 +364,7 @@ func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) ht
 			}
 
 			// Using constant time comparison to avoid timing attacks
-			if accountUserName != adminAccount || subtle.ConstantTimeCompare([]byte(apiKey), []byte(adminApiKey)) != 1 {
+			if accountUserName != adminAccount || subtle.ConstantTimeCompare([]byte(apiKey), []byte(adminAPIKey)) != 1 {
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}

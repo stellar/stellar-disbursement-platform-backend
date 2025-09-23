@@ -19,8 +19,6 @@ linters:
     - unconvert
     - unparam
 
-  default: none # TODO: remove this line in the next PR, where we're addressing staticcheck errors
-
   settings:
     staticcheck:
       checks:
@@ -59,6 +57,10 @@ linters:
       # Exclude some `staticcheck` messages.
       - linters: [staticcheck]
         text: '(QF1008|SqlDB should be SQLDB)'
+
+      - linters: [staticcheck]
+        path: _test\.go
+        text: '(QF1003)'
 
     # Mode of the generated files analysis.
     #

@@ -212,7 +212,7 @@ func (s *CircleReconciliationService) fetchCircleData(ctx context.Context, circl
 		return &cObjData, nil
 
 	default:
-		return nil, fmt.Errorf("Circle transfer request %q has neither Circle transfer ID nor Circle payout ID", circleRequest.IdempotencyKey)
+		return nil, fmt.Errorf("circle transfer request %q has neither Circle transfer ID nor Circle payout ID", circleRequest.IdempotencyKey)
 	}
 }
 

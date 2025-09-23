@@ -315,9 +315,9 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 }
 
 func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) error {
-	buf, header, parseHttpErr := parseCsvFromMultipartRequest(r)
-	if parseHttpErr != nil {
-		return fmt.Errorf("could not parse csv file: %w", parseHttpErr)
+	buf, header, parseHTTPErr := parseCsvFromMultipartRequest(r)
+	if parseHTTPErr != nil {
+		return fmt.Errorf("could not parse csv file: %w", parseHTTPErr)
 	}
 
 	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {

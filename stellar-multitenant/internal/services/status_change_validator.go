@@ -37,7 +37,8 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 	// if attempting to deactivate tenant, need to check for a few conditions such as
 	// 1. whether tenant is already deactivated
 	// 2. whether there are any payments still active
-	if reqStatus == schema.DeactivatedTenantStatus {
+	switch reqStatus {
+	case schema.DeactivatedTenantStatus:
 		if tnt.Status == schema.DeactivatedTenantStatus {
 			log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
 		} else {
@@ -58,13 +59,13 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 				return ErrCannotDeactivateTenantWithActivePayments
 			}
 		}
-	} else if reqStatus == schema.ActivatedTenantStatus {
+	case schema.ActivatedTenantStatus:
 		if tnt.Status == schema.ActivatedTenantStatus {
 			log.Ctx(ctx).Warnf("tenant %s is already activated", tenantID)
 		} else if tnt.Status != schema.DeactivatedTenantStatus {
 			return ErrCannotActivateTenant
 		}
-	} else {
+	default:
 		return ErrCannotPerformStatusUpdate
 	}
 

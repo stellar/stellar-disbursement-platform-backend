@@ -33,11 +33,11 @@ type DistributionAccountServiceOptions struct {
 
 func (opts DistributionAccountServiceOptions) Validate() error {
 	if opts.HorizonClient == nil {
-		return fmt.Errorf("Horizon client cannot be nil")
+		return fmt.Errorf("horizon client cannot be nil")
 	}
 
 	if opts.CircleService == nil {
-		return fmt.Errorf("Circle service cannot be nil")
+		return fmt.Errorf("circle service cannot be nil")
 	}
 
 	err := opts.NetworkType.Validate()
@@ -163,7 +163,7 @@ func (s *CircleDistributionAccountService) GetBalances(ctx context.Context, acco
 		return nil, fmt.Errorf("distribution account is not a Circle account")
 	}
 	if account.Status == schema.AccountStatusPendingUserActivation {
-		return nil, fmt.Errorf("This organization's distribution account is in %s state, please complete the %s activation process to access this endpoint.", account.Status, account.Type.Platform())
+		return nil, fmt.Errorf("this organization's distribution account is in %s state, please complete the %s activation process to access this endpoint", account.Status, account.Type.Platform())
 	}
 
 	businessBalances, err := s.CircleService.GetBusinessBalances(ctx)

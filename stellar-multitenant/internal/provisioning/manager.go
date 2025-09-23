@@ -35,7 +35,7 @@ type ProvisionTenant struct {
 	UserLastName            string
 	UserEmail               string
 	OrgName                 string
-	UiBaseURL               string
+	UIBaseURL               string
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
@@ -147,7 +147,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*sc
 		Status:                    &tenantStatus,
 		DistributionAccountType:   t.DistributionAccountType,
 		DistributionAccountStatus: t.DistributionAccountStatus,
-		SDPUIBaseURL:              &pt.UiBaseURL,
+		SDPUIBaseURL:              &pt.UIBaseURL,
 		BaseURL:                   &pt.BaseURL,
 	}
 	if t.DistributionAccountType.IsStellar() {

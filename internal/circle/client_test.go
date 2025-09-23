@@ -1080,7 +1080,7 @@ func Test_Client_request(t *testing.T) {
 }
 
 func newClientWithMocks(t *testing.T) (Client, *clientMocks) {
-	httpClientMock := httpclientMocks.NewHttpClientMock(t)
+	httpClientMock := httpclientMocks.NewHTTPClientMock(t)
 	tntManagerMock := tenant.NewTenantManagerMock(t)
 	monitorSvcMock := monitorMocks.NewMockMonitorService(t)
 
@@ -1098,7 +1098,7 @@ func newClientWithMocks(t *testing.T) (Client, *clientMocks) {
 }
 
 type clientMocks struct {
-	httpClientMock     *httpclientMocks.HttpClientMock
+	httpClientMock     *httpclientMocks.HTTPClientMock
 	tenantManagerMock  *tenant.TenantManagerMock
 	monitorServiceMock *monitorMocks.MockMonitorService
 }

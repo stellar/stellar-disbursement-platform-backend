@@ -264,7 +264,7 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		UserLastName:            cfg.DefaultTenantOwnerLastName,
 		UserEmail:               cfg.DefaultTenantOwnerEmail,
 		OrgName:                 "Default Organization",
-		UiBaseURL:               opts.SDPUIBaseURL,
+		UIBaseURL:               opts.SDPUIBaseURL,
 		BaseURL:                 opts.BaseURL,
 		NetworkType:             string(netType),
 		DistributionAccountType: schema.AccountType(cfg.DefaultTenantDistributionAccountType),

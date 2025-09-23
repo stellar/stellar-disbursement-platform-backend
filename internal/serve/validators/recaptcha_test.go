@@ -17,7 +17,7 @@ import (
 
 func Test_GoogleReCAPTCHAValidator(t *testing.T) {
 	siteSecretKey := "secretKey"
-	httpClientMock := &httpclientMocks.HttpClientMock{}
+	httpClientMock := &httpclientMocks.HTTPClientMock{}
 
 	grv := NewGoogleReCAPTCHAValidator(siteSecretKey, httpClientMock)
 	ctx := context.Background()

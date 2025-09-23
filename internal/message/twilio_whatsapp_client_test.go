@@ -135,17 +135,17 @@ func Test_twilioWhatsAppClient_SendMessage_errorIsHandledCorrectly(t *testing.T)
 		Body:          "Test WhatsApp message",
 	}
 
-	mockApi := newMockTwilioApiInterface(t)
+	mockAPI := newMockTwilioAPIInterface(t)
 	expectedError := fmt.Errorf("test Twilio API error")
 
-	mockApi.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
+	mockAPI.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
 		return params.To != nil && *params.To == "whatsapp:+14155551234" &&
 			params.From != nil && *params.From == "whatsapp:+14155238886" &&
 			params.ContentSid != nil && *params.ContentSid == "HX123"
 	})).Return(nil, expectedError).Once()
 
 	client := &twilioWhatsAppClient{
-		apiService: mockApi,
+		apiService: mockAPI,
 		fromNumber: "+14155238886",
 		templates: map[MessageType]string{
 			MessageTypeReceiverInvitation: "HX123",
@@ -164,11 +164,11 @@ func Test_twilioWhatsAppClient_SendMessage_handlesAPIError(t *testing.T) {
 		Body:          "Test WhatsApp message",
 	}
 
-	mockApi := newMockTwilioApiInterface(t)
+	mockAPI := newMockTwilioAPIInterface(t)
 	errorCode := 21211
 	errorMessage := "Invalid 'To' Phone Number"
 
-	mockApi.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
+	mockAPI.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
 		return params.To != nil && *params.To == "whatsapp:+14155551234"
 	})).Return(&twilioAPI.ApiV2010Message{
 		ErrorCode:    &errorCode,
@@ -176,7 +176,7 @@ func Test_twilioWhatsAppClient_SendMessage_handlesAPIError(t *testing.T) {
 	}, nil).Once()
 
 	client := &twilioWhatsAppClient{
-		apiService: mockApi,
+		apiService: mockAPI,
 		fromNumber: "+14155238886",
 		templates: map[MessageType]string{
 			MessageTypeReceiverInvitation: "HX123",
@@ -195,9 +195,9 @@ func Test_twilioWhatsAppClient_SendMessage_success(t *testing.T) {
 		Body:          "Test WhatsApp message",
 	}
 
-	mockApi := newMockTwilioApiInterface(t)
+	mockAPI := newMockTwilioAPIInterface(t)
 
-	mockApi.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
+	mockAPI.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
 		return params.To != nil && *params.To == "whatsapp:+14155551234" &&
 			params.From != nil && *params.From == "whatsapp:+14155238886" &&
 			params.ContentSid != nil && *params.ContentSid == "HX123"
@@ -207,7 +207,7 @@ func Test_twilioWhatsAppClient_SendMessage_success(t *testing.T) {
 	}, nil).Once()
 
 	client := &twilioWhatsAppClient{
-		apiService: mockApi,
+		apiService: mockAPI,
 		fromNumber: "+14155238886",
 		templates: map[MessageType]string{
 			MessageTypeReceiverInvitation: "HX123",
@@ -226,9 +226,9 @@ func Test_twilioWhatsAppClient_SendMessage_withWhatsAppPrefixedFromNumber(t *tes
 		Body:          "Test WhatsApp message",
 	}
 
-	mockApi := newMockTwilioApiInterface(t)
+	mockAPI := newMockTwilioAPIInterface(t)
 
-	mockApi.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
+	mockAPI.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
 		return params.To != nil && *params.To == "whatsapp:+14155551234" &&
 			params.From != nil && *params.From == "whatsapp:+14155238886" &&
 			params.ContentSid != nil && *params.ContentSid == "HX123"
@@ -238,7 +238,7 @@ func Test_twilioWhatsAppClient_SendMessage_withWhatsAppPrefixedFromNumber(t *tes
 	}, nil).Once()
 
 	client := &twilioWhatsAppClient{
-		apiService: mockApi,
+		apiService: mockAPI,
 		fromNumber: "whatsapp:+14155238886", // Already has whatsapp: prefix
 		templates: map[MessageType]string{
 			MessageTypeReceiverInvitation: "HX123",
@@ -265,9 +265,9 @@ func Test_twilioWhatsAppClient_SendMessage_withTemplate(t *testing.T) {
 		},
 	}
 
-	mockApi := newMockTwilioApiInterface(t)
+	mockAPI := newMockTwilioAPIInterface(t)
 
-	mockApi.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
+	mockAPI.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
 		return params.To != nil && *params.To == "whatsapp:+14155551234" &&
 			params.From != nil && *params.From == "whatsapp:+14155238886" &&
 			params.ContentSid != nil && *params.ContentSid == "HXabcdef123456789" &&
@@ -279,7 +279,7 @@ func Test_twilioWhatsAppClient_SendMessage_withTemplate(t *testing.T) {
 	}, nil).Once()
 
 	client := &twilioWhatsAppClient{
-		apiService: mockApi,
+		apiService: mockAPI,
 		fromNumber: "+14155238886",
 		templates: map[MessageType]string{
 			MessageTypeReceiverInvitation: "HXabcdef123456789",
@@ -298,9 +298,9 @@ func Test_twilioWhatsAppClient_SendMessage_withDefaultTemplate(t *testing.T) {
 		Body:          "Hello from Test Organization! Click here to register: https://example.com/register?token=abc123",
 	}
 
-	mockApi := newMockTwilioApiInterface(t)
+	mockAPI := newMockTwilioAPIInterface(t)
 
-	mockApi.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
+	mockAPI.On("CreateMessage", mock.MatchedBy(func(params *twilioAPI.CreateMessageParams) bool {
 		return params.To != nil && *params.To == "whatsapp:+14155551234" &&
 			params.From != nil && *params.From == "whatsapp:+14155238886" &&
 			params.ContentSid != nil && *params.ContentSid == "HXdefault123456" &&
@@ -311,7 +311,7 @@ func Test_twilioWhatsAppClient_SendMessage_withDefaultTemplate(t *testing.T) {
 	}, nil).Once()
 
 	client := &twilioWhatsAppClient{
-		apiService: mockApi,
+		apiService: mockAPI,
 		fromNumber: "+14155238886",
 		templates: map[MessageType]string{
 			MessageTypeReceiverInvitation: "HXdefault123456",

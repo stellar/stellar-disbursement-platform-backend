@@ -15,7 +15,7 @@ const (
 	PasswordCharset = DefaultCharset + SpecialCharset
 )
 
-// Generates a random string with the charset infromed and the length
+// StringWithCharset generates a random string with the charset and length provided.
 func StringWithCharset(length int, charset string) (string, error) {
 	b := make([]byte, length)
 	for i := range b {

@@ -15,7 +15,7 @@ type ReceiverRegistrationAttemptModel struct {
 type ReceiverRegistrationAttempt struct {
 	PhoneNumber   string    `db:"phone_number"`
 	Email         string    `db:"email"`
-	AttemptTs     time.Time `db:"attempt_ts"`
+	AttemptTS     time.Time `db:"attempt_ts"`
 	ClientDomain  string    `db:"client_domain"`
 	TransactionID string    `db:"transaction_id"`
 	WalletAddress string    `db:"wallet_address"`
@@ -31,7 +31,7 @@ func (m *ReceiverRegistrationAttemptModel) InsertReceiverRegistrationAttempt(ctx
     `,
 		attempt.PhoneNumber,
 		attempt.Email,
-		attempt.AttemptTs,
+		attempt.AttemptTS,
 		attempt.ClientDomain,
 		attempt.TransactionID,
 		attempt.WalletAddress,

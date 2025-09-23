@@ -108,13 +108,13 @@ type ReceiverModel struct{}
 type ReceiverInsert struct {
 	PhoneNumber *string `db:"phone_number"`
 	Email       *string `db:"email"`
-	ExternalId  *string `db:"external_id"`
+	ExternalID  *string `db:"external_id"`
 }
 
 type ReceiverUpdate ReceiverInsert
 
 func (ru ReceiverUpdate) IsEmpty() bool {
-	return ru.Email == nil && ru.ExternalId == nil && ru.PhoneNumber == nil
+	return ru.Email == nil && ru.ExternalID == nil && ru.PhoneNumber == nil
 }
 
 func (ru ReceiverUpdate) Validate() error {
@@ -321,7 +321,7 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
-	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalId)
+	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalID)
 	if err != nil {
 		var pqError *pq.Error
 		if errors.As(err, &pqError) && pqError.Code == "23505" {
@@ -359,8 +359,8 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 		args = append(args, email)
 	}
 
-	if receiverUpdate.ExternalId != nil {
-		externalID := *receiverUpdate.ExternalId
+	if receiverUpdate.ExternalID != nil {
+		externalID := *receiverUpdate.ExternalID
 		fields = append(fields, "external_id = ?")
 		args = append(args, externalID)
 	}

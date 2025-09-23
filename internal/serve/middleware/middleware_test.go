@@ -49,11 +49,11 @@ func Test_RecoverHandler(t *testing.T) {
 
 	// assert response
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	wantJson := `{
+	wantJSON := `{
 		"error": "An internal error occurred while processing this request.",
 		"error_code": "500_0"
 	}`
-	assert.JSONEq(t, wantJson, rr.Body.String())
+	assert.JSONEq(t, wantJSON, rr.Body.String())
 
 	// assert logged text
 	assert.Contains(t, buf.String(), "panic: test panic", "should log the panic message")
@@ -94,13 +94,13 @@ func Test_MetricsRequestHandler(t *testing.T) {
 	})
 
 	t.Run("monitor request with valid route", func(t *testing.T) {
-		mLabels := monitor.HttpRequestLabels{
+		mLabels := monitor.HTTPRequestLabels{
 			Status: "200",
 			Route:  "/mock",
 			Method: "GET",
 		}
 
-		mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
+		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
 
 		// test
 		req, err := http.NewRequest("GET", "/mock", nil)
@@ -115,13 +115,13 @@ func Test_MetricsRequestHandler(t *testing.T) {
 	})
 
 	t.Run("monitor request with invalid route", func(t *testing.T) {
-		mLabels := monitor.HttpRequestLabels{
+		mLabels := monitor.HTTPRequestLabels{
 			Status: "404",
 			Route:  "undefined",
 			Method: "GET",
 		}
 
-		mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
+		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
 
 		// test
 		req, err := http.NewRequest("GET", "/invalid-route", nil)
@@ -134,13 +134,13 @@ func Test_MetricsRequestHandler(t *testing.T) {
 	})
 
 	t.Run("monitor request with method not allowed", func(t *testing.T) {
-		mLabels := monitor.HttpRequestLabels{
+		mLabels := monitor.HTTPRequestLabels{
 			Status: "405",
 			Route:  "undefined",
 			Method: "POST",
 		}
 
-		mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
+		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
 
 		// test
 		req, err := http.NewRequest("POST", "/mock", nil)
@@ -713,10 +713,13 @@ func Test_LoggingMiddleware(t *testing.T) {
 			assert.Contains(t, entry, fmt.Sprintf("tenant_name=%s", tenantName))
 			assert.Contains(t, entry, fmt.Sprintf("tenant_id=%s", tenantID))
 
-			if i == 0 {
+			switch i {
+			case 0:
 				assert.Contains(t, e.Message, "starting request")
-			} else if i == 1 {
+			case 1:
 				assert.Contains(t, e.Message, "finished request")
+			default:
+				require.Fail(t, "unexpected log entry")
 			}
 			assert.Equal(t, logrus.InfoLevel, e.Level)
 		}
@@ -760,15 +763,18 @@ func Test_LoggingMiddleware(t *testing.T) {
 			assert.NotContains(t, entry, "tenant_name")
 			assert.NotContains(t, entry, "tenant_id")
 
-			if i == 0 {
+			switch i {
+			case 0:
 				assert.Contains(t, e.Message, "tenant cannot be derived from context")
 				assert.Equal(t, log.DebugLevel, e.Level)
-			} else if i == 1 {
+			case 1:
 				assert.Contains(t, e.Message, "starting request")
 				assert.Equal(t, log.InfoLevel, e.Level)
-			} else if i == 2 {
+			case 2:
 				assert.Contains(t, e.Message, "finished request")
 				assert.Equal(t, log.InfoLevel, e.Level)
+			default:
+				require.Fail(t, "unexpected log entry")
 			}
 		}
 	})
@@ -1075,10 +1081,10 @@ func Test_BasicAuthMiddleware(t *testing.T) {
 	r := chi.NewRouter()
 
 	adminAccount := "admin"
-	adminApiKey := "secret"
+	adminAPIKey := "secret"
 
 	r.Group(func(r chi.Router) {
-		r.Use(BasicAuthMiddleware(adminAccount, adminApiKey))
+		r.Use(BasicAuthMiddleware(adminAccount, adminAPIKey))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -1127,7 +1133,7 @@ func Test_BasicAuthMiddleware(t *testing.T) {
 	t.Run("🎉 200 response for correct credentials", func(t *testing.T) {
 		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
 		assert.NoError(t, err)
-		req.SetBasicAuth(adminAccount, adminApiKey)
+		req.SetBasicAuth(adminAccount, adminAPIKey)
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)

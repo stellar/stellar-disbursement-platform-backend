@@ -31,7 +31,7 @@ type AnchorPlatformIntegrationTestsInterface interface {
 }
 
 type AnchorPlatformIntegrationTests struct {
-	HttpClient                httpclient.HttpClientInterface
+	HTTPClient                httpclient.HTTPClientInterface
 	TenantName                string
 	AnchorPlatformBaseSepURL  string
 	ReceiverAccountPublicKey  string
@@ -87,7 +87,7 @@ func (ap AnchorPlatformIntegrationTests) StartChallengeTransaction() (*Challenge
 	q.Add("home_domain", mtnHomeDomain)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := ap.HttpClient.Do(req)
+	resp, err := ap.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request to anchor platform get AUTH: %w", err)
 	}
@@ -165,7 +165,7 @@ func (ap AnchorPlatformIntegrationTests) SendSignedChallengeTransaction(signedCh
 	// POST auth endpoint on anchor platform expects the content-type to be x-www-form-urlencoded
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := ap.HttpClient.Do(req)
+	resp, err := ap.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request to anchor platform post AUTH: %w", err)
 	}
@@ -187,7 +187,7 @@ func (ap AnchorPlatformIntegrationTests) SendSignedChallengeTransaction(signedCh
 // CreateSep24DepositTransaction creates a new sep24 deposit transaction on the anchor platform.
 // To make this request, an auth token is required and it needs to be obtained through SEP-10.
 func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken *AnchorPlatformAuthToken) (*AnchorPlatformAuthSEP24Token, *AnchorPlatformDepositResponse, error) {
-	depositUrl, err := url.JoinPath(ap.AnchorPlatformBaseSepURL, sep24DepositURL)
+	depositURL, err := url.JoinPath(ap.AnchorPlatformBaseSepURL, sep24DepositURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating url: %w", err)
 	}
@@ -215,7 +215,7 @@ func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken
 	}
 
 	ctx := context.Background()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, depositUrl, b)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, depositURL, b)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating new request: %w", err)
 	}
@@ -225,7 +225,7 @@ func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken
 	// sets in the header the authorization token received in SendSignedChallengeTransaction
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
 
-	resp, err := ap.HttpClient.Do(req)
+	resp, err := ap.HTTPClient.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error making request to anchor platform post SEP24 Deposit: %w", err)
 	}

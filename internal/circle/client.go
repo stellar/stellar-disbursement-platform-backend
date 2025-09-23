@@ -52,7 +52,7 @@ type ClientInterface interface {
 type Client struct {
 	BasePath       string
 	APIKey         string
-	httpClient     httpclient.HttpClientInterface
+	httpClient     httpclient.HTTPClientInterface
 	tenantManager  tenant.ManagerInterface
 	monitorService monitor.MonitorServiceInterface
 }

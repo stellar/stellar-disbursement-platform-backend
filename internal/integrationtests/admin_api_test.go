@@ -15,14 +15,14 @@ import (
 	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 )
 
-func Test_AdminApiIntegrationTests_CreateTenant(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+func Test_AdminAPIIntegrationTests_CreateTenant(t *testing.T) {
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
-	aa := AdminApiIntegrationTests{
-		HttpClient:      &httpClientMock,
-		AdminApiBaseURL: "http://localhost:8083",
-		AccountId:       "accountId",
-		ApiKey:          "apiKey",
+	aa := AdminAPIIntegrationTests{
+		HTTPClient:      &httpClientMock,
+		AdminAPIBaseURL: "http://localhost:8083",
+		AccountID:       "accountId",
+		APIKey:          "apiKey",
 	}
 
 	ctx := context.Background()
@@ -84,10 +84,10 @@ func Test_AdminApiIntegrationTests_CreateTenant(t *testing.T) {
 	httpClientMock.AssertExpectations(t)
 }
 
-func Test_AdminApiIntegrationTests_AuthHeader(t *testing.T) {
-	aa := AdminApiIntegrationTests{
-		AccountId: "accountId",
-		ApiKey:    "apiKey",
+func Test_AdminAPIIntegrationTests_AuthHeader(t *testing.T) {
+	aa := AdminAPIIntegrationTests{
+		AccountID: "accountId",
+		APIKey:    "apiKey",
 	}
 
 	authHeader := aa.AuthHeader()

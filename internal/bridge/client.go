@@ -57,7 +57,7 @@ type ClientInterface interface {
 type Client struct {
 	baseURL    string
 	apiKey     string
-	httpClient httpclient.HttpClientInterface
+	httpClient httpclient.HTTPClientInterface
 }
 
 type ClientOptions struct {

@@ -23,7 +23,7 @@ func MetricsServe(opts MetricsServeOptions, httpServer HTTPServerInterface) erro
 	metricsAddr := fmt.Sprintf(":%d", opts.Port)
 	metricsServerConfig := supporthttp.Config{
 		ListenAddr:   metricsAddr,
-		Handler:      handleMetricsHttp(opts),
+		Handler:      handleMetricsHTTP(opts),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  2 * time.Minute,
@@ -40,14 +40,14 @@ func MetricsServe(opts MetricsServeOptions, httpServer HTTPServerInterface) erro
 	return nil
 }
 
-func handleMetricsHttp(opts MetricsServeOptions) *chi.Mux {
+func handleMetricsHTTP(opts MetricsServeOptions) *chi.Mux {
 	mux := chi.NewMux()
 
-	metricHttpHandler, err := opts.MonitorService.GetMetricHttpHandler()
+	metricHTTPHandler, err := opts.MonitorService.GetMetricHTTPHandler()
 	if err != nil {
 		log.Fatalf("Error getting metric http.handler: %s", err.Error())
 	}
 
-	mux.Handle("/metrics", metricHttpHandler)
+	mux.Handle("/metrics", metricHTTPHandler)
 	return mux
 }

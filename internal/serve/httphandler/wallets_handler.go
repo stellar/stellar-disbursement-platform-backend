@@ -177,12 +177,12 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	httpjson.RenderStatus(rw, http.StatusCreated, wallet, httpjson.JSON)
 }
 
-func (c WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request) {
+func (h WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	walletID := chi.URLParam(req, "id")
 
-	_, err := c.Models.Wallets.SoftDelete(ctx, walletID)
+	_, err := h.Models.Wallets.SoftDelete(ctx, walletID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("", err, nil).Render(rw)
