@@ -60,6 +60,7 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 		return "", fmt.Errorf("getting database DSN: %w", err)
 	}
 
+	//nolint:wrapcheck
 	return router.GetDSNForTenant(dataSourceName, tenantName)
 }
 

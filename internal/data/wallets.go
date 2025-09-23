@@ -246,7 +246,7 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 		return &w, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inserting wallet: %w", err)
 	}
 
 	return wallet, nil
@@ -420,7 +420,7 @@ func (wm *WalletModel) Update(ctx context.Context, walletID string, update Walle
 		return &w, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("updating wallet: %w", err)
 	}
 
 	return wm.Get(ctx, wallet.ID)

@@ -14,7 +14,7 @@ linters:
     # - errname
     - errorlint
     - errcheck
-    # - wrapcheck
+    - wrapcheck
     - unused
     - unconvert
     - unparam
@@ -31,6 +31,17 @@ linters:
     errcheck:
       # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`.
       check-blank: true
+
+    wrapcheck:
+      extra-ignore-sigs:
+        - .Close()
+        - .Rollback()
+        - .Value()
+        - .Ping(
+        - db.OpenDBConnectionPool
+        - db.RunInTransaction
+        - json.Marshal
+        - json.Unmarshal
 
   exclusions:
     paths:

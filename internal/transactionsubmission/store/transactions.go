@@ -66,6 +66,7 @@ type Transaction struct {
 }
 
 func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
+	//nolint:wrapcheck // This is a wrapper method
 	return schema.NewMemo(tx.MemoType, tx.Memo)
 }
 
@@ -204,8 +205,8 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 	q := `
 		SELECT
 			` + TransactionColumnNames("", "") + `
-		FROM 
-			submitter_transactions t 
+		FROM
+			submitter_transactions t
 		WHERE
 			t.id = $1
 		`
@@ -216,7 +217,7 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 		}
 		return nil, fmt.Errorf("error querying transaction ID %s: %w", txID, err)
 	}
-	return &transaction, err
+	return &transaction, nil
 }
 
 func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []string) ([]*Transaction, error) {

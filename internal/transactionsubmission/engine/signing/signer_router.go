@@ -243,7 +243,10 @@ func (r *SignerRouterImpl) BatchInsert(
 		})
 	}
 
-	return stellarAccounts, err
+	if err != nil {
+		return stellarAccounts, fmt.Errorf("batch inserting accounts for strategy=%s: %w", accountType, err)
+	}
+	return stellarAccounts, nil
 }
 
 func (r *SignerRouterImpl) Delete(

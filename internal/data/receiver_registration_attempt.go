@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -21,7 +22,7 @@ type ReceiverRegistrationAttempt struct {
 	WalletMemo    string    `db:"wallet_memo"`
 }
 
-// InsertReceiverRegistrationAttempt logs a failed wallet-registration attempt.
+// InsertReceiverRegistrationAttempt logs a failed wallet-registration attempt in the database.
 func (m *ReceiverRegistrationAttemptModel) InsertReceiverRegistrationAttempt(ctx context.Context, attempt ReceiverRegistrationAttempt) error {
 	_, err := m.dbConnectionPool.ExecContext(ctx, `
         INSERT INTO receiver_registration_attempts
@@ -36,5 +37,9 @@ func (m *ReceiverRegistrationAttemptModel) InsertReceiverRegistrationAttempt(ctx
 		attempt.WalletAddress,
 		attempt.WalletMemo,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("inserting receiver registration attempt: %w", err)
+	}
+
+	return nil
 }

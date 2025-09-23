@@ -384,5 +384,9 @@ func extractTenantNameFromRequest(r *http.Request) (string, error) {
 	}
 
 	// 2. If header is blank, extract from the hostname prefix
-	return utils.ExtractTenantNameFromHostName(r.Host)
+	tenantName, err := utils.ExtractTenantNameFromHostName(r.Host)
+	if err != nil {
+		return "", fmt.Errorf("extracting tenant name from hostname: %w", err)
+	}
+	return tenantName, nil
 }

@@ -44,7 +44,11 @@ func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
 
 func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*data.APIKey, error) {
 	if a.cache == nil {
-		return a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
+		apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
+		if err != nil {
+			return nil, fmt.Errorf("validating API key (cacheless) %w", err)
+		}
+		return apiKey, nil
 	}
 
 	if cached, found := a.cache.Get(rawKey); found {

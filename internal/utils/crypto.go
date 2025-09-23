@@ -22,12 +22,12 @@ func Encrypt(message string, passphrase string) (string, error) {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating new cipher: %w", err)
 	}
 
 	gcmCipher, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating new gcm cipher: %w", err)
 	}
 
 	nonce := make([]byte, gcmCipher.NonceSize())
@@ -53,17 +53,17 @@ func Decrypt(message string, passphrase string) (string, error) {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating new cipher: %w", err)
 	}
 
 	gcmCipher, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("creating new gcm cipher: %w", err)
 	}
 
 	decodedMsg, err := base64.StdEncoding.DecodeString(message)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("decoding message: %w", err)
 	}
 
 	nonceSize := gcmCipher.NonceSize()
@@ -71,7 +71,7 @@ func Decrypt(message string, passphrase string) (string, error) {
 
 	plainText, err := gcmCipher.Open(nil, nonce, cipheredText, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("decrypting and authenticating message: %w", err)
 	}
 
 	return string(plainText), nil

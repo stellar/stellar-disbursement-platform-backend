@@ -193,10 +193,7 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 	if password != "" {
 		encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, password)
 		if err != nil {
-			if !errors.Is(err, ErrPasswordTooShort) {
-				return fmt.Errorf("encrypting password: %w", err)
-			}
-			return err
+			return fmt.Errorf("encrypting password: %w", err)
 		}
 
 		fields = append(fields, "encrypted_password = ?")
@@ -384,10 +381,7 @@ func (a *defaultAuthenticator) UpdatePassword(ctx context.Context, user *User, c
 
 	encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, newPassword)
 	if err != nil {
-		if !errors.Is(err, ErrPasswordTooShort) {
-			return fmt.Errorf("encrypting password: %w", err)
-		}
-		return err
+		return fmt.Errorf("encrypting password: %w", err)
 	}
 
 	res, err := a.dbConnectionPool.ExecContext(ctx, query, encryptedPassword, user.ID)

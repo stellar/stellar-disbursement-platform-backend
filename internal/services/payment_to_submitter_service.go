@@ -64,7 +64,10 @@ func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, p
 			log.Ctx(ctx).Errorf("[PaymentToSubmitterService] The number of incoming payments to be processed (%d) is different from the number ready to be processed found in the database (%d)", len(paymentIDs), len(payments))
 		}
 
-		return payments, innerErr
+		if innerErr != nil {
+			return payments, fmt.Errorf("getting ready payments by IDs: %w", innerErr)
+		}
+		return payments, nil
 	})
 	if err != nil {
 		return fmt.Errorf("sending payments: %w", err)

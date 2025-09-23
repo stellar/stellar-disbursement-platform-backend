@@ -244,7 +244,7 @@ func (s *DirectPaymentService) CreateDirectPayment(
 	}
 
 	if err := db.RunInTransactionWithPostCommit(ctx, &opts); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating direct payment: %w", err)
 	}
 
 	return payment, nil

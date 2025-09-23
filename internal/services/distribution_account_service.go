@@ -75,10 +75,12 @@ func NewDistributionAccountService(opts DistributionAccountServiceOptions) (*Dis
 }
 
 func (s *DistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+	//nolint:wrapcheck // This is a wrapper method
 	return s.strategies[account.Type].GetBalance(ctx, account, asset)
 }
 
 func (s *DistributionAccountService) GetBalances(ctx context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+	//nolint:wrapcheck // This is a wrapper method
 	return s.strategies[account.Type].GetBalances(ctx, account)
 }
 

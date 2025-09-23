@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -49,7 +50,7 @@ func NewManager(opts ManagerOptions) (TenantProvisioningService, error) {
 
 	internalManager, err := provisioning.NewManager(internalOpts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating provisioning manager: %w", err)
 	}
 
 	return &Manager{
@@ -70,5 +71,6 @@ func (m *Manager) ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*
 		DistributionAccountType: pt.DistributionAccountType,
 	}
 
+	//nolint:wrapcheck // This is a wrapper method
 	return m.internalManager.ProvisionNewTenant(ctx, internalPT)
 }

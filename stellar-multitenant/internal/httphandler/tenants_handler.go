@@ -150,6 +150,7 @@ func (h TenantsHandler) generateTenantURL(providedURL *string, defaultURL string
 	if providedURL != nil {
 		return *providedURL, nil
 	}
+	//nolint:wrapcheck // This is a wrapper method
 	return utils.GenerateTenantURL(defaultURL, tenantName)
 }
 

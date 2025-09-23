@@ -405,7 +405,7 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 		retry.LastErrorOnly(true),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unsuccessful after multiple attempts: %w", err)
 	}
 
 	return resp, nil

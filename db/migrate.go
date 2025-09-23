@@ -30,5 +30,6 @@ func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationR
 	if err != nil {
 		return 0, fmt.Errorf("fetching sql.DB: %w", err)
 	}
+	//nolint:wrapcheck // This is a wrapper method
 	return ms.ExecMax(db, dbConnectionPool.DriverName(), m, dir, count)
 }
