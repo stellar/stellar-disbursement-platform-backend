@@ -11,7 +11,7 @@ linters:
     - rowserrcheck
     - nilerr
     - nilnesserr
-    # - errname
+    - errname
     - errorlint
     - errcheck
     - wrapcheck

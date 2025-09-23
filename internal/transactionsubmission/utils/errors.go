@@ -48,6 +48,8 @@ func NewTransactionStatusUpdateError(status, txID string, forRetry bool, err err
 var _ error = &TransactionStatusUpdateError{}
 
 // HorizonErrorWrapper is an error that occurs when a horizon response is not successful.
+//
+//nolint:errname // This is both an error and a wrapper
 type HorizonErrorWrapper struct {
 	StatusCode  int
 	Problem     problem.P

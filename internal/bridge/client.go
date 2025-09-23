@@ -22,6 +22,8 @@ const (
 )
 
 // BridgeErrorResponse represents an error response from the Bridge API.
+//
+//nolint:errname // This is both an error and a response type
 type BridgeErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
