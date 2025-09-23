@@ -2034,7 +2034,7 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 	})
 
 	existingWalletAddress := "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K"
-	receiverWalletID, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, data.ReceiverWalletInsert{
+	receiverWalletID, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, data.ReceiverWalletInsert{
 		ReceiverID: existingReceiver.ID,
 		WalletID:   wallets[0].ID,
 	})
@@ -2182,7 +2182,6 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
 			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
 

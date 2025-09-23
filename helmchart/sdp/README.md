@@ -184,7 +184,7 @@ These parameters are shared by all charts.
 | `global.recaptchaSiteKey`                              | Site key for ReCaptcha V2 to verify user's non-robotic behavior. Default value is for testing.                                      | `6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI` |
 | `global.recaptchaSiteSecretKey`                        | Secret key for ReCaptcha V2 to verify user's non-robotic behavior. Default value is for testing.                                    | `6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe` |
 | `global.bridgeIntegration.enabled`                     | Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.                            | `false`                                    |
-| `global.bridgeIntegration.baseUrl`                     | The base URL of the bridge api.                                                                                                     | `nil`                                      |
+| `global.bridgeIntegration.baseUrl`                     | The base URL of the bridge api.                                                                                                     | `https://api.bridge.xyz`                   |
 | `global.bridgeIntegration.apiKey`                      | The API key for the bridge integration.                                                                                             | `nil`                                      |
 
 ### Stellar Disbursement Platform (SDP) parameters

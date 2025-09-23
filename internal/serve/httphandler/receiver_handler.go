@@ -224,7 +224,7 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 				}
 
 				var receiverWalletID string
-				if receiverWalletID, txErr = rh.Models.ReceiverWallet.Insert(ctx, dbTx, walletInsert); txErr != nil {
+				if receiverWalletID, txErr = rh.Models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbTx, walletInsert); txErr != nil {
 					return nil, fmt.Errorf("creating receiver wallet: %w", txErr)
 				}
 

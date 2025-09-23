@@ -434,8 +434,8 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx
 	return int(updatedRowsAffected), nil
 }
 
-// Insert inserts a new receiver wallet into the database.
-func (rw *ReceiverWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, insert ReceiverWalletInsert) (string, error) {
+// GetOrInsertReceiverWallet inserts a new receiver wallet into the database.
+func (rw *ReceiverWalletModel) GetOrInsertReceiverWallet(ctx context.Context, sqlExec db.SQLExecuter, insert ReceiverWalletInsert) (string, error) {
 	var newId string
 	query := `
 		INSERT INTO receiver_wallets (receiver_id, wallet_id)

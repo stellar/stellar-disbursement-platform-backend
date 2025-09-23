@@ -116,7 +116,7 @@ global:
   ## @param global.bridgeIntegration.apiKey The API key for the bridge integration.
   bridgeIntegration:
       enabled: false
-      baseUrl: #required if bridgeIntegration.enabled is true
+      baseUrl: "https://api.bridge.xyz"
       apiKey: #required if bridgeIntegration.enabled is true
 
 
