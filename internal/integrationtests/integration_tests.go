@@ -494,7 +494,7 @@ func (it *IntegrationTestsService) createReceiverWalletsForSEP24(ctx context.Con
 
 		if !walletExists {
 			log.Ctx(ctx).Infof("Creating receiver wallet for receiver %s with wallet %s", receiver.ID, walletID)
-			_, err = it.models.ReceiverWallet.Insert(ctx, it.mtnDbConnectionPool, data.ReceiverWalletInsert{
+			_, err = it.models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, it.mtnDbConnectionPool, data.ReceiverWalletInsert{
 				ReceiverID: receiver.ID,
 				WalletID:   walletID,
 			})
