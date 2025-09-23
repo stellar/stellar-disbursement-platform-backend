@@ -52,7 +52,7 @@ func Test_UnwrapInterfaceToPointer(t *testing.T) {
 	// Test with a string
 	strValue := "test"
 	strValuePtr := &strValue
-	i := interface{}(strValuePtr)
+	i := any(strValuePtr)
 
 	unwrappedValue := UnwrapInterfaceToPointer[string](i)
 	assert.Equal(t, "test", *unwrappedValue)
@@ -63,7 +63,7 @@ func Test_UnwrapInterfaceToPointer(t *testing.T) {
 	}
 	testStructValue := testStruct{Name: "test"}
 	testStructValuePtr := &testStructValue
-	i = interface{}(testStructValuePtr)
+	i = any(testStructValuePtr)
 	assert.Equal(t, testStruct{Name: "test"}, *UnwrapInterfaceToPointer[testStruct](i))
 }
 
@@ -124,19 +124,19 @@ func Test_IsEmpty(t *testing.T) {
 func Test_MapSlice(t *testing.T) {
 	testCases := []struct {
 		name              string
-		prepareMapSliceFn func() interface{}
-		wantMapped        interface{}
+		prepareMapSliceFn func() any
+		wantMapped        any
 	}{
 		{
 			name: "map to string slice to uppercased string slice",
-			prepareMapSliceFn: func() interface{} {
+			prepareMapSliceFn: func() any {
 				return MapSlice([]string{"a", "b", "c"}, strings.ToUpper)
 			},
 			wantMapped: []string{"A", "B", "C"},
 		},
 		{
 			name: "map int slice to string slice",
-			prepareMapSliceFn: func() interface{} {
+			prepareMapSliceFn: func() any {
 				return MapSlice([]int{1, 2, 3}, func(input int) string { return fmt.Sprintf("%d", input) })
 			},
 			wantMapped: []string{"1", "2", "3"},
@@ -183,7 +183,7 @@ func Test_GetTypeName(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		instance       interface{}
+		instance       any
 		expectedResult string
 	}{
 		{
