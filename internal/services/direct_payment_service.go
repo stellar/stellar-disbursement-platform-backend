@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -243,7 +244,7 @@ func (s *DirectPaymentService) CreateDirectPayment(
 	}
 
 	if err := db.RunInTransactionWithPostCommit(ctx, &opts); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating direct payment: %w", err)
 	}
 
 	return payment, nil
@@ -311,7 +312,7 @@ func (s *DirectPaymentService) getReceiverWallet(
 	}
 
 	// Check if receiver has any verifications
-	receiverVerifications, err := s.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiverID)
+	receiverVerifications, err := s.Models.ReceiverVerification.GetAllByReceiverID(ctx, dbTx, receiverID)
 	if err != nil {
 		return nil, fmt.Errorf("checking receiver verifications: %w", err)
 	}
@@ -479,7 +480,8 @@ func (s *DirectPaymentService) checkTrustlineExists(
 		AccountID: account.Address,
 	})
 	if err != nil {
-		if horizonErr, ok := err.(*horizonclient.Error); ok {
+		var horizonErr *horizonclient.Error
+		if errors.As(err, &horizonErr) {
 			if horizonErr.Response.StatusCode == 404 {
 				return false, AccountNotFoundError{Address: account.Address}
 			}

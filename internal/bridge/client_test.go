@@ -537,7 +537,7 @@ func Test_Client_makeRequest(t *testing.T) {
 }
 
 func newClientWithMocks(t *testing.T) (*Client, *clientMocks) {
-	httpClientMock := httpclientMocks.NewHttpClientMock(t)
+	httpClientMock := httpclientMocks.NewHTTPClientMock(t)
 
 	return &Client{
 			baseURL:    "https://api.bridge.example.com",
@@ -549,5 +549,5 @@ func newClientWithMocks(t *testing.T) (*Client, *clientMocks) {
 }
 
 type clientMocks struct {
-	httpClientMock *httpclientMocks.HttpClientMock
+	httpClientMock *httpclientMocks.HTTPClientMock
 }

@@ -110,7 +110,8 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 		requestBody := `{"password":"!1Az?2By.3Cx","reset_token":"badtoken"}`
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))
+		req, err := http.NewRequest(method, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
 
 		authenticatorMock.
 			On("ResetPassword", req.Context(), "badtoken", "!1Az?2By.3Cx").
@@ -132,7 +133,8 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 		requestBody := `{"password":"!1Az?2By.3Cx","reset_token":"expiredtoken"}`
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))
+		req, err := http.NewRequest(method, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
 
 		authenticatorMock.
 			On("ResetPassword", req.Context(), "expiredtoken", "!1Az?2By.3Cx").
@@ -154,7 +156,8 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 		requestBody := `{}`
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))
+		req, err := http.NewRequest(method, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
 
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
 

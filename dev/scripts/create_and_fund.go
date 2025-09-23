@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -25,6 +26,7 @@ func main() {
 	flag.BoolVar(&fundUSDC, "fundusdc", false, "Set to true to fund the account with USDC and establish a trustline")
 	flag.StringVar(&xlmAmount, "xlm_amount", "10", "The amount of XLM to fund the account with (default is 10).")
 
+	//nolint:errcheck // Not handling error on flag.Usage
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
 		fmt.Fprintln(flag.CommandLine.Output(), "  This program creates and manages funding for Stellar accounts.")
@@ -82,11 +84,12 @@ func main() {
 }
 
 func printHorizonError(err error) {
-	if herr, ok := err.(*horizonclient.Error); ok {
-		fmt.Printf("Horizon Error: %s\n", herr.Problem.Title)
-		fmt.Printf("Detail: %s\n", herr.Problem.Detail)
-		fmt.Printf("Status: %d\n", herr.Problem.Status)
-		fmt.Printf("Type: %s\n", herr.Problem.Type)
+	var hErr *horizonclient.Error
+	if errors.As(err, &hErr) {
+		fmt.Printf("Horizon Error: %s\n", hErr.Problem.Title)
+		fmt.Printf("Detail: %s\n", hErr.Problem.Detail)
+		fmt.Printf("Status: %d\n", hErr.Problem.Status)
+		fmt.Printf("Type: %s\n", hErr.Problem.Type)
 	} else {
 		fmt.Printf("Error: %v\n", err)
 	}
@@ -95,7 +98,7 @@ func printHorizonError(err error) {
 func establishTrustlineAndBuyUSDC(client *horizonclient.Client, pair *keypair.Full, xlmAmount string) error {
 	sourceAccount, err := client.AccountDetail(horizonclient.AccountRequest{AccountID: pair.Address()})
 	if err != nil {
-		return fmt.Errorf("failed to get account details: %v", err)
+		return fmt.Errorf("failed to get account details: %w", err)
 	}
 
 	usdcAsset := txnbuild.CreditAsset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"}
@@ -126,17 +129,17 @@ func establishTrustlineAndBuyUSDC(client *horizonclient.Client, pair *keypair.Fu
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to build the transaction: %v", err)
+		return fmt.Errorf("failed to build the transaction: %w", err)
 	}
 
 	tx, err = tx.Sign(network.TestNetworkPassphrase, pair)
 	if err != nil {
-		return fmt.Errorf("failed to sign the transaction: %v", err)
+		return fmt.Errorf("failed to sign the transaction: %w", err)
 	}
 
 	resp, err := client.SubmitTransaction(tx)
 	if err != nil {
-		return fmt.Errorf("failed to submit the transaction: %v", err)
+		return fmt.Errorf("failed to submit the transaction: %w", err)
 	}
 
 	fmt.Printf("Transaction successful: %s\n", resp.Hash)

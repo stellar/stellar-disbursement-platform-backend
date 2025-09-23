@@ -257,7 +257,7 @@ func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistrati
 			return nil, fmt.Errorf("getting receiver wallets pending registration by rw ids %v: %w", receiverWalletIDsPendingRegistration, err)
 		}
 	}
-	return receiverWallets, err
+	return receiverWallets, nil
 }
 
 // shouldSendInvitation returns true if we should send the invitation to the receiver. It will be used to either

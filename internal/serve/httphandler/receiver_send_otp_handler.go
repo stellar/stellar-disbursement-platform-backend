@@ -268,7 +268,7 @@ func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
 	attempt := data.ReceiverRegistrationAttempt{
 		PhoneNumber:   "",
 		Email:         "",
-		AttemptTs:     time.Now(),
+		AttemptTS:     time.Now(),
 		ClientDomain:  claims.ClientDomain(),
 		TransactionID: claims.TransactionID(),
 		WalletAddress: claims.SEP10StellarAccount(),

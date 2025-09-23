@@ -1,10 +1,13 @@
 package circle
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 // APIError represents the error response from Circle APIs.
@@ -38,7 +41,7 @@ func parseAPIError(resp *http.Response) (*APIError, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading error response body: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(context.Background(), resp.Body, "closing response body")
 
 	var apiErr APIError
 	if err = json.Unmarshal(body, &apiErr); err != nil {

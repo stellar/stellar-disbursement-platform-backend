@@ -194,7 +194,7 @@ func Test_UpdateReceiverHandler_400(t *testing.T) {
 		},
 		{
 			name:    "invalid national ID - too long",
-			request: validators.UpdateReceiverRequest{NationalID: fmt.Sprintf("%0*d", utils.VerificationFieldMaxIdLength+1, 0)},
+			request: validators.UpdateReceiverRequest{NationalID: fmt.Sprintf("%0*d", utils.VerificationFieldMaxIDLength+1, 0)},
 			expectedBody: `
 				{
 					"error": "request invalid",
@@ -457,7 +457,7 @@ func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
 				VerificationField: data.VerificationTypeDateOfBirth,
 				VerificationValue: "2000-01-01",
 			})
-			rvSlice, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
+			rvSlice, err := models.ReceiverVerification.GetAllByReceiverID(ctx, dbConnectionPool, receiver.ID)
 			require.NoError(t, err)
 			require.Len(t, rvSlice, 1)
 			rv := rvSlice[0]
@@ -635,7 +635,7 @@ func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
 				resp := rr.Result()
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-				rvSlice, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
+				rvSlice, err := models.ReceiverVerification.GetAllByReceiverID(ctx, dbConnectionPool, receiver.ID)
 				require.NoError(t, err)
 
 				tc.assertFn(t, rvSlice)

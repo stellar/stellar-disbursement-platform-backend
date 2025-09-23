@@ -40,12 +40,12 @@ func (tssPrometheusClient) GetMetricType() MetricType {
 	return MetricTypeTSSPrometheus
 }
 
-func (p *tssPrometheusClient) GetMetricHttpHandler() http.Handler {
+func (p *tssPrometheusClient) GetMetricHTTPHandler() http.Handler {
 	return p.httpHandler
 }
 
-func (p *tssPrometheusClient) MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) {
-	SummaryTSSVecMetrics[HttpRequestDurationTag].With(prometheus.Labels{
+func (p *tssPrometheusClient) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) {
+	SummaryTSSVecMetrics[HTTPRequestDurationTag].With(prometheus.Labels{
 		"status": labels.Status,
 		"route":  labels.Route,
 		"method": labels.Method,

@@ -1,6 +1,6 @@
 package monitor
 
-type HttpRequestLabels struct {
+type HTTPRequestLabels struct {
 	Status string
 	Route  string
 	Method string

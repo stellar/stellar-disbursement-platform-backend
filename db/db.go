@@ -1,3 +1,4 @@
+//nolint:wrapcheck // Wrapper structs, no extra context needed
 package db
 
 import (
@@ -239,6 +240,7 @@ func CloseConnectionPoolIfNeeded(ctx context.Context, dbConnectionPool DBConnect
 		return nil
 	}
 
+	//nolint:nilerr // Not handling error on Ping, as we consider it as an already closed connection pool
 	if err := dbConnectionPool.Ping(ctx); err != nil {
 		log.Ctx(ctx).Info("NO-OP: attempting to close a DB connection pool that was already closed")
 		return nil

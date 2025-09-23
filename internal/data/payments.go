@@ -559,15 +559,14 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 	if err != nil {
 		return fmt.Errorf("error getting number of rows affected for payment with id %s: %w", payment.ID, err)
 	}
-	if numRowsAffected == 0 {
+	switch numRowsAffected {
+	case 0:
 		return fmt.Errorf("payment %s status was not updated from %s to %s", payment.ID, payment.Status, update.Status)
-	} else if numRowsAffected == 1 {
-		log.Ctx(ctx).Infof("Set payment %s status from %s to %s", payment.ID, payment.Status, update.Status)
-	} else {
+	case 1:
+		return nil
+	default:
 		return fmt.Errorf("unexpected number of rows affected: %d when updating payment %s status from %s to %s", numRowsAffected, payment.ID, payment.Status, update.Status)
 	}
-
-	return nil
 }
 
 func (p *PaymentModel) RetryFailedPayments(ctx context.Context, sqlExec db.SQLExecuter, email string, paymentIDs ...string) error {

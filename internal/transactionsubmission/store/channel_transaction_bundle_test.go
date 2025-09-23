@@ -164,7 +164,7 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 			unlockedChAccounts := CreateChannelAccountFixtures(t, ctx, dbConnectionPool, tc.numberOfChannelAccountsUnlocked)
 
 			// Transactions(LOCKED)
-			lockedTransactions := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, tc.numberOfTransactionsLocked, TransactionFixture{
+			lockedTransactions := CreateTransactionFixtures(t, ctx, dbConnectionPool, tc.numberOfTransactionsLocked, TransactionFixture{
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "",
@@ -178,7 +178,7 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 			}
 
 			// Transactions(UNLOCKED)
-			unlockedTransactions := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, tc.numberOfTransactionsUnlocked, TransactionFixture{
+			unlockedTransactions := CreateTransactionFixtures(t, ctx, dbConnectionPool, tc.numberOfTransactionsUnlocked, TransactionFixture{
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "",

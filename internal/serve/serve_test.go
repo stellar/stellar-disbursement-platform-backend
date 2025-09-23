@@ -173,13 +173,13 @@ func Test_handleHTTP_Health(t *testing.T) {
 	require.NoError(t, err)
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mLabels := monitor.HttpRequestLabels{
+	mLabels := monitor.HTTPRequestLabels{
 		Status: "200",
 		Route:  "/health",
 		Method: "GET",
 	}
 	mMonitorService.
-		On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
+		On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
 		Return(nil).
 		Once()
 
@@ -269,7 +269,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	t.Helper()
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
+	mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
 
 	messengerClientMock := message.MessengerClientMock{}
 	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil)

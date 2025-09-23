@@ -27,8 +27,8 @@ func PrometheusMetrics() map[MetricTag]prometheus.Collector {
 }
 
 var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
-	HttpRequestDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: "sdp", Subsystem: "http", Name: string(HttpRequestDurationTag),
+	HTTPRequestDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace: "sdp", Subsystem: "http", Name: string(HTTPRequestDurationTag),
 		Help: "HTTP requests durations, sliding window = 10m",
 	},
 		[]string{"status", "route", "method"},

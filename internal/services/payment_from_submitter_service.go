@@ -122,11 +122,12 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 	payment := payments[0]
 
 	var toStatus data.PaymentStatus
-	if transaction.Status == txSubStore.TransactionStatusSuccess {
+	switch transaction.Status {
+	case txSubStore.TransactionStatusSuccess:
 		toStatus = data.SuccessPaymentStatus
-	} else if transaction.Status == txSubStore.TransactionStatusError {
+	case txSubStore.TransactionStatusError:
 		toStatus = data.FailedPaymentStatus
-	} else {
+	default:
 		return fmt.Errorf("invalid transaction status %s. Expected only %s or %s", transaction.Status, txSubStore.TransactionStatusSuccess, txSubStore.TransactionStatusError)
 	}
 
