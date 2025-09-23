@@ -13,7 +13,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -101,7 +101,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	// Validate SEP-24 JWT claims
-	sep24Claims := anchorplatform.GetSEP24Claims(ctx)
+	sep24Claims := sepauth.GetSEP24Claims(ctx)
 	if sep24Claims == nil {
 		err = fmt.Errorf("no SEP-24 claims found in the request context")
 		log.Ctx(ctx).Error(err)
@@ -264,7 +264,7 @@ func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
 	contactType data.ReceiverContactType,
 	contactInfo string,
 ) {
-	claims := anchorplatform.GetSEP24Claims(ctx)
+	claims := sepauth.GetSEP24Claims(ctx)
 	attempt := data.ReceiverRegistrationAttempt{
 		PhoneNumber:   "",
 		Email:         "",

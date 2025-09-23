@@ -30,7 +30,7 @@
 
 ## Introduction
 
-Follow these instructions to get started with the Stellar Disbursement Platform (SDP). The SDP now operates independently without requiring Anchor Platform integration.
+Follow these instructions to get started with the Stellar Disbursement Platform (SDP).
 
 ## Quick Setup and Deployment
 
@@ -67,9 +67,6 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 ### Automated Stellar Account Creation and .env Configuration
 
 To automatically create Stellar accounts for SEP10 authentication and a distribution wallet, and to set up the necessary configuration values in a .env file, follow these steps:
-
-> [!NOTE]
-> The SDP now includes native SEP10 and SEP24 implementations. When `ENABLE_ANCHOR_PLATFORM=false` (default in development), the SDP serves its own SEP10/SEP24 endpoints without requiring external Anchor Platform services.
 
 1. Navigate to the dev directory:
 
@@ -181,7 +178,7 @@ The SDP now provides native SEP10 and SEP24 endpoints for wallet integration:
 - `GET /sep24/transactions` - Get transaction status
 
 **Stellar.toml Configuration:**
-The SDP automatically generates `stellar.toml` files that point to the native SEP10/SEP24 endpoints when `ENABLE_ANCHOR_PLATFORM=false`.
+The SDP automatically generates `stellar.toml` files that point to the native SEP10/SEP24 endpoints.
 
 ### Receive Payment to Digital Wallet (Deposit Flow)
 

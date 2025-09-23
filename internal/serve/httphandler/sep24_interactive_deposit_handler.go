@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -63,7 +63,7 @@ func (h SEP24InteractiveDepositHandler) ServeApp(w http.ResponseWriter, r *http.
 // serveReactApp serves the React SPA by delivering the index.html file.
 func serveReactApp(ctx context.Context, reqURL *url.URL, w http.ResponseWriter, fileSystem fs.FS) {
 	// Authentication and authorization
-	sep24Claims := anchorplatform.GetSEP24Claims(ctx)
+	sep24Claims := sepauth.GetSEP24Claims(ctx)
 	if sep24Claims == nil {
 		err := fmt.Errorf("no SEP-24 claims found in the request context")
 		log.Ctx(ctx).Error(err)

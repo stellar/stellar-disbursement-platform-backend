@@ -1,7 +1,6 @@
 package httphandler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,8 +14,8 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
@@ -60,7 +59,7 @@ type SEP24FeatureFlagResponse struct {
 
 type SEP24Handler struct {
 	Models             *data.Models
-	SEP24JWTManager    *anchorplatform.JWTManager
+	SEP24JWTManager    *sepauth.JWTManager
 	InteractiveBaseURL string
 }
 
@@ -88,7 +87,7 @@ type SEP24InteractiveResponse struct {
 }
 
 // generateMoreInfoURL creates a secure more_info_url with JWT token for SEP-24 transactions
-func (h SEP24Handler) generateMoreInfoURL(ctx context.Context, sep10Claims *anchorplatform.Sep10JWTClaims, transactionID, status string) (string, error) {
+func (h SEP24Handler) generateMoreInfoURL(sep10Claims *sepauth.Sep10JWTClaims, transactionID, status string) (string, error) {
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24MoreInfoToken(
 		sep10Claims.Subject,
 		"",
@@ -118,7 +117,7 @@ func (h SEP24Handler) generateMoreInfoURL(ctx context.Context, sep10Claims *anch
 func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sep10Claims := anchorplatform.GetSEP10Claims(ctx)
+	sep10Claims := sepauth.GetSEP10Claims(ctx)
 	if sep10Claims == nil {
 		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)
 		return
@@ -136,13 +135,13 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		"refunded": false, // Always false for registration
 	}
 
-	receiverWallet, err := h.Models.ReceiverWallet.GetByAnchorPlatformTransactionID(ctx, transactionID)
+	receiverWallet, err := h.Models.ReceiverWallet.GetBySEP24TransactionID(ctx, transactionID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
 
-			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusIncomplete)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusIncomplete)
 			if moreInfoErr != nil {
 				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return
@@ -166,7 +165,7 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		case data.ReadyReceiversWalletStatus:
 			transaction["status"] = SEP24StatusPendingUserInfoUpdate
 
-			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
 			if moreInfoErr != nil {
 				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return
@@ -233,7 +232,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 
 	// Get SEP-10 claims from middleware
-	sep10Claims := anchorplatform.GetSEP10Claims(ctx)
+	sep10Claims := sepauth.GetSEP10Claims(ctx)
 	if sep10Claims == nil {
 		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)
 		return

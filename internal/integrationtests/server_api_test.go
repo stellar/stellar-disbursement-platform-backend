@@ -298,7 +298,7 @@ func Test_ReceiverRegistration(t *testing.T) {
 
 	ctx := context.Background()
 
-	authToken := &AnchorPlatformAuthSEP24Token{
+	authToken := &SEP24AuthToken{
 		Token: "valid_token",
 	}
 

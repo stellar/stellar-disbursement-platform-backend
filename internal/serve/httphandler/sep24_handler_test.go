@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
@@ -26,7 +26,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 	models := data.SetupModels(t)
 	ctx := context.Background()
 
-	jwtManager, err := anchorplatform.NewJWTManager("test_secret_1234567890", 15000)
+	jwtManager, err := sepauth.NewJWTManager("test_secret_1234567890", 15000)
 	require.NoError(t, err)
 
 	handler := &SEP24Handler{
@@ -36,7 +36,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 	}
 
 	t.Run("missing id parameter", func(t *testing.T) {
-		sep10Claims := &anchorplatform.Sep10JWTClaims{
+		sep10Claims := &sepauth.Sep10JWTClaims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer:  "https://example.com",
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
@@ -60,7 +60,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 	})
 
 	t.Run("transaction not found returns incomplete status", func(t *testing.T) {
-		sep10Claims := &anchorplatform.Sep10JWTClaims{
+		sep10Claims := &sepauth.Sep10JWTClaims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer:  "https://example.com",
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
@@ -98,15 +98,15 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		update := data.ReceiverWalletUpdate{
-			AnchorPlatformTransactionID: "test-transaction-id",
-			StellarAddress:              "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-			StellarMemo:                 &[]string{"memo123"}[0],
-			StellarMemoType:             &[]schema.MemoType{schema.MemoTypeID}[0],
+			SEP24TransactionID: "test-transaction-id",
+			StellarAddress:     "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			StellarMemo:        &[]string{"memo123"}[0],
+			StellarMemoType:    &[]schema.MemoType{schema.MemoTypeID}[0],
 		}
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
-		sep10Claims := &anchorplatform.Sep10JWTClaims{
+		sep10Claims := &sepauth.Sep10JWTClaims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer:  "https://example.com",
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
@@ -147,12 +147,12 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
 		update := data.ReceiverWalletUpdate{
-			AnchorPlatformTransactionID: "test-transaction-id-2",
+			SEP24TransactionID: "test-transaction-id-2",
 		}
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
-		sep10Claims := &anchorplatform.Sep10JWTClaims{
+		sep10Claims := &sepauth.Sep10JWTClaims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer:  "https://example.com",
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
@@ -190,12 +190,12 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
 
 		update := data.ReceiverWalletUpdate{
-			AnchorPlatformTransactionID: "test-transaction-id-3",
+			SEP24TransactionID: "test-transaction-id-3",
 		}
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
-		sep10Claims := &anchorplatform.Sep10JWTClaims{
+		sep10Claims := &sepauth.Sep10JWTClaims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer:  "https://example.com",
 				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
@@ -267,7 +267,7 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 	t.Parallel()
 	models := data.SetupModels(t)
 
-	jwtManager, err := anchorplatform.NewJWTManager("test-secret-key-for-testing-purposes-only", 300000)
+	jwtManager, err := sepauth.NewJWTManager("test-secret-key-for-testing-purposes-only", 300000)
 	require.NoError(t, err)
 
 	handler := &SEP24Handler{
@@ -531,10 +531,10 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 	})
 }
 
-func setupRequestWithSEP10Claims(method, url string, body io.Reader, sep10Claims *anchorplatform.Sep10JWTClaims) *http.Request {
+func setupRequestWithSEP10Claims(method, url string, body io.Reader, sep10Claims *sepauth.Sep10JWTClaims) *http.Request {
 	ctx := context.Background()
 	if sep10Claims != nil {
-		ctx = context.WithValue(ctx, anchorplatform.SEP10ClaimsContextKey, sep10Claims)
+		ctx = context.WithValue(ctx, sepauth.SEP10ClaimsContextKey, sep10Claims)
 	}
 	req, _ := http.NewRequestWithContext(ctx, method, url, body)
 	return req

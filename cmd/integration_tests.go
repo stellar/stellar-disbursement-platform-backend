@@ -181,7 +181,7 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 		},
 		{
 			Name:           "sep10-signing-public-key",
-			Usage:          "Anchor platform SEP10 signing public key",
+			Usage:          "SEP10 signing public key",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionStellarPublicKey,
 			ConfigKey:      &integrationTestsOpts.Sep10SigningPublicKey,
@@ -199,14 +199,6 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Usage:     "File path of the integration test disbursement file.",
 			OptType:   types.String,
 			ConfigKey: &integrationTestsOpts.DisbursementCSVFilePath,
-			Required:  true,
-		},
-		{
-			Name: "anchor-platform-base-sep-url",
-			Usage: "The Base URL of the sep server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file.",
-			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.AnchorPlatformBaseSepURL,
 			Required:  true,
 		},
 		{

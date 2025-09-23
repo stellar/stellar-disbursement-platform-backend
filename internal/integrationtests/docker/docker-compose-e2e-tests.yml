@@ -42,14 +42,6 @@ services:
       DISABLE_RECAPTCHA: "true"
       SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false"
 
-      # Toggle between Anchor Platform and Internal SEP
-      ENABLE_ANCHOR_PLATFORM: ${ENABLE_ANCHOR_PLATFORM:-true}
-      
-      # Anchor Platform URLs (only used when ENABLE_ANCHOR_PLATFORM=true)
-      ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
-      ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
-      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
-
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
       SINGLE_TENANT_MODE: "true"
@@ -163,9 +155,8 @@ services:
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
 
-  # Anchor Platform containers - only started when ENABLE_ANCHOR_PLATFORM=true
-  db-anchor-platform:
-    container_name: e2e-anchor-platform-postgres-db
+  kafka:
+    container_name: e2e-platform-postgres-db
     image: postgres:14-alpine
     environment:
       POSTGRES_USER: postgres
@@ -176,91 +167,6 @@ services:
       - "5433:5433"
     volumes:
       - e2e-postgres-ap-db:/data/postgres
-
-  anchor-platform:
-    container_name: e2e-anchor-platform
-    image: stellar/anchor-platform:2.6.0
-    command: --sep-server --platform-server --platform linux/amd64
-    ports:
-      - "8080:8080" # sep-server
-      - "8085:8085" # platform-server
-      - "8082:8082" # metrics
-    depends_on:
-      - db-anchor-platform
-    environment:
-      HOST_URL: http://localhost:8080
-      SEP_SERVER_PORT: 8080
-      CALLBACK_API_BASE_URL: http://sdp-api:8000
-      CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
-      PLATFORM_SERVER_AUTH_TYPE: JWT
-      APP_LOGGING_LEVEL: INFO
-      DATA_TYPE: postgres
-      DATA_SERVER: db-anchor-platform:5433
-      DATA_DATABASE: e2e-postgres
-      DATA_FLYWAY_ENABLED: "true"
-      DATA_DDL_AUTO: update
-      METRICS_ENABLED: "false"  # Metrics would be available at port 8082
-      METRICS_EXTRAS_ENABLED: "false"
-      SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local:8000" # Comma separated list of home domains
-      SEP10_HOME_DOMAIN: ""
-      SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
-      SEP24_ENABLED: "true"
-      SEP24_INTERACTIVE_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
-      SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
-      SEP24_MORE_INFO_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
-      STELLAR_NETWORK_NETWORK: ${NETWORK_NETWORK:-TESTNET}
-      STELLAR_NETWORK_NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
-      STELLAR_NETWORK_HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
-      SEP1_ENABLED: "true"
-      SEP1_TOML_TYPE: url
-      SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
-      ASSETS_TYPE: json
-      ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
-        {
-          "assets": [
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "USDC",
-              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            },
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "XLM",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            }
-          ]
-        }
-
-      # secrets:
-      SECRET_DATA_USERNAME: postgres
-      SECRET_DATA_PASSWORD: postgres
-      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
-      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
 
   kafka:
     container_name: e2e-kafka

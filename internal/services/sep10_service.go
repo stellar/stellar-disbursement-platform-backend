@@ -18,7 +18,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -32,7 +32,7 @@ type SEP10Service interface {
 
 type sep10Service struct {
 	SEP10SigningKeypair       *keypair.Full
-	JWTManager                *anchorplatform.JWTManager
+	JWTManager                *sepauth.JWTManager
 	HorizonClient             horizonclient.ClientInterface
 	HTTPClient                httpclient.HttpClientInterface
 	NetworkPassphrase         string
@@ -101,7 +101,7 @@ type ChallengeValidationResult struct {
 }
 
 func NewSEP10Service(
-	jwtManager *anchorplatform.JWTManager,
+	jwtManager *sepauth.JWTManager,
 	networkPassphrase string,
 	sep10SigningPrivateKey string,
 	baseURL string,

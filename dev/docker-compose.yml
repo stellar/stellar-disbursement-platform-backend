@@ -2,13 +2,13 @@ version: "3"
 services:
   db:
     extends:
-      file: docker-compose-sdp-anchor.yml
+      file: docker-compose-sdp.yml
       service: db
     volumes:
       - postgres-db:/data/postgres
   sdp-api:
     extends:
-      file: docker-compose-sdp-anchor.yml
+      file: docker-compose-sdp.yml
       service: sdp-api
     depends_on:
       db:
@@ -31,20 +31,6 @@ services:
     extends:
       file: docker-compose-sdp.yml
       service: demo-wallet
-  db-anchor-platform:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: db-anchor-platform
-    depends_on:
-      - sdp-api
-    volumes:
-      - postgres-ap-db:/data/postgres
-  anchor-platform:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: anchor-platform
-    depends_on:
-      - db-anchor-platform
 volumes:
   postgres-db:
     driver: local

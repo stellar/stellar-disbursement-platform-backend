@@ -23,7 +23,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -116,7 +116,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: "no-op-domain.test.com",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -124,9 +124,9 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_validation(t *testing.T) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
 	}
-	ctxWithValidSEP24Claims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
-	invalidClaims := &anchorplatform.SEP24JWTClaims{}
-	ctxWithInvalidSEP24Claims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, invalidClaims)
+	ctxWithValidSEP24Claims := context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims)
+	invalidClaims := &sepauth.SEP24JWTClaims{}
+	ctxWithInvalidSEP24Claims := context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, invalidClaims)
 
 	const reCAPTCHAToken = "XyZ"
 
@@ -259,7 +259,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 	require.NoError(t, err)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
 
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: wallet.SEP10ClientDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -267,7 +267,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP_otpHandlerIsCalled(t *testing.T) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
 	}
-	ctxWithValidSEP24Claims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+	ctxWithValidSEP24Claims := context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims)
 
 	const reCAPTCHAToken = "XyZ"
 
@@ -590,7 +590,7 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 }
 
 func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.T) {
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: "calgar.indomitus",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "TX-MARINES",
@@ -598,7 +598,7 @@ func Test_ReceiverSendOTPHandler_RecordsAttempt_UnregisteredContacts(t *testing.
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
 	}
-	ctx := context.WithValue(context.Background(), anchorplatform.SEP24ClaimsContextKey, validClaims)
+	ctx := context.WithValue(context.Background(), sepauth.SEP24ClaimsContextKey, validClaims)
 
 	models := data.SetupModels(t)
 
@@ -663,7 +663,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: "test-domain.test",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -671,7 +671,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
 		},
 	}
-	ctx = context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+	ctx = context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims)
 
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://correct.test", "correct.test", "wallet123://")
 	receiverWithoutWalletInsert := &data.Receiver{

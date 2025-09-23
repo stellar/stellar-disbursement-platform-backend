@@ -1,4 +1,4 @@
-package anchorplatform
+package sepauth
 
 import (
 	"fmt"
@@ -100,7 +100,6 @@ func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clien
 }
 
 // GenerateSEP24MoreInfoToken will generate a JWT token string for more info URLs with transaction data.
-// This matches the original Anchor Platform implementation for more info URL generation.
 func (manager *JWTManager) GenerateSEP24MoreInfoToken(stellarAccount, stellarMemo, clientDomain, homeDomain, transactionID, lang string, transactionData map[string]string) (string, error) {
 	subject := stellarAccount
 	if stellarMemo != "" {

@@ -16,7 +16,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -61,8 +61,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
-		invalidClaims := &anchorplatform.SEP24JWTClaims{}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, invalidClaims))
+		invalidClaims := &sepauth.SEP24JWTClaims{}
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, invalidClaims))
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -83,7 +83,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	_, err = models.Organizations.Get(ctx)
 	require.NoError(t, err)
 
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: "stellar.org",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -92,7 +92,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		},
 	}
 	currentTenant, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
-	ctxWithClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+	ctxWithClaims := context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims)
 
 	t.Run("returns 200 - Ok with JSON response for unregistered user", func(t *testing.T) {
 		req, reqErr := http.NewRequestWithContext(ctxWithClaims, "GET", "/sep24-interactive-deposit/info", nil)
@@ -165,11 +165,11 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	})
 
 	t.Run("returns 200 - Ok with JSON response for unregistered user with same address but different wallet", func(t *testing.T) {
-		otherWalletClaims := &anchorplatform.SEP24JWTClaims{
+		otherWalletClaims := &sepauth.SEP24JWTClaims{
 			ClientDomainClaim: "other.stellar.org",
 			RegisteredClaims:  validClaims.RegisteredClaims,
 		}
-		ctxWithOtherWalletClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, otherWalletClaims)
+		ctxWithOtherWalletClaims := context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, otherWalletClaims)
 		req, reqErr := http.NewRequestWithContext(ctxWithOtherWalletClaims, "GET", "/sep24-interactive-deposit/info", nil)
 		require.NoError(t, reqErr)
 

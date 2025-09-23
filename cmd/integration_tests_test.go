@@ -50,7 +50,6 @@ func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 		ReceiverAccountStellarMemo: "memo",
 		Sep10SigningPublicKey:      "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		RecaptchaSiteKey:           "reCAPTCHASiteKey",
-		AnchorPlatformBaseSepURL:   "localhost:8080",
 		ServerApiBaseURL:           "localhost:8000",
 	}
 
@@ -70,7 +69,6 @@ func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 	t.Setenv("RECEIVER_ACCOUNT_STELLAR_MEMO", "memo")
 	t.Setenv("SEP10_SIGNING_PUBLIC_KEY", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S")
 	t.Setenv("RECAPTCHA_SITE_KEY", "reCAPTCHASiteKey")
-	t.Setenv("ANCHOR_PLATFORM_BASE_SEP_URL", "localhost:8080")
 	t.Setenv("SERVER_API_BASE_URL", "localhost:8000")
 
 	parentCmdMock.SetArgs([]string{

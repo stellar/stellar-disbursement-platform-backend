@@ -47,16 +47,7 @@ var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 	),
 }
 
-var CounterMetrics = map[MetricTag]prometheus.Counter{
-	AnchorPlatformAuthProtectionEnsuredCounterTag: prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "sdp", Subsystem: "anchor_platform", Name: string(AnchorPlatformAuthProtectionEnsuredCounterTag),
-		Help: "A counter of how many times the anchor platform auth protection was ensured",
-	}),
-	AnchorPlatformAuthProtectionMissingCounterTag: prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: "sdp", Subsystem: "anchor_platform", Name: string(AnchorPlatformAuthProtectionMissingCounterTag),
-		Help: "A counter of how many times the anchor platform auth protection check revealed the AP is not protected",
-	}),
-}
+var CounterMetrics = map[MetricTag]prometheus.Counter{}
 
 var HistogramVecMetrics = map[MetricTag]*prometheus.HistogramVec{
 	CircleAPIRequestDurationTag: prometheus.NewHistogramVec(prometheus.HistogramOpts{
