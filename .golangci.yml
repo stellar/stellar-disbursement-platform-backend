@@ -19,7 +19,7 @@ linters:
     - unconvert
     - unparam
 
-  default: none
+  default: none # TODO: remove this line in the next PR, where we're addressing staticcheck errors
 
   settings:
     staticcheck:
