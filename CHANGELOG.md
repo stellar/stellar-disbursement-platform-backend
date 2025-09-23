@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Properly detect memo type in receiver creation. [#870](https://github.com/stellar/stellar-disbursement-platform-backend/pull/870)
 - Add Support to Direct Payments for Payments Export. [#873](https://github.com/stellar/stellar-disbursement-platform-backend/pull/873)
 - Re-enable golangci-lint in the CI and address all the related issues. [#874](https://github.com/stellar/stellar-disbursement-platform-backend/pull/874)
+- Fix email color overrides. [#762](https://github.com/stellar/stellar-disbursement-platform-backend/pull/762)
 
 ## [4.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.0...4.0.1))
 
