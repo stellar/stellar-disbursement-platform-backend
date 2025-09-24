@@ -66,20 +66,6 @@ func TwilioConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption 
 			ConfigKey: &opts.TwilioWhatsAppReceiverOTPTemplateSID,
 			Required:  false,
 		},
-		{
-			Name:      "twilio-whatsapp-user-invitation-template-sid",
-			Usage:     "The Twilio Content SID for WhatsApp user invitation template (starts with HX)",
-			OptType:   types.String,
-			ConfigKey: &opts.TwilioWhatsAppUserInvitationTemplateSID,
-			Required:  false,
-		},
-		{
-			Name:      "twilio-whatsapp-user-forgot-password-template-sid",
-			Usage:     "The Twilio Content SID for WhatsApp user forgot password template (starts with HX)",
-			OptType:   types.String,
-			ConfigKey: &opts.TwilioWhatsAppUserForgotPasswordTemplateSID,
-			Required:  false,
-		},
 		// Twilio Email (SendGrid)
 		{
 			Name:      "twilio-sendgrid-api-key",

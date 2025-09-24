@@ -99,7 +99,7 @@ func NewTwilioWhatsAppClient(accountSid, authToken, fromNumber string, templates
 		return nil, fmt.Errorf("twilio WhatsApp fromNumber is invalid: %w", err)
 	}
 
-	for _, msgType := range allMessageTypes() {
+	for _, msgType := range receiverMessageTypes() {
 		if templateID, ok := templates[msgType]; !ok || strings.TrimSpace(templateID) == "" {
 			return nil, fmt.Errorf("missing template SID for message type %s", msgType)
 		}
