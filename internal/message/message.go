@@ -12,17 +12,14 @@ type MessageType string
 const (
 	MessageTypeUserForgotPassword MessageType = "user_forgot_password"
 	MessageTypeUserMFA            MessageType = "user_mfa"
-	MessageTypeUserInvitation     MessageType = "user_org_invitation"
+	MessageTypeUserInvitation     MessageType = "user_invitation"
 	MessageTypeReceiverInvitation MessageType = "receiver_invitation"
 	MessageTypeReceiverOTP        MessageType = "receiver_otp"
 )
 
-// allMessageTypes returns all supported MessageType values.
-func allMessageTypes() []MessageType {
+// receiverMessageTypes returns MessageType values related to receivers.
+func receiverMessageTypes() []MessageType {
 	return []MessageType{
-		MessageTypeUserForgotPassword,
-		MessageTypeUserMFA,
-		MessageTypeUserInvitation,
 		MessageTypeReceiverInvitation,
 		MessageTypeReceiverOTP,
 	}
