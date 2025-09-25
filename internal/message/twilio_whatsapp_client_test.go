@@ -259,9 +259,9 @@ func Test_twilioWhatsAppClient_SendMessage_withTemplate(t *testing.T) {
 	message := Message{
 		Type:          MessageTypeReceiverInvitation,
 		ToPhoneNumber: "+14155551234",
-		TemplateVariables: map[string]string{
-			"1": "Test Organization",
-			"2": "https://example.com/register?token=abc123",
+		TemplateVariables: map[TemplateVariable]string{
+			TemplateVarOrgName:                  "Test Organization",
+			TemplateVarReceiverRegistrationLink: "https://example.com/register?token=abc123",
 		},
 	}
 
@@ -322,6 +322,100 @@ func Test_twilioWhatsAppClient_SendMessage_withDefaultTemplate(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func Test_formatContentVariables(t *testing.T) {
+	testCases := []struct {
+		name        string
+		messageType MessageType
+		vars        map[TemplateVariable]string
+		wantResult  string
+		wantErr     string
+	}{
+		{
+			name:        "successful formatting for receiver invitation",
+			messageType: MessageTypeReceiverInvitation,
+			vars: map[TemplateVariable]string{
+				TemplateVarOrgName:                  "Test Organization",
+				TemplateVarReceiverRegistrationLink: "https://example.com/register?token=abc123",
+			},
+			wantResult: `{"1":"Test Organization","2":"https://example.com/register?token=abc123"}`,
+		},
+		{
+			name:        "successful formatting for receiver OTP",
+			messageType: MessageTypeReceiverOTP,
+			vars: map[TemplateVariable]string{
+				TemplateVarReceiverOTP: "123456",
+				TemplateVarOrgName:     "MyOrg",
+			},
+			wantResult: `{"1":"123456","2":"MyOrg"}`,
+		},
+		{
+			name:        "unsupported message type",
+			messageType: MessageTypeUserInvitation,
+			vars: map[TemplateVariable]string{
+				TemplateVarFirstName: "John",
+			},
+			wantErr: "unsupported message type user_invitation for WhatsApp template variables",
+		},
+		{
+			name:        "missing required variables for receiver invitation",
+			messageType: MessageTypeReceiverInvitation,
+			vars: map[TemplateVariable]string{
+				TemplateVarOrgName: "Test Organization",
+			},
+			wantErr: "expected 2 template variables for message type receiver_invitation, got 1",
+		},
+		{
+			name:        "too many variables for receiver OTP",
+			messageType: MessageTypeReceiverOTP,
+			vars: map[TemplateVariable]string{
+				TemplateVarReceiverOTP: "123456",
+				TemplateVarOrgName:     "MyOrg",
+				TemplateVarFirstName:   "Extra",
+			},
+			wantErr: "expected 2 template variables for message type receiver_otp, got 3",
+		},
+		{
+			name:        "incorrect variable for receiver invitation",
+			messageType: MessageTypeReceiverInvitation,
+			vars: map[TemplateVariable]string{
+				TemplateVarOrgName:   "Test Organization",
+				TemplateVarFirstName: "Wrong Variable",
+			},
+			wantErr: "missing template variable registration_link for message type receiver_invitation",
+		},
+		{
+			name:        "incorrect variable for receiver OTP",
+			messageType: MessageTypeReceiverOTP,
+			vars: map[TemplateVariable]string{
+				TemplateVarFirstName: "Wrong Variable",
+				TemplateVarOrgName:   "MyOrg",
+			},
+			wantErr: "missing template variable receiver_otp for message type receiver_otp",
+		},
+		{
+			name:        "empty variables map for receiver invitation",
+			messageType: MessageTypeReceiverInvitation,
+			vars:        map[TemplateVariable]string{},
+			wantErr:     "expected 2 template variables for message type receiver_invitation, got 0",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := formatContentVariables(tc.messageType, tc.vars)
+
+			if tc.wantErr != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+				assert.Empty(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.wantResult, result)
+			}
+		})
+	}
+}
+
 func Test_Message_ValidateFor_WhatsAppTemplate(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -342,7 +436,7 @@ func Test_Message_ValidateFor_WhatsAppTemplate(t *testing.T) {
 				Type:              MessageTypeReceiverInvitation,
 				ToPhoneNumber:     "+14155551234",
 				Body:              "Some content",
-				TemplateVariables: map[string]string{"1": "Test"},
+				TemplateVariables: map[TemplateVariable]string{TemplateVarOrgName: "Test"},
 			},
 			wantErr: false,
 		},

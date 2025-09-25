@@ -17,6 +17,19 @@ const (
 	MessageTypeReceiverOTP        MessageType = "receiver_otp"
 )
 
+type TemplateVariable string
+
+const (
+	TemplateVarOrgName                  TemplateVariable = "org_name"
+	TemplateVarReceiverOTP              TemplateVariable = "receiver_otp"
+	TemplateVarReceiverRegistrationLink TemplateVariable = "registration_link"
+	TemplateVarResetPasswordLink        TemplateVariable = "reset_password_link"
+	TemplateVarMFACode                  TemplateVariable = "mfa_code"
+	TemplateVarFirstName                TemplateVariable = "first_name"
+	TemplateVarRole                     TemplateVariable = "role"
+	TemplateVarForgotPasswordLink       TemplateVariable = "forgot_password_link"
+)
+
 // receiverMessageTypes returns MessageType values related to receivers.
 func receiverMessageTypes() []MessageType {
 	return []MessageType{
@@ -31,7 +44,7 @@ type Message struct {
 	ToEmail           string
 	Body              string
 	Title             string
-	TemplateVariables map[string]string
+	TemplateVariables map[TemplateVariable]string
 }
 
 // ValidateFor validates if the message object is valid for the given messengerType.
