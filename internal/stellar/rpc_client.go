@@ -28,7 +28,6 @@ func (w *RPCClientWrapper) SimulateTransaction(ctx context.Context, request prot
 	}
 
 	resp, err := w.client.SimulateTransaction(ctx, request)
-
 	if err != nil {
 		return nil, NewSimulationError(
 			err,
