@@ -9,7 +9,7 @@ ALTER TABLE submitter_transactions
     ADD COLUMN wasm_hash VARCHAR(64),
     -- Add new columns for sponsored transactions
     ADD COLUMN sponsored_account VARCHAR(56),
-    ADD COLUMN sponsored_transaction_xdr TEXT;
+    ADD COLUMN sponsored_operation_xdr TEXT;
 
 ALTER TABLE submitter_transactions
     ALTER COLUMN asset_code DROP NOT NULL,
@@ -39,7 +39,7 @@ ALTER TABLE submitter_transactions
     ADD CONSTRAINT submitter_transactions_sponsored_constraints CHECK (
         transaction_type != 'SPONSORED' OR (
             sponsored_account IS NOT NULL AND
-            sponsored_transaction_xdr IS NOT NULL
+            sponsored_operation_xdr IS NOT NULL
         )
     );
 
@@ -55,7 +55,7 @@ ALTER TABLE submitter_transactions
     DROP COLUMN wasm_hash,
     DROP COLUMN transaction_type,
     DROP COLUMN sponsored_account,
-    DROP COLUMN sponsored_transaction_xdr;
+    DROP COLUMN sponsored_operation_xdr;
 
 ALTER TABLE submitter_transactions
     ALTER COLUMN asset_code SET NOT NULL,

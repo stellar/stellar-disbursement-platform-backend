@@ -32,3 +32,12 @@ type EventWalletCreationCompletedData struct {
 	WalletCreationCompletedAt   time.Time `json:"completed_at"`
 	StellarTransactionID        string    `json:"stellar_transaction_id"`
 }
+
+type EventSponsoredTransactionCompletedData struct {
+	TransactionID                     string    `json:"transaction_id"`
+	SponsoredTransactionID            string    `json:"sponsored_transaction_id"`
+	SponsoredTransactionStatus        string    `json:"sponsored_transaction_status"`
+	SponsoredTransactionStatusMessage string    `json:"sponsored_transaction_status_message"`
+	SponsoredTransactionCompletedAt   time.Time `json:"completed_at"`
+	StellarTransactionID              string    `json:"stellar_transaction_id"`
+}

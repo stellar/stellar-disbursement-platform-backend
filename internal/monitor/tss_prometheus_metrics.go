@@ -54,8 +54,9 @@ var SummaryTSSVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 var CounterTSSMetrics = map[MetricTag]prometheus.Counter{}
 
 var (
-	paymentLabelNames        = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
-	walletCreationLabelNames = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
+	paymentLabelNames              = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
+	walletCreationLabelNames       = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
+	sponsoredTransactionLabelNames = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
 )
 
 var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
@@ -156,5 +157,46 @@ var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 			Help:      "Count of wallet creations that have failed onchain",
 		},
 		walletCreationLabelNames,
+	),
+
+	SponsoredTransactionProcessingStartedTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(SponsoredTransactionProcessingStartedTag),
+			Help:      "Count of sponsored transactions that are starting to process",
+		},
+		sponsoredTransactionLabelNames,
+	),
+	SponsoredTransactionTransactionSuccessfulTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(SponsoredTransactionTransactionSuccessfulTag),
+			Help:      "Count of sponsored transactions that have processed successfully",
+		},
+		sponsoredTransactionLabelNames,
+	),
+	SponsoredTransactionReconciliationSuccessfulTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(SponsoredTransactionReconciliationSuccessfulTag),
+			Help:      "Count of sponsored transactions that have completed reconciliation successfully",
+		},
+		sponsoredTransactionLabelNames,
+	),
+	SponsoredTransactionReconciliationFailureTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(SponsoredTransactionReconciliationFailureTag),
+			Help:      "Count of sponsored transactions that have failed reconciliation",
+		},
+		sponsoredTransactionLabelNames,
+	),
+	SponsoredTransactionErrorTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(SponsoredTransactionErrorTag),
+			Help:      "Count of sponsored transactions that have failed onchain",
+		},
+		sponsoredTransactionLabelNames,
 	),
 }

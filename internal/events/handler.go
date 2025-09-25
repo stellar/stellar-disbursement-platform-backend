@@ -10,11 +10,12 @@ import (
 //
 //	`kafka-topics.sh --create --if-not-exists --topic events.new-topic ...`
 const (
-	ReceiverWalletNewInvitationTopic = "events.receiver-wallets.new_invitation"
-	PaymentCompletedTopic            = "events.payment.payment_completed"
-	PaymentReadyToPayTopic           = "events.payment.ready_to_pay"
-	CirclePaymentReadyToPayTopic     = "events.payment.circle_ready_to_pay"
-	WalletCreationCompletedTopic     = "events.wallet.creation_completed"
+	ReceiverWalletNewInvitationTopic   = "events.receiver-wallets.new_invitation"
+	PaymentCompletedTopic              = "events.payment.payment_completed"
+	PaymentReadyToPayTopic             = "events.payment.ready_to_pay"
+	CirclePaymentReadyToPayTopic       = "events.payment.circle_ready_to_pay"
+	WalletCreationCompletedTopic       = "events.wallet.creation_completed"
+	SponsoredTransactionCompletedTopic = "events.sponsored_transaction.completed"
 )
 
 // Type Names
@@ -29,6 +30,8 @@ const (
 	PaymentReadyToPayDirectPayment                 = "payment-direct-payment"
 	WalletCreationCompletedSuccessType             = "wallet-creation-completed-success"
 	WalletCreationCompletedErrorType               = "wallet-creation-completed-error"
+	SponsoredTransactionCompletedSuccessType       = "sponsored-transaction-completed-success"
+	SponsoredTransactionCompletedErrorType         = "sponsored-transaction-completed-error"
 )
 
 type EventHandler interface {

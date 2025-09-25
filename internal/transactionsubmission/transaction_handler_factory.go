@@ -45,6 +45,11 @@ func (f *TransactionHandlerFactory) GetTransactionHandler(tx *store.Transaction)
 			return nil, fmt.Errorf("rpc client is required for wallet creation transaction handler")
 		}
 		return NewWalletCreationTransactionHandler(f.engine, f.rpcClient, f.monitorSvc)
+	case store.TransactionTypeSponsored:
+		if f.rpcClient == nil {
+			return nil, fmt.Errorf("rpc client is required for sponsored transaction handler")
+		}
+		return NewSponsoredTransactionHandler(f.engine, f.rpcClient, f.monitorSvc)
 	default:
 		return nil, fmt.Errorf("unsupported transaction type: %s", tx.TransactionType)
 	}

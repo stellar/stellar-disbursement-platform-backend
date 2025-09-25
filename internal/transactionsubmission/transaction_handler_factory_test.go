@@ -45,6 +45,13 @@ func TestTransactionHandlerFactory_GetTransactionHandler(t *testing.T) {
 			expectedType: "*transactionsubmission.WalletCreationTransactionHandler",
 		},
 		{
+			name: "returns sponsored transaction handler for sponsored transaction",
+			transaction: &store.Transaction{
+				TransactionType: store.TransactionTypeSponsored,
+			},
+			expectedType: "*transactionsubmission.SponsoredTransactionHandler",
+		},
+		{
 			name: "returns error for unsupported transaction type",
 			transaction: &store.Transaction{
 				TransactionType: "UNSUPPORTED_TYPE",
@@ -76,6 +83,8 @@ func getTypeName(obj interface{}) string {
 		return "*transactionsubmission.PaymentTransactionHandler"
 	case *WalletCreationTransactionHandler:
 		return "*transactionsubmission.WalletCreationTransactionHandler"
+	case *SponsoredTransactionHandler:
+		return "*transactionsubmission.SponsoredTransactionHandler"
 	default:
 		return "unknown"
 	}
