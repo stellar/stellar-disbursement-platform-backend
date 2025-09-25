@@ -32,7 +32,7 @@ var TestnetWallets = []data.Wallet{
 	},
 	{
 		Name:           "SDP Embedded Wallet",
-		DeepLinkSchema: "http://localhost:3000",
+		DeepLinkSchema: "http://localhost:3000/invite",
 		Homepage:       "http://localhost:3000",
 		Assets:         assets.AllAssetsTestnet,
 		Embedded:       true,
