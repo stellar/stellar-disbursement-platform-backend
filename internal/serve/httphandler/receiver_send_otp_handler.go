@@ -235,9 +235,9 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	msg := message.Message{
 		Type: message.MessageTypeReceiverOTP,
 		Body: builder.String(),
-		TemplateVariables: map[string]string{
-			"OTP":              otp,
-			"OrganizationName": organization.Name,
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarReceiverOTP: otp,
+			message.TemplateVarOrgName:     organization.Name,
 		},
 	}
 	switch contactType {

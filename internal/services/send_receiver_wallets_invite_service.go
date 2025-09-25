@@ -155,9 +155,9 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		msg := message.Message{
 			Type: message.MessageTypeReceiverInvitation,
 			Body: content.String(),
-			TemplateVariables: map[string]string{
-				"OrganizationName": organization.Name,
-				"RegistrationLink": registrationLink,
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarOrgName:                  organization.Name,
+				message.TemplateVarReceiverRegistrationLink: registrationLink,
 			},
 		}
 		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {

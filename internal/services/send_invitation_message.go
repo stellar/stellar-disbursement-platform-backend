@@ -73,11 +73,11 @@ func SendInvitationMessage(ctx context.Context, messengerClient message.Messenge
 		Body:    messageContent,
 		Title:   invitationMessageTitle,
 		Type:    message.MessageTypeUserInvitation,
-		TemplateVariables: map[string]string{
-			"FirstName":          opts.FirstName,
-			"Role":               opts.Role,
-			"ForgotPasswordLink": forgotPasswordLink,
-			"OrganizationName":   organization.Name,
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarFirstName:          opts.FirstName,
+			message.TemplateVarRole:               opts.Role,
+			message.TemplateVarForgotPasswordLink: forgotPasswordLink,
+			message.TemplateVarOrgName:            organization.Name,
 		},
 	}
 

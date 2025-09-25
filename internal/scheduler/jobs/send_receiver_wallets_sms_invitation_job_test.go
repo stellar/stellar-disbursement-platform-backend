@@ -194,9 +194,9 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			ToEmail:       receiver1.Email,
 			Body:          contentWallet1,
 			Title:         titleWallet1,
-			TemplateVariables: map[string]string{
-				"OrganizationName": walletDeepLink1.OrganizationName,
-				"RegistrationLink": deepLink1,
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+				message.TemplateVarReceiverRegistrationLink: deepLink1,
 			},
 		}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 		Return(message.MessengerTypeTwilioSMS, mockErr).
@@ -207,9 +207,9 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			ToEmail:       receiver2.Email,
 			Body:          contentWallet2,
 			Title:         titleWallet2,
-			TemplateVariables: map[string]string{
-				"OrganizationName": walletDeepLink2.OrganizationName,
-				"RegistrationLink": deepLink2,
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+				message.TemplateVarReceiverRegistrationLink: deepLink2,
 			},
 		}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 		Return(message.MessengerTypeTwilioSMS, nil).

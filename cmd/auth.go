@@ -149,11 +149,11 @@ func (a *AuthCommand) Command() *cobra.Command {
 					Title:   "Welcome to Stellar Disbursement Platform",
 					Body:    msgBody,
 					Type:    message.MessageTypeUserInvitation,
-					TemplateVariables: map[string]string{
-						"FirstName":          firstName,
-						"Role":               role,
-						"ForgotPasswordLink": forgotPasswordLink,
-						"OrganizationName":   organization.Name,
+					TemplateVariables: map[message.TemplateVariable]string{
+						message.TemplateVarFirstName:          firstName,
+						message.TemplateVarRole:               role,
+						message.TemplateVarForgotPasswordLink: forgotPasswordLink,
+						message.TemplateVarOrgName:            organization.Name,
 					},
 				})
 				if err != nil {

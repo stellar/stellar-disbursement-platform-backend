@@ -538,9 +538,9 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 						Type:          message.MessageTypeReceiverOTP,
 						ToPhoneNumber: phoneNumber,
 						Body:          tc.wantMessage,
-						TemplateVariables: map[string]string{
-							"OTP":              otp,
-							"OrganizationName": organization.Name,
+						TemplateVariables: map[message.TemplateVariable]string{
+							message.TemplateVarReceiverOTP: otp,
+							message.TemplateVarOrgName:     organization.Name,
 						},
 					}
 					contactInfo = phoneNumber
@@ -551,9 +551,9 @@ func Test_ReceiverSendOTPHandler_sendOTP(t *testing.T) {
 						ToEmail: email,
 						Body:    tc.wantMessage,
 						Title:   "Your One-Time Password: " + otp,
-						TemplateVariables: map[string]string{
-							"OTP":              otp,
-							"OrganizationName": organization.Name,
+						TemplateVariables: map[message.TemplateVariable]string{
+							message.TemplateVarReceiverOTP: otp,
+							message.TemplateVarOrgName:     organization.Name,
 						},
 					}
 					contactInfo = email
