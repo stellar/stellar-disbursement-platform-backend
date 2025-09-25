@@ -268,6 +268,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		}
 
 		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+		//nolint:wrapcheck // not wrapping because stellar/go's horizonclient.Error is not compatible with the fmt.Errorf wrapper
 		return err
 	},
 		retry.Context(ctx), // Respect the context's cancellation

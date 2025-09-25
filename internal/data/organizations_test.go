@@ -175,7 +175,7 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 	err = ou.validate()
 	assert.Nil(t, err)
 
-	var link string = "test-link"
+	link := "test-link"
 	ou.PrivacyPolicyLink = &link
 	err = ou.validate()
 	assert.EqualError(t, err, "invalid privacy policy link: parse \"test-link\": invalid URI for request")
@@ -455,7 +455,7 @@ func Test_Organizations_Update(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, o.PrivacyPolicyLink)
 
-		var link string = "https://example.com/privacy-policy"
+		link := "https://example.com/privacy-policy"
 		err = organizationModel.Update(ctx, &OrganizationUpdate{PrivacyPolicyLink: &link})
 		require.NoError(t, err)
 
@@ -464,7 +464,7 @@ func Test_Organizations_Update(t *testing.T) {
 		assert.Equal(t, link, *o.PrivacyPolicyLink)
 
 		// Set it as null
-		var emptyValue string = ""
+		emptyValue := ""
 		err = organizationModel.Update(ctx, &OrganizationUpdate{PrivacyPolicyLink: &emptyValue})
 		require.NoError(t, err)
 

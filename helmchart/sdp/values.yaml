@@ -113,7 +113,7 @@ global:
   ## @param global.bridgeIntegration.apiKey The API key for the bridge integration.
   bridgeIntegration:
       enabled: false
-      baseUrl: #required if bridgeIntegration.enabled is true
+      baseUrl: "https://api.bridge.xyz"
       apiKey: #required if bridgeIntegration.enabled is true
 
 
@@ -150,7 +150,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "4.0.1"
+    tag: "4.1.0"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -187,7 +187,7 @@ sdp:
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   ## @param sdp.configMap.data.METRICS_TYPE Defines the type of metrics system in use. Options: "PROMETHEUS".
   ## @param sdp.configMap.data.EMAIL_SENDER_TYPE The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL", "TWILIO_EMAIL".
-  ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS", "AWS_SMS".
+  ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS", "TWILIO_WHATSAPP", "AWS_SMS".
   ## @param sdp.configMap.data.CORS_ALLOWED_ORIGINS Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.
   ## @param sdp.configMap.data.DISABLE_RECAPTCHA Determines if ReCaptcha should be disabled for login ("true" or "false").
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
@@ -248,6 +248,9 @@ sdp:
   ## @extra sdp.kubeSecrets.data.TWILIO_ACCOUNT_SID Account SID for authenticating to the Twilio service, used for sending text messages.
   ## @extra sdp.kubeSecrets.data.TWILIO_AUTH_TOKEN Authentication token for the Twilio service.
   ## @extra sdp.kubeSecrets.data.TWILIO_SERVICE_SID Service SID for the specific Twilio service being utilized.
+  ## @extra sdp.kubeSecrets.data.TWILIO_WHATSAPP_FROM_NUMBER The WhatsApp Business number used to send messages (with whatsapp: prefix).
+  ## @extra sdp.kubeSecrets.data.TWILIO_WHATSAPP_RECEIVER_INVITATION_TEMPLATE_SID The Twilio Content SID for WhatsApp receiver invitation template (starts with HX).
+  ## @extra sdp.kubeSecrets.data.TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID The Twilio Content SID for WhatsApp receiver OTP template (starts with HX).
   ## @extra sdp.kubeSecrets.data.TWILIO_SENDGRID_API_KEY API key for the Twilio SendGrid (email) service.
   ## @extra sdp.kubeSecrets.data.TWILIO_SENDGRID_SENDER_ADDRESS Email address used to send emails via Twilio SendGrid.
   ## @extra sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
@@ -283,10 +286,15 @@ sdp:
 #      AWS_SES_SENDER_ID: MY_AWS_SES_SENDER_ID
 #      AWS_SNS_SENDER_ID: MY_AWS_SNS_SENDER_ID
 
-      ### Twilio Config when SMS_SENDER_TYPE is set to "TWILIO_SMS"
+      ### Twilio Config when SMS_SENDER_TYPE is set to "TWILIO_SMS" or "TWILIO_WHATSAPP"
 #      TWILIO_ACCOUNT_SID: MY_TWILIO_ACCOUNT_SID
 #      TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
 #      TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
+
+      ### Twilio WhatsApp Config when SMS_SENDER_TYPE is set to "TWILIO_WHATSAPP"
+#      TWILIO_WHATSAPP_FROM_NUMBER: whatsapp:+1234567890
+#      TWILIO_WHATSAPP_RECEIVER_INVITATION_TEMPLATE_SID: HXabcdef123456789
+#      TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID: HXabcdef123456788
 
       ### Twilio Sendgrid Config when EMAIL_SENDER_TYPE is set to "TWILIO_EMAIL"
 #      TWILIO_SENDGRID_API_KEY: MY_TWILIO_SENDGRID_API_KEY
@@ -600,7 +608,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:4.0.1
+    fullName: stellar/stellar-disbursement-platform-frontend:4.1.0
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.

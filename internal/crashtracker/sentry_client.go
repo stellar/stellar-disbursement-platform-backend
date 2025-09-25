@@ -1,3 +1,4 @@
+//nolint:wrapcheck // Wrapper struct, no extra context needed
 package crashtracker
 
 import (

@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
-	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -92,7 +91,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_failure(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			defer data.DeleteAllTransactionsFixtures(t, ctx, dbConnectionPool)
-			mDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+			mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
 			dispatcher := NewStellarPaymentDispatcher(models, tssModel, mDistAccountResolver)
 			tssTx := testutils.BeginTxWithRollback(t, ctx, tssModel.DBConnectionPool)
 
@@ -209,7 +208,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defer data.DeleteAllTransactionsFixtures(t, ctx, dbConnectionPool)
 
-			mDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+			mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
 			mDistAccountResolver.On("DistributionAccountFromContext", ctx).
 				Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
 				Once()

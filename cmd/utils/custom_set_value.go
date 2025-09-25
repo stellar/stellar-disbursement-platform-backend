@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -104,7 +105,7 @@ func SetConfigOptionEC256PrivateKey(co *config.ConfigOption) error {
 	privateKey := viper.GetString(co.Name)
 
 	// We must remove the literal \n in case of the config options being set this way
-	privateKey = strings.Replace(privateKey, `\n`, "\n", -1)
+	privateKey = strings.ReplaceAll(privateKey, `\n`, "\n")
 
 	_, err := utils.ParseStrongECPrivateKey(privateKey)
 	if err != nil {
@@ -295,5 +296,17 @@ func SetRegistrationContactType(co *config.ConfigOption) error {
 	}
 
 	*(co.ConfigKey.(*data.RegistrationContactType)) = regAccountType
+	return nil
+}
+
+func SetConfigOptionCAPTCHAType(co *config.ConfigOption) error {
+	captchaTypeStr := viper.GetString(co.Name)
+
+	captchaType := validators.CAPTCHAType(captchaTypeStr)
+	if !captchaType.IsValid() {
+		return fmt.Errorf("couldn't parse CAPTCHA type in %s: %s is not a valid CAPTCHA type. Valid options are: %v", co.Name, captchaTypeStr, validators.ValidCAPTCHATypes())
+	}
+
+	*(co.ConfigKey.(*validators.CAPTCHAType)) = captchaType
 	return nil
 }

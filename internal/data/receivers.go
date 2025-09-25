@@ -15,6 +15,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+var (
+	ErrDuplicateEmail       = errors.New("email already in use")
+	ErrDuplicatePhoneNumber = errors.New("phone number already in use")
+)
+
 type Receiver struct {
 	ID          string     `json:"id" db:"id"`
 	Email       string     `json:"email,omitempty" db:"email"`
@@ -103,13 +108,13 @@ type ReceiverModel struct{}
 type ReceiverInsert struct {
 	PhoneNumber *string `db:"phone_number"`
 	Email       *string `db:"email"`
-	ExternalId  *string `db:"external_id"`
+	ExternalID  *string `db:"external_id"`
 }
 
 type ReceiverUpdate ReceiverInsert
 
 func (ru ReceiverUpdate) IsEmpty() bool {
-	return ru.Email == nil && ru.ExternalId == nil && ru.PhoneNumber == nil
+	return ru.Email == nil && ru.ExternalID == nil && ru.PhoneNumber == nil
 }
 
 func (ru ReceiverUpdate) Validate() error {
@@ -316,8 +321,17 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
-	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalId)
+	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalID)
 	if err != nil {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Code == "23505" {
+			switch pqError.Constraint {
+			case "receiver_unique_email":
+				return nil, ErrDuplicateEmail
+			case "receiver_unique_phone_number":
+				return nil, ErrDuplicatePhoneNumber
+			}
+		}
 		return nil, fmt.Errorf("inserting receiver: %w", err)
 	}
 
@@ -345,8 +359,8 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 		args = append(args, email)
 	}
 
-	if receiverUpdate.ExternalId != nil {
-		externalID := *receiverUpdate.ExternalId
+	if receiverUpdate.ExternalID != nil {
+		externalID := *receiverUpdate.ExternalID
 		fields = append(fields, "external_id = ?")
 		args = append(args, externalID)
 	}
@@ -366,6 +380,15 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 
 	_, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Code == "23505" {
+			switch pqError.Constraint {
+			case "receiver_unique_email":
+				return ErrDuplicateEmail
+			case "receiver_unique_phone_number":
+				return ErrDuplicatePhoneNumber
+			}
+		}
 		return fmt.Errorf("updating receiver: %w", err)
 	}
 

@@ -403,7 +403,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			requestBody, err := json.Marshal(tc.reqBody)
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
-			req, _ := http.NewRequestWithContext(ctx, "POST", "/disbursements", bytes.NewReader(requestBody))
+			req, err := http.NewRequestWithContext(ctx, "POST", "/disbursements", bytes.NewReader(requestBody))
+			require.NoError(t, err)
 			http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
 			resp := rr.Result()
 			respBody, err := io.ReadAll(resp.Body)
@@ -1234,15 +1235,24 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "number of instructions exceeds maximum of 10000",
 		},
+		{
+			name:           "🔴 wallet address already in use by another receiver",
+			disbursementID: emailWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"email", "walletAddress", "id", "amount"},
+				{"user1@example.com", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "123456789", "100.5"},
+				{"user2@example.com", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "987654321", "200.0"},
+			},
+			expectedStatus:  http.StatusConflict,
+			expectedMessage: "wallet address GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 is already registered to another receiver: wallet address already in use",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fileContent, err := createCSVFile(t, tc.csvRecords)
-			require.NoError(t, err)
+			fileContent := createCSVFile(t, tc.csvRecords)
 
-			req, err := createInstructionsMultipartRequest(t, ctx, tc.multipartFieldName, tc.actualFileName, tc.disbursementID, fileContent)
-			require.NoError(t, err)
+			req := createInstructionsMultipartRequest(t, ctx, tc.multipartFieldName, tc.actualFileName, tc.disbursementID, fileContent)
 
 			// Record the response
 			rr := httptest.NewRecorder()
@@ -2372,18 +2382,16 @@ func addInstructionsIfNeeded(t *testing.T, csvRecords [][]string, writer *multip
 	t.Helper()
 
 	if len(csvRecords) > 0 {
-		csvContent, err := createCSVFile(t, csvRecords)
-		require.NoError(t, err)
-
 		part, err := writer.CreateFormFile("file", "instructions.csv")
 		require.NoError(t, err)
 
+		csvContent := createCSVFile(t, csvRecords)
 		_, err = io.Copy(part, csvContent)
 		require.NoError(t, err)
 	}
 }
 
-func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
+func createCSVFile(t *testing.T, records [][]string) io.Reader {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -2393,10 +2401,10 @@ func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
 		require.NoError(t, err)
 	}
 	writer.Flush()
-	return &buf, nil
+	return &buf
 }
 
-func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multipartFieldName, fileName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
+func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multipartFieldName, fileName, disbursementID string, fileContent io.Reader) *http.Request {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -2423,7 +2431,7 @@ func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multi
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return req, nil
+	return req
 }
 
 func buildURLWithQueryParams(baseURL, endpoint string, queryParams map[string]string) string {

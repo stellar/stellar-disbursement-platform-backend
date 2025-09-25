@@ -29,13 +29,13 @@ var (
 const (
 	VerificationFieldPinMinLength = 4
 	VerificationFieldPinMaxLength = 8
-
-	VerificationFieldMaxIdLength = 50
+	VerificationFieldMaxIDLength  = 50
 )
 
-// https://github.com/firebase/firebase-admin-go/blob/cef91acd46f2fc5d0b3408d8154a0005db5bdb0b/auth/user_mgt.go#L449-L457
+// ValidatePhoneNumber validates a phone number string according to the E.164 standard.
+// See: https://github.com/firebase/firebase-admin-go/blob/cef91acd46f2fc5d0b3408d8154a0005db5bdb0b/auth/user_mgt.go#L449-L457
 func ValidatePhoneNumber(phoneNumberStr string) error {
-	if phoneNumberStr == "" {
+	if strings.TrimSpace(phoneNumberStr) == "" {
 		return ErrEmptyPhoneNumber
 	}
 
@@ -176,8 +176,8 @@ func ValidateNationalIDVerification(nationalID string) (string, error) {
 		return httperror.Extra_0, fmt.Errorf("national id cannot be empty")
 	}
 
-	if len(nationalID) > VerificationFieldMaxIdLength {
-		return httperror.Extra_6, fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIdLength)
+	if len(nationalID) > VerificationFieldMaxIDLength {
+		return httperror.Extra_6, fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIDLength)
 	}
 
 	return "", nil

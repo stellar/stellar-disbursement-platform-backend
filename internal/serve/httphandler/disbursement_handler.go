@@ -315,9 +315,9 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 }
 
 func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) error {
-	buf, header, parseHttpErr := parseCsvFromMultipartRequest(r)
-	if parseHttpErr != nil {
-		return fmt.Errorf("could not parse csv file: %w", parseHttpErr)
+	buf, header, parseHTTPErr := parseCsvFromMultipartRequest(r)
+	if parseHTTPErr != nil {
+		return fmt.Errorf("could not parse csv file: %w", parseHTTPErr)
 	}
 
 	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
@@ -352,6 +352,8 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+		case errors.Is(err, data.ErrDuplicateWalletAddress):
+			return httperror.Conflict(err.Error(), err, nil)
 		default:
 			return httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursement.ID), err, nil)
 		}
@@ -368,7 +370,7 @@ func parseCsvFromMultipartRequest(r *http.Request) (*bytes.Buffer, *multipart.Fi
 	if err != nil {
 		return nil, nil, httperror.BadRequest("could not parse file", err, nil)
 	}
-	defer file.Close()
+	defer utils.DeferredClose(r.Context(), file, "closing file")
 
 	if err = utils.ValidatePathIsNotTraversal(header.Filename); err != nil {
 		return nil, nil, httperror.BadRequest("file name contains invalid traversal pattern", nil, nil)

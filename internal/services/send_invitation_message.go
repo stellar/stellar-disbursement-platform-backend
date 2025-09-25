@@ -32,7 +32,7 @@ func (o SendInvitationMessageOptions) Validate() error {
 	} else {
 		_, err := url.Parse(o.UIBaseURL)
 		if err != nil {
-			return fmt.Errorf("UI base URL is not a valid URL: %s", err)
+			return fmt.Errorf("UI base URL is not a valid URL: %w", err)
 		}
 	}
 
@@ -72,6 +72,13 @@ func SendInvitationMessage(ctx context.Context, messengerClient message.Messenge
 		ToEmail: opts.Email,
 		Body:    messageContent,
 		Title:   invitationMessageTitle,
+		Type:    message.MessageTypeUserInvitation,
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarFirstName:          opts.FirstName,
+			message.TemplateVarRole:               opts.Role,
+			message.TemplateVarForgotPasswordLink: forgotPasswordLink,
+			message.TemplateVarOrgName:            organization.Name,
+		},
 	}
 
 	if sendMsgErr := messengerClient.SendMessage(ctx, msg); sendMsgErr != nil {

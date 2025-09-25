@@ -153,6 +153,11 @@ func (h ForgotPasswordHandler) SendForgotPasswordMessage(ctx context.Context, ui
 		ToEmail: email,
 		Title:   forgotPasswordMessageTitle,
 		Body:    messageContent,
+		Type:    message.MessageTypeUserForgotPassword,
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarResetPasswordLink: resetPasswordURL.String(),
+			message.TemplateVarOrgName:           organization.Name,
+		},
 	}
 	err = h.MessengerClient.SendMessage(ctx, msg)
 	if err != nil {

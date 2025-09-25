@@ -152,7 +152,14 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			return fmt.Errorf("executing registration message template: %w", err)
 		}
 
-		msg := message.Message{Body: content.String()}
+		msg := message.Message{
+			Type: message.MessageTypeReceiverInvitation,
+			Body: content.String(),
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarOrgName:                  organization.Name,
+				message.TemplateVarReceiverRegistrationLink: registrationLink,
+			},
+		}
 		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
 			msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
 		}
@@ -250,7 +257,7 @@ func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistrati
 			return nil, fmt.Errorf("getting receiver wallets pending registration by rw ids %v: %w", receiverWalletIDsPendingRegistration, err)
 		}
 	}
-	return receiverWallets, err
+	return receiverWallets, nil
 }
 
 // shouldSendInvitation returns true if we should send the invitation to the receiver. It will be used to either

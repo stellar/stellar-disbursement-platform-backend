@@ -226,7 +226,10 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 
 	if ou.PrivacyPolicyLink != nil {
 		if *ou.PrivacyPolicyLink != "" {
-			link, _ := url.ParseRequestURI(*ou.PrivacyPolicyLink)
+			link, err := url.ParseRequestURI(*ou.PrivacyPolicyLink)
+			if err != nil {
+				return fmt.Errorf("invalid privacy policy link: %w", err)
+			}
 			fields = append(fields, "privacy_policy_link = ?")
 			args = append(args, link.String())
 		} else {

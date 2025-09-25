@@ -4,11 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lib/pq"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -19,12 +16,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-)
-
-const (
-	// PostgreSQL error codes
-	pgUniqueViolation = "23505"
-	pgRaiseException  = "P0001"
 )
 
 type UpdateReceiverHandler struct {
@@ -123,7 +114,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			receiverUpdate.PhoneNumber = &reqBody.PhoneNumber
 		}
 		if reqBody.ExternalID != "" {
-			receiverUpdate.ExternalId = &reqBody.ExternalID
+			receiverUpdate.ExternalID = &reqBody.ExternalID
 		}
 
 		if !receiverUpdate.IsEmpty() {
@@ -140,7 +131,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 		return receiver, nil
 	})
 	if err != nil {
-		if httpErr := parseHttpConflictErrorIfNeeded(err); httpErr != nil {
+		if httpErr := parseConflictErrorIfNeeded(err); httpErr != nil {
 			httpErr.Render(rw)
 			return
 		}
@@ -152,34 +143,24 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	httpjson.Render(rw, receiver, httpjson.JSON)
 }
 
-func parseHttpConflictErrorIfNeeded(err error) *httperror.HTTPError {
-	var pqErr *pq.Error
-	if !errors.As(err, &pqErr) {
-		return nil
-	}
-
-	// Handle unique constraint violations (email, phone number)
-	if pqErr.Code == pgUniqueViolation {
-		allowedConstraints := []string{"receiver_unique_email", "receiver_unique_phone_number"}
-		if !slices.Contains(allowedConstraints, pqErr.Constraint) {
-			return nil
-		}
-
-		fieldName := strings.Replace(pqErr.Constraint, "receiver_unique_", "", 1)
-		msg := fmt.Sprintf("The provided %s is already associated with another user.", fieldName)
-		return httperror.Conflict(msg, err, map[string]interface{}{
-			fieldName: fieldName + " must be unique",
-		})
-	}
-
-	// Handle custom database trigger exceptions for wallet address conflicts
-	if pqErr.Code == pgRaiseException &&
-		strings.Contains(pqErr.Message, "Stellar address") &&
-		strings.Contains(pqErr.Message, "already belongs to another receiver") {
-		return httperror.Conflict("The provided wallet address is already associated with another receiver.", err, map[string]interface{}{
+func parseConflictErrorIfNeeded(err error) *httperror.HTTPError {
+	switch {
+	// Handle wallet address conflicts
+	case errors.Is(err, data.ErrDuplicateWalletAddress):
+		return httperror.Conflict("The provided wallet address is already associated with another user.", err, map[string]interface{}{
 			"wallet_address": "wallet address must be unique",
 		})
+	// Handle email conflicts
+	case errors.Is(err, data.ErrDuplicateEmail):
+		return httperror.Conflict("The provided email is already associated with another user.", err, map[string]interface{}{
+			"email": "email must be unique",
+		})
+	// Handle phone number conflicts
+	case errors.Is(err, data.ErrDuplicatePhoneNumber):
+		return httperror.Conflict("The provided phone number is already associated with another user.", err, map[string]interface{}{
+			"phone_number": "phone number must be unique",
+		})
+	default:
+		return nil
 	}
-
-	return nil
 }

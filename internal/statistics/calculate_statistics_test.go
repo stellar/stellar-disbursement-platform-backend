@@ -30,9 +30,9 @@ func TestCalculateStatistics_emptyDatabase(t *testing.T) {
 
 		// paymentsCounter assertions
 		assert.IsType(t, &PaymentCounters{}, paymentsCounter)
-		gotJsonCounter, errJson := json.Marshal(paymentsCounter)
-		require.NoError(t, errJson)
-		wantJsonCounter := `{
+		gotJSONCounter, errJSON := json.Marshal(paymentsCounter)
+		require.NoError(t, errJSON)
+		wantJSONCounter := `{
 			"canceled":0,
 			"draft": 0,
 			"ready": 0,
@@ -42,14 +42,14 @@ func TestCalculateStatistics_emptyDatabase(t *testing.T) {
 			"failed": 0,
 			"total": 0
 		}`
-		assert.JSONEq(t, wantJsonCounter, string(gotJsonCounter))
+		assert.JSONEq(t, wantJSONCounter, string(gotJSONCounter))
 
 		// paymentsAmountByAsset assertions
 		assert.IsType(t, []PaymentAmountsByAsset{}, paymentsAmountByAsset)
-		gotJsonAmountByAsset, errJson := json.Marshal(paymentsAmountByAsset)
-		require.NoError(t, errJson)
-		wantJsonAmountByAsset := `[]`
-		assert.JSONEq(t, wantJsonAmountByAsset, string(gotJsonAmountByAsset))
+		gotJSONAmountByAsset, errJSON := json.Marshal(paymentsAmountByAsset)
+		require.NoError(t, errJSON)
+		wantJSONAmountByAsset := `[]`
+		assert.JSONEq(t, wantJSONAmountByAsset, string(gotJSONAmountByAsset))
 	})
 
 	t.Run("getReceiverWalletsStats", func(t *testing.T) {
@@ -58,16 +58,16 @@ func TestCalculateStatistics_emptyDatabase(t *testing.T) {
 
 		// receiverWalletStats assertions
 		assert.IsType(t, &ReceiverWalletsCounters{}, receiverWalletStats)
-		gotJson, errJson := json.Marshal(receiverWalletStats)
-		require.NoError(t, errJson)
-		wantJson := `{
+		gotJSON, errJSON := json.Marshal(receiverWalletStats)
+		require.NoError(t, errJSON)
+		wantJSON := `{
 			"draft": 0,
 			"flagged": 0,
 			"ready": 0,
 			"registered": 0,
 			"total": 0
 		}`
-		assert.JSONEq(t, wantJson, string(gotJson))
+		assert.JSONEq(t, wantJSON, string(gotJSON))
 	})
 
 	t.Run("getTotalReceivers", func(t *testing.T) {
@@ -148,10 +148,10 @@ func TestCalculateStatistics(t *testing.T) {
 
 		assert.IsType(t, &ReceiverWalletsCounters{}, receiverWalletStats)
 
-		gotJson, errJson := json.Marshal(receiverWalletStats)
-		require.NoError(t, errJson)
+		gotJSON, errJSON := json.Marshal(receiverWalletStats)
+		require.NoError(t, errJSON)
 
-		wantJson := `{
+		wantJSON := `{
 			"draft": 2,
 			"flagged": 0,
 			"ready": 0,
@@ -159,7 +159,7 @@ func TestCalculateStatistics(t *testing.T) {
 			"total": 2
 		}`
 
-		assert.JSONEq(t, wantJson, string(gotJson))
+		assert.JSONEq(t, wantJSON, string(gotJSON))
 	})
 
 	t.Run("get total disbursement", func(t *testing.T) {
@@ -176,10 +176,10 @@ func TestCalculateStatistics(t *testing.T) {
 		assert.IsType(t, &PaymentCounters{}, paymentsCounter)
 		assert.IsType(t, []PaymentAmountsByAsset{}, paymentsAmountByAsset)
 
-		gotJsonCounter, errJson := json.Marshal(paymentsCounter)
-		require.NoError(t, errJson)
+		gotJSONCounter, errJSON := json.Marshal(paymentsCounter)
+		require.NoError(t, errJSON)
 
-		wantJsonCounter := `{
+		wantJSONCounter := `{
 			"canceled":0,
 			"draft": 2,
 			"ready": 0,
@@ -190,12 +190,12 @@ func TestCalculateStatistics(t *testing.T) {
 			"total": 2
 		}`
 
-		assert.JSONEq(t, wantJsonCounter, string(gotJsonCounter))
+		assert.JSONEq(t, wantJSONCounter, string(gotJSONCounter))
 
-		gotJsonAmountByAsset, errJson := json.Marshal(paymentsAmountByAsset)
-		require.NoError(t, errJson)
+		gotJSONAmountByAsset, errJSON := json.Marshal(paymentsAmountByAsset)
+		require.NoError(t, errJSON)
 
-		wantJsonAmountByAsset := `[
+		wantJSONAmountByAsset := `[
 				{
 					"asset_code": "USDC",
 					"payment_amounts": {
@@ -212,7 +212,7 @@ func TestCalculateStatistics(t *testing.T) {
 				}
 			]`
 
-		assert.JSONEq(t, wantJsonAmountByAsset, string(gotJsonAmountByAsset))
+		assert.JSONEq(t, wantJSONAmountByAsset, string(gotJSONAmountByAsset))
 	})
 
 	asset2 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
@@ -246,10 +246,10 @@ func TestCalculateStatistics(t *testing.T) {
 		assert.IsType(t, &PaymentCounters{}, paymentsCounter)
 		assert.IsType(t, []PaymentAmountsByAsset{}, paymentsAmountByAsset)
 
-		gotJsonCounter, err := json.Marshal(paymentsCounter)
+		gotJSONCounter, err := json.Marshal(paymentsCounter)
 		require.NoError(t, err)
 
-		wantJsonCounter := `{
+		wantJSONCounter := `{
 			"canceled": 0,
 			"draft": 2,
 			"ready": 0,
@@ -260,12 +260,12 @@ func TestCalculateStatistics(t *testing.T) {
 			"total": 3
 		}`
 
-		assert.JSONEq(t, wantJsonCounter, string(gotJsonCounter))
+		assert.JSONEq(t, wantJSONCounter, string(gotJSONCounter))
 
-		gotJsonAmountByAsset, err := json.Marshal(paymentsAmountByAsset)
+		gotJSONAmountByAsset, err := json.Marshal(paymentsAmountByAsset)
 		require.NoError(t, err)
 
-		wantJsonAmountByAsset := `[
+		wantJSONAmountByAsset := `[
 				{
 					"asset_code": "EURT",
 					"payment_amounts": {
@@ -296,7 +296,7 @@ func TestCalculateStatistics(t *testing.T) {
 				}
 			]`
 
-		assert.JSONEq(t, wantJsonAmountByAsset, string(gotJsonAmountByAsset))
+		assert.JSONEq(t, wantJSONAmountByAsset, string(gotJSONAmountByAsset))
 	})
 
 	t.Run("get payment stats for specific disbursement", func(t *testing.T) {
@@ -306,10 +306,10 @@ func TestCalculateStatistics(t *testing.T) {
 		assert.IsType(t, &PaymentCounters{}, paymentsCounter)
 		assert.IsType(t, []PaymentAmountsByAsset{}, paymentsAmountByAsset)
 
-		gotJsonCounter, err := json.Marshal(paymentsCounter)
+		gotJSONCounter, err := json.Marshal(paymentsCounter)
 		require.NoError(t, err)
 
-		wantJsonCounter := `{
+		wantJSONCounter := `{
 			"canceled":0,
 			"draft": 0,
 			"ready": 0,
@@ -320,12 +320,12 @@ func TestCalculateStatistics(t *testing.T) {
 			"total": 1
 		}`
 
-		assert.JSONEq(t, wantJsonCounter, string(gotJsonCounter))
+		assert.JSONEq(t, wantJSONCounter, string(gotJSONCounter))
 
-		gotJsonAmountByAsset, err := json.Marshal(paymentsAmountByAsset)
+		gotJSONAmountByAsset, err := json.Marshal(paymentsAmountByAsset)
 		require.NoError(t, err)
 
-		wantJsonAmountByAsset := `[
+		wantJSONAmountByAsset := `[
 				{
 					"asset_code": "EURT",
 					"payment_amounts": {
@@ -342,7 +342,7 @@ func TestCalculateStatistics(t *testing.T) {
 				}
 			]`
 
-		assert.JSONEq(t, wantJsonAmountByAsset, string(gotJsonAmountByAsset))
+		assert.JSONEq(t, wantJSONAmountByAsset, string(gotJSONAmountByAsset))
 	})
 
 	t.Run("get receiver wallet stats for specific disbursement", func(t *testing.T) {
@@ -351,10 +351,10 @@ func TestCalculateStatistics(t *testing.T) {
 
 		assert.IsType(t, &ReceiverWalletsCounters{}, receiverWalletStats)
 
-		gotJson, err := json.Marshal(receiverWalletStats)
+		gotJSON, err := json.Marshal(receiverWalletStats)
 		require.NoError(t, err)
 
-		wantJson := `{
+		wantJSON := `{
 			"draft": 1,
 			"flagged": 0,
 			"ready": 0,
@@ -362,7 +362,7 @@ func TestCalculateStatistics(t *testing.T) {
 			"total": 1
 		}`
 
-		assert.JSONEq(t, wantJson, string(gotJson))
+		assert.JSONEq(t, wantJSON, string(gotJSON))
 	})
 
 	t.Run("get total receivers", func(t *testing.T) {

@@ -16,7 +16,7 @@ type mockMonitorClient struct {
 	mock.Mock
 }
 
-func (m *mockMonitorClient) GetMetricHttpHandler() http.Handler {
+func (m *mockMonitorClient) GetMetricHTTPHandler() http.Handler {
 	return m.Called().Get(0).(http.Handler)
 }
 
@@ -24,7 +24,7 @@ func (m *mockMonitorClient) GetMetricType() MetricType {
 	return m.Called().Get(0).(MetricType)
 }
 
-func (m *mockMonitorClient) MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) {
+func (m *mockMonitorClient) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) {
 	m.Called(duration, labels)
 }
 
@@ -75,21 +75,21 @@ func Test_MetricsService_Start(t *testing.T) {
 	})
 }
 
-func Test_MetricsService_GetMetricHttpHandler(t *testing.T) {
+func Test_MetricsService_GetMetricHTTPHandler(t *testing.T) {
 	monitorService := &MonitorService{}
 
 	mMonitorClient := &mockMonitorClient{}
 	monitorService.MonitorClient = mMonitorClient
 
 	t.Run("running HttpServe with metric http handler", func(t *testing.T) {
-		mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		mHTTPHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write([]byte(`{"status": "OK"}`))
 			require.NoError(t, err)
 		})
-		mMonitorClient.On("GetMetricHttpHandler").Return(mHttpHandler).Once()
+		mMonitorClient.On("GetMetricHTTPHandler").Return(mHTTPHandler).Once()
 
-		httpHandler, err := monitorService.GetMetricHttpHandler()
+		httpHandler, err := monitorService.GetMetricHTTPHandler()
 		require.NoError(t, err)
 
 		r := chi.NewRouter()
@@ -101,15 +101,15 @@ func Test_MetricsService_GetMetricHttpHandler(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		wantJson := `{"status": "OK"}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		wantJSON := `{"status": "OK"}`
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 		mMonitorClient.AssertExpectations(t)
 	})
 
 	t.Run("error monitor client not initialized", func(t *testing.T) {
 		monitorService.MonitorClient = nil
 
-		_, err := monitorService.GetMetricHttpHandler()
+		_, err := monitorService.GetMetricHTTPHandler()
 		require.EqualError(t, err, "client was not initialized")
 	})
 }
@@ -144,7 +144,7 @@ func Test_MetricsService_MonitorRequestTime(t *testing.T) {
 	mMonitorClient := &mockMonitorClient{}
 	monitorService.MonitorClient = mMonitorClient
 
-	mLabels := HttpRequestLabels{
+	mLabels := HTTPRequestLabels{
 		Status: "200",
 		Route:  "/mock",
 		Method: "get",
@@ -153,8 +153,8 @@ func Test_MetricsService_MonitorRequestTime(t *testing.T) {
 	mDuration := time.Duration(1)
 
 	t.Run("monitor request time is called", func(t *testing.T) {
-		mMonitorClient.On("MonitorHttpRequestDuration", mDuration, mLabels).Once()
-		err := monitorService.MonitorHttpRequestDuration(mDuration, mLabels)
+		mMonitorClient.On("MonitorHTTPRequestDuration", mDuration, mLabels).Once()
+		err := monitorService.MonitorHTTPRequestDuration(mDuration, mLabels)
 
 		require.NoError(t, err)
 		mMonitorClient.AssertExpectations(t)
@@ -163,7 +163,7 @@ func Test_MetricsService_MonitorRequestTime(t *testing.T) {
 	t.Run("error monitor client not initialized", func(t *testing.T) {
 		monitorService.MonitorClient = nil
 
-		err := monitorService.MonitorHttpRequestDuration(mDuration, mLabels)
+		err := monitorService.MonitorHTTPRequestDuration(mDuration, mLabels)
 		require.EqualError(t, err, "client was not initialized")
 	})
 }

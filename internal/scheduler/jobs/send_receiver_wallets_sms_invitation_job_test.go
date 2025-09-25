@@ -189,18 +189,28 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	mockErr := errors.New("unexpected error")
 	messageDispatcherMock.
 		On("SendMessage", mock.Anything, message.Message{
+			Type:          message.MessageTypeReceiverInvitation,
 			ToPhoneNumber: receiver1.PhoneNumber,
 			ToEmail:       receiver1.Email,
 			Body:          contentWallet1,
 			Title:         titleWallet1,
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+				message.TemplateVarReceiverRegistrationLink: deepLink1,
+			},
 		}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 		Return(message.MessengerTypeTwilioSMS, mockErr).
 		Once().
 		On("SendMessage", mock.Anything, message.Message{
+			Type:          message.MessageTypeReceiverInvitation,
 			ToPhoneNumber: receiver2.PhoneNumber,
 			ToEmail:       receiver2.Email,
 			Body:          contentWallet2,
 			Title:         titleWallet2,
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+				message.TemplateVarReceiverRegistrationLink: deepLink2,
+			},
 		}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 		Return(message.MessengerTypeTwilioSMS, nil).
 		Once()

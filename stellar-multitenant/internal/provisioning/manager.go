@@ -35,7 +35,7 @@ type ProvisionTenant struct {
 	UserLastName            string
 	UserEmail               string
 	OrgName                 string
-	UiBaseURL               string
+	UIBaseURL               string
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
@@ -147,7 +147,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*sc
 		Status:                    &tenantStatus,
 		DistributionAccountType:   t.DistributionAccountType,
 		DistributionAccountStatus: t.DistributionAccountStatus,
-		SDPUIBaseURL:              &pt.UiBaseURL,
+		SDPUIBaseURL:              &pt.UIBaseURL,
 		BaseURL:                   &pt.BaseURL,
 	}
 	if t.DistributionAccountType.IsStellar() {
@@ -231,7 +231,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 	if err != nil {
 		return fmt.Errorf("opening database connection on tenant schema and getting models: %w", err)
 	}
-	defer tenantSchemaConnectionPool.Close()
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool")
 
 	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.NetworkType), pt.DistributionAccountType.Platform())
 	if err != nil {
@@ -281,13 +281,13 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 
 	// Applying migrations
 	log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-	runTntMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.SDPMigrationRouter)
+	runTntMigrationsErr := m.applyTenantMigrations(ctx, dsn, migrations.SDPMigrationRouter)
 	if runTntMigrationsErr != nil {
 		return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
 	}
 
 	log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.AuthMigrationRouter)
+	runTntAuthMigrationsErr := m.applyTenantMigrations(ctx, dsn, migrations.AuthMigrationRouter)
 	if runTntAuthMigrationsErr != nil {
 		return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
 	}
@@ -314,12 +314,13 @@ func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *schema.Te
 	return nil
 }
 
-func (m *Manager) runMigrationsForTenant(
-	ctx context.Context, dbURL string,
-	dir migrate.MigrationDirection, count int,
+// applyTenantMigrations applies the migrations on the tenant schema when provisioning a new tenant.
+func (m *Manager) applyTenantMigrations(
+	ctx context.Context,
+	dbURL string,
 	migrationRouter migrations.MigrationRouter,
 ) error {
-	n, err := db.Migrate(dbURL, dir, count, migrationRouter)
+	n, err := db.Migrate(dbURL, migrate.Up, 0, migrationRouter)
 	if err != nil {
 		return fmt.Errorf("applying SDP migrations: %w", err)
 	}

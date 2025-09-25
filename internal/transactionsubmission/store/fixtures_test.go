@@ -29,7 +29,7 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 
 	t.Run("create transaction with pending status", func(t *testing.T) {
 		tx.ExternalID = uuid.NewString()
-		createdTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		createdTx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 			ExternalID:         tx.ExternalID,
 			AssetCode:          tx.AssetCode,
 			AssetIssuer:        tx.AssetIssuer,
@@ -47,7 +47,7 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 
 	t.Run("create transaction with successful status", func(t *testing.T) {
 		tx.ExternalID = uuid.NewString()
-		createdTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		createdTx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 			ExternalID:         tx.ExternalID,
 			AssetCode:          tx.AssetCode,
 			AssetIssuer:        tx.AssetIssuer,
@@ -81,7 +81,7 @@ func Test_Fixtures_CreateAndDeleteAllTransactionFixtures(t *testing.T) {
 
 	t.Run("create and delete transactions", func(t *testing.T) {
 		txCount := 5
-		createdTxs := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, txCount, TransactionFixture{
+		createdTxs := CreateTransactionFixtures(t, ctx, dbConnectionPool, txCount, TransactionFixture{
 			AssetCode:          tx.AssetCode,
 			AssetIssuer:        tx.AssetIssuer,
 			DestinationAddress: tx.Destination,

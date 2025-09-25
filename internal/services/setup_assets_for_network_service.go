@@ -115,9 +115,9 @@ func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConn
 	}
 
 	buf := new(strings.Builder)
-	buf.WriteString(fmt.Sprintf("Updated list of assets for network %s:\n\n", network))
+	fmt.Fprintf(buf, "Updated list of assets for network %s:\n\n", network)
 	for _, asset := range allAssets {
-		buf.WriteString(fmt.Sprintf("\t * %s - %s\n", asset.Code, asset.Issuer))
+		fmt.Fprintf(buf, "\t * %s - %s\n", asset.Code, asset.Issuer)
 	}
 	log.Ctx(ctx).Info(buf.String())
 

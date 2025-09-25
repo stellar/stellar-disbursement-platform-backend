@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -328,6 +329,23 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:  true,
 		},
 		{
+			Name:           "captcha-type",
+			Usage:          `The type of CAPTCHA to use. Options: ["GOOGLE_RECAPTCHA_V2", "GOOGLE_RECAPTCHA_V3"].`,
+			OptType:        types.String,
+			ConfigKey:      &serveOpts.CAPTCHAType,
+			Required:       false,
+			CustomSetValue: cmdUtils.SetConfigOptionCAPTCHAType,
+			FlagDefault:    string(validators.GoogleReCAPTCHAV2),
+		},
+		{
+			Name:        "recaptcha-v3-min-score",
+			Usage:       "The minimum score threshold for reCAPTCHA v3 (0.0 to 1.0, where 1.0 is very likely a good interaction). Only used when captcha-type is GOOGLE_RECAPTCHA_V3.",
+			OptType:     types.Float64,
+			ConfigKey:   &serveOpts.ReCAPTCHAV3MinScore,
+			FlagDefault: 0.5,
+			Required:    false,
+		},
+		{
 			Name:        "disable-mfa",
 			Usage:       "Disables the email Multi-Factor Authentication (MFA).",
 			OptType:     types.Bool,
@@ -403,7 +421,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Name:      "admin-api-key",
 			Usage:     "API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
 			OptType:   types.String,
-			ConfigKey: &adminServeOpts.AdminApiKey,
+			ConfigKey: &adminServeOpts.AdminAPIKey,
 			Required:  true,
 		},
 		cmdUtils.TenantXLMBootstrapAmount(&adminServeOpts.TenantAccountNativeAssetBootstrapAmount),

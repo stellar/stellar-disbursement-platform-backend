@@ -12,14 +12,18 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
 	kycLinksPath        = "/v0/kyc_links"
 	virtualAccountsPath = "/v0/customers/%s/virtual_accounts"
+	customersPath       = "/v0/customers/%s"
 )
 
 // BridgeErrorResponse represents an error response from the Bridge API.
+//
+//nolint:errname // This is both an error and a response type
 type BridgeErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -44,6 +48,7 @@ func (e BridgeErrorResponse) Error() string {
 type ClientInterface interface {
 	PostKYCLink(ctx context.Context, request KYCLinkRequest) (*KYCLinkInfo, error)
 	GetKYCLink(ctx context.Context, kycLinkID string) (*KYCLinkInfo, error)
+	GetCustomer(ctx context.Context, customerID string) (*CustomerInfo, error)
 	PostVirtualAccount(ctx context.Context, customerID string, request VirtualAccountRequest) (*VirtualAccountInfo, error)
 	GetVirtualAccount(ctx context.Context, customerID, virtualAccountID string) (*VirtualAccountInfo, error)
 }
@@ -52,7 +57,7 @@ type ClientInterface interface {
 type Client struct {
 	baseURL    string
 	apiKey     string
-	httpClient httpclient.HttpClientInterface
+	httpClient httpclient.HTTPClientInterface
 }
 
 type ClientOptions struct {
@@ -103,7 +108,7 @@ func (c *Client) PostKYCLink(ctx context.Context, request KYCLinkRequest) (*KYCL
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var kycResponse KYCLinkInfo
@@ -129,7 +134,7 @@ func (c *Client) GetKYCLink(ctx context.Context, kycLinkID string) (*KYCLinkInfo
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var kycResponse KYCLinkInfo
@@ -164,7 +169,7 @@ func (c *Client) PostVirtualAccount(ctx context.Context, customerID string, requ
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var vaResponse VirtualAccountInfo
@@ -195,7 +200,7 @@ func (c *Client) GetVirtualAccount(ctx context.Context, customerID, virtualAccou
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var vaResponse VirtualAccountInfo
@@ -204,6 +209,31 @@ func (c *Client) GetVirtualAccount(ctx context.Context, customerID, virtualAccou
 	}
 
 	return &vaResponse, nil
+}
+
+// GetCustomer retrieves customer information by ID
+func (c *Client) GetCustomer(ctx context.Context, customerID string) (*CustomerInfo, error) {
+	if customerID == "" {
+		return nil, fmt.Errorf("customerID is required")
+	}
+
+	u, err := url.JoinPath(c.baseURL, fmt.Sprintf(customersPath, customerID))
+	if err != nil {
+		return nil, fmt.Errorf("building URL path: %w", err)
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("making HTTP request: %w", err)
+	}
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
+
+	var customerResponse CustomerInfo
+	if jsonErr := json.NewDecoder(resp.Body).Decode(&customerResponse); jsonErr != nil {
+		return nil, fmt.Errorf("decoding success response: %w", jsonErr)
+	}
+
+	return &customerResponse, nil
 }
 
 // makeRequest constructs and sends an HTTP request to the Bridge API.
@@ -237,7 +267,7 @@ func (c *Client) handleErrorResponse(resp *http.Response) error {
 		return nil
 	}
 
-	defer resp.Body.Close()
+	defer utils.DeferredClose(context.Background(), resp.Body, "closing response body")
 
 	var bridgeError BridgeErrorResponse
 	if jsonErr := json.NewDecoder(resp.Body).Decode(&bridgeError); jsonErr != nil {

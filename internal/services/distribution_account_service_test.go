@@ -30,14 +30,14 @@ func Test_DistributionAccountServiceOptions_Validate(t *testing.T) {
 		{
 			name:          "🔴returns error if Horizon client is nil",
 			opts:          DistributionAccountServiceOptions{},
-			expectedError: "Horizon client cannot be nil",
+			expectedError: "horizon client cannot be nil",
 		},
 		{
 			name: "🔴returns error if Circle service is nil",
 			opts: DistributionAccountServiceOptions{
 				HorizonClient: &horizonclient.Client{},
 			},
-			expectedError: "Circle service cannot be nil",
+			expectedError: "circle service cannot be nil",
 		},
 		{
 			name: "🔴returns error if network type is invalid",
@@ -255,7 +255,7 @@ func Test_CircleDistributionAccountService_GetBalances(t *testing.T) {
 				Type:           schema.DistributionAccountCircleDBVault,
 				Status:         schema.AccountStatusPendingUserActivation,
 			},
-			expectedError: fmt.Errorf("This organization's distribution account is in %s state, please complete the %s activation process to access this endpoint.", schema.AccountStatusPendingUserActivation, schema.CirclePlatform),
+			expectedError: fmt.Errorf("this organization's distribution account is in %s state, please complete the %s activation process to access this endpoint", schema.AccountStatusPendingUserActivation, schema.CirclePlatform),
 		},
 		{
 			name:        "🔴wrap error comming from GetWalletByID",

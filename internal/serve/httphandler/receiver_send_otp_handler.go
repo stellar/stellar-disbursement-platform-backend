@@ -232,7 +232,14 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 		return fmt.Errorf("cannot execute OTP template: %w", err)
 	}
 
-	msg := message.Message{Body: builder.String()}
+	msg := message.Message{
+		Type: message.MessageTypeReceiverOTP,
+		Body: builder.String(),
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarReceiverOTP: otp,
+			message.TemplateVarOrgName:     organization.Name,
+		},
+	}
 	switch contactType {
 	case data.ReceiverContactTypeSMS:
 		msg.ToPhoneNumber = contactInfo
@@ -261,7 +268,7 @@ func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
 	attempt := data.ReceiverRegistrationAttempt{
 		PhoneNumber:   "",
 		Email:         "",
-		AttemptTs:     time.Now(),
+		AttemptTS:     time.Now(),
 		ClientDomain:  claims.ClientDomain(),
 		TransactionID: claims.TransactionID(),
 		WalletAddress: claims.SEP10StellarAccount(),

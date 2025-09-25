@@ -33,22 +33,27 @@ type ChAccCmdServiceInterface interface {
 type ChAccCmdService struct{}
 
 func (s *ChAccCmdService) ViewChannelAccounts(ctx context.Context, dbConnectionPool db.DBConnectionPool) error {
+	//nolint:wrapcheck // This is a wrapper method
 	return txSubSvc.ViewChannelAccounts(ctx, dbConnectionPool)
 }
 
 func (s *ChAccCmdService) CreateChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
+	//nolint:wrapcheck // This is a wrapper method
 	return chAccService.CreateChannelAccounts(ctx, count)
 }
 
 func (s *ChAccCmdService) EnsureChannelAccountsCount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
+	//nolint:wrapcheck // This is a wrapper method
 	return chAccService.EnsureChannelAccountsCount(ctx, count)
 }
 
 func (s *ChAccCmdService) DeleteChannelAccount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, opts txSubSvc.DeleteChannelAccountsOptions) error {
+	//nolint:wrapcheck // This is a wrapper method
 	return chAccService.DeleteChannelAccount(ctx, opts)
 }
 
 func (s *ChAccCmdService) VerifyChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, deleteInvalidAccounts bool) error {
+	//nolint:wrapcheck // This is a wrapper method
 	return chAccService.VerifyChannelAccounts(ctx, deleteInvalidAccounts)
 }
 

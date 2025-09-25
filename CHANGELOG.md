@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [4.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.1...4.1.0))
+
+### Added
+
+- Add Support For Twilio WhatsApp messaging [#855](https://github.com/stellar/stellar-disbursement-platform-backend/pull/855)
+- Add Twilio WhatsApp template documentation. [#877](https://github.com/stellar/stellar-disbursement-platform-backend/pull/877)
+- Added initiator and approver user roles with mutual exclusivity validation for separation of duties in disbursement workflows. [#865](https://github.com/stellar/stellar-disbursement-platform-backend/pull/865)
+- Ability to Onboard existing customers to Bridge integration via `PATCH /bridge-integration` endpoint. [#867](https://github.com/stellar/stellar-disbursement-platform-backend/pull/867)
+- Add endpoint for patch receiver wallet. [#848](https://github.com/stellar/stellar-disbursement-platform-backend/pull/848)
+- Add ReCAPTCHA v3 support. [#869](https://github.com/stellar/stellar-disbursement-platform-backend/pull/869)
+- Enable direct payments to SEP-24 wallets. [#860](https://github.com/stellar/stellar-disbursement-platform-backend/pull/860)
+
+### Fixed
+
+- Return proper error when calling `POST /disbursements` with a duplicate wallet address. [#862](https://github.com/stellar/stellar-disbursement-platform-backend/pull/862)
+- Properly detect memo type in receiver creation. [#870](https://github.com/stellar/stellar-disbursement-platform-backend/pull/870)
+- Add Support to Direct Payments for Payments Export. [#873](https://github.com/stellar/stellar-disbursement-platform-backend/pull/873)
+- Re-enable golangci-lint in the CI and address all the related issues. [#874](https://github.com/stellar/stellar-disbursement-platform-backend/pull/874)
+- Fix email color overrides. [#762](https://github.com/stellar/stellar-disbursement-platform-backend/pull/762)
+- Fix Receiver Invitation for direct payments. [#876](https://github.com/stellar/stellar-disbursement-platform-backend/pull/876)
+
 ## [4.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.0...4.0.1))
 
 ### Fixed
