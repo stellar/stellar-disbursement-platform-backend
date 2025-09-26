@@ -46,8 +46,8 @@ func SetDefaultReportErrorFunc(fn ReportErrorFunc) {
 	defaultReportErrorFunc.reportErrorFunc = fn
 }
 
-func (h *HTTPError) Error() string {
-	return h.Message
+func (e *HTTPError) Error() string {
+	return e.Message
 }
 
 func (e *HTTPError) Unwrap() error {

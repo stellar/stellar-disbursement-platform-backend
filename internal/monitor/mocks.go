@@ -14,12 +14,12 @@ type MockMonitorClient struct {
 	mock.Mock
 }
 
-// GetMetricHttpHandler provides a mock function with given fields:
-func (_m *MockMonitorClient) GetMetricHttpHandler() http.Handler {
+// GetMetricHTTPHandler provides a mock function with given fields:
+func (_m *MockMonitorClient) GetMetricHTTPHandler() http.Handler {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetMetricHttpHandler")
+		panic("no return value specified for GetMetricHTTPHandler")
 	}
 
 	var r0 http.Handler
@@ -73,7 +73,7 @@ func (_m *MockMonitorClient) MonitorHistogram(value float64, tag MetricTag, labe
 }
 
 // MonitorHttpRequestDuration provides a mock function with given fields: duration, labels
-func (_m *MockMonitorClient) MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) {
+func (_m *MockMonitorClient) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) {
 	_m.Called(duration, labels)
 }
 

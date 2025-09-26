@@ -37,7 +37,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 
 	separator := strings.Repeat("-", 20)
 	buf := new(strings.Builder)
-	buf.WriteString("wallets that will be updated or inserted:\n\n")
+	fmt.Fprintf(buf, "wallets that will be updated or inserted:\n\n")
 	for _, wallet := range wallets {
 		names = append(names, wallet.Name)
 		homepages = append(homepages, wallet.Homepage)
@@ -45,7 +45,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 		sep10ClientDomains = append(sep10ClientDomains, wallet.SEP10ClientDomain)
 		userManagedFlags = append(userManagedFlags, wallet.UserManaged)
 
-		buf.WriteString(fmt.Sprintf("%s\n%s\n\n", wallet.Name, separator))
+		fmt.Fprintf(buf, "%s\n%s\n\n", wallet.Name, separator)
 	}
 
 	log.Ctx(ctx).Info(buf.String())
@@ -180,14 +180,14 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 	}
 
 	buf.Reset()
-	buf.WriteString(fmt.Sprintf("Registered wallets for network %s:\n\n", network))
+	fmt.Fprintf(buf, "Registered wallets for network %s:\n\n", network)
 	for _, wallet := range allWallets {
-		buf.WriteString(fmt.Sprintf("Name: %s\nHomepage: %s\nDeep Link Schema: %s\nSEP-10 Client Domain: %s\n", wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain))
-		buf.WriteString("Assets:\n")
+		fmt.Fprintf(buf, "Name: %s\nHomepage: %s\nDeep Link Schema: %s\nSEP-10 Client Domain: %s\n", wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain)
+		fmt.Fprintf(buf, "Assets:\n")
 		for _, asset := range wallet.Assets {
-			buf.WriteString(fmt.Sprintf("\t * %s - %s\n", asset.Code, asset.Issuer))
+			fmt.Fprintf(buf, "\t * %s - %s\n", asset.Code, asset.Issuer)
 		}
-		buf.WriteString(fmt.Sprintf("%s\n", separator))
+		fmt.Fprintf(buf, "%s\n", separator)
 	}
 
 	log.Ctx(ctx).Info(buf.String())

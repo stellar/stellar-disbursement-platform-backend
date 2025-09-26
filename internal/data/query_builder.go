@@ -44,9 +44,9 @@ func (qb *QueryBuilder) AddGroupBy(fields string) *QueryBuilder {
 	return qb
 }
 
-// TODO [SDP-1190]: combine AddCondition and AddOrCondition into one function with a parameter for the condition type
-// AddOrCondition adds an OR condition to the query
-func (qb *QueryBuilder) AddOrCondition(condition string, value ...interface{}) *QueryBuilder {
+// AddOrCondition adds an OR condition to the query.
+func (qb *QueryBuilder) AddOrCondition(condition string, value ...any) *QueryBuilder {
+	// TODO [SDP-1190]: combine AddCondition and AddOrCondition into one function with a parameter for the condition type
 	if len(value) >= 0 {
 		qb.whereClause = fmt.Sprintf("%s %s", qb.whereClause, "OR "+condition)
 		if len(value) > 0 {

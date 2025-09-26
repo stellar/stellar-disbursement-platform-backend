@@ -27,8 +27,8 @@ func PrometheusMetrics() map[MetricTag]prometheus.Collector {
 }
 
 var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
-	HttpRequestDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: DefaultNamespace, Subsystem: string(HTTPSubservice), Name: string(HttpRequestDurationTag),
+	HTTPRequestDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace: DefaultNamespace, Subsystem: string(HTTPSubservice), Name: string(HTTPRequestDurationTag),
 		Help: "HTTP requests durations, sliding window = 10m",
 		Objectives: map[float64]float64{
 			0.5:  0.05,  // 50th percentile with 5% error

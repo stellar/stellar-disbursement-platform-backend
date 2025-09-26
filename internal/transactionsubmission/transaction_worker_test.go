@@ -115,7 +115,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 
 	// Create txJob:
-	tx := store.CreateTransactionFixtureNew(t, ctx, dbConnectionPool, store.TransactionFixture{
+	tx := store.CreateTransactionFixture(t, ctx, dbConnectionPool, store.TransactionFixture{
 		ExternalID:         uuid.NewString(),
 		AssetCode:          "USDC",
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -1574,7 +1574,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 
 			hMock := &horizonclient.MockClient{}
 			if tc.wantHorizonErrorStatusCode == http.StatusOK {
-				hMock.On("Root").Return(horizon.Root{HorizonSequence: int32(currentLedger)}, nil).Once()
+				hMock.On("Root").Return(horizon.Root{HorizonSequence: currentLedger}, nil).Once()
 			} else if tc.wantHorizonErrorStatusCode != 0 {
 				hMock.On("Root").Return(horizon.Root{}, horizonclient.Error{Problem: problem.P{Status: http.StatusBadGateway}}).Once()
 			}

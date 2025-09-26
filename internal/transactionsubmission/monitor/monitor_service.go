@@ -120,12 +120,12 @@ func (ms *TSSMonitorService) LogAndMonitorTransaction(ctx context.Context, tx st
 	}
 }
 
-func (ms *TSSMonitorService) GetMetricHttpHandler() (http.Handler, error) {
+func (ms *TSSMonitorService) GetMetricHTTPHandler() (http.Handler, error) {
 	if ms.Client == nil {
 		return nil, fmt.Errorf("client was not initialized")
 	}
 
-	return ms.Client.GetMetricHttpHandler(), nil
+	return ms.Client.GetMetricHTTPHandler(), nil
 }
 
 func (ms *TSSMonitorService) MonitorCounters(metricTag sdpMonitor.MetricTag, labels map[string]string) error {

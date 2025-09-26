@@ -89,8 +89,8 @@ func (iv *DisbursementInstructionsValidator) SanitizeInstruction(instruction *da
 	}
 	sanitizedInstruction.WalletAddressMemo = strings.TrimSpace(instruction.WalletAddressMemo)
 
-	if instruction.ExternalPaymentId != "" {
-		sanitizedInstruction.ExternalPaymentId = strings.TrimSpace(instruction.ExternalPaymentId)
+	if instruction.ExternalPaymentID != "" {
+		sanitizedInstruction.ExternalPaymentID = strings.TrimSpace(instruction.ExternalPaymentID)
 	}
 
 	sanitizedInstruction.ID = strings.TrimSpace(instruction.ID)

@@ -36,7 +36,7 @@ func (bm *ConsumerBackoffManager) TriggerBackoff() {
 		bm.backoffCounter = bm.maxBackoff
 	}
 
-	// No need to handle this error since it only returns error when retry > 32, < 0
+	//nolint:errcheck // No need to handle this error since it only returns error when retry > 32, < 0
 	bm.backoff, _ = utils.ExponentialBackoffInSeconds(bm.backoffCounter)
 
 	bm.backoffChan <- struct{}{}

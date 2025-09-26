@@ -4,7 +4,7 @@ type CommonLabels struct {
 	TenantName string
 }
 
-type HttpRequestLabels struct {
+type HTTPRequestLabels struct {
 	Status string
 	Route  string
 	Method string

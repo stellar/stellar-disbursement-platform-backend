@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -37,7 +38,7 @@ func (ar *WalletAssetResolver) resolveAssetReference(ctx context.Context, ref va
 	case validators.AssetReferenceTypeID:
 		asset, err := ar.assetModel.Get(ctx, ref.ID)
 		if err != nil {
-			if err == data.ErrRecordNotFound {
+			if errors.Is(err, data.ErrRecordNotFound) {
 				return "", fmt.Errorf("asset with ID %s not found", ref.ID)
 			}
 			return "", fmt.Errorf("failed to get asset by ID: %w", err)
@@ -66,7 +67,7 @@ func (ar *WalletAssetResolver) ValidateAssetIDs(ctx context.Context, assetIDs []
 	for _, assetID := range assetIDs {
 		_, err := ar.assetModel.Get(ctx, assetID)
 		if err != nil {
-			if err == data.ErrRecordNotFound {
+			if errors.Is(err, data.ErrRecordNotFound) {
 				return fmt.Errorf("asset with ID %s not found", assetID)
 			}
 			return fmt.Errorf("failed to validate asset ID %s: %w", assetID, err)

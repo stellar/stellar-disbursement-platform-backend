@@ -380,7 +380,7 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 				"cannot convert amount %s for paymment id %s into float: %w",
 				ip.Amount,
 				ip.ID,
-				err,
+				parsePaymentAmountErr,
 			)
 		}
 		totalPendingAmount += paymentAmount

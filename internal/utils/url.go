@@ -140,7 +140,7 @@ func IsStaticAsset(path string) bool {
 func IsBaseURL(urlStr string) (bool, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("parsing url: %w", err)
 	}
 
 	// Check if path is empty or just "/" AND no query params AND no fragment

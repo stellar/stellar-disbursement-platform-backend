@@ -228,11 +228,12 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 
 		var insertedTx1, insertedTx2 Transaction
 		for _, tx := range insertedTransactions {
-			if tx.ExternalID == incomingTx1.ExternalID {
+			switch tx.ExternalID {
+			case incomingTx1.ExternalID:
 				insertedTx1 = tx
-			} else if tx.ExternalID == incomingTx2.ExternalID {
+			case incomingTx2.ExternalID:
 				insertedTx2 = tx
-			} else {
+			default:
 				require.FailNow(t, "unexpected transaction: %v", tx)
 			}
 		}
@@ -289,7 +290,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		},
 	}
 
-	unphazedTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:         uuid.NewString(),
 		AssetCode:          "USDC",
 		AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
@@ -301,7 +302,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
 				AssetCode:          "USDC",
 				AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
@@ -377,7 +378,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		},
 	}
 
-	unphazedTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:         uuid.NewString(),
 		AssetCode:          "USDC",
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -389,7 +390,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -813,7 +814,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 			tenantID := uuid.NewString()
 			var transactions []*Transaction
 			if tc.transactionStatus != "" {
-				transactions = CreateTransactionFixturesNew(t, ctx, dbTx, txCount, TransactionFixture{
+				transactions = CreateTransactionFixtures(t, ctx, dbTx, txCount, TransactionFixture{
 					AssetCode:          "USDC",
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -909,7 +910,7 @@ func Test_TransactionModel_GetTransactionPendingUpdateByID(t *testing.T) {
 
 			var tx Transaction
 			if tc.transactionStatus != "" {
-				tx = *CreateTransactionFixtureNew(t, ctx, dbTx, TransactionFixture{
+				tx = *CreateTransactionFixture(t, ctx, dbTx, TransactionFixture{
 					AssetCode:          "USDC",
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -996,7 +997,7 @@ func Test_TransactionModel_UpdateSyncedTransactions(t *testing.T) {
 			} else if tc.shouldSendInvalidIDs {
 				txIDs = []string{"invalid-id"}
 			} else {
-				transactions := CreateTransactionFixturesNew(t, ctx, dbTx, txCount, TransactionFixture{
+				transactions := CreateTransactionFixtures(t, ctx, dbTx, txCount, TransactionFixture{
 					AssetCode:          "USDC",
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
@@ -1123,7 +1124,7 @@ func Test_TransactionModel_Lock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -1213,7 +1214,7 @@ func Test_TransactionModel_Unlock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -1292,7 +1293,7 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 			const lockedUntilLedger = 2
 
 			// create and prepare the transaction:
-			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 				ExternalID:         uuid.NewString(),
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",

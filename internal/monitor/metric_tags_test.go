@@ -33,7 +33,7 @@ func Test_MetricTag_ListAll_IncludesExistingMetrics(t *testing.T) {
 	existingTags := []MetricTag{
 		SuccessfulQueryDurationTag,
 		FailureQueryDurationTag,
-		HttpRequestDurationTag,
+		HTTPRequestDurationTag,
 		DisbursementsCounterTag,
 		AnchorPlatformAuthProtectionEnsuredCounterTag,
 		AnchorPlatformAuthProtectionMissingCounterTag,

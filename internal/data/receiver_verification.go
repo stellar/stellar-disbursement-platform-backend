@@ -75,8 +75,8 @@ func (m *ReceiverVerificationModel) GetByReceiverIDsAndVerificationField(ctx con
 	return receiverVerifications, nil
 }
 
-// GetAllByReceiverId returns all receiver verifications by receiver id.
-func (m *ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlExec db.SQLExecuter, receiverId string) ([]ReceiverVerification, error) {
+// GetAllByReceiverID returns all receiver verifications by receiver id.
+func (m *ReceiverVerificationModel) GetAllByReceiverID(ctx context.Context, sqlExec db.SQLExecuter, receiverID string) ([]ReceiverVerification, error) {
 	receiverVerifications := []ReceiverVerification{}
 	query := `
 		SELECT 
@@ -86,7 +86,7 @@ func (m *ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlE
 		WHERE 
 		    receiver_id = $1
 	`
-	err := sqlExec.SelectContext(ctx, &receiverVerifications, query, receiverId)
+	err := sqlExec.SelectContext(ctx, &receiverVerifications, query, receiverID)
 	if err != nil {
 		return nil, fmt.Errorf("error querying receiver verifications: %w", err)
 	}

@@ -812,11 +812,11 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			ToEmail: u.Email,
 			Title:   "Welcome to Stellar Disbursement Platform",
 			Body:    content,
-			TemplateVariables: map[string]string{
-				"FirstName":          u.FirstName,
-				"Role":               u.Roles[0],
-				"ForgotPasswordLink": forgotPasswordLink,
-				"OrganizationName":   "MyCustomAid",
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarFirstName:          u.FirstName,
+				message.TemplateVarRole:               u.Roles[0],
+				message.TemplateVarForgotPasswordLink: forgotPasswordLink,
+				message.TemplateVarOrgName:            "MyCustomAid",
 			},
 		}
 		messengerClientMock.
@@ -986,11 +986,11 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			ToEmail: u.Email,
 			Title:   "Welcome to Stellar Disbursement Platform",
 			Body:    content,
-			TemplateVariables: map[string]string{
-				"FirstName":          u.FirstName,
-				"Role":               u.Roles[0],
-				"ForgotPasswordLink": forgotPasswordLink,
-				"OrganizationName":   "MyCustomAid",
+			TemplateVariables: map[message.TemplateVariable]string{
+				message.TemplateVarFirstName:          u.FirstName,
+				message.TemplateVarRole:               u.Roles[0],
+				message.TemplateVarForgotPasswordLink: forgotPasswordLink,
+				message.TemplateVarOrgName:            "MyCustomAid",
 			},
 		}
 		messengerClientMock.

@@ -68,7 +68,7 @@ func Test_Client_Ping(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, pingPath, http.MethodGet, "no_tenant")
 
 		ok, err := cc.Ping(ctx)
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/ping: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/ping: %w", testError).Error())
 		assert.False(t, ok)
 	})
 
@@ -121,7 +121,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, transferPath, http.MethodPost, "test-tenant")
 
 		transfer, err := cc.PostTransfer(ctx, validTransferReq)
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/transfers: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/transfers: %w", testError).Error())
 		assert.Nil(t, transfer)
 	})
 
@@ -196,7 +196,7 @@ func Test_Client_GetTransferByID(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, transferPath, http.MethodGet, "test-tenant")
 
 		transfer, err := cc.GetTransferByID(ctx, "test-id")
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/transfers/test-id: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/transfers/test-id: %w", testError).Error())
 		assert.Nil(t, transfer)
 	})
 
@@ -268,7 +268,7 @@ func Test_Client_PostRecipient(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, addressRecipientPath, http.MethodPost, "no_tenant")
 
 		recipient, err := cc.PostRecipient(ctx, validRecipientReq)
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/addressBook/recipients: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/addressBook/recipients: %w", testError).Error())
 		assert.Nil(t, recipient)
 	})
 
@@ -345,7 +345,7 @@ func Test_Client_GetRecipientByID(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, addressRecipientPath, http.MethodGet, "no_tenant")
 
 		recipient, err := cc.GetRecipientByID(ctx, "test-id")
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/addressBook/recipients/test-id: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/addressBook/recipients/test-id: %w", testError).Error())
 		assert.Nil(t, recipient)
 	})
 
@@ -422,7 +422,7 @@ func Test_Client_PostPayout(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, payoutPath, http.MethodPost, "no_tenant")
 
 		payout, err := cc.PostPayout(ctx, validPayoutReq)
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/payouts: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/payouts: %w", testError).Error())
 		assert.Nil(t, payout)
 	})
 
@@ -499,7 +499,7 @@ func Test_Client_GetPayoutByID(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, payoutPath, http.MethodGet, "no_tenant")
 
 		payout, err := cc.GetPayoutByID(ctx, "test-id")
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/payouts/test-id: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/payouts/test-id: %w", testError).Error())
 		assert.Nil(t, payout)
 	})
 
@@ -576,7 +576,7 @@ func Test_Client_GetBusinessBalances(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, businessBalancesPath, http.MethodGet, "no_tenant")
 
 		wallet, err := cc.GetBusinessBalances(ctx)
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/businessAccount/balances: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/businessAccount/balances: %w", testError).Error())
 		assert.Nil(t, wallet)
 	})
 
@@ -673,7 +673,7 @@ func Test_Client_GetAccountConfiguration(t *testing.T) {
 		setupErrorMonitorExpectations(cMocks.monitorServiceMock, configurationPath, http.MethodGet, "no_tenant")
 
 		wallet, err := cc.GetAccountConfiguration(ctx)
-		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/configuration: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: unsuccessful after multiple attempts: submitting request to http://localhost:8080/v1/configuration: %w", testError).Error())
 		assert.Nil(t, wallet)
 	})
 
@@ -937,7 +937,7 @@ func setupSuccessMonitorExpectations(mockService *monitorMocks.MockMonitorServic
 }
 
 func newClientWithMocks(t *testing.T) (Client, *clientMocks) {
-	httpClientMock := httpclientMocks.NewHttpClientMock(t)
+	httpClientMock := httpclientMocks.NewHTTPClientMock(t)
 	tntManagerMock := tenant.NewTenantManagerMock(t)
 	monitorSvcMock := monitorMocks.NewMockMonitorService(t)
 
@@ -955,7 +955,7 @@ func newClientWithMocks(t *testing.T) (Client, *clientMocks) {
 }
 
 type clientMocks struct {
-	httpClientMock     *httpclientMocks.HttpClientMock
+	httpClientMock     *httpclientMocks.HTTPClientMock
 	tenantManagerMock  *tenant.TenantManagerMock
 	monitorServiceMock *monitorMocks.MockMonitorService
 }

@@ -19,12 +19,12 @@ func (p *prometheusClient) GetMetricType() MetricType {
 	return MetricTypePrometheus
 }
 
-func (p *prometheusClient) GetMetricHttpHandler() http.Handler {
+func (p *prometheusClient) GetMetricHTTPHandler() http.Handler {
 	return p.httpHandler
 }
 
-func (p *prometheusClient) MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) {
-	SummaryVecMetrics[HttpRequestDurationTag].With(prometheus.Labels{
+func (p *prometheusClient) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) {
+	SummaryVecMetrics[HTTPRequestDurationTag].With(prometheus.Labels{
 		"status":      labels.Status,
 		"route":       labels.Route,
 		"method":      labels.Method,
@@ -95,7 +95,7 @@ func (p *prometheusClient) RegisterFunctionMetric(metricType FuncMetricType, opt
 	p.registry.MustRegister(metric)
 }
 
-func newPrometheusClient() (*prometheusClient, error) {
+func newPrometheusClient() *prometheusClient {
 	// register Prometheus metrics
 	metricsRegistry := prometheus.NewRegistry()
 
@@ -110,7 +110,7 @@ func newPrometheusClient() (*prometheusClient, error) {
 	return &prometheusClient{
 		httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}),
 		registry:    metricsRegistry,
-	}, nil
+	}
 }
 
 // Ensuring that promtheusClient is implementing MonitorClient interface

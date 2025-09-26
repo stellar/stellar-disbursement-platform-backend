@@ -23,9 +23,9 @@ const (
 type MonitorServiceInterface interface {
 	Start(opts MetricOptions) error
 	GetMetricType() (MetricType, error)
-	GetMetricHttpHandler() (http.Handler, error)
+	GetMetricHTTPHandler() (http.Handler, error)
 	RegisterFunctionMetric(metricType FuncMetricType, opts FuncMetricOptions)
-	MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) error
+	MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) error
 	MonitorDBQueryDuration(duration time.Duration, tag MetricTag, labels DBQueryLabels) error
 	MonitorCounters(tag MetricTag, labels map[string]string) error
 	MonitorDuration(duration time.Duration, tag MetricTag, labels map[string]string) error
@@ -61,20 +61,20 @@ func (m *MonitorService) GetMetricType() (MetricType, error) {
 	return m.MonitorClient.GetMetricType(), nil
 }
 
-func (m *MonitorService) GetMetricHttpHandler() (http.Handler, error) {
+func (m *MonitorService) GetMetricHTTPHandler() (http.Handler, error) {
 	if m.MonitorClient == nil {
 		return nil, fmt.Errorf("client was not initialized")
 	}
 
-	return m.MonitorClient.GetMetricHttpHandler(), nil
+	return m.MonitorClient.GetMetricHTTPHandler(), nil
 }
 
-func (m *MonitorService) MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) error {
+func (m *MonitorService) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) error {
 	if m.MonitorClient == nil {
 		return fmt.Errorf("client was not initialized")
 	}
 
-	m.MonitorClient.MonitorHttpRequestDuration(duration, labels)
+	m.MonitorClient.MonitorHTTPRequestDuration(duration, labels)
 
 	return nil
 }

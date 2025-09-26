@@ -51,7 +51,7 @@ type ServeOptions struct {
 	tenantProvisioningManager               *provisioning.Manager
 	Version                                 string
 	AdminAccount                            string
-	AdminApiKey                             string
+	AdminAPIKey                             string
 	SingleTenantMode                        bool
 	BaseURL                                 string
 	SDPUIBaseURL                            string
@@ -135,7 +135,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 
 	// Authenticated Routes
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.BasicAuthMiddleware(opts.AdminAccount, opts.AdminApiKey))
+		r.Use(middleware.BasicAuthMiddleware(opts.AdminAccount, opts.AdminAPIKey))
 
 		r.Route("/tenants", func(r chi.Router) {
 			tenantsHandler := httphandler.TenantsHandler{

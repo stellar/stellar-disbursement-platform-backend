@@ -291,7 +291,7 @@ func (ca *ChannelAccountModel) DeleteIfLockedUntil(ctx context.Context, publicKe
 			return fmt.Errorf("cannot retrieve account %s: %w", publicKey, err)
 		}
 
-		if !(account.LockedUntilLedgerNumber.Valid && account.LockedUntilLedgerNumber.Int32 == int32(lockedUntilLedgerNumber)) {
+		if !account.LockedUntilLedgerNumber.Valid || account.LockedUntilLedgerNumber.Int32 != int32(lockedUntilLedgerNumber) {
 			return fmt.Errorf("cannot delete account due to locked until ledger number mismatch or field being null")
 		}
 

@@ -21,18 +21,18 @@ func Test_TSSPrometheusClient_GetMetricType(t *testing.T) {
 	assert.Equal(t, MetricTypeTSSPrometheus, metricType)
 }
 
-func Test_TSSPrometheusClient_GetMetricHttpHandler(t *testing.T) {
+func Test_TSSPrometheusClient_GetMetricHTTPHandler(t *testing.T) {
 	mTSSPrometheusClient := &tssPrometheusClient{}
 
-	mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	mHTTPHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{"status": "OK"}`))
 		require.NoError(t, err)
 	})
 
-	mTSSPrometheusClient.httpHandler = mHttpHandler
+	mTSSPrometheusClient.httpHandler = mHTTPHandler
 
-	httpHandler := mTSSPrometheusClient.GetMetricHttpHandler()
+	httpHandler := mTSSPrometheusClient.GetMetricHTTPHandler()
 
 	r := chi.NewRouter()
 	r.Get("/metrics", httpHandler.ServeHTTP)
@@ -43,8 +43,8 @@ func Test_TSSPrometheusClient_GetMetricHttpHandler(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	wantJson := `{"status": "OK"}`
-	assert.JSONEq(t, wantJson, rr.Body.String())
+	wantJSON := `{"status": "OK"}`
+	assert.JSONEq(t, wantJSON, rr.Body.String())
 }
 
 func Test_TSSPrometheusClient_MonitorDBQueryDuration(t *testing.T) {
