@@ -98,6 +98,9 @@ func Test_MetricsRequestHandler(t *testing.T) {
 			Status: "200",
 			Route:  "/mock",
 			Method: "GET",
+			CommonLabels: monitor.CommonLabels{
+				TenantName: "no_tenant",
+			},
 		}
 
 		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
@@ -119,6 +122,9 @@ func Test_MetricsRequestHandler(t *testing.T) {
 			Status: "404",
 			Route:  "undefined",
 			Method: "GET",
+			CommonLabels: monitor.CommonLabels{
+				TenantName: "no_tenant",
+			},
 		}
 
 		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
@@ -138,9 +144,15 @@ func Test_MetricsRequestHandler(t *testing.T) {
 			Status: "405",
 			Route:  "undefined",
 			Method: "POST",
+			CommonLabels: monitor.CommonLabels{
+				TenantName: "no_tenant",
+			},
 		}
 
-		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
+		mMonitorService.
+			On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
+			Return(nil).
+			Once()
 
 		// test
 		req, err := http.NewRequest("POST", "/mock", nil)

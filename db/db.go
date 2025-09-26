@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -217,13 +218,13 @@ func OpenDBConnectionPool(dataSourceName string) (DBConnectionPool, error) {
 }
 
 // OpenDBConnectionPoolWithMetrics opens a new database connection pool with the monitor service. It returns an error if it can't connect to the database.
-func OpenDBConnectionPoolWithMetrics(dataSourceName string, monitorService monitor.MonitorServiceInterface) (DBConnectionPool, error) {
+func OpenDBConnectionPoolWithMetrics(ctx context.Context, dataSourceName string, monitorService monitor.MonitorServiceInterface) (DBConnectionPool, error) {
 	dbConnectionPool, err := OpenDBConnectionPool(dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("error opening a new db connection pool: %w", err)
 	}
 
-	return NewDBConnectionPoolWithMetrics(dbConnectionPool, monitorService)
+	return NewDBConnectionPoolWithMetrics(ctx, dbConnectionPool, monitorService)
 }
 
 // CloseRows closes the given rows and logs an error if it can't close them.
@@ -271,4 +272,24 @@ func (t *TransactionExecutionError) Unwrap() error {
 func IsTransactionExecutionError(err error) bool {
 	var eErr *TransactionExecutionError
 	return errors.As(err, &eErr)
+}
+
+const (
+	defaultSchema = "public"
+)
+
+// detectSchemaFromDBCP detects the schema from the given DBConnectionPool by parsing the DSN for the search_path parameter.
+func detectSchemaFromDBCP(ctx context.Context, dbConnectionPool DBConnectionPool) string {
+	dsn, dsnErr := dbConnectionPool.DSN(ctx)
+	if dsnErr != nil {
+		log.Ctx(ctx).Errorf("Error getting DSN from DBConnectionPool: %s", dsnErr)
+		return defaultSchema
+	}
+
+	if u, err := url.Parse(dsn); err == nil {
+		if searchPath := u.Query().Get("search_path"); searchPath != "" {
+			return searchPath
+		}
+	}
+	return defaultSchema
 }

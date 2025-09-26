@@ -177,6 +177,9 @@ func Test_handleHTTP_Health(t *testing.T) {
 		Status: "200",
 		Route:  "/health",
 		Method: "GET",
+		CommonLabels: monitor.CommonLabels{
+			TenantName: "no_tenant",
+		},
 	}
 	mMonitorService.
 		On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
