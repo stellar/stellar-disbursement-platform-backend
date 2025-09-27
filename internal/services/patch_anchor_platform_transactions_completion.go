@@ -168,7 +168,8 @@ func failedStatusMessageFromPayment(payment data.Payment) string {
 
 // patchAnchorPaymentTransaction patches the anchor platform transaction with the respective status.
 func (s *PatchAnchorPlatformTransactionCompletionService) patchAnchorPaymentTransaction(ctx context.Context, payment data.Payment, statusMessage string) error {
-	if payment.Status == data.SuccessPaymentStatus {
+	switch payment.Status {
+	case data.SuccessPaymentStatus:
 		paymentLastUpdatedAtUTC := payment.UpdatedAt.UTC()
 		err := s.apAPISvc.PatchAnchorTransactionsPostSuccessCompletion(ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 			ID:     payment.ReceiverWallet.AnchorPlatformTransactionID,
@@ -192,7 +193,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) patchAnchorPaymentTran
 			log.Ctx(ctx).Error(err)
 			return err
 		}
-	} else if payment.Status == data.FailedPaymentStatus {
+	case data.FailedPaymentStatus:
 		messageLength := len(statusMessage)
 		if messageLength > MaxErrorMessageLength {
 			messageLength = MaxErrorMessageLength - 1
@@ -209,7 +210,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) patchAnchorPaymentTran
 			log.Ctx(ctx).Error(err)
 			return err
 		}
-	} else {
+	default:
 		err := fmt.Errorf("[%s] invalid payment status to patch to anchor platform (paymentID=%s, status=%s)", utils.GetTypeName(s), payment.ID, payment.Status)
 		log.Ctx(ctx).Error(err)
 		return err

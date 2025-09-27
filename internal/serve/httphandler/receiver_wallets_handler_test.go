@@ -116,7 +116,7 @@ func Test_RetryInvitation(t *testing.T) {
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
-		wantJson := fmt.Sprintf(`{
+		wantJSON := fmt.Sprintf(`{
 			"id": %q,
 			"receiver_id": %q,
 			"wallet_id": %q,
@@ -126,7 +126,7 @@ func Test_RetryInvitation(t *testing.T) {
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	t.Run("returns error when fails writing message on message broker", func(t *testing.T) {
@@ -176,14 +176,14 @@ func Test_RetryInvitation(t *testing.T) {
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		wantJson := fmt.Sprintf(`{
+		wantJSON := fmt.Sprintf(`{
 			"id": %q,
 			"receiver_id": %q,
 			"wallet_id": %q,
 			"created_at": %q,
 			"invitation_sent_at": null
 		}`, rw.ID, receiver.ID, wallet.ID, rw.CreatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
@@ -208,7 +208,7 @@ func Test_RetryInvitation(t *testing.T) {
 		rr := httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 
-		wantJson := fmt.Sprintf(`{
+		wantJSON := fmt.Sprintf(`{
 			"id": %q,
 			"receiver_id": %q,
 			"wallet_id": %q,
@@ -218,7 +218,7 @@ func Test_RetryInvitation(t *testing.T) {
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 
 		msg := events.Message{
 			Topic:    events.ReceiverWalletNewInvitationTopic,

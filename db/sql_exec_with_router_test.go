@@ -199,6 +199,7 @@ func TestSQLExecutorWithRouter_QueryContext(t *testing.T) {
 			require.NoError(t, err)
 			dest = append(dest, name)
 		}
+		require.NoError(t, rows.Err())
 
 		require.Equal(t, 1, len(dest))
 		require.Equal(t, "MyCustomAid", dest[0])
@@ -211,9 +212,12 @@ func TestSQLExecutorWithRouter_QueryContext(t *testing.T) {
 			Return(nil, fmt.Errorf("data source error")).
 			Once()
 
-		_, err := sqlExecWithRouter.QueryContext(ctx, query)
+		rows, err := sqlExecWithRouter.QueryContext(ctx, query)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "getting data source from context in QueryContext")
+		if rows != nil {
+			require.NoError(t, rows.Err())
+		}
 
 		mockRouter.AssertExpectations(t)
 	})
@@ -302,6 +306,7 @@ func TestSQLExecutorWithRouter_PrepareContext(t *testing.T) {
 			require.NoError(t, err)
 			dest = append(dest, name)
 		}
+		require.NoError(t, rows.Err())
 
 		require.Equal(t, 1, len(dest))
 		require.Equal(t, "MyCustomAid", dest[0])

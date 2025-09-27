@@ -552,7 +552,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 				{
 					"id": %q,
 					"email": "receiver1@mock.com",
@@ -583,7 +583,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 				}
 			]`, receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano),
 			receiver2.ID, receiver2.CreatedAt.Format(time.RFC3339Nano), receiver2.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		err = dbTx.Commit()
 		require.NoError(t, err)
@@ -610,7 +610,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 			{
 				"id": %q,
 				"email": "receiver1@mock.com",
@@ -626,7 +626,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 				"registered_wallets":"0"
 			}
 		]`, receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		err = dbTx.Commit()
 		require.NoError(t, err)
@@ -653,7 +653,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 			{
 				"id": %q,
 				"email": "receiver2@mock.com",
@@ -669,7 +669,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 				"registered_wallets":"1"
 			}
 		]`, receiver2.ID, receiver2.CreatedAt.Format(time.RFC3339Nano), receiver2.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		err = dbTx.Commit()
 		require.NoError(t, err)
@@ -696,7 +696,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 			{
 				"id": %q,
 				"email": "receiver1@mock.com",
@@ -712,7 +712,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 				"registered_wallets":"0"
 			}
 		]`, receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		err = dbTx.Commit()
 		require.NoError(t, err)
@@ -747,7 +747,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 			{
 				"id": %q,
 				"email": "receiver1@mock.com",
@@ -763,7 +763,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 				"registered_wallets":"0"	
 			}
 		]`, receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		err = dbTx.Commit()
 		require.NoError(t, err)
@@ -785,7 +785,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 			{
 				"id": %q,
 				"email": "receiver2@mock.com",
@@ -801,7 +801,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 				"registered_wallets":"1"
 			}
 		]`, receiver2.ID, receiver2.CreatedAt.Format(time.RFC3339Nano), receiver2.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		err = dbTx.Commit()
 		require.NoError(t, err)
@@ -827,7 +827,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 			{
 				"id": %q,
 				"email": "receiver1@mock.com",
@@ -843,7 +843,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 				"registered_wallets":"0"
 			}
 		]`, receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		err = dbTx.Commit()
 		require.NoError(t, err)
@@ -867,7 +867,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 		ar, err := json.Marshal(actualReceivers)
 		require.NoError(t, err)
 
-		wantJson := fmt.Sprintf(`[
+		wantJSON := fmt.Sprintf(`[
 				{
 					"id": %q,
 					"email": "receiver1@mock.com",
@@ -899,7 +899,7 @@ func Test_ReceiversModel_GetAll(t *testing.T) {
 			]`, receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano),
 			receiver2.ID, receiver2.CreatedAt.Format(time.RFC3339Nano), receiver2.UpdatedAt.Format(time.RFC3339Nano))
 
-		assert.JSONEq(t, wantJson, string(ar))
+		assert.JSONEq(t, wantJSON, string(ar))
 
 		// Commit the transaction.
 		commitErr := dbTx.Commit()
@@ -1246,7 +1246,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
 			Email:      utils.StringPtr("invalid"),
-			ExternalId: utils.StringPtr(""),
+			ExternalID: utils.StringPtr(""),
 		})
 		assert.EqualError(t, err, `validating receiver update: validating email: the email address provided is not valid`)
 	})
@@ -1281,7 +1281,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 
 		err := receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
 			Email:      utils.StringPtr("updated_email@email.com"),
-			ExternalId: utils.StringPtr("newExternalID"),
+			ExternalID: utils.StringPtr("newExternalID"),
 		})
 		require.NoError(t, err)
 

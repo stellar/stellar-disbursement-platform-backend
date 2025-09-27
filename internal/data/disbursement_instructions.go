@@ -19,7 +19,7 @@ type DisbursementInstruction struct {
 	ID                string `csv:"id"`
 	Amount            string `csv:"amount"`
 	VerificationValue string `csv:"verification"`
-	ExternalPaymentId string `csv:"paymentID"`
+	ExternalPaymentID string `csv:"paymentID"`
 	WalletAddress     string `csv:"walletAddress"`
 	WalletAddressMemo string `csv:"walletAddressMemo"`
 }
@@ -281,7 +281,7 @@ func (di DisbursementInstructionModel) createReceiverFromInstructionIfNeeded(ctx
 			receiverInsert.Email = &instruction.Email
 		}
 		if instruction.ID != "" {
-			receiverInsert.ExternalId = &instruction.ID
+			receiverInsert.ExternalID = &instruction.ID
 		}
 		_, insertErr := di.receiverModel.Insert(ctx, dbTx, receiverInsert)
 		if insertErr != nil {
@@ -402,8 +402,8 @@ func (di DisbursementInstructionModel) createPayments(ctx context.Context, dbTx 
 			ReceiverWalletID: receiverIDToReceiverWalletIDMap[receiver.ID],
 			PaymentType:      PaymentTypeDisbursement,
 		}
-		if instruction.ExternalPaymentId != "" {
-			payment.ExternalPaymentID = &instruction.ExternalPaymentId
+		if instruction.ExternalPaymentID != "" {
+			payment.ExternalPaymentID = &instruction.ExternalPaymentID
 		}
 		payments = append(payments, payment)
 	}

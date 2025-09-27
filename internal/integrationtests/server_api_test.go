@@ -18,11 +18,11 @@ import (
 )
 
 func Test_Login(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
-	sa := ServerApiIntegrationTests{
-		HttpClient:       &httpClientMock,
-		ServerApiBaseURL: "http://mock_server.com/",
+	sa := ServerAPIIntegrationTests{
+		HTTPClient:       &httpClientMock,
+		ServerAPIBaseURL: "http://mock_server.com/",
 		UserEmail:        "user_mock@email.com",
 		UserPassword:     "userPass123",
 	}
@@ -89,16 +89,16 @@ func Test_Login(t *testing.T) {
 }
 
 func Test_CreateDisbursement(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
-	sa := ServerApiIntegrationTests{
-		HttpClient:       &httpClientMock,
-		ServerApiBaseURL: "http://mock_server.com/",
+	sa := ServerAPIIntegrationTests{
+		HTTPClient:       &httpClientMock,
+		ServerAPIBaseURL: "http://mock_server.com/",
 	}
 
 	ctx := context.Background()
 
-	authToken := &ServerApiAuthToken{
+	authToken := &ServerAPIAuthToken{
 		Token: "valid_token",
 	}
 
@@ -172,18 +172,18 @@ func Test_CreateDisbursement(t *testing.T) {
 }
 
 func Test_ProcessDisbursement(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
-	sa := ServerApiIntegrationTests{
-		HttpClient:              &httpClientMock,
-		ServerApiBaseURL:        "http://mock_server.com/",
+	sa := ServerAPIIntegrationTests{
+		HTTPClient:              &httpClientMock,
+		ServerAPIBaseURL:        "http://mock_server.com/",
 		DisbursementCSVFilePath: "resources",
 		DisbursementCSVFileName: "disbursement_instructions_phone.csv",
 	}
 
 	ctx := context.Background()
 
-	authToken := &ServerApiAuthToken{
+	authToken := &ServerAPIAuthToken{
 		Token: "valid_token",
 	}
 
@@ -230,16 +230,16 @@ func Test_ProcessDisbursement(t *testing.T) {
 }
 
 func Test_StartDisbursement(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
-	sa := ServerApiIntegrationTests{
-		HttpClient:       &httpClientMock,
-		ServerApiBaseURL: "http://mock_server.com/",
+	sa := ServerAPIIntegrationTests{
+		HTTPClient:       &httpClientMock,
+		ServerAPIBaseURL: "http://mock_server.com/",
 	}
 
 	ctx := context.Background()
 
-	authToken := &ServerApiAuthToken{
+	authToken := &ServerAPIAuthToken{
 		Token: "valid_token",
 	}
 
@@ -289,11 +289,11 @@ func Test_StartDisbursement(t *testing.T) {
 }
 
 func Test_ReceiverRegistration(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
-	sa := ServerApiIntegrationTests{
-		HttpClient:       &httpClientMock,
-		ServerApiBaseURL: "http://mock_server.com/",
+	sa := ServerAPIIntegrationTests{
+		HTTPClient:       &httpClientMock,
+		ServerAPIBaseURL: "http://mock_server.com/",
 	}
 
 	ctx := context.Background()

@@ -204,16 +204,16 @@ func TestNewHTTPError_json(t *testing.T) {
 		"foo": "bar",
 	})
 
-	gotJson, err := json.Marshal(httpErr)
+	gotJSON, err := json.Marshal(httpErr)
 	require.NoError(t, err)
 
-	wantJson := `{
+	wantJSON := `{
 		"error": "Bad request",
 		"extras": {
 			"foo": "bar"
 		}
 	}`
-	require.JSONEq(t, wantJson, string(gotJson))
+	require.JSONEq(t, wantJSON, string(gotJSON))
 }
 
 type testError struct {

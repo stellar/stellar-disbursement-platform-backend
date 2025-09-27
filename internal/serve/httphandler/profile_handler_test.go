@@ -1484,7 +1484,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	t.Run("returns the custom privacy_policy_link", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
-		var privacyPolicyLink string = "https://example.com/privacy-policy"
+		privacyPolicyLink := "https://example.com/privacy-policy"
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
 			PrivacyPolicyLink: &privacyPolicyLink,
 		})

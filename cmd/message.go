@@ -23,6 +23,7 @@ type MessengerServiceInterface interface {
 type MessengerService struct{}
 
 func (m *MessengerService) GetClient(opts message.MessengerOptions) (message.MessengerClient, error) {
+	//nolint:wrapcheck // This is a wrapper method
 	return message.GetClient(opts)
 }
 
@@ -32,6 +33,7 @@ func (m *MessengerService) SendMessage(ctx context.Context, opts message.Messeng
 		return fmt.Errorf("getting messenger client: %w", err)
 	}
 
+	//nolint:wrapcheck // This is a wrapper method
 	return messengerClient.SendMessage(ctx, message)
 }
 

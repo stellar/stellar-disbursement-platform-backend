@@ -220,6 +220,7 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 
 			assert.Contains(t, expected, code)
 		}
+		require.NoError(t, rows.Err())
 	})
 
 	t.Run("query failure in QueryContext", func(t *testing.T) {
@@ -238,6 +239,9 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
 
 		assert.Nil(t, rows)
+		if rows != nil {
+			require.NoError(t, rows.Err())
+		}
 	})
 }
 

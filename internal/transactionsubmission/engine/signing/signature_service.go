@@ -86,6 +86,6 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 	}, nil
 }
 
-func (ss *SignatureService) NetworkPassphrase() string {
-	return ss.networkPassphrase
+func (s *SignatureService) NetworkPassphrase() string {
+	return s.networkPassphrase
 }

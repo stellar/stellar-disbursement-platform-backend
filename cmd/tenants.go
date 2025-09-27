@@ -264,7 +264,7 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		log.Ctx(ctx).Infof("Default tenant exists: %s (%s)", existing.Name, existing.ID)
 		return nil
 	}
-	if err != tenant.ErrTenantDoesNotExist {
+	if !errors.Is(err, tenant.ErrTenantDoesNotExist) {
 		return fmt.Errorf("checking default tenant: %w", err)
 	}
 
@@ -283,7 +283,7 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		UserLastName:            cfg.DefaultTenantOwnerLastName,
 		UserEmail:               cfg.DefaultTenantOwnerEmail,
 		OrgName:                 "Default Organization",
-		UiBaseURL:               opts.SDPUIBaseURL,
+		UIBaseURL:               opts.SDPUIBaseURL,
 		BaseURL:                 opts.BaseURL,
 		NetworkType:             string(netType),
 		DistributionAccountType: schema.AccountType(cfg.DefaultTenantDistributionAccountType),

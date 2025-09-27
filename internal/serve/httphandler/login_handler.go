@@ -193,9 +193,9 @@ func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code st
 		Title:   mfaMessageTitle,
 		Body:    msgContent,
 		Type:    message.MessageTypeUserMFA,
-		TemplateVariables: map[string]string{
-			"MFACode":          code,
-			"OrganizationName": organization.Name,
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarMFACode: code,
+			message.TemplateVarOrgName: organization.Name,
 		},
 	}
 	if err = h.MessengerClient.SendMessage(ctx, msg); err != nil {

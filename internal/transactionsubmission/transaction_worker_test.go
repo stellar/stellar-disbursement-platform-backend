@@ -31,7 +31,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
@@ -116,7 +115,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 
 	// Create txJob:
-	tx := store.CreateTransactionFixtureNew(t, ctx, dbConnectionPool, store.TransactionFixture{
+	tx := store.CreateTransactionFixture(t, ctx, dbConnectionPool, store.TransactionFixture{
 		ExternalID:         uuid.NewString(),
 		AssetCode:          "USDC",
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -476,7 +475,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				tw.txModel = mockTxStore
 
 				// PART 2: mock deferred LogAndMonitorTransaction
-				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 					Return(nil).
@@ -520,7 +519,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				tw.chAccModel = mockChAccStore
 
 				// PART 3: mock deferred LogAndMonitorTransaction
-				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 					Return(nil).
@@ -642,7 +641,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			assert.Equal(t, 100, txProcessingLimiter.LimitValue())
 			tw.txProcessingLimiter = txProcessingLimiter
 			// PART 4: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -815,7 +814,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			}
 
 			// PART 4: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -894,7 +893,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 	tw.crashTrackerClient = mockCrashTrackerClient
 
 	// PART 3: mock deferred LogAndMonitorTransaction
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 		Return(nil).
@@ -991,7 +990,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 			}
 
 			// PART 2: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -1575,7 +1574,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 
 			hMock := &horizonclient.MockClient{}
 			if tc.wantHorizonErrorStatusCode == http.StatusOK {
-				hMock.On("Root").Return(horizon.Root{HorizonSequence: int32(currentLedger)}, nil).Once()
+				hMock.On("Root").Return(horizon.Root{HorizonSequence: currentLedger}, nil).Once()
 			} else if tc.wantHorizonErrorStatusCode != 0 {
 				hMock.On("Root").Return(horizon.Root{}, horizonclient.Error{Problem: problem.P{Status: http.StatusBadGateway}}).Once()
 			}

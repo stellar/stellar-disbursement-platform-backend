@@ -60,7 +60,7 @@ func (rct RegistrationContactType) MarshalJSON() ([]byte, error) {
 func (rct *RegistrationContactType) UnmarshalJSON(data []byte) error {
 	var strValue string
 	if err := json.Unmarshal(data, &strValue); err != nil {
-		return err
+		return fmt.Errorf("unmarshalling registration contact type: %w", err)
 	}
 
 	if strValue == "" {

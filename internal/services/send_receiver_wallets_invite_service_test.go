@@ -165,9 +165,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, errors.New("unexpected error")).
@@ -178,9 +178,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -318,9 +318,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
 				Body:          contentWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -330,9 +330,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail: receiverEmailOnly.Email,
 				Body:    contentWallet2,
 				Title:   titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeAWSEmail, nil).
@@ -468,9 +468,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -481,9 +481,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -776,9 +776,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -901,9 +901,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement3,
 				Title:         titleDisbursement3,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -914,9 +914,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentDisbursement4,
 				Title:         titleDisbursement4,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -1044,9 +1044,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement,
 				Title:         titleDisbursement,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).

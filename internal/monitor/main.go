@@ -34,7 +34,7 @@ type MetricOptions struct {
 func GetClient(opts MetricOptions) (MonitorClient, error) {
 	switch opts.MetricType {
 	case MetricTypePrometheus:
-		return newPrometheusClient()
+		return newPrometheusClient(), nil
 	case MetricTypeTSSPrometheus:
 		return NewTSSPrometheusClient()
 	default:

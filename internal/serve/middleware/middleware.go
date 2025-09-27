@@ -66,14 +66,16 @@ func MetricsRequestHandler(monitorService monitor.MonitorServiceInterface) func(
 
 			duration := time.Since(then)
 
-			labels := monitor.HttpRequestLabels{
+			labels := monitor.HTTPRequestLabels{
 				Status: fmt.Sprintf("%d", mw.Status()),
 				Route:  utils.GetRoutePattern(req),
 				Method: req.Method,
+				CommonLabels: monitor.CommonLabels{
+					TenantName: sdpcontext.MustGetTenantNameFromContext(req.Context()),
+				},
 			}
 
-			err := monitorService.MonitorHttpRequestDuration(duration, labels)
-			if err != nil {
+			if err := monitorService.MonitorHTTPRequestDuration(duration, labels); err != nil {
 				log.Ctx(req.Context()).Errorf("Error trying to monitor request time: %s", err)
 			}
 		})
@@ -318,7 +320,8 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 			} else {
 				// Attempt fetching tenant name from request
 				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
-					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
+					currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
+					log.Ctx(ctx).Warnf("could not find tenant with name %s: %v", tenantName, err)
 				}
 			}
 
@@ -346,12 +349,12 @@ func EnsureTenantMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) http.Handler {
+func BasicAuthMiddleware(adminAccount, adminAPIKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
-			if adminAccount == "" || adminApiKey == "" {
+			if adminAccount == "" || adminAPIKey == "" {
 				httperror.InternalError(ctx, "Admin account and API key are not set", nil, nil).Render(rw)
 				return
 			}
@@ -363,7 +366,7 @@ func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) ht
 			}
 
 			// Using constant time comparison to avoid timing attacks
-			if accountUserName != adminAccount || subtle.ConstantTimeCompare([]byte(apiKey), []byte(adminApiKey)) != 1 {
+			if accountUserName != adminAccount || subtle.ConstantTimeCompare([]byte(apiKey), []byte(adminAPIKey)) != 1 {
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
@@ -383,5 +386,9 @@ func extractTenantNameFromRequest(r *http.Request) (string, error) {
 	}
 
 	// 2. If header is blank, extract from the hostname prefix
-	return utils.ExtractTenantNameFromHostName(r.Host)
+	tenantName, err := utils.ExtractTenantNameFromHostName(r.Host)
+	if err != nil {
+		return "", fmt.Errorf("extracting tenant name from hostname: %w", err)
+	}
+	return tenantName, nil
 }

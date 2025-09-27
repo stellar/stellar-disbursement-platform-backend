@@ -47,10 +47,10 @@ type TenantsHandler struct {
 
 const MaxNativeAssetBalanceForDeletion = 100
 
-func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	tnts, err := t.Manager.GetAllTenants(ctx, &tenant.QueryParams{})
+	tnts, err := h.Manager.GetAllTenants(ctx, &tenant.QueryParams{})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get tenants", err, nil).Render(w)
 		return
@@ -59,11 +59,11 @@ func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, tnts, httpjson.JSON)
 }
 
-func (t TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
+func (h TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	arg := chi.URLParam(r, "arg")
 
-	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg)
+	tnt, err := h.Manager.GetTenantByIDOrName(ctx, arg)
 	if err != nil {
 		if errors.Is(err, tenant.ErrTenantDoesNotExist) {
 			errorMsg := fmt.Sprintf("tenant %s does not exist", arg)
@@ -122,7 +122,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		UserEmail:               reqBody.OwnerEmail,
 		OrgName:                 reqBody.OrganizationName,
 		NetworkType:             string(h.NetworkType),
-		UiBaseURL:               tntSDPUIBaseURL,
+		UIBaseURL:               tntSDPUIBaseURL,
 		BaseURL:                 tntBaseURL,
 		DistributionAccountType: schema.AccountType(reqBody.DistributionAccountType),
 		MFADisabled:             &orgMFADisabled,
@@ -157,6 +157,7 @@ func (h TenantsHandler) generateTenantURL(providedURL *string, defaultURL string
 	if providedURL != nil {
 		return *providedURL, nil
 	}
+	//nolint:wrapcheck // This is a wrapper method
 	return utils.GenerateTenantURL(defaultURL, tenantName)
 }
 
@@ -172,7 +173,7 @@ func (h TenantsHandler) sendInvitationMessage(
 	if err != nil {
 		return fmt.Errorf("opening database connection on tenant schema and getting model: %w", err)
 	}
-	defer tenantSchemaConnectionPool.Close()
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool")
 
 	if err = coreSvc.SendInvitationMessage(ctx, h.MessengerClient, models, opts); err != nil {
 		return fmt.Errorf("creating and sending invitation message: %w", err)
@@ -181,7 +182,7 @@ func (h TenantsHandler) sendInvitationMessage(
 	return nil
 }
 
-func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
+func (h TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var reqBody *validators.UpdateTenantRequest
@@ -203,7 +204,7 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 	// factor out to own method
 	if reqBody.Status != nil {
-		err := services.ValidateStatus(ctx, t.Manager, t.Models, tenantID, *reqBody.Status)
+		err := services.ValidateStatus(ctx, h.Manager, h.Models, tenantID, *reqBody.Status)
 		if err != nil {
 			if errors.Is(err, services.ErrCannotRetrieveTenantByID) {
 				httperror.InternalError(ctx, services.ErrCannotRetrieveTenantByID.Error(), err, nil).Render(w)
@@ -216,7 +217,7 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tnt, err := t.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+	tnt, err := h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 		ID:           tenantID,
 		BaseURL:      reqBody.BaseURL,
 		SDPUIBaseURL: reqBody.SDPUIBaseURL,
@@ -241,11 +242,11 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
 }
 
-func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+func (h TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := chi.URLParam(r, "id")
 
-	tnt, err := t.Manager.GetTenant(ctx, &tenant.QueryParams{
+	tnt, err := h.Manager.GetTenant(ctx, &tenant.QueryParams{
 		Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tenantID},
 	})
 	if err != nil {
@@ -270,14 +271,14 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount().Address != *tnt.DistributionAccountAddress {
-		tntDistributionAcc, getTntDistAccErr := t.DistributionAccountResolver.DistributionAccount(ctx, tnt.ID)
+	if tnt.DistributionAccountAddress != nil && h.DistributionAccountResolver.HostDistributionAccount().Address != *tnt.DistributionAccountAddress {
+		tntDistributionAcc, getTntDistAccErr := h.DistributionAccountResolver.DistributionAccount(ctx, tnt.ID)
 		if getTntDistAccErr != nil {
 			httperror.InternalError(ctx, "Cannot get tenant distribution account", getTntDistAccErr, nil).Render(w)
 			return
 		}
 
-		distAccBalances, getBalErr := t.DistributionAccountService.GetBalances(ctx, &tntDistributionAcc)
+		distAccBalances, getBalErr := h.DistributionAccountService.GetBalances(ctx, &tntDistributionAcc)
 		if getBalErr != nil {
 			httperror.InternalError(ctx, "Cannot get tenant distribution account balances", getBalErr, nil).Render(w)
 			return
@@ -300,7 +301,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tnt, err = t.Manager.SoftDeleteTenantByID(ctx, tenantID)
+	tnt, err = h.Manager.SoftDeleteTenantByID(ctx, tenantID)
 	if err != nil {
 		errMsg := fmt.Sprintf("Cannot delete tenant %s", tenantID)
 		httperror.InternalError(ctx, errMsg, err, nil).Render(w)
@@ -310,10 +311,10 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
 }
 
-func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
+func (h TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	if !t.SingleTenantMode {
+	if !h.SingleTenantMode {
 		log.Ctx(ctx).Warnf("An attempt of set a default tenant was made but SINGLE_TENANT_MODE is set to `false`")
 		httperror.Forbidden("Single Tenant Mode feature is disabled. Please, enable it before setting a tenant as default.", nil, nil).Render(rw)
 		return
@@ -332,8 +333,8 @@ func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	defaultTnt, err := db.RunInTransactionWithResult(ctx, t.AdminDBConnectionPool, nil, func(dbTx db.DBTransaction) (*schema.Tenant, error) {
-		tnt, err := t.Manager.SetDefault(ctx, dbTx, reqBody.ID)
+	defaultTnt, err := db.RunInTransactionWithResult(ctx, h.AdminDBConnectionPool, nil, func(dbTx db.DBTransaction) (*schema.Tenant, error) {
+		tnt, err := h.Manager.SetDefault(ctx, dbTx, reqBody.ID)
 		if err != nil {
 			return nil, fmt.Errorf("setting tenant id %s as default: %w", reqBody.ID, err)
 		}

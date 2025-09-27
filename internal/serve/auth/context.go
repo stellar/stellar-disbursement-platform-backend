@@ -12,7 +12,7 @@ import (
 func GetUserFromContext(ctx context.Context, authManager auth.AuthManager) (*auth.User, error) {
 	userID, err := sdpcontext.GetUserIDFromContext(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting user id from context: %w", err)
 	}
 
 	user, err := authManager.GetUserByID(ctx, userID)

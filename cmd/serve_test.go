@@ -242,7 +242,7 @@ func Test_serve(t *testing.T) {
 		DistributionAccountService:              mDistAccService,
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
-		AdminApiKey:                             "admin-api-key",
+		AdminAPIKey:                             "admin-api-key",
 		BaseURL:                                 "https://sdp-backend.stellar.org",
 		SDPUIBaseURL:                            "https://sdp-ui.stellar.org",
 	}
