@@ -1,18 +1,16 @@
 version: '3.8'
 services:
   db:
-    container_name: sdp_v2_database-mtn
     image: postgres:14-alpine
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
-      POSTGRES_DB: sdp_mtn
+      POSTGRES_DB: ${DATABASE_NAME:-sdp_mtn}
       PGDATA: /data/postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres-db:/data/postgres
   sdp-api:
-    container_name: sdp-api-mtn
     image: stellar/sdp-v2:development
     build:
       context: ../
@@ -24,7 +22,7 @@ services:
       - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
-      DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
+      DATABASE_URL: postgres://postgres@db:5432/${DATABASE_NAME:-sdp_mtn}?sslmode=disable
       ENVIRONMENT: localhost
       LOG_LEVEL: INFO
       PORT: "8000"
@@ -32,14 +30,14 @@ services:
       METRICS_TYPE: PROMETHEUS
       EMAIL_SENDER_TYPE: DRY_RUN
       SMS_SENDER_TYPE: DRY_RUN
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      NETWORK_PASSPHRASE: "${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
       ANCHOR_PLATFORM_BASE_SEP_URL: http://localhost:8080
       ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
-      DISABLE_MFA: "true"
+      DISABLE_MFA: "${DISABLE_MFA:-true}"
       DISABLE_RECAPTCHA: "true"
       CORS_ALLOWED_ORIGINS: "*"
 
@@ -90,11 +88,8 @@ services:
         ./stellar-disbursement-platform db setup-for-network --all
         echo "starting dlv stellar-disbursement-platform"
         /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
-    volumes:
-      - ./scripts/add_test_users.sh:/app/github.com/stellar/stellar-disbursement-platform/dev/scripts/add_test_users.sh
 
   db-anchor-platform:
-    container_name: anchor-platform-postgres-db-mtn
     image: postgres:14-alpine
     environment:
       POSTGRES_USER: postgres
@@ -107,7 +102,6 @@ services:
       - postgres-ap-db:/data/postgres
 
   anchor-platform:
-    container_name: anchor-platform
     image: stellar/anchor-platform:2.6.1
     platform: linux/amd64
     depends_on:
@@ -205,6 +199,8 @@ services:
 
 volumes:
   postgres-db:
+    name: ${COMPOSE_PROJECT_NAME:-sdp}_postgres-db-${NETWORK_TYPE:-testnet}
     driver: local
   postgres-ap-db:
+    name: ${COMPOSE_PROJECT_NAME:-sdp}_postgres-ap-db-${NETWORK_TYPE:-testnet}
     driver: local

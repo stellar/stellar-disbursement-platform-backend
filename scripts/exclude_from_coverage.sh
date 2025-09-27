@@ -18,3 +18,4 @@ EOF
 exclude_terms "mock" "c.out"
 exclude_terms "tss_payments_loadtest.go" "c.out"
 exclude_terms "fixtures.go" "c.out"
+exclude_terms "tools/" "c.out"
