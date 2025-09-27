@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - configure Summary metrics with percentiles for HTTP request durations (0.5, 0.9, 0.95, 0.99)
   - rework Grafana dashboard to include tenant tag and new metrics
   - [#818](https://github.com/stellar/stellar-disbursement-platform-backend/pull/818)
+- Add organization level MFA and ReCAPTCHA settings [#861](https://github.com/stellar/stellar-disbursement-platform-backend/pull/861)
 
 ## [4.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.1...4.1.0))
 
@@ -36,10 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Fix Receiver Invitation for direct payments. [#876](https://github.com/stellar/stellar-disbursement-platform-backend/pull/876)
 
 ## [4.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.0...4.0.1))
-
-### Added
-
-- Add organization level MFA and ReCAPTCHA settings [#861](https://github.com/stellar/stellar-disbursement-platform-backend/pull/861)
 
 ### Fixed
 
