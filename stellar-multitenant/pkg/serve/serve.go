@@ -55,6 +55,8 @@ type ServeOptions struct {
 	SingleTenantMode                        bool
 	BaseURL                                 string
 	SDPUIBaseURL                            string
+	DisableMFA                              bool
+	DisableReCAPTCHA                        bool
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -151,6 +153,8 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				DistributionAccountService:  opts.DistributionAccountService,
 				BaseURL:                     opts.BaseURL,
 				SDPUIBaseURL:                opts.SDPUIBaseURL,
+				DisableMFA:                  opts.DisableMFA,
+				DisableReCAPTCHA:            opts.DisableReCAPTCHA,
 			}
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)

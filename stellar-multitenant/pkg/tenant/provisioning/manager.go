@@ -26,6 +26,8 @@ type ProvisionTenant struct {
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
+	MFADisabled             *bool
+	CAPTCHADisabled         *bool
 }
 
 type ManagerOptions struct {
@@ -69,6 +71,8 @@ func (m *Manager) ProvisionNewTenant(ctx context.Context, pt ProvisionTenant) (*
 		BaseURL:                 pt.BaseURL,
 		NetworkType:             pt.NetworkType,
 		DistributionAccountType: pt.DistributionAccountType,
+		MFADisabled:             pt.MFADisabled,
+		CAPTCHADisabled:         pt.CAPTCHADisabled,
 	}
 
 	//nolint:wrapcheck // This is a wrapper method

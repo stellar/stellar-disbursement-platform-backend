@@ -31,6 +31,8 @@ type DefaultTenantConfig struct {
 	DefaultTenantOwnerLastName           string
 	DefaultTenantDistributionAccountType string
 	DistributionPublicKey                string
+	DisableMFA                           bool
+	DisableReCAPTCHA                     bool
 }
 
 func (c *DefaultTenantConfig) Validate() error {
@@ -115,6 +117,20 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 			FlagDefault: string(schema.DistributionAccountStellarDBVault),
 		},
 		cmdUtils.DistributionPublicKey(&cfg.DistributionPublicKey),
+		{
+			Name:        "disable-mfa",
+			Usage:       "Disable MFA for the default tenant (used as initial organization setting)",
+			OptType:     types.Bool,
+			ConfigKey:   &cfg.DisableMFA,
+			FlagDefault: false,
+		},
+		{
+			Name:        "disable-recaptcha",
+			Usage:       "Disable reCAPTCHA for the default tenant (used as initial organization setting)",
+			OptType:     types.Bool,
+			ConfigKey:   &cfg.DisableReCAPTCHA,
+			FlagDefault: false,
+		},
 	}
 
 	configOpts = append(
@@ -258,6 +274,9 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		return fmt.Errorf("network type: %w", err)
 	}
 
+	orgMFADisabled := cfg.DisableMFA
+	orgCAPTCHADisabled := cfg.DisableReCAPTCHA
+
 	newTenant, err := s.tenantProvisioning.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
 		Name:                    "default",
 		UserFirstName:           cfg.DefaultTenantOwnerFirstName,
@@ -268,6 +287,8 @@ func (s *defaultTenantsService) EnsureDefaultTenant(
 		BaseURL:                 opts.BaseURL,
 		NetworkType:             string(netType),
 		DistributionAccountType: schema.AccountType(cfg.DefaultTenantDistributionAccountType),
+		MFADisabled:             &orgMFADisabled,
+		CAPTCHADisabled:         &orgCAPTCHADisabled,
 	})
 	if err != nil {
 		return fmt.Errorf("provision new tenant: %w", err)
