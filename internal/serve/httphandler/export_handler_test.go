@@ -74,6 +74,12 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 		expectedDisbursements []*data.Disbursement
 	}{
 		{
+			name:                  "error - invalid query parameters",
+			queryParams:           "status=invalid_status",
+			expectedStatusCode:    http.StatusBadRequest,
+			expectedDisbursements: nil,
+		},
+		{
 			name:                  "success - returns CSV with no disbursements",
 			queryParams:           "status=completed",
 			expectedStatusCode:    http.StatusOK,
@@ -110,6 +116,13 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
+			
+			if tc.expectedStatusCode != http.StatusOK {
+				// For error cases, we expect a JSON error response, not CSV
+				assert.Contains(t, rr.Body.String(), "error")
+				return
+			}
+
 			csvReader := csv.NewReader(strings.NewReader(rr.Body.String()))
 
 			header, err := csvReader.Read()
@@ -210,6 +223,12 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 		expectedPayments   []*data.Payment
 	}{
 		{
+			name:               "error - invalid query parameters",
+			queryParams:        "status=invalid_status",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedPayments:   nil,
+		},
+		{
 			name:               "success - returns CSV with no payments",
 			queryParams:        "status=draft",
 			expectedStatusCode: http.StatusOK,
@@ -247,6 +266,13 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
+			
+			if tc.expectedStatusCode != http.StatusOK {
+				// For error cases, we expect a JSON error response, not CSV
+				assert.Contains(t, rr.Body.String(), "error")
+				return
+			}
+
 			csvReader := csv.NewReader(strings.NewReader(rr.Body.String()))
 
 			header, err := csvReader.Read()

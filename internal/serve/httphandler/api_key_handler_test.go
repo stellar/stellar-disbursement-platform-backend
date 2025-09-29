@@ -327,51 +327,64 @@ func TestCreateAPIKey_MissingUserID(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
-func Test_GetAllAPIKeys_Success(t *testing.T) {
+func Test_GetAllAPIKeys(t *testing.T) {
 	t.Parallel()
-	handler, ctx := setupHandler(t)
-	userID := adminUserID
 
-	k1, err := handler.Models.APIKeys.Insert(ctx,
-		"Eisenhorn Archive Key",
-		[]data.APIKeyPermission{data.ReadAll},
-		nil,
-		nil,
-		userID,
-	)
-	require.NoError(t, err)
+	t.Run("success", func(t *testing.T) {
+		handler, ctx := setupHandler(t)
+		userID := adminUserID
 
-	k2, err := handler.Models.APIKeys.Insert(ctx,
-		"Cicatrix Maledictum Cipher",
-		[]data.APIKeyPermission{data.ReadStatistics},
-		[]string{"203.0.113.0/24"},
-		nil,
-		userID,
-	)
-	require.NoError(t, err)
+		k1, err := handler.Models.APIKeys.Insert(ctx,
+			"Eisenhorn Archive Key",
+			[]data.APIKeyPermission{data.ReadAll},
+			nil,
+			nil,
+			userID,
+		)
+		require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api-keys", nil)
-	rr := httptest.NewRecorder()
-	handler.GetAllAPIKeys(rr, req)
-	res := rr.Result()
-	defer res.Body.Close()
+		k2, err := handler.Models.APIKeys.Insert(ctx,
+			"Cicatrix Maledictum Cipher",
+			[]data.APIKeyPermission{data.ReadStatistics},
+			[]string{"203.0.113.0/24"},
+			nil,
+			userID,
+		)
+		require.NoError(t, err)
 
-	assert.Equal(t, http.StatusOK, res.StatusCode)
+		req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api-keys", nil)
+		rr := httptest.NewRecorder()
+		handler.GetAllAPIKeys(rr, req)
+		res := rr.Result()
+		defer res.Body.Close()
 
-	var list []data.APIKey
-	require.NoError(t, json.NewDecoder(res.Body).Decode(&list))
+		assert.Equal(t, http.StatusOK, res.StatusCode)
 
-	require.Len(t, list, 2)
-	// newest first
-	assert.Equal(t, k2.ID, list[0].ID)
-	assert.Equal(t, "Cicatrix Maledictum Cipher", list[0].Name)
-	assert.ElementsMatch(t, []data.APIKeyPermission{data.ReadStatistics}, list[0].Permissions)
-	assert.Equal(t, data.IPList{"203.0.113.0/24"}, list[0].AllowedIPs)
+		var list []data.APIKey
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&list))
 
-	assert.Equal(t, k1.ID, list[1].ID)
-	assert.Equal(t, "Eisenhorn Archive Key", list[1].Name)
-	assert.ElementsMatch(t, []data.APIKeyPermission{data.ReadAll}, list[1].Permissions)
-	assert.Empty(t, list[1].AllowedIPs)
+		require.Len(t, list, 2)
+		// newest first
+		assert.Equal(t, k2.ID, list[0].ID)
+		assert.Equal(t, "Cicatrix Maledictum Cipher", list[0].Name)
+		assert.ElementsMatch(t, []data.APIKeyPermission{data.ReadStatistics}, list[0].Permissions)
+		assert.Equal(t, data.IPList{"203.0.113.0/24"}, list[0].AllowedIPs)
+
+		assert.Equal(t, k1.ID, list[1].ID)
+		assert.Equal(t, "Eisenhorn Archive Key", list[1].Name)
+		assert.ElementsMatch(t, []data.APIKeyPermission{data.ReadAll}, list[1].Permissions)
+		assert.Empty(t, list[1].AllowedIPs)
+	})
+
+	t.Run("missing user ID in context", func(t *testing.T) {
+		handler, _ := setupHandler(t)
+		// Create request without user ID in context
+		req := httptest.NewRequest(http.MethodGet, "/api-keys", nil)
+		rr := httptest.NewRecorder()
+		handler.GetAllAPIKeys(rr, req)
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+		assert.Contains(t, rr.Body.String(), "User identification error")
+	})
 }
 
 func Test_DeleteAPIKeyEndpoints(t *testing.T) {
