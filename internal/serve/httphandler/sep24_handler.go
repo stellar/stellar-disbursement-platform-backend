@@ -1,7 +1,6 @@
 package httphandler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,7 +87,7 @@ type SEP24InteractiveResponse struct {
 }
 
 // generateMoreInfoURL creates a secure more_info_url with JWT token for SEP-24 transactions
-func (h SEP24Handler) generateMoreInfoURL(ctx context.Context, sep10Claims *anchorplatform.Sep10JWTClaims, transactionID, status string) (string, error) {
+func (h SEP24Handler) generateMoreInfoURL(sep10Claims *anchorplatform.Sep10JWTClaims, transactionID, status string) (string, error) {
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24MoreInfoToken(
 		sep10Claims.Subject,
 		"",
@@ -142,7 +141,7 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
 
-			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusIncomplete)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusIncomplete)
 			if moreInfoErr != nil {
 				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return
@@ -166,7 +165,7 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		case data.ReadyReceiversWalletStatus:
 			transaction["status"] = SEP24StatusPendingUserInfoUpdate
 
-			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(ctx, sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
 			if moreInfoErr != nil {
 				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return

@@ -286,19 +286,72 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 			wantStatusCode:   http.StatusOK,
 			wantResponseBody: `{"token": "token"}`,
 		},
+		{
+			name:              "🟢[200] nil org CAPTCHA setting - falls back to env setting (disabled)",
+			ReCAPTCHADisabled: true,
+			reqBody:           `{"mfa_code":"123456"}`,
+			deviceID:          deviceID,
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+				
+				authManagerMock.
+					On("AuthenticateMFA", mock.Anything, deviceID, "123456", mock.AnythingOfType("bool")).
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUserID", mock.Anything, "token").
+					Return("user_id", nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
+		{
+			name:              "🟢[200] nil org CAPTCHA setting - falls back to env setting (enabled)",
+			ReCAPTCHADisabled: false,
+			reqBody:           `{"mfa_code":"123456","recaptcha_token":"token"}`,
+			deviceID:          deviceID,
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+				
+				reCAPTCHAValidatorMock.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(true, nil).
+					Once()
+				authManagerMock.
+					On("AuthenticateMFA", mock.Anything, deviceID, "123456", mock.AnythingOfType("bool")).
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUserID", mock.Anything, "token").
+					Return("user_id", nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
+			authManager := auth.NewAuthManagerMock(t)
+
 			ctx := context.Background()
 			captchaDisabled := tc.ReCAPTCHADisabled
 			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
 				CAPTCHADisabled: &captchaDisabled,
 			})
 			require.NoError(t, err)
-
-			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
-			authManager := auth.NewAuthManagerMock(t)
+			
 			if tc.prepareMocks != nil {
 				tc.prepareMocks(t, reCAPTCHAValidatorMock, authManager)
 			}

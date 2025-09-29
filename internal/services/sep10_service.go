@@ -471,7 +471,7 @@ func (s *sep10Service) generateToken(
 	}
 
 	timebounds := tx.Timebounds()
-	iat := time.Unix(int64(timebounds.MinTime), 0)
+	iat := time.Unix(timebounds.MinTime, 0)
 	exp := iat.Add(s.JWTExpiration)
 
 	protocol := "http"
@@ -619,12 +619,12 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 
 	tx, err := txnbuild.NewTransaction(txParams)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating new transaction: %w", err)
 	}
 
 	tx, err = tx.Sign(s.NetworkPassphrase, s.SEP10SigningKeypair)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("signing transaction: %w", err)
 	}
 	return tx, nil
 }
@@ -633,10 +633,10 @@ func (s *sep10Service) generateRandomNonce(n int) ([]byte, error) {
 	binary := make([]byte, n)
 	_, err := rand.Read(binary)
 	if err != nil {
-		return []byte{}, err
+		return []byte{}, fmt.Errorf("reading random bytes: %w", err)
 	}
 
-	return binary, err
+	return binary, nil
 }
 
 func (s *sep10Service) fetchSigningKeyFromClientDomain(clientDomain string) (string, error) {

@@ -436,11 +436,100 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 			wantStatusCode:   http.StatusOK,
 			wantResponseBody: `{"message": "MFA code sent to email. Check your inbox and spam folders."}`,
 		},
+		{
+			name:              "🟢[200] successful login with nil org settings - falls back to env settings (CAPTCHA disabled)",
+			ReCAPTCHADisabled: true,
+			MFAADisabled:      false,
+			req: Req{
+				body:    `{"email": "foobar@test.com","password": "pass1234"}`,
+				headers: map[string]string{DeviceIDHeader: "safari-xyz"},
+			},
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+				
+				authManagerMock.
+					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&usr, nil).
+					Once()
+				authManagerMock.
+					On("MFADeviceRemembered", mock.Anything, "safari-xyz", "user-ID").
+					Return(true, nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
+		{
+			name:              "🟢[200] successful login with nil org settings - falls back to env settings (MFA disabled)",
+			ReCAPTCHADisabled: false,
+			MFAADisabled:      true,
+			req:               defaultValidRequest,
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+				
+				reCAPTCHAValidatorMock.
+					On("IsTokenValid", mock.Anything, "XyZ").
+					Return(true, nil).
+					Once()
+				authManagerMock.
+					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&usr, nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
+		{
+			name:              "🟢[200] both org settings nil - falls back to both env settings disabled",
+			ReCAPTCHADisabled: true,
+			MFAADisabled:      true,
+			req: Req{
+				body:    `{"email": "foobar@test.com","password": "pass1234"}`,
+				headers: map[string]string{DeviceIDHeader: "safari-xyz"},
+			},
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+				
+				authManagerMock.
+					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&usr, nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Set up organization settings to match handler expectations
+			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
+			authManagerMock := auth.NewAuthManagerMock(t)
+			messengerClientMock := message.NewMessengerClientMock(t)
+
 			ctx := context.Background()
 			mfaDisabled := tc.MFAADisabled
 			captchaDisabled := tc.ReCAPTCHADisabled
@@ -449,10 +538,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 				CAPTCHADisabled: &captchaDisabled,
 			})
 			require.NoError(t, err)
-
-			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
-			authManagerMock := auth.NewAuthManagerMock(t)
-			messengerClientMock := message.NewMessengerClientMock(t)
+			
 			if tc.prepareMocks != nil {
 				tc.prepareMocks(t, reCAPTCHAValidatorMock, authManagerMock, messengerClientMock)
 			}

@@ -25,6 +25,7 @@ func createMockResponse(statusCode int, body any) *http.Response {
 		if str, ok := body.(string); ok {
 			bodyBytes = []byte(str)
 		} else {
+			//nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
 			jsonBytes, _ := json.Marshal(body)
 			bodyBytes = jsonBytes
 		}
@@ -105,7 +106,8 @@ func TestSDPSepServicesIntegrationTests_GetSEP10Challenge(t *testing.T) {
 			name: "✅ successful challenge creation",
 			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				challengeTx := createTestChallengeTransaction(t, receiverKP.Address(), clientDomainKP.Address())
-				txBase64, _ := challengeTx.Base64()
+				txBase64, err := challengeTx.Base64()
+				require.NoError(t, err)
 
 				expectedResponse := SEP10ChallengeResponse{
 					Transaction:       txBase64,

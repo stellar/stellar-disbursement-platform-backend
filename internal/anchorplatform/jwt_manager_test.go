@@ -229,10 +229,13 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 		{
 			name: "token signed with different secret",
 			setupToken: func() string {
-				token, _ := differentJWTManager.GenerateSEP10Token(
+				token, err := differentJWTManager.GenerateSEP10Token(
 					"issuer", "subject", "jti", "", "",
 					time.Now(), time.Now().Add(5*time.Minute),
 				)
+				if err != nil {
+					return ""
+				}
 				return token
 			},
 			wantErr:     true,
@@ -241,10 +244,13 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 		{
 			name: "expired SEP-10 token",
 			setupToken: func() string {
-				token, _ := jwtManager.GenerateSEP10Token(
+				token, err := jwtManager.GenerateSEP10Token(
 					"issuer", "subject", "jti", "", "",
 					time.Now().Add(-10*time.Minute), time.Now().Add(-5*time.Minute),
 				)
+				if err != nil {
+					return ""
+				}
 				return token
 			},
 			wantErr:     true,
@@ -253,10 +259,13 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 		{
 			name: "SEP-24 token parsed as SEP-10",
 			setupToken: func() string {
-				token, _ := jwtManager.GenerateSEP24Token(
+				token, err := jwtManager.GenerateSEP24Token(
 					"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 					"", "client.com", "home.com", "tx-123",
 				)
+				if err != nil {
+					return ""
+				}
 				return token
 			},
 			wantErr:     true,
