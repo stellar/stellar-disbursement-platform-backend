@@ -208,10 +208,10 @@ func Test_RandomCodeGenerator_Generate(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			code := generator.Generate(tc.length)
-			
+
 			assert.Equal(t, tc.expectedLength, len(code))
 			assert.NotContains(t, code, "-")
-			
+
 			for _, char := range code {
 				assert.True(t, (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f'),
 					"Character '%c' is not a valid UUID character", char)
@@ -222,22 +222,22 @@ func Test_RandomCodeGenerator_Generate(t *testing.T) {
 	t.Run("generates unique codes", func(t *testing.T) {
 		codes := make(map[string]bool)
 		generator := &RandomCodeGenerator{}
-		
+
 		for i := 0; i < 100; i++ {
 			code := generator.Generate(8)
 			assert.False(t, codes[code], "Duplicate code generated: %s", code)
 			codes[code] = true
 		}
-		
+
 		assert.Equal(t, 100, len(codes))
 	})
 
 	t.Run("handles small lengths", func(t *testing.T) {
 		generator := &RandomCodeGenerator{}
-		
+
 		code := generator.Generate(0)
 		assert.Equal(t, 0, len(code))
-		
+
 		code = generator.Generate(32)
 		assert.LessOrEqual(t, len(code), 32)
 		assert.NotContains(t, code, "-")

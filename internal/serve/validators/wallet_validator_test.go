@@ -599,8 +599,8 @@ func TestWalletValidator_inferAssetType(t *testing.T) {
 			},
 		},
 		{
-			name: "Empty asset - no inference",
-			input: AssetReference{},
+			name:     "Empty asset - no inference",
+			input:    AssetReference{},
 			expected: AssetReference{},
 		},
 		{
@@ -628,7 +628,7 @@ func TestWalletValidator_inferAssetType(t *testing.T) {
 	}
 
 	validator := &WalletValidator{}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := validator.inferAssetType(tc.input)
