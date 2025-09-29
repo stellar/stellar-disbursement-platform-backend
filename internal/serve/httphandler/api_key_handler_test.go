@@ -506,6 +506,14 @@ func Test_GetAPIKeyByIDEndpoints(t *testing.T) {
 		r.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
+
+	t.Run("missing user ID in context", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api-keys/some-id", nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+		assert.Contains(t, rr.Body.String(), "User identification error")
+	})
 }
 
 func Test_UpdateKeyEndpoints(t *testing.T) {

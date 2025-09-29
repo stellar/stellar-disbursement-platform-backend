@@ -450,7 +450,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 					Name: "Test Org",
 				})
 				require.NoError(t, err)
-				
+
 				authManagerMock.
 					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
 					Return("token", nil).
@@ -478,7 +478,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 					Name: "Test Org",
 				})
 				require.NoError(t, err)
-				
+
 				reCAPTCHAValidatorMock.
 					On("IsTokenValid", mock.Anything, "XyZ").
 					Return(true, nil).
@@ -509,7 +509,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 					Name: "Test Org",
 				})
 				require.NoError(t, err)
-				
+
 				authManagerMock.
 					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
 					Return("token", nil).
@@ -538,7 +538,7 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 				CAPTCHADisabled: &captchaDisabled,
 			})
 			require.NoError(t, err)
-			
+
 			if tc.prepareMocks != nil {
 				tc.prepareMocks(t, reCAPTCHAValidatorMock, authManagerMock, messengerClientMock)
 			}

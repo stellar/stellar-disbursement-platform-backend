@@ -130,7 +130,7 @@ func (s *SDPSepServicesIntegrationTests) GetSEP10Challenge(ctx context.Context) 
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
 	}()
 
 	if resp.StatusCode != http.StatusOK {
@@ -236,7 +236,7 @@ func (s *SDPSepServicesIntegrationTests) ValidateSEP10Challenge(ctx context.Cont
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
 	}()
 
 	if resp.StatusCode != http.StatusOK {
@@ -292,7 +292,7 @@ func (s *SDPSepServicesIntegrationTests) InitiateSEP24Deposit(ctx context.Contex
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
 	}()
 
 	if resp.StatusCode != http.StatusOK {
@@ -347,7 +347,7 @@ func (s *SDPSepServicesIntegrationTests) GetSEP24Transaction(ctx context.Context
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
 	}()
 
 	if resp.StatusCode != http.StatusOK {
@@ -396,7 +396,7 @@ func (s *SDPSepServicesIntegrationTests) CompleteReceiverRegistration(ctx contex
 		return fmt.Errorf("executing request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
 	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {

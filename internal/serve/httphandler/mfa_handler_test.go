@@ -297,7 +297,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 					Name: "Test Org",
 				})
 				require.NoError(t, err)
-				
+
 				authManagerMock.
 					On("AuthenticateMFA", mock.Anything, deviceID, "123456", mock.AnythingOfType("bool")).
 					Return("token", nil).
@@ -321,7 +321,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 					Name: "Test Org",
 				})
 				require.NoError(t, err)
-				
+
 				reCAPTCHAValidatorMock.
 					On("IsTokenValid", mock.Anything, "token").
 					Return(true, nil).
@@ -351,7 +351,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 				CAPTCHADisabled: &captchaDisabled,
 			})
 			require.NoError(t, err)
-			
+
 			if tc.prepareMocks != nil {
 				tc.prepareMocks(t, reCAPTCHAValidatorMock, authManager)
 			}

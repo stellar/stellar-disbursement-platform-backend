@@ -116,7 +116,7 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
-			
+
 			if tc.expectedStatusCode != http.StatusOK {
 				// For error cases, we expect a JSON error response, not CSV
 				assert.Contains(t, rr.Body.String(), "error")
@@ -266,7 +266,7 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
-			
+
 			if tc.expectedStatusCode != http.StatusOK {
 				// For error cases, we expect a JSON error response, not CSV
 				assert.Contains(t, rr.Body.String(), "error")
