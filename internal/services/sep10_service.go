@@ -34,7 +34,7 @@ type sep10Service struct {
 	SEP10SigningKeypair       *keypair.Full
 	JWTManager                *anchorplatform.JWTManager
 	HorizonClient             horizonclient.ClientInterface
-	HTTPClient                httpclient.HttpClientInterface
+	HTTPClient                httpclient.HTTPClientInterface
 	NetworkPassphrase         string
 	BaseURL                   string
 	JWTExpiration             time.Duration

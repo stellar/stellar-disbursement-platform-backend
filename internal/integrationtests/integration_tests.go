@@ -131,7 +131,7 @@ func (it *IntegrationTestsService) initServices(_ context.Context, opts Integrat
 	if !opts.EnableAnchorPlatform {
 		it.sdpSepServices = &SDPSepServicesIntegrationTests{
 			HTTPClient:                httpclient.DefaultClient(),
-			SDPBaseURL:                opts.ServerApiBaseURL,
+			SDPBaseURL:                opts.ServerAPIBaseURL,
 			TenantName:                opts.TenantName,
 			ReceiverAccountPublicKey:  opts.ReceiverAccountPublicKey,
 			ReceiverAccountPrivateKey: opts.ReceiverAccountPrivateKey,
@@ -470,7 +470,7 @@ func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Conte
 // to enable SEP-24 registration flow
 func (it *IntegrationTestsService) createReceiverWalletsForSEP24(ctx context.Context, disbursementID, walletID string) error {
 	// Get all receivers from the disbursement
-	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursementID)
+	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDBConnectionPool, &data.QueryParams{}, disbursementID)
 	if err != nil {
 		return fmt.Errorf("getting receivers from disbursement: %w", err)
 	}
@@ -478,7 +478,7 @@ func (it *IntegrationTestsService) createReceiverWalletsForSEP24(ctx context.Con
 	// Create receiver wallet for each receiver
 	for _, receiver := range receivers {
 		// Check if receiver wallet already exists
-		existingWallets, err := it.models.ReceiverWallet.GetWithReceiverIDs(ctx, it.mtnDbConnectionPool, data.ReceiverIDs{receiver.ID})
+		existingWallets, err := it.models.ReceiverWallet.GetWithReceiverIDs(ctx, it.mtnDBConnectionPool, data.ReceiverIDs{receiver.ID})
 		if err != nil {
 			return fmt.Errorf("checking existing receiver wallets for receiver %s: %w", receiver.ID, err)
 		}
@@ -494,7 +494,7 @@ func (it *IntegrationTestsService) createReceiverWalletsForSEP24(ctx context.Con
 
 		if !walletExists {
 			log.Ctx(ctx).Infof("Creating receiver wallet for receiver %s with wallet %s", receiver.ID, walletID)
-			_, err = it.models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, it.mtnDbConnectionPool, data.ReceiverWalletInsert{
+			_, err = it.models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, it.mtnDBConnectionPool, data.ReceiverWalletInsert{
 				ReceiverID: receiver.ID,
 				WalletID:   walletID,
 			})

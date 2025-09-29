@@ -96,14 +96,14 @@ func TestSDPSepServicesIntegrationTests_GetSEP10Challenge(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		setupMock      func(*httpclientMocks.HttpClientMock)
+		setupMock      func(*httpclientMocks.HTTPClientMock)
 		expectedError  bool
 		expectedStatus int
 		checkResponse  func(*testing.T, *SEP10ChallengeResponse)
 	}{
 		{
 			name: "✅ successful challenge creation",
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				challengeTx := createTestChallengeTransaction(t, receiverKP.Address(), clientDomainKP.Address())
 				txBase64, _ := challengeTx.Base64()
 
@@ -126,7 +126,7 @@ func TestSDPSepServicesIntegrationTests_GetSEP10Challenge(t *testing.T) {
 		},
 		{
 			name: "❌ server error",
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusInternalServerError, "Internal Server Error"), nil,
 				).Once()
@@ -136,7 +136,7 @@ func TestSDPSepServicesIntegrationTests_GetSEP10Challenge(t *testing.T) {
 		},
 		{
 			name: "❌ invalid response format",
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusOK, "invalid json"), nil,
 				).Once()
@@ -148,7 +148,7 @@ func TestSDPSepServicesIntegrationTests_GetSEP10Challenge(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockClient := &httpclientMocks.HttpClientMock{}
+			mockClient := &httpclientMocks.HTTPClientMock{}
 			tc.setupMock(mockClient)
 
 			service := &SDPSepServicesIntegrationTests{
@@ -267,7 +267,7 @@ func TestSDPSepServicesIntegrationTests_ValidateSEP10Challenge(t *testing.T) {
 	testCases := []struct {
 		name            string
 		signedChallenge *SignedSEP10Challenge
-		setupMock       func(*httpclientMocks.HttpClientMock)
+		setupMock       func(*httpclientMocks.HTTPClientMock)
 		expectedError   bool
 		expectedToken   string
 	}{
@@ -280,7 +280,7 @@ func TestSDPSepServicesIntegrationTests_ValidateSEP10Challenge(t *testing.T) {
 				},
 				SignedTransaction: "signed-transaction-base64",
 			},
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				expectedResponse := SEP10AuthToken{
 					Token: "jwt-token-here",
 				}
@@ -301,7 +301,7 @@ func TestSDPSepServicesIntegrationTests_ValidateSEP10Challenge(t *testing.T) {
 				},
 				SignedTransaction: "invalid-transaction",
 			},
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusBadRequest, "Invalid transaction"), nil,
 				).Once()
@@ -312,7 +312,7 @@ func TestSDPSepServicesIntegrationTests_ValidateSEP10Challenge(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockClient := &httpclientMocks.HttpClientMock{}
+			mockClient := &httpclientMocks.HTTPClientMock{}
 			tc.setupMock(mockClient)
 
 			service := &SDPSepServicesIntegrationTests{
@@ -343,7 +343,7 @@ func TestSDPSepServicesIntegrationTests_InitiateSEP24Deposit(t *testing.T) {
 	testCases := []struct {
 		name          string
 		sep10Token    *SEP10AuthToken
-		setupMock     func(*httpclientMocks.HttpClientMock)
+		setupMock     func(*httpclientMocks.HTTPClientMock)
 		expectedError bool
 		checkResponse func(*testing.T, *SEP24DepositResponse)
 	}{
@@ -352,7 +352,7 @@ func TestSDPSepServicesIntegrationTests_InitiateSEP24Deposit(t *testing.T) {
 			sep10Token: &SEP10AuthToken{
 				Token: "valid-jwt-token",
 			},
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				expectedResponse := SEP24DepositResponse{
 					Type:          "interactive_customer_info_needed",
 					URL:           "https://test.stellar.local:8000/sep24/interactive?token=sep24-token",
@@ -375,7 +375,7 @@ func TestSDPSepServicesIntegrationTests_InitiateSEP24Deposit(t *testing.T) {
 			sep10Token: &SEP10AuthToken{
 				Token: "invalid-token",
 			},
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusUnauthorized, "Unauthorized"), nil,
 				).Once()
@@ -386,7 +386,7 @@ func TestSDPSepServicesIntegrationTests_InitiateSEP24Deposit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockClient := &httpclientMocks.HttpClientMock{}
+			mockClient := &httpclientMocks.HTTPClientMock{}
 			tc.setupMock(mockClient)
 
 			service := &SDPSepServicesIntegrationTests{
@@ -421,7 +421,7 @@ func TestSDPSepServicesIntegrationTests_GetSEP24Transaction(t *testing.T) {
 		name          string
 		sep10Token    *SEP10AuthToken
 		transactionID string
-		setupMock     func(*httpclientMocks.HttpClientMock)
+		setupMock     func(*httpclientMocks.HTTPClientMock)
 		expectedError bool
 		checkResponse func(*testing.T, *SEP24TransactionStatus)
 	}{
@@ -431,7 +431,7 @@ func TestSDPSepServicesIntegrationTests_GetSEP24Transaction(t *testing.T) {
 				Token: "valid-jwt-token",
 			},
 			transactionID: "tx-123",
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				expectedResponse := SEP24TransactionStatus{
 					Transaction: struct {
 						ID              string     `json:"id"`
@@ -468,7 +468,7 @@ func TestSDPSepServicesIntegrationTests_GetSEP24Transaction(t *testing.T) {
 				Token: "valid-jwt-token",
 			},
 			transactionID: "nonexistent-tx",
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusNotFound, "Transaction not found"), nil,
 				).Once()
@@ -479,7 +479,7 @@ func TestSDPSepServicesIntegrationTests_GetSEP24Transaction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockClient := &httpclientMocks.HttpClientMock{}
+			mockClient := &httpclientMocks.HTTPClientMock{}
 			tc.setupMock(mockClient)
 
 			service := &SDPSepServicesIntegrationTests{
@@ -513,7 +513,7 @@ func TestSDPSepServicesIntegrationTests_CompleteReceiverRegistration(t *testing.
 		name             string
 		sep24Token       string
 		registrationData *ReceiverRegistrationRequest
-		setupMock        func(*httpclientMocks.HttpClientMock)
+		setupMock        func(*httpclientMocks.HTTPClientMock)
 		expectedError    bool
 	}{
 		{
@@ -526,7 +526,7 @@ func TestSDPSepServicesIntegrationTests_CompleteReceiverRegistration(t *testing.
 				VerificationField: "phone_number",
 				ReCAPTCHAToken:    "recaptcha-token",
 			},
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusOK, "Success"), nil,
 				).Once()
@@ -543,7 +543,7 @@ func TestSDPSepServicesIntegrationTests_CompleteReceiverRegistration(t *testing.
 				VerificationField: "email",
 				ReCAPTCHAToken:    "recaptcha-token",
 			},
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusCreated, "Success"), nil,
 				).Once()
@@ -560,7 +560,7 @@ func TestSDPSepServicesIntegrationTests_CompleteReceiverRegistration(t *testing.
 				VerificationField: "phone_number",
 				ReCAPTCHAToken:    "recaptcha-token",
 			},
-			setupMock: func(mockClient *httpclientMocks.HttpClientMock) {
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
 				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
 					createMockResponse(http.StatusUnauthorized, "Invalid token"), nil,
 				).Once()
@@ -571,7 +571,7 @@ func TestSDPSepServicesIntegrationTests_CompleteReceiverRegistration(t *testing.
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockClient := &httpclientMocks.HttpClientMock{}
+			mockClient := &httpclientMocks.HTTPClientMock{}
 			tc.setupMock(mockClient)
 
 			service := &SDPSepServicesIntegrationTests{

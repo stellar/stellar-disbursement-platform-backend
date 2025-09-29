@@ -29,7 +29,7 @@ type SDPSepServicesIntegrationTestsInterface interface {
 }
 
 type SDPSepServicesIntegrationTests struct {
-	HTTPClient                httpclient.HttpClientInterface
+	HTTPClient                httpclient.HTTPClientInterface
 	SDPBaseURL                string
 	TenantName                string
 	ReceiverAccountPublicKey  string

@@ -50,8 +50,8 @@ func createMockHorizonClient(accountID string, thresholds horizon.AccountThresho
 	return mockClient
 }
 
-func createMockHTTPClient(t *testing.T, clientDomainKP *keypair.Full) *mocks.HttpClientMock {
-	mockClient := mocks.NewHttpClientMock(t)
+func createMockHTTPClient(t *testing.T, clientDomainKP *keypair.Full) *mocks.HTTPClientMock {
+	mockClient := mocks.NewHTTPClientMock(t)
 	mockClient.
 		On("Get", mock.AnythingOfType("string")).
 		Return(func(_ string) *http.Response {
@@ -806,7 +806,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 	})
 
 	t.Run("valid signatures but wrong client domain account", func(t *testing.T) {
-		mockClient := mocks.NewHttpClientMock(t)
+		mockClient := mocks.NewHTTPClientMock(t)
 		mockClient.On("Get", mock.AnythingOfType("string")).Return(&http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + wrongKP.Address() + "\"\n")),
