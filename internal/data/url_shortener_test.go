@@ -169,3 +169,77 @@ func Test_URLShortenerModel_GetOrCreateShortCode(t *testing.T) {
 		})
 	}
 }
+
+func Test_RandomCodeGenerator_Generate(t *testing.T) {
+	generator := &RandomCodeGenerator{}
+
+	testCases := []struct {
+		name           string
+		length         int
+		expectedLength int
+	}{
+		{
+			name:           "generates code of length 5",
+			length:         5,
+			expectedLength: 5,
+		},
+		{
+			name:           "generates code of length 8",
+			length:         8,
+			expectedLength: 8,
+		},
+		{
+			name:           "generates code of length 9 (includes first hyphen)",
+			length:         9,
+			expectedLength: 8,
+		},
+		{
+			name:           "generates code of length 14 (includes two hyphens)",
+			length:         14,
+			expectedLength: 12,
+		},
+		{
+			name:           "generates code of length 1",
+			length:         1,
+			expectedLength: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			code := generator.Generate(tc.length)
+			
+			assert.Equal(t, tc.expectedLength, len(code))
+			assert.NotContains(t, code, "-")
+			
+			for _, char := range code {
+				assert.True(t, (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f'),
+					"Character '%c' is not a valid UUID character", char)
+			}
+		})
+	}
+
+	t.Run("generates unique codes", func(t *testing.T) {
+		codes := make(map[string]bool)
+		generator := &RandomCodeGenerator{}
+		
+		for i := 0; i < 100; i++ {
+			code := generator.Generate(8)
+			assert.False(t, codes[code], "Duplicate code generated: %s", code)
+			codes[code] = true
+		}
+		
+		assert.Equal(t, 100, len(codes))
+	})
+
+	t.Run("handles small lengths", func(t *testing.T) {
+		generator := &RandomCodeGenerator{}
+		
+		code := generator.Generate(0)
+		assert.Equal(t, 0, len(code))
+		
+		code = generator.Generate(32)
+		assert.LessOrEqual(t, len(code), 32)
+		assert.NotContains(t, code, "-")
+	})
+}

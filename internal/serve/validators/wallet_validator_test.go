@@ -515,3 +515,124 @@ func TestWalletValidator_AssetReferenceValidation(t *testing.T) {
 func boolToPtr(b bool) *bool {
 	return &b
 }
+
+func TestWalletValidator_inferAssetType(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    AssetReference
+		expected AssetReference
+	}{
+		{
+			name: "Asset with ID provided - no inference needed",
+			input: AssetReference{
+				ID:   "asset-123",
+				Code: "USDC",
+			},
+			expected: AssetReference{
+				ID:   "asset-123",
+				Code: "USDC",
+			},
+		},
+		{
+			name: "Asset with type already specified - no inference needed",
+			input: AssetReference{
+				Type: "classic",
+				Code: "USDC",
+			},
+			expected: AssetReference{
+				Type: "classic",
+				Code: "USDC",
+			},
+		},
+		{
+			name: "Native XLM asset - uppercase",
+			input: AssetReference{
+				Code:   "XLM",
+				Issuer: "",
+			},
+			expected: AssetReference{
+				Type:   "native",
+				Code:   "",
+				Issuer: "",
+			},
+		},
+		{
+			name: "Native xlm asset - lowercase",
+			input: AssetReference{
+				Code:   "xlm",
+				Issuer: "",
+			},
+			expected: AssetReference{
+				Type:   "native",
+				Code:   "",
+				Issuer: "",
+			},
+		},
+		{
+			name: "Classic asset with code and issuer",
+			input: AssetReference{
+				Code:   "USDC",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+			expected: AssetReference{
+				Type:   "classic",
+				Code:   "USDC",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+		},
+		{
+			name: "Asset with only code - no type inference",
+			input: AssetReference{
+				Code: "BOLT",
+			},
+			expected: AssetReference{
+				Code: "BOLT",
+			},
+		},
+		{
+			name: "Asset with only issuer - no type inference",
+			input: AssetReference{
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+			expected: AssetReference{
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+		},
+		{
+			name: "Empty asset - no inference",
+			input: AssetReference{},
+			expected: AssetReference{},
+		},
+		{
+			name: "XLM with issuer should be classic",
+			input: AssetReference{
+				Code:   "XLM",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+			expected: AssetReference{
+				Type:   "classic",
+				Code:   "XLM",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+		},
+		{
+			name: "Mixed case XLm without issuer",
+			input: AssetReference{
+				Code: "XLm",
+			},
+			expected: AssetReference{
+				Type: "native",
+				Code: "",
+			},
+		},
+	}
+
+	validator := &WalletValidator{}
+	
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validator.inferAssetType(tc.input)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
