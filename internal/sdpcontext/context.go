@@ -22,6 +22,10 @@ type (
 	apiKeyContextKey struct{}
 )
 
+const (
+	NoTenantName = "no_tenant"
+)
+
 // GetTenantFromContext retrieves the tenant information from the context.
 func GetTenantFromContext(ctx context.Context) (*schema.Tenant, error) {
 	currentTenant, ok := ctx.Value(tenantContextKey{}).(*schema.Tenant)
@@ -29,6 +33,15 @@ func GetTenantFromContext(ctx context.Context) (*schema.Tenant, error) {
 		return nil, ErrTenantNotFoundInContext
 	}
 	return currentTenant, nil
+}
+
+// MustGetTenantNameFromContext retrieves the tenant information from the context and defaults to a no_tenant if not found.
+func MustGetTenantNameFromContext(ctx context.Context) string {
+	t, err := GetTenantFromContext(ctx)
+	if err != nil || t == nil {
+		return NoTenantName
+	}
+	return t.Name
 }
 
 // SetTenantInContext stores the tenant information in the context.

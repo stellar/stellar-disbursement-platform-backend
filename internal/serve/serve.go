@@ -280,11 +280,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models: o.Models,
 			}
-			r.Get("/{id}", apiKeyHandler.GetApiKeyByID)
-			r.Get("/", apiKeyHandler.GetAllApiKeys)
+			r.Get("/{id}", apiKeyHandler.GetAPIKeyByID)
+			r.Get("/", apiKeyHandler.GetAllAPIKeys)
 			r.Post("/", apiKeyHandler.CreateAPIKey)
 			r.Patch("/{id}", apiKeyHandler.UpdateKey)
-			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
+			r.Delete("/{id}", apiKeyHandler.DeleteAPIKey)
 		})
 
 		// Statistics endpoints

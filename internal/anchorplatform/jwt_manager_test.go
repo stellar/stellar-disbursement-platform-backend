@@ -44,7 +44,6 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 
 	claims, err := jwtManager.ParseSEP24TokenClaims(token)
 	require.NoError(t, err)
-
 	assert.Equal(t, transactionID, claims.TransactionID())
 	assert.Equal(t, stellarAccount, claims.SEP10StellarAccount())
 	assert.Equal(t, stellarMemo, claims.SEP10StellarMemo())
@@ -90,7 +89,7 @@ func Test_JWTManager_GenerateAndParseSEP24MoreInfoToken(t *testing.T) {
 	// Verify full transaction data map
 	assert.Equal(t, lang, claims.TransactionData["lang"])
 	assert.Equal(t, "deposit", claims.TransactionData["kind"])
-	assert.Equal(t, "incomplete", claims.TransactionData["status"])
+	assert.Nil(t, claims.Valid())
 }
 
 func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {
@@ -109,8 +108,8 @@ func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {
 	assert.Nil(t, claims.Valid())
 	assert.Equal(t, "test-transaction-id", claims.ID)
 	assert.Equal(t, "stellar-disbursement-platform-backend", claims.Subject)
-	assert.True(t, claims.ExpiresAt.After(now.Add(time.Duration(4000*time.Millisecond))))
-	assert.True(t, claims.ExpiresAt.Before(now.Add(time.Duration(5000*time.Millisecond))))
+	assert.True(t, claims.ExpiresAt.After(now.Add(4000*time.Millisecond)))
+	assert.True(t, claims.ExpiresAt.Before(now.Add(5000*time.Millisecond)))
 }
 
 func Test_JWTManager_GenerateAndParseSEP10Token(t *testing.T) {

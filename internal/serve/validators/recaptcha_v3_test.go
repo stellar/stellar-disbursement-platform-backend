@@ -83,7 +83,7 @@ func TestGoogleReCAPTCHAV3Validator_IsTokenValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			httpClientMock := httpclientMocks.NewHttpClientMock(t)
+			httpClientMock := httpclientMocks.NewHTTPClientMock(t)
 
 			if tt.mockError != nil {
 				httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(nil, tt.mockError)
@@ -147,7 +147,7 @@ func TestNewGoogleReCAPTCHAV3Validator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			httpClientMock := httpclientMocks.NewHttpClientMock(t)
+			httpClientMock := httpclientMocks.NewHTTPClientMock(t)
 			validator := NewGoogleReCAPTCHAV3Validator("test-secret", tt.minScore, httpClientMock)
 
 			if validator.MinScore != tt.want {

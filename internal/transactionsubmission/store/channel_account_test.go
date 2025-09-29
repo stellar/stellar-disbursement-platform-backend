@@ -695,7 +695,7 @@ func Test_ChannelAccountModel_GetAndLockAll(t *testing.T) {
 		updatedChannelAccounts, err := chAccModel.GetAndLockAll(ctx, int(currLedgerNumber), int(lockToLedgerNumber), 0)
 		require.NoError(t, err)
 		for _, account := range updatedChannelAccounts {
-			assert.Equal(t, account.LockedUntilLedgerNumber.Int32, int32(lockToLedgerNumber))
+			assert.Equal(t, account.LockedUntilLedgerNumber.Int32, lockToLedgerNumber)
 		}
 
 		DeleteAllFromChannelAccounts(t, ctx, chAccModel.DBConnectionPool)
@@ -731,7 +731,7 @@ func Test_ChannelAccountModel_GetAndLock(t *testing.T) {
 
 		updatedAccount, err := chAccModel.GetAndLock(ctx, channelAccount.PublicKey, int(currLedgerNumber), int(lockToLedgerNumber))
 		require.NoError(t, err)
-		assert.Equal(t, updatedAccount.LockedUntilLedgerNumber.Int32, int32(lockToLedgerNumber))
+		assert.Equal(t, updatedAccount.LockedUntilLedgerNumber.Int32, lockToLedgerNumber)
 
 		DeleteAllFromChannelAccounts(t, ctx, chAccModel.DBConnectionPool)
 	})

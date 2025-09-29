@@ -17,7 +17,7 @@ import (
 )
 
 // CreateTransactionFixtures creates count number submitter transactions
-func CreateTransactionFixturesNew(t *testing.T,
+func CreateTransactionFixtures(t *testing.T,
 	ctx context.Context,
 	sqlExec db.SQLExecuter,
 	count int,
@@ -27,7 +27,7 @@ func CreateTransactionFixturesNew(t *testing.T,
 	for i := 0; i < count; i++ {
 		txFixtureCopy := txFixture
 		txFixtureCopy.ExternalID = keypair.MustRandom().Address()
-		tx := CreateTransactionFixtureNew(t, ctx, sqlExec, txFixtureCopy)
+		tx := CreateTransactionFixture(t, ctx, sqlExec, txFixtureCopy)
 		txs = append(txs, tx)
 	}
 
@@ -46,7 +46,7 @@ type TransactionFixture struct {
 }
 
 // CreateTransactionFixture creates a submitter transaction in the database
-func CreateTransactionFixtureNew(
+func CreateTransactionFixture(
 	t *testing.T,
 	ctx context.Context,
 	sqlExec db.SQLExecuter,
@@ -62,7 +62,8 @@ func CreateTransactionFixtureNew(
 
 	completedAt := pq.NullTime{}
 	if txFixture.Status == TransactionStatusSuccess || txFixture.Status == TransactionStatusError {
-		timeElapsed, _ := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
+		timeElapsed, err := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
+		require.NoError(t, err)
 		randomCompletedAt := time.Unix(timeElapsed.Int64(), 0)
 		completedAt = pq.NullTime{Time: randomCompletedAt, Valid: true}
 	}

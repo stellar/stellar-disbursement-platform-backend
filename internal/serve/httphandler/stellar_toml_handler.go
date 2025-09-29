@@ -136,7 +136,7 @@ func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// return a stellar.toml file for this tenant.
 		organization, innerErr := s.Models.Organizations.Get(ctx)
 		if innerErr != nil {
-			httperror.InternalError(ctx, "Cannot retrieve organization", err, nil).Render(w)
+			httperror.InternalError(ctx, "Cannot retrieve organization", innerErr, nil).Render(w)
 			return
 		}
 

@@ -288,7 +288,7 @@ func (rw *ReceiverWalletModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecu
 }
 
 // GetByReceiverIDsAndWalletID returns a list of receiver wallets by receiver IDs and wallet ID.
-func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, walletId string) ([]*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, walletID string) ([]*ReceiverWallet, error) {
 	receiverWallets := []*ReceiverWallet{}
 	query := `
 		SELECT
@@ -297,7 +297,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 		WHERE rw.receiver_id = ANY($1)
 		AND rw.wallet_id = $2
 	`
-	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverIds), walletId)
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverIds), walletID)
 	if err != nil {
 		return nil, fmt.Errorf("error querying receiver wallets: %w", err)
 	}
@@ -436,22 +436,22 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx
 
 // GetOrInsertReceiverWallet inserts a new receiver wallet into the database.
 func (rw *ReceiverWalletModel) GetOrInsertReceiverWallet(ctx context.Context, sqlExec db.SQLExecuter, insert ReceiverWalletInsert) (string, error) {
-	var newId string
+	var newID string
 	query := `
 		INSERT INTO receiver_wallets (receiver_id, wallet_id)
 		VALUES ($1, $2)
 		RETURNING id
 	`
 
-	err := sqlExec.GetContext(ctx, &newId, query, insert.ReceiverID, insert.WalletID)
+	err := sqlExec.GetContext(ctx, &newID, query, insert.ReceiverID, insert.WalletID)
 	if err != nil {
 		return "", fmt.Errorf("error inserting receiver wallet: %w", err)
 	}
-	return newId, nil
+	return newID, nil
 }
 
 // GetByReceiverIDAndWalletDomain returns a receiver wallet that match the receiver ID and wallet domain.
-func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Context, receiverId string, walletDomain string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Context, receiverID string, walletDomain string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
 	query := `
 		SELECT
 			` + ReceiverWalletColumnNames("rw", "") + `,
@@ -466,7 +466,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	`
 
 	var receiverWallet ReceiverWallet
-	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverId, walletDomain)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletDomain)
 	if err != nil {
 		return nil, fmt.Errorf("error querying receiver wallet: %w", err)
 	}
@@ -573,7 +573,7 @@ func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx conte
 }
 
 // RetryInvitationMessage sets null the invitation_sent_at of a receiver wallet.
-func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletId string) (*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
 	query := `
 		UPDATE
@@ -584,7 +584,7 @@ func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlEx
 		AND rw.status = 'READY'
 		RETURNING ` + ReceiverWalletColumnNames("", "")
 
-	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverWalletId)
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverWalletID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
@@ -707,10 +707,9 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	query = sqlExec.Rebind(query)
 	result, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
-		if pqError, ok := err.(*pq.Error); ok {
-			if pqError.Code == "P0001" && strings.Contains(pqError.Message, "already belongs to another receiver") {
-				return ErrDuplicateWalletAddress
-			}
+		var pqError *pq.Error
+		if errors.As(err, &pqError) && pqError.Code == "P0001" && strings.Contains(pqError.Message, "already belongs to another receiver") {
+			return ErrDuplicateWalletAddress
 		}
 		return fmt.Errorf("updating receiver wallet: %w", err)
 	}

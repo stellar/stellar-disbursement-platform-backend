@@ -87,7 +87,7 @@ func Test_APIKeyOrJWTAuthenticate_IPRestriction(t *testing.T) {
 	require.NoError(t, err)
 
 	r := chi.NewRouter()
-	r.Use(APIKeyOrJWTAuthenticate(apiKeyModel, jwtAuthWithID("jwt-user")))
+	r.Use(APIKeyOrJWTAuthenticate(apiKeyModel, jwtAuthWithID("user")))
 	r.Get("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -107,8 +107,10 @@ func Test_APIKeyOrJWTAuthenticate_JWTFallback(t *testing.T) {
 
 	// handler echoes the user ID from context
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, _ := sdpcontext.GetUserIDFromContext(r.Context())
-		_, _ = w.Write([]byte(id))
+		id, err := sdpcontext.GetUserIDFromContext(r.Context())
+		require.NoError(t, err)
+		_, err = w.Write([]byte(id))
+		require.NoError(t, err)
 	})
 
 	// JWT path sets id to 'jwt-user'

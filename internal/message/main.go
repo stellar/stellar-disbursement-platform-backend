@@ -71,9 +71,6 @@ type MessengerOptions struct {
 	// Twilio WhatsApp Templates
 	TwilioWhatsAppReceiverInvitationTemplateSID string
 	TwilioWhatsAppReceiverOTPTemplateSID        string
-	TwilioWhatsAppUserInvitationTemplateSID     string
-	TwilioWhatsAppUserForgotPasswordTemplateSID string
-	TwilioWhatsAppUserMFATemplateSID            string
 
 	// Twilio Email (SendGrid)
 	TwilioSendGridAPIKey        string
@@ -97,9 +94,6 @@ func GetClient(opts MessengerOptions) (MessengerClient, error) {
 		templates := map[MessageType]string{
 			MessageTypeReceiverInvitation: opts.TwilioWhatsAppReceiverInvitationTemplateSID,
 			MessageTypeReceiverOTP:        opts.TwilioWhatsAppReceiverOTPTemplateSID,
-			MessageTypeUserInvitation:     opts.TwilioWhatsAppUserInvitationTemplateSID,
-			MessageTypeUserForgotPassword: opts.TwilioWhatsAppUserForgotPasswordTemplateSID,
-			MessageTypeUserMFA:            opts.TwilioWhatsAppUserMFATemplateSID,
 		}
 		return NewTwilioWhatsAppClient(opts.TwilioAccountSID, opts.TwilioAuthToken, opts.TwilioWhatsAppFromNumber, templates)
 	case MessengerTypeTwilioEmail:

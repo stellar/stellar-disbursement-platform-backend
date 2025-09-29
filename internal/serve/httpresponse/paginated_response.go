@@ -55,7 +55,7 @@ func NewPaginatedResponse(r *http.Request, data interface{}, currentPage, pageLi
 
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
-		return PaginatedResponse{}, err
+		return PaginatedResponse{}, fmt.Errorf("marshalling data: %w", err)
 	}
 
 	return PaginatedResponse{

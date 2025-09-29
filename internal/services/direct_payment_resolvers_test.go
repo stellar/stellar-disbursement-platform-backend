@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,6 +46,7 @@ func TestAssetResolver_Validate(t *testing.T) {
 			expectedError: ValidationError{
 				EntityType: EntityTypeAsset,
 				Field:      FieldType,
+				Message:    "invalid type 'chaos', must be one of: native, classic, contract, fiat",
 			},
 		},
 		{
@@ -165,17 +165,7 @@ func TestAssetResolver_Validate(t *testing.T) {
 
 			if tc.expectedError != nil {
 				require.Error(t, err)
-
-				switch expectedErr := tc.expectedError.(type) {
-				case ValidationError:
-					var validationErr ValidationError
-					require.True(t, errors.As(err, &validationErr))
-					assert.Equal(t, expectedErr.EntityType, validationErr.EntityType)
-					assert.Equal(t, expectedErr.Field, validationErr.Field)
-					if expectedErr.Message != "" {
-						assert.Equal(t, expectedErr.Message, validationErr.Message)
-					}
-				}
+				require.Equal(t, tc.expectedError, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -286,29 +276,7 @@ func TestAssetResolver_Resolve(t *testing.T) {
 
 			if tc.expectedError != nil {
 				require.Error(t, err)
-
-				switch expectedErr := tc.expectedError.(type) {
-				case NotFoundError:
-					var notFoundErr NotFoundError
-					require.True(t, errors.As(err, &notFoundErr))
-					assert.Equal(t, expectedErr.EntityType, notFoundErr.EntityType)
-					if expectedErr.Reference != "" {
-						assert.Equal(t, expectedErr.Reference, notFoundErr.Reference)
-					}
-				case UnsupportedError:
-					var unsupportedErr UnsupportedError
-					require.True(t, errors.As(err, &unsupportedErr))
-					assert.Equal(t, expectedErr.EntityType, unsupportedErr.EntityType)
-					assert.Equal(t, expectedErr.Feature, unsupportedErr.Feature)
-				case ValidationError:
-					var validationErr ValidationError
-					require.True(t, errors.As(err, &validationErr))
-					assert.Equal(t, expectedErr.EntityType, validationErr.EntityType)
-					assert.Equal(t, expectedErr.Field, validationErr.Field)
-					if expectedErr.Message != "" {
-						assert.Equal(t, expectedErr.Message, validationErr.Message)
-					}
-				}
+				require.Equal(t, tc.expectedError, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantAsset.ID, asset.ID)
@@ -354,6 +322,7 @@ func TestReceiverResolver_Validate(t *testing.T) {
 			expectedError: ValidationError{
 				EntityType: EntityTypeReceiver,
 				Field:      FieldEmail,
+				Message:    "invalid format: not-an-email",
 			},
 		},
 		{
@@ -364,6 +333,7 @@ func TestReceiverResolver_Validate(t *testing.T) {
 			expectedError: ValidationError{
 				EntityType: EntityTypeReceiver,
 				Field:      FieldPhoneNumber,
+				Message:    "invalid format: 123",
 			},
 		},
 		{
@@ -374,6 +344,7 @@ func TestReceiverResolver_Validate(t *testing.T) {
 			expectedError: ValidationError{
 				EntityType: EntityTypeReceiver,
 				Field:      FieldWalletAddress,
+				Message:    "invalid stellar address format: not-stellar-address",
 			},
 		},
 		{
@@ -419,6 +390,7 @@ func TestReceiverResolver_Validate(t *testing.T) {
 			expectedError: ValidationError{
 				EntityType: EntityTypeReceiver,
 				Field:      FieldReference,
+				Message:    "must be specified by id, email, phone_number, or wallet_address",
 			},
 		},
 	}
@@ -430,17 +402,7 @@ func TestReceiverResolver_Validate(t *testing.T) {
 
 			if tc.expectedError != nil {
 				require.Error(t, err)
-
-				switch expectedErr := tc.expectedError.(type) {
-				case ValidationError:
-					var validationErr ValidationError
-					require.True(t, errors.As(err, &validationErr))
-					assert.Equal(t, expectedErr.EntityType, validationErr.EntityType)
-					assert.Equal(t, expectedErr.Field, validationErr.Field)
-					if expectedErr.Message != "" {
-						assert.Equal(t, expectedErr.Message, validationErr.Message)
-					}
-				}
+				require.Equal(t, tc.expectedError, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -523,6 +485,7 @@ func TestReceiverResolver_Resolve(t *testing.T) {
 			},
 			expectedError: NotFoundError{
 				EntityType: EntityTypeReceiver,
+				Message:    "no receiver found with contact info: chaos@warp.imperium",
 			},
 		},
 		{
@@ -532,6 +495,7 @@ func TestReceiverResolver_Resolve(t *testing.T) {
 			},
 			expectedError: NotFoundError{
 				EntityType: EntityTypeReceiver,
+				Message:    "no receiver found with wallet address: GD6VWBXI6NY3AOOR55RLVQ4MNIDSXE5JSAVXUTF35FRRI72LYPI3WL6Z",
 			},
 		},
 		{
@@ -551,24 +515,7 @@ func TestReceiverResolver_Resolve(t *testing.T) {
 
 			if tc.expectedError != nil {
 				require.Error(t, err)
-
-				switch expectedErr := tc.expectedError.(type) {
-				case NotFoundError:
-					var notFoundErr NotFoundError
-					require.True(t, errors.As(err, &notFoundErr))
-					assert.Equal(t, expectedErr.EntityType, notFoundErr.EntityType)
-					if expectedErr.Reference != "" {
-						assert.Equal(t, expectedErr.Reference, notFoundErr.Reference)
-					}
-				case ValidationError:
-					var validationErr ValidationError
-					require.True(t, errors.As(err, &validationErr))
-					assert.Equal(t, expectedErr.EntityType, validationErr.EntityType)
-					assert.Equal(t, expectedErr.Field, validationErr.Field)
-					if expectedErr.Message != "" {
-						assert.Equal(t, expectedErr.Message, validationErr.Message)
-					}
-				}
+				require.Equal(t, tc.expectedError, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantReceiver.ID, resolvedReceiver.ID)
@@ -665,6 +612,7 @@ func TestWalletResolver_Validate(t *testing.T) {
 			expectedError: ValidationError{
 				EntityType: EntityTypeWallet,
 				Field:      FieldAddress,
+				Message:    "invalid stellar address format: not-a-stellar-address",
 			},
 		},
 		{
@@ -699,17 +647,7 @@ func TestWalletResolver_Validate(t *testing.T) {
 
 			if tc.expectedError != nil {
 				require.Error(t, err)
-
-				switch expectedErr := tc.expectedError.(type) {
-				case ValidationError:
-					var validationErr ValidationError
-					require.True(t, errors.As(err, &validationErr))
-					assert.Equal(t, expectedErr.EntityType, validationErr.EntityType)
-					assert.Equal(t, expectedErr.Field, validationErr.Field)
-					if expectedErr.Message != "" {
-						assert.Equal(t, expectedErr.Message, validationErr.Message)
-					}
-				}
+				require.Equal(t, tc.expectedError, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -786,24 +724,7 @@ func TestWalletResolver_Resolve(t *testing.T) {
 
 			if tc.expectedError != nil {
 				require.Error(t, err)
-
-				switch expectedErr := tc.expectedError.(type) {
-				case NotFoundError:
-					var notFoundErr NotFoundError
-					require.True(t, errors.As(err, &notFoundErr))
-					assert.Equal(t, expectedErr.EntityType, notFoundErr.EntityType)
-					if expectedErr.Reference != "" {
-						assert.Equal(t, expectedErr.Reference, notFoundErr.Reference)
-					}
-				case ValidationError:
-					var validationErr ValidationError
-					require.True(t, errors.As(err, &validationErr))
-					assert.Equal(t, expectedErr.EntityType, validationErr.EntityType)
-					assert.Equal(t, expectedErr.Field, validationErr.Field)
-					if expectedErr.Message != "" {
-						assert.Equal(t, expectedErr.Message, validationErr.Message)
-					}
-				}
+				require.Equal(t, tc.expectedError, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantWallet.ID, wallet.ID)

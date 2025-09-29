@@ -225,7 +225,8 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 			newWallet.Name, newWallet.Homepage, newWallet.DeepLinkSchema, newWallet.SEP10ClientDomain, newWallet.Enabled,
 			pq.Array(newWallet.AssetsIDs),
 		); err != nil {
-			if pqError, ok := err.(*pq.Error); ok {
+			var pqError *pq.Error
+			if errors.As(err, &pqError) {
 				constraintErrMap := map[string]error{
 					"wallets_assets_asset_id_fkey": ErrInvalidAssetID,
 					"wallets_name_key":             ErrWalletNameAlreadyExists,
@@ -245,7 +246,7 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 		return &w, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inserting wallet: %w", err)
 	}
 
 	return wallet, nil
@@ -301,7 +302,7 @@ func (wm *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset,
 	return assets, nil
 }
 
-func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
+func (wm *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
 	const query = `
 		UPDATE
 			wallets
@@ -314,7 +315,7 @@ func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet,
 	`
 
 	var wallet Wallet
-	err := w.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
+	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
@@ -371,7 +372,8 @@ func (wm *WalletModel) Update(ctx context.Context, walletID string, update Walle
 				if errors.Is(err, sql.ErrNoRows) {
 					return nil, ErrRecordNotFound
 				}
-				if pqError, ok := err.(*pq.Error); ok {
+				var pqError *pq.Error
+				if errors.As(err, &pqError) {
 					constraintErrMap := map[string]error{
 						"wallets_name_key":             ErrWalletNameAlreadyExists,
 						"wallets_homepage_key":         ErrWalletHomepageAlreadyExists,
@@ -406,7 +408,8 @@ func (wm *WalletModel) Update(ctx context.Context, walletID string, update Walle
 					ON CONFLICT DO NOTHING
 				`
 				if _, err := dbTx.ExecContext(ctx, q, walletID, pq.Array(*update.AssetsIDs)); err != nil {
-					if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "wallets_assets_asset_id_fkey" {
+					var pqError *pq.Error
+					if errors.As(err, &pqError) && pqError.Constraint == "wallets_assets_asset_id_fkey" {
 						return nil, ErrInvalidAssetID
 					}
 					return nil, fmt.Errorf("inserting new wallet assets: %w", err)
@@ -417,7 +420,7 @@ func (wm *WalletModel) Update(ctx context.Context, walletID string, update Walle
 		return &w, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("updating wallet: %w", err)
 	}
 
 	return wm.Get(ctx, wallet.ID)

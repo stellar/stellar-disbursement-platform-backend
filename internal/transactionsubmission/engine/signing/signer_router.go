@@ -231,7 +231,7 @@ func (r *SignerRouterImpl) BatchInsert(
 	}
 
 	publicKeys, err := sigClient.BatchInsert(ctx, number)
-	if err != nil && !(errors.Is(err, ErrUnsupportedCommand) && len(publicKeys) > 0) {
+	if err != nil && (!errors.Is(err, ErrUnsupportedCommand) || len(publicKeys) == 0) {
 		return nil, fmt.Errorf("batch inserting accounts for strategy=%s: %w", accountType, err)
 	}
 
@@ -243,7 +243,10 @@ func (r *SignerRouterImpl) BatchInsert(
 		})
 	}
 
-	return stellarAccounts, err
+	if err != nil {
+		return stellarAccounts, fmt.Errorf("batch inserting accounts for strategy=%s: %w", accountType, err)
+	}
+	return stellarAccounts, nil
 }
 
 func (r *SignerRouterImpl) Delete(

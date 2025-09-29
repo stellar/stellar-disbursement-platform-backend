@@ -105,7 +105,7 @@ func SetConfigOptionEC256PrivateKey(co *config.ConfigOption) error {
 	privateKey := viper.GetString(co.Name)
 
 	// We must remove the literal \n in case of the config options being set this way
-	privateKey = strings.Replace(privateKey, `\n`, "\n", -1)
+	privateKey = strings.ReplaceAll(privateKey, `\n`, "\n")
 
 	_, err := utils.ParseStrongECPrivateKey(privateKey)
 	if err != nil {

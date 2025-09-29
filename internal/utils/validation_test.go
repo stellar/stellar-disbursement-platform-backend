@@ -332,7 +332,7 @@ func Test_ValidateNationalIDVerification(t *testing.T) {
 	}{
 		{"valid National ID", "1234567890", nil, ""},
 		{"invalid National ID - empty", "", fmt.Errorf("national id cannot be empty"), httperror.Extra_0},
-		{"invalid National ID - too long", fmt.Sprintf("%0*d", VerificationFieldMaxIdLength+1, 0), fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIdLength), httperror.Extra_6},
+		{"invalid National ID - too long", fmt.Sprintf("%0*d", VerificationFieldMaxIDLength+1, 0), fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIDLength), httperror.Extra_6},
 	}
 
 	for _, tt := range tests {
@@ -405,10 +405,10 @@ func Test_ValidateNoHTML(t *testing.T) {
 	}
 
 	for i, tc := range rawHTMLTestCases {
-		encodedHtmlStr := html.EscapeString(tc)
-		t.Run(fmt.Sprintf("encodedHTML/%d(%s)", i, encodedHtmlStr), func(t *testing.T) {
-			err := ValidateNoHTML(encodedHtmlStr)
-			require.Error(t, err, "ValidateNoHTML(%q) didn't catch the error", encodedHtmlStr)
+		encodedHTMLStr := html.EscapeString(tc)
+		t.Run(fmt.Sprintf("encodedHTML/%d(%s)", i, encodedHTMLStr), func(t *testing.T) {
+			err := ValidateNoHTML(encodedHTMLStr)
+			require.Error(t, err, "ValidateNoHTML(%q) didn't catch the error", encodedHTMLStr)
 		})
 	}
 }

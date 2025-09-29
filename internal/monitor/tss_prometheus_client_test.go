@@ -21,18 +21,18 @@ func Test_TSSPrometheusClient_GetMetricType(t *testing.T) {
 	assert.Equal(t, MetricTypeTSSPrometheus, metricType)
 }
 
-func Test_TSSPrometheusClient_GetMetricHttpHandler(t *testing.T) {
+func Test_TSSPrometheusClient_GetMetricHTTPHandler(t *testing.T) {
 	mTSSPrometheusClient := &tssPrometheusClient{}
 
-	mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	mHTTPHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{"status": "OK"}`))
 		require.NoError(t, err)
 	})
 
-	mTSSPrometheusClient.httpHandler = mHttpHandler
+	mTSSPrometheusClient.httpHandler = mHTTPHandler
 
-	httpHandler := mTSSPrometheusClient.GetMetricHttpHandler()
+	httpHandler := mTSSPrometheusClient.GetMetricHTTPHandler()
 
 	r := chi.NewRouter()
 	r.Get("/metrics", httpHandler.ServeHTTP)
@@ -43,8 +43,8 @@ func Test_TSSPrometheusClient_GetMetricHttpHandler(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	wantJson := `{"status": "OK"}`
-	assert.JSONEq(t, wantJson, rr.Body.String())
+	wantJSON := `{"status": "OK"}`
+	assert.JSONEq(t, wantJSON, rr.Body.String())
 }
 
 func Test_TSSPrometheusClient_MonitorDBQueryDuration(t *testing.T) {
@@ -273,5 +273,90 @@ func Test_TSSPrometheusClient_MonitorHistogram(t *testing.T) {
 		assert.Contains(t, body, metric)
 
 		HistogramTSSVecMetrics[TransactionStartedToCompletedLatencyTag].Reset()
+	})
+}
+
+func Test_TSSPrometheusClient_RegisterFunctionMetric(t *testing.T) {
+	client, err := NewTSSPrometheusClient()
+	require.NoError(t, err)
+
+	t.Run("gauge function metric", func(t *testing.T) {
+		called := false
+		testFunc := func() float64 {
+			called = true
+			return 55.66
+		}
+
+		opts := FuncMetricOptions{
+			Namespace:  "tss",
+			Subservice: "db",
+			Name:       "gauge_test",
+			Help:       "TSS Test gauge",
+			Labels:     map[string]string{"pool": "tss"},
+			Function:   testFunc,
+		}
+
+		// Should not panic
+		client.RegisterFunctionMetric(FuncGaugeType, opts)
+
+		// Verify function metric is accessible through HTTP handler
+		r := chi.NewRouter()
+		r.Get("/metrics", client.httpHandler.ServeHTTP)
+
+		req, err := http.NewRequest("GET", "/metrics", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		data, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body := string(data)
+
+		// Check that the metric appears in output
+		assert.Contains(t, body, "tss_db_gauge_test")
+		assert.Contains(t, body, "55.66")
+		assert.True(t, called, "Function should have been called")
+	})
+
+	t.Run("counter function metric", func(t *testing.T) {
+		called := false
+		testFunc := func() float64 {
+			called = true
+			return 77.88
+		}
+
+		opts := FuncMetricOptions{
+			Namespace:  "tss",
+			Subservice: "db",
+			Name:       "counter_test",
+			Help:       "TSS Test counter",
+			Labels:     map[string]string{"pool": "tss"},
+			Function:   testFunc,
+		}
+
+		// Should not panic
+		client.RegisterFunctionMetric(FuncCounterType, opts)
+
+		// Verify function metric is accessible through HTTP handler
+		r := chi.NewRouter()
+		r.Get("/metrics", client.httpHandler.ServeHTTP)
+
+		req, err := http.NewRequest("GET", "/metrics", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		data, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body := string(data)
+
+		// Check that the metric appears in output
+		assert.Contains(t, body, "tss_db_counter_test")
+		assert.Contains(t, body, "77.88")
+		assert.True(t, called, "Function should have been called")
 	})
 }

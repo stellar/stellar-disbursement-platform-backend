@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -43,6 +44,8 @@ func Test_dependencyinjection_NewTSSDBConnectionPool(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		// Expect 8 RegisterFunctionMetric calls for database connection pool metrics
+		mMonitorService.On("RegisterFunctionMetric", mock.Anything, mock.Anything).Times(8)
 		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN, MonitorService: mMonitorService}
 
 		gotDependency, err := NewTSSDBConnectionPool(ctx, opts)

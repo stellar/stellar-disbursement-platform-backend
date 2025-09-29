@@ -16,3 +16,43 @@ docker-push:
 
 go-install:
 	go build -o $(GOPATH)/bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$(LABEL)" .
+
+go-test:
+	@echo ""
+	@echo "🧪 Running unit tests..."
+	gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails
+	@echo "✅ Unit tests completed successfully"
+
+go-lint:
+	@echo ""
+	@echo "🔍 Running golangci-lint..."
+	golangci-lint run
+	@echo "✅ golangci-lint completed successfully"
+
+go-shadow:
+	@echo ""
+	@echo "🌑 Running shadow variable detection..."
+	shadow ./...
+	@echo "✅ Shadow check completed successfully"
+
+go-mod:
+	@echo ""
+	@echo "📦 Verifying Go modules..."
+	./gomod.sh
+	@echo "✅ Module verification completed successfully"
+
+go-deadcode:
+	@echo ""
+	@echo "💀 Running dead code detection..."
+	deadcode -test ./...
+	@echo "✅ Dead code check completed successfully"
+
+go-exhaustive:
+	@echo ""
+	@echo "🔄 Running exhaustive enum checking..."
+	exhaustive -default-signifies-exhaustive ./...
+	@echo "✅ Exhaustive check completed successfully"
+
+go-check: go-test go-lint go-shadow go-mod go-deadcode go-exhaustive
+	@echo ""
+	@echo "🎉🎉🎉 All Go checks completed successfully! 🎉🎉🎉"
