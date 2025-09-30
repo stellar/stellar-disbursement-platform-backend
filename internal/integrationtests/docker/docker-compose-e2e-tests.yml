@@ -156,19 +156,6 @@ services:
         ./stellar-disbursement-platform tss
 
   kafka:
-    container_name: e2e-platform-postgres-db
-    image: postgres:14-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: e2e-postgres
-      PGPORT: 5433
-    ports:
-      - "5433:5433"
-    volumes:
-      - e2e-postgres-ap-db:/data/postgres
-
-  kafka:
     container_name: e2e-kafka
     image: apache/kafka:3.7.0
     ports:
