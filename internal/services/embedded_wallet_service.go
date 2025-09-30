@@ -21,6 +21,10 @@ var (
 	ErrMissingCredentialID       = fmt.Errorf("credential ID is required")
 	ErrInvalidCredentialID       = fmt.Errorf("credential ID does not exist")
 	ErrCredentialIDAlreadyExists = fmt.Errorf("credential ID already exists")
+
+	// Sponsored transaction errors
+	ErrMissingAccount      = fmt.Errorf("account is required")
+	ErrMissingOperationXDR = fmt.Errorf("operation XDR is required")
 )
 
 //go:generate mockery --name=EmbeddedWalletServiceInterface --case=underscore --structname=MockEmbeddedWalletService --filename=embedded_wallet_service.go
@@ -31,6 +35,10 @@ type EmbeddedWalletServiceInterface interface {
 	CreateWallet(ctx context.Context, token, publicKey, credentialID string) error
 	// GetWalletByCredentialID retrieves an embedded wallet by credential ID
 	GetWalletByCredentialID(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error)
+	// SponsorTransaction sponsors a transaction on behalf of the embedded wallet
+	SponsorTransaction(ctx context.Context, account, operationXDR string) (string, error)
+	// GetTransactionStatus retrieves a sponsored transaction by ID
+	GetTransactionStatus(ctx context.Context, transactionID string) (*data.SponsoredTransaction, error)
 }
 
 var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
@@ -170,5 +178,64 @@ func (e *EmbeddedWalletService) GetWalletByCredentialID(ctx context.Context, cre
 			return nil, fmt.Errorf("getting wallet by credential ID %s: %w", credentialID, err)
 		}
 		return embeddedWallet, nil
+	})
+}
+
+func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account, operationXDR string) (string, error) {
+	if account == "" {
+		return "", ErrMissingAccount
+	}
+	if operationXDR == "" {
+		return "", ErrMissingOperationXDR
+	}
+
+	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(sdpTx db.DBTransaction) (string, error) {
+		insert := data.SponsoredTransactionInsert{
+			ID:           uuid.New().String(),
+			Account:      account,
+			OperationXDR: operationXDR,
+			Status:       data.PendingSponsoredTransactionStatus,
+		}
+		sponsoredTx, err := e.sdpModels.SponsoredTransactions.Insert(ctx, sdpTx, insert)
+		if err != nil {
+			return "", fmt.Errorf("creating sponsored transaction: %w", err)
+		}
+
+		currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
+		if err != nil {
+			return "", fmt.Errorf("getting tenant from context: %w", err)
+		}
+
+		tssTransaction := &store.Transaction{
+			ExternalID:      sponsoredTx.ID,
+			TransactionType: store.TransactionTypeSponsored,
+			TenantID:        currentTenant.ID,
+			Sponsored: store.Sponsored{
+				SponsoredAccount:        account,
+				SponsoredTransactionXDR: operationXDR,
+			},
+		}
+
+		_, err = e.tssModel.BulkInsert(ctx, e.tssModel.DBConnectionPool, []store.Transaction{*tssTransaction})
+		if err != nil {
+			return "", fmt.Errorf("creating TSS transaction for processing: %w", err)
+		}
+
+		return sponsoredTx.ID, nil
+	})
+}
+
+func (e *EmbeddedWalletService) GetTransactionStatus(ctx context.Context, transactionID string) (*data.SponsoredTransaction, error) {
+	if transactionID == "" {
+		return nil, fmt.Errorf("transaction ID is required")
+	}
+
+	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(sdpTx db.DBTransaction) (*data.SponsoredTransaction, error) {
+		sponsoredTx, err := e.sdpModels.SponsoredTransactions.GetByID(ctx, sdpTx, transactionID)
+		if err != nil {
+			return nil, fmt.Errorf("getting sponsored transaction by ID %s: %w", transactionID, err)
+		}
+
+		return sponsoredTx, nil
 	})
 }

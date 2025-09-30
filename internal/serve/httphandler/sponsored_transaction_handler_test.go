@@ -1,0 +1,203 @@
+package httphandler
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+)
+
+func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := SponsoredTransactionHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	t.Run("returns bad request when JSON is malformed", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		ctx := context.Background()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader("invalid-json"))
+		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	})
+
+	t.Run("returns bad request when operation_xdr is empty", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		requestBody, _ := json.Marshal(CreateSponsoredTransactionRequest{
+			OperationXDR: "",
+		})
+		ctx := context.Background()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	})
+
+	t.Run("returns bad request when operation_xdr is invalid base64", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		requestBody, _ := json.Marshal(CreateSponsoredTransactionRequest{
+			OperationXDR: "invalid-base64-!!!",
+		})
+		ctx := context.Background()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	})
+
+	t.Run("returns bad request when operation_xdr is not valid XDR", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		requestBody := `{"operation_xdr": "aGVsbG8gd29ybGQ="}`
+		ctx := context.Background()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(requestBody))
+		req.Header.Set("Content-Type", "application/json")
+		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	})
+}
+
+func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
+	walletService := mocks.NewMockEmbeddedWalletService(t)
+	handler := SponsoredTransactionHandler{
+		EmbeddedWalletService: walletService,
+	}
+
+	t.Run("returns bad request when transaction ID is empty", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		ctx := context.Background()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallets/sponsored-transactions/", nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", "")
+		req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+		http.HandlerFunc(handler.GetSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	})
+
+	t.Run("returns not found when transaction does not exist", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		ctx := context.Background()
+		transactionID := "non-existent-id"
+
+		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(nil, data.ErrRecordNotFound).Once()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", transactionID)
+		req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+		http.HandlerFunc(handler.GetSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Result().StatusCode)
+	})
+
+	t.Run("returns internal server error when service fails", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		ctx := context.Background()
+		transactionID := "test-transaction-id"
+
+		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(nil, errors.New("service error")).Once()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", transactionID)
+		req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+		http.HandlerFunc(handler.GetSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+	})
+
+	t.Run("successfully returns sponsored transaction", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		ctx := context.Background()
+		transactionID := "test-transaction-id"
+		createdAt := time.Now()
+		updatedAt := time.Now()
+
+		mockTransaction := &data.SponsoredTransaction{
+			ID:              transactionID,
+			Account:         "GDSPHTXJIMA762ZXHPDEKMEPGVUK6MQGJRM4YVBF2DDPZDV7VXFITYCN",
+			Status:          string(data.SuccessSponsoredTransactionStatus),
+			TransactionHash: "test-hash",
+			CreatedAt:       &createdAt,
+			UpdatedAt:       &updatedAt,
+		}
+
+		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(mockTransaction, nil).Once()
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", transactionID)
+		req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+		http.HandlerFunc(handler.GetSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+		var respBody GetSponsoredTransactionResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+		require.NoError(t, err)
+
+		assert.Equal(t, string(data.SuccessSponsoredTransactionStatus), respBody.Status)
+		assert.Equal(t, "test-hash", respBody.TransactionHash)
+	})
+}
+
+func Test_CreateSponsoredTransactionRequest_Validate(t *testing.T) {
+	t.Run("returns error when operation_xdr is empty", func(t *testing.T) {
+		req := CreateSponsoredTransactionRequest{
+			OperationXDR: "",
+		}
+		err := req.Validate()
+		assert.NotNil(t, err)
+	})
+
+	t.Run("returns error when operation_xdr is whitespace only", func(t *testing.T) {
+		req := CreateSponsoredTransactionRequest{
+			OperationXDR: "   ",
+		}
+		err := req.Validate()
+		assert.NotNil(t, err)
+	})
+
+	t.Run("returns error when operation_xdr is invalid base64", func(t *testing.T) {
+		req := CreateSponsoredTransactionRequest{
+			OperationXDR: "invalid-base64-!!!",
+		}
+		err := req.Validate()
+		assert.NotNil(t, err)
+	})
+
+	t.Run("returns error when operation_xdr is not valid XDR structure", func(t *testing.T) {
+		req := CreateSponsoredTransactionRequest{
+			OperationXDR: "aGVsbG8gd29ybGQ=",
+		}
+		err := req.Validate()
+		assert.NotNil(t, err)
+	})
+}

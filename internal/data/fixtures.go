@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/require"
@@ -895,6 +896,35 @@ func CleanupBridgeIntegration(t *testing.T, ctx context.Context, sqlExec db.SQLE
 	require.NoError(t, err)
 }
 
+func CreateSponsoredTransactionFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, account, operationXDR string) *SponsoredTransaction {
+	t.Helper()
+
+	if account == "" {
+		account = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAUHKENYZCH"
+	}
+
+	if operationXDR == "" {
+		operationXDR = "AAAAAAAAAAEAAAAAQrZOIEmLI5hkv4bb5sP0YyQTpFyEczBBOgXW3/8B372/AAAAAVVTREMAAAAArO0NsVxEmdYQr+xYr9XlsQIpT2xH5jPTGI0twLPplJYAAAAABfXhAA=="
+	}
+
+	model := &SponsoredTransactionModel{}
+	insert := SponsoredTransactionInsert{
+		ID:           uuid.New().String(),
+		Account:      account,
+		OperationXDR: operationXDR,
+		Status:       PendingSponsoredTransactionStatus,
+	}
+	transaction, err := model.Insert(ctx, sqlExec, insert)
+	require.NoError(t, err)
+	return transaction
+}
+
+func DeleteAllSponsoredTransactionsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM sponsored_transactions")
+	require.NoError(t, err)
+}
+
 func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	DeleteAllMessagesFixtures(t, ctx, sqlExec)
 	DeleteAllPaymentsFixtures(t, ctx, sqlExec)
@@ -904,6 +934,7 @@ func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter
 	DeleteAllReceiversFixtures(t, ctx, sqlExec)
 	DeleteAllDisbursementFixtures(t, ctx, sqlExec)
 	DeleteAllEmbeddedWalletsFixtures(t, ctx, sqlExec)
+	DeleteAllSponsoredTransactionsFixtures(t, ctx, sqlExec)
 	DeleteAllWalletFixtures(t, ctx, sqlExec)
 	DeleteAllAssetFixtures(t, ctx, sqlExec)
 	DeleteAllCircleRecipientsFixtures(t, ctx, sqlExec)
