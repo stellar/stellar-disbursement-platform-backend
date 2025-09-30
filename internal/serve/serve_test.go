@@ -73,20 +73,20 @@ func Test_Serve(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := ServeOptions{
-		CrashTrackerClient:              mockCrashTrackerClient,
-		MtnDBConnectionPool:             dbConnectionPool,
-		AdminDBConnectionPool:           dbConnectionPool,
-		EC256PrivateKey:                 privateKeyStr,
-		Environment:                     "test",
-		GitCommit:                       "1234567890abcdef",
-		Models:                          models,
-		Port:                            8000,
-		ResetTokenExpirationHours:       1,
-		SEP24JWTSecret:                  "jwt_secret_1234567890",
-		Version:                         "x.y.z",
-		Sep10SigningPrivateKey:          testKP.Seed(),
-		Sep10SigningPublicKey:           testKP.Address(),
-		NetworkPassphrase:               network.TestNetworkPassphrase,
+		CrashTrackerClient:        mockCrashTrackerClient,
+		MtnDBConnectionPool:       dbConnectionPool,
+		AdminDBConnectionPool:     dbConnectionPool,
+		EC256PrivateKey:           privateKeyStr,
+		Environment:               "test",
+		GitCommit:                 "1234567890abcdef",
+		Models:                    models,
+		Port:                      8000,
+		ResetTokenExpirationHours: 1,
+		SEP24JWTSecret:            "jwt_secret_1234567890",
+		Version:                   "x.y.z",
+		Sep10SigningPrivateKey:    testKP.Seed(),
+		Sep10SigningPublicKey:     testKP.Address(),
+		NetworkPassphrase:         network.TestNetworkPassphrase,
 	}
 
 	// Mock supportHTTPRun
@@ -177,13 +177,16 @@ func Test_handleHTTP_Health(t *testing.T) {
 	require.NoError(t, err)
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mLabels := monitor.HttpRequestLabels{
+	mLabels := monitor.HTTPRequestLabels{
 		Status: "200",
 		Route:  "/health",
 		Method: "GET",
+		CommonLabels: monitor.CommonLabels{
+			TenantName: "no_tenant",
+		},
 	}
 	mMonitorService.
-		On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
+		On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
 		Return(nil).
 		Once()
 
@@ -273,7 +276,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	t.Helper()
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
+	mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
 
 	messengerClientMock := message.MessengerClientMock{}
 	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil)
@@ -321,25 +324,25 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	require.NoError(t, err)
 
 	serveOptions := ServeOptions{
-		CrashTrackerClient:              crashTrackerClient,
-		MtnDBConnectionPool:             dbConnectionPool,
-		AdminDBConnectionPool:           dbConnectionPool,
-		EC256PrivateKey:                 privateKeyStr,
-		EmailMessengerClient:            &messengerClientMock,
-		Environment:                     "test",
-		GitCommit:                       "1234567890abcdef",
-		MonitorService:                  mMonitorService,
-		ResetTokenExpirationHours:       1,
-		SEP24JWTSecret:                  "jwt_secret_1234567890",
-		BaseURL:                         "https://test.com",
-		MessageDispatcher:               messageDispatcherMock,
-		Version:                         "x.y.z",
-		NetworkPassphrase:               network.TestNetworkPassphrase,
-		SubmitterEngine:                 submitterEngine,
-		EventProducer:                   producerMock,
-		Sep10SigningPrivateKey:          testKP.Seed(),
-		Sep10SigningPublicKey:           testKP.Address(),
-		BridgeService:                   bridge.NewMockService(t),
+		CrashTrackerClient:        crashTrackerClient,
+		MtnDBConnectionPool:       dbConnectionPool,
+		AdminDBConnectionPool:     dbConnectionPool,
+		EC256PrivateKey:           privateKeyStr,
+		EmailMessengerClient:      &messengerClientMock,
+		Environment:               "test",
+		GitCommit:                 "1234567890abcdef",
+		MonitorService:            mMonitorService,
+		ResetTokenExpirationHours: 1,
+		SEP24JWTSecret:            "jwt_secret_1234567890",
+		BaseURL:                   "https://test.com",
+		MessageDispatcher:         messageDispatcherMock,
+		Version:                   "x.y.z",
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		SubmitterEngine:           submitterEngine,
+		EventProducer:             producerMock,
+		Sep10SigningPrivateKey:    testKP.Seed(),
+		Sep10SigningPublicKey:     testKP.Address(),
+		BridgeService:             bridge.NewMockService(t),
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)

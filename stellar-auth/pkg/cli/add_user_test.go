@@ -63,7 +63,8 @@ func Test_authAddUserCommand(t *testing.T) {
 	defer tenantConnectionPool.Close()
 
 	mockPrompt := PasswordPromptMock{}
-	mockedPassword, _ := mockPrompt.Run()
+	mockedPassword, err := mockPrompt.Run()
+	require.NoError(t, err)
 
 	tenant := tenant.CreateTenantFixture(t, ctx, adminDBConnectionPool, tenantName, "pub-key")
 	tenantID := tenant.ID

@@ -133,7 +133,8 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		reqBody := services.ValidationRequest{
 			Transaction: "AAAA...",
 		}
-		reqBodyBytes, _ := json.Marshal(reqBody)
+		reqBodyBytes, err := json.Marshal(reqBody)
+		require.NoError(t, err)
 
 		mockService.On("ValidateChallenge", mock.Anything, reqBody).Return(expectedResponse, nil)
 
@@ -150,7 +151,7 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
 
 		var response services.ValidationResponse
-		err := json.NewDecoder(w.Body).Decode(&response)
+		err = json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, expectedResponse.Token, response.Token)
 	})

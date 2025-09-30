@@ -74,6 +74,12 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 		expectedDisbursements []*data.Disbursement
 	}{
 		{
+			name:                  "error - invalid query parameters",
+			queryParams:           "status=invalid_status",
+			expectedStatusCode:    http.StatusBadRequest,
+			expectedDisbursements: nil,
+		},
+		{
 			name:                  "success - returns CSV with no disbursements",
 			queryParams:           "status=completed",
 			expectedStatusCode:    http.StatusOK,
@@ -110,6 +116,13 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
+
+			if tc.expectedStatusCode != http.StatusOK {
+				// For error cases, we expect a JSON error response, not CSV
+				assert.Contains(t, rr.Body.String(), "error")
+				return
+			}
+
 			csvReader := csv.NewReader(strings.NewReader(rr.Body.String()))
 
 			header, err := csvReader.Read()
@@ -166,6 +179,15 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 		Asset:  asset,
 	})
 
+	directPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		Type:              data.PaymentTypeDirect,
+		ReceiverWallet:    rwReady,
+		Asset:             *asset,
+		Amount:            "150",
+		Status:            data.SuccessPaymentStatus,
+		CreatedAt:         time.Date(2025, 3, 22, 23, 40, 20, 1431, time.UTC),
+		ExternalPaymentID: "DIRECT_PAY",
+	})
 	pendingPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		ReceiverWallet:    rwReady,
 		Disbursement:      disbursement,
@@ -201,6 +223,12 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 		expectedPayments   []*data.Payment
 	}{
 		{
+			name:               "error - invalid query parameters",
+			queryParams:        "status=invalid_status",
+			expectedStatusCode: http.StatusBadRequest,
+			expectedPayments:   nil,
+		},
+		{
 			name:               "success - returns CSV with no payments",
 			queryParams:        "status=draft",
 			expectedStatusCode: http.StatusOK,
@@ -210,19 +238,19 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			name:               "success - returns CSV with all payments",
 			expectedStatusCode: http.StatusOK,
 			queryParams:        "sort=created_at",
-			expectedPayments:   []*data.Payment{pendingPayment, successfulPayment, failedPayment},
+			expectedPayments:   []*data.Payment{directPayment, pendingPayment, successfulPayment, failedPayment},
 		},
 		{
 			name:               "success - return CSV with reverse order of payments",
 			expectedStatusCode: http.StatusOK,
 			queryParams:        "sort=created_at&direction=asc",
-			expectedPayments:   []*data.Payment{failedPayment, successfulPayment, pendingPayment},
+			expectedPayments:   []*data.Payment{failedPayment, successfulPayment, pendingPayment, directPayment},
 		},
 		{
 			name:               "success - return CSV with only successful payments",
 			expectedStatusCode: http.StatusOK,
 			queryParams:        "status=success",
-			expectedPayments:   []*data.Payment{successfulPayment},
+			expectedPayments:   []*data.Payment{successfulPayment, directPayment},
 		},
 	}
 
@@ -238,13 +266,20 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Code)
+
+			if tc.expectedStatusCode != http.StatusOK {
+				// For error cases, we expect a JSON error response, not CSV
+				assert.Contains(t, rr.Body.String(), "error")
+				return
+			}
+
 			csvReader := csv.NewReader(strings.NewReader(rr.Body.String()))
 
 			header, err := csvReader.Read()
 			require.NoError(t, err)
 
 			expectedHeaders := []string{
-				"ID", "Amount", "StellarTransactionID", "Status",
+				"ID", "Amount", "StellarTransactionID", "Status", "Type",
 				"Disbursement.ID", "Asset.Code", "Asset.Issuer", "Wallet.Name", "Receiver.ID",
 				"Receiver.PhoneNumber", "Receiver.Email", "Receiver.ExternalID", "ReceiverWallet.Address", "ReceiverWallet.Status",
 				"CreatedAt", "UpdatedAt", "ExternalPaymentID", "CircleTransferRequestID",
@@ -264,17 +299,20 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 				assert.Equal(t, tc.expectedPayments[i].Amount, row[1])
 				assert.Equal(t, tc.expectedPayments[i].StellarTransactionID, row[2])
 				assert.Equal(t, string(tc.expectedPayments[i].Status), row[3])
-				assert.Equal(t, tc.expectedPayments[i].Disbursement.ID, row[4])
-				assert.Equal(t, tc.expectedPayments[i].Asset.Code, row[5])
-				assert.Equal(t, tc.expectedPayments[i].Asset.Issuer, row[6])
-				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.Wallet.Name, row[7])
-				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.Receiver.ID, row[8])
-				assert.Equal(t, receiverReady.PhoneNumber, row[9])
-				assert.Equal(t, receiverReady.Email, row[10])
-				assert.Equal(t, receiverReady.ExternalID, row[11])
-				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.StellarAddress, row[12])
-				assert.Equal(t, string(tc.expectedPayments[i].ReceiverWallet.Status), row[13])
-				assert.Equal(t, tc.expectedPayments[i].ExternalPaymentID, row[16])
+				assert.Equal(t, string(tc.expectedPayments[i].Type), row[4])
+				assert.Equal(t, tc.expectedPayments[i].Asset.Code, row[6])
+				assert.Equal(t, tc.expectedPayments[i].Asset.Issuer, row[7])
+				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.Wallet.Name, row[8])
+				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.Receiver.ID, row[9])
+				assert.Equal(t, receiverReady.PhoneNumber, row[10])
+				assert.Equal(t, receiverReady.Email, row[11])
+				assert.Equal(t, receiverReady.ExternalID, row[12])
+				assert.Equal(t, tc.expectedPayments[i].ReceiverWallet.StellarAddress, row[13])
+				assert.Equal(t, string(tc.expectedPayments[i].ReceiverWallet.Status), row[14])
+				assert.Equal(t, tc.expectedPayments[i].ExternalPaymentID, row[17])
+				if tc.expectedPayments[i].Type == data.PaymentTypeDisbursement {
+					assert.Equal(t, tc.expectedPayments[i].Disbursement.ID, row[5])
+				}
 			}
 		})
 	}

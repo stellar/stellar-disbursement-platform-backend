@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -33,11 +34,16 @@ type MFAHandler struct {
 
 const DeviceIDHeader = "Device-ID"
 
-func (h MFAHandler) validateRequest(req MFARequest, deviceID string) *httperror.HTTPError {
+func (h MFAHandler) validateRequest(ctx context.Context, req MFARequest, deviceID string) *httperror.HTTPError {
 	lv := validators.NewValidator()
 
 	lv.Check(req.MFACode != "", "mfa_code", "MFA Code is required")
-	lv.Check(h.ReCAPTCHADisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
+
+	captchaDisabled := IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	})
+	lv.Check(captchaDisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
 
 	lv.Check(deviceID != "", DeviceIDHeader, DeviceIDHeader+" header is required")
 
@@ -59,13 +65,16 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	deviceID := req.Header.Get(DeviceIDHeader)
-	if httpErr := h.validateRequest(reqBody, deviceID); httpErr != nil {
+	if httpErr := h.validateRequest(ctx, reqBody, deviceID); httpErr != nil {
 		httpErr.Render(rw)
 		return
 	}
 
 	// Step 2: Run the reCAPTCHA validation if it is enabled
-	if !h.ReCAPTCHADisabled {
+	if !IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	}) {
 		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil).Render(rw)

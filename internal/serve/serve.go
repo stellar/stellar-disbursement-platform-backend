@@ -16,7 +16,6 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -24,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
@@ -259,11 +259,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models: o.Models,
 			}
-			r.Get("/{id}", apiKeyHandler.GetApiKeyByID)
-			r.Get("/", apiKeyHandler.GetAllApiKeys)
+			r.Get("/{id}", apiKeyHandler.GetAPIKeyByID)
+			r.Get("/", apiKeyHandler.GetAllAPIKeys)
 			r.Post("/", apiKeyHandler.CreateAPIKey)
 			r.Patch("/{id}", apiKeyHandler.UpdateKey)
-			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
+			r.Delete("/{id}", apiKeyHandler.DeleteAPIKey)
 		})
 
 		// Statistics endpoints

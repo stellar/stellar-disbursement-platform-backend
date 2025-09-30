@@ -50,7 +50,7 @@ func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 		ReceiverAccountStellarMemo: "memo",
 		Sep10SigningPublicKey:      "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		RecaptchaSiteKey:           "reCAPTCHASiteKey",
-		ServerApiBaseURL:           "localhost:8000",
+		ServerAPIBaseURL:           "localhost:8000",
 	}
 
 	cmd := command.StartIntegrationTestsCommand(integrationTestsOpts)

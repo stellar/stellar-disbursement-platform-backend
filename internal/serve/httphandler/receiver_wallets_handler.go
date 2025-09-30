@@ -234,9 +234,6 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 
 		// 3: Update the receiver wallet
 		if txErr = h.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); txErr != nil {
-			if errors.Is(txErr, data.ErrDuplicateWalletAddress) {
-				return nil, txErr
-			}
 			return nil, fmt.Errorf("updating receiver wallet %s: %w", receiverWalletID, txErr)
 		}
 

@@ -76,9 +76,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -94,9 +94,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -113,9 +113,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -131,9 +131,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: true,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -149,9 +149,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -167,9 +167,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -186,9 +186,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -204,9 +204,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: true,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -252,7 +252,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 
 			generalInformation := tc.s.buildGeneralInformation(ctx, req)
 			generalInformation = strings.TrimSpace(generalInformation)
-			generalInformation = strings.Replace(generalInformation, "\t", "", -1)
+			generalInformation = strings.ReplaceAll(generalInformation, "\t", "")
 
 			generalInformationLines := strings.Split(generalInformation, "\n")
 			assert.Equal(t, len(tc.wantLines), len(generalInformationLines))

@@ -14,7 +14,7 @@ import (
 )
 
 type twilioWhatsAppClient struct {
-	apiService twilioApiInterface
+	apiService twilioAPIInterface
 	fromNumber string
 	templates  map[MessageType]string
 }
@@ -45,11 +45,11 @@ func (t *twilioWhatsAppClient) SendMessage(ctx context.Context, message Message)
 	params.SetContentSid(templateID)
 
 	if len(message.TemplateVariables) > 0 {
-		varsJSON, jsonErr := json.Marshal(message.TemplateVariables)
-		if jsonErr != nil {
-			return fmt.Errorf("converting template variables to JSON: %w", jsonErr)
+		contentVariables, contentVarErr := formatContentVariables(message.Type, message.TemplateVariables)
+		if contentVarErr != nil {
+			return fmt.Errorf("formatting WhatsApp content variables: %w", contentVarErr)
 		}
-		params.SetContentVariables(string(varsJSON))
+		params.SetContentVariables(contentVariables)
 	}
 
 	log.Ctx(ctx).Debugf("📞 Sending WhatsApp template message with SID %s to phoneNumber %q",
@@ -66,6 +66,58 @@ func (t *twilioWhatsAppClient) SendMessage(ctx context.Context, message Message)
 	}
 
 	return nil
+}
+
+// templateMapping defines the required variables and their position for each message type
+type templateMapping struct {
+	requiredVars map[TemplateVariable]string // maps variable to position key
+}
+
+var messageTemplateConfig = map[MessageType]templateMapping{
+	MessageTypeReceiverInvitation: {
+		requiredVars: map[TemplateVariable]string{
+			TemplateVarOrgName:                  "1",
+			TemplateVarReceiverRegistrationLink: "2",
+		},
+	},
+	MessageTypeReceiverOTP: {
+		requiredVars: map[TemplateVariable]string{
+			TemplateVarReceiverOTP: "1",
+			TemplateVarOrgName:     "2",
+		},
+	},
+}
+
+// formatContentVariables formats the template variables into a JSON string as required by Twilio's API.
+func formatContentVariables(messageType MessageType, vars map[TemplateVariable]string) (string, error) {
+	config, ok := messageTemplateConfig[messageType]
+	if !ok {
+		return "", fmt.Errorf("unsupported message type %s for WhatsApp template variables", messageType)
+	}
+
+	// Validate all required variables are present
+	if len(vars) != len(config.requiredVars) {
+		return "", fmt.Errorf("expected %d template variables for message type %s, got %d",
+			len(config.requiredVars), messageType, len(vars))
+	}
+
+	// Build content variables map with position mapping
+	contentVars := make(map[string]string, len(config.requiredVars))
+	for templateVar, position := range config.requiredVars {
+		value, ok := vars[templateVar]
+		if !ok {
+			return "", fmt.Errorf("missing template variable %s for message type %s",
+				templateVar, messageType)
+		}
+		contentVars[position] = value
+	}
+
+	contentVarsJSON, err := json.Marshal(contentVars)
+	if err != nil {
+		return "", fmt.Errorf("marshaling WhatsApp content variables to JSON: %w", err)
+	}
+
+	return string(contentVarsJSON), nil
 }
 
 // formatWhatsAppNumber ensures the phone number has the `whatsapp:` prefix.
@@ -99,7 +151,7 @@ func NewTwilioWhatsAppClient(accountSid, authToken, fromNumber string, templates
 		return nil, fmt.Errorf("twilio WhatsApp fromNumber is invalid: %w", err)
 	}
 
-	for _, msgType := range allMessageTypes() {
+	for _, msgType := range receiverMessageTypes() {
 		if templateID, ok := templates[msgType]; !ok || strings.TrimSpace(templateID) == "" {
 			return nil, fmt.Errorf("missing template SID for message type %s", msgType)
 		}

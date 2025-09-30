@@ -13,9 +13,9 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -235,9 +235,9 @@ func (h ReceiverSendOTPHandler) sendOTP(ctx context.Context, contactType data.Re
 	msg := message.Message{
 		Type: message.MessageTypeReceiverOTP,
 		Body: builder.String(),
-		TemplateVariables: map[string]string{
-			"OTP":              otp,
-			"OrganizationName": organization.Name,
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarReceiverOTP: otp,
+			message.TemplateVarOrgName:     organization.Name,
 		},
 	}
 	switch contactType {
@@ -268,7 +268,7 @@ func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
 	attempt := data.ReceiverRegistrationAttempt{
 		PhoneNumber:   "",
 		Email:         "",
-		AttemptTs:     time.Now(),
+		AttemptTS:     time.Now(),
 		ClientDomain:  claims.ClientDomain(),
 		TransactionID: claims.TransactionID(),
 		WalletAddress: claims.SEP10StellarAccount(),

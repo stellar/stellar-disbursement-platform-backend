@@ -24,17 +24,21 @@ func calculateAndPrintMetrics(ctx context.Context, horizonClient *horizonclient.
 	transactionLatencies := make([]time.Duration, 0, len(transactionIDs))
 	uniqueLedgers := make(map[int32]bool)
 	for _, transactionID := range transactionIDs {
-		tx, _ := txModel.Get(ctx, transactionID)
+		tx, err := txModel.Get(ctx, transactionID)
+		if err != nil {
+			fmt.Printf("failed to get transaction %s from tss", transactionID)
+			continue
+		}
 		transactionsTSS[transactionID] = tx
 	}
 
-	for txnId, txn := range transactionsTSS {
+	for txnID, txn := range transactionsTSS {
 		stellarTxn, err := horizonClient.TransactionDetail(txn.StellarTransactionHash.String)
 		// time.Sleep(100000) might need to sleep if getting rate limited
 		if err != nil {
 			fmt.Printf("failed to retrieve stellar transaction %s from horizon", txn.StellarTransactionHash.String)
 		}
-		transactionsStellar[txnId] = &stellarTxn
+		transactionsStellar[txnID] = &stellarTxn
 	}
 
 	minCreatedPaymentTime := time.Now()
@@ -65,9 +69,9 @@ func calculateAndPrintMetrics(ctx context.Context, horizonClient *horizonclient.
 
 	minTxnLatency := time.Duration(math.MaxInt64)
 	maxTxnLatency := time.Duration(math.MinInt64)
-	for _, txId := range transactionIDs {
-		start := transactionsTSS[txId].CreatedAt
-		finish := transactionsStellar[txId].LedgerCloseTime
+	for _, txID := range transactionIDs {
+		start := transactionsTSS[txID].CreatedAt
+		finish := transactionsStellar[txID].LedgerCloseTime
 		duration := finish.Sub(*start)
 		transactionLatencies = append(transactionLatencies, duration)
 		if duration < minTxnLatency {
@@ -174,15 +178,15 @@ func waitForTransactionsToComplete(ctx context.Context, txModel *store.Transacti
 // There is minimal error handling and minimal checking for valid input parameters.
 func main() {
 	paymentCount := flag.Int("paymentCount", 0, "how many payments to create")
-	databaseUrl := flag.String("databaseUrl", "", "database to create the transactions in")
-	horizonUrl := flag.String("horizonUrl", "https://horizon-testnet.stellar.org", "horizon url")
+	databaseURL := flag.String("databaseUrl", "", "database to create the transactions in")
+	horizonURL := flag.String("horizonUrl", "https://horizon-testnet.stellar.org", "horizon url")
 	assetCode := flag.String("assetCode", "USDC", "asset code")
 	assetIssuer := flag.String("assetIssuer", "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP", "asset issuer")
 	paymentDestination := flag.String("paymentDestination", "", "destination address of the payment")
 	flag.Parse()
 
 	ctx := context.Background()
-	dbConnectionPool, err := db.OpenDBConnectionPool(*databaseUrl)
+	dbConnectionPool, err := db.OpenDBConnectionPool(*databaseURL)
 	if err != nil {
 		fmt.Printf("Error opening db connection pool in init: %s ", err.Error())
 	}
@@ -191,7 +195,7 @@ func main() {
 
 	// create horizon client
 	horizonClient := &horizonclient.Client{
-		HorizonURL: *horizonUrl,
+		HorizonURL: *horizonURL,
 		HTTP:       httpclient.DefaultClient(),
 	}
 

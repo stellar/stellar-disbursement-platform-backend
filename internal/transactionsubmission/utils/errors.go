@@ -48,6 +48,8 @@ func NewTransactionStatusUpdateError(status, txID string, forRetry bool, err err
 var _ error = &TransactionStatusUpdateError{}
 
 // HorizonErrorWrapper is an error that occurs when a horizon response is not successful.
+//
+//nolint:errname // This is both an error and a wrapper
 type HorizonErrorWrapper struct {
 	StatusCode  int
 	Problem     problem.P
@@ -95,15 +97,15 @@ func (e *HorizonErrorWrapper) Error() string {
 	}
 
 	msgBuilder := &strings.Builder{}
-	msgBuilder.WriteString(fmt.Sprintf("horizon response error: StatusCode=%d", e.StatusCode))
+	fmt.Fprintf(msgBuilder, "horizon response error: StatusCode=%d", e.StatusCode)
 	if e.Problem.Type != "" {
-		msgBuilder.WriteString(fmt.Sprintf(", Type=%s", e.Problem.Type))
+		fmt.Fprintf(msgBuilder, ", Type=%s", e.Problem.Type)
 	}
 	if e.Problem.Title != "" {
-		msgBuilder.WriteString(fmt.Sprintf(", Title=%s", e.Problem.Title))
+		fmt.Fprintf(msgBuilder, ", Title=%s", e.Problem.Title)
 	}
 	if e.Problem.Detail != "" {
-		msgBuilder.WriteString(fmt.Sprintf(", Detail=%s", e.Problem.Detail))
+		fmt.Fprintf(msgBuilder, ", Detail=%s", e.Problem.Detail)
 	}
 	// TODO: place extras right after status codes, for better readability. Details are pretty verbose and not that useful.
 	if e.HasResultCodes() {
@@ -171,7 +173,7 @@ func (e *HorizonErrorWrapper) IsNoIssuer() bool {
 	return slices.Contains(e.ResultCodes.OperationCodes, opCode)
 }
 
-// IsSourceNotAuthorized verifies if the Horizon Error is related to the
+// IsSourceAccountNotAuthorized verifies if the Horizon Error is related to the
 // source account not having authorization from the asset issuer to send the asset.
 func (e *HorizonErrorWrapper) IsSourceAccountNotAuthorized() bool {
 	if !e.HasResultCodes() {
@@ -204,7 +206,7 @@ func (e *HorizonErrorWrapper) IsDestinationAccountNotAuthorized() bool {
 	return slices.Contains(e.ResultCodes.OperationCodes, opCode)
 }
 
-// IsNoTrustline verifies if the Horizon Error is related to the
+// IsDestinationNoTrustline verifies if the Horizon Error is related to the
 // destination account not having a trustline for the asset being sent.
 func (e *HorizonErrorWrapper) IsDestinationNoTrustline() bool {
 	if !e.HasResultCodes() {

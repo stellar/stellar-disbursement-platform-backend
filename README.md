@@ -65,6 +65,11 @@ Security is a critical aspect of the SDP. The measures outlined in this document
 
 Google's reCAPTCHA has been integrated into the SDP to prevent automated attacks and ensure that interactions are performed by humans, not bots.
 
+
+ReCAPTCHA can be configured at two levels:
+1. **Environment level (default)**: Set the `DISABLE_RECAPTCHA` environment variable to `true` to disable for all tenants
+2. **Organization level**: Each tenant can override the environment default through the organization settings (via API or UI)
+
 The SDP supports both reCAPTCHA v2 ("I'm not a robot") and reCAPTCHA v3 (invisible, score-based) implementations:
 
 - **reCAPTCHA v2**: Traditional checkbox-based verification
@@ -80,15 +85,21 @@ The SDP supports both reCAPTCHA v2 ("I'm not a robot") and reCAPTCHA v3 (invisib
 
 ReCAPTCHA is enabled by default and can be disabled in the development environment by setting the `DISABLE_RECAPTCHA` environment variable to `true`.
 
-**Note:** Disabling reCAPTCHA is supported for pubnet environments but this might reduce security!.
+The organization-level setting takes precedence over the environment default when explicitly set. If not set at the organization level, the environment default is used.
+
+**Note:** Disabling reCAPTCHA is supported for pubnet environments but this might reduce security!
 
 ### Enforcement of Multi-Factor Authentication
 
 Multi-Factor Authentication (MFA) provides an additional layer of security to user accounts. It is enforced by default on the SDP and it relies on OTPs sent to the account's email.
 
-MFA is enabled by default and can be disabled in the development environment by setting the `DISABLE_MFA` environment variable to `true`.
+MFA can be configured at two levels:
+1. **Environment level (default)**: Set the `DISABLE_MFA` environment variable to `true` to disable for all tenants
+2. **Organization level**: Each tenant can override the environment default through the organization settings (via API or UI)
 
-**Note:** Disabling MFA is not supported for production environments due to security risks.
+The organization-level setting takes precedence over the environment default when explicitly set. If not set at the organization level, the environment default is used.
+
+**Note:** Disabling MFA is not recommended for production environments due to security risks.
 
 ### Best Practices for Wallet Management
 
@@ -210,10 +221,53 @@ The Message Service sends messages to users and recipients for the following rea
 - Providing one-time passcodes (OTPs) to recipients
 - Sending emails to users during account creation and account recovery flows
 
-Note that the Message Service requires that both SMS and email services are configured. For emails, AWS SES and Twilio Sendgrid are supported. For SMS messages to recipients, Twilio and AWS SNS are supported.
+Note that the Message Service requires that both SMS and email services are configured. For emails, AWS SES and Twilio Sendgrid are supported. For SMS messages to recipients, Twilio SMS, Twilio WhatsAPP and AWS SNS are supported.
 
 If you're using the `AWS_EMAIL` or `TWILIO_EMAIL` sender types, you'll need to verify the email address you're using to send emails in order to prevent it from being flagged by email firewalls. You can do that by following the instructions in [this link for AWS SES](https://docs.aws.amazon.com/ses/latest/dg/email-authentication-methods.html) or [this link for Twilio Sendgrid](https://www.twilio.com/docs/sendgrid/glossary/sender-authentication).
 
+##### Configuring Twilio WhatsApp
+
+Configuring Twilio WhatsApp requires additional steps beyond the standard Twilio SMS setup.
+
+**Prerequisites:**
+1. Set up a Twilio WhatsApp Business Profile and complete the approval process
+2. Create message templates in the Twilio Console for each type of message you plan to send
+3. Wait for template approval before using them in production
+
+**Message Templates Setup:**
+
+You must create the following message templates in your Twilio Console and obtain their Template SIDs.
+
+1. **Receiver Invitation Template** (`TWILIO_WHATSAPP_RECEIVER_INVITATION_TEMPLATE_SID`)
+   - **Purpose**: Notify recipients about incoming disbursements
+   - **Variables**: `{{1}}` = Organization Name, `{{2}}` = Registration Link
+   - **Example**: "You have a payment waiting for you from the {{1}}. Click {{2}} to register."
+
+2. **Receiver OTP Template** (`TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID`)
+   - **Purpose**: Send one-time passwords to recipients during wallet registration
+   - **Variables**: `{{1}}` = OTP Code, `{{2}}` = Organization Name
+   - **Example**: "{{1}} is your {{2}} verification code."
+
+**Configuration:**
+
+Set the following environment variables:
+
+```sh
+SMS_SENDER_TYPE=TWILIO_WHATSAPP
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_WHATSAPP_FROM_NUMBER=whatsapp:+1234567890
+TWILIO_WHATSAPP_RECEIVER_INVITATION_TEMPLATE_SID=HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID=HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**Important Notes:**
+- The `TWILIO_WHATSAPP_FROM_NUMBER` must include the `whatsapp:` prefix and use your approved Twilio WhatsApp number
+- Template SIDs are obtained from the Twilio Console after template creation and approval
+- WhatsApp requires pre-approved message templates for all business-initiated conversations
+- Template variables are automatically populated by the SDP based on the message type
+- All templates must be approved by WhatsApp before they can be used in production
+- For detailed setup instructions, refer to the [Twilio WhatsApp API documentation](https://www.twilio.com/docs/whatsapp/api) 
 
 #### Wallet Registration UI
 

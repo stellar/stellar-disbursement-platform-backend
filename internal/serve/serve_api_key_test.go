@@ -147,9 +147,9 @@ func Test_handleHTTP_APIKeyReadAllPermissions(t *testing.T) {
 		Return(nil).
 		Maybe()
 	monitorMock.
-		On("MonitorHttpRequestDuration",
+		On("MonitorHTTPRequestDuration",
 			mock.AnythingOfType("time.Duration"),
-			mock.AnythingOfType("monitor.HttpRequestLabels"),
+			mock.AnythingOfType("monitor.HTTPRequestLabels"),
 		).
 		Return(nil).
 		Maybe()
@@ -224,9 +224,9 @@ func Test_handleHTTP_APIKeyWriteAllPermissions(t *testing.T) {
 		Return(nil).
 		Maybe()
 	monitorMock.
-		On("MonitorHttpRequestDuration",
+		On("MonitorHTTPRequestDuration",
 			mock.AnythingOfType("time.Duration"),
-			mock.AnythingOfType("monitor.HttpRequestLabels"),
+			mock.AnythingOfType("monitor.HTTPRequestLabels"),
 		).
 		Return(nil).
 		Maybe()
@@ -306,9 +306,9 @@ func Test_handleHTTP_APIKeyFullAccessPermissions(t *testing.T) {
 		Return(nil).
 		Maybe()
 	monitorMock.
-		On("MonitorHttpRequestDuration",
+		On("MonitorHTTPRequestDuration",
 			mock.AnythingOfType("time.Duration"),
-			mock.AnythingOfType("monitor.HttpRequestLabels"),
+			mock.AnythingOfType("monitor.HTTPRequestLabels"),
 		).
 		Return(nil).
 		Maybe()
@@ -395,9 +395,9 @@ func Test_handleHTTP_APIKeySpecificPermissions(t *testing.T) {
 		Return(nil).
 		Maybe()
 	monitorMock.
-		On("MonitorHttpRequestDuration",
+		On("MonitorHTTPRequestDuration",
 			mock.AnythingOfType("time.Duration"),
-			mock.AnythingOfType("monitor.HttpRequestLabels"),
+			mock.AnythingOfType("monitor.HTTPRequestLabels"),
 		).
 		Return(nil).
 		Maybe()
@@ -495,7 +495,7 @@ func createTestReceiver(t *testing.T, dbPool db.DBConnectionPool) (*data.Receive
 	insert := data.ReceiverInsert{
 		PhoneNumber: phonePtr,
 		Email:       emailPtr,
-		ExternalId:  externalIDPtr,
+		ExternalID:  externalIDPtr,
 	}
 
 	return models.Receiver.Insert(ctx, dbPool, insert)

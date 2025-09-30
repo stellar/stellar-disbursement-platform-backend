@@ -27,20 +27,20 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-// ErrorInformationNotFound implements the error interface.
-type ErrorInformationNotFound struct {
+// InformationNotFoundError implements the error interface.
+type InformationNotFoundError struct {
 	cause error
 }
 
-func (e *ErrorInformationNotFound) Error() string {
+func (e *InformationNotFoundError) Error() string {
 	return e.cause.Error()
 }
 
-type ErrorVerificationAttemptsExceeded struct {
+type VerificationAttemptsExceededError struct {
 	cause error
 }
 
-func (e *ErrorVerificationAttemptsExceeded) Error() string {
+func (e *VerificationAttemptsExceededError) Error() string {
 	return e.cause.Error()
 }
 
@@ -138,7 +138,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	}
 	if len(receiverVerifications) == 0 {
 		err = fmt.Errorf("verification of type %s not found for receiver id %s", receiverRegistrationRequest.VerificationField, receiver.ID)
-		return &ErrorInformationNotFound{cause: err}
+		return &InformationNotFoundError{cause: err}
 	}
 	if len(receiverVerifications) > 1 {
 		log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receiver.ID, receiverRegistrationRequest.VerificationField)
@@ -149,7 +149,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 		// TODO: the application currently can't recover from a max attempts exceeded error.
 		err = fmt.Errorf("the number of attempts to confirm the verification value exceeded the max attempts")
-		return &ErrorVerificationAttemptsExceeded{cause: err}
+		return &VerificationAttemptsExceededError{cause: err}
 	}
 
 	// STEP 3: check if the payload verification value matches the one saved in the database
@@ -164,7 +164,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 		rvu.VerificationChannel = message.MessageChannelEmail
 	} else {
 		err = fmt.Errorf("no valid verification channel found resolved for receiver")
-		return &ErrorInformationNotFound{cause: err}
+		return &InformationNotFoundError{cause: err}
 	}
 
 	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
@@ -181,7 +181,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 			err = fmt.Errorf("%s", baseErrMsg)
 		}
 
-		return &ErrorInformationNotFound{cause: err}
+		return &InformationNotFoundError{cause: err}
 	}
 
 	// STEP 4: update the receiver verification row with the confirmation that the value was successfully validated
@@ -209,7 +209,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	rw, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
 	if err != nil {
 		err = fmt.Errorf("receiver wallet not found for receiverID=%s and clientDomain=%s: %w", receiver.ID, sep24Claims.ClientDomain(), err)
-		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
+		return receiverWallet, false, &InformationNotFoundError{cause: err}
 	}
 
 	// STEP 2: check if receiver wallet status is already "REGISTERED"
@@ -222,7 +222,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	err = rw.Status.TransitionTo(data.RegisteredReceiversWalletStatus)
 	if err != nil {
 		err = fmt.Errorf("transitioning status for receiverWallet[ID=%s]: %w", rw.ID, err)
-		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
+		return receiverWallet, false, &InformationNotFoundError{cause: err}
 	}
 
 	// STEP 4: verify receiver wallet OTP
@@ -317,7 +317,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			}
 			if len(receivers) == 0 {
 				err = fmt.Errorf("receiver with contact info %s not found in our server", truncatedContactInfo)
-				return nil, &ErrorInformationNotFound{cause: err}
+				return nil, &InformationNotFoundError{cause: err}
 			}
 			receiver := receivers[0]
 
@@ -360,10 +360,10 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	}
 
 	if atomicFnErr := db.RunInTransactionWithPostCommit(ctx, &opts); atomicFnErr != nil {
-		var errorInformationNotFound *ErrorInformationNotFound
+		var infoNotFoundErr *InformationNotFoundError
 		// if error is due to verification attempts being exceeded, we want to display the message with what that limit is clearly
 		// to the user
-		var errorVerficationAttemptsExceeded *ErrorVerificationAttemptsExceeded
+		var verficationAttemptsExceededErr *VerificationAttemptsExceededError
 
 		switch {
 		case errors.Is(atomicFnErr, ErrOTPMaxAttemptsExceeded):
@@ -381,13 +381,13 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 				WithErrorCode(httperror.Code400_6).
 				Render(w)
 			return
-		case errors.As(atomicFnErr, &errorInformationNotFound):
-			log.Ctx(ctx).Error(errorInformationNotFound.cause)
+		case errors.As(atomicFnErr, &infoNotFoundErr):
+			log.Ctx(ctx).Error(infoNotFoundErr.cause)
 			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).WithErrorCode(httperror.Code400_2).Render(w)
 			return
-		case errors.As(atomicFnErr, &errorVerficationAttemptsExceeded):
-			log.Ctx(ctx).Error(errorVerficationAttemptsExceeded.cause)
-			httperror.BadRequest(errorVerficationAttemptsExceeded.Error(), atomicFnErr, nil).WithErrorCode(httperror.Code400_3).Render(w)
+		case errors.As(atomicFnErr, &verficationAttemptsExceededErr):
+			log.Ctx(ctx).Error(verficationAttemptsExceededErr.cause)
+			httperror.BadRequest(verficationAttemptsExceededErr.Error(), atomicFnErr, nil).WithErrorCode(httperror.Code400_3).Render(w)
 			return
 		default:
 			httperror.InternalError(ctx, "", atomicFnErr, nil).WithErrorCode(httperror.Code500_0).Render(w)

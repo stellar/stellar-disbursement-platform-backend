@@ -238,14 +238,15 @@ func Test_SEP24Handler_GetInfo(t *testing.T) {
 		data.CreateAssetFixture(t, ctx, models.DBConnectionPool, "XLM", "")
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/info", nil)
+		req, err := http.NewRequest("GET", "/info", nil)
+		require.NoError(t, err)
 		http.HandlerFunc(handler.GetInfo).ServeHTTP(rr, req)
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var response SEP24InfoResponse
-		err := json.Unmarshal(rr.Body.Bytes(), &response)
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
 		require.NoError(t, err)
 
 		assert.Len(t, response.Deposit, 2)
@@ -368,7 +369,8 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 			"account":    "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 			"lang":       "en",
 		}
-		requestBodyBytes, _ := json.Marshal(requestBody)
+		requestBodyBytes, err := json.Marshal(requestBody)
+		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
 		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), sep10Claims)
@@ -446,7 +448,8 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 			"asset_code": "USDC",
 			"lang":       "en",
 		}
-		requestBodyBytes, _ := json.Marshal(requestBody)
+		requestBodyBytes, err := json.Marshal(requestBody)
+		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
 		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), sep10Claims)
@@ -482,7 +485,8 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		requestBody := map[string]string{
 			"asset_code": "XLM",
 		}
-		requestBodyBytes, _ := json.Marshal(requestBody)
+		requestBodyBytes, err := json.Marshal(requestBody)
+		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
 		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), sep10Claims)
@@ -536,6 +540,9 @@ func setupRequestWithSEP10Claims(method, url string, body io.Reader, sep10Claims
 	if sep10Claims != nil {
 		ctx = context.WithValue(ctx, sepauth.SEP10ClaimsContextKey, sep10Claims)
 	}
-	req, _ := http.NewRequestWithContext(ctx, method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		panic(err)
+	}
 	return req
 }

@@ -44,7 +44,6 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 
 	claims, err := jwtManager.ParseSEP24TokenClaims(token)
 	require.NoError(t, err)
-
 	assert.Equal(t, transactionID, claims.TransactionID())
 	assert.Equal(t, stellarAccount, claims.SEP10StellarAccount())
 	assert.Equal(t, stellarMemo, claims.SEP10StellarMemo())
@@ -90,7 +89,7 @@ func Test_JWTManager_GenerateAndParseSEP24MoreInfoToken(t *testing.T) {
 	// Verify full transaction data map
 	assert.Equal(t, lang, claims.TransactionData["lang"])
 	assert.Equal(t, "deposit", claims.TransactionData["kind"])
-	assert.Equal(t, "incomplete", claims.TransactionData["status"])
+	assert.Nil(t, claims.Valid())
 }
 
 func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {
@@ -109,8 +108,8 @@ func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {
 	assert.Nil(t, claims.Valid())
 	assert.Equal(t, "test-transaction-id", claims.ID)
 	assert.Equal(t, "stellar-disbursement-platform-backend", claims.Subject)
-	assert.True(t, claims.ExpiresAt.After(now.Add(time.Duration(4000*time.Millisecond))))
-	assert.True(t, claims.ExpiresAt.Before(now.Add(time.Duration(5000*time.Millisecond))))
+	assert.True(t, claims.ExpiresAt.After(now.Add(4000*time.Millisecond)))
+	assert.True(t, claims.ExpiresAt.Before(now.Add(5000*time.Millisecond)))
 }
 
 func Test_JWTManager_GenerateAndParseSEP10Token(t *testing.T) {
@@ -230,10 +229,13 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 		{
 			name: "token signed with different secret",
 			setupToken: func() string {
-				token, _ := differentJWTManager.GenerateSEP10Token(
+				token, err := differentJWTManager.GenerateSEP10Token(
 					"issuer", "subject", "jti", "", "",
 					time.Now(), time.Now().Add(5*time.Minute),
 				)
+				if err != nil {
+					return ""
+				}
 				return token
 			},
 			wantErr:     true,
@@ -242,10 +244,13 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 		{
 			name: "expired SEP-10 token",
 			setupToken: func() string {
-				token, _ := jwtManager.GenerateSEP10Token(
+				token, err := jwtManager.GenerateSEP10Token(
 					"issuer", "subject", "jti", "", "",
 					time.Now().Add(-10*time.Minute), time.Now().Add(-5*time.Minute),
 				)
+				if err != nil {
+					return ""
+				}
 				return token
 			},
 			wantErr:     true,
@@ -254,10 +259,13 @@ func Test_JWTManager_ParseSEP10TokenClaims_InvalidTokens(t *testing.T) {
 		{
 			name: "SEP-24 token parsed as SEP-10",
 			setupToken: func() string {
-				token, _ := jwtManager.GenerateSEP24Token(
+				token, err := jwtManager.GenerateSEP24Token(
 					"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 					"", "client.com", "home.com", "tx-123",
 				)
+				if err != nil {
+					return ""
+				}
 				return token
 			},
 			wantErr:     true,

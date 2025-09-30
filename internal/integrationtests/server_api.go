@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -25,18 +26,18 @@ const (
 	registrationURL = "sep24-interactive-deposit"
 )
 
-type ServerApiIntegrationTestsInterface interface {
-	Login(ctx context.Context) (*ServerApiAuthToken, error)
-	CreateDisbursement(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PostDisbursementRequest) (*data.Disbursement, error)
-	ProcessDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string) error
-	StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
+type ServerAPIIntegrationTestsInterface interface {
+	Login(ctx context.Context) (*ServerAPIAuthToken, error)
+	CreateDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PostDisbursementRequest) (*data.Disbursement, error)
+	ProcessDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string) error
+	StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error
-	ConfigureCircleAccess(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PatchCircleConfigRequest) error
+	ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error
 }
 
-type ServerApiIntegrationTests struct {
-	HttpClient              httpclient.HttpClientInterface
-	ServerApiBaseURL        string
+type ServerAPIIntegrationTests struct {
+	HTTPClient              httpclient.HTTPClientInterface
+	ServerAPIBaseURL        string
 	TenantName              string
 	UserEmail               string
 	UserPassword            string
@@ -44,7 +45,7 @@ type ServerApiIntegrationTests struct {
 	DisbursementCSVFileName string
 }
 
-type ServerApiAuthToken struct {
+type ServerAPIAuthToken struct {
 	Token string `json:"token"`
 }
 
@@ -53,8 +54,8 @@ type SEP24AuthToken struct {
 }
 
 // Login login the integration test user on SDP server API.
-func (sa *ServerApiIntegrationTests) Login(ctx context.Context) (*ServerApiAuthToken, error) {
-	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, loginURL)
+func (sa *ServerAPIIntegrationTests) Login(ctx context.Context) (*ServerAPIAuthToken, error) {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, loginURL)
 	if err != nil {
 		return nil, fmt.Errorf("error creating url: %w", err)
 	}
@@ -75,7 +76,7 @@ func (sa *ServerApiIntegrationTests) Login(ctx context.Context) (*ServerApiAuthT
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
-	resp, err := sa.HttpClient.Do(req)
+	resp, err := sa.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request to server API post LOGIN: %w", err)
 	}
@@ -85,7 +86,7 @@ func (sa *ServerApiIntegrationTests) Login(ctx context.Context) (*ServerApiAuthT
 		return nil, fmt.Errorf("error trying to login on the server API")
 	}
 
-	at := &ServerApiAuthToken{}
+	at := &ServerAPIAuthToken{}
 	err = json.NewDecoder(resp.Body).Decode(at)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding response body: %w", err)
@@ -95,8 +96,8 @@ func (sa *ServerApiIntegrationTests) Login(ctx context.Context) (*ServerApiAuthT
 }
 
 // CreateDisbursement creates a new disbursement using the SDP server API.
-func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PostDisbursementRequest) (*data.Disbursement, error) {
-	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, disbursementURL)
+func (sa *ServerAPIIntegrationTests) CreateDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PostDisbursementRequest) (*data.Disbursement, error) {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, disbursementURL)
 	if err != nil {
 		return nil, fmt.Errorf("error creating url: %w", err)
 	}
@@ -115,7 +116,7 @@ func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, aut
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
 	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
-	resp, err := sa.HttpClient.Do(req)
+	resp, err := sa.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request to server API post DISBURSEMENT: %w", err)
 	}
@@ -140,28 +141,31 @@ func createInstructionsRequest(ctx context.Context, tenantName, reqURL, disburse
 
 	csvBytes, err := fs.ReadFile(DisbursementCSVFiles, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error reading csv file: %w", err)
+		return nil, fmt.Errorf("reading csv file: %w", err)
 	}
 
 	b := &bytes.Buffer{}
 	w := multipart.NewWriter(b)
-	defer w.Close()
+	defer utils.DeferredClose(ctx, w, "closing multipart writer")
 
 	fileWriter, err := w.CreateFormFile("file", disbursementCSVFileName)
 	if err != nil {
-		return nil, fmt.Errorf("error creating form file with disbursement csv file: %w", err)
+		return nil, fmt.Errorf("creating form file with disbursement csv file: %w", err)
 	}
 
 	_, err = io.Copy(fileWriter, bytes.NewReader(csvBytes))
 	if err != nil {
-		return nil, fmt.Errorf("error copying file: %w", err)
+		return nil, fmt.Errorf("copying file: %w", err)
 	}
 	// we need to close *multipart.Writter before pass as parameter in http.NewRequestWithContext
-	w.Close()
+	err = w.Close()
+	if err != nil {
+		return nil, fmt.Errorf("closing multipart writer: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, b)
 	if err != nil {
-		return nil, fmt.Errorf("error creating new request: %w", err)
+		return nil, fmt.Errorf("creating new request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
@@ -171,8 +175,8 @@ func createInstructionsRequest(ctx context.Context, tenantName, reqURL, disburse
 }
 
 // ProcessDisbursement process the disbursement using the SDP server API.
-func (sa *ServerApiIntegrationTests) ProcessDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string) error {
-	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, disbursementURL, disbursementID, "instructions")
+func (sa *ServerAPIIntegrationTests) ProcessDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string) error {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, disbursementURL, disbursementID, "instructions")
 	if err != nil {
 		return fmt.Errorf("error creating url: %w", err)
 	}
@@ -185,7 +189,7 @@ func (sa *ServerApiIntegrationTests) ProcessDisbursement(ctx context.Context, au
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
 	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
-	resp, err := sa.HttpClient.Do(req)
+	resp, err := sa.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request to server API post DISBURSEMENT INSTRUCTIONS: %w", err)
 	}
@@ -199,8 +203,8 @@ func (sa *ServerApiIntegrationTests) ProcessDisbursement(ctx context.Context, au
 }
 
 // StartDisbursement starts the disbursement using the SDP server API.
-func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error {
-	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, disbursementURL, disbursementID, "status")
+func (sa *ServerAPIIntegrationTests) StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, disbursementURL, disbursementID, "status")
 	if err != nil {
 		return fmt.Errorf("error creating url: %w", err)
 	}
@@ -219,7 +223,7 @@ func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, auth
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
 	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
-	resp, err := sa.HttpClient.Do(req)
+	resp, err := sa.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request to server API patch DISBURSEMENT: %w", err)
 	}
@@ -233,8 +237,8 @@ func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, auth
 }
 
 // ReceiverRegistration completes the receiver registration using SDP server API and the anchor platform.
-func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error {
-	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, registrationURL, "verification")
+func (sa *ServerAPIIntegrationTests) ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, registrationURL, "verification")
 	if err != nil {
 		return fmt.Errorf("error creating url: %w", err)
 	}
@@ -253,7 +257,7 @@ func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, a
 	req.Header.Set("Authorization", "Bearer "+authSEP24Token.Token)
 	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
-	resp, err := sa.HttpClient.Do(req)
+	resp, err := sa.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request to server API post WALLET REGISTRATION VERIFICATION: %w", err)
 	}
@@ -266,8 +270,8 @@ func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, a
 	return nil
 }
 
-func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PatchCircleConfigRequest) error {
-	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, organizationURL, "circle-config")
+func (sa *ServerAPIIntegrationTests) ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, organizationURL, "circle-config")
 	if err != nil {
 		return fmt.Errorf("creating url: %w", err)
 	}
@@ -286,7 +290,7 @@ func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
 	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
-	resp, err := sa.HttpClient.Do(req)
+	resp, err := sa.HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("making request to server API patch CIRCLE CONFIG: %w", err)
 	}
@@ -299,5 +303,5 @@ func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	return nil
 }
 
-// Ensuring that ServerApiIntegrationTests is implementing ServerApiIntegrationTestsInterface.
-var _ ServerApiIntegrationTestsInterface = (*ServerApiIntegrationTests)(nil)
+// Ensuring that ServerAPIIntegrationTests is implementing ServerAPIIntegrationTestsInterface.
+var _ ServerAPIIntegrationTestsInterface = (*ServerAPIIntegrationTests)(nil)

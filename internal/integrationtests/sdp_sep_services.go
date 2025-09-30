@@ -29,7 +29,7 @@ type SDPSepServicesIntegrationTestsInterface interface {
 }
 
 type SDPSepServicesIntegrationTests struct {
-	HTTPClient                httpclient.HttpClientInterface
+	HTTPClient                httpclient.HTTPClientInterface
 	SDPBaseURL                string
 	TenantName                string
 	ReceiverAccountPublicKey  string
@@ -129,10 +129,15 @@ func (s *SDPSepServicesIntegrationTests) GetSEP10Challenge(ctx context.Context) 
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %w", err)
+		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -230,10 +235,15 @@ func (s *SDPSepServicesIntegrationTests) ValidateSEP10Challenge(ctx context.Cont
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %w", err)
+		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -281,10 +291,15 @@ func (s *SDPSepServicesIntegrationTests) InitiateSEP24Deposit(ctx context.Contex
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %w", err)
+		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -331,10 +346,15 @@ func (s *SDPSepServicesIntegrationTests) GetSEP24Transaction(ctx context.Context
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %w", err)
+		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -375,10 +395,15 @@ func (s *SDPSepServicesIntegrationTests) CompleteReceiverRegistration(ctx contex
 	if err != nil {
 		return fmt.Errorf("executing request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading response body: %w", err)
+		}
 		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 

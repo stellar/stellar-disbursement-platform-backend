@@ -662,14 +662,14 @@ func Test_PaymentNewPaymentQuery(t *testing.T) {
 func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
 
-	models, err := NewModels(dbConnectionPool)
-	require.NoError(t, err)
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
 
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
@@ -770,11 +770,12 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		_ = db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-			err := models.Payment.RetryFailedPayments(ctx, dbTx, "user@test.com", payment1.ID, payment2.ID, payment3.ID)
-			assert.ErrorIs(t, err, ErrMismatchNumRowsAffected)
-			return ErrMismatchNumRowsAffected
+		err := db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+			innerErr := models.Payment.RetryFailedPayments(ctx, dbTx, "user@test.com", payment1.ID, payment2.ID, payment3.ID)
+			assert.ErrorIs(t, innerErr, ErrMismatchNumRowsAffected)
+			return innerErr
 		})
+		assert.ErrorIs(t, err, ErrMismatchNumRowsAffected)
 
 		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
 		require.NoError(t, err)

@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -17,10 +18,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func Test_LoginHandler_validateRequest(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
 	type Req struct {
 		body    LoginRequest
 		headers map[string]string
@@ -33,6 +39,11 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 	}{
 		{
 			name: "🔴 invalid body and headers fields",
+			handler: LoginHandler{
+				ReCAPTCHADisabled: false,
+				MFADisabled:       false,
+				Models:            models,
+			},
 			expected: httperror.BadRequest("", nil, map[string]interface{}{
 				"email":           "email is required",
 				"password":        "password is required",
@@ -45,6 +56,7 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 			handler: LoginHandler{
 				ReCAPTCHADisabled: true,
 				MFADisabled:       true,
+				Models:            models,
 			},
 			expected: httperror.BadRequest("", nil, map[string]interface{}{
 				"email":    "email is required",
@@ -53,6 +65,11 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 		},
 		{
 			name: "🟢 valid request with mfa & reCAPTCHA enabled",
+			handler: LoginHandler{
+				ReCAPTCHADisabled: false,
+				MFADisabled:       false,
+				Models:            models,
+			},
 			req: Req{
 				body: LoginRequest{
 					Email:          "foobar@test.com",
@@ -74,6 +91,7 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 			handler: LoginHandler{
 				ReCAPTCHADisabled: true,
 				MFADisabled:       true,
+				Models:            models,
 			},
 			expected: nil,
 		},
@@ -81,12 +99,21 @@ func Test_LoginHandler_validateRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			mfaDisabled := tc.handler.MFADisabled
+			captchaDisabled := tc.handler.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				MFADisabled:     &mfaDisabled,
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			headers := http.Header{}
 			for k, v := range tc.req.headers {
 				headers.Set(k, v)
 			}
 
-			err := tc.handler.validateRequest(tc.req.body, headers)
+			err = tc.handler.validateRequest(ctx, tc.req.body, headers)
 			if tc.expected == nil {
 				require.Nil(t, err)
 			} else {
@@ -409,6 +436,92 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 			wantStatusCode:   http.StatusOK,
 			wantResponseBody: `{"message": "MFA code sent to email. Check your inbox and spam folders."}`,
 		},
+		{
+			name:              "🟢[200] successful login with nil org settings - falls back to env settings (CAPTCHA disabled)",
+			ReCAPTCHADisabled: true,
+			MFAADisabled:      false,
+			req: Req{
+				body:    `{"email": "foobar@test.com","password": "pass1234"}`,
+				headers: map[string]string{DeviceIDHeader: "safari-xyz"},
+			},
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+
+				authManagerMock.
+					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&usr, nil).
+					Once()
+				authManagerMock.
+					On("MFADeviceRemembered", mock.Anything, "safari-xyz", "user-ID").
+					Return(true, nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
+		{
+			name:              "🟢[200] successful login with nil org settings - falls back to env settings (MFA disabled)",
+			ReCAPTCHADisabled: false,
+			MFAADisabled:      true,
+			req:               defaultValidRequest,
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+
+				reCAPTCHAValidatorMock.
+					On("IsTokenValid", mock.Anything, "XyZ").
+					Return(true, nil).
+					Once()
+				authManagerMock.
+					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&usr, nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
+		{
+			name:              "🟢[200] both org settings nil - falls back to both env settings disabled",
+			ReCAPTCHADisabled: true,
+			MFAADisabled:      true,
+			req: Req{
+				body:    `{"email": "foobar@test.com","password": "pass1234"}`,
+				headers: map[string]string{DeviceIDHeader: "safari-xyz"},
+			},
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				ctx := context.Background()
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					Name: "Test Org",
+				})
+				require.NoError(t, err)
+
+				authManagerMock.
+					On("Authenticate", mock.Anything, "foobar@test.com", "pass1234").
+					Return("token", nil).
+					Once()
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&usr, nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: `{"token": "token"}`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -416,6 +529,16 @@ func Test_LoginHandler_ServeHTTP(t *testing.T) {
 			reCAPTCHAValidatorMock := validators.NewReCAPTCHAValidatorMock(t)
 			authManagerMock := auth.NewAuthManagerMock(t)
 			messengerClientMock := message.NewMessengerClientMock(t)
+
+			ctx := context.Background()
+			mfaDisabled := tc.MFAADisabled
+			captchaDisabled := tc.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				MFADisabled:     &mfaDisabled,
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
 			if tc.prepareMocks != nil {
 				tc.prepareMocks(t, reCAPTCHAValidatorMock, authManagerMock, messengerClientMock)
 			}

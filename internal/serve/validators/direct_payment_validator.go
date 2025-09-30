@@ -200,18 +200,19 @@ func (v *DirectPaymentValidator) validateReceiverReference(receiver *DirectPayme
 	}
 }
 
-func (dpv *DirectPaymentValidator) validateWalletReference(wallet *DirectPaymentWallet) {
+func (v *DirectPaymentValidator) validateWalletReference(wallet *DirectPaymentWallet) {
 	hasID := wallet.ID != nil && strings.TrimSpace(*wallet.ID) != ""
 	hasAddress := wallet.Address != nil && strings.TrimSpace(*wallet.Address) != ""
 
-	dpv.Check(hasID || hasAddress, "wallet",
+	// Must specify either id or address, not both:
+	v.Check(hasID || hasAddress, "wallet",
 		"wallet reference is required - must specify either id or address")
-	dpv.Check(!(hasID && hasAddress), "wallet",
+	v.Check(!hasID || !hasAddress, "wallet",
 		"wallet reference must specify either id or address, not both")
 
 	if hasAddress {
 		address := strings.TrimSpace(*wallet.Address)
-		dpv.Check(strkey.IsValidEd25519PublicKey(address),
+		v.Check(strkey.IsValidEd25519PublicKey(address),
 			"wallet.address", "invalid stellar account ID format")
 		*wallet.Address = address
 	}

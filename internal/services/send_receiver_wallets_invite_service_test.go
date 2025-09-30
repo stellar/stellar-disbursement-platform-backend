@@ -165,9 +165,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, errors.New("unexpected error")).
@@ -178,9 +178,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -318,9 +318,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
 				Body:          contentWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -330,9 +330,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail: receiverEmailOnly.Email,
 				Body:    contentWallet2,
 				Title:   titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeAWSEmail, nil).
@@ -468,9 +468,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -481,9 +481,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -776,9 +776,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -901,9 +901,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement3,
 				Title:         titleDisbursement3,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -914,9 +914,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentDisbursement4,
 				Title:         titleDisbursement4,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -1044,9 +1044,9 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement,
 				Title:         titleDisbursement,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -1760,5 +1760,132 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 		isValid, err := utils.VerifySignedURL(actual, stellarPublicKey)
 		require.NoError(t, err)
 		require.True(t, isValid)
+	})
+}
+
+func TestSendReceiverWalletInviteService_GetRegistrationLink(t *testing.T) {
+	ctx := context.Background()
+	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
+
+	t.Run("successful registration link without shortener", func(t *testing.T) {
+		dbt := dbtest.Open(t)
+		defer dbt.Close()
+
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		defer dbConnectionPool.Close()
+
+		models, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		wdl := WalletDeepLink{
+			DeepLink:         "wallet://sdp",
+			TenantBaseURL:    "https://tenant.example.com",
+			OrganizationName: "Test Org",
+			AssetCode:        "USDC",
+			AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		}
+
+		service := SendReceiverWalletInviteService{
+			Models:                 models,
+			sep10SigningPrivateKey: stellarSecretKey,
+		}
+
+		link, err := service.GetRegistrationLink(ctx, wdl, false)
+		require.NoError(t, err)
+		assert.Contains(t, link, "wallet://sdp")
+		assert.Contains(t, link, "asset=USDC")
+		assert.Contains(t, link, "signature=")
+	})
+
+	t.Run("successful registration link with shortener", func(t *testing.T) {
+		dbt := dbtest.Open(t)
+		defer dbt.Close()
+
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		defer dbConnectionPool.Close()
+
+		models, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		wdl := WalletDeepLink{
+			DeepLink:         "wallet://sdp",
+			TenantBaseURL:    "https://tenant.example.com",
+			OrganizationName: "Test Org",
+			AssetCode:        "USDC",
+			AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		}
+
+		service := SendReceiverWalletInviteService{
+			Models:                 models,
+			sep10SigningPrivateKey: stellarSecretKey,
+		}
+
+		link, err := service.GetRegistrationLink(ctx, wdl, true)
+		require.NoError(t, err)
+		assert.Contains(t, link, "https://tenant.example.com/r/")
+		assert.NotContains(t, link, "wallet://sdp")
+	})
+
+	t.Run("error with invalid signing key", func(t *testing.T) {
+		dbt := dbtest.Open(t)
+		defer dbt.Close()
+
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		defer dbConnectionPool.Close()
+
+		models, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		wdl := WalletDeepLink{
+			DeepLink:         "wallet://sdp",
+			TenantBaseURL:    "https://tenant.example.com",
+			OrganizationName: "Test Org",
+			AssetCode:        "USDC",
+			AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		}
+
+		service := SendReceiverWalletInviteService{
+			Models:                 models,
+			sep10SigningPrivateKey: "invalid-key",
+		}
+
+		link, err := service.GetRegistrationLink(ctx, wdl, false)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "getting signed registration link")
+		assert.Empty(t, link)
+	})
+
+	t.Run("native asset without shortener", func(t *testing.T) {
+		dbt := dbtest.Open(t)
+		defer dbt.Close()
+
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		defer dbConnectionPool.Close()
+
+		models, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		wdl := WalletDeepLink{
+			DeepLink:         "wallet://sdp",
+			TenantBaseURL:    "https://tenant.example.com",
+			OrganizationName: "Test Org",
+			AssetCode:        "XLM",
+			AssetIssuer:      "",
+		}
+
+		service := SendReceiverWalletInviteService{
+			Models:                 models,
+			sep10SigningPrivateKey: stellarSecretKey,
+		}
+
+		link, err := service.GetRegistrationLink(ctx, wdl, false)
+		require.NoError(t, err)
+		assert.Contains(t, link, "wallet://sdp")
+		assert.Contains(t, link, "asset=native")
+		assert.Contains(t, link, "signature=")
 	})
 }

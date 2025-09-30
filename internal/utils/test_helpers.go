@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,8 +27,9 @@ func AssertFuncExitsWithFatal(t *testing.T, fatalFunc func(), stdErrContains ...
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	exitError, ok := err.(*exec.ExitError)
-	require.Truef(t, ok, "process ran with err %v, want exit status 1", err)
+	var exitError *exec.ExitError
+	require.ErrorAs(t, err, &exitError)
+	require.True(t, errors.As(err, &exitError), "process ran with err %v, want exit status 1", err)
 	require.False(t, exitError.Success())
 
 	for _, stdErrContain := range stdErrContains {

@@ -9,7 +9,6 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
-	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/integrationtests"
 )
@@ -70,14 +69,14 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Name:      "admin-server-account-id",
 			Usage:     "The account id of the admin server api",
 			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.AdminServerAccountId,
+			ConfigKey: &integrationTestsOpts.AdminServerAccountID,
 			Required:  true,
 		},
 		{
 			Name:      "admin-server-api-key",
 			Usage:     "The api key of the admin server api",
 			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.AdminServerApiKey,
+			ConfigKey: &integrationTestsOpts.AdminServerAPIKey,
 			Required:  true,
 		},
 		{
@@ -105,14 +104,14 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Name:      "server-api-base-url",
 			Usage:     "The Base URL of the server API of the SDP.",
 			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.ServerApiBaseURL,
+			ConfigKey: &integrationTestsOpts.ServerAPIBaseURL,
 			Required:  true,
 		},
 		{
 			Name:           "registration-contact-type",
 			Usage:          fmt.Sprintf("The registration contact type used when creating a new disbursement. Options: %v", data.AllRegistrationContactTypes()),
 			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetRegistrationContactType,
+			CustomSetValue: utils.SetRegistrationContactType,
 			ConfigKey:      &integrationTestsOpts.RegistrationContactType,
 			Required:       true,
 		},
@@ -123,7 +122,7 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 		Use:   "integration-tests",
 		Short: "Integration tests related commands",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmdUtils.PropagatePersistentPreRun(cmd, args)
+			utils.PropagatePersistentPreRun(cmd, args)
 			ctx := cmd.Context()
 
 			// Validate & ingest input parameters
@@ -160,7 +159,7 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Name:           "receiver-account-public-key",
 			Usage:          "Integration test receiver public stellar account key",
 			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPublicKey,
+			CustomSetValue: utils.SetConfigOptionStellarPublicKey,
 			ConfigKey:      &integrationTestsOpts.ReceiverAccountPublicKey,
 			Required:       true,
 		},
@@ -168,7 +167,7 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Name:           "receiver-account-private-key",
 			Usage:          "Integration test receiver private stellar account key",
 			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
+			CustomSetValue: utils.SetConfigOptionStellarPrivateKey,
 			ConfigKey:      &integrationTestsOpts.ReceiverAccountPrivateKey,
 			Required:       true,
 		},
@@ -183,7 +182,7 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Name:           "sep10-signing-public-key",
 			Usage:          "SEP10 signing public key",
 			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPublicKey,
+			CustomSetValue: utils.SetConfigOptionStellarPublicKey,
 			ConfigKey:      &integrationTestsOpts.Sep10SigningPublicKey,
 			Required:       true,
 		},

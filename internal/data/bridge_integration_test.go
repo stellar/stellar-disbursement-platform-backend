@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_BridgeIntegrationInsert_Validate(t *testing.T) {
@@ -18,17 +19,18 @@ func Test_BridgeIntegrationInsert_Validate(t *testing.T) {
 		expectedError string
 	}{
 		{
-			name: "returns error if KYCLinkID is empty",
+			name: "returns error if KYCLinkID is empty string",
 			insert: BridgeIntegrationInsert{
+				KYCLinkID:  utils.StringPtr(""),
 				CustomerID: "customer-123",
 				OptedInBy:  "user@example.com",
 			},
-			expectedError: "KYCLinkID is required",
+			expectedError: "KYCLinkID is empty",
 		},
 		{
 			name: "returns error if CustomerID is empty",
 			insert: BridgeIntegrationInsert{
-				KYCLinkID: "kyc-link-123",
+				KYCLinkID: utils.StringPtr("kyc-link-123"),
 				OptedInBy: "user@example.com",
 			},
 			expectedError: "CustomerID is required",
@@ -36,7 +38,7 @@ func Test_BridgeIntegrationInsert_Validate(t *testing.T) {
 		{
 			name: "returns error if OptedInBy is empty",
 			insert: BridgeIntegrationInsert{
-				KYCLinkID:  "kyc-link-123",
+				KYCLinkID:  utils.StringPtr("kyc-link-123"),
 				CustomerID: "customer-123",
 			},
 			expectedError: "OptedInBy is required",
@@ -44,7 +46,7 @@ func Test_BridgeIntegrationInsert_Validate(t *testing.T) {
 		{
 			name: "🎉 validation passes with all required fields",
 			insert: BridgeIntegrationInsert{
-				KYCLinkID:  "kyc-link-123",
+				KYCLinkID:  utils.StringPtr("kyc-link-123"),
 				CustomerID: "customer-123",
 				OptedInBy:  "user@example.com",
 			},
@@ -78,7 +80,7 @@ func Test_BridgeIntegrationModel_Get(t *testing.T) {
 
 	t.Run("🎉 successfully retrieves bridge integration record", func(t *testing.T) {
 		insertData := BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-123",
+			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user@example.com",
 		}
@@ -113,13 +115,13 @@ func Test_BridgeIntegrationModel_Insert(t *testing.T) {
 
 		integration, err := m.Insert(ctx, insert)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "KYCLinkID is required")
+		assert.ErrorContains(t, err, "OptedInBy is required")
 		assert.Nil(t, integration)
 	})
 
 	t.Run("🎉 successfully inserts bridge integration record", func(t *testing.T) {
 		insert := BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-123",
+			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user@example.com",
 		}
@@ -130,7 +132,7 @@ func Test_BridgeIntegrationModel_Insert(t *testing.T) {
 		defer deleteBridgeIntegrationFixture(t, ctx, dbConnectionPool)
 
 		assert.Equal(t, BridgeIntegrationStatusOptedIn, integration.Status)
-		assert.Equal(t, &insert.KYCLinkID, integration.KYCLinkID)
+		assert.Equal(t, insert.KYCLinkID, integration.KYCLinkID)
 		assert.Equal(t, &insert.CustomerID, integration.CustomerID)
 		assert.Equal(t, &insert.OptedInBy, integration.OptedInBy)
 		assert.NotNil(t, integration.OptedInAt)
@@ -144,7 +146,7 @@ func Test_BridgeIntegrationModel_Insert(t *testing.T) {
 
 	t.Run("database constraint prevents duplicate records", func(t *testing.T) {
 		insert := BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-456",
+			KYCLinkID:  utils.StringPtr("kyc-link-456"),
 			CustomerID: "customer-456",
 			OptedInBy:  "user2@example.com",
 		}
@@ -167,7 +169,7 @@ func Test_BridgeIntegrationModel_Update(t *testing.T) {
 
 	setupIntegration := func(t *testing.T) *BridgeIntegration {
 		insert := BridgeIntegrationInsert{
-			KYCLinkID:  "kyc-link-789",
+			KYCLinkID:  utils.StringPtr("kyc-link-789"),
 			CustomerID: "customer-789",
 			OptedInBy:  "user3@example.com",
 		}
@@ -358,7 +360,7 @@ func Test_BridgeIntegrationStatus_Flow(t *testing.T) {
 
 	t.Run("🎉 demonstrates typical status flow", func(t *testing.T) {
 		insert := BridgeIntegrationInsert{
-			KYCLinkID:  "flow-kyc-link",
+			KYCLinkID:  utils.StringPtr("flow-kyc-link"),
 			CustomerID: "flow-customer",
 			OptedInBy:  "flow@example.com",
 		}

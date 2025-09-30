@@ -32,7 +32,7 @@ type TxSubmitterServiceInterface interface {
 type TxSubmitterService struct{}
 
 // StartSubmitter starts the Transaction Submission Service
-func (t *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.SubmitterOptions) {
+func (s *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.SubmitterOptions) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

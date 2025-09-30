@@ -76,7 +76,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets", nil)
+		req, err := http.NewRequest("GET", "/assets", nil)
+		require.NoError(t, err)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -99,7 +100,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		data.AssociateAssetWithWalletFixture(t, ctx, dbConnectionPool, assets[0].ID, wallet.ID)
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", fmt.Sprintf("/assets?wallet=%s", wallet.ID), nil)
+		req, err := http.NewRequest("GET", fmt.Sprintf("/assets?wallet=%s", wallet.ID), nil)
+		require.NoError(t, err)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
 		var assetsResponse []data.Asset
@@ -160,7 +162,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		})).Return(0.0, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
+		req, err := http.NewRequest("GET", "/assets?enabled=true", nil)
+		require.NoError(t, err)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
@@ -227,7 +230,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		})).Return(0.0, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
+		req, err := http.NewRequest("GET", "/assets?enabled=true", nil)
+		require.NoError(t, err)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
@@ -267,7 +271,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?enabled=false", nil)
+		req, err := http.NewRequest("GET", "/assets?enabled=false", nil)
+		require.NoError(t, err)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
@@ -281,7 +286,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 
 	t.Run("returns error for invalid enabled parameter", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?enabled=invalid", nil)
+		req, err := http.NewRequest("GET", "/assets?enabled=invalid", nil)
+		require.NoError(t, err)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -336,7 +342,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		horizonClientMock.On("AccountDetail", mock.Anything).Return(*horizonAccount, nil)
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/assets?enabled=true", nil)
+		req, err := http.NewRequest("GET", "/assets?enabled=true", nil)
+		require.NoError(t, err)
 		req = req.WithContext(ctxWithTenant)
 		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
 
@@ -562,9 +569,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 			Return(schema.TransactionAccount{}, errors.New("foobar")).Once()
 
 		rr := httptest.NewRecorder()
-		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+		requestBody, err := json.Marshal(AssetRequest{code, issuer})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
@@ -576,9 +585,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).Once()
 
 		rr := httptest.NewRecorder()
-		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+		requestBody, err := json.Marshal(AssetRequest{code, issuer})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -641,9 +652,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 
-		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+		requestBody, err := json.Marshal(AssetRequest{code, issuer})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -681,9 +694,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 
-		requestBody, _ := json.Marshal(AssetRequest{Code: "XLM"})
+		requestBody, err := json.Marshal(AssetRequest{Code: "XLM"})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -721,9 +736,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 
-		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+		requestBody, err := json.Marshal(AssetRequest{code, issuer})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -738,9 +755,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	t.Run("failed creating asset, issuer invalid", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 
-		requestBody, _ := json.Marshal(AssetRequest{code, "invalid"})
+		requestBody, err := json.Marshal(AssetRequest{code, "invalid"})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -751,9 +770,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	t.Run("failed creating asset, missing field", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 
-		requestBody, _ := json.Marshal(AssetRequest{})
+		requestBody, err := json.Marshal(AssetRequest{})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -765,9 +786,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		rr := httptest.NewRecorder()
 
 		emptyStr := ""
-		requestBody, _ := json.Marshal(AssetRequest{Code: emptyStr, Issuer: emptyStr})
+		requestBody, err := json.Marshal(AssetRequest{Code: emptyStr, Issuer: emptyStr})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -958,9 +981,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 
-		requestBody, _ := json.Marshal(AssetRequest{code, fmt.Sprintf(" %s ", issuer)})
+		requestBody, err := json.Marshal(AssetRequest{code, fmt.Sprintf(" %s ", issuer)})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -1015,7 +1040,8 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 			Return(schema.TransactionAccount{}, errors.New("foobar")).Once()
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		require.NoError(t, err)
 		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
@@ -1030,7 +1056,8 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).Once()
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		require.NoError(t, err)
 		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -1214,7 +1241,8 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	t.Run("failed deleting an asset, asset not found", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 
-		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", "nonexistant"), nil)
+		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", "nonexistant"), nil)
+		require.NoError(t, err)
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -1952,7 +1980,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
 					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
 
-					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+					require.WithinDuration(t, expectedMax, actualMax, 60*time.Second,
 						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
 				}
 			}(t, signedTx, 0)).

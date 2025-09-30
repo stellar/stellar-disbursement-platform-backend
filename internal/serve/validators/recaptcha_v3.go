@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -47,7 +49,7 @@ func (v *GoogleReCAPTCHAV3Validator) IsTokenValid(ctx context.Context, token str
 	if err != nil {
 		return false, fmt.Errorf("requesting verify reCAPTCHA v3 token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	respBodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

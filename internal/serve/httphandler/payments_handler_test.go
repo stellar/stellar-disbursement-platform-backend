@@ -109,7 +109,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := `{
+		wantJSON := `{
 			"id": "` + payment.ID + `",
 			"amount": "50.0000000",
 			"stellar_transaction_id": "` + payment.StellarTransactionID + `",
@@ -175,7 +175,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"external_payment_id": "` + payment.ExternalPaymentID + `"
 		}`
 
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	t.Run("error payment not found for given ID", func(t *testing.T) {
@@ -188,10 +188,10 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 
-		wantJson := `{
+		wantJSON := `{
 			"error": "Cannot retrieve payment with ID: invalid_id"
 		}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 }
 
@@ -266,7 +266,7 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 				t.Helper()
 
 				assert.Equal(t, http.StatusInternalServerError, responseStatus)
-				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, string(response))
+				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, response)
 			},
 		},
 		{
@@ -875,9 +875,9 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 			assert.Equal(t, tc.expectedPagination, actualResponse.Pagination)
 
 			// Parse the response data
-			expectedJson, err := json.Marshal(tc.expectedPayments)
+			expectedJSON, err := json.Marshal(tc.expectedPayments)
 			require.NoError(t, err)
-			assert.JSONEq(t, string(expectedJson), string(actualResponse.Data))
+			assert.JSONEq(t, string(expectedJSON), string(actualResponse.Data))
 		})
 	}
 }

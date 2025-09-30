@@ -40,15 +40,24 @@ type LoginHandler struct {
 	MFADisabled        bool
 }
 
-func (h LoginHandler) validateRequest(req LoginRequest, headers http.Header) *httperror.HTTPError {
+func (h LoginHandler) validateRequest(ctx context.Context, req LoginRequest, headers http.Header) *httperror.HTTPError {
 	lv := validators.NewValidator()
 
 	lv.Check(req.Email != "", "email", "email is required")
 	lv.Check(req.Password != "", "password", "password is required")
-	lv.Check(h.ReCAPTCHADisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
 
+	captchaDisabled := IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	})
+	lv.Check(captchaDisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
+
+	mfaDisabled := IsMFADisabled(ctx, MFAConfig{
+		Models:      h.Models,
+		MFADisabled: h.MFADisabled,
+	})
 	deviceID := headers.Get(DeviceIDHeader)
-	lv.Check(h.MFADisabled || deviceID != "", DeviceIDHeader, "Device-ID header is required")
+	lv.Check(mfaDisabled || deviceID != "", DeviceIDHeader, "Device-ID header is required")
 
 	if lv.HasErrors() {
 		return httperror.BadRequest("", nil, lv.Errors)
@@ -68,7 +77,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
 	}
-	if httpErr := h.validateRequest(reqBody, req.Header); httpErr != nil {
+	if httpErr := h.validateRequest(ctx, reqBody, req.Header); httpErr != nil {
 		httpErr.Render(rw)
 		return
 	}
@@ -76,7 +85,10 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	truncatedEmail := utils.TruncateString(reqBody.Email, 3)
 
 	// Step 2: Run the reCAPTCHA validation if it is enabled
-	if !h.ReCAPTCHADisabled {
+	if !IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	}) {
 		// validating reCAPTCHA Token
 		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if err != nil {
@@ -130,7 +142,10 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 func (h LoginHandler) handleMFA(ctx context.Context, req *http.Request, user *auth.User) (canSkipMFA bool, httpErr *httperror.HTTPError) {
 	truncatedEmail := utils.TruncateString(user.Email, 3)
 	// 1: If MFA is disabled, return the token
-	if h.MFADisabled {
+	if IsMFADisabled(ctx, MFAConfig{
+		Models:      h.Models,
+		MFADisabled: h.MFADisabled,
+	}) {
 		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 		return true, nil
 	}
@@ -178,9 +193,9 @@ func (h LoginHandler) sendMFAEmail(ctx context.Context, user *auth.User, code st
 		Title:   mfaMessageTitle,
 		Body:    msgContent,
 		Type:    message.MessageTypeUserMFA,
-		TemplateVariables: map[string]string{
-			"MFACode":          code,
-			"OrganizationName": organization.Name,
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarMFACode: code,
+			message.TemplateVarOrgName: organization.Name,
 		},
 	}
 	if err = h.MessengerClient.SendMessage(ctx, msg); err != nil {

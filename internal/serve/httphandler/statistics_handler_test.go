@@ -41,7 +41,7 @@ func TestStatisticsHandler(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := `{
+		wantJSON := `{
 			"payment_counters": {
 				"canceled": 0,
 				"draft": 0,
@@ -63,7 +63,7 @@ func TestStatisticsHandler(t *testing.T) {
 			"total_receivers": 0,
 			"total_disbursements": 0
 		}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	t.Run("get statistics for invalid disbursement id", func(t *testing.T) {
@@ -77,10 +77,10 @@ func TestStatisticsHandler(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 
-		wantJson := `{
+		wantJSON := `{
 			"error": "a disbursement with the id invalid-id does not exist"
 		}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	ctx := context.Background()
@@ -108,7 +108,7 @@ func TestStatisticsHandler(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := `{
+		wantJSON := `{
 			"payment_counters": {
 				"canceled": 0,
 				"draft": 0,
@@ -129,7 +129,7 @@ func TestStatisticsHandler(t *testing.T) {
 			},
 			"total_receivers": 0
 		}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
@@ -159,7 +159,7 @@ func TestStatisticsHandler(t *testing.T) {
 
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
-		wantJson := `{
+		wantJSON := `{
 			"payment_counters": {
 				"canceled": 0,
 				"draft": 1,
@@ -196,7 +196,7 @@ func TestStatisticsHandler(t *testing.T) {
 			"total_receivers": 1,
 			"total_disbursements": 1
 		}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	t.Run("get statistics for specific disbursement", func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestStatisticsHandler(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := `{
+		wantJSON := `{
 			"payment_counters": {
 				"canceled": 0,
 				"draft": 1,
@@ -245,6 +245,6 @@ func TestStatisticsHandler(t *testing.T) {
 			},
 			"total_receivers": 1
 		}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 }

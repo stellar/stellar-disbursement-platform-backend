@@ -594,16 +594,16 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
-			Status:                      receiverWallet.Status,
-			StellarAddress:              receiverWallet.StellarAddress,
-			StellarMemo:                 receiverWallet.StellarMemo,
-			StellarMemoType:             receiverWallet.StellarMemoType,
-			StatusHistory:               receiverWallet.StatusHistory,
-			OTPCreatedAt:                receiverWallet.OTPCreatedAt,
-			CreatedAt:                   receiverWallet.CreatedAt,
-			UpdatedAt:                   actual.UpdatedAt,
-			OTP:                         "123456",
-			OTPConfirmedAt:              nil,
+			Status:             receiverWallet.Status,
+			StellarAddress:     receiverWallet.StellarAddress,
+			StellarMemo:        receiverWallet.StellarMemo,
+			StellarMemoType:    receiverWallet.StellarMemoType,
+			StatusHistory:      receiverWallet.StatusHistory,
+			OTPCreatedAt:       receiverWallet.OTPCreatedAt,
+			CreatedAt:          receiverWallet.CreatedAt,
+			UpdatedAt:          actual.UpdatedAt,
+			OTP:                "123456",
+			OTPConfirmedAt:     nil,
 			SEP24TransactionID: receiverWallet.SEP24TransactionID,
 		}
 
@@ -1221,19 +1221,19 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
-			OTP:                         receiverWallet.OTP,
-			Status:                      receiverWallet.Status,
-			StatusHistory:               actual.StatusHistory,
-			OTPCreatedAt:                actual.OTPCreatedAt,
-			OTPConfirmedAt:              actual.OTPConfirmedAt,
-			OTPConfirmedWith:            actual.OTPConfirmedWith,
-			CreatedAt:                   actual.CreatedAt,
-			UpdatedAt:                   actual.UpdatedAt,
-			StellarAddress:              receiverWallet.StellarAddress,
-			StellarMemo:                 receiverWallet.StellarMemo,
-			StellarMemoType:             receiverWallet.StellarMemoType,
+			OTP:                receiverWallet.OTP,
+			Status:             receiverWallet.Status,
+			StatusHistory:      actual.StatusHistory,
+			OTPCreatedAt:       actual.OTPCreatedAt,
+			OTPConfirmedAt:     actual.OTPConfirmedAt,
+			OTPConfirmedWith:   actual.OTPConfirmedWith,
+			CreatedAt:          actual.CreatedAt,
+			UpdatedAt:          actual.UpdatedAt,
+			StellarAddress:     receiverWallet.StellarAddress,
+			StellarMemo:        receiverWallet.StellarMemo,
+			StellarMemoType:    receiverWallet.StellarMemoType,
 			SEP24TransactionID: receiverWallet.SEP24TransactionID,
-			InvitationSentAt:            actual.InvitationSentAt,
+			InvitationSentAt:   actual.InvitationSentAt,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -1258,19 +1258,19 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
-			Status:                      receiverWallet.Status,
-			OTP:                         receiverWallet.OTP,
-			StatusHistory:               actual.StatusHistory,
-			OTPCreatedAt:                actual.OTPCreatedAt,
-			OTPConfirmedAt:              actual.OTPConfirmedAt,
-			OTPConfirmedWith:            actual.OTPConfirmedWith,
-			CreatedAt:                   actual.CreatedAt,
-			UpdatedAt:                   actual.UpdatedAt,
-			StellarAddress:              receiverWallet.StellarAddress,
-			StellarMemo:                 "",
-			StellarMemoType:             "",
+			Status:             receiverWallet.Status,
+			OTP:                receiverWallet.OTP,
+			StatusHistory:      actual.StatusHistory,
+			OTPCreatedAt:       actual.OTPCreatedAt,
+			OTPConfirmedAt:     actual.OTPConfirmedAt,
+			OTPConfirmedWith:   actual.OTPConfirmedWith,
+			CreatedAt:          actual.CreatedAt,
+			UpdatedAt:          actual.UpdatedAt,
+			StellarAddress:     receiverWallet.StellarAddress,
+			StellarMemo:        "",
+			StellarMemoType:    "",
 			SEP24TransactionID: receiverWallet.SEP24TransactionID,
-			InvitationSentAt:            actual.InvitationSentAt,
+			InvitationSentAt:   actual.InvitationSentAt,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -1513,13 +1513,13 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 		now := time.Now()
 
 		update := ReceiverWalletUpdate{
-			Status:                      RegisteredReceiversWalletStatus,
+			Status:             RegisteredReceiversWalletStatus,
 			SEP24TransactionID: "test-tx-id",
-			StellarAddress:              "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-			StellarMemo:                 utils.Ptr("123456"),
-			StellarMemoType:             utils.Ptr(schema.MemoTypeID),
-			OTPConfirmedAt:              now,
-			OTPConfirmedWith:            "test@stellar.org",
+			StellarAddress:     "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			StellarMemo:        utils.Ptr("123456"),
+			StellarMemoType:    utils.Ptr(schema.MemoTypeID),
+			OTPConfirmedAt:     now,
+			OTPConfirmedWith:   "test@stellar.org",
 		}
 
 		err := receiverWalletModel.Update(ctx, receiverWallet.ID, update, dbConnectionPool)
@@ -1730,7 +1730,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet.ID,
 		}
 
-		rwID, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert)
+		rwID, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert)
 		require.NoError(t, err)
 		require.NotEmpty(t, rwID)
 
@@ -1746,7 +1746,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet1.ID,
 		}
 
-		rwID, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert)
+		rwID, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert)
 		require.NoError(t, err)
 		require.NotEmpty(t, rwID)
 
@@ -1771,7 +1771,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet1.ID,
 		}
 
-		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		rwID1, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert1)
 		require.NoError(t, err)
 
 		update1 := ReceiverWalletUpdate{
@@ -1786,7 +1786,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet2.ID,
 		}
 
-		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		rwID2, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert2)
 		require.NoError(t, err)
 
 		update2 := ReceiverWalletUpdate{
@@ -1811,7 +1811,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet1.ID,
 		}
 
-		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		rwID1, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert1)
 		require.NoError(t, err)
 
 		update1 := ReceiverWalletUpdate{
@@ -1826,7 +1826,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet2.ID,
 		}
 
-		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		rwID2, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert2)
 		require.NoError(t, err)
 
 		update2 := ReceiverWalletUpdate{
@@ -1852,7 +1852,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet1.ID,
 		}
 
-		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		rwID1, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert1)
 		require.NoError(t, err)
 
 		insert2 := ReceiverWalletInsert{
@@ -1860,7 +1860,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet2.ID,
 		}
 
-		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		rwID2, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert2)
 		require.NoError(t, err)
 
 		_, err = dbConnectionPool.ExecContext(ctx, "DELETE FROM receiver_wallets WHERE id IN ($1, $2)", rwID1, rwID2)
@@ -1910,7 +1910,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet1.ID,
 		}
 
-		rwID1, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert1)
+		rwID1, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert1)
 		require.NoError(t, err)
 
 		insert2 := ReceiverWalletInsert{
@@ -1918,7 +1918,7 @@ func Test_ReceiverWalletModel_Insert_StellarAddressConstraint(t *testing.T) {
 			WalletID:   wallet2.ID,
 		}
 
-		rwID2, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, insert2)
+		rwID2, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, insert2)
 		require.NoError(t, err)
 
 		update1 := ReceiverWalletUpdate{

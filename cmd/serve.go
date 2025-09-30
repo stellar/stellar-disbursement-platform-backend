@@ -400,7 +400,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Name:      "admin-api-key",
 			Usage:     "API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
 			OptType:   types.String,
-			ConfigKey: &adminServeOpts.AdminApiKey,
+			ConfigKey: &adminServeOpts.AdminAPIKey,
 			Required:  true,
 		},
 		cmdUtils.TenantXLMBootstrapAmount(&adminServeOpts.TenantAccountNativeAssetBootstrapAmount),
@@ -738,6 +738,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			log.Ctx(ctx).Info("Starting Tenant Server...")
 			adminServeOpts.SingleTenantMode = serveOpts.SingleTenantMode
+			adminServeOpts.DisableMFA = serveOpts.DisableMFA
+			adminServeOpts.DisableReCAPTCHA = serveOpts.DisableReCAPTCHA
 			go serverService.StartAdminServe(adminServeOpts, &serveadmin.HTTPServer{})
 
 			// Starting Application Server

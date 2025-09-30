@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"go/types"
+	"strings"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
@@ -15,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -62,20 +64,6 @@ func TwilioConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption 
 			Usage:     "The Twilio Content SID for WhatsApp receiver OTP template (starts with HX)",
 			OptType:   types.String,
 			ConfigKey: &opts.TwilioWhatsAppReceiverOTPTemplateSID,
-			Required:  false,
-		},
-		{
-			Name:      "twilio-whatsapp-user-invitation-template-sid",
-			Usage:     "The Twilio Content SID for WhatsApp user invitation template (starts with HX)",
-			OptType:   types.String,
-			ConfigKey: &opts.TwilioWhatsAppUserInvitationTemplateSID,
-			Required:  false,
-		},
-		{
-			Name:      "twilio-whatsapp-user-forgot-password-template-sid",
-			Usage:     "The Twilio Content SID for WhatsApp user forgot password template (starts with HX)",
-			OptType:   types.String,
-			ConfigKey: &opts.TwilioWhatsAppUserForgotPasswordTemplateSID,
 			Required:  false,
 		},
 		// Twilio Email (SendGrid)
@@ -358,12 +346,24 @@ type BridgeIntegrationOptions struct {
 }
 
 func (opts *BridgeIntegrationOptions) ValidateFlags() error {
-	if opts.EnableBridgeIntegration && opts.BridgeAPIKey == "" {
+	if !opts.EnableBridgeIntegration {
+		return nil
+	}
+
+	if strings.TrimSpace(opts.BridgeAPIKey) == "" {
 		return fmt.Errorf("bridge API key must be set when bridge integration is enabled")
 	}
-	if opts.EnableBridgeIntegration && opts.BridgeBaseURL == "" {
+	if strings.TrimSpace(opts.BridgeBaseURL) == "" {
 		return fmt.Errorf("bridge base URL must be set when bridge integration is enabled")
 	}
+	isBaseURL, err := utils.IsBaseURL(opts.BridgeBaseURL)
+	if err != nil {
+		return fmt.Errorf("validating bridge base URL: %w", err)
+	}
+	if !isBaseURL {
+		return fmt.Errorf("bridge base URL must be a base URL e.g. `https://api.bridge.xyz`")
+	}
+
 	return nil
 }
 
@@ -382,7 +382,7 @@ func BridgeIntegrationConfigOptions(opts *BridgeIntegrationOptions) []*config.Co
 			Usage:       "Bridge Base URL. This needs to be configured only if the Bridge integration is enabled.",
 			OptType:     types.String,
 			ConfigKey:   &opts.BridgeBaseURL,
-			FlagDefault: "https://api.sandbox.bridge.xyz",
+			FlagDefault: "https://api.bridge.xyz",
 			Required:    false,
 		},
 		{

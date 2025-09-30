@@ -14,6 +14,7 @@ import (
 
 type tssPrometheusClient struct {
 	httpHandler http.Handler
+	registry    *prometheus.Registry
 }
 
 // Metrics is a logrus hook-compliant struct that records metrics about logging
@@ -40,12 +41,12 @@ func (tssPrometheusClient) GetMetricType() MetricType {
 	return MetricTypeTSSPrometheus
 }
 
-func (p *tssPrometheusClient) GetMetricHttpHandler() http.Handler {
+func (p *tssPrometheusClient) GetMetricHTTPHandler() http.Handler {
 	return p.httpHandler
 }
 
-func (p *tssPrometheusClient) MonitorHttpRequestDuration(duration time.Duration, labels HttpRequestLabels) {
-	SummaryTSSVecMetrics[HttpRequestDurationTag].With(prometheus.Labels{
+func (p *tssPrometheusClient) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) {
+	SummaryTSSVecMetrics[HTTPRequestDurationTag].With(prometheus.Labels{
 		"status": labels.Status,
 		"route":  labels.Route,
 		"method": labels.Method,
@@ -83,6 +84,40 @@ func (p *tssPrometheusClient) MonitorCounters(tag MetricTag, labels map[string]s
 func (p *tssPrometheusClient) MonitorHistogram(value float64, tag MetricTag, labels map[string]string) {
 	histogram := HistogramTSSVecMetrics[tag]
 	histogram.With(labels).Observe(value)
+}
+
+func (p *tssPrometheusClient) RegisterFunctionMetric(metricType FuncMetricType, opts FuncMetricOptions) {
+	var metric prometheus.Collector
+
+	switch metricType {
+	case FuncGaugeType:
+		metric = prometheus.NewGaugeFunc(
+			prometheus.GaugeOpts{
+				Namespace:   opts.Namespace,
+				Subsystem:   opts.Subservice,
+				Name:        opts.Name,
+				Help:        opts.Help,
+				ConstLabels: opts.Labels,
+			},
+			opts.Function,
+		)
+	case FuncCounterType:
+		metric = prometheus.NewCounterFunc(
+			prometheus.CounterOpts{
+				Namespace:   opts.Namespace,
+				Subsystem:   opts.Subservice,
+				Name:        opts.Name,
+				Help:        opts.Help,
+				ConstLabels: opts.Labels,
+			},
+			opts.Function,
+		)
+	default:
+		log.Errorf("Error Registering Function %s metric %s: unsupported metric type", metricType, opts.Name)
+		return
+	}
+
+	p.registry.MustRegister(metric)
 }
 
 // NewTSSPrometheusClient registers Prometheus metrics for the Transaction Submission Service
@@ -129,7 +164,10 @@ func NewTSSPrometheusClient() (*tssPrometheusClient, error) {
 	// add the logCounterHook to the logger
 	log.DefaultLogger.AddHook(logCounterHook)
 
-	return &tssPrometheusClient{httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})}, nil
+	return &tssPrometheusClient{
+		httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}),
+		registry:    metricsRegistry,
+	}, nil
 }
 
 // Ensuring that promtheusClient is implementing MonitorClient interface
