@@ -80,8 +80,7 @@ func (h SponsoredTransactionHandler) CreateSponsoredTransaction(w http.ResponseW
 		Status: string(data.PendingSponsoredTransactionStatus),
 	}
 
-	w.WriteHeader(http.StatusAccepted)
-	httpjson.Render(w, resp, httpjson.JSON)
+	httpjson.RenderStatus(w, http.StatusAccepted, resp, httpjson.JSON)
 }
 
 func (h SponsoredTransactionHandler) GetSponsoredTransaction(w http.ResponseWriter, r *http.Request) {
