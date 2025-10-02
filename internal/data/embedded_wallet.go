@@ -51,6 +51,7 @@ type EmbeddedWallet struct {
 	WasmHash        string               `json:"wasm_hash" db:"wasm_hash"`
 	ContractAddress string               `json:"contract_address" db:"contract_address"`
 	CredentialID    string               `json:"credential_id" db:"credential_id"`
+	PublicKey       string               `json:"public_key" db:"public_key"`
 	CreatedAt       *time.Time           `json:"created_at" db:"created_at"`
 	UpdatedAt       *time.Time           `json:"updated_at" db:"updated_at"`
 	WalletStatus    EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
@@ -74,6 +75,7 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"wasm_hash",
 			"contract_address",
 			"credential_id",
+			"public_key",
 		},
 	}.Build()
 
@@ -179,6 +181,7 @@ type EmbeddedWalletUpdate struct {
 	WasmHash        string               `db:"wasm_hash"`
 	ContractAddress string               `db:"contract_address"`
 	CredentialID    string               `db:"credential_id"`
+	PublicKey       string               `db:"public_key"`
 	WalletStatus    EmbeddedWalletStatus `db:"wallet_status"`
 }
 
