@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	migrate "github.com/rubenv/sql-migrate"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
@@ -15,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
+	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -165,6 +169,12 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*sc
 		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
 	}
 
+	if updatedTenant.DistributionAccountType.IsStellar() && updatedTenant.DistributionAccountAddress != nil {
+		if err := m.provisionTrustlinesForDistributionAccount(ctx, *updatedTenant); err != nil {
+			return t, fmt.Errorf("%w. provisioning trustlines for distribution account: %w", ErrUpdateTenantFailed, err)
+		}
+	}
+
 	return updatedTenant, nil
 }
 
@@ -192,6 +202,132 @@ func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Conte
 	default:
 		return fmt.Errorf("unsupported accountType=%s", tenant.DistributionAccountType)
 	}
+}
+
+func (m *Manager) provisionTrustlinesForDistributionAccount(ctx context.Context, tenant schema.Tenant) error {
+	// The helper only applies to Stellar-linked distribution accounts; Circle accounts manage
+	// balances outside Horizon so there is nothing we can provision here.
+	if !tenant.DistributionAccountType.IsStellar() {
+		return nil
+	}
+
+	if tenant.DistributionAccountAddress == nil || *tenant.DistributionAccountAddress == "" {
+		return fmt.Errorf("distribution account address is not set")
+	}
+
+	tenantSchemaDSN, err := m.tenantManager.GetDSNForTenant(ctx, tenant.Name)
+	if err != nil {
+		return fmt.Errorf("getting tenant DSN: %w", err)
+	}
+
+	tenantSchemaConnectionPool, models, err := GetTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
+	if err != nil {
+		return fmt.Errorf("opening tenant schema connection: %w", err)
+	}
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool after provisioning trustlines")
+
+	// Gather the non-native assets currently linked to enabled wallets. This snapshot defines
+	// what the tenant considers "supported" at provisioning time.
+	wallets, err := models.Wallets.FindWallets(ctx, data.NewFilter(data.FilterEnabledWallets, true))
+	if err != nil {
+		return fmt.Errorf("listing enabled wallets: %w", err)
+	}
+
+	supportedAssets := make(map[string]data.Asset)
+	for _, wallet := range wallets {
+		for _, asset := range wallet.Assets {
+			if asset.IsNative() {
+				continue
+			}
+			key := fmt.Sprintf("%s:%s", asset.Code, asset.Issuer)
+			supportedAssets[key] = asset
+		}
+	}
+
+	if len(supportedAssets) == 0 {
+		log.Ctx(ctx).Info("no non-native supported assets found for tenant during provisioning; skipping trustline setup")
+		return nil
+	}
+
+	accountRequest := horizonclient.AccountRequest{AccountID: *tenant.DistributionAccountAddress}
+	accountDetails, err := m.SubmitterEngine.HorizonClient.AccountDetail(accountRequest)
+	if err != nil {
+		return fmt.Errorf("getting distribution account details: %w", err)
+	}
+
+	currentTrustlines := make(map[string]struct{})
+	for _, balance := range accountDetails.Balances {
+		if balance.Asset.Type == "native" {
+			continue
+		}
+		key := fmt.Sprintf("%s:%s", balance.Asset.Code, balance.Asset.Issuer)
+		currentTrustlines[key] = struct{}{}
+	}
+
+	changeTrustOperations := make([]*txnbuild.ChangeTrust, 0)
+	assetKeys := make([]string, 0, len(supportedAssets))
+	for key := range supportedAssets {
+		assetKeys = append(assetKeys, key)
+	}
+	sort.Strings(assetKeys)
+
+	for _, key := range assetKeys {
+		if _, exists := currentTrustlines[key]; exists {
+			log.Ctx(ctx).Debugf("distribution account already has trustline for %s; skipping", key)
+			continue
+		}
+
+		asset := supportedAssets[key]
+		changeTrustOperations = append(changeTrustOperations, &txnbuild.ChangeTrust{
+			Line:          txnbuild.ChangeTrustAssetWrapper{Asset: asset.ToBasicAsset()},
+			Limit:         "",
+			SourceAccount: *tenant.DistributionAccountAddress,
+		})
+	}
+
+	if len(changeTrustOperations) == 0 {
+		log.Ctx(ctx).Infof("distribution account %s already has trustlines for all supported assets", *tenant.DistributionAccountAddress)
+		return nil
+	}
+
+	operations := make([]txnbuild.Operation, 0, len(changeTrustOperations))
+	for _, op := range changeTrustOperations {
+		operations = append(operations, op)
+	}
+
+	preconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
+	transaction, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+		SourceAccount: &txnbuild.SimpleAccount{
+			AccountID: *tenant.DistributionAccountAddress,
+			Sequence:  accountDetails.Sequence,
+		},
+		IncrementSequenceNum: true,
+		Operations:           operations,
+		BaseFee:              int64(m.SubmitterEngine.MaxBaseFee),
+		Preconditions:        preconditions,
+	})
+	if err != nil {
+		return fmt.Errorf("creating change trust transaction: %w", err)
+	}
+
+	distAccount := schema.TransactionAccount{
+		Address: *tenant.DistributionAccountAddress,
+		Type:    tenant.DistributionAccountType,
+		Status:  tenant.DistributionAccountStatus,
+	}
+
+	transaction, err = m.SubmitterEngine.SignStellarTransaction(ctx, transaction, distAccount)
+	if err != nil {
+		return fmt.Errorf("signing change trust transaction: %w", err)
+	}
+
+	log.Ctx(ctx).Infof("adding %d trustlines to distribution account %s", len(changeTrustOperations), *tenant.DistributionAccountAddress)
+	_, err = m.SubmitterEngine.HorizonClient.SubmitTransactionWithOptions(transaction, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+	if err != nil {
+		return fmt.Errorf("submitting change trust transaction to network: %w", tssUtils.NewHorizonErrorWrapper(err))
+	}
+
+	return nil
 }
 
 // provisionDistributionAccount provisions a distribution account for the tenant if necessary, based on the accountType provided.
