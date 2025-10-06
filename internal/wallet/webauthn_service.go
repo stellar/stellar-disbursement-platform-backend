@@ -312,18 +312,25 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 	return existingUserObj.wallet, nil
 }
 
+const (
+	UncompressedKeyLength = 65
+	ECPointXStart         = 1
+	ECPointXEnd           = 33
+	ECPointYEnd           = 65
+)
+
 // uncompressedECToCOSE converts an uncompressed EC public key to COSE format.
 func uncompressedECToCOSE(uncompressed []byte) ([]byte, error) {
-	if len(uncompressed) != 65 {
-		return nil, fmt.Errorf("invalid uncompressed key length (expected 65, got %d)", len(uncompressed))
+	if len(uncompressed) != UncompressedKeyLength {
+		return nil, fmt.Errorf("invalid uncompressed key length (expected %d, got %d)", UncompressedKeyLength, len(uncompressed))
 	}
 
 	if uncompressed[0] != 0x04 {
 		return nil, fmt.Errorf("invalid uncompressed key format (expected 0x04 prefix, got 0x%02x)", uncompressed[0])
 	}
 
-	x := uncompressed[1:33]
-	y := uncompressed[33:65]
+	x := uncompressed[ECPointXStart:ECPointXEnd]
+	y := uncompressed[ECPointXEnd:ECPointYEnd]
 
 	key, err := cose.NewKeyEC2(cose.AlgorithmES256, x, y, nil)
 	if err != nil {
