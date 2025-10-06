@@ -3,13 +3,13 @@ package wallet
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/veraison/go-cose"
@@ -17,6 +17,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_NewWebAuthnService(t *testing.T) {
@@ -30,41 +32,26 @@ func Test_NewWebAuthnService(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	webAuthnConfig := &webauthn.Config{
-		RPDisplayName: "Test RP",
-		RPID:          "localhost",
-		RPOrigins:     []string{"http://localhost"},
-	}
-	webAuthn, err := webauthn.New(webAuthnConfig)
-	require.NoError(t, err)
-
 	sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
 
 	t.Run("return an error if models is nil", func(t *testing.T) {
-		service, err := NewWebAuthnService(nil, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(nil, sessionCache)
 		assert.Nil(t, service)
 		assert.EqualError(t, err, "models cannot be nil")
 	})
 
-	t.Run("return an error if webAuthn is nil", func(t *testing.T) {
-		service, err := NewWebAuthnService(models, nil, sessionCache)
-		assert.Nil(t, service)
-		assert.EqualError(t, err, "webAuthn cannot be nil")
-	})
-
 	t.Run("return an error if sessionCache is nil", func(t *testing.T) {
-		service, err := NewWebAuthnService(models, webAuthn, nil)
+		service, err := NewWebAuthnService(models, nil)
 		assert.Nil(t, service)
 		assert.EqualError(t, err, "sessionCache cannot be nil")
 	})
 
 	t.Run("🎉 successfully creates a new WebAuthnService instance", func(t *testing.T) {
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 		require.NotNil(t, service)
 
 		assert.Equal(t, models, service.sdpModels)
-		assert.Equal(t, webAuthn, service.webAuthn)
 		assert.Equal(t, sessionCache, service.sessionCache)
 		assert.Equal(t, DefaultSessionTTL, service.sessionTTL)
 	})
@@ -78,23 +65,17 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	ctx := context.Background()
+	sdpUIBaseURL := "http://localhost:3000"
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Tenant", SDPUIBaseURL: &sdpUIBaseURL}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
 	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	webAuthnConfig := &webauthn.Config{
-		RPDisplayName: "Test RP",
-		RPID:          "localhost",
-		RPOrigins:     []string{"http://localhost"},
-	}
-	webAuthn, err := webauthn.New(webAuthnConfig)
 	require.NoError(t, err)
 
 	t.Run("returns ErrInvalidToken if token does not exist", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
 		nonExistentToken := "non-existent-token"
@@ -108,7 +89,7 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
 		wallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.SuccessWalletStatus)
@@ -122,7 +103,7 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
 		wallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
@@ -134,7 +115,7 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 		assert.NotNil(t, creation.Response)
 		assert.NotEmpty(t, creation.Response.Challenge)
 		assert.Equal(t, "localhost", creation.Response.RelyingParty.ID)
-		assert.Equal(t, "Test RP", creation.Response.RelyingParty.Name)
+		assert.Equal(t, RPDisplayName, creation.Response.RelyingParty.Name)
 		assert.Equal(t, protocol.URLEncodedBase64(wallet.Token), creation.Response.User.ID)
 		assert.Equal(t, wallet.Token, creation.Response.User.Name)
 		assert.Equal(t, "SDP Wallet User", creation.Response.User.DisplayName)
@@ -155,23 +136,17 @@ func Test_WebAuthnService_FinishPasskeyRegistration(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	ctx := context.Background()
+	sdpUIBaseURL := "http://localhost:3000"
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Tenant", SDPUIBaseURL: &sdpUIBaseURL}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
 	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	webAuthnConfig := &webauthn.Config{
-		RPDisplayName: "Test RP",
-		RPID:          "localhost",
-		RPOrigins:     []string{"http://localhost"},
-	}
-	webAuthn, err := webauthn.New(webAuthnConfig)
 	require.NoError(t, err)
 
 	t.Run("returns ErrInvalidToken if token does not exist", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
 		nonExistentToken := "non-existent-token"
@@ -186,10 +161,11 @@ func Test_WebAuthnService_FinishPasskeyRegistration(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
 		wallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.SuccessWalletStatus)
+
 		req := &http.Request{}
 
 		credential, err := service.FinishPasskeyRegistration(ctx, wallet.Token, req)
@@ -201,7 +177,7 @@ func Test_WebAuthnService_FinishPasskeyRegistration(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
 		sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
 		wallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
@@ -228,21 +204,15 @@ func Test_WebAuthnService_StartPasskeyAuthentication(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	ctx := context.Background()
+	sdpUIBaseURL := "http://localhost:3000"
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Tenant", SDPUIBaseURL: &sdpUIBaseURL}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
 	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	webAuthnConfig := &webauthn.Config{
-		RPDisplayName: "Test RP",
-		RPID:          "localhost",
-		RPOrigins:     []string{"http://localhost"},
-	}
-	webAuthn, err := webauthn.New(webAuthnConfig)
 	require.NoError(t, err)
 
 	t.Run("🎉 successfully starts discoverable passkey authentication and stores session in cache", func(t *testing.T) {
 		sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-		service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
 		assertion, err := service.StartPasskeyAuthentication(ctx)
@@ -265,20 +235,14 @@ func Test_WebAuthnService_FinishPasskeyAuthentication(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	ctx := context.Background()
+	sdpUIBaseURL := "http://localhost:3000"
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Tenant", SDPUIBaseURL: &sdpUIBaseURL}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	webAuthnConfig := &webauthn.Config{
-		RPDisplayName: "Test RP",
-		RPID:          "localhost",
-		RPOrigins:     []string{"http://localhost"},
-	}
-	webAuthn, err := webauthn.New(webAuthnConfig)
-	require.NoError(t, err)
-
 	sessionCache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
-	service, err := NewWebAuthnService(models, webAuthn, sessionCache)
+	service, err := NewWebAuthnService(models, sessionCache)
 	require.NoError(t, err)
 
 	t.Run("returns error if parsing request body fails", func(t *testing.T) {
@@ -325,8 +289,11 @@ func Test_uncompressedECToCOSE(t *testing.T) {
 		var key cose.Key
 		err = key.UnmarshalCBOR(coseBytes)
 		require.NoError(t, err)
-
 		assert.Equal(t, cose.KeyTypeEC2, key.Type)
 		assert.Equal(t, cose.AlgorithmES256, key.Algorithm)
+
+		hexKey, err := COSEKeyToUncompressedHex(coseBytes)
+		require.NoError(t, err)
+		assert.Equal(t, hex.EncodeToString(validKey), hexKey)
 	})
 }
