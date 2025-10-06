@@ -240,7 +240,7 @@ func BuildTrustlines(
 		if asset.IsNative() {
 			continue
 		}
-		assetCandidates[getAssetId(asset.Code, asset.Issuer)] = asset
+		assetCandidates[getAssetID(asset.Code, asset.Issuer)] = asset
 	}
 
 	if len(assetCandidates) == 0 {
@@ -257,7 +257,7 @@ func BuildTrustlines(
 		if balance.Asset.Type == "native" {
 			continue
 		}
-		existingTrustlines[getAssetId(balance.Asset.Code, balance.Asset.Issuer)] = struct{}{}
+		existingTrustlines[getAssetID(balance.Asset.Code, balance.Asset.Issuer)] = struct{}{}
 	}
 
 	// sort keys to keep deterministic operation ordering for easier debugging/testing
@@ -410,7 +410,7 @@ func getAccountDetails(client horizonclient.ClientInterface, accountID string) (
 	return &account, nil
 }
 
-// getAssetId returns asset identifier formatted as CODE:issuer.
-func getAssetId(code, issuer string) string {
+// getAssetID returns asset identifier formatted as CODE:issuer.
+func getAssetID(code, issuer string) string {
 	return fmt.Sprintf("%s:%s", strings.ToUpper(code), issuer)
 }
