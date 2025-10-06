@@ -8,12 +8,11 @@ import (
 	"net/http"
 	"testing"
 
-	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
@@ -23,12 +22,14 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -607,4 +608,130 @@ func Test_FundDistributionAccount(t *testing.T) {
 			horizonClientMock.AssertExpectations(t)
 		})
 	}
+}
+
+func newSubmitterEngineForTrust(t *testing.T) (engine.SubmitterEngine, *horizonclient.MockClient, *sigMocks.MockSignerRouter) {
+	t.Helper()
+
+	ledgerTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	hClient := &horizonclient.MockClient{}
+	sigService, sigRouter, _ := signing.NewMockSignatureService(t)
+
+	return engine.SubmitterEngine{
+		HorizonClient:       hClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: ledgerTracker,
+		MaxBaseFee:          2 * txnbuild.MinBaseFee,
+	}, hClient, sigRouter
+}
+
+func TestBuildTrustlines_AddsTrustlines(t *testing.T) {
+	ctx := context.Background()
+	issuerKP := keypair.MustRandom()
+	accountAddress := keypair.MustRandom().Address()
+	account := schema.TransactionAccount{
+		Address: accountAddress,
+		Type:    schema.DistributionAccountStellarDBVault,
+		Status:  schema.AccountStatusActive,
+	}
+	assets := []data.Asset{
+		{Code: "USDC", Issuer: issuerKP.Address()},
+		{Code: "NGNT", Issuer: keypair.MustRandom().Address()},
+	}
+
+	submitterEngine, hClient, sigRouter := newSubmitterEngineForTrust(t)
+
+	hClient.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: accountAddress}).
+		Return(horizon.Account{AccountID: accountAddress, Sequence: 123}, nil).
+		Once()
+
+	sigRouter.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), account).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+
+	hClient.
+		On(
+			"SubmitTransactionWithOptions",
+			mock.AnythingOfType("*txnbuild.Transaction"),
+			horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
+		).
+		Return(horizon.Transaction{}, nil).
+		Once()
+
+	count, err := BuildTrustlines(ctx, submitterEngine, account, assets)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	hClient.AssertExpectations(t)
+	sigRouter.AssertExpectations(t)
+}
+
+func TestBuildTrustlines_SkipsExistingTrustlines(t *testing.T) {
+	ctx := context.Background()
+	issuer := keypair.MustRandom().Address()
+	accountAddress := keypair.MustRandom().Address()
+	account := schema.TransactionAccount{Address: accountAddress, Type: schema.DistributionAccountStellarDBVault, Status: schema.AccountStatusActive}
+	assets := []data.Asset{{Code: "USDC", Issuer: issuer}}
+
+	submitterEngine, hClient, sigRouter := newSubmitterEngineForTrust(t)
+
+	hClient.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: accountAddress}).
+		Return(horizon.Account{
+			AccountID: accountAddress,
+			Sequence:  123,
+			Balances: []horizon.Balance{
+				{Asset: base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: issuer}},
+			},
+		}, nil).
+		Once()
+
+	count, err := BuildTrustlines(ctx, submitterEngine, account, assets)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	sigRouter.AssertNumberOfCalls(t, "SignStellarTransaction", 0)
+	hClient.AssertNotCalled(t, "SubmitTransactionWithOptions", mock.Anything, mock.Anything)
+
+	hClient.AssertExpectations(t)
+	sigRouter.AssertExpectations(t)
+}
+
+func TestBuildTrustlines_SubmitFailure(t *testing.T) {
+	ctx := context.Background()
+	issuer := keypair.MustRandom().Address()
+	accountAddress := keypair.MustRandom().Address()
+	account := schema.TransactionAccount{Address: accountAddress, Type: schema.DistributionAccountStellarDBVault, Status: schema.AccountStatusActive}
+	assets := []data.Asset{{Code: "USDC", Issuer: issuer}}
+
+	submitterEngine, hClient, sigRouter := newSubmitterEngineForTrust(t)
+
+	hClient.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: accountAddress}).
+		Return(horizon.Account{AccountID: accountAddress, Sequence: 42}, nil).
+		Once()
+
+	sigRouter.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), account).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+
+	submissionErr := errors.New("boom")
+	hClient.
+		On(
+			"SubmitTransactionWithOptions",
+			mock.AnythingOfType("*txnbuild.Transaction"),
+			horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
+		).
+		Return(horizon.Transaction{}, submissionErr).
+		Once()
+
+	count, err := BuildTrustlines(ctx, submitterEngine, account, assets)
+	assert.ErrorContains(t, err, "submitting change trust transaction to network")
+	assert.Equal(t, 0, count)
+
+	hClient.AssertExpectations(t)
+	sigRouter.AssertExpectations(t)
 }
