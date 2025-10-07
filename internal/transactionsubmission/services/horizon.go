@@ -224,8 +224,8 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	return nil
 }
 
-// BuildTrustlines ensures the provided account trusts all supplied assets and returns how many trustlines were added.
-func BuildTrustlines(
+// AddTrustlines ensures the provided account trusts all supplied assets and returns how many trustlines were added.
+func AddTrustlines(
 	ctx context.Context,
 	submitterEngine engine.SubmitterEngine,
 	account schema.TransactionAccount,

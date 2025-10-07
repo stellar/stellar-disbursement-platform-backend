@@ -245,7 +245,7 @@ func (m *Manager) addTrustlinesForDistributionAccount(ctx context.Context, tenan
 		assetsToTrust = append(assetsToTrust, asset)
 	}
 
-	_, err = tssSvc.BuildTrustlines(ctx, m.SubmitterEngine, distAccount, assetsToTrust)
+	_, err = tssSvc.AddTrustlines(ctx, m.SubmitterEngine, distAccount, assetsToTrust)
 	if err != nil {
 		return fmt.Errorf("submitting change trust transaction: %w", err)
 	}
