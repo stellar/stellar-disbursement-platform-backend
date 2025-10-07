@@ -79,6 +79,19 @@ Config_Stellar_Env_Phone_XLM_Futurenet=(
   "HORIZON_URL=https://horizon-futurenet.stellar.org"
 )
 
+Config_Stellar_Env_Phone_Embedded_USDC_Testnet=(
+  "platform=Stellar"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "DISBURSED_ASSET_CODE=USDC"
+  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+  "ENABLE_EMBEDDED_WALLETS=true"
+  "EMBEDDED_WALLET_CREDENTIAL_ID=credential-embedded-e2e"
+  "EMBEDDED_WALLET_PUBLIC_KEY=04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
+  "WALLET_DEEPLINK=SELF"
+)
+
 options=(
   Config_Stellar_Env_Phone_USDC_Testnet[@]
   Config_CircleTransfer_DBVault_Phone_USDC_Testnet[@]
@@ -86,6 +99,7 @@ options=(
   Config_Stellar_Env_Email_USDC_Testnet[@]
   Config_Stellar_Env_PhoneWithWallet_USDC_Testnet[@]
   Config_Stellar_Env_Phone_XLM_Futurenet[@]
+  Config_Stellar_Env_Phone_Embedded_USDC_Testnet[@]
 )
 
 # Iterate over each configuration
@@ -95,6 +109,9 @@ for config_name in "${options[@]}"; do
 
   echo -e "\n====> 👀 Starting e2e setup and integration test for ${config_name}"
   export CIRCLE_API_TYPE=""
+  export ENABLE_EMBEDDED_WALLETS=false
+  export EMBEDDED_WALLET_CREDENTIAL_ID=""
+  export EMBEDDED_WALLET_PUBLIC_KEY=""
 
   # Parse and export key-value pairs
   for pair in "${config[@]}"; do
