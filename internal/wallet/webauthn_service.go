@@ -293,13 +293,13 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 		}, nil
 	}
 
-	// FinishPasskeyLogin verifies the authentication response from the client:
+	// ValidatePasskeyLogin verifies the authentication response from the client:
 	// 1. Calls getUserForCredential handler to look up the user and their public key
 	// 2. Validates the cryptographic signature using the stored public key
 	// 3. Returns the authenticated user if signature verification succeeds
-	user, _, err := w.webAuthn.FinishPasskeyLogin(getUserForCredential, session, request)
+	user, _, err := w.webAuthn.ValidatePasskeyLogin(getUserForCredential, session, parsedResponse)
 	if err != nil {
-		return nil, fmt.Errorf("finishing WebAuthn passkey login: %w", err)
+		return nil, fmt.Errorf("validating WebAuthn passkey login: %w", err)
 	}
 
 	existingUserObj, ok := user.(*existingUser)
