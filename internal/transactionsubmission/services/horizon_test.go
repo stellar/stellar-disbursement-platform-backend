@@ -625,7 +625,7 @@ func newSubmitterEngineForTrust(t *testing.T) (engine.SubmitterEngine, *horizonc
 	}, hClient, sigRouter
 }
 
-func TestBuildTrustlines_AddsTrustlines(t *testing.T) {
+func TestAddTrustlines_AddsTrustlines(t *testing.T) {
 	ctx := context.Background()
 	issuerKP := keypair.MustRandom()
 	accountAddress := keypair.MustRandom().Address()
@@ -660,7 +660,7 @@ func TestBuildTrustlines_AddsTrustlines(t *testing.T) {
 		Return(horizon.Transaction{}, nil).
 		Once()
 
-	count, err := BuildTrustlines(ctx, submitterEngine, account, assets)
+	count, err := AddTrustlines(ctx, submitterEngine, account, assets)
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 
@@ -668,7 +668,7 @@ func TestBuildTrustlines_AddsTrustlines(t *testing.T) {
 	sigRouter.AssertExpectations(t)
 }
 
-func TestBuildTrustlines_SkipsExistingTrustlines(t *testing.T) {
+func TestAddTrustlines_SkipsExistingTrustlines(t *testing.T) {
 	ctx := context.Background()
 	issuer := keypair.MustRandom().Address()
 	accountAddress := keypair.MustRandom().Address()
@@ -688,7 +688,7 @@ func TestBuildTrustlines_SkipsExistingTrustlines(t *testing.T) {
 		}, nil).
 		Once()
 
-	count, err := BuildTrustlines(ctx, submitterEngine, account, assets)
+	count, err := AddTrustlines(ctx, submitterEngine, account, assets)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 
@@ -699,7 +699,7 @@ func TestBuildTrustlines_SkipsExistingTrustlines(t *testing.T) {
 	sigRouter.AssertExpectations(t)
 }
 
-func TestBuildTrustlines_SubmitFailure(t *testing.T) {
+func TestAddTrustlines_SubmitFailure(t *testing.T) {
 	ctx := context.Background()
 	issuer := keypair.MustRandom().Address()
 	accountAddress := keypair.MustRandom().Address()
@@ -728,7 +728,7 @@ func TestBuildTrustlines_SubmitFailure(t *testing.T) {
 		Return(horizon.Transaction{}, submissionErr).
 		Once()
 
-	count, err := BuildTrustlines(ctx, submitterEngine, account, assets)
+	count, err := AddTrustlines(ctx, submitterEngine, account, assets)
 	assert.ErrorContains(t, err, "submitting change trust transaction to network")
 	assert.Equal(t, 0, count)
 
