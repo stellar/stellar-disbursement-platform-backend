@@ -227,6 +227,19 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 				signatureStrategies[tc.accountType] = distAccSigClient
 
+				mHorizonClient.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+					Return(horizon.Account{
+						AccountID: hostAccountKP.Address(),
+						Sequence:  1,
+					}, nil).
+					Once()
+
+				mHorizonClient.
+					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, nil).
+					Once()
+
 			case schema.DistributionAccountStellarDBVault:
 				distAccSigClient, err := signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
 					DBConnectionPool:            dbConnectionPool,
@@ -252,7 +265,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				mHorizonClient.
 					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, nil).
-					Once()
+					Times(2)
 				mHorizonClient.
 					On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
 					Run(func(args mock.Arguments) {
@@ -264,7 +277,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 						AccountID: tenantAccountKP.Address(),
 						Sequence:  1,
 					}, nil).
-					Once()
+					Times(2)
 
 				signatureStrategies[tc.accountType] = distAccSigClient
 
@@ -645,7 +658,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
 
 				// Needed for createSchemaAndRunMigrations:
-				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
+				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Twice()
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
 
 				// Needed for setupTenantData (this one cannot be mocked):
@@ -701,17 +714,21 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostAccount).
 					Return(&txnbuild.Transaction{}, nil).
 					Once()
+				sigRouter.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
 				mHorizonClient.
 					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, nil).
-					Once()
+					Twice()
 				mHorizonClient.
 					On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
 					Return(horizon.Account{
 						AccountID: distAccAddress,
 						Sequence:  1,
 					}, nil).
-					Once()
+					Twice()
 			},
 		},
 	}
