@@ -303,6 +303,13 @@ func (u *existingUser) WebAuthnCredentials() []webauthn.Credential {
 		{
 			ID:        credID,
 			PublicKey: coseKey,
+			// We don't persist the backup state when we create the passkey
+			// and by default the WebAuthn library sets both flags to false,
+			// causing the authentication to fail.
+			Flags: webauthn.CredentialFlags{
+				BackupEligible: true,
+				BackupState:    true,
+			},
 		},
 	}
 }
