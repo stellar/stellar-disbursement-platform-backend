@@ -20,7 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 )
 
 type RetryInvitationMessageResponse struct {
@@ -225,9 +225,9 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 		}
 
 		memo := strings.TrimSpace(patchRequest.StellarMemo)
-		_, memoType, parseErr := schema.ParseMemo(memo)
-		if parseErr != nil {
-			return nil, fmt.Errorf("parsing memo %s: %w", patchRequest.StellarMemo, parseErr)
+		memoType, memoErr := validators.ValidateWalletAddressMemo(patchRequest.StellarAddress, memo)
+		if memoErr != nil {
+			return nil, fmt.Errorf("validating memo %s: %w", patchRequest.StellarMemo, memoErr)
 		}
 		walletUpdate.StellarMemo = &memo
 		walletUpdate.StellarMemoType = &memoType
