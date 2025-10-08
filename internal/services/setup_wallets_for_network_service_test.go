@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -267,6 +268,29 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		logs := buf.String()
 		for _, expectedLog := range expectedLogs {
 			assert.Contains(t, logs, expectedLog)
+		}
+	})
+
+	t.Run("futurenet wallets only register native assets", func(t *testing.T) {
+		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+
+		data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.XLMAssetCode, "")
+
+		err := SetupWalletsForProperNetwork(ctx, dbConnectionPool, utils.FuturenetNetworkType, DefaultWalletsNetworkMap)
+		require.NoError(t, err)
+
+		wallets, err := models.Wallets.GetAll(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, wallets)
+
+		for _, w := range wallets {
+			walletAssets, err := models.Wallets.GetAssets(ctx, w.ID)
+			require.NoError(t, err)
+
+			for _, asset := range walletAssets {
+				assert.Truef(t, asset.IsNative(), "wallet %s should not include non-native asset %s:%s", w.Name, asset.Code, asset.Issuer)
+			}
 		}
 	})
 
