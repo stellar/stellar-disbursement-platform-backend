@@ -703,6 +703,16 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				})
 			})
 		}
+
+		// TODO(philip): Add JWT authentication to this endpoint
+		if o.RpcConfig.RPCUrl != "" {
+			rpcProxyHandler := httphandler.RPCProxyHandler{
+				RPCUrl:             o.RpcConfig.RPCUrl,
+				RPCAuthHeaderKey:   o.RpcConfig.RPCRequestAuthHeaderKey,
+				RPCAuthHeaderValue: o.RpcConfig.RPCRequestAuthHeaderValue,
+			}
+			r.Post("/rpc", rpcProxyHandler.ServeHTTP)
+		}
 	})
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
