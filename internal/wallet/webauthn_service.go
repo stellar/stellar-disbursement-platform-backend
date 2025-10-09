@@ -7,13 +7,18 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/veraison/go-cose"
+	"golang.org/x/net/publicsuffix"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 )
 
 var (
@@ -26,6 +31,8 @@ var (
 )
 
 // WebAuthnServiceInterface defines the interface for WebAuthn passkey operations.
+//
+//go:generate mockery --name=WebAuthnServiceInterface --case=underscore --structname=MockWebAuthnService --filename=webauthn_service.go
 type WebAuthnServiceInterface interface {
 	StartPasskeyRegistration(ctx context.Context, token string) (*protocol.CredentialCreation, error)
 	FinishPasskeyRegistration(ctx context.Context, token string, request *http.Request) (*webauthn.Credential, error)
@@ -38,6 +45,7 @@ var _ WebAuthnServiceInterface = (*WebAuthnService)(nil)
 const (
 	// DefaultSessionTTL is the default time-to-live for WebAuthn sessions.
 	DefaultSessionTTL = 5 * time.Minute
+	RPDisplayName     = "Stellar Disbursement Platform"
 )
 
 // SessionType represents the type of WebAuthn session.
@@ -51,18 +59,14 @@ const (
 // WebAuthnService handles WebAuthn passkey operations for embedded wallets.
 type WebAuthnService struct {
 	sdpModels    *data.Models
-	webAuthn     *webauthn.WebAuthn
 	sessionCache SessionCacheInterface
 	sessionTTL   time.Duration
 }
 
 // NewWebAuthnService creates a new WebAuthnService.
-func NewWebAuthnService(models *data.Models, webAuthn *webauthn.WebAuthn, sessionCache SessionCacheInterface) (*WebAuthnService, error) {
+func NewWebAuthnService(models *data.Models, sessionCache SessionCacheInterface) (*WebAuthnService, error) {
 	if models == nil {
 		return nil, fmt.Errorf("models cannot be nil")
-	}
-	if webAuthn == nil {
-		return nil, fmt.Errorf("webAuthn cannot be nil")
 	}
 	if sessionCache == nil {
 		return nil, fmt.Errorf("sessionCache cannot be nil")
@@ -70,10 +74,64 @@ func NewWebAuthnService(models *data.Models, webAuthn *webauthn.WebAuthn, sessio
 
 	return &WebAuthnService{
 		sdpModels:    models,
-		webAuthn:     webAuthn,
 		sessionCache: sessionCache,
 		sessionTTL:   DefaultSessionTTL,
 	}, nil
+}
+
+// createWebAuthn creates a WebAuthn instance configured with the tenant's origin and RPID.
+func (w *WebAuthnService) createWebAuthn(ctx context.Context) (*webauthn.WebAuthn, error) {
+	tenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting tenant from context: %w", err)
+	}
+
+	if tenant.SDPUIBaseURL == nil || *tenant.SDPUIBaseURL == "" {
+		return nil, fmt.Errorf("tenant SDPUIBaseURL is not configured")
+	}
+
+	origin := *tenant.SDPUIBaseURL
+	rpID, err := extractRPIDFromOrigin(origin)
+	if err != nil {
+		return nil, fmt.Errorf("extracting RPID from origin: %w", err)
+	}
+
+	return webauthn.New(&webauthn.Config{
+		RPDisplayName: RPDisplayName,
+		RPID:          rpID,
+		RPOrigins:     []string{origin},
+	})
+}
+
+// extractRPIDFromOrigin extracts the Relying Party ID from a given origin URL.
+// For localhost, it returns "localhost". For other domains, it returns the effective TLD+1.
+// For example, "redcorp.stellar.local" becomes "stellar.local", meaning
+// all tenants under "stellar.local" share the same RPID.
+func extractRPIDFromOrigin(origin string) (string, error) {
+	parsedURL, err := url.Parse(origin)
+	if err != nil {
+		return "", fmt.Errorf("parsing origin URL: %w", err)
+	}
+
+	hostname := parsedURL.Hostname()
+	if hostname == "" {
+		return "", fmt.Errorf("empty hostname in origin URL")
+	}
+
+	if hostname == "localhost" {
+		return hostname, nil
+	}
+
+	etldPlusOne, err := publicsuffix.EffectiveTLDPlusOne(hostname)
+	if err != nil {
+		parts := strings.Split(hostname, ".")
+		if len(parts) >= 2 {
+			return strings.Join(parts[len(parts)-2:], "."), nil
+		}
+		return hostname, nil
+	}
+
+	return etldPlusOne, nil
 }
 
 type newUser struct {
@@ -116,6 +174,11 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 		return nil, ErrWalletAlreadyExists
 	}
 
+	webAuthn, err := w.createWebAuthn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("creating WebAuthn instance: %w", err)
+	}
+
 	user := &newUser{
 		token: token,
 	}
@@ -139,7 +202,7 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 	// - Generates a cryptographic challenge (random bytes) to prevent replay attacks
 	// - Returns credential creation options (algorithms, attestation preferences, etc.)
 	// - Client will use these to create a new credential with the authenticator
-	creation, session, err := w.webAuthn.BeginRegistration(user, opts...)
+	creation, session, err := webAuthn.BeginRegistration(user, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("beginning WebAuthn registration: %w", err)
 	}
@@ -169,6 +232,11 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 		return nil, ErrWalletAlreadyExists
 	}
 
+	webAuthn, err := w.createWebAuthn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("creating WebAuthn instance: %w", err)
+	}
+
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("parsing credential creation response: %w", err)
@@ -187,7 +255,7 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 	// - Validates the client's response matches the challenge we sent
 	// - Verifies the attestation signature
 	// - Extracts and returns the public key and credential ID to use for wallet creation and authentication
-	credential, err := w.webAuthn.CreateCredential(user, session, parsedResponse)
+	credential, err := webAuthn.CreateCredential(user, session, parsedResponse)
 	if err != nil {
 		return nil, fmt.Errorf("creating credential: %w", err)
 	}
@@ -235,6 +303,13 @@ func (u *existingUser) WebAuthnCredentials() []webauthn.Credential {
 		{
 			ID:        credID,
 			PublicKey: coseKey,
+			// We don't persist the backup state when we create the passkey
+			// and by default the WebAuthn library sets both flags to false,
+			// causing the authentication to fail.
+			Flags: webauthn.CredentialFlags{
+				BackupEligible: true,
+				BackupState:    true,
+			},
 		},
 	}
 }
@@ -243,6 +318,11 @@ var _ webauthn.User = (*existingUser)(nil)
 
 // StartPasskeyAuthentication initiates the WebAuthn passkey authentication process.
 func (w *WebAuthnService) StartPasskeyAuthentication(ctx context.Context) (*protocol.CredentialAssertion, error) {
+	webAuthn, err := w.createWebAuthn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("creating WebAuthn instance: %w", err)
+	}
+
 	opts := []webauthn.LoginOption{
 		webauthn.WithUserVerification(protocol.VerificationRequired),
 	}
@@ -250,7 +330,7 @@ func (w *WebAuthnService) StartPasskeyAuthentication(ctx context.Context) (*prot
 	// BeginDiscoverableMediatedLogin starts passwordless authentication where:
 	// - "Discoverable": User doesn't need to enter username, authenticator presents available credentials
 	// - "Mediated": Browser shows account picker UI for user to select which credential to use
-	assertion, session, err := w.webAuthn.BeginDiscoverableMediatedLogin(protocol.MediationDefault, opts...)
+	assertion, session, err := webAuthn.BeginDiscoverableMediatedLogin(protocol.MediationDefault, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("beginning WebAuthn discoverable login: %w", err)
 	}
@@ -264,6 +344,11 @@ func (w *WebAuthnService) StartPasskeyAuthentication(ctx context.Context) (*prot
 
 // FinishPasskeyAuthentication completes the WebAuthn passkey authentication process, returning the authenticated embedded wallet.
 func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, request *http.Request) (*data.EmbeddedWallet, error) {
+	webAuthn, err := w.createWebAuthn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("creating WebAuthn instance: %w", err)
+	}
+
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("parsing credential request response: %w", err)
@@ -274,7 +359,6 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 		return nil, fmt.Errorf("retrieving session: %w", err)
 	}
 
-	// Handler to look up user by credential ID during authentication
 	getUserForCredential := func(rawID, userHandle []byte) (webauthn.User, error) {
 		credentialID := base64.RawURLEncoding.EncodeToString(rawID)
 		embeddedWallet, getErr := w.sdpModels.EmbeddedWallets.GetByCredentialID(ctx, w.sdpModels.DBConnectionPool, credentialID)
@@ -297,7 +381,7 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 	// 1. Calls getUserForCredential handler to look up the user and their public key
 	// 2. Validates the cryptographic signature using the stored public key
 	// 3. Returns the authenticated user if signature verification succeeds
-	user, _, err := w.webAuthn.ValidatePasskeyLogin(getUserForCredential, session, parsedResponse)
+	user, _, err := webAuthn.ValidatePasskeyLogin(getUserForCredential, session, parsedResponse)
 	if err != nil {
 		return nil, fmt.Errorf("validating WebAuthn passkey login: %w", err)
 	}
@@ -343,4 +427,29 @@ func uncompressedECToCOSE(uncompressed []byte) ([]byte, error) {
 	}
 
 	return coseBytes, nil
+}
+
+// COSEKeyToUncompressedHex converts a COSE-encoded public key to an uncompressed hex string.
+func COSEKeyToUncompressedHex(coseBytes []byte) (string, error) {
+	var rawKey map[int]interface{}
+	if err := cbor.Unmarshal(coseBytes, &rawKey); err != nil {
+		return "", fmt.Errorf("unmarshaling COSE key: %w", err)
+	}
+
+	xCoord, ok := rawKey[-2].([]byte)
+	if !ok || len(xCoord) != 32 {
+		return "", fmt.Errorf("invalid X coordinate in COSE key")
+	}
+
+	yCoord, ok := rawKey[-3].([]byte)
+	if !ok || len(yCoord) != 32 {
+		return "", fmt.Errorf("invalid Y coordinate in COSE key")
+	}
+
+	uncompressed := make([]byte, UncompressedKeyLength)
+	uncompressed[0] = 0x04
+	copy(uncompressed[ECPointXStart:ECPointXEnd], xCoord)
+	copy(uncompressed[ECPointXEnd:ECPointYEnd], yCoord)
+
+	return hex.EncodeToString(uncompressed), nil
 }
