@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  sdp-frontend:
+    container_name: sdp-frontend-mtn-https
+    ports:
+      - "3443:443"
+      - "3080:80"
+    volumes:
+      - ./nginx-https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/ssl:ro
+      - ./env-config.js:/usr/share/nginx/html/settings/env-config.js
