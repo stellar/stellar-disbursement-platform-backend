@@ -706,6 +706,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// bridge
 		{http.MethodGet, "/bridge-integration"},
 		{http.MethodPatch, "/bridge-integration"},
+		// RPC endpoints
+		{http.MethodPost, "/rpc/wallet"},
+		{http.MethodPost, "/rpc/user"},
 	}
 
 	// Expect 401 as a response:

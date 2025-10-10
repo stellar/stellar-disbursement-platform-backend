@@ -704,14 +704,17 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			})
 		}
 
-		// TODO(philip): Add JWT authentication to this endpoint
+		// RPC endpoints for wallet and dashboard (only if RPC URL is set)
 		if o.RpcConfig.RPCUrl != "" {
 			rpcProxyHandler := httphandler.RPCProxyHandler{
 				RPCUrl:             o.RpcConfig.RPCUrl,
 				RPCAuthHeaderKey:   o.RpcConfig.RPCRequestAuthHeaderKey,
 				RPCAuthHeaderValue: o.RpcConfig.RPCRequestAuthHeaderValue,
 			}
-			r.Post("/rpc", rpcProxyHandler.ServeHTTP)
+			r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).
+				Post("/rpc/wallet", rpcProxyHandler.ServeHTTP)
+			r.With(middleware.AuthenticateMiddleware(o.authManager, o.tenantManager)).
+				Post("/rpc/user", rpcProxyHandler.ServeHTTP)
 		}
 	})
 
