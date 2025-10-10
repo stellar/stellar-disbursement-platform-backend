@@ -35,6 +35,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -105,6 +106,8 @@ type ServeOptions struct {
 	CircleAPIType                   circle.APIType
 	BridgeService                   bridge.ServiceInterface
 	EmbeddedWalletService           services.EmbeddedWalletServiceInterface
+	WebAuthnService                 wallet.WebAuthnServiceInterface
+	walletJWTManager                wallet.WalletJWTManager
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -135,6 +138,12 @@ func (opts *ServeOptions) SetupDependencies() error {
 	)
 	if err != nil {
 		return fmt.Errorf("error creating Stellar Auth manager: %w", err)
+	}
+
+	// Setup Wallet JWT Manager for passkey authentication
+	opts.walletJWTManager, err = wallet.NewWalletJWTManager(opts.EC256PrivateKey)
+	if err != nil {
+		return fmt.Errorf("error creating wallet JWT manager: %w", err)
 	}
 
 	// Setup Anchor Platform SEP24 JWT manager
@@ -668,11 +677,41 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				walletCreationHandler := httphandler.WalletCreationHandler{
 					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
+				passkeyHandler := &httphandler.PasskeyHandler{
+					WebAuthnService:  o.WebAuthnService,
+					WalletJWTManager: o.walletJWTManager,
+				}
+
 				r.Route("/embedded-wallets", func(r chi.Router) {
+					// Wallet creation routes
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
+
+					// Passkey registration + authentication routes
+					if passkeyHandler != nil {
+						r.Route("/passkey", func(r chi.Router) {
+							r.Route("/registration", func(r chi.Router) {
+								r.Post("/start", passkeyHandler.StartPasskeyRegistration)
+								r.Post("/finish", passkeyHandler.FinishPasskeyRegistration)
+							})
+							r.Route("/authentication", func(r chi.Router) {
+								r.Post("/start", passkeyHandler.StartPasskeyAuthentication)
+								r.Post("/finish", passkeyHandler.FinishPasskeyAuthentication)
+							})
+						})
+					}
 				})
 			})
+		}
+
+		// TODO(philip): Add JWT authentication to this endpoint
+		if o.RpcConfig.RPCUrl != "" {
+			rpcProxyHandler := httphandler.RPCProxyHandler{
+				RPCUrl:             o.RpcConfig.RPCUrl,
+				RPCAuthHeaderKey:   o.RpcConfig.RPCRequestAuthHeaderKey,
+				RPCAuthHeaderValue: o.RpcConfig.RPCRequestAuthHeaderValue,
+			}
+			r.Post("/rpc", rpcProxyHandler.ServeHTTP)
 		}
 	})
 
