@@ -28,7 +28,8 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 	ctx := context.Background()
 
 	handler := &WalletsHandler{
-		Models: models,
+		Models:                models,
+		EnableEmbeddedWallets: true,
 	}
 
 	testCases := []struct {
@@ -38,6 +39,7 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		expectedStatus int
 		expectedBody   string
 		validateResult func(t *testing.T, setup *testWalletSetup, respBody []byte)
+		enableEmbedded *bool
 	}{
 		{
 			name: "successfully returns all wallets",
@@ -53,6 +55,26 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 				err := json.Unmarshal(respBody, &resultWallets)
 				require.NoError(t, err)
 				assert.Len(t, resultWallets, len(setup.wallets))
+			},
+		},
+		{
+			name: "filters embedded wallets when feature disabled",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				data.MakeWalletEmbedded(t, ctx, dbPool, wallets[0].ID)
+				return &testWalletSetup{wallets: wallets}
+			},
+			enableEmbedded: ptrBool(false),
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				assert.Len(t, resultWallets, len(setup.wallets)-1)
+				for _, wallet := range resultWallets {
+					assert.False(t, wallet.Embedded)
+				}
 			},
 		},
 
@@ -248,6 +270,16 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			setup := tc.setupFn(t)
+			prevFlag := handler.EnableEmbeddedWallets
+			if tc.enableEmbedded != nil {
+				handler.EnableEmbeddedWallets = *tc.enableEmbedded
+				require.Equal(t, *tc.enableEmbedded, handler.EnableEmbeddedWallets)
+			} else {
+				handler.EnableEmbeddedWallets = true
+			}
+			t.Cleanup(func() {
+				handler.EnableEmbeddedWallets = prevFlag
+			})
 
 			queryParams := tc.queryParams
 			if strings.Contains(queryParams, "{{USDC_ID}}") && setup.assetUSDC != nil {
@@ -311,6 +343,11 @@ func createWalletAssetsTestSetup(t *testing.T, ctx context.Context, dbPool db.SQ
 	}
 }
 
+func ptrBool(v bool) *bool {
+	b := v
+	return &b
+}
+
 func Test_WalletsHandlerPostWallets(t *testing.T) {
 	dbConnectionPool := getDBConnectionPool(t)
 
@@ -319,7 +356,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 
 	ctx := context.Background()
 	assetResolver := services.NewWalletAssetResolver(models.Assets)
-	handler := &WalletsHandler{Models: models, WalletAssetResolver: assetResolver}
+	handler := &WalletsHandler{Models: models, WalletAssetResolver: assetResolver, EnableEmbeddedWallets: true}
 
 	// Fixture setup
 	wallet := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
@@ -492,9 +529,10 @@ func Test_WalletsHandlerPostWallets_WithNewAssetFormat(t *testing.T) {
 	assetResolver := services.NewWalletAssetResolver(models.Assets)
 
 	handler := &WalletsHandler{
-		Models:              models,
-		NetworkType:         utils.PubnetNetworkType,
-		WalletAssetResolver: assetResolver,
+		Models:                models,
+		NetworkType:           utils.PubnetNetworkType,
+		WalletAssetResolver:   assetResolver,
+		EnableEmbeddedWallets: true,
 	}
 
 	xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.XLMAssetCode, "")
@@ -719,7 +757,8 @@ func Test_WalletsHandlerDeleteWallet(t *testing.T) {
 	ctx := context.Background()
 
 	handler := &WalletsHandler{
-		Models: models,
+		Models:                models,
+		EnableEmbeddedWallets: true,
 	}
 
 	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
@@ -799,9 +838,10 @@ func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
 	eurc := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
 	handler := &WalletsHandler{
-		Models:              models,
-		NetworkType:         utils.TestnetNetworkType,
-		WalletAssetResolver: services.NewWalletAssetResolver(models.Assets),
+		Models:                models,
+		NetworkType:           utils.TestnetNetworkType,
+		WalletAssetResolver:   services.NewWalletAssetResolver(models.Assets),
+		EnableEmbeddedWallets: true,
 	}
 
 	r := chi.NewRouter()
@@ -815,6 +855,7 @@ func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
 		expectedStatus int
 		expectedBody   string
 		validateResult func(t *testing.T, wallet *data.Wallet, originalWallet *data.Wallet)
+		enableEmbedded *bool
 	}{
 		{
 			name: "🟢 updates all fields successfully",
@@ -1050,6 +1091,24 @@ func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
 			expectedStatus: http.StatusConflict,
 			expectedBody:   `{"error": "a wallet with this name already exists"}`,
 		},
+		{
+			name: "🔴 embedded wallet cannot be enabled when feature disabled",
+			setupFn: func(t *testing.T) *data.Wallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
+					"Embedded Wallet",
+					"https://embedded.example",
+					"embedded.example",
+					"SELF")
+				data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
+				data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
+				return wallet
+			},
+			payload:        `{"enabled": true}`,
+			walletIDFn:     func(wallet *data.Wallet) string { return wallet.ID },
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error": "embedded wallet feature is disabled"}`,
+			enableEmbedded: ptrBool(false),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1058,6 +1117,16 @@ func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {
 			if tc.setupFn != nil {
 				wallet = tc.setupFn(t)
 			}
+
+			prevFlag := handler.EnableEmbeddedWallets
+			if tc.enableEmbedded != nil {
+				handler.EnableEmbeddedWallets = *tc.enableEmbedded
+			} else {
+				handler.EnableEmbeddedWallets = true
+			}
+			t.Cleanup(func() {
+				handler.EnableEmbeddedWallets = prevFlag
+			})
 
 			walletID := tc.walletIDFn(wallet)
 
@@ -1094,7 +1163,8 @@ func Test_WalletsHandler_parseFilters(t *testing.T) {
 	ctx := context.Background()
 
 	handler := &WalletsHandler{
-		Models: models,
+		Models:                models,
+		EnableEmbeddedWallets: true,
 	}
 
 	// Create test assets for validation
@@ -1251,7 +1321,8 @@ func Test_WalletsHandler_parseSupportedAssetsParam(t *testing.T) {
 	ctx := context.Background()
 
 	handler := &WalletsHandler{
-		Models: models,
+		Models:                models,
+		EnableEmbeddedWallets: true,
 	}
 
 	// Create test assets
