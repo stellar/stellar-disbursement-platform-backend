@@ -242,12 +242,12 @@ func (h *WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request)
 	}
 
 	if reqBody.Assets != nil {
-		assetIDs, err := h.WalletAssetResolver.ResolveAssetReferences(ctx, *reqBody.Assets)
-		if err != nil {
-			httperror.BadRequest("failed to resolve asset references", err, nil).Render(rw)
+		resolvedAssetIDs, assetErr := h.WalletAssetResolver.ResolveAssetReferences(ctx, *reqBody.Assets)
+		if assetErr != nil {
+			httperror.BadRequest("failed to resolve asset references", assetErr, nil).Render(rw)
 			return
 		}
-		update.AssetsIDs = &assetIDs
+		update.AssetsIDs = &resolvedAssetIDs
 	}
 	wallet, err := h.Models.Wallets.Update(ctx, walletID, update)
 	if err != nil {
