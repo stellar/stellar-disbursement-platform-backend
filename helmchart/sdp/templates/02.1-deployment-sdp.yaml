@@ -120,9 +120,9 @@ spec:
             periodSeconds: 15
             failureThreshold: 10
 
-          {{- if .Values.global.resources }}
+          {{- if or .Values.sdp.deployment.resources .Values.global.resources }}
           resources:
-            {{- toYaml .Values.global.resources | nindent 12 }}
+            {{- toYaml (.Values.sdp.deployment.resources | default .Values.global.resources) | nindent 12 }}
           {{- end }}
 
           envFrom:
