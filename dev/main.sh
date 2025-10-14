@@ -59,7 +59,8 @@ if [ "$HTTPS_MODE" = true ]; then
     fi
 
     # Check if mkcert CA is installed
-    if ! mkcert -CAROOT &> /dev/null 2>&1; then
+    CAROOT=$(mkcert -CAROOT 2>/dev/null)
+    if [ -z "$CAROOT" ] || [ ! -f "$CAROOT/rootCA.pem" ]; then
         echo "⚠️  mkcert CA is not installed."
         echo ""
         echo "Please run: mkcert -install"

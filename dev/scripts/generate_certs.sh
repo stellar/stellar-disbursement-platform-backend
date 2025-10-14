@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CERTS_DIR="$SCRIPT_DIR/../certs"
 
-echo "====> Generating SSL certificates for local development"
+echo "====> 👀 Generating SSL certificates for local development"
 
 # Check if mkcert is installed
 if ! command -v mkcert > /dev/null 2>&1; then
@@ -32,7 +32,4 @@ cd "$CERTS_DIR"
 mkcert -key-file stellar.local-key.pem -cert-file stellar.local.pem \
     "*.stellar.local" localhost 127.0.0.1 ::1
 
-echo "====> Certificates generated successfully"
-echo "Location: $CERTS_DIR"
-echo "  - Certificate: stellar.local.pem"
-echo "  - Private Key: stellar.local-key.pem"
+echo "====> ✅ Certificates generated successfully"
