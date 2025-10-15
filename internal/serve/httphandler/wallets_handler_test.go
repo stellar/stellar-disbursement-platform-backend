@@ -342,11 +342,6 @@ func createWalletAssetsTestSetup(t *testing.T, ctx context.Context, dbPool db.SQ
 	}
 }
 
-func ptrBool(v bool) *bool {
-	b := v
-	return &b
-}
-
 func Test_WalletsHandlerPostWallets(t *testing.T) {
 	dbConnectionPool := getDBConnectionPool(t)
 
