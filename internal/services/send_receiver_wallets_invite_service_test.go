@@ -32,7 +32,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 		OrganizationName: "FOO Org",
 		AssetCode:        "USDC",
 		AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-		TenantBaseURL:    "https://tenant.localhost.com",
+		TenantUIBaseURL:  "https://tenant.localhost.com",
 	}
 
 	registrationLink, err := wdl.GetSignedRegistrationLink("SCTOVDWM3A7KLTXXIV6YXL6QRVUIIG4HHHIDDKPR4JUB3DGDIKI5VGA2")
@@ -42,7 +42,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 
 	wdl = WalletDeepLink{
 		DeepLink:         "https://www.beansapp.com/disbursements/registration?redirect=true",
-		TenantBaseURL:    "https://tenant.localhost.com",
+		TenantUIBaseURL:  "https://tenant.localhost.com",
 		OrganizationName: "FOO Org",
 		AssetCode:        "USDC",
 		AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -63,7 +63,8 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantBaseURL := "http://localhost:8000"
-	tenantInfo := &schema.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL}
+	tenantUIBaseURL := "http://localhost:3000"
+	tenantInfo := &schema.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL, SDPUIBaseURL: &tenantUIBaseURL}
 	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
@@ -148,7 +149,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:         wallet1.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
@@ -160,7 +161,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset2.Code,
 			AssetIssuer:      asset2.Issuer,
@@ -304,7 +305,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:         wallet1.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
@@ -316,7 +317,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset2.Code,
 			AssetIssuer:      asset2.Issuer,
@@ -568,7 +569,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:         wallet1.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
@@ -580,7 +581,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset2.Code,
 			AssetIssuer:      asset2.Issuer,
@@ -888,7 +889,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:         wallet1.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
@@ -1001,7 +1002,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:         wallet1.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
@@ -1013,7 +1014,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:         wallet2.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset2.Code,
 			AssetIssuer:      asset2.Issuer,
@@ -1156,7 +1157,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:         wallet1.DeepLinkSchema,
-			TenantBaseURL:    tenantBaseURL,
+			TenantUIBaseURL:  tenantUIBaseURL,
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
@@ -1663,7 +1664,7 @@ func Test_WalletDeepLink_TomlFileDomain(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.link, func(t *testing.T) {
 			wdl := WalletDeepLink{
-				TenantBaseURL: tc.link,
+				TenantUIBaseURL: tc.link,
 			}
 
 			result, err := wdl.TomlFileDomain()
@@ -1696,7 +1697,7 @@ func Test_WalletDeepLink_validate(t *testing.T) {
 	require.EqualError(t, err, "tenant base URL can't be empty")
 
 	// organization name can't be empty
-	wdl.TenantBaseURL = "foo.bar"
+	wdl.TenantUIBaseURL = "foo.bar"
 	err = wdl.validate()
 	require.EqualError(t, err, "organization name can't be empty")
 
@@ -1743,7 +1744,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "wallet://",
 				Route:            "sdp", // route added separated from the deep link
-				TenantBaseURL:    "foo.bar",
+				TenantUIBaseURL:  "foo.bar",
 				OrganizationName: "Foo Bar Org",
 				AssetCode:        "FOO",
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
@@ -1754,7 +1755,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for native (XLM) assets",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "wallet://sdp", // route added directly to the deep link
-				TenantBaseURL:    "foo.bar",
+				TenantUIBaseURL:  "foo.bar",
 				OrganizationName: "Foo Bar Org",
 				AssetCode:        "XLM",
 			},
@@ -1764,7 +1765,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for deeplink with query params",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "wallet://sdp?custom=true",
-				TenantBaseURL:    "foo.bar",
+				TenantUIBaseURL:  "foo.bar",
 				OrganizationName: "Foo Bar Org",
 				AssetCode:        "FOO",
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
@@ -1775,7 +1776,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for deeplink with regular URL",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "https://test.com",
-				TenantBaseURL:    "foo.bar",
+				TenantUIBaseURL:  "foo.bar",
 				OrganizationName: "Foo Bar Org",
 				AssetCode:        "FOO",
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
@@ -1786,7 +1787,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for tenant base URL that contains a port",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "https://test.com",
-				TenantBaseURL:    "http://foo.bar:8000",
+				TenantUIBaseURL:  "http://foo.bar:8000",
 				OrganizationName: "Foo Bar Org",
 				AssetCode:        "FOO",
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
@@ -1797,7 +1798,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for embedded wallet hosted by SDP",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "http://foo.bar:8000",
-				TenantBaseURL:    "http://foo.bar:8000",
+				TenantUIBaseURL:  "http://foo.bar:8000",
 				Route:            "wallet",
 				OrganizationName: "Foo Bar Org",
 				AssetCode:        "FOO",
@@ -1811,7 +1812,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for embedded wallet hosted elsewhere",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:         "https://test.com",
-				TenantBaseURL:    "http://foo.bar:8000",
+				TenantUIBaseURL:  "http://foo.bar:8000",
 				OrganizationName: "Foo Bar Org",
 				AssetCode:        "FOO",
 				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
@@ -1850,7 +1851,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 		wdl := WalletDeepLink{
 			DeepLink:         "wallet://",
 			Route:            "sdp",
-			TenantBaseURL:    "foo.bar",
+			TenantUIBaseURL:  "foo.bar",
 			OrganizationName: "Foo Bar Org",
 			AssetCode:        "FOO",
 			AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
@@ -1864,7 +1865,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 	t.Run("Successful for non-native assets 🎉", func(t *testing.T) {
 		wdl := WalletDeepLink{
 			DeepLink:         "wallet://sdp",
-			TenantBaseURL:    "foo.bar",
+			TenantUIBaseURL:  "foo.bar",
 			OrganizationName: "Foo Bar Org",
 			AssetCode:        "FOO",
 			AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
@@ -1884,7 +1885,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 		wdl := WalletDeepLink{
 			DeepLink:         "wallet://",
 			Route:            "sdp",
-			TenantBaseURL:    "foo.bar",
+			TenantUIBaseURL:  "foo.bar",
 			OrganizationName: "Foo Bar Org",
 			AssetCode:        "XLM",
 		}
@@ -1902,7 +1903,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 	t.Run("Successful for native (XLM) assets and TenantBaseURL with https:// schema 🎉", func(t *testing.T) {
 		wdl := WalletDeepLink{
 			DeepLink:         "wallet://sdp",
-			TenantBaseURL:    "https://foo.bar",
+			TenantUIBaseURL:  "https://foo.bar",
 			OrganizationName: "Foo Bar Org",
 			AssetCode:        "XLM",
 		}
