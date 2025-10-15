@@ -282,6 +282,24 @@ func Test_WalletModelFindWallets(t *testing.T) {
 		require.Equal(t, wallets[0].ID, actual[0].ID)
 	})
 
+	t.Run("filters embedded wallets", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		MakeWalletEmbedded(t, ctx, dbConnectionPool, wallets[1].ID)
+
+		embeddedOnly, err := walletModel.FindWallets(ctx, NewFilter(FilterEmbedded, true))
+		require.NoError(t, err)
+		require.Len(t, embeddedOnly, 1)
+		require.Equal(t, wallets[1].ID, embeddedOnly[0].ID)
+
+		nonEmbedded, err := walletModel.FindWallets(ctx, NewFilter(FilterEmbedded, false))
+		require.NoError(t, err)
+		require.Len(t, nonEmbedded, 2)
+		ids := []string{nonEmbedded[0].ID, nonEmbedded[1].ID}
+		assert.NotContains(t, ids, wallets[1].ID)
+	})
+
 	t.Run("returns user_managed and enabled wallet", func(t *testing.T) {
 		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
 		wallets := createTestWallets()
