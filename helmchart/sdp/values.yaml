@@ -158,6 +158,7 @@ sdp:
   ## @param sdp.deployment.podSecurityContext Security settings for the pods.
   ## @param sdp.deployment.securityContext Security settings for the container within the pod.
   ## @param sdp.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
+  ## @param sdp.deployment.resources Resource limits and requests for the SDP service pods. If not specified, falls back to global.resources.
   ## @param sdp.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param sdp.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param sdp.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
@@ -169,6 +170,7 @@ sdp:
     podSecurityContext: {}
     securityContext: {}
     strategy: {}
+    resources: {}
     nodeSelector: {}
     tolerations: []
     affinity: {}
@@ -381,7 +383,7 @@ anchorPlatform:
   ## @param anchorPlatform.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param anchorPlatform.deployment.podSecurityContext Security settings for the pods.
   ## @param anchorPlatform.deployment.securityContext Security settings for the container within the pod.
-  ## @param anchorPlatform.deployment.resources Resource limits and requests for the application pods.
+  ## @param anchorPlatform.deployment.resources Resource limits and requests for the Anchor Platform service pods. If not specified, falls back to global.resources.
   ## @param anchorPlatform.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param anchorPlatform.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param anchorPlatform.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
@@ -495,7 +497,7 @@ tss:
   ## @param tss.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param tss.deployment.podSecurityContext Security settings for the pods.
   ## @param tss.deployment.securityContext Security settings for the container within the pod.
-  ## @param tss.deployment.resources Resource limits and requests for the application pods.
+  ## @param tss.deployment.resources Resource limits and requests for the TSS service pods. If not specified, falls back to global.resources.
   ## @param tss.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param tss.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param tss.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
@@ -617,7 +619,7 @@ dashboard:
   ## @param dashboard.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param dashboard.deployment.podSecurityContext Security settings for the pods.
   ## @param dashboard.deployment.securityContext Security settings for the container within the pod.
-  ## @param dashboard.deployment.resources Resource limits and requests for the application pods.
+  ## @param dashboard.deployment.resources Resource limits and requests for the Dashboard service pods. If not specified, falls back to global.resources.
   ## @param dashboard.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param dashboard.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param dashboard.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.

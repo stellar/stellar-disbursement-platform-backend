@@ -59,9 +59,9 @@ spec:
               containerPort: {{ include "sdp.dashboard.port" . }}
               protocol: TCP
 
-          {{- if .Values.dashboard.deployment.resources }}
+          {{- if or .Values.dashboard.deployment.resources .Values.global.resources }}
           resources:
-            {{- toYaml .Values.dashboard.deployment.resources | nindent 12 }}
+            {{- toYaml (.Values.dashboard.deployment.resources | default .Values.global.resources) | nindent 12 }}
           {{- end }}
 
           envFrom:

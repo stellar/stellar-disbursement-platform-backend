@@ -102,9 +102,9 @@ spec:
             periodSeconds: 15
             failureThreshold: 10
 
-          {{- if .Values.anchorPlatform.deployment.resources }}
+          {{- if or .Values.anchorPlatform.deployment.resources .Values.global.resources }}
           resources:
-            {{- tpl (toYaml .Values.anchorPlatform.deployment.resources) . | nindent 12 }}
+            {{- tpl (toYaml (.Values.anchorPlatform.deployment.resources | default .Values.global.resources)) . | nindent 12 }}
           {{- end }}
 
           envFrom:
