@@ -1584,6 +1584,40 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 		assert.Contains(t, err.Error(), "validating receiver wallet update: validating status: invalid receiver wallet status \"invalid\"")
 	})
 
+	contractAddress := "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53"
+
+	t.Run("returns error when stored stellar address is contract and memo update attempted", func(t *testing.T) {
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE receiver_wallets SET stellar_address = $1, stellar_memo = NULL, stellar_memo_type = NULL WHERE id = $2", contractAddress, receiverWallet.ID)
+		require.NoError(t, err)
+
+		update := ReceiverWalletUpdate{
+			StellarMemo:     utils.Ptr("123456"),
+			StellarMemoType: utils.Ptr(schema.MemoTypeID),
+		}
+
+		err = receiverWalletModel.Update(ctx, receiverWallet.ID, update, dbConnectionPool)
+		require.ErrorIs(t, err, ErrMemosNotSupportedForContractAddresses)
+	})
+
+	t.Run("returns error when incoming stellar address is contract and memo update attempted", func(t *testing.T) {
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		update := ReceiverWalletUpdate{
+			StellarAddress:  contractAddress,
+			StellarMemo:     utils.Ptr("123456"),
+			StellarMemoType: utils.Ptr(schema.MemoTypeID),
+		}
+
+		err := receiverWalletModel.Update(ctx, receiverWallet.ID, update, dbConnectionPool)
+		require.ErrorIs(t, err, ErrMemosNotSupportedForContractAddresses)
+	})
+
 	t.Run("successfully updates receiver wallet", func(t *testing.T) {
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
