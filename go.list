@@ -81,6 +81,7 @@ github.com/fortytw2/leaktest v1.3.0
 github.com/frankban/quicktest v1.14.6
 github.com/fsnotify/fsnotify v1.9.0
 github.com/fsouza/fake-gcs-server v1.49.2
+github.com/fxamacker/cbor/v2 v2.9.0
 github.com/gavv/monotime v0.0.0-20161010190848-47d58efa6955
 github.com/getsentry/raven-go v0.2.0
 github.com/getsentry/sentry-go v0.35.3
@@ -94,6 +95,8 @@ github.com/go-logr/logr v1.4.2
 github.com/go-logr/stdr v1.2.2
 github.com/go-sql-driver/mysql v1.8.1
 github.com/go-viper/mapstructure/v2 v2.4.0
+github.com/go-webauthn/webauthn v0.14.0
+github.com/go-webauthn/x v0.1.25
 github.com/gobuffalo/packd v1.0.2
 github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
 github.com/godror/godror v0.40.4
@@ -101,13 +104,15 @@ github.com/godror/knownpb v0.1.1
 github.com/gogo/protobuf v1.3.2
 github.com/golang-jwt/jwt v3.2.2+incompatible
 github.com/golang-jwt/jwt/v4 v4.5.2
-github.com/golang-jwt/jwt/v5 v5.2.2
+github.com/golang-jwt/jwt/v5 v5.3.0
 github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe
 github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 github.com/golang/mock v1.6.0
 github.com/golang/protobuf v1.5.4
 github.com/google/go-cmp v0.7.0
 github.com/google/go-querystring v0.0.0-20160401233042-9235644dd9e5
+github.com/google/go-tpm v0.9.5
+github.com/google/go-tpm-tools v0.3.13-0.20230620182252-4639ecce2aba
 github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1
 github.com/google/renameio/v2 v2.0.0
 github.com/google/s2a-go v0.1.7
@@ -179,6 +184,7 @@ github.com/onsi/gomega v1.27.10
 github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/image-spec v1.1.0
 github.com/opentracing/opentracing-go v1.1.0
+github.com/patrickmn/go-cache v2.1.0+incompatible
 github.com/pelletier/go-toml v1.9.5
 github.com/pelletier/go-toml/v2 v2.2.4
 github.com/pierrec/lz4/v4 v4.1.18
@@ -223,6 +229,8 @@ github.com/twilio/twilio-go v1.28.1
 github.com/tyler-smith/go-bip39 v0.0.0-20180618194314-52158e4697b8
 github.com/valyala/bytebufferpool v1.0.0
 github.com/valyala/fasthttp v1.34.0
+github.com/veraison/go-cose v1.3.0
+github.com/x448/float16 v0.8.4
 github.com/xdg-go/pbkdf2 v1.0.0
 github.com/xdg-go/scram v1.1.2
 github.com/xdg-go/stringprep v1.0.4
@@ -247,6 +255,7 @@ go.opentelemetry.io/otel/metric v1.28.0
 go.opentelemetry.io/otel/sdk v1.28.0
 go.opentelemetry.io/otel/trace v1.28.0
 go.uber.org/goleak v1.3.0
+go.uber.org/mock v0.6.0
 go.uber.org/multierr v1.11.0
 go.yaml.in/yaml/v2 v2.4.2
 go.yaml.in/yaml/v3 v3.0.4

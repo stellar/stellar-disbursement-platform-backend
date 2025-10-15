@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
@@ -787,6 +788,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating embedded wallet service: %v", err)
 				}
+
+				serveOpts.WebAuthnService, err = dependencyinjection.NewWebAuthnService(context.Background(), dependencyinjection.WebAuthnServiceOptions{
+					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
+					SessionTTL:          5 * time.Minute,
+				})
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating WebAuthn service: %v", err)
+				}
+				log.Info("WebAuthn passkey authentication enabled")
 			}
 
 			// Validate the Event Broker Type and Scheduler Jobs

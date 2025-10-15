@@ -149,6 +149,7 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 			embeddedWalletUpdate := data.EmbeddedWalletUpdate{
 				WasmHash:     e.wasmHash,
 				CredentialID: credentialID,
+				PublicKey:    publicKey,
 				WalletStatus: data.ProcessingWalletStatus,
 			}
 
