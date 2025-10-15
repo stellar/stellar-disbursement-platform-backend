@@ -136,7 +136,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("successfully creates a wallet TSS transaction", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := service.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -189,7 +189,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	t.Run("returns error if wallet status is not pending", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.SuccessWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err := service.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -204,7 +204,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, "invalid_hash_not_32_bytes")
 		require.NoError(t, err)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err = invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -223,7 +223,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		invalidService, err := NewEmbeddedWalletService(sdpModels, tssModel, testWasmHash)
 		require.NoError(t, err)
 
-		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.SuccessWalletStatus)
+		initialWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.SuccessWalletStatus)
 		walletIDForTest := initialWallet.Token
 
 		err = invalidService.CreateWallet(ctx, walletIDForTest, defaultPublicKey, defaultCredentialID)
@@ -241,7 +241,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		duplicateCredentialID := "duplicate-credential-id"
 
 		// Step 1: Create first wallet successfully
-		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
 		err := service.CreateWallet(ctx, wallet1.Token, defaultPublicKey, duplicateCredentialID)
 		require.NoError(t, err)
 
@@ -256,7 +256,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		assert.Len(t, tssTransactions1, 1, "First wallet should have exactly one TSS transaction")
 
 		// Step 2: Try duplicate credential ID (should fail cleanly)
-		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
 		otherPublicKey := "04deadbeef" + strings.Repeat("00", 60)
 		err = service.CreateWallet(ctx, wallet2.Token, otherPublicKey, duplicateCredentialID)
 		require.Error(t, err)
@@ -281,12 +281,12 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 		secondCredentialID := "second-credential-id"
 
 		// Step 1: Create first wallet successfully
-		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		wallet1 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
 		err := service.CreateWallet(ctx, wallet1.Token, defaultPublicKey, firstCredentialID)
 		require.NoError(t, err)
 
 		// Step 2: Try duplicate credential ID (should fail)
-		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", data.PendingWalletStatus)
+		wallet2 := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
 		otherPublicKey := "04deadbeef" + strings.Repeat("00", 60)
 		err = service.CreateWallet(ctx, wallet2.Token, otherPublicKey, firstCredentialID)
 		require.Error(t, err)
@@ -336,7 +336,7 @@ func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 	t.Run("successfully gets a wallet by credential ID", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", data.SuccessWalletStatus)
+		expectedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "somehash", "somecontract", "test-credential-id", "test-public-key", data.SuccessWalletStatus)
 
 		retrievedWallet, err := service.GetWalletByCredentialID(ctx, expectedWallet.CredentialID)
 		require.NoError(t, err)
@@ -346,6 +346,7 @@ func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 		assert.Equal(t, expectedWallet.WasmHash, retrievedWallet.WasmHash)
 		assert.Equal(t, expectedWallet.ContractAddress, retrievedWallet.ContractAddress)
 		assert.Equal(t, expectedWallet.CredentialID, retrievedWallet.CredentialID)
+		assert.Equal(t, expectedWallet.PublicKey, retrievedWallet.PublicKey)
 		assert.Equal(t, expectedWallet.WalletStatus, retrievedWallet.WalletStatus)
 		assert.NotNil(t, retrievedWallet.CreatedAt)
 		assert.NotNil(t, retrievedWallet.UpdatedAt)
