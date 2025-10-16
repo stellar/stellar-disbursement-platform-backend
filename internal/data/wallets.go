@@ -150,6 +150,7 @@ const (
 	FilterEnabledWallets  FilterKey = "enabled"
 	FilterUserManaged     FilterKey = "user_managed"
 	FilterSupportedAssets FilterKey = "supported_assets"
+	FilterEmbedded        FilterKey = "embedded"
 )
 
 // FindWallets returns wallets filtering by enabled status.
@@ -173,6 +174,8 @@ func newWalletQuery(baseQuery string, sqlExec db.SQLExecuter, filters ...Filter)
 			qb.AddCondition("w.enabled = ?", filter.Value)
 		case FilterUserManaged:
 			qb.AddCondition("w.user_managed = ?", filter.Value)
+		case FilterEmbedded:
+			qb.AddCondition("w.embedded = ?", filter.Value)
 		case FilterSupportedAssets:
 			if assets, ok := filter.Value.([]string); ok && len(assets) > 0 {
 				// Filter wallets that support all specified assets
