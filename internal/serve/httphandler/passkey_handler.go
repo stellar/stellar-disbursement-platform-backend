@@ -11,14 +11,22 @@ import (
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 )
 
+const (
+	// WalletTokenExpiration defines how long wallet JWT tokens are valid
+	WalletTokenExpiration = 15 * time.Minute
+)
+
 type PasskeyHandler struct {
-	WebAuthnService  wallet.WebAuthnServiceInterface
-	WalletJWTManager wallet.WalletJWTManager
+	WebAuthnService       wallet.WebAuthnServiceInterface
+	WalletJWTManager      wallet.WalletJWTManager
+	EmbeddedWalletService services.EmbeddedWalletServiceInterface
 }
 
 type StartPasskeyRegistrationRequest struct {
@@ -37,6 +45,7 @@ func (r StartPasskeyRegistrationRequest) Validate() *httperror.HTTPError {
 }
 
 type PasskeyRegistrationResponse struct {
+	Token        string `json:"token"`
 	CredentialID string `json:"credential_id"`
 	PublicKey    string `json:"public_key"`
 }
@@ -109,8 +118,17 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 		return
 	}
 
+	credentialID := base64.RawURLEncoding.EncodeToString(credential.ID)
+	expiresAt := time.Now().Add(WalletTokenExpiration)
+	jwtToken, err := h.WalletJWTManager.GenerateToken(ctx, credentialID, "", expiresAt)
+	if err != nil {
+		httperror.InternalError(ctx, "Failed to generate token", err, nil).Render(rw)
+		return
+	}
+
 	resp := PasskeyRegistrationResponse{
-		CredentialID: base64.RawURLEncoding.EncodeToString(credential.ID),
+		Token:        jwtToken,
+		CredentialID: credentialID,
 		PublicKey:    publicKeyHex,
 	}
 
@@ -148,8 +166,8 @@ func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req 
 		return
 	}
 
-	expiresAt := time.Now().Add(15 * time.Minute)
-	token, err := h.WalletJWTManager.GenerateToken(ctx, embeddedWallet.ContractAddress, expiresAt)
+	expiresAt := time.Now().Add(WalletTokenExpiration)
+	token, err := h.WalletJWTManager.GenerateToken(ctx, embeddedWallet.CredentialID, embeddedWallet.ContractAddress, expiresAt)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to generate authentication token", err, nil).Render(rw)
 		return
@@ -159,6 +177,77 @@ func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req 
 		Token:           token,
 		CredentialID:    embeddedWallet.CredentialID,
 		ContractAddress: embeddedWallet.ContractAddress,
+	}
+
+	httpjson.Render(rw, resp, httpjson.JSON)
+}
+
+type RefreshTokenRequest struct {
+	Token string `json:"token"`
+}
+
+func (r RefreshTokenRequest) Validate() *httperror.HTTPError {
+	validator := validators.NewValidator()
+	validator.Check(len(strings.TrimSpace(r.Token)) > 0, "token", "token is required")
+
+	if validator.HasErrors() {
+		return httperror.BadRequest("", nil, validator.Errors)
+	}
+
+	return nil
+}
+
+type RefreshTokenResponse struct {
+	Token string `json:"token"`
+}
+
+func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	var reqBody RefreshTokenRequest
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+		httperror.BadRequest("", err, nil).Render(rw)
+		return
+	}
+
+	if err := reqBody.Validate(); err != nil {
+		err.Render(rw)
+		return
+	}
+
+	credentialID, contractAddress, err := h.WalletJWTManager.ValidateToken(ctx, reqBody.Token)
+	if err != nil {
+		if errors.Is(err, wallet.ErrExpiredWalletToken) {
+			httperror.Unauthorized("Token has expired", err, nil).Render(rw)
+		} else if errors.Is(err, wallet.ErrInvalidWalletToken) {
+			httperror.Unauthorized("Invalid token", err, nil).Render(rw)
+		} else if errors.Is(err, wallet.ErrMissingSubClaim) {
+			httperror.Unauthorized("Invalid token claims", err, nil).Render(rw)
+		} else {
+			httperror.InternalError(ctx, "Failed to validate token", err, nil).Render(rw)
+		}
+		return
+	}
+
+	if contractAddress == "" {
+		var embeddedWallet *data.EmbeddedWallet
+		embeddedWallet, err = h.EmbeddedWalletService.GetWalletByCredentialID(ctx, credentialID)
+		if err != nil {
+			httperror.InternalError(ctx, "Failed to lookup wallet", err, nil).Render(rw)
+			return
+		}
+		contractAddress = embeddedWallet.ContractAddress
+	}
+
+	expiresAt := time.Now().Add(WalletTokenExpiration)
+	refreshedToken, err := h.WalletJWTManager.GenerateToken(ctx, credentialID, contractAddress, expiresAt)
+	if err != nil {
+		httperror.InternalError(ctx, "Failed to generate token", err, nil).Render(rw)
+		return
+	}
+
+	resp := RefreshTokenResponse{
+		Token: refreshedToken,
 	}
 
 	httpjson.Render(rw, resp, httpjson.JSON)
