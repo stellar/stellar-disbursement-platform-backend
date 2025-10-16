@@ -8,4 +8,4 @@ services:
     volumes:
       - ./nginx-https.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certs:/etc/nginx/ssl:ro
-      - ./env-config.js:/usr/share/nginx/html/settings/env-config.js
+      - ./env-config.js:/usr/share/nginx/html/settings/env-config.js:ro
