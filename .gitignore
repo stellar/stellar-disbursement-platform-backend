@@ -28,3 +28,9 @@ stellar-disbursement-platform-backend
 # Rust & Soroban
 target/
 test_snapshots/
+
+# Local HTTPS certificates
+dev/certs/
+*.pem
+*.key
+*.crt

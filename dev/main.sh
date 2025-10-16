@@ -10,12 +10,20 @@ display_help() {
     echo "Options:"
     echo "  --help            Show this help message and exit."
     echo "  --delete_pv       Delete persistent volumes for SDP databases."
+    echo "  --https           Enable HTTPS mode with SSL certificates."
 }
 
 # Check if --help is passed as an argument
 if [[ " $@ " =~ " --help " ]]; then
     display_help
     exit 0
+fi
+
+# Check if --https flag is passed
+HTTPS_MODE=false
+if [[ " $@ " =~ " --https " ]]; then
+    HTTPS_MODE=true
+    echo "====> 🔒 HTTPS mode enabled"
 fi
 
 if [ ! -f ./.env ]; then
@@ -38,6 +46,28 @@ done
 
 if [[ $failed != 0 ]]; then
     exit 1
+fi
+
+# Handle mkcert for HTTPS mode
+if [ "$HTTPS_MODE" = true ]; then
+    if ! command -v mkcert &> /dev/null; then
+        echo "❌ mkcert is not installed (required for HTTPS mode)."
+        echo ""
+        echo "Please install mkcert: https://web.dev/articles/how-to-use-local-https"
+        echo ""
+        exit 1
+    fi
+
+    # Check if mkcert CA is installed
+    CAROOT=$(mkcert -CAROOT 2>/dev/null)
+    if [ -z "$CAROOT" ] || [ ! -f "$CAROOT/rootCA.pem" ]; then
+        echo "⚠️  mkcert CA is not installed."
+        echo ""
+        echo "Please run: mkcert -install"
+        echo "Learn more: https://web.dev/articles/how-to-use-local-https"
+        echo ""
+        exit 1
+    fi
 fi
 
 # prepare
@@ -73,7 +103,27 @@ fi
 echo $DIVIDER
 echo "====> 👀calling docker compose up"
 export GIT_COMMIT="debug"
-docker compose -p sdp-multi-tenant up -d --build
+
+# Build docker compose command based on HTTPS mode
+COMPOSE_FILES="-f docker-compose.yml"
+if [ "$HTTPS_MODE" = true ]; then
+    COMPOSE_FILES="$COMPOSE_FILES -f docker-compose-https-frontend.yml"
+
+    # Check if SSL certificates exist, generate if needed
+    if [ ! -f ./certs/stellar.local.pem ] || [ ! -f ./certs/stellar.local-key.pem ]; then
+        echo "====> ⚠️  SSL certificates not found. Generating them now..."
+        ./scripts/generate_certs.sh
+        if [ $? -ne 0 ]; then
+            echo "❌ Failed to generate certificates. Exiting."
+            exit 1
+        fi
+        echo "====> ✅ Certificates generated successfully!"
+    else
+        echo "====> ✅ SSL certificates found, using existing certificates"
+    fi
+fi
+
+docker compose -p sdp-multi-tenant $COMPOSE_FILES up -d --build
 
 # Run docker compose
 echo $DIVIDER
@@ -86,6 +136,16 @@ echo "====> 👀Step 3: initialize tenants... (😴 10s sleep)"
 
 # Wait for docker containers to start
 sleep 10
+
+# Set URLs based on HTTPS mode
+if [ "$HTTPS_MODE" = true ]; then
+    FRONTEND_PROTOCOL="https"
+    FRONTEND_PORT="3443"
+else
+    FRONTEND_PROTOCOL="http"
+    FRONTEND_PORT="3000"
+fi
+
 AdminTenantURL="http://localhost:8003/tenants"
 
 # Initialize tenants
@@ -115,7 +175,7 @@ for tenant in "${tenants[@]}"; do
     else
         echo "🐈Provisioning missing tenant: $tenant"
         baseURL="http://$tenant.stellar.local:8000"
-        sdpUIBaseURL="http://$tenant.stellar.local:3000"
+        sdpUIBaseURL="$FRONTEND_PROTOCOL://$tenant.stellar.local:$FRONTEND_PORT"
         ownerEmail="init_owner@$tenant.local"
 
         response=$(curl -s -w "\n%{http_code}" -X POST $AdminTenantURL \
@@ -156,7 +216,7 @@ echo $DIVIDER
 echo "🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉"
 echo "Login URLs for each tenant:"
 for tenant in "${tenants[@]}"; do
-    url="http://$tenant.stellar.local:3000"
+    url="$FRONTEND_PROTOCOL://$tenant.stellar.local:$FRONTEND_PORT"
     echo -e "🔗Tenant $tenant: \033]8;;$url\033\\$url\033]8;;\033\\"
     echo "username: owner@$tenant.local  password: Password123!"
 
