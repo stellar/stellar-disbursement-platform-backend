@@ -31,6 +31,7 @@ jobs:
           - "Stellar-email" # Stellar distribution account where receivers are registered with their email
           - "Circle-transfers-phone" # Circle(Transfers) distribution account where receivers are registered with their phone number
           - "Circle-payouts-phoneWallet" # Circle(Payouts) distribution account where receivers are registered with their phone number and wallet address
+          - "Stellar-embedded" # Stellar distribution account with embedded wallet creation enabled
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
@@ -39,6 +40,11 @@ jobs:
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+            ENABLE_EMBEDDED_WALLETS: "false"
+            EMBEDDED_WALLET_CREDENTIAL_ID: ""
+            EMBEDDED_WALLET_PUBLIC_KEY: ""
+            EMBEDDED_WALLETS_WASM_HASH: ""
+            WALLET_DEEPLINK: "test-wallet://sdp"
           - platform: "Stellar-phoneWallet"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
@@ -46,6 +52,11 @@ jobs:
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+            ENABLE_EMBEDDED_WALLETS: "false"
+            EMBEDDED_WALLET_CREDENTIAL_ID: ""
+            EMBEDDED_WALLET_PUBLIC_KEY: ""
+            EMBEDDED_WALLETS_WASM_HASH: ""
+            WALLET_DEEPLINK: "test-wallet://sdp"
           - platform: "Stellar-email"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
@@ -53,6 +64,11 @@ jobs:
             REGISTRATION_CONTACT_TYPE: "EMAIL"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+            ENABLE_EMBEDDED_WALLETS: "false"
+            EMBEDDED_WALLET_CREDENTIAL_ID: ""
+            EMBEDDED_WALLET_PUBLIC_KEY: ""
+            EMBEDDED_WALLETS_WASM_HASH: ""
+            WALLET_DEEPLINK: "test-wallet://sdp"
           - platform: "Circle-transfers-phone"
             environment: "Receiver Registration - E2E Integration Tests (Circle)"
             CIRCLE_API_TYPE: "TRANSFERS"
@@ -61,6 +77,11 @@ jobs:
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+            ENABLE_EMBEDDED_WALLETS: "false"
+            EMBEDDED_WALLET_CREDENTIAL_ID: ""
+            EMBEDDED_WALLET_PUBLIC_KEY: ""
+            EMBEDDED_WALLETS_WASM_HASH: ""
+            WALLET_DEEPLINK: "test-wallet://sdp"
           - platform: "Circle-payouts-phoneWallet"
             environment: "Receiver Registration - E2E Integration Tests (Circle)"
             CIRCLE_API_TYPE: "PAYOUTS"
@@ -69,6 +90,11 @@ jobs:
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+            ENABLE_EMBEDDED_WALLETS: "false"
+            EMBEDDED_WALLET_CREDENTIAL_ID: ""
+            EMBEDDED_WALLET_PUBLIC_KEY: ""
+            EMBEDDED_WALLETS_WASM_HASH: ""
+            WALLET_DEEPLINK: "test-wallet://sdp"
           - platform: "Stellar-phone-FUTURENET"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
@@ -77,6 +103,23 @@ jobs:
             DISBURSED_ASSET_CODE: "XLM"
             NETWORK_PASSPHRASE: "Test SDF Future Network ; October 2022"
             HORIZON_URL: "https://horizon-futurenet.stellar.org"
+            ENABLE_EMBEDDED_WALLETS: "false"
+            EMBEDDED_WALLET_CREDENTIAL_ID: ""
+            EMBEDDED_WALLET_PUBLIC_KEY: ""
+            EMBEDDED_WALLETS_WASM_HASH: ""
+            WALLET_DEEPLINK: "test-wallet://sdp"
+          - platform: "Stellar-embedded"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+            ENABLE_EMBEDDED_WALLETS: "true"
+            EMBEDDED_WALLET_CREDENTIAL_ID: "credential-embedded-e2e"
+            EMBEDDED_WALLET_PUBLIC_KEY: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
+            EMBEDDED_WALLETS_WASM_HASH: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            WALLET_DEEPLINK: "SELF"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
@@ -87,6 +130,11 @@ jobs:
       NETWORK_PASSPHRASE: ${{ matrix.NETWORK_PASSPHRASE }}
       HORIZON_URL: ${{ matrix.HORIZON_URL }}
       CIRCLE_API_TYPE: ${{ matrix.CIRCLE_API_TYPE || 'TRANSFERS' }}
+      ENABLE_EMBEDDED_WALLETS: ${{ matrix.ENABLE_EMBEDDED_WALLETS }}
+      EMBEDDED_WALLET_CREDENTIAL_ID: ${{ matrix.EMBEDDED_WALLET_CREDENTIAL_ID }}
+      EMBEDDED_WALLET_PUBLIC_KEY: ${{ matrix.EMBEDDED_WALLET_PUBLIC_KEY }}
+      EMBEDDED_WALLETS_WASM_HASH: ${{ matrix.EMBEDDED_WALLETS_WASM_HASH }}
+      WALLET_DEEPLINK: ${{ matrix.WALLET_DEEPLINK }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
