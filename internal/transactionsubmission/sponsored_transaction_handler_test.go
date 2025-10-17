@@ -676,8 +676,9 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		require.NoError(t, xdr.SafeUnmarshalBase64(validOpXDR, &decodedOp))
 
 		sponsoredOperation := &txnbuild.InvokeHostFunction{
-			HostFunction: decodedOp.HostFunction,
-			Auth:         decodedOp.Auth,
+			SourceAccount: distributionAccount,
+			HostFunction:  decodedOp.HostFunction,
+			Auth:          decodedOp.Auth,
 			Ext: xdr.TransactionExt{
 				V:           1,
 				SorobanData: &transactionData,

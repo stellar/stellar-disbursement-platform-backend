@@ -105,8 +105,9 @@ func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context,
 	}
 
 	sponsoredOperation := &txnbuild.InvokeHostFunction{
-		HostFunction: operation.HostFunction,
-		Auth:         operation.Auth,
+		SourceAccount: distributionAccount,
+		HostFunction:  operation.HostFunction,
+		Auth:          operation.Auth,
 	}
 
 	txParams := txnbuild.TransactionParams{
