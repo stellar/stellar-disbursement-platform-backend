@@ -99,6 +99,20 @@ cd dev
 ./main.sh
 ```
 
+**Optional: Enable HTTPS for Frontend**
+
+To run the frontend with HTTPS (required to test passkey authentication with embedded wallets), follow these steps:
+
+1. Install mkcert: https://web.dev/articles/how-to-use-local-https
+2. Run with the `--https` flag:
+```sh
+./main.sh --https
+```
+
+The frontend will be accessible at:
+- RedCorp: https://redcorp.stellar.local:3443
+- BlueCorp: https://bluecorp.stellar.local:3443
+- PinkCorp: https://pinkcorp.stellar.local:3443
 
 ### Login to the SDP and send a Disbursement
 > [!NOTE]  

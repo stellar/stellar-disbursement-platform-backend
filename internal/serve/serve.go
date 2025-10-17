@@ -504,9 +504,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{
-				Models:              o.Models,
-				NetworkType:         o.NetworkType,
-				WalletAssetResolver: services.NewWalletAssetResolver(o.Models.Assets),
+				Models:                o.Models,
+				NetworkType:           o.NetworkType,
+				WalletAssetResolver:   services.NewWalletAssetResolver(o.Models.Assets),
+				EnableEmbeddedWallets: o.EnableEmbeddedWallets,
 			}
 
 			// Read operations
