@@ -92,8 +92,7 @@ func (h WalletCreationHandler) CreateWallet(rw http.ResponseWriter, req *http.Re
 		Status: data.PendingWalletStatus,
 	}
 
-	rw.WriteHeader(http.StatusAccepted)
-	httpjson.Render(rw, resp, httpjson.JSON)
+	httpjson.RenderStatus(rw, http.StatusAccepted, resp, httpjson.JSON)
 }
 
 func (h WalletCreationHandler) GetWallet(rw http.ResponseWriter, req *http.Request) {
