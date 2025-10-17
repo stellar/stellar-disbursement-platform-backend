@@ -464,7 +464,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Write operations
 			r.With(middleware.RequirePermission(
 				data.WriteWallets,
-				middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", walletsHandler.PostWallets)
 				r.Delete("/{id}", walletsHandler.DeleteWallet)
@@ -472,7 +472,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.RequirePermission(
 				data.WriteWallets,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
