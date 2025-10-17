@@ -77,5 +77,15 @@ func (h RPCProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httperror.InternalError(ctx, "Failed to proxy request to RPC", err, nil).Render(w)
 	}
 
+	// Remove CORS headers added by the RPC server to avoid conflicts with SDP's CORS settings
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Access-Control-Allow-Origin")
+		resp.Header.Del("Access-Control-Allow-Methods")
+		resp.Header.Del("Access-Control-Allow-Headers")
+		resp.Header.Del("Access-Control-Expose-Headers")
+		resp.Header.Del("Access-Control-Allow-Credentials")
+		return nil
+	}
+
 	proxy.ServeHTTP(w, r)
 }
