@@ -22,6 +22,11 @@ import (
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+const (
+	// SponsoredTransactionTimeoutSeconds is the timeout in seconds for sponsored transactions
+	SponsoredTransactionTimeoutSeconds = 300
+)
+
 type SponsoredTransactionHandler struct {
 	engine     *engine.SubmitterEngine
 	rpcClient  stellar.RPCClient
@@ -90,6 +95,9 @@ func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context,
 			if auth.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress {
 				return nil, fmt.Errorf("invalid auth credentials type")
 			}
+			if auth.Credentials.Address == nil {
+				return nil, fmt.Errorf("auth credentials address cannot be nil")
+			}
 			if auth.Credentials.Address.Address.Type == xdr.ScAddressTypeScAddressTypeAccount {
 				authAccountId := *auth.Credentials.Address.Address.AccountId
 
@@ -118,7 +126,7 @@ func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context,
 		Operations: []txnbuild.Operation{sponsoredOperation},
 		BaseFee:    int64(h.engine.MaxBaseFee),
 		Preconditions: txnbuild.Preconditions{
-			TimeBounds:   txnbuild.NewTimeout(300),
+			TimeBounds:   txnbuild.NewTimeout(SponsoredTransactionTimeoutSeconds),
 			LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
 		},
 	}
