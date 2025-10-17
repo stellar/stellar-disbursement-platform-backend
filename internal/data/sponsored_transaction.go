@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -157,8 +158,13 @@ func (stu SponsoredTransactionUpdate) Validate() error {
 		}
 	}
 
-	if stu.TransactionHash != "" && len(stu.TransactionHash) != 64 {
-		return fmt.Errorf("transaction hash must be 64 characters, got %d", len(stu.TransactionHash))
+	if stu.TransactionHash != "" {
+		if len(stu.TransactionHash) != 64 {
+			return fmt.Errorf("transaction hash must be 64 characters, got %d", len(stu.TransactionHash))
+		}
+		if _, err := hex.DecodeString(stu.TransactionHash); err != nil {
+			return fmt.Errorf("transaction hash must be valid hexadecimal: %w", err)
+		}
 	}
 
 	return nil

@@ -217,7 +217,7 @@ func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account,
 			},
 		}
 
-		_, err = e.tssModel.BulkInsert(ctx, e.tssModel.DBConnectionPool, []store.Transaction{*tssTransaction})
+		_, err = e.tssModel.BulkInsert(ctx, sdpTx, []store.Transaction{*tssTransaction})
 		if err != nil {
 			return "", fmt.Errorf("creating TSS transaction for processing: %w", err)
 		}

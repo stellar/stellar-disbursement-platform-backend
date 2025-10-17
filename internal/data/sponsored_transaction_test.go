@@ -178,7 +178,14 @@ func Test_SponsoredTransactionUpdate_Validate(t *testing.T) {
 		assert.EqualError(t, err, "transaction hash must be 64 characters, got 9")
 
 		update = SponsoredTransactionUpdate{
-			TransactionHash: "1234567890123456789012345678901234567890123456789012345678901234",
+			TransactionHash: "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+		}
+		err = update.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "transaction hash must be valid hexadecimal")
+
+		update = SponsoredTransactionUpdate{
+			TransactionHash: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 		}
 		err = update.Validate()
 		require.NoError(t, err)
