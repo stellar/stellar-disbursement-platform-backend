@@ -52,6 +52,22 @@ const (
 	WalletCreationReconciliationUnexpectedErrorLabel       string = "wallet_creation_reconciliation_unexpected_error"
 	WalletCreationMarkedForReprocessingLabel               string = "wallet_creation_marked_for_reprocessing"
 	WalletCreationFailedLabel                              string = "wallet_creation_failed"
+
+	// Sponsored transaction metric tags
+	SponsoredTransactionProcessingStartedTag        MetricTag = "sponsored_transaction_processing_started"
+	SponsoredTransactionTransactionSuccessfulTag    MetricTag = "sponsored_transaction_transaction_successful"
+	SponsoredTransactionReconciliationSuccessfulTag MetricTag = "sponsored_transaction_reconciliation_successful"
+	SponsoredTransactionReconciliationFailureTag    MetricTag = "sponsored_transaction_reconciliation_failure"
+	SponsoredTransactionErrorTag                    MetricTag = "sponsored_transaction_error"
+
+	SponsoredTransactionProcessingStartedLabel                   string = "sponsored_transaction_processing_started"
+	SponsoredTransactionProcessingSuccessfulLabel                string = "sponsored_transaction_processing_successful"
+	SponsoredTransactionReprocessingSuccessfulLabel              string = "sponsored_transaction_reprocessing_successful"
+	SponsoredTransactionReconciliationTransactionSuccessfulLabel string = "sponsored_transaction_reconciliation_transaction_successful"
+	SponsoredTransactionReconciliationMarkedForReprocessingLabel string = "sponsored_transaction_reconciliation_marked_for_reprocessing"
+	SponsoredTransactionReconciliationUnexpectedErrorLabel       string = "sponsored_transaction_reconciliation_unexpected_error"
+	SponsoredTransactionMarkedForReprocessingLabel               string = "sponsored_transaction_marked_for_reprocessing"
+	SponsoredTransactionFailedLabel                              string = "sponsored_transaction_failed"
 )
 
 func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
@@ -73,5 +89,11 @@ func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
 		WalletCreationReconciliationSuccessfulTag,
 		WalletCreationReconciliationFailureTag,
 		WalletCreationErrorTag,
+
+		SponsoredTransactionProcessingStartedTag,
+		SponsoredTransactionTransactionSuccessfulTag,
+		SponsoredTransactionReconciliationSuccessfulTag,
+		SponsoredTransactionReconciliationFailureTag,
+		SponsoredTransactionErrorTag,
 	}
 }

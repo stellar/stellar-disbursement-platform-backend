@@ -389,9 +389,11 @@ func (e *HorizonErrorWrapper) GetErrorType() string {
 	return "Horizon"
 }
 
-var _ error = &HorizonErrorWrapper{}
-var _ TransactionError = &HorizonErrorWrapper{}
-var _ HorizonSpecificError = &HorizonErrorWrapper{}
+var (
+	_ error                = &HorizonErrorWrapper{}
+	_ TransactionError     = &HorizonErrorWrapper{}
+	_ HorizonSpecificError = &HorizonErrorWrapper{}
+)
 
 // RPCErrorWrapper wraps RPC simulation errors to provide consistent error handling
 type RPCErrorWrapper struct {
@@ -483,5 +485,7 @@ func (e *RPCErrorWrapper) GetErrorType() string {
 	return "RPC"
 }
 
-var _ error = &RPCErrorWrapper{}
-var _ TransactionError = &RPCErrorWrapper{}
+var (
+	_ error            = &RPCErrorWrapper{}
+	_ TransactionError = &RPCErrorWrapper{}
+)
