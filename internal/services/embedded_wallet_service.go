@@ -212,8 +212,8 @@ func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account,
 			TransactionType: store.TransactionTypeSponsored,
 			TenantID:        currentTenant.ID,
 			Sponsored: store.Sponsored{
-				SponsoredAccount:        account,
-				SponsoredTransactionXDR: operationXDR,
+				SponsoredAccount:      account,
+				SponsoredOperationXDR: operationXDR,
 			},
 		}
 
