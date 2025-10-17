@@ -233,7 +233,11 @@ func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) 
 		var embeddedWallet *data.EmbeddedWallet
 		embeddedWallet, err = h.EmbeddedWalletService.GetWalletByCredentialID(ctx, credentialID)
 		if err != nil {
-			httperror.InternalError(ctx, "Failed to lookup wallet", err, nil).Render(rw)
+			if errors.Is(err, services.ErrInvalidCredentialID) {
+				httperror.Unauthorized("Invalid credential ID", err, nil).Render(rw)
+			} else {
+				httperror.InternalError(ctx, "Failed to lookup wallet", err, nil).Render(rw)
+			}
 			return
 		}
 		contractAddress = embeddedWallet.ContractAddress

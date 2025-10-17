@@ -19,6 +19,7 @@ import (
 	"github.com/veraison/go-cose"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	walletMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/wallet/mocks"
@@ -893,36 +894,57 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 }
 
 func Test_PasskeyHandler_RefreshToken_WalletLookupError(t *testing.T) {
-	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
-	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
-	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
-	handler := PasskeyHandler{
-		WebAuthnService:       mockWebAuthnService,
-		WalletJWTManager:      mockJWTManager,
-		EmbeddedWalletService: mockEmbeddedWalletService,
+	errorCases := []struct {
+		name               string
+		lookupError        error
+		expectedStatusCode int
+	}{
+		{
+			name:               "invalid credential ID",
+			lookupError:        services.ErrInvalidCredentialID,
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "database error",
+			lookupError:        errors.New("database error"),
+			expectedStatusCode: http.StatusInternalServerError,
+		},
 	}
 
-	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(RefreshTokenRequest{
-		Token: "valid-token",
-	})
-	ctx := context.Background()
+	for _, tc := range errorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+			handler := PasskeyHandler{
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
+			}
 
-	credentialID := "test-credential-id"
+			rr := httptest.NewRecorder()
+			requestBody, _ := json.Marshal(RefreshTokenRequest{
+				Token: "valid-token",
+			})
+			ctx := context.Background()
 
-	mockJWTManager.
-		On("ValidateToken", mock.Anything, "valid-token").
-		Return(credentialID, "", nil).
-		Once()
+			credentialID := "test-credential-id"
 
-	mockEmbeddedWalletService.
-		On("GetWalletByCredentialID", mock.Anything, credentialID).
-		Return((*data.EmbeddedWallet)(nil), errors.New("database error")).
-		Once()
+			mockJWTManager.
+				On("ValidateToken", mock.Anything, "valid-token").
+				Return(credentialID, "", nil).
+				Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
-	req.Header.Set("Content-Type", "application/json")
-	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+			mockEmbeddedWalletService.
+				On("GetWalletByCredentialID", mock.Anything, credentialID).
+				Return((*data.EmbeddedWallet)(nil), tc.lookupError).
+				Once()
 
-	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			req.Header.Set("Content-Type", "application/json")
+			http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatusCode, rr.Result().StatusCode)
+		})
+	}
 }
