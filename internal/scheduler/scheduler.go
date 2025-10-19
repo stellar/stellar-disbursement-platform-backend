@@ -241,6 +241,13 @@ func WithWalletCreationFromSubmitterJobOption(walletCreationJobInterval int, mod
 	}
 }
 
+func WithSponsoredTransactionFromSubmitterJobOption(sponsoredTransactionJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSponsoredTransactionFromSubmitterJob(sponsoredTransactionJobInterval, models, tssDBConnectionPool)
+		s.addJob(j)
+	}
+}
+
 func WithSendReceiverWalletsInvitationJobOption(o jobs.SendReceiverWalletsInvitationJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewSendReceiverWalletsInvitationJob(o)

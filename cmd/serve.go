@@ -132,14 +132,21 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			}),
 		)
 
-		// Add wallet creation sync job only if enabled
+		// Add embedded wallet sync jobs only if enabled
 		if serveOpts.EnableEmbeddedWallets {
-			sj = append(sj, scheduler.WithWalletCreationFromSubmitterJobOption(
-				schedulerOptions.PaymentJobIntervalSeconds,
-				models,
-				tssDBConnectionPool,
-				serveOpts.NetworkPassphrase,
-			))
+			sj = append(sj,
+				scheduler.WithWalletCreationFromSubmitterJobOption(
+					schedulerOptions.PaymentJobIntervalSeconds,
+					models,
+					tssDBConnectionPool,
+					serveOpts.NetworkPassphrase,
+				),
+				scheduler.WithSponsoredTransactionFromSubmitterJobOption(
+					schedulerOptions.PaymentJobIntervalSeconds,
+					models,
+					tssDBConnectionPool,
+				),
+			)
 		}
 	}
 
