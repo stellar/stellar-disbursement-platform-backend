@@ -201,7 +201,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			},
 		}
 
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)

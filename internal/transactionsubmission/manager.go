@@ -13,7 +13,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -29,7 +28,6 @@ type SubmitterOptions struct {
 	QueuePollingInterval int
 	MonitorService       tssMonitor.TSSMonitorService
 	CrashTrackerClient   crashtracker.CrashTrackerClient
-	EventProducer        events.Producer
 
 	SubmitterEngine  engine.SubmitterEngine
 	DBConnectionPool db.DBConnectionPool
@@ -73,8 +71,6 @@ type Manager struct {
 	// crash & metrics monitoring:
 	monitorService     tssMonitor.TSSMonitorService
 	crashTrackerClient crashtracker.CrashTrackerClient
-	// event producer:
-	eventProducer events.Producer
 }
 
 func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err error) {
@@ -132,8 +128,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 
 		crashTrackerClient: crashTrackerClient,
 		monitorService:     opts.MonitorService,
-
-		eventProducer: opts.EventProducer,
 	}, nil
 }
 
@@ -184,7 +178,6 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.crashTrackerClient,
 					m.txProcessingLimiter,
 					m.monitorService,
-					m.eventProducer,
 				)
 				if err != nil {
 					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")

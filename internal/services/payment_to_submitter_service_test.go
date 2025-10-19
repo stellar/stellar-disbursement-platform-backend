@@ -766,16 +766,8 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	})
 
 	tenantID := "tenant-id"
-	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{
-		TenantID: tenantID,
-		Payments: []schemas.PaymentReadyToPay{
-			{
-				ID: payment.ID,
-			},
-		},
-	}
 
-	err = service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
+	err = service.SendBatchPayments(ctx, paymentsReadyToPay)
 	require.NoError(t, err)
 
 	paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)

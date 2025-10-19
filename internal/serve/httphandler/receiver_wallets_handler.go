@@ -16,8 +16,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -33,7 +31,6 @@ type RetryInvitationMessageResponse struct {
 
 type ReceiverWalletsHandler struct {
 	Models             *data.Models
-	EventProducer      events.Producer
 	CrashTrackerClient crashtracker.CrashTrackerClient
 }
 
@@ -42,25 +39,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 
 	receiverWalletID := chi.URLParam(req, "receiver_wallet_id")
 
-	var msg *events.Message
-	receiverWallet, err := db.RunInTransactionWithResult(ctx, h.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.ReceiverWallet, error) {
-		receiverWallet, err := h.Models.ReceiverWallet.RetryInvitationMessage(ctx, dbTx, receiverWalletID)
-		if err != nil {
-			return nil, fmt.Errorf("retrying invitation message for receiver wallet ID %s: %w", receiverWalletID, err)
-		}
-
-		eventData := []schemas.EventReceiverWalletInvitationData{{ReceiverWalletID: receiverWalletID}}
-		msg, err = events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, receiverWalletID, events.RetryReceiverWalletInvitationType, eventData)
-		if err != nil {
-			return nil, fmt.Errorf("creating event producer message: %w", err)
-		}
-		err = msg.Validate()
-		if err != nil {
-			return nil, fmt.Errorf("validating event producer message %+v: %w", msg, err)
-		}
-
-		return receiverWallet, nil
-	})
+	receiverWallet, err := h.Models.ReceiverWallet.RetryInvitationMessage(ctx, h.Models.DBConnectionPool, receiverWalletID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("", err, nil).Render(rw)
@@ -75,11 +54,6 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 		err = fmt.Errorf("retrying invitation: %w", err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
-	} else {
-		err = events.ProduceEvents(ctx, h.EventProducer, msg)
-		if err != nil {
-			h.CrashTrackerClient.LogAndReportErrors(ctx, err, "writing retry invitation message on the event producer")
-		}
 	}
 
 	response := RetryInvitationMessageResponse{

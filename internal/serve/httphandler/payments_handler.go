@@ -15,8 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
@@ -32,7 +30,6 @@ type PaymentsHandler struct {
 	Models                      *data.Models
 	DBConnectionPool            db.DBConnectionPool
 	AuthManager                 auth.AuthManager
-	EventProducer               events.Producer
 	CrashTrackerClient          crashtracker.CrashTrackerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
 	DirectPaymentService        *services.DirectPaymentService
@@ -172,51 +169,24 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		return
 	}
 
-	opts := db.TransactionOptions{
-		DBConnectionPool: p.DBConnectionPool,
-		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
-			err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
+	err = db.RunInTransaction(ctx, p.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
+		if err != nil {
+			return fmt.Errorf("retrying failed payments: %w", err)
+		}
+
+		var tnt *schema.Tenant
+		if tnt, err = sdpcontext.GetTenantFromContext(ctx); err != nil {
+			return fmt.Errorf("getting tenant from context: %w", err)
+		} else if tnt.DistributionAccountType.IsCircle() {
+			_, err = p.Models.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, dbTx, reqBody.PaymentIDs...)
 			if err != nil {
-				return nil, fmt.Errorf("retrying failed payments: %w", err)
+				return fmt.Errorf("resetting circle recipients for retry if needed: %w", err)
 			}
+		}
+		return nil
+	})
 
-			var tnt *schema.Tenant
-			if tnt, err = sdpcontext.GetTenantFromContext(ctx); err != nil {
-				return nil, fmt.Errorf("getting tenant from context: %w", err)
-			} else if tnt.DistributionAccountType.IsCircle() {
-				_, err = p.Models.CircleRecipient.ResetRecipientsForRetryIfNeeded(ctx, dbTx, reqBody.PaymentIDs...)
-				if err != nil {
-					return nil, fmt.Errorf("resetting circle recipients for retry if needed: %w", err)
-				}
-			}
-
-			// Producing event to send ready payments to TSS
-			var payments []*data.Payment
-			payments, err = p.Models.Payment.GetReadyByID(ctx, dbTx, reqBody.PaymentIDs...)
-			if err != nil {
-				return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
-			}
-
-			if len(payments) > 0 {
-				msg, err := p.buildPaymentsReadyEventMessage(ctx, payments)
-				if err != nil {
-					return nil, fmt.Errorf("building event message for payment retry: %w", err)
-				}
-
-				postCommitFn = func() error {
-					postErr := events.ProduceEvents(ctx, p.EventProducer, msg)
-					if postErr != nil {
-						p.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing retry payment message on the event producer")
-					}
-
-					return nil
-				}
-			}
-
-			return postCommitFn, nil
-		},
-	}
-	err = db.RunInTransactionWithPostCommit(ctx, &opts)
 	if err != nil {
 		if errors.Is(err, data.ErrMismatchNumRowsAffected) {
 			httperror.BadRequest("Invalid payment ID(s) provided. All payment IDs must exist and be in the 'FAILED' state.", err, nil).Render(rw)
@@ -228,37 +198,6 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
-}
-
-func (p PaymentsHandler) buildPaymentsReadyEventMessage(ctx context.Context, payments []*data.Payment) (*events.Message, error) {
-	if len(payments) == 0 {
-		log.Ctx(ctx).Warnf("no payments to retry")
-		return nil, nil
-	}
-
-	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("resolving distribution account: %w", err)
-	}
-
-	msg, err := events.NewPaymentReadyToPayMessage(ctx, distAccount.Type.Platform(), "", events.PaymentReadyToPayRetryFailedPayment)
-	if err != nil {
-		return nil, fmt.Errorf("creating a new message: %w", err)
-	}
-
-	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
-	for _, payment := range payments {
-		paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
-	}
-	msg.Data = paymentsReadyToPay
-	msg.Key = paymentsReadyToPay.TenantID
-
-	err = msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
-	}
-
-	return msg, nil
 }
 
 func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {

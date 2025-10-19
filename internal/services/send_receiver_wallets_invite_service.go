@@ -16,14 +16,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
-	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletInvitationData) error
+	SendInvite(ctx context.Context) error
 }
 
 type SendReceiverWalletInviteService struct {
@@ -49,7 +48,7 @@ func (s SendReceiverWalletInviteService) validate() error {
 // For instance, the Wallet Foo is in two Ready Payments, one with USDC and the other with EUROC.
 // So the receiver who has a Stellar Address pending registration (status:READY) in this wallet will receive both invites for USDC and EUROC.
 // This would not impact the user receiving both token amounts. It's only for the registration process.
-func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletInvitationData) error {
+func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 	if s.Models == nil {
 		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
 	}
@@ -94,9 +93,9 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		walletsMap[wallet.ID] = wallet
 	}
 
-	receiverWallets, err := s.resolveReceiverWalletsPendingRegistration(ctx, receiverWalletInvitationData)
+	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrations(ctx, s.Models.DBConnectionPool)
 	if err != nil {
-		return fmt.Errorf("resolving receiver wallets pending registration: %w", err)
+		return fmt.Errorf("getting all receiver wallets pending registration: %w", err)
 	}
 
 	receiverWalletsAsset, err := s.Models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
@@ -202,11 +201,11 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	}
 
 	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if _, err := s.Models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
+		if _, err = s.Models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
 			return fmt.Errorf("updating receiver wallets' invitation sent at: %w", err)
 		}
 
-		if err := s.Models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
+		if err = s.Models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
 			return fmt.Errorf("inserting messages in the database: %w", err)
 		}
 
@@ -235,29 +234,6 @@ func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context
 	}
 
 	return shortenedRegistrationLink, nil
-}
-
-// resolveReceiverWalletsPendingRegistration returns the receiver wallets pending registration based on the receiverWalletInvitationData.
-// If the receiverWalletInvitationData is empty, it will return all receiver wallets pending registration.
-func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistration(ctx context.Context, receiverWalletInvitationData []schemas.EventReceiverWalletInvitationData) ([]*data.ReceiverWallet, error) {
-	var err error
-	var receiverWallets []*data.ReceiverWallet
-	if len(receiverWalletInvitationData) == 0 {
-		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrations(ctx, s.Models.DBConnectionPool)
-		if err != nil {
-			return nil, fmt.Errorf("getting all receiver wallets pending registration: %w", err)
-		}
-	} else {
-		receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletInvitationData))
-		for _, receiverWallet := range receiverWalletInvitationData {
-			receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
-		}
-		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, s.Models.DBConnectionPool, receiverWalletIDsPendingRegistration)
-		if err != nil {
-			return nil, fmt.Errorf("getting receiver wallets pending registration by rw ids %v: %w", receiverWalletIDsPendingRegistration, err)
-		}
-	}
-	return receiverWallets, nil
 }
 
 // shouldSendInvitation returns true if we should send the invitation to the receiver. It will be used to either
