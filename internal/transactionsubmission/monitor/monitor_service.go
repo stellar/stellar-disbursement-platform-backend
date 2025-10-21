@@ -135,6 +135,7 @@ func (ms *TSSMonitorService) isProcessingStartedEvent(metricTag sdpMonitor.Metri
 	processingStartedTags := []sdpMonitor.MetricTag{
 		sdpMonitor.PaymentProcessingStartedTag,
 		sdpMonitor.WalletCreationProcessingStartedTag,
+		sdpMonitor.SponsoredTransactionProcessingStartedTag,
 	}
 	return slices.Contains(processingStartedTags, metricTag)
 }
@@ -142,8 +143,9 @@ func (ms *TSSMonitorService) isProcessingStartedEvent(metricTag sdpMonitor.Metri
 // isReconciliationReprocessingEvent checks if this is a reconciliation reprocessing event
 func (ms *TSSMonitorService) isReconciliationReprocessingEvent(metricTag sdpMonitor.MetricTag, txMetadata TxMetadata) bool {
 	reprocessingCombinations := map[sdpMonitor.MetricTag]string{
-		sdpMonitor.PaymentReconciliationSuccessfulTag:        sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
-		sdpMonitor.WalletCreationReconciliationSuccessfulTag: sdpMonitor.WalletCreationReconciliationMarkedForReprocessingLabel,
+		sdpMonitor.PaymentReconciliationSuccessfulTag:              sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
+		sdpMonitor.WalletCreationReconciliationSuccessfulTag:       sdpMonitor.WalletCreationReconciliationMarkedForReprocessingLabel,
+		sdpMonitor.SponsoredTransactionReconciliationSuccessfulTag: sdpMonitor.SponsoredTransactionReconciliationMarkedForReprocessingLabel,
 	}
 
 	expectedEventType, exists := reprocessingCombinations[metricTag]
@@ -155,6 +157,7 @@ func (ms *TSSMonitorService) isSuccessfulEvent(metricTag sdpMonitor.MetricTag, t
 	simpleSuccessTags := []sdpMonitor.MetricTag{
 		sdpMonitor.PaymentTransactionSuccessfulTag,
 		sdpMonitor.WalletCreationTransactionSuccessfulTag,
+		sdpMonitor.SponsoredTransactionTransactionSuccessfulTag,
 	}
 	if slices.Contains(simpleSuccessTags, metricTag) {
 		return true
@@ -162,8 +165,9 @@ func (ms *TSSMonitorService) isSuccessfulEvent(metricTag sdpMonitor.MetricTag, t
 
 	// Reconciliation success tags that need specific event type checks
 	reconciliationSuccessCombinations := map[sdpMonitor.MetricTag]string{
-		sdpMonitor.PaymentReconciliationSuccessfulTag:        sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
-		sdpMonitor.WalletCreationReconciliationSuccessfulTag: sdpMonitor.WalletCreationReconciliationTransactionSuccessfulLabel,
+		sdpMonitor.PaymentReconciliationSuccessfulTag:              sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
+		sdpMonitor.WalletCreationReconciliationSuccessfulTag:       sdpMonitor.WalletCreationReconciliationTransactionSuccessfulLabel,
+		sdpMonitor.SponsoredTransactionReconciliationSuccessfulTag: sdpMonitor.SponsoredTransactionReconciliationTransactionSuccessfulLabel,
 	}
 
 	expectedEventType, exists := reconciliationSuccessCombinations[metricTag]
@@ -177,6 +181,8 @@ func (ms *TSSMonitorService) isErrorEvent(metricTag sdpMonitor.MetricTag) bool {
 		sdpMonitor.PaymentReconciliationFailureTag,
 		sdpMonitor.WalletCreationErrorTag,
 		sdpMonitor.WalletCreationReconciliationFailureTag,
+		sdpMonitor.SponsoredTransactionErrorTag,
+		sdpMonitor.SponsoredTransactionReconciliationFailureTag,
 	}
 	return slices.Contains(errorTags, metricTag)
 }

@@ -25,6 +25,7 @@ type Models struct {
 	ReceiverRegistrationAttempt *ReceiverRegistrationAttemptModel
 	ReceiverWallet              *ReceiverWalletModel
 	EmbeddedWallets             *EmbeddedWalletModel
+	SponsoredTransactions       *SponsoredTransactionModel
 	DisbursementReceivers       *DisbursementReceiverModel
 	Message                     *MessageModel
 	CircleTransferRequests      *CircleTransferRequestModel
@@ -50,6 +51,7 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		ReceiverVerification:        &ReceiverVerificationModel{dbConnectionPool: dbConnectionPool},
 		ReceiverWallet:              &ReceiverWalletModel{dbConnectionPool: dbConnectionPool},
 		EmbeddedWallets:             &EmbeddedWalletModel{dbConnectionPool: dbConnectionPool},
+		SponsoredTransactions:       &SponsoredTransactionModel{},
 		ReceiverRegistrationAttempt: &ReceiverRegistrationAttemptModel{dbConnectionPool: dbConnectionPool},
 		DisbursementReceivers:       &DisbursementReceiverModel{dbConnectionPool: dbConnectionPool},
 		Message:                     &MessageModel{dbConnectionPool: dbConnectionPool},

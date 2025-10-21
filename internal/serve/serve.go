@@ -678,6 +678,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				walletCreationHandler := httphandler.WalletCreationHandler{
 					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
+				sponsoredTransactionHandler := httphandler.SponsoredTransactionHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+				}
 				passkeyHandler := &httphandler.PasskeyHandler{
 					WebAuthnService:       o.WebAuthnService,
 					WalletJWTManager:      o.walletJWTManager,
@@ -688,6 +691,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					// Wallet creation routes
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
+
+					// Sponsored transactions routes
+					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Route("/sponsored-transactions", func(r chi.Router) {
+						r.Post("/", sponsoredTransactionHandler.CreateSponsoredTransaction)
+						r.Get("/{id}", sponsoredTransactionHandler.GetSponsoredTransaction)
+					})
 
 					// Passkey registration + authentication routes
 					if passkeyHandler != nil {

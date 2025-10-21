@@ -88,8 +88,8 @@ type WalletCreation struct {
 }
 
 type Sponsored struct {
-	SponsoredAccount        string `db:"sponsored_account"`
-	SponsoredTransactionXDR string `db:"sponsored_transaction_xdr"`
+	SponsoredAccount      string `db:"sponsored_account"`
+	SponsoredOperationXDR string `db:"sponsored_operation_xdr"`
 }
 
 func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
@@ -185,12 +185,12 @@ func (s *Sponsored) validate() error {
 		return fmt.Errorf("sponsored account %q is not a valid contract address", s.SponsoredAccount)
 	}
 
-	if s.SponsoredTransactionXDR == "" {
-		return fmt.Errorf("sponsored transaction XDR is required")
+	if s.SponsoredOperationXDR == "" {
+		return fmt.Errorf("sponsored operation XDR is required")
 	}
-	var txEnvelope xdr.TransactionEnvelope
-	if err := xdr.SafeUnmarshalBase64(s.SponsoredTransactionXDR, &txEnvelope); err != nil {
-		return fmt.Errorf("invalid sponsored transaction XDR %q: %w", s.SponsoredTransactionXDR, err)
+	var operation xdr.InvokeHostFunctionOp
+	if err := xdr.SafeUnmarshalBase64(s.SponsoredOperationXDR, &operation); err != nil {
+		return fmt.Errorf("invalid sponsored operation XDR %q: %w", s.SponsoredOperationXDR, err)
 	}
 	return nil
 }
@@ -236,7 +236,7 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"public_key",
 			"wasm_hash",
 			"sponsored_account",
-			"sponsored_transaction_xdr",
+			"sponsored_operation_xdr",
 			"memo",
 			"memo_type::text",
 		},
@@ -265,7 +265,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, sponsored_account, sponsored_transaction_xdr, tenant_id, memo, memo_type) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, sponsored_account, sponsored_operation_xdr, tenant_id, memo, memo_type) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
 	valueArgs := make([]interface{}, 0, len(transactions)*13)
 
@@ -284,7 +284,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 			sdpUtils.SQLNullString(transaction.PublicKey),
 			sdpUtils.SQLNullString(transaction.WasmHash),
 			sdpUtils.SQLNullString(transaction.SponsoredAccount),
-			sdpUtils.SQLNullString(transaction.SponsoredTransactionXDR),
+			sdpUtils.SQLNullString(transaction.SponsoredOperationXDR),
 			transaction.TenantID,
 			sdpUtils.SQLNullString(transaction.Memo),
 			sdpUtils.SQLNullString(string(transaction.MemoType)),
