@@ -186,7 +186,6 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		}
 		return nil
 	})
-
 	if err != nil {
 		if errors.Is(err, data.ErrMismatchNumRowsAffected) {
 			httperror.BadRequest("Invalid payment ID(s) provided. All payment IDs must exist and be in the 'FAILED' state.", err, nil).Render(rw)

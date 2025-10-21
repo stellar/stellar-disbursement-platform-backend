@@ -424,9 +424,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusError, transaction.Status)
 
 	// WHEN the monitor service is called
-	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{
-		TransactionID: transaction.ID,
-	})
+	err = monitorService.SyncBatchTransactions(testCtx.ctx, 1, transaction.TenantID)
 	require.NoError(t, err)
 
 	// THEN the payment is synced to the error state
@@ -467,9 +465,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, txSubStore.TransactionStatusSuccess, transaction2.Status)
 
-	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{
-		TransactionID: transaction2.ID,
-	})
+	err = monitorService.SyncBatchTransactions(testCtx.ctx, 1, transaction.TenantID)
 	require.NoError(t, err)
 
 	paymentDB, err = testCtx.sdpModel.Payment.Get(ctx, paymentDB.ID, dbConnectionPool)
@@ -538,7 +534,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusError, transaction.Status)
 
 	// WHEN the monitor service is called
-	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentCompletedData{TransactionID: transaction.ID})
+	err = monitorService.SyncBatchTransactions(testCtx.ctx, 1, transaction.TenantID)
 	require.NoError(t, err)
 
 	// THEN the disbursement will not be completed
@@ -576,7 +572,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusSuccess, transaction2.Status)
 
 	// WHEN the monitor service is called again
-	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentCompletedData{TransactionID: transaction2.ID})
+	err = monitorService.SyncBatchTransactions(testCtx.ctx, 1, transaction2.TenantID)
 	require.NoError(t, err)
 
 	// THEN disbursement gets completed

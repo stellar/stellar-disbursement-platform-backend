@@ -25,7 +25,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
@@ -186,16 +185,6 @@ func Test_handleHTTP_Health(t *testing.T) {
 		Return(nil).
 		Once()
 
-	producerMock := events.NewMockProducer(t)
-	producerMock.
-		On("Ping", mock.Anything).
-		Return(nil).
-		Once()
-	producerMock.
-		On("BrokerType").
-		Return(events.KafkaEventBrokerType).
-		Once()
-
 	handlerMux := handleHTTP(ServeOptions{
 		EC256PrivateKey:       privateKeyStr,
 		Environment:           "test",
@@ -205,7 +194,6 @@ func Test_handleHTTP_Health(t *testing.T) {
 		SEP24JWTSecret:        "jwt_secret_1234567890",
 		Version:               "x.y.z",
 		tenantManager:         tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
-		EventProducer:         producerMock,
 		AdminDBConnectionPool: dbConnectionPool,
 	})
 
@@ -224,8 +212,7 @@ func Test_handleHTTP_Health(t *testing.T) {
 		"service_id": "serve",
 		"release_id": "1234567890abcdef",
 		"services": {
-			"database": "pass",
-			"kafka": "pass"
+			"database": "pass"
 		}
 	}`
 	assert.JSONEq(t, wantBody, string(body))
@@ -306,16 +293,6 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Return(distAccount, nil).
 		Maybe()
 
-	producerMock := events.NewMockProducer(t)
-	producerMock.
-		On("Ping", mock.Anything).
-		Return(nil).
-		Maybe()
-	producerMock.
-		On("BrokerType").
-		Return(events.KafkaEventBrokerType).
-		Maybe()
-
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
@@ -333,7 +310,6 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
-		EventProducer:                   producerMock,
 		BridgeService:                   bridge.NewMockService(t),
 	}
 	err = serveOptions.SetupDependencies()
