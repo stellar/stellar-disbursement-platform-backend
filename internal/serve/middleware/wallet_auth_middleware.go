@@ -31,7 +31,7 @@ func WalletAuthMiddleware(walletJWTManager wallet.WalletJWTManager) func(http.Ha
 			ctx := req.Context()
 			token := authHeaderParts[1]
 
-			contractAddress, err := walletJWTManager.ValidateToken(ctx, token)
+			credentialID, contractAddress, err := walletJWTManager.ValidateToken(ctx, token)
 			if err != nil {
 				if !errors.Is(err, wallet.ErrInvalidWalletToken) &&
 					!errors.Is(err, wallet.ErrExpiredWalletToken) &&
@@ -50,7 +50,7 @@ func WalletAuthMiddleware(walletJWTManager wallet.WalletJWTManager) func(http.Ha
 
 			ctx = sdpcontext.SetWalletContractAddressInContext(ctx, contractAddress)
 			ctx = sdpcontext.SetTokenInContext(ctx, token)
-			ctx = log.Set(ctx, log.Ctx(ctx).WithField("wallet_contract_address", contractAddress))
+			ctx = log.Set(ctx, log.Ctx(ctx).WithField("wallet_contract_address", contractAddress).WithField("credential_id", credentialID))
 
 			req = req.WithContext(ctx)
 

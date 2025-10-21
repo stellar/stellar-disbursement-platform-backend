@@ -17,11 +17,12 @@ import (
 )
 
 func Test_WalletAuthMiddleware_SuccessfulAuthentication(t *testing.T) {
+	credentialID := "test-credential-id"
 	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "valid-token").
-		Return(contractAddress, nil).
+		Return(credentialID, contractAddress, nil).
 		Once()
 
 	var capturedContractAddress string
@@ -121,7 +122,7 @@ func Test_WalletAuthMiddleware_InvalidToken(t *testing.T) {
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "invalid-token").
-		Return("", wallet.ErrInvalidWalletToken).
+		Return("", "", wallet.ErrInvalidWalletToken).
 		Once()
 
 	r := chi.NewRouter()
@@ -143,7 +144,7 @@ func Test_WalletAuthMiddleware_ExpiredToken(t *testing.T) {
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "expired-token").
-		Return("", wallet.ErrExpiredWalletToken).
+		Return("", "", wallet.ErrExpiredWalletToken).
 		Once()
 
 	r := chi.NewRouter()
@@ -165,7 +166,7 @@ func Test_WalletAuthMiddleware_UnexpectedValidationError(t *testing.T) {
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "error-token").
-		Return("", errors.New("unexpected database error")).
+		Return("", "", errors.New("unexpected database error")).
 		Once()
 
 	r := chi.NewRouter()
@@ -176,6 +177,29 @@ func Test_WalletAuthMiddleware_UnexpectedValidationError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Authorization", "Bearer error-token")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func Test_WalletAuthMiddleware_EmptyContractAddress(t *testing.T) {
+	credentialID := "test-credential-id"
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	mockJWTManager.
+		On("ValidateToken", mock.Anything, "token-without-contract").
+		Return(credentialID, "", nil).
+		Once()
+
+	r := chi.NewRouter()
+	r.Use(WalletAuthMiddleware(mockJWTManager))
+	r.Get("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer token-without-contract")
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)

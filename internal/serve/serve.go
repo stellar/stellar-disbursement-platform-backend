@@ -682,8 +682,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
 				passkeyHandler := &httphandler.PasskeyHandler{
-					WebAuthnService:  o.WebAuthnService,
-					WalletJWTManager: o.walletJWTManager,
+					WebAuthnService:       o.WebAuthnService,
+					WalletJWTManager:      o.walletJWTManager,
+					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
 
 				r.Route("/embedded-wallets", func(r chi.Router) {
@@ -707,6 +708,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 							r.Route("/authentication", func(r chi.Router) {
 								r.Post("/start", passkeyHandler.StartPasskeyAuthentication)
 								r.Post("/finish", passkeyHandler.FinishPasskeyAuthentication)
+								r.Post("/refresh", passkeyHandler.RefreshToken)
 							})
 						})
 					}
