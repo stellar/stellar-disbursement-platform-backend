@@ -96,8 +96,6 @@ func Test_tss(t *testing.T) {
 		"--distribution-account-encryption-passphrase", "SDA3C7OW5HU4MMEEYTPXX43F4OU2MJBGF5WMJALL7CTILTI2GOVK2YFA",
 		"--horizon-url", "https://horizon-testnet.stellar.org",
 		"--network-passphrase", "Test SDF Network ; September 2015",
-		"--broker-urls", "kafka:9092",
-		"--kafka-security-protocol", "PLAINTEXT",
 	})
 
 	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")

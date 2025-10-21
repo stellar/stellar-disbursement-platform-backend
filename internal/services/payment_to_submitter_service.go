@@ -10,7 +10,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -19,7 +18,6 @@ import (
 )
 
 type PaymentToSubmitterServiceInterface interface {
-	SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error
 	SendBatchPayments(ctx context.Context, batchSize int) error
 }
 
@@ -47,33 +45,6 @@ func NewPaymentToSubmitterService(opts PaymentToSubmitterServiceOptions) *Paymen
 		distAccountResolver: opts.DistAccountResolver,
 		paymentDispatcher:   opts.PaymentDispatcher,
 	}
-}
-
-// SendPaymentsReadyToPay sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
-func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
-	paymentIDs := make([]string, 0, len(paymentsReadyToPay.Payments))
-	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
-		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
-	}
-
-	err := s.sendPaymentsReadyToPay(ctx, paymentsReadyToPay.TenantID, func(sdpDBTx db.DBTransaction) ([]*data.Payment, error) {
-		log.Ctx(ctx).Infof("Registering %d payments to %s Dispatcher, paymentIDs=%v", len(paymentIDs), s.paymentDispatcher.SupportedPlatform(), paymentIDs)
-
-		payments, innerErr := s.sdpModels.Payment.GetReadyByID(ctx, sdpDBTx, paymentIDs...)
-		if len(payments) != len(paymentIDs) {
-			log.Ctx(ctx).Errorf("[PaymentToSubmitterService] The number of incoming payments to be processed (%d) is different from the number ready to be processed found in the database (%d)", len(paymentIDs), len(payments))
-		}
-
-		if innerErr != nil {
-			return payments, fmt.Errorf("getting ready payments by IDs: %w", innerErr)
-		}
-		return payments, nil
-	})
-	if err != nil {
-		return fmt.Errorf("sending payments: %w", err)
-	}
-
-	return nil
 }
 
 // SendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
