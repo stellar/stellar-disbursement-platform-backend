@@ -168,7 +168,6 @@ func Test_serve(t *testing.T) {
 		ReCAPTCHAV3MinScore:             0.5,
 		DisableMFA:                      false,
 		DisableReCAPTCHA:                false,
-		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
 		DistributionAccountService:      mDistAccService,
 		MaxInvitationResendAttempts:     3,

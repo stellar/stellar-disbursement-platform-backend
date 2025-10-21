@@ -91,41 +91,39 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}),
 	}
 
-	if serveOpts.EnableScheduler {
-		if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
-			log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
-		}
-
-		if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
-			log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
-		}
-
-		sj = append(sj,
-			scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
-				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
-				Models:              models,
-				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-				CircleService:       serveOpts.CircleService,
-				CircleAPIType:       serveOpts.CircleAPIType,
-			}),
-			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
-				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
-				Models:              models,
-				TSSDBConnectionPool: tssDBConnectionPool,
-				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-			}),
-			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
-			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
-			scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
-				Models:                      models,
-				MessageDispatcher:           serveOpts.MessageDispatcher,
-				MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
-				Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
-				CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
-				JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
-			}),
-		)
+	if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
 	}
+
+	if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+	}
+
+	sj = append(sj,
+		scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
+			JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+			Models:              models,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			CircleService:       serveOpts.CircleService,
+			CircleAPIType:       serveOpts.CircleAPIType,
+		}),
+		scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
+			JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+			Models:              models,
+			TSSDBConnectionPool: tssDBConnectionPool,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+		}),
+		scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
+		scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
+			Models:                      models,
+			MessageDispatcher:           serveOpts.MessageDispatcher,
+			MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
+			Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
+			JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
+		}),
+	)
 
 	return sj, nil
 }
@@ -263,14 +261,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Usage:       "Disables ReCAPTCHA for login and forgot password.",
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.DisableReCAPTCHA,
-			FlagDefault: false,
-			Required:    false,
-		},
-		{
-			Name:        "enable-scheduler",
-			Usage:       "Enable Scheduler Jobs. Deprecated: Use event-broker-type=SCHEDULER instead.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableScheduler,
 			FlagDefault: false,
 			Required:    false,
 		},

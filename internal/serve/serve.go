@@ -86,7 +86,6 @@ type ServeOptions struct {
 	DisableMFA                      bool
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
-	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
 	tenantManager                   tenant.ManagerInterface
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string

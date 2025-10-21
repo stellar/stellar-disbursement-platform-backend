@@ -44,8 +44,8 @@ services:
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
-      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "2"
-      SCHEDULER_PAYMENT_JOB_SECONDS: "2"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "5"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "5"
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin
