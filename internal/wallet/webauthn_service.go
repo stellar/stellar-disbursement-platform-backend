@@ -8,14 +8,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/veraison/go-cose"
-	"golang.org/x/net/publicsuffix"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
@@ -104,9 +102,6 @@ func (w *WebAuthnService) createWebAuthn(ctx context.Context) (*webauthn.WebAuth
 }
 
 // extractRPIDFromOrigin extracts the Relying Party ID from a given origin URL.
-// For localhost, it returns "localhost". For other domains, it returns the effective TLD+1.
-// For example, "redcorp.stellar.local" becomes "stellar.local", meaning
-// all tenants under "stellar.local" share the same RPID.
 func extractRPIDFromOrigin(origin string) (string, error) {
 	parsedURL, err := url.Parse(origin)
 	if err != nil {
@@ -118,20 +113,7 @@ func extractRPIDFromOrigin(origin string) (string, error) {
 		return "", fmt.Errorf("empty hostname in origin URL")
 	}
 
-	if hostname == "localhost" {
-		return hostname, nil
-	}
-
-	etldPlusOne, err := publicsuffix.EffectiveTLDPlusOne(hostname)
-	if err != nil {
-		parts := strings.Split(hostname, ".")
-		if len(parts) >= 2 {
-			return strings.Join(parts[len(parts)-2:], "."), nil
-		}
-		return hostname, nil
-	}
-
-	return etldPlusOne, nil
+	return hostname, nil
 }
 
 type newUser struct {
