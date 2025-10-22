@@ -101,7 +101,7 @@ func Test_SponsoredTransactionFromSubmitterJob_Execute_NoTenantInContext(t *test
 
 	err := j.Execute(ctx)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "error getting tenant from context")
+	require.Contains(t, err.Error(), "getting tenant from context")
 
 	mockService.AssertExpectations(t)
 }

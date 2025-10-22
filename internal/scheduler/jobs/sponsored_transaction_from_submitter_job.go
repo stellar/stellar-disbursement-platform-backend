@@ -50,10 +50,10 @@ func (j sponsoredTransactionFromSubmitterJob) IsJobMultiTenant() bool {
 func (j sponsoredTransactionFromSubmitterJob) Execute(ctx context.Context) error {
 	t, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
-		return fmt.Errorf("error getting tenant from context for %s: %w", sponsoredTransactionFromSubmitterJobName, err)
+		return fmt.Errorf("getting tenant from context for %s: %w", sponsoredTransactionFromSubmitterJobName, err)
 	}
 	if err := j.service.SyncBatchTransactions(ctx, sponsoredTransactionFromSubmitterBatchSize, t.ID); err != nil {
-		return fmt.Errorf("error executing sponsoredTransactionFromSubmitterJob: %w", err)
+		return fmt.Errorf("executing sponsoredTransactionFromSubmitterJob: %w", err)
 	}
 	return nil
 }
