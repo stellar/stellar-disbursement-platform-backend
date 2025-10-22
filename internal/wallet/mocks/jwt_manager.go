@@ -14,9 +14,9 @@ type MockWalletJWTManager struct {
 	mock.Mock
 }
 
-// GenerateToken provides a mock function with given fields: ctx, contractAddress, expiresAt
-func (_m *MockWalletJWTManager) GenerateToken(ctx context.Context, contractAddress string, expiresAt time.Time) (string, error) {
-	ret := _m.Called(ctx, contractAddress, expiresAt)
+// GenerateToken provides a mock function with given fields: ctx, credentialID, contractAddress, expiresAt
+func (_m *MockWalletJWTManager) GenerateToken(ctx context.Context, credentialID string, contractAddress string, expiresAt time.Time) (string, error) {
+	ret := _m.Called(ctx, credentialID, contractAddress, expiresAt)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GenerateToken")
@@ -24,17 +24,17 @@ func (_m *MockWalletJWTManager) GenerateToken(ctx context.Context, contractAddre
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, time.Time) (string, error)); ok {
-		return rf(ctx, contractAddress, expiresAt)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Time) (string, error)); ok {
+		return rf(ctx, credentialID, contractAddress, expiresAt)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, time.Time) string); ok {
-		r0 = rf(ctx, contractAddress, expiresAt)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Time) string); ok {
+		r0 = rf(ctx, credentialID, contractAddress, expiresAt)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, time.Time) error); ok {
-		r1 = rf(ctx, contractAddress, expiresAt)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Time) error); ok {
+		r1 = rf(ctx, credentialID, contractAddress, expiresAt)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -43,7 +43,7 @@ func (_m *MockWalletJWTManager) GenerateToken(ctx context.Context, contractAddre
 }
 
 // ValidateToken provides a mock function with given fields: ctx, tokenString
-func (_m *MockWalletJWTManager) ValidateToken(ctx context.Context, tokenString string) (string, error) {
+func (_m *MockWalletJWTManager) ValidateToken(ctx context.Context, tokenString string) (string, string, error) {
 	ret := _m.Called(ctx, tokenString)
 
 	if len(ret) == 0 {
@@ -51,8 +51,9 @@ func (_m *MockWalletJWTManager) ValidateToken(ctx context.Context, tokenString s
 	}
 
 	var r0 string
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+	var r1 string
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (string, string, error)); ok {
 		return rf(ctx, tokenString)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
@@ -61,13 +62,19 @@ func (_m *MockWalletJWTManager) ValidateToken(ctx context.Context, tokenString s
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, string) string); ok {
 		r1 = rf(ctx, tokenString)
 	} else {
-		r1 = ret.Error(1)
+		r1 = ret.Get(1).(string)
 	}
 
-	return r0, r1
+	if rf, ok := ret.Get(2).(func(context.Context, string) error); ok {
+		r2 = rf(ctx, tokenString)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
 }
 
 // NewMockWalletJWTManager creates a new instance of MockWalletJWTManager. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

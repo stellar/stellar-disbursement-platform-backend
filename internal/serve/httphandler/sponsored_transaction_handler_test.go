@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 )
 
@@ -26,9 +27,26 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		EmbeddedWalletService: walletService,
 	}
 
+	t.Run("returns unauthorized when wallet contract address is not in context", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		ctx := context.Background()
+
+		validOperationXDR := "AAAAAAAAABgAAAAAAAAAAQECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAAAACHRyYW5zZmVyAAAAAwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAAEgAAAAAAAAAAF86FwjfRjFGWkbfT4T7U0u/BtWDhZ0dYhuaV6RufuUsAAAAKAAAAAAAAAAAAAAAAAA9CQAAAAAA="
+		requestBody, _ := json.Marshal(CreateSponsoredTransactionRequest{
+			OperationXDR: validOperationXDR,
+		})
+
+		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		req.Header.Set("Content-Type", "application/json")
+		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Result().StatusCode)
+	})
+
 	t.Run("returns bad request when JSON is malformed", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		ctx := context.Background()
+		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader("invalid-json"))
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
@@ -42,6 +60,7 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 			OperationXDR: "",
 		})
 		ctx := context.Background()
+		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
@@ -55,6 +74,7 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 			OperationXDR: "invalid-base64-!!!",
 		})
 		ctx := context.Background()
+		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
@@ -66,6 +86,7 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		rr := httptest.NewRecorder()
 		requestBody := `{"operation_xdr": "aGVsbG8gd29ybGQ="}`
 		ctx := context.Background()
+		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(requestBody))
 		req.Header.Set("Content-Type", "application/json")

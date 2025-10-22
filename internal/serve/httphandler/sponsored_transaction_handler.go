@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -66,8 +67,11 @@ func (h SponsoredTransactionHandler) CreateSponsoredTransaction(w http.ResponseW
 		return
 	}
 
-	// TODO: Extract account from JWT token/authentication context
-	account := "PLACEHOLDER"
+	account, err := sdpcontext.GetWalletContractAddressFromContext(ctx)
+	if err != nil {
+		httperror.Unauthorized("Wallet contract address not found in context", err, nil).Render(w)
+		return
+	}
 
 	transactionID, err := h.EmbeddedWalletService.SponsorTransaction(ctx, account, reqBody.OperationXDR)
 	if err != nil {

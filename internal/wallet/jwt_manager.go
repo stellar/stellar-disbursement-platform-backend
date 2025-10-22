@@ -20,11 +20,12 @@ var (
 //
 //go:generate mockery --name=WalletJWTManager --case=underscore --structname=MockWalletJWTManager --filename=jwt_manager.go
 type WalletJWTManager interface {
-	GenerateToken(ctx context.Context, contractAddress string, expiresAt time.Time) (string, error)
-	ValidateToken(ctx context.Context, tokenString string) (contractAddress string, err error)
+	GenerateToken(ctx context.Context, credentialID, contractAddress string, expiresAt time.Time) (string, error)
+	ValidateToken(ctx context.Context, tokenString string) (credentialID, contractAddress string, err error)
 }
 
 type walletClaims struct {
+	ContractAddress string `json:"contract_address,omitempty"`
 	jwtgo.RegisteredClaims
 }
 
@@ -46,10 +47,11 @@ func NewWalletJWTManager(privateKeyPEM string) (WalletJWTManager, error) {
 
 var _ WalletJWTManager = (*defaultWalletJWTManager)(nil)
 
-func (m *defaultWalletJWTManager) GenerateToken(ctx context.Context, contractAddress string, expiresAt time.Time) (string, error) {
+func (m *defaultWalletJWTManager) GenerateToken(ctx context.Context, credentialID, contractAddress string, expiresAt time.Time) (string, error) {
 	claims := &walletClaims{
+		ContractAddress: contractAddress,
 		RegisteredClaims: jwtgo.RegisteredClaims{
-			Subject:   contractAddress,
+			Subject:   credentialID,
 			ExpiresAt: jwtgo.NewNumericDate(expiresAt),
 			IssuedAt:  jwtgo.NewNumericDate(time.Now()),
 		},
@@ -65,7 +67,7 @@ func (m *defaultWalletJWTManager) GenerateToken(ctx context.Context, contractAdd
 	return tokenString, nil
 }
 
-func (m *defaultWalletJWTManager) ValidateToken(ctx context.Context, tokenString string) (contractAddress string, err error) {
+func (m *defaultWalletJWTManager) ValidateToken(ctx context.Context, tokenString string) (credentialID, contractAddress string, err error) {
 	claims := &walletClaims{}
 
 	token, err := jwtgo.ParseWithClaims(tokenString, claims, func(t *jwtgo.Token) (interface{}, error) {
@@ -77,25 +79,25 @@ func (m *defaultWalletJWTManager) ValidateToken(ctx context.Context, tokenString
 	})
 	if err != nil {
 		if errors.Is(err, jwtgo.ErrTokenExpired) {
-			return "", ErrExpiredWalletToken
+			return "", "", ErrExpiredWalletToken
 		}
 
 		if vErr, ok := err.(*jwtgo.ValidationError); ok {
 			if vErr.Errors&jwtgo.ValidationErrorExpired != 0 {
-				return "", ErrExpiredWalletToken
+				return "", "", ErrExpiredWalletToken
 			}
 		}
 
-		return "", fmt.Errorf("%w: %v", ErrInvalidWalletToken, err)
+		return "", "", fmt.Errorf("%w: %v", ErrInvalidWalletToken, err)
 	}
 
 	if !token.Valid {
-		return "", ErrInvalidWalletToken
+		return "", "", ErrInvalidWalletToken
 	}
 
 	if claims.Subject == "" {
-		return "", ErrMissingSubClaim
+		return "", "", ErrMissingSubClaim
 	}
 
-	return claims.Subject, nil
+	return claims.Subject, claims.ContractAddress, nil
 }

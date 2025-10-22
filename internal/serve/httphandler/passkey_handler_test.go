@@ -19,6 +19,8 @@ import (
 	"github.com/veraison/go-cose"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	walletMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/wallet/mocks"
 )
@@ -83,10 +85,12 @@ func Test_StartPasskeyRegistrationRequest_Validate(t *testing.T) {
 
 func Test_PasskeyHandler_StartPasskeyRegistration(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -143,10 +147,12 @@ func Test_PasskeyHandler_StartPasskeyRegistration_ValidationErrors(t *testing.T)
 	for _, tc := range errorCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 			handler := PasskeyHandler{
-				WebAuthnService:  mockWebAuthnService,
-				WalletJWTManager: mockJWTManager,
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
 			}
 
 			rr := httptest.NewRecorder()
@@ -189,10 +195,12 @@ func Test_PasskeyHandler_StartPasskeyRegistration_ServiceErrors(t *testing.T) {
 	for _, tc := range errorCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 			handler := PasskeyHandler{
-				WebAuthnService:  mockWebAuthnService,
-				WalletJWTManager: mockJWTManager,
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
 			}
 
 			rr := httptest.NewRecorder()
@@ -216,10 +224,12 @@ func Test_PasskeyHandler_StartPasskeyRegistration_ServiceErrors(t *testing.T) {
 
 func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -235,6 +245,12 @@ func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 		Return(mockCredential, nil).
 		Once()
 
+	expectedCredentialID := base64.RawURLEncoding.EncodeToString(mockCredential.ID)
+	mockJWTManager.
+		On("GenerateToken", mock.Anything, expectedCredentialID, "", mock.AnythingOfType("time.Time")).
+		Return("jwt-token", nil).
+		Once()
+
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/finish?token=valid-token", nil)
 	http.HandlerFunc(handler.FinishPasskeyRegistration).ServeHTTP(rr, req)
 
@@ -243,17 +259,20 @@ func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 	var respBody PasskeyRegistrationResponse
 	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
+	assert.Equal(t, "jwt-token", respBody.Token)
 	assert.NotEmpty(t, respBody.CredentialID)
 	assert.NotEmpty(t, respBody.PublicKey)
-	assert.Equal(t, base64.RawURLEncoding.EncodeToString(mockCredential.ID), respBody.CredentialID)
+	assert.Equal(t, expectedCredentialID, respBody.CredentialID)
 }
 
 func Test_PasskeyHandler_FinishPasskeyRegistration_MissingTokenQueryParam(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -311,10 +330,12 @@ func Test_PasskeyHandler_FinishPasskeyRegistration_ServiceErrors(t *testing.T) {
 	for _, tc := range errorCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 			handler := PasskeyHandler{
-				WebAuthnService:  mockWebAuthnService,
-				WalletJWTManager: mockJWTManager,
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
 			}
 
 			rr := httptest.NewRecorder()
@@ -335,10 +356,12 @@ func Test_PasskeyHandler_FinishPasskeyRegistration_ServiceErrors(t *testing.T) {
 
 func Test_PasskeyHandler_StartPasskeyAuthentication(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -368,10 +391,12 @@ func Test_PasskeyHandler_StartPasskeyAuthentication(t *testing.T) {
 
 func Test_PasskeyHandler_StartPasskeyAuthentication_InternalError(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -390,10 +415,12 @@ func Test_PasskeyHandler_StartPasskeyAuthentication_InternalError(t *testing.T) 
 
 func Test_PasskeyHandler_FinishPasskeyAuthentication(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -412,7 +439,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication(t *testing.T) {
 		Once()
 
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
 		Return("jwt-token", nil).
 		Once()
 
@@ -470,10 +497,12 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_ServiceErrors(t *testing.T)
 	for _, tc := range errorCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 			handler := PasskeyHandler{
-				WebAuthnService:  mockWebAuthnService,
-				WalletJWTManager: mockJWTManager,
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
 			}
 
 			rr := httptest.NewRecorder()
@@ -494,10 +523,12 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_ServiceErrors(t *testing.T)
 
 func Test_PasskeyHandler_FinishPasskeyAuthentication_JWTGenerationError(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -516,7 +547,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_JWTGenerationError(t *testi
 		Once()
 
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
 		Return("", errors.New("JWT signing error")).
 		Once()
 
@@ -528,10 +559,12 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_JWTGenerationError(t *testi
 
 func Test_PasskeyHandler_FinishPasskeyAuthentication_TokenExpiration(t *testing.T) {
 	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	handler := PasskeyHandler{
-		WebAuthnService:  mockWebAuthnService,
-		WalletJWTManager: mockJWTManager,
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
 	}
 
 	rr := httptest.NewRecorder()
@@ -551,9 +584,9 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_TokenExpiration(t *testing.
 
 	var capturedExpiresAt time.Time
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
 		Run(func(args mock.Arguments) {
-			capturedExpiresAt = args.Get(2).(time.Time)
+			capturedExpiresAt = args.Get(3).(time.Time)
 		}).
 		Return("jwt-token", nil).
 		Once()
@@ -563,6 +596,355 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_TokenExpiration(t *testing.
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 
-	expectedExpiry := time.Now().Add(15 * time.Minute)
+	expectedExpiry := time.Now().Add(WalletTokenExpiration)
 	assert.WithinDuration(t, expectedExpiry, capturedExpiresAt, 5*time.Second)
+}
+
+func Test_RefreshTokenRequest_Validate(t *testing.T) {
+	testCases := []struct {
+		name      string
+		request   RefreshTokenRequest
+		wantError bool
+	}{
+		{
+			name: "valid request",
+			request: RefreshTokenRequest{
+				Token: "valid-token",
+			},
+			wantError: false,
+		},
+		{
+			name: "empty token",
+			request: RefreshTokenRequest{
+				Token: "",
+			},
+			wantError: true,
+		},
+		{
+			name: "whitespace only token",
+			request: RefreshTokenRequest{
+				Token: "   ",
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.request.Validate()
+			if tc.wantError {
+				assert.NotNil(t, err)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func Test_PasskeyHandler_RefreshToken(t *testing.T) {
+	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	handler := PasskeyHandler{
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
+	}
+
+	rr := httptest.NewRecorder()
+	requestBody, _ := json.Marshal(RefreshTokenRequest{
+		Token: "valid-token",
+	})
+	ctx := context.Background()
+
+	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	credentialID := "test-credential-id"
+
+	mockJWTManager.
+		On("ValidateToken", mock.Anything, "valid-token").
+		Return(credentialID, contractAddress, nil).
+		Once()
+
+	var capturedExpiresAt time.Time
+	mockJWTManager.
+		On("GenerateToken", mock.Anything, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
+		Run(func(args mock.Arguments) {
+			capturedExpiresAt = args.Get(3).(time.Time)
+		}).
+		Return("refreshed-token", nil).
+		Once()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	req.Header.Set("Content-Type", "application/json")
+	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+
+	var respBody RefreshTokenResponse
+	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	require.NoError(t, err)
+	assert.Equal(t, "refreshed-token", respBody.Token)
+
+	expectedExpiry := time.Now().Add(WalletTokenExpiration)
+	assert.WithinDuration(t, expectedExpiry, capturedExpiresAt, 5*time.Second)
+}
+
+func Test_PasskeyHandler_RefreshToken_InvalidRequestBody(t *testing.T) {
+	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	handler := PasskeyHandler{
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
+	}
+
+	rr := httptest.NewRecorder()
+	ctx := context.Background()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader("invalid-json"))
+	req.Header.Set("Content-Type", "application/json")
+	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+}
+
+func Test_PasskeyHandler_RefreshToken_ValidationError(t *testing.T) {
+	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	handler := PasskeyHandler{
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
+	}
+
+	rr := httptest.NewRecorder()
+	requestBody, _ := json.Marshal(RefreshTokenRequest{
+		Token: "",
+	})
+	ctx := context.Background()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	req.Header.Set("Content-Type", "application/json")
+	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+}
+
+func Test_PasskeyHandler_RefreshToken_ValidateTokenErrors(t *testing.T) {
+	errorCases := []struct {
+		name               string
+		validationError    error
+		expectedStatusCode int
+	}{
+		{
+			name:               "expired token",
+			validationError:    wallet.ErrExpiredWalletToken,
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "invalid token",
+			validationError:    wallet.ErrInvalidWalletToken,
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "missing sub claim",
+			validationError:    wallet.ErrMissingSubClaim,
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "unexpected error",
+			validationError:    errors.New("database error"),
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range errorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+			handler := PasskeyHandler{
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
+			}
+
+			rr := httptest.NewRecorder()
+			requestBody, _ := json.Marshal(RefreshTokenRequest{
+				Token: "test-token",
+			})
+			ctx := context.Background()
+
+			mockJWTManager.
+				On("ValidateToken", mock.Anything, "test-token").
+				Return("", "", tc.validationError).
+				Once()
+
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			req.Header.Set("Content-Type", "application/json")
+			http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatusCode, rr.Result().StatusCode)
+		})
+	}
+}
+
+func Test_PasskeyHandler_RefreshToken_GenerateTokenErrors(t *testing.T) {
+	errorCases := []struct {
+		name               string
+		generateError      error
+		expectedStatusCode int
+	}{
+		{
+			name:               "signing error",
+			generateError:      errors.New("signing error"),
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range errorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+			handler := PasskeyHandler{
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
+			}
+
+			rr := httptest.NewRecorder()
+			requestBody, _ := json.Marshal(RefreshTokenRequest{
+				Token: "test-token",
+			})
+			ctx := context.Background()
+
+			contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+			credentialID := "test-credential-id"
+
+			mockJWTManager.
+				On("ValidateToken", mock.Anything, "test-token").
+				Return(credentialID, contractAddress, nil).
+				Once()
+
+			mockJWTManager.
+				On("GenerateToken", mock.Anything, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
+				Return("", tc.generateError).
+				Once()
+
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			req.Header.Set("Content-Type", "application/json")
+			http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatusCode, rr.Result().StatusCode)
+		})
+	}
+}
+
+func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
+	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	handler := PasskeyHandler{
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
+	}
+
+	rr := httptest.NewRecorder()
+	requestBody, _ := json.Marshal(RefreshTokenRequest{
+		Token: "valid-token",
+	})
+	ctx := context.Background()
+
+	credentialID := "test-credential-id"
+	oldContractAddress := ""
+	newContractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+
+	mockJWTManager.
+		On("ValidateToken", mock.Anything, "valid-token").
+		Return(credentialID, oldContractAddress, nil).
+		Once()
+
+	mockEmbeddedWalletService.
+		On("GetWalletByCredentialID", mock.Anything, credentialID).
+		Return(&data.EmbeddedWallet{
+			CredentialID:    credentialID,
+			ContractAddress: newContractAddress,
+		}, nil).
+		Once()
+
+	mockJWTManager.
+		On("GenerateToken", mock.Anything, credentialID, newContractAddress, mock.AnythingOfType("time.Time")).
+		Return("refreshed-token-with-address", nil).
+		Once()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	req.Header.Set("Content-Type", "application/json")
+	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+
+	var respBody RefreshTokenResponse
+	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	require.NoError(t, err)
+	assert.Equal(t, "refreshed-token-with-address", respBody.Token)
+}
+
+func Test_PasskeyHandler_RefreshToken_WalletLookupError(t *testing.T) {
+	errorCases := []struct {
+		name               string
+		lookupError        error
+		expectedStatusCode int
+	}{
+		{
+			name:               "invalid credential ID",
+			lookupError:        services.ErrInvalidCredentialID,
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "database error",
+			lookupError:        errors.New("database error"),
+			expectedStatusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range errorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+			mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+			mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+			handler := PasskeyHandler{
+				WebAuthnService:       mockWebAuthnService,
+				WalletJWTManager:      mockJWTManager,
+				EmbeddedWalletService: mockEmbeddedWalletService,
+			}
+
+			rr := httptest.NewRecorder()
+			requestBody, _ := json.Marshal(RefreshTokenRequest{
+				Token: "valid-token",
+			})
+			ctx := context.Background()
+
+			credentialID := "test-credential-id"
+
+			mockJWTManager.
+				On("ValidateToken", mock.Anything, "valid-token").
+				Return(credentialID, "", nil).
+				Once()
+
+			mockEmbeddedWalletService.
+				On("GetWalletByCredentialID", mock.Anything, credentialID).
+				Return((*data.EmbeddedWallet)(nil), tc.lookupError).
+				Once()
+
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			req.Header.Set("Content-Type", "application/json")
+			http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatusCode, rr.Result().StatusCode)
+		})
+	}
 }

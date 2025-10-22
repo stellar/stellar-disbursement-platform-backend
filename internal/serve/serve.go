@@ -682,17 +682,21 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
 				passkeyHandler := &httphandler.PasskeyHandler{
-					WebAuthnService:  o.WebAuthnService,
-					WalletJWTManager: o.walletJWTManager,
+					WebAuthnService:       o.WebAuthnService,
+					WalletJWTManager:      o.walletJWTManager,
+					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
 
 				r.Route("/embedded-wallets", func(r chi.Router) {
 					// Wallet creation routes
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
+
 					// Sponsored transactions routes
-					r.Post("/sponsored-transactions", sponsoredTransactionHandler.CreateSponsoredTransaction)
-					r.Get("/sponsored-transactions/{id}", sponsoredTransactionHandler.GetSponsoredTransaction)
+					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Route("/sponsored-transactions", func(r chi.Router) {
+						r.Post("/", sponsoredTransactionHandler.CreateSponsoredTransaction)
+						r.Get("/{id}", sponsoredTransactionHandler.GetSponsoredTransaction)
+					})
 
 					// Passkey registration + authentication routes
 					if passkeyHandler != nil {
@@ -704,6 +708,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 							r.Route("/authentication", func(r chi.Router) {
 								r.Post("/start", passkeyHandler.StartPasskeyAuthentication)
 								r.Post("/finish", passkeyHandler.FinishPasskeyAuthentication)
+								r.Post("/refresh", passkeyHandler.RefreshToken)
 							})
 						})
 					}
