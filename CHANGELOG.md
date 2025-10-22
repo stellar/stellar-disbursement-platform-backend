@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add trustlines for distribution account when provisioning tenant [#891](https://github.com/stellar/stellar-disbursement-platform-backend/pull/891)
 
 ### Changed
-
+- Decommissioned Event Broker Kafka support in favor of Scheduler for background jobs. [#914](https://github.com/stellar/stellar-disbursement-platform-backend/pull/914)
 - Allow configuring `resources` limits and requests for services in the Helm charts [#904](https://github.com/stellar/stellar-disbursement-platform-backend/pull/904)
 - Enable short linking by default [#916](https://github.com/stellar/stellar-disbursement-platform-backend/pull/916)
 

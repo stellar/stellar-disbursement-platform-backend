@@ -35,7 +35,6 @@ The chart can be installed either from a packaged chart or directly from the git
 - Kubernetes 1.19+
 - Helm 3.2.0+
 - Postgres 14.0+ database deployed in the same Kubernetes cluster
-- Kafka (optional) needed for inter-service communication when `eventBroker.type` is set to "KAFKA"
 
 ### From a packaged chart
 
@@ -165,12 +164,6 @@ These parameters are shared by all charts.
 | `global.deployment.topologySpreadConstraints`          | Pod topology spread constraints for all services.                                                                                   | `[]`                                       |
 | `global.ephemeralDatabase`                             | Enables or disables the creation of an ephemeral database for testing purposes.                                                     | `true`                                     |
 | `global.autoGenerateSecrets`                           | Determines if secrets should be auto-generated.                                                                                     | `false`                                    |
-| `global.eventBroker`                                   | Configuration related to the event broker used by the application.                                                                  |                                            |
-| `global.eventBroker.type`                              | The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".                                                    | `SCHEDULER`                                |
-| `global.eventBroker.urls`                              | A comma-separated list of broker URLs for the event broker.                                                                         | `nil`                                      |
-| `global.eventBroker.consumerGroupId`                   | The consumer group ID for the event broker.                                                                                         | `nil`                                      |
-| `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |                                            |
-| `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `nil`                                      |
 | `global.singleTenantMode`                              | Determines if the SDP service is running in single-tenant mode.                                                                     | `false`                                    |
 | `global.distributionPublicKey`                         | The public key of the HOST's Stellar distribution account, used to create channel accounts.                                         | `nil`                                      |
 | `global.distributionPrivateKey`                        | The private key of the root Stellar distribution account                                                                            | `nil`                                      |
@@ -266,10 +259,6 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.kubeSecrets.data.DISTRIBUTION_SEED`                                | The HOST's Stellar distribution account, used to create channel accounts. This is needed for the init container.                                               |                                                 |
 | `sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE`       | A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.                                        |                                                 |
 | `sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE`            | The private key used to encrypt the channel accounts secrets in the database.                                                                                  |                                                 |
-| `sdp.kubeSecrets.data.KAFKA_SASL_USERNAME`                              | The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                        |                                                 |
-| `sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD`                              | The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                        |                                                 |
-| `sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY`                             | Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".                                                                      |                                                 |
-| `sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE`                     | Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".                                         |                                                 |
 | `sdp.kubeSecrets.data.ADMIN_ACCOUNT`                                    | The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",                |                                                 |
 | `sdp.kubeSecrets.data.ADMIN_API_KEY`                                    | The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",          |                                                 |
 | `sdp.kubeSecrets.data.BRIDGE_API_KEY`                                   | The API key for the bridge integration. Required if ENABLE_BRIDGE_INTEGRATION is set to true.                                                                  |                                                 |
@@ -383,10 +372,6 @@ This service is designed to maximize payment throughput, handle queuing, and gra
 | `tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE`      | The private key used to encrypt the channel accounts secrets in the database.                                                                                          |                   |
 | `tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE` | A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.                                                |                   |
 | `tss.kubeSecrets.data.SENTRY_DSN`                                 | The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".                                                                               |                   |
-| `tss.kubeSecrets.data.KAFKA_SASL_USERNAME`                        | The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                                |                   |
-| `tss.kubeSecrets.data.KAFKA_SASL_PASSWORD`                        | The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                                |                   |
-| `tss.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY`                       | Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".                                                                              |                   |
-| `tss.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE`               | Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".                                                 |                   |
 
 ### Dashboard
 

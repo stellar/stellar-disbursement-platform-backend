@@ -24,7 +24,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
@@ -1578,7 +1577,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	require.NotNil(t, user)
 
 	authManagerMock := &auth.AuthManagerMock{}
-	mockEventProducer := events.MockProducer{}
 	mockDistAccSvc := svcMocks.NewMockDistributionAccountService(t)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
@@ -1593,7 +1591,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		DisbursementManagementService: &services.DisbursementManagementService{
 			Models:                     models,
 			AuthManager:                authManagerMock,
-			EventProducer:              &mockEventProducer,
 			DistributionAccountService: mockDistAccSvc,
 		},
 	}
@@ -1767,11 +1764,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
 
-		mockEventProducer.
-			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
-			Return(nil).
-			Once()
-
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
@@ -1798,11 +1790,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
-
-		mockEventProducer.
-			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
-			Return(nil).
-			Once()
 
 		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 			Name:          "ready disbursement #3",
@@ -1919,7 +1906,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
-	mockEventProducer.AssertExpectations(t)
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {

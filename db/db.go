@@ -101,42 +101,6 @@ func RunInTransactionWithResult[T any](ctx context.Context, dbConnectionPool DBC
 	return result, nil
 }
 
-// RunInTransactionWithPostCommit runs the given atomic function in an atomic database transaction.
-// If the atomic function succeeds, it returns a postCommit function to be executed after the transaction is committed.
-func RunInTransactionWithPostCommit(ctx context.Context, opts *TransactionOptions) error {
-	dbConnectionPool := opts.DBConnectionPool
-	atomicFunction := opts.AtomicFunctionWithPostCommit
-	txOpts := opts.TxOptions
-
-	dbTx, err := dbConnectionPool.BeginTxx(ctx, txOpts)
-	if err != nil {
-		return fmt.Errorf("creating db transaction for RunInTransactionWithResult: %w", err)
-	}
-
-	defer func() {
-		DBTxRollback(ctx, dbTx, err, "rolling back transaction due to error")
-	}()
-
-	postCommit, err := atomicFunction(dbTx)
-	if err != nil {
-		return NewTransactionExecutionError(err)
-	}
-
-	err = dbTx.Commit()
-	if err != nil {
-		return fmt.Errorf("committing transaction in RunInTransactionWithPostCommit: %w", err)
-	}
-
-	// Execute the postCommit function if it's not nil.
-	if postCommit != nil {
-		if postCommitErr := postCommit(); postCommitErr != nil {
-			return fmt.Errorf("executing postCommit function: %w", postCommitErr)
-		}
-	}
-
-	return nil
-}
-
 // RunInTransaction runs the given atomic function in an atomic database transaction and returns an error. Boilerplate
 // code for database transactions.
 func RunInTransaction(ctx context.Context, dbConnectionPool DBConnectionPool, opts *sql.TxOptions, atomicFunction func(dbTx DBTransaction) error) error {

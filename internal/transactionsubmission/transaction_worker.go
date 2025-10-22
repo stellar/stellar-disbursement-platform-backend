@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
@@ -18,9 +17,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -44,7 +40,6 @@ type TransactionWorker struct {
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
-	eventProducer       events.Producer
 	jobUUID             string
 }
 
@@ -56,7 +51,6 @@ func NewTransactionWorker(
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
-	eventProducer events.Producer,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -98,7 +92,6 @@ func NewTransactionWorker(
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
-		eventProducer:       eventProducer,
 	}, nil
 }
 
@@ -212,27 +205,12 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			if hErrWrapper.ShouldMarkAsError() {
 				metricsMetadata.PaymentEventType = sdpMonitor.PaymentFailedLabel
 
-				// Building the payment completed event before updating the transaction status. This way, if the message
-				// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
-				// will be re-tried.
-				var msg *events.Message
-				msg, err = tw.buildPaymentCompletedEvent(events.PaymentCompletedErrorType, &txJob.Transaction, data.FailedPaymentStatus, hErrWrapper.Error())
-				if err != nil {
-					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-				}
-
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
 					return fmt.Errorf("updating transaction status to error: %w", err)
 				}
 				txJob.Transaction = *updatedTx
-
-				// Publishing a new event on the event producer
-				err = events.ProduceEvents(ctx, tw.eventProducer, msg)
-				if err != nil {
-					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-				}
 
 				// report any terminal errors, excluding those caused by the external account not being valid
 				if !hErrWrapper.IsDestinationAccountNotReady() {
@@ -281,24 +259,11 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("transaction was not successful for some reason")
 	}
 
-	// Building the payment completed event before updating the transaction status. This way, if the message fails to be
-	// built, the transaction will be marked for reprocessing -> reconciliation and the event will be re-tried.
-	msg, err := tw.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &txJob.Transaction, data.SuccessPaymentStatus, "")
-	if err != nil {
-		return fmt.Errorf("building payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-	}
-
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
 	if err != nil {
 		return utils.NewTransactionStatusUpdateError("SUCCESS", txJob.Transaction.ID, false, err)
 	}
 	txJob.Transaction = *updatedTx
-
-	// Publishing a new event on the event producer
-	err = events.ProduceEvents(ctx, tw.eventProducer, msg)
-	if err != nil {
-		return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-	}
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
@@ -376,34 +341,6 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	})
 
 	return nil
-}
-
-func (tw *TransactionWorker) buildPaymentCompletedEvent(eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus, statusMsg string) (*events.Message, error) {
-	if paymentStatus != data.SuccessPaymentStatus && paymentStatus != data.FailedPaymentStatus {
-		return nil, fmt.Errorf("invalid payment status to produce payment completed event")
-	}
-
-	msg := &events.Message{
-		Topic:    events.PaymentCompletedTopic,
-		Key:      tx.ExternalID,
-		TenantID: tx.TenantID,
-		Type:     eventType,
-		Data: schemas.EventPaymentCompletedData{
-			TransactionID:        tx.ID,
-			PaymentID:            tx.ExternalID,
-			PaymentStatus:        string(paymentStatus),
-			PaymentStatusMessage: statusMsg,
-			PaymentCompletedAt:   time.Now(),
-			StellarTransactionID: tx.StellarTransactionHash.String,
-		},
-	}
-
-	err := msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
-	}
-
-	return msg, nil
 }
 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {

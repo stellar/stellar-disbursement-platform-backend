@@ -15,7 +15,6 @@
   - [Additional Development Environment Details](#additional-development-environment-details)
     - [Stellar Accounts and .env File](#stellar-accounts-and-env-file)
     - [Building the SDP Docker Containers](#building-the-sdp-docker-containers)
-    - [Using Kafka for Event Handling](#using-kafka-for-event-handling)
     - [Remote Debugging](#remote-debugging)
       - [Ensure Docker Containers are Running:](#ensure-docker-containers-are-running)
       - [Using VS Code:](#using-vs-code)
@@ -232,7 +231,7 @@ You can use the make_env.sh script to automatically create a stellar accounts fo
 
 ### Building the SDP Docker Containers
 
-A main.sh wrapper script has been included to help you bring up a local environment. The script stops and removes existing Docker containers, optionally deletes persistent volumes, and then uses Docker Compose to bring up new containers for the Stellar Disbursement Platform (SDP). This includes the SDP, Anchor Platform (for user registration), PostgreSQL database, Kafka for event handling, and a local demo wallet instance. It then initializes tenants if they don't exist and adds test users, setting up the local environment for the SEP-24 deposit flow.
+A main.sh wrapper script has been included to help you bring up a local environment. The script stops and removes existing Docker containers, optionally deletes persistent volumes, and then uses Docker Compose to bring up new containers for the Stellar Disbursement Platform (SDP). This includes the SDP, Anchor Platform (for user registration), PostgreSQL database and a local demo wallet instance. It then initializes tenants if they don't exist and adds test users, setting up the local environment for the SEP-24 deposit flow.
 
 1. Execute the following command to create all the necessary Docker containers needed to run SDP as well as provision sample tenants:
 ```sh
@@ -247,19 +246,6 @@ This will spin up the following services:
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
 - `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000`.
-
-
-### Using Kafka for Event Handling
-
-Using Kafka for event handling is optional. If you want to use Kafka, you can start the Kafka service by running the following command from the `dev` directory:
-
-```sh
-docker compose -p sdp-multi-tenant -f docker-compose.yml -f docker-compose-kafka.yml up -d
-```
-
-This will start the following containers on top of the ones listed above:
-- `kafka`: Kafka service running on ports `9092`, `9094`(external).
-- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
 
 ### Remote Debugging
 
