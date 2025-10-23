@@ -254,10 +254,11 @@ func (a *AssetModel) SoftDelete(ctx context.Context, sqlExec db.SQLExecuter, id 
 }
 
 type ReceiverWalletAsset struct {
-	WalletID                                    string         `db:"wallet_id"`
-	ReceiverWallet                              ReceiverWallet `db:"receiver_wallet"`
-	Asset                                       Asset          `db:"asset"`
-	DisbursementReceiverRegistrationMsgTemplate *string        `json:"-" db:"receiver_registration_message_template"`
+	WalletID                                    string           `db:"wallet_id"`
+	ReceiverWallet                              ReceiverWallet   `db:"receiver_wallet"`
+	Asset                                       Asset            `db:"asset"`
+	DisbursementReceiverRegistrationMsgTemplate *string          `json:"-" db:"receiver_registration_message_template"`
+	VerificationField                           VerificationType `db:"verification_field"`
 }
 
 // GetAssetsPerReceiverWallet returns the assets associated with a READY payment for each receiver
@@ -272,11 +273,12 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 	query := `
 		WITH latest_payments_by_wallet AS (
 			-- Gets the latest payment by wallet with its asset
-			SELECT
-				p.id AS payment_id,
-				d.wallet_id,
-				COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
-				p.asset_id
+		SELECT
+			p.id AS payment_id,
+			d.wallet_id,
+			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
+			COALESCE(d.verification_field::text, '') as verification_field,
+			p.asset_id
 			FROM
 				payments p
 				INNER JOIN disbursements d ON d.id = p.disbursement_id
@@ -284,7 +286,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			WHERE
 				p.status = $1
 			GROUP BY
-				p.id, p.asset_id, d.wallet_id, d.receiver_registration_message_template
+				p.id, p.asset_id, d.wallet_id, d.receiver_registration_message_template, d.verification_field
 			ORDER BY
 				p.updated_at DESC
 		), messages_resent_since_invitation AS (
@@ -316,6 +318,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			r.id AS "receiver_wallet.receiver.id",
 			COALESCE(r.phone_number, '') AS "receiver_wallet.receiver.phone_number",
 			COALESCE(r.email, '') AS "receiver_wallet.receiver.email",
+			lpw.verification_field,
 			` + AssetColumnNames("a", "asset", true) + `
 		FROM
 			assets a

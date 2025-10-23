@@ -125,8 +125,10 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			SelfHosted:       wallet.IsSelfHosted(),
 		}
 
+		requiresSEP24 := rwa.VerificationField == data.VerificationTypeSEP24Registration
+
 		if wallet.Embedded {
-			if err := s.updateEmbeddedWalletDeepLink(ctx, &wdl); err != nil {
+			if err := s.updateEmbeddedWalletDeepLink(ctx, &wdl, rwa.ReceiverWallet.ID, requiresSEP24); err != nil {
 				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
 				continue
 			}
@@ -224,7 +226,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	})
 }
 
-func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx context.Context, wdl *WalletDeepLink) error {
+func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx context.Context, wdl *WalletDeepLink, receiverWalletID string, requiresSEP24 bool) error {
 	if wdl == nil {
 		return fmt.Errorf("wallet deep link cannot be nil")
 	}
@@ -244,6 +246,13 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 	}
 
 	wdl.Token = token
+
+	update := data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWalletID}
+	update.RequiresSEP24Registration = &requiresSEP24
+
+	if err := s.Models.EmbeddedWallets.Update(ctx, s.Models.DBConnectionPool, token, update); err != nil {
+		return fmt.Errorf("linking embedded wallet token to receiver wallet %s: %w", receiverWalletID, err)
+	}
 
 	return nil
 }

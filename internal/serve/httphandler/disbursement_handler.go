@@ -143,6 +143,13 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 		return nil, httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil)
 	}
 
+	if req.VerificationField == data.VerificationTypeSEP24Registration && !wallet.Embedded {
+		extra := map[string]interface{}{
+			"verification_field": fmt.Sprintf("%s requires an embedded wallet", data.VerificationTypeSEP24Registration),
+		}
+		return nil, httperror.BadRequest("verification_field is only allowed for embedded wallets", nil, extra)
+	}
+
 	// Get Asset
 	asset, err := d.Models.Assets.Get(ctx, req.AssetID)
 	if err != nil {

@@ -47,14 +47,16 @@ func (status EmbeddedWalletStatus) Validate() error {
 }
 
 type EmbeddedWallet struct {
-	Token           string               `json:"token" db:"token"`
-	WasmHash        string               `json:"wasm_hash" db:"wasm_hash"`
-	ContractAddress string               `json:"contract_address" db:"contract_address"`
-	CredentialID    string               `json:"credential_id" db:"credential_id"`
-	PublicKey       string               `json:"public_key" db:"public_key"`
-	CreatedAt       *time.Time           `json:"created_at" db:"created_at"`
-	UpdatedAt       *time.Time           `json:"updated_at" db:"updated_at"`
-	WalletStatus    EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
+	Token                     string               `json:"token" db:"token"`
+	WasmHash                  string               `json:"wasm_hash" db:"wasm_hash"`
+	ContractAddress           string               `json:"contract_address" db:"contract_address"`
+	CredentialID              string               `json:"credential_id" db:"credential_id"`
+	PublicKey                 string               `json:"public_key" db:"public_key"`
+	ReceiverWalletID          string               `json:"receiver_wallet_id" db:"receiver_wallet_id"`
+	RequiresSEP24Registration bool                 `json:"requires_sep24_registration" db:"requires_sep24_registration"`
+	CreatedAt                 *time.Time           `json:"created_at" db:"created_at"`
+	UpdatedAt                 *time.Time           `json:"updated_at" db:"updated_at"`
+	WalletStatus              EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
 }
 
 type EmbeddedWalletModel struct {
@@ -70,12 +72,14 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 			"wallet_status",
+			"requires_sep24_registration",
 		},
 		CoalesceStringColumns: []string{
 			"wasm_hash",
 			"contract_address",
 			"credential_id",
 			"public_key",
+			"receiver_wallet_id",
 		},
 	}.Build()
 
@@ -178,11 +182,13 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 }
 
 type EmbeddedWalletUpdate struct {
-	WasmHash        string               `db:"wasm_hash"`
-	ContractAddress string               `db:"contract_address"`
-	CredentialID    string               `db:"credential_id"`
-	PublicKey       string               `db:"public_key"`
-	WalletStatus    EmbeddedWalletStatus `db:"wallet_status"`
+	WasmHash                  string               `db:"wasm_hash"`
+	ContractAddress           string               `db:"contract_address"`
+	CredentialID              string               `db:"credential_id"`
+	PublicKey                 string               `db:"public_key"`
+	WalletStatus              EmbeddedWalletStatus `db:"wallet_status"`
+	ReceiverWalletID          string               `db:"receiver_wallet_id"`
+	RequiresSEP24Registration *bool                `db:"requires_sep24_registration"`
 }
 
 func (ewu EmbeddedWalletUpdate) Validate() error {

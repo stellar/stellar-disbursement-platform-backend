@@ -1576,7 +1576,8 @@ func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
 		"DATE_OF_BIRTH",
 		"YEAR_MONTH",
 		"PIN",
-		"NATIONAL_ID_NUMBER"
+		"NATIONAL_ID_NUMBER",
+		"SEP24_REGISTRATION"
 	]`
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.JSONEq(t, expectedBody, string(respBody))

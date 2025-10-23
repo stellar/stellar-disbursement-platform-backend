@@ -113,9 +113,10 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	})
 
 	disbursementEmbedded := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Wallet: walletEmbedded,
-		Status: data.ReadyDisbursementStatus,
-		Asset:  asset1,
+		Wallet:            walletEmbedded,
+		Status:            data.ReadyDisbursementStatus,
+		Asset:             asset1,
+		VerificationField: data.VerificationTypeSEP24Registration,
 	})
 
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
@@ -428,7 +429,13 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		require.NoError(t, err)
 
 		mockToken := uuid.New().String()
-		embeddedWalletServiceMock.On("CreateInvitationToken", mock.Anything).Return(mockToken, nil).Once()
+		embeddedWalletServiceMock.
+			On("CreateInvitationToken", mock.Anything).
+			Return(mockToken, nil).
+			Run(func(args mock.Arguments) {
+				data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, mockToken, "abcdef123456", "", "", "", data.PendingWalletStatus)
+			}).
+			Once()
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
@@ -464,6 +471,11 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
+
+		embeddedWalletRow, err := models.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, mockToken)
+		require.NoError(t, err)
+		require.Equal(t, recRW.ID, embeddedWalletRow.ReceiverWalletID)
+		assert.True(t, embeddedWalletRow.RequiresSEP24Registration)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, walletEmbedded.ID)
 		require.NoError(t, err)

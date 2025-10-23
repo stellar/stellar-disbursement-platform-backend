@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,7 +90,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				VerificationField: "mock_type",
 			},
 			expectedValidationErrors: map[string]interface{}{
-				"verification_field": "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]",
+				"verification_field": fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationTypes()),
 			},
 		},
 		{
@@ -245,6 +246,6 @@ func Test_ReceiverRegistrationValidator_ValidateAndGetVerificationType(t *testin
 		actual := validator.validateAndGetVerificationType(invalidStatus)
 		assert.Empty(t, actual)
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]", validator.Errors["verification_field"])
+		assert.Equal(t, fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationTypes()), validator.Errors["verification_field"])
 	})
 }

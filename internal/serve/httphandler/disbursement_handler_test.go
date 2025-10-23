@@ -202,6 +202,10 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	disabledWallet := wallets[1]
 	data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
 
+	embeddedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
+	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
+	embeddedWallet = data.GetWalletFixture(t, ctx, dbConnectionPool, embeddedWallet.Name)
+
 	userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
 	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
 	userManagedWallet = data.GetWalletFixture(t, ctx, dbConnectionPool, userManagedWallet.Name)
@@ -234,7 +238,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						"wallet_id": "wallet_id is required",
 						"asset_id": "asset_id is required",
 						"registration_contact_type": "registration_contact_type must be one of [EMAIL PHONE_NUMBER EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER_AND_WALLET_ADDRESS]",
-						"verification_field": "verification_field must be one of [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"
+				"verification_field": "verification_field must be one of [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER SEP24_REGISTRATION]"
 					}
 				}`
 			},
@@ -265,6 +269,20 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
 				return `{"error":"Wallet is not enabled"}`
+			},
+		},
+		{
+			name: "🔴 embedded wallet verification type requires embedded wallet",
+			reqBody: map[string]interface{}{
+				"name":                      "disbursement embedded",
+				"asset_id":                  asset.ID,
+				"wallet_id":                 enabledWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+				"verification_field":        data.VerificationTypeSEP24Registration,
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantResponseBodyFn: func(d *data.Disbursement) string {
+				return `{"error":"verification_field is only allowed for embedded wallets", "extras":{"verification_field":"SEP24_REGISTRATION requires an embedded wallet"}}`
 			},
 		},
 		{

@@ -12,6 +12,8 @@ CREATE TABLE embedded_wallets (
     wasm_hash VARCHAR(64),
     contract_address VARCHAR(56),
     public_key VARCHAR(130),
+    receiver_wallet_id VARCHAR(36) REFERENCES receiver_wallets (id),
+    requires_sep24_registration BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     wallet_status embedded_wallet_status NOT NULL DEFAULT 'PENDING'::embedded_wallet_status
