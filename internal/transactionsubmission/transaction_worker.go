@@ -231,25 +231,11 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 
 // markTransactionAsError handles the process of marking a transaction as ERROR and producing events
 func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *TxJob, txErr utils.TransactionError, errorMsg string) error {
-	// Building the completed event before updating the transaction status. This way, if the message
-	// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
-	// will be re-tried.
-	eventMsg, eventErr := tw.txHandler.BuildFailureEvent(ctx, txJob, txErr)
-	if eventErr != nil {
-		return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, eventErr)
-	}
-
 	updatedTx, updateErr := tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, errorMsg)
 	if updateErr != nil {
 		return fmt.Errorf("updating transaction status to error: %w", updateErr)
 	}
 	txJob.Transaction = *updatedTx
-
-	// Publishing a new event on the event producer
-	err := events.ProduceEvents(ctx, tw.eventProducer, eventMsg)
-	if err != nil {
-		return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-	}
 
 	return nil
 }
@@ -283,24 +269,11 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("transaction was not successful for some reason")
 	}
 
-	// Building the completed event before updating the transaction status. This way, if the message fails to be
-	// built, the transaction will be marked for reprocessing -> reconciliation and the event will be re-tried.
-	eventMsg, err := tw.txHandler.BuildSuccessEvent(ctx, txJob)
-	if err != nil {
-		return fmt.Errorf("building completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-	}
-
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
 	if err != nil {
 		return utils.NewTransactionStatusUpdateError("SUCCESS", txJob.Transaction.ID, false, err)
 	}
 	txJob.Transaction = *updatedTx
-
-	// Publishing a new event on the event producer
-	err = events.ProduceEvents(ctx, tw.eventProducer, eventMsg)
-	if err != nil {
-		return fmt.Errorf("producing completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-	}
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {

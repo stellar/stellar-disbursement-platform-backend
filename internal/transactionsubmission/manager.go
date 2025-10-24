@@ -126,7 +126,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 	txHandlerFactory := NewTransactionHandlerFactory(
 		&opts.SubmitterEngine,
 		txModel,
-		opts.EventProducer,
 		opts.MonitorService,
 		opts.RPCClient,
 	)

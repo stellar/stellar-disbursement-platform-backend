@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -16,13 +15,12 @@ import (
 func TestTransactionHandlerFactory_GetTransactionHandler(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
 	txModel := &store.TransactionModel{}
-	eventProducer := &events.NoopProducer{}
 	monitorSvc := tssMonitor.TSSMonitorService{
 		Client: &sdpMonitorMocks.MockMonitorClient{},
 	}
 	rpcClient := &mocks.MockRPCClient{}
 
-	factory := NewTransactionHandlerFactory(engine, txModel, eventProducer, monitorSvc, rpcClient)
+	factory := NewTransactionHandlerFactory(engine, txModel, monitorSvc, rpcClient)
 
 	testCases := []struct {
 		name          string

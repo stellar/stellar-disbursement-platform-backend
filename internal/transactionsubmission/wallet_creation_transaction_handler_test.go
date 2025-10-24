@@ -15,9 +15,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
@@ -418,78 +415,6 @@ func Test_WalletCreationHandler_BuildInnerTransaction(t *testing.T) {
 
 		rpcClient.AssertExpectations(t)
 	})
-}
-
-func Test_WalletCreationTransactionHandler_BuildSuccessEvent(t *testing.T) {
-	walletCreationHandler := &WalletCreationTransactionHandler{}
-
-	ctx := context.Background()
-	txJob := &TxJob{
-		Transaction: store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "wallet-creation-id",
-			TenantID:               "tenant-id",
-			StellarTransactionHash: sql.NullString{},
-		},
-	}
-
-	msg, err := walletCreationHandler.BuildSuccessEvent(ctx, txJob)
-	require.NoError(t, err)
-
-	gotWalletCreationCompletedAt := msg.Data.(schemas.EventWalletCreationCompletedData).WalletCreationCompletedAt
-	assert.WithinDuration(t, time.Now(), gotWalletCreationCompletedAt, time.Millisecond*100)
-	wantMsg := &events.Message{
-		Topic:    events.WalletCreationCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.WalletCreationCompletedSuccessType,
-		Data: schemas.EventWalletCreationCompletedData{
-			TransactionID:             txJob.Transaction.ID,
-			WalletCreationID:          txJob.Transaction.ExternalID,
-			WalletCreationStatus:      string(data.SuccessWalletStatus),
-			WalletCreationCompletedAt: gotWalletCreationCompletedAt,
-			StellarTransactionID:      txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-	assert.Equal(t, wantMsg, msg)
-}
-
-func Test_WalletCreationTransactionHandler_BuildFailureEvent(t *testing.T) {
-	walletCreationHandler := &WalletCreationTransactionHandler{}
-
-	ctx := context.Background()
-	txJob := &TxJob{
-		Transaction: store.Transaction{
-			ID:                     "tx-123",
-			ExternalID:             "wallet_token_abc",
-			TenantID:               "tenant-1",
-			StellarTransactionHash: sql.NullString{},
-		},
-	}
-	hErr := &utils.HorizonErrorWrapper{
-		Err: fmt.Errorf("test error"),
-	}
-
-	msg, err := walletCreationHandler.BuildFailureEvent(ctx, txJob, hErr)
-	require.NoError(t, err)
-
-	gotWalletCreationCompletedAt := msg.Data.(schemas.EventWalletCreationCompletedData).WalletCreationCompletedAt
-	assert.WithinDuration(t, time.Now(), gotWalletCreationCompletedAt, time.Millisecond*100)
-	wantMsg := &events.Message{
-		Topic:    events.WalletCreationCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.WalletCreationCompletedErrorType,
-		Data: schemas.EventWalletCreationCompletedData{
-			TransactionID:               txJob.Transaction.ID,
-			WalletCreationID:            txJob.Transaction.ExternalID,
-			WalletCreationStatus:        string(data.FailedWalletStatus),
-			WalletCreationStatusMessage: hErr.Error(),
-			WalletCreationCompletedAt:   gotWalletCreationCompletedAt,
-			StellarTransactionID:        txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-	assert.Equal(t, wantMsg, msg)
 }
 
 func Test_WalletCreationTransactionHandler_MonitorTransactionProcessingStarted(t *testing.T) {

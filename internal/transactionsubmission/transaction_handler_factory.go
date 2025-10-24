@@ -3,7 +3,6 @@ package transactionsubmission
 import (
 	"fmt"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -11,11 +10,10 @@ import (
 )
 
 type TransactionHandlerFactory struct {
-	engine        *engine.SubmitterEngine
-	txModel       store.TransactionStore
-	eventProducer events.Producer
-	monitorSvc    tssMonitor.TSSMonitorService
-	rpcClient     stellar.RPCClient
+	engine     *engine.SubmitterEngine
+	txModel    store.TransactionStore
+	monitorSvc tssMonitor.TSSMonitorService
+	rpcClient  stellar.RPCClient
 }
 
 var _ TransactionHandlerFactoryInterface = &TransactionHandlerFactory{}
@@ -23,16 +21,14 @@ var _ TransactionHandlerFactoryInterface = &TransactionHandlerFactory{}
 func NewTransactionHandlerFactory(
 	engine *engine.SubmitterEngine,
 	txModel store.TransactionStore,
-	eventProducer events.Producer,
 	monitorSvc tssMonitor.TSSMonitorService,
 	rpcClient stellar.RPCClient,
 ) *TransactionHandlerFactory {
 	return &TransactionHandlerFactory{
-		engine:        engine,
-		txModel:       txModel,
-		eventProducer: eventProducer,
-		monitorSvc:    monitorSvc,
-		rpcClient:     rpcClient,
+		engine:     engine,
+		txModel:    txModel,
+		monitorSvc: monitorSvc,
+		rpcClient:  rpcClient,
 	}
 }
 

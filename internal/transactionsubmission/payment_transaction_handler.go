@@ -5,14 +5,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -117,54 +113,6 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 	)
 
 	return paymentTx, err
-}
-
-func (h *PaymentTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error) {
-	msg := &events.Message{
-		Topic:    events.PaymentCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.PaymentCompletedSuccessType,
-		Data: schemas.EventPaymentCompletedData{
-			TransactionID:        txJob.Transaction.ID,
-			PaymentID:            txJob.Transaction.ExternalID,
-			PaymentStatus:        string(data.SuccessPaymentStatus),
-			PaymentStatusMessage: "",
-			PaymentCompletedAt:   time.Now(),
-			StellarTransactionID: txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-
-	validationErr := msg.Validate()
-	if validationErr != nil {
-		return nil, fmt.Errorf("validating message: %w", validationErr)
-	}
-
-	return msg, nil
-}
-
-func (h *PaymentTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, err error) (*events.Message, error) {
-	msg := &events.Message{
-		Topic:    events.PaymentCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.PaymentCompletedErrorType,
-		Data: schemas.EventPaymentCompletedData{
-			TransactionID:        txJob.Transaction.ID,
-			PaymentID:            txJob.Transaction.ExternalID,
-			PaymentStatus:        string(data.FailedPaymentStatus),
-			PaymentStatusMessage: err.Error(),
-			PaymentCompletedAt:   time.Now(),
-			StellarTransactionID: txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-
-	validationErr := msg.Validate()
-	if validationErr != nil {
-		return nil, fmt.Errorf("validating message: %w", validationErr)
-	}
-
-	return msg, nil
 }
 
 func (h *PaymentTransactionHandler) MonitorTransactionProcessingStarted(ctx context.Context, txJob *TxJob, jobUUID string) {

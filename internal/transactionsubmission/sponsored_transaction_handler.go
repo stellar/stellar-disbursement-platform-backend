@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"time"
 
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -160,52 +157,6 @@ func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context,
 	}
 
 	return preparedTx, nil
-}
-
-func (h *SponsoredTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error) {
-	msg := &events.Message{
-		Topic:    events.SponsoredTransactionCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.SponsoredTransactionCompletedSuccessType,
-		Data: schemas.EventSponsoredTransactionCompletedData{
-			TransactionID:                     txJob.Transaction.ID,
-			SponsoredTransactionID:            txJob.Transaction.ExternalID,
-			SponsoredTransactionStatus:        "SUCCESS",
-			SponsoredTransactionStatusMessage: "",
-			SponsoredTransactionCompletedAt:   time.Now(),
-			StellarTransactionID:              txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-
-	if err := msg.Validate(); err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
-	}
-
-	return msg, nil
-}
-
-func (h *SponsoredTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, err error) (*events.Message, error) {
-	msg := &events.Message{
-		Topic:    events.SponsoredTransactionCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.SponsoredTransactionCompletedErrorType,
-		Data: schemas.EventSponsoredTransactionCompletedData{
-			TransactionID:                     txJob.Transaction.ID,
-			SponsoredTransactionID:            txJob.Transaction.ExternalID,
-			SponsoredTransactionStatus:        "FAILED",
-			SponsoredTransactionStatusMessage: err.Error(),
-			SponsoredTransactionCompletedAt:   time.Now(),
-			StellarTransactionID:              txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-
-	if validationErr := msg.Validate(); validationErr != nil {
-		return nil, fmt.Errorf("validating message: %w", validationErr)
-	}
-
-	return msg, nil
 }
 
 func (h *SponsoredTransactionHandler) RequiresRebuildOnRetry() bool {
