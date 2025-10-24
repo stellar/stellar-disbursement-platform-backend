@@ -706,18 +706,9 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, expectedRespBody, string(respBody))
 
-		logEntries := debugEntries()
-		assert.Len(t, logEntries, 3)
-
-		// Find the request start and finish logs (skip the warning log)
-		var requestLogs []logrus.Entry
-		for _, e := range logEntries {
-			if e.Message == "starting request" || e.Message == "finished request" {
-				requestLogs = append(requestLogs, e)
-			}
-		}
-
+		requestLogs := debugEntries()
 		assert.Len(t, requestLogs, 2)
+
 		for i, e := range requestLogs {
 			entry, err := e.String()
 			require.NoError(t, err)
