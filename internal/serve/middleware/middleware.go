@@ -319,9 +319,18 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 				}
 			} else {
 				// Attempt fetching tenant name from request
-				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
+				tenantName, err := extractTenantNameFromRequest(req)
+				if err != nil {
+					if errors.Is(err, utils.ErrHostnameIsIPAddress) {
+						log.Ctx(ctx).Debug("hostname is an IP address, skipping tenant resolution")
+					} else if !errors.Is(err, utils.ErrTenantNameNotFound) {
+						log.Ctx(ctx).Debugf("could not extract tenant name from request: %v", err)
+					}
+				} else if tenantName != "" {
 					currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
-					log.Ctx(ctx).Warnf("could not find tenant with name %s: %v", tenantName, err)
+					if err != nil {
+						log.Ctx(ctx).Warnf("could not find tenant with name %s: %v", tenantName, err)
+					}
 				}
 			}
 
