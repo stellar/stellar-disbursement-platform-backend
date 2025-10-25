@@ -19,7 +19,6 @@ import (
 //go:generate mockery --name=WalletCreationFromSubmitterServiceInterface --case=snake --structname=MockWalletCreationFromSubmitterService
 
 type WalletCreationFromSubmitterServiceInterface interface {
-	SyncTransaction(ctx context.Context, transactionID string) error
 	SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error
 }
 
@@ -108,28 +107,6 @@ func (s *WalletCreationFromSubmitterService) calculateContractAddress(
 	}
 
 	return contractAddress, nil
-}
-
-// SyncTransaction syncs a single completed TSS wallet creation transaction with the embedded wallet table
-func (s *WalletCreationFromSubmitterService) SyncTransaction(ctx context.Context, transactionID string) error {
-	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
-		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-			transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, tssDBTx, transactionID, store.TransactionTypeWalletCreation)
-			if err != nil {
-				if errors.Is(err, store.ErrRecordNotFound) {
-					return fmt.Errorf("wallet creation transaction %s not found or wrong type", transactionID)
-				}
-				return fmt.Errorf("getting wallet creation transaction %s: %w", transactionID, err)
-			}
-
-			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, []*store.Transaction{transaction})
-		})
-	})
-	if err != nil {
-		return fmt.Errorf("synchronizing wallet creation from submitter: %w", err)
-	}
-
-	return nil
 }
 
 // SyncBatchTransactions syncs a batch of completed TSS wallet creation transactions with the embedded wallet table

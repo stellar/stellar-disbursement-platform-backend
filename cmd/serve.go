@@ -233,27 +233,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
 	}
 
-	var walletCreationCompletedConsumer events.Consumer
-	// Wallet creation completion consumer (only if embedded wallets are enabled)
-	if o.ServeOpts.EnableEmbeddedWallets {
-		walletCreationHandler := eventhandlers.NewWalletCreationFromSubmitterEventHandler(eventhandlers.WalletCreationFromSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-			NetworkPassphrase:     o.ServeOpts.NetworkPassphrase,
-		})
-
-		walletCreationCompletedConsumer, err = events.NewKafkaConsumer(
-			kafkaConfig,
-			events.WalletCreationCompletedTopic,
-			o.EventBrokerOptions.ConsumerGroupID,
-			walletCreationHandler,
-		)
-		if err != nil {
-			return fmt.Errorf("creating Wallet Creation Completed Kafka Consumer: %w", err)
-		}
-	}
-
 	producer, err := events.NewKafkaProducer(kafkaConfig)
 	if err != nil {
 		return fmt.Errorf("creating Kafka producer: %w", err)
@@ -263,9 +242,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 	go events.NewEventConsumer(paymentCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 	go events.NewEventConsumer(stellarPaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 	go events.NewEventConsumer(circlePaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	if walletCreationCompletedConsumer != nil {
-		go events.NewEventConsumer(walletCreationCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	}
 
 	return nil
 }
