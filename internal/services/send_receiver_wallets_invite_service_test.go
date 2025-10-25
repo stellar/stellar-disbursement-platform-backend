@@ -54,7 +54,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 	require.Equal(t, wantRegistrationLink, registrationLink)
 }
 
-func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
+func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -63,7 +63,13 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantBaseURL := "http://localhost:8000"
-	tenantInfo := &schema.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL}
+	tenantUIBaseURL := "http://localhost:3000"
+	tenantInfo := &schema.Tenant{
+		ID:           uuid.NewString(),
+		Name:         "TestTenant",
+		BaseURL:      &tenantBaseURL,
+		SDPUIBaseURL: &tenantUIBaseURL,
+	}
 	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
@@ -442,7 +448,8 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			On("SendMessage", mock.Anything, mock.MatchedBy(func(msg message.Message) bool {
 				return msg.ToPhoneNumber == receiverPhoneOnly.PhoneNumber &&
 					strings.Contains(msg.Body, "You have a payment waiting for you from the MyCustomAid") &&
-					strings.Contains(msg.Body, "wallet?asset=FOO1-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX") &&
+					strings.Contains(msg.Body, tenantUIBaseURL+"/wallet?asset=FOO1-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX") &&
+					!strings.Contains(msg.Body, tenantBaseURL+"/wallet?") &&
 					strings.Contains(msg.Body, "token=") &&
 					strings.Contains(msg.Body, "signature=")
 			}), []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
@@ -485,7 +492,8 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Empty(t, msg.TitleEncrypted)
 
 		assert.Contains(t, msg.TextEncrypted, "You have a payment waiting for you from the MyCustomAid")
-		assert.Contains(t, msg.TextEncrypted, "wallet?asset=FOO1-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
+		assert.Contains(t, msg.TextEncrypted, tenantUIBaseURL+"/wallet?asset=FOO1-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
+		assert.NotContains(t, msg.TextEncrypted, tenantBaseURL+"/wallet?")
 		assert.Contains(t, msg.TextEncrypted, "token=")
 		assert.Contains(t, msg.TextEncrypted, "signature=")
 		assert.Len(t, msg.StatusHistory, 2)

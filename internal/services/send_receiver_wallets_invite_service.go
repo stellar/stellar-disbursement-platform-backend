@@ -121,6 +121,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			AssetCode:        rwa.Asset.Code,
 			AssetIssuer:      rwa.Asset.Issuer,
 			TenantBaseURL:    *currentTenant.BaseURL,
+			TenantUIBaseURL:  *currentTenant.SDPUIBaseURL,
 			SelfHosted:       wallet.IsSelfHosted(),
 		}
 
@@ -233,7 +234,7 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 	}
 
 	if wdl.SelfHosted {
-		wdl.DeepLink = wdl.TenantBaseURL
+		wdl.DeepLink = wdl.TenantUIBaseURL
 		wdl.Route = "wallet"
 	}
 
@@ -374,6 +375,8 @@ type WalletDeepLink struct {
 	AssetIssuer string
 	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
 	TenantBaseURL string
+	// TenantUIBaseURL is the base URL for the tenant UI that the receiver wallet belongs to.
+	TenantUIBaseURL string
 	// Token is a unique token that identifies identifies a receiver wallet creation request.
 	Token string
 	// SelfHosted is set to true when the deep link should be set to the tenant base URL, which is the case only for embedded wallets.
