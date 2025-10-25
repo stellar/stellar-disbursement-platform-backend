@@ -120,7 +120,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			OrganizationName: organization.Name,
 			AssetCode:        rwa.Asset.Code,
 			AssetIssuer:      rwa.Asset.Issuer,
-			TenantUIBaseURL:  *currentTenant.SDPUIBaseURL,
+			TenantBaseURL:    *currentTenant.BaseURL,
 			SelfHosted:       wallet.IsSelfHosted(),
 		}
 
@@ -233,7 +233,7 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 	}
 
 	if wdl.SelfHosted {
-		wdl.DeepLink = wdl.TenantUIBaseURL
+		wdl.DeepLink = wdl.TenantBaseURL
 		wdl.Route = "wallet"
 	}
 
@@ -262,7 +262,7 @@ func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context
 		return "", fmt.Errorf("creating short URL for registration link: %w", err)
 	}
 
-	shortenedRegistrationLink, err := url.JoinPath(wdl.TenantUIBaseURL, "r", shortCode)
+	shortenedRegistrationLink, err := url.JoinPath(wdl.TenantBaseURL, "r", shortCode)
 	if err != nil {
 		return "", fmt.Errorf("building shortened registration link: %w", err)
 	}
@@ -372,8 +372,8 @@ type WalletDeepLink struct {
 	AssetCode string
 	// AssetIssuer is the issuer of the Stellar asset that the receiver will be able to receive.
 	AssetIssuer string
-	// TenantUIBaseURL is the UI base URL for the tenant that the receiver wallet belongs to.
-	TenantUIBaseURL string
+	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
+	TenantBaseURL string
 	// Token is a unique token that identifies identifies a receiver wallet creation request.
 	Token string
 	// SelfHosted is set to true when the deep link should be set to the tenant base URL, which is the case only for embedded wallets.
@@ -424,11 +424,11 @@ func (wdl WalletDeepLink) BaseURLWithRoute() (string, error) {
 }
 
 func (wdl WalletDeepLink) TomlFileDomain() (string, error) {
-	if wdl.TenantUIBaseURL == "" {
+	if wdl.TenantBaseURL == "" {
 		return "", fmt.Errorf("base URL for tenant can't be empty")
 	}
 
-	tenantBaseURL, err := utils.GetURLWithScheme(wdl.TenantUIBaseURL)
+	tenantBaseURL, err := utils.GetURLWithScheme(wdl.TenantBaseURL)
 	if err != nil {
 		return "", fmt.Errorf("setting the protocol scheme: %w", err)
 	}
@@ -452,7 +452,7 @@ func (wdl WalletDeepLink) validate() error {
 		return fmt.Errorf("can't generate a valid base URL for the deep link: %w", err)
 	}
 
-	if wdl.TenantUIBaseURL == "" {
+	if wdl.TenantBaseURL == "" {
 		return fmt.Errorf("tenant base URL can't be empty")
 	}
 

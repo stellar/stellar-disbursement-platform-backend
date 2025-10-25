@@ -99,12 +99,10 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	require.NoError(t, err)
 
 	tenantBaseURL := "http://localhost:8000"
-	tenantUIBaseURL := "http://localhost:3000"
 	tenantInfo := &schema.Tenant{
-		ID:           uuid.NewString(),
-		Name:         "TestTenant",
-		BaseURL:      &tenantBaseURL,
-		SDPUIBaseURL: &tenantUIBaseURL,
+		ID:      uuid.NewString(),
+		Name:    "TestTenant",
+		BaseURL: &tenantBaseURL,
 	}
 	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
@@ -169,7 +167,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 
 	walletDeepLink1 := services.WalletDeepLink{
 		DeepLink:         wallet1.DeepLinkSchema,
-		TenantUIBaseURL:  tenantUIBaseURL,
+		TenantBaseURL:    tenantBaseURL,
 		OrganizationName: "MyCustomAid",
 		AssetCode:        asset1.Code,
 		AssetIssuer:      asset1.Issuer,
@@ -181,7 +179,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 
 	walletDeepLink2 := services.WalletDeepLink{
 		DeepLink:         wallet2.DeepLinkSchema,
-		TenantUIBaseURL:  tenantUIBaseURL,
+		TenantBaseURL:    tenantBaseURL,
 		OrganizationName: "MyCustomAid",
 		AssetCode:        asset2.Code,
 		AssetIssuer:      asset2.Issuer,
