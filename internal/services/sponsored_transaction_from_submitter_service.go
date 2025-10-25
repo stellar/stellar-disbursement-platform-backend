@@ -15,7 +15,6 @@ import (
 //go:generate mockery --name=SponsoredTransactionFromSubmitterServiceInterface --case=snake --structname=MockSponsoredTransactionFromSubmitterService
 
 type SponsoredTransactionFromSubmitterServiceInterface interface {
-	SyncTransaction(ctx context.Context, transactionID string) error
 	SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error
 }
 
@@ -37,28 +36,6 @@ func NewSponsoredTransactionFromSubmitterService(
 		sdpModels: models,
 		tssModel:  store.NewTransactionModel(tssDBConnectionPool),
 	}
-}
-
-// SyncTransaction syncs a single completed TSS sponsored transaction with the sponsored_transactions table
-func (s *SponsoredTransactionFromSubmitterService) SyncTransaction(ctx context.Context, transactionID string) error {
-	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
-		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-			transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, tssDBTx, transactionID, store.TransactionTypeSponsored)
-			if err != nil {
-				if errors.Is(err, store.ErrRecordNotFound) {
-					return fmt.Errorf("sponsored transaction %s not found or wrong type", transactionID)
-				}
-				return fmt.Errorf("getting sponsored transaction %s: %w", transactionID, err)
-			}
-
-			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, []*store.Transaction{transaction})
-		})
-	})
-	if err != nil {
-		return fmt.Errorf("synchronizing sponsored transaction from submitter: %w", err)
-	}
-
-	return nil
 }
 
 // SyncBatchTransactions syncs a batch of completed TSS sponsored transactions with the sponsored_transactions table

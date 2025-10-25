@@ -19,9 +19,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
@@ -33,7 +30,6 @@ import (
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -308,74 +304,6 @@ func Test_PaymentHandler_BuildInnerTransaction(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_PaymentHandler_BuildSuccessEvent(t *testing.T) {
-	paymentHandler := &PaymentTransactionHandler{}
-
-	ctx := context.Background()
-	txJob := TxJob{
-		Transaction: store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "payment-id",
-			TenantID:               "tenant-id",
-			StellarTransactionHash: sql.NullString{},
-		},
-	}
-	msg, err := paymentHandler.BuildSuccessEvent(ctx, &txJob)
-	require.NoError(t, err)
-
-	gotPaymentCompletedAt := msg.Data.(schemas.EventPaymentCompletedData).PaymentCompletedAt
-	assert.WithinDuration(t, time.Now(), gotPaymentCompletedAt, time.Millisecond*100)
-	wantMsg := &events.Message{
-		Topic:    events.PaymentCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.PaymentCompletedSuccessType,
-		Data: schemas.EventPaymentCompletedData{
-			TransactionID:        txJob.Transaction.ID,
-			PaymentID:            txJob.Transaction.ExternalID,
-			PaymentStatus:        string(data.SuccessPaymentStatus),
-			PaymentCompletedAt:   gotPaymentCompletedAt,
-			StellarTransactionID: txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-	assert.Equal(t, wantMsg, msg)
-}
-
-func Test_PaymentHandler_BuildFailureEvent(t *testing.T) {
-	paymentHandler := &PaymentTransactionHandler{}
-
-	ctx := context.Background()
-	txJob := TxJob{
-		Transaction: store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "payment-id",
-			TenantID:               "tenant-id",
-			StellarTransactionHash: sql.NullString{},
-		},
-	}
-	hErr := &utils.HorizonErrorWrapper{}
-	msg, err := paymentHandler.BuildFailureEvent(ctx, &txJob, hErr)
-	require.NoError(t, err)
-
-	gotPaymentCompletedAt := msg.Data.(schemas.EventPaymentCompletedData).PaymentCompletedAt
-	assert.WithinDuration(t, time.Now(), gotPaymentCompletedAt, time.Millisecond*100)
-	wantMsg := &events.Message{
-		Topic:    events.PaymentCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.PaymentCompletedErrorType,
-		Data: schemas.EventPaymentCompletedData{
-			TransactionID:        txJob.Transaction.ID,
-			PaymentID:            txJob.Transaction.ExternalID,
-			PaymentStatus:        string(data.FailedPaymentStatus),
-			PaymentStatusMessage: hErr.Error(),
-			PaymentCompletedAt:   gotPaymentCompletedAt,
-			StellarTransactionID: txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-	assert.Equal(t, wantMsg, msg)
 }
 
 func Test_PaymentHandler_MonitorTransactionProcessingStarted(t *testing.T) {

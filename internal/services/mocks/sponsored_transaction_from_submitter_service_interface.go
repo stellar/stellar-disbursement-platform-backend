@@ -31,24 +31,6 @@ func (_m *MockSponsoredTransactionFromSubmitterService) SyncBatchTransactions(ct
 	return r0
 }
 
-// SyncTransaction provides a mock function with given fields: ctx, transactionID
-func (_m *MockSponsoredTransactionFromSubmitterService) SyncTransaction(ctx context.Context, transactionID string) error {
-	ret := _m.Called(ctx, transactionID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for SyncTransaction")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = rf(ctx, transactionID)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // NewMockSponsoredTransactionFromSubmitterService creates a new instance of MockSponsoredTransactionFromSubmitterService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockSponsoredTransactionFromSubmitterService(t interface {

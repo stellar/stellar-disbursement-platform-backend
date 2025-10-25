@@ -5,15 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -204,54 +200,6 @@ func (h *WalletCreationTransactionHandler) applyTransactionData(operation *txnbu
 		SorobanData: &transactionData,
 	}
 	return nil
-}
-
-func (h *WalletCreationTransactionHandler) BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error) {
-	msg := &events.Message{
-		Topic:    events.WalletCreationCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.WalletCreationCompletedSuccessType,
-		Data: schemas.EventWalletCreationCompletedData{
-			TransactionID:               txJob.Transaction.ID,
-			WalletCreationID:            txJob.Transaction.ExternalID,
-			WalletCreationStatus:        string(data.SuccessWalletStatus),
-			WalletCreationStatusMessage: "",
-			WalletCreationCompletedAt:   time.Now(),
-			StellarTransactionID:        txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-
-	validationErr := msg.Validate()
-	if validationErr != nil {
-		return nil, fmt.Errorf("validating message: %w", validationErr)
-	}
-
-	return msg, nil
-}
-
-func (h *WalletCreationTransactionHandler) BuildFailureEvent(ctx context.Context, txJob *TxJob, err error) (*events.Message, error) {
-	msg := &events.Message{
-		Topic:    events.WalletCreationCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.WalletCreationCompletedErrorType,
-		Data: schemas.EventWalletCreationCompletedData{
-			TransactionID:               txJob.Transaction.ID,
-			WalletCreationID:            txJob.Transaction.ExternalID,
-			WalletCreationStatus:        string(data.FailedWalletStatus),
-			WalletCreationStatusMessage: err.Error(),
-			WalletCreationCompletedAt:   time.Now(),
-			StellarTransactionID:        txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-
-	validationErr := msg.Validate()
-	if validationErr != nil {
-		return nil, fmt.Errorf("validating message: %w", validationErr)
-	}
-
-	return msg, nil
 }
 
 func (h *WalletCreationTransactionHandler) MonitorTransactionProcessingStarted(ctx context.Context, txJob *TxJob, jobUUID string) {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/stellar/go/txnbuild"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
@@ -22,12 +21,6 @@ const (
 type TransactionHandlerInterface interface {
 	// BuildInnerTransaction builds the inner transaction for a given job
 	BuildInnerTransaction(ctx context.Context, txJob *TxJob, sequenceNumber int64, distributionAccount string) (*txnbuild.Transaction, error)
-
-	// BuildSuccessEvent builds an appropriate event message for a successful transaction
-	BuildSuccessEvent(ctx context.Context, txJob *TxJob) (*events.Message, error)
-
-	// BuildFailureEvent builds an appropriate event message for a failed transaction
-	BuildFailureEvent(ctx context.Context, txJob *TxJob, err error) (*events.Message, error)
 
 	// RequiresRebuildOnRetry returns true if this transaction type needs to be rebuilt
 	// when retried

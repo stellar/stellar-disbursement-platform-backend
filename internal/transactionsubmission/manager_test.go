@@ -486,10 +486,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
 
-			mockEventProducer := &events.MockProducer{}
-			mockEventProducer.On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).Return(nil).Once()
-			defer mockEventProducer.AssertExpectations(t)
-
 			monitorService := tssMonitor.TSSMonitorService{
 				Client:        mMonitorClient,
 				GitCommitHash: "gitCommitHash0x",
@@ -501,7 +497,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			handlerFactory := NewTransactionHandlerFactory(
 				submitterEngine,
 				store.NewTransactionModel(dbConnectionPool),
-				mockEventProducer,
 				monitorService,
 				mockRpcClient,
 			)
@@ -523,8 +518,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
-
-				eventProducer: mockEventProducer,
 
 				txHandlerFactory: handlerFactory,
 			}

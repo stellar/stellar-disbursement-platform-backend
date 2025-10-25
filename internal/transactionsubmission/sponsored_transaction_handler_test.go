@@ -17,8 +17,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
@@ -790,79 +788,6 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 
 		rpcClient.AssertExpectations(t)
 	})
-}
-
-func Test_SponsoredTransactionHandler_BuildSuccessEvent(t *testing.T) {
-	sponsoredHandler := &SponsoredTransactionHandler{}
-
-	ctx := context.Background()
-	txJob := &TxJob{
-		Transaction: store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "sponsored-transaction-id",
-			TenantID:               "tenant-id",
-			StellarTransactionHash: sql.NullString{},
-		},
-	}
-
-	msg, err := sponsoredHandler.BuildSuccessEvent(ctx, txJob)
-	require.NoError(t, err)
-
-	gotSponsoredTransactionCompletedAt := msg.Data.(schemas.EventSponsoredTransactionCompletedData).SponsoredTransactionCompletedAt
-	assert.WithinDuration(t, time.Now(), gotSponsoredTransactionCompletedAt, time.Millisecond*100)
-	wantMsg := &events.Message{
-		Topic:    events.SponsoredTransactionCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.SponsoredTransactionCompletedSuccessType,
-		Data: schemas.EventSponsoredTransactionCompletedData{
-			TransactionID:                     txJob.Transaction.ID,
-			SponsoredTransactionID:            txJob.Transaction.ExternalID,
-			SponsoredTransactionStatus:        "SUCCESS",
-			SponsoredTransactionStatusMessage: "",
-			SponsoredTransactionCompletedAt:   gotSponsoredTransactionCompletedAt,
-			StellarTransactionID:              txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-	assert.Equal(t, wantMsg, msg)
-}
-
-func Test_SponsoredTransactionHandler_BuildFailureEvent(t *testing.T) {
-	sponsoredHandler := &SponsoredTransactionHandler{}
-
-	ctx := context.Background()
-	txJob := &TxJob{
-		Transaction: store.Transaction{
-			ID:                     "tx-123",
-			ExternalID:             "sponsored_transaction_abc",
-			TenantID:               "tenant-1",
-			StellarTransactionHash: sql.NullString{},
-		},
-	}
-	hErr := &utils.HorizonErrorWrapper{
-		Err: fmt.Errorf("test error"),
-	}
-
-	msg, err := sponsoredHandler.BuildFailureEvent(ctx, txJob, hErr)
-	require.NoError(t, err)
-
-	gotSponsoredTransactionCompletedAt := msg.Data.(schemas.EventSponsoredTransactionCompletedData).SponsoredTransactionCompletedAt
-	assert.WithinDuration(t, time.Now(), gotSponsoredTransactionCompletedAt, time.Millisecond*100)
-	wantMsg := &events.Message{
-		Topic:    events.SponsoredTransactionCompletedTopic,
-		Key:      txJob.Transaction.ExternalID,
-		TenantID: txJob.Transaction.TenantID,
-		Type:     events.SponsoredTransactionCompletedErrorType,
-		Data: schemas.EventSponsoredTransactionCompletedData{
-			TransactionID:                     txJob.Transaction.ID,
-			SponsoredTransactionID:            txJob.Transaction.ExternalID,
-			SponsoredTransactionStatus:        "FAILED",
-			SponsoredTransactionStatusMessage: hErr.Error(),
-			SponsoredTransactionCompletedAt:   gotSponsoredTransactionCompletedAt,
-			StellarTransactionID:              txJob.Transaction.StellarTransactionHash.String,
-		},
-	}
-	assert.Equal(t, wantMsg, msg)
 }
 
 func Test_SponsoredTransactionHandler_MonitorTransactionProcessingStarted(t *testing.T) {
