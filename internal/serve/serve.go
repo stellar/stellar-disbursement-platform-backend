@@ -20,7 +20,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
@@ -85,16 +84,16 @@ type ServeOptions struct {
 	DisableMFA                     bool
 	DisableReCAPTCHA               bool
 	PasswordValidator              *authUtils.PasswordValidator
-	EnableScheduler                bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
-	tenantManager                  tenant.ManagerInterface
-	DistributionAccountService     services.DistributionAccountServiceInterface
-	DistAccEncryptionPassphrase    string
-	EventProducer                  events.Producer
-	MaxInvitationResendAttempts    int
-	SingleTenantMode               bool
-	CircleService                  circle.ServiceInterface
-	CircleAPIType                  circle.APIType
-	BridgeService                  bridge.ServiceInterface
+
+	tenantManager               tenant.ManagerInterface
+	DistributionAccountService  services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase string
+
+	MaxInvitationResendAttempts int
+	SingleTenantMode            bool
+	CircleService               circle.ServiceInterface
+	CircleAPIType               circle.APIType
+	BridgeService               bridge.ServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -317,7 +316,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				DisbursementManagementService: &services.DisbursementManagementService{
 					Models:                     o.Models,
 					AuthManager:                authManager,
-					EventProducer:              o.EventProducer,
 					CrashTrackerClient:         o.CrashTrackerClient,
 					DistributionAccountService: o.DistributionAccountService,
 				},
@@ -359,12 +357,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:                      o.Models,
 				DBConnectionPool:            o.MtnDBConnectionPool,
 				AuthManager:                 o.authManager,
-				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				DirectPaymentService: services.NewDirectPaymentService(
 					o.Models,
-					o.EventProducer,
 					o.DistributionAccountService,
 					o.SubmitterEngine,
 				),
@@ -421,7 +417,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
 				Models:             o.Models,
 				CrashTrackerClient: o.CrashTrackerClient,
-				EventProducer:      o.EventProducer,
 			}
 
 			r.With(middleware.RequirePermission(
@@ -480,7 +475,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Write operations
 			r.With(middleware.RequirePermission(
 				data.WriteWallets,
-				middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", walletsHandler.PostWallets)
 				r.Delete("/{id}", walletsHandler.DeleteWallet)
@@ -488,7 +483,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.RequirePermission(
 				data.WriteWallets,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
@@ -650,7 +645,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			ServiceID:        ServiceID,
 			Version:          o.Version,
 			DBConnectionPool: o.AdminDBConnectionPool,
-			Producer:         o.EventProducer,
 		}.ServeHTTP)
 
 		// START SEP-24 endpoints
@@ -703,7 +697,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
 				ReCAPTCHADisabled:           o.DisableReCAPTCHA,
 				NetworkPassphrase:           o.NetworkPassphrase,
-				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			}.VerifyReceiverRegistration)

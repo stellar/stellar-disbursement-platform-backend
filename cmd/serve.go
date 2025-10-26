@@ -16,8 +16,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
@@ -41,7 +39,6 @@ type ServerServiceInterface interface {
 		serveOpts serve.ServeOptions,
 		schedulerOptions scheduler.SchedulerOptions,
 		tssDBConnectionPool db.DBConnectionPool) ([]scheduler.SchedulerJobRegisterOption, error)
-	SetupConsumers(ctx context.Context, o SetupConsumersOptions) error
 }
 
 type ServerService struct{}
@@ -90,133 +87,40 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}),
 	}
 
-	if serveOpts.EnableScheduler {
-		if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
-			log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
-		}
-
-		if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
-			log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
-		}
-
-		sj = append(sj,
-			scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
-				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
-				Models:              models,
-				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-				CircleService:       serveOpts.CircleService,
-				CircleAPIType:       serveOpts.CircleAPIType,
-			}),
-			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
-				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
-				Models:              models,
-				TSSDBConnectionPool: tssDBConnectionPool,
-				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-			}),
-			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
-			scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
-				Models:                      models,
-				MessageDispatcher:           serveOpts.MessageDispatcher,
-				MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
-				Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
-				CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
-				JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
-			}),
-		)
-
+	if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
 	}
+
+	if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+	}
+
+	sj = append(sj,
+		scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
+			JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+			Models:              models,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			CircleService:       serveOpts.CircleService,
+			CircleAPIType:       serveOpts.CircleAPIType,
+		}),
+		scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
+			JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+			Models:              models,
+			TSSDBConnectionPool: tssDBConnectionPool,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+		}),
+		scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+		scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
+			Models:                      models,
+			MessageDispatcher:           serveOpts.MessageDispatcher,
+			MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
+			Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
+			JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
+		}),
+	)
 
 	return sj, nil
-}
-
-type SetupConsumersOptions struct {
-	EventBrokerOptions  cmdUtils.EventBrokerOptions
-	ServeOpts           serve.ServeOptions
-	TSSDBConnectionPool db.DBConnectionPool
-}
-
-func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOptions) error {
-	kafkaConfig := cmdUtils.KafkaConfig(o.EventBrokerOptions)
-
-	receiverInvitationConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.ReceiverWalletNewInvitationTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewSendReceiverWalletsInvitationEventHandler(eventhandlers.SendReceiverWalletsInvitationEventHandlerOptions{
-			MtnDBConnectionPool:         o.ServeOpts.MtnDBConnectionPool,
-			AdminDBConnectionPool:       o.ServeOpts.AdminDBConnectionPool,
-			MessageDispatcher:           o.ServeOpts.MessageDispatcher,
-			MaxInvitationResendAttempts: int64(o.ServeOpts.MaxInvitationResendAttempts),
-			Sep10SigningPrivateKey:      o.ServeOpts.Sep10SigningPrivateKey,
-			CrashTrackerClient:          o.ServeOpts.CrashTrackerClient.Clone(),
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("creating Receiver Invitation Kafka Consumer: %w", err)
-	}
-
-	handlers := []events.EventHandler{
-		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-		}),
-	}
-
-	paymentCompletedConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.PaymentCompletedTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		handlers...,
-	)
-	if err != nil {
-		return fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
-	}
-
-	// Stellar and Circle have their dedicated paymentReadyToPay consumer that reads from their dedicated topics.
-	// This is to avoid the noisy neighbor problem where slow circle payments can block stellar payments and vice versa.
-	stellarPaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.PaymentReadyToPayTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewStellarPaymentToSubmitterEventHandler(eventhandlers.StellarPaymentToSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
-	}
-
-	circlePaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.CirclePaymentReadyToPayTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewCirclePaymentToSubmitterEventHandler(eventhandlers.CirclePaymentToSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
-			CircleService:         o.ServeOpts.CircleService,
-			CircleAPIType:         o.ServeOpts.CircleAPIType,
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
-	}
-
-	producer, err := events.NewKafkaProducer(kafkaConfig)
-	if err != nil {
-		return fmt.Errorf("creating Kafka producer: %w", err)
-	}
-
-	go events.NewEventConsumer(receiverInvitationConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(paymentCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(stellarPaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(circlePaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-
-	return nil
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
@@ -341,14 +245,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    false,
 		},
 		{
-			Name:        "enable-scheduler",
-			Usage:       "Enable Scheduler Jobs. Deprecated: Use event-broker-type=SCHEDULER instead.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableScheduler,
-			FlagDefault: false,
-			Required:    false,
-		},
-		{
 			Name:        "max-invitation-resend-attempts",
 			Usage:       "The maximum number of attempts to resend the invitation to the Receiver Wallets.",
 			OptType:     types.Int,
@@ -459,10 +355,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault:    string(message.MessengerTypeDryRun),
 			Required:       true,
 		})
-
-	// event config options:
-	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
-	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
 	// distribution account resolver options:
 	distAccResolverOpts := signing.DistributionAccountResolverOptions{}
@@ -675,54 +567,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				}
 				serveOpts.BridgeService = bridgeService
 				log.Ctx(ctx).Infof("🌉 Bridge integration is enabled for base URL %s", bridgeIntegrationOpts.BridgeBaseURL)
-			}
-
-			// Validate the Event Broker Type and Scheduler Jobs
-			if serveOpts.EnableScheduler {
-				log.Ctx(ctx).Warn("The 'enable-scheduler' flag is deprecated. Please use 'event-broker-type=SCHEDULER' instead.")
-			}
-
-			switch eventBrokerOptions.EventBrokerType {
-			case events.KafkaEventBrokerType:
-				if serveOpts.EnableScheduler {
-					log.Ctx(ctx).Fatalf("Both 'event-broker-type=KAFKA' and 'enable-scheduler=true' are set. Please use only one approach.")
-				}
-			case events.NoneEventBrokerType:
-				if !serveOpts.EnableScheduler {
-					log.Ctx(ctx).Fatalf("No background processing method is enabled. Please set event-broker-type=SCHEDULER or event-broker-type=KAFKA.")
-				} else {
-					log.Ctx(ctx).Warn("Using event-broker-type=NONE with enable-scheduler=true is deprecated. Please use event-broker-type=SCHEDULER instead.")
-				}
-			case events.SchedulerEventBrokerType:
-				if serveOpts.EnableScheduler {
-					log.Ctx(ctx).Warn("Both event-broker-type=SCHEDULER and enable-scheduler=true are set. The enable-scheduler flag is redundant and can be removed.")
-				}
-				serveOpts.EnableScheduler = true
-			}
-
-			// Initialize event producer based on the event broker type
-			switch eventBrokerOptions.EventBrokerType {
-			case events.KafkaEventBrokerType:
-				kafkaProducer, kafkaErr := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
-				if kafkaErr != nil {
-					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
-				}
-				defer kafkaProducer.Close(ctx)
-				serveOpts.EventProducer = kafkaProducer
-
-				kafkaErr = serverService.SetupConsumers(ctx, SetupConsumersOptions{
-					EventBrokerOptions:  eventBrokerOptions,
-					ServeOpts:           serveOpts,
-					TSSDBConnectionPool: tssDBConnectionPool,
-				})
-				if kafkaErr != nil {
-					log.Fatalf("error setting up consumers: %v", kafkaErr)
-				}
-			case events.NoneEventBrokerType:
-				log.Ctx(ctx).Warn("Event Broker Type is NONE (deprecated). Using NoopProducer for logging events.")
-				serveOpts.EventProducer = events.NoopProducer{}
-			case events.SchedulerEventBrokerType:
-				serveOpts.EventProducer = events.NoopProducer{}
 			}
 
 			log.Ctx(ctx).Info("Starting Scheduler Service...")

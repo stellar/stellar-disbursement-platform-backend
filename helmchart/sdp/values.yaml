@@ -75,21 +75,6 @@ global:
   ## @param global.autoGenerateSecrets Determines if secrets should be auto-generated.
   autoGenerateSecrets: false
 
-  ## @extra global.eventBroker Configuration related to the event broker used by the application.
-  ## @param global.eventBroker.type The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".
-  ## @param global.eventBroker.urls A comma-separated list of broker URLs for the event broker.
-  ## @param global.eventBroker.consumerGroupId The consumer group ID for the event broker.
-  eventBroker:
-    type: "SCHEDULER"
-    urls: #required
-    consumerGroupId: #required
-
-    ## @extra global.eventBroker.kafka Configuration related to the Kafka event broker.
-    ## @param global.eventBroker.kafka.securityProtocol The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".
-    kafka:
-      securityProtocol:
-        #required
-
   ## @param global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
   singleTenantMode: false
 
@@ -158,6 +143,7 @@ sdp:
   ## @param sdp.deployment.podSecurityContext Security settings for the pods.
   ## @param sdp.deployment.securityContext Security settings for the container within the pod.
   ## @param sdp.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
+  ## @param sdp.deployment.resources Resource limits and requests for the SDP service pods. If not specified, falls back to global.resources.
   ## @param sdp.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param sdp.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param sdp.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
@@ -169,6 +155,7 @@ sdp:
     podSecurityContext: {}
     securityContext: {}
     strategy: {}
+    resources: {}
     nodeSelector: {}
     tolerations: []
     affinity: {}
@@ -261,10 +248,6 @@ sdp:
   ## @extra sdp.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts. This is needed for the init container.
   ## @extra sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.
   ## @extra sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
-  ## @extra sdp.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
-  ## @extra sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
-  ## @extra sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
-  ## @extra sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
   ## @extra sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   ## @extra sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   ## @extra sdp.kubeSecrets.data.BRIDGE_API_KEY The API key for the bridge integration. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
@@ -312,12 +295,6 @@ sdp:
 #      DISTRIBUTION_SEED: #required
 #      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
 #      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
-
-      ## Kafka Configuration when global.eventBroker.type is set to "KAFKA"
-#      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
-#      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
-#      KAFKA_SSL_ACCESS_KEY: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
-#      KAFKA_SSL_ACCESS_CERTIFICATE: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 
       ## Admin account configuration
 #      ADMIN_ACCOUNT: #required
@@ -371,7 +348,7 @@ tss:
   ## @param tss.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param tss.deployment.podSecurityContext Security settings for the pods.
   ## @param tss.deployment.securityContext Security settings for the container within the pod.
-  ## @param tss.deployment.resources Resource limits and requests for the application pods.
+  ## @param tss.deployment.resources Resource limits and requests for the TSS service pods. If not specified, falls back to global.resources.
   ## @param tss.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param tss.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param tss.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
@@ -432,10 +409,6 @@ tss:
   ## @extra tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
   ## @extra tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.
   ## @extra tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
-  ## @extra tss.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
-  ## @extra tss.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
-  ## @extra tss.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
-  ## @extra tss.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
   kubeSecrets:
     secretName: "tss-secret-name"
     create: false
@@ -451,13 +424,6 @@ tss:
 
       ## Monitoring and logging configuration
 #      SENTRY_DSN: #optional
-
-      ## Kafka Configuration when global.eventBroker.type is set to "KAFKA"
-#      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
-#      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
-#      KAFKA_SSL_ACCESS_KEY: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
-#      KAFKA_SSL_ACCESS_CERTIFICATE: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
-
 
       # =========================== START dashboard ===========================
       ## @section Dashboard
@@ -493,7 +459,7 @@ dashboard:
   ## @param dashboard.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param dashboard.deployment.podSecurityContext Security settings for the pods.
   ## @param dashboard.deployment.securityContext Security settings for the container within the pod.
-  ## @param dashboard.deployment.resources Resource limits and requests for the application pods.
+  ## @param dashboard.deployment.resources Resource limits and requests for the Dashboard service pods. If not specified, falls back to global.resources.
   ## @param dashboard.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param dashboard.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param dashboard.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.

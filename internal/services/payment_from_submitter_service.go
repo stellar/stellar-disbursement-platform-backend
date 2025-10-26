@@ -8,12 +8,10 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
 type PaymentFromSubmitterServiceInterface interface {
-	SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error
 	SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error
 }
 
@@ -47,24 +45,6 @@ func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, 
 	})
 	if err != nil {
 		return fmt.Errorf("synchronizing payments from submitter: %w", err)
-	}
-
-	return nil
-}
-
-// SyncTransaction syncs the completed TSS transaction with the SDP's payment.
-func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error {
-	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
-		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-			transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, tssDBTx, tx.TransactionID)
-			if err != nil {
-				return fmt.Errorf("getting transaction ID %s for update: %w", tx.TransactionID, err)
-			}
-			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, []*txSubStore.Transaction{transaction})
-		})
-	})
-	if err != nil {
-		return fmt.Errorf("synchronizing payment from submitter: %w", err)
 	}
 
 	return nil

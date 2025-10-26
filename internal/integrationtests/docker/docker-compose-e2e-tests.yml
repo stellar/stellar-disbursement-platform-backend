@@ -45,12 +45,8 @@ services:
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
       SINGLE_TENANT_MODE: "true"
-      EVENT_BROKER_TYPE: "KAFKA"
-      BROKER_URLS: "kafka:9092"
-      CONSUMER_GROUP_ID: "group-id"
-      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
-      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "0" # disabled - we're using kafka for this.
-      SCHEDULER_PAYMENT_JOB_SECONDS: "0" # disabled - we're using kafka for this.
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "5"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "5"
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin
@@ -109,10 +105,6 @@ services:
     depends_on:
       db:
         condition: service_started
-      kafka:
-        condition: service_started
-      kafka-init:
-        condition: service_completed_successfully
 
   tss:
     container_name: e2e-sdp-tss
@@ -135,16 +127,9 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
-
-      # multi-tenant
-      EVENT_BROKER_TYPE: "KAFKA"
-      BROKER_URLS: "kafka:9092"
-      CONSUMER_GROUP_ID: "group-id"
-      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
     depends_on:
       - db
       - sdp-api
-      - kafka
     entrypoint: ""
     command:
       - sh
@@ -155,62 +140,8 @@ services:
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
 
-  kafka:
-    container_name: e2e-kafka
-    image: apache/kafka:3.7.0
-    ports:
-      - "9094:9094"
-      - "9092:9092"
-    volumes:
-      - "kafka-data:/var/lib/kafka/data"
-    environment:
-      # KRaft settings
-      - KAFKA_NODE_ID=0
-      - KAFKA_PROCESS_ROLES=controller,broker
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-      # Listeners
-      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - CLUSTER_ID=e2e-test-cluster
-    healthcheck:
-      test: /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1
-      start_period: 15s
-      interval: 10s
-      timeout: 10s
-      retries: 10
-
-  kafka-init:
-    container_name: e2e-kafka-init
-    image: apache/kafka:3.7.0
-    entrypoint: [ "/bin/bash", "-c" ]
-    command: |
-      "
-        # Create consumer offsets topic explicitly
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic __consumer_offsets --partitions 50 --replication-factor 1 --bootstrap-server kafka:9092 || echo 'Consumer offsets topic may already exist'
-        
-        # Wait a bit for the topic to be fully created
-        sleep 2
-        
-        # Create application topics
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay --bootstrap-server kafka:9092
-      
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay.dlq --bootstrap-server kafka:9092
-      "
-    depends_on:
-      kafka:
-        condition: service_healthy
 volumes:
   e2e-postgres-db:
     driver: local
   e2e-postgres-ap-db:
-    driver: local
-  kafka-data:
     driver: local

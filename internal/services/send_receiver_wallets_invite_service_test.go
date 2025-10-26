@@ -17,7 +17,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -192,16 +191,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		)
 		mockCrashTrackerClient.On("LogAndReportErrors", ctx, mockErr, mockMsg).Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -338,16 +328,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Return(message.MessengerTypeAWSEmail, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, wallet1.ID)
@@ -489,16 +470,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -583,13 +555,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendIntervalDays: new(int64)})
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -663,13 +629,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			UpdatedAt:        time.Now().AddDate(0, 0, int(smsResendInterval*3)),
 		})
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -710,13 +670,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendIntervalDays: &smsResendInterval})
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -784,13 +738,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -922,16 +870,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -1052,13 +991,7 @@ func Test_SendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)

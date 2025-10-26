@@ -15,7 +15,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -74,7 +73,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
 			AccountID: distributionAccPubKey,
@@ -94,16 +92,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(1000), nil)
 
-		mockEventProducer.On("WriteMessages", mock.Anything, mock.MatchedBy(func(msgs []events.Message) bool {
-			if len(msgs) != 1 {
-				return false
-			}
-			msg := msgs[0]
-			return msg.Topic == events.PaymentReadyToPayTopic &&
-				msg.Type == events.PaymentReadyToPayDirectPayment
-		})).Return(nil)
-
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -117,7 +106,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Nil(t, payment.Disbursement)
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -139,9 +127,8 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -156,7 +143,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Contains(t, err.Error(), "Calth Reserve")
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -178,9 +164,8 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -196,7 +181,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Contains(t, err.Error(), enabledWallet.Name)
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -220,7 +204,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
 			AccountID: distributionAccPubKey,
@@ -240,7 +223,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(100), nil)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -257,7 +240,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Contains(t, err.Error(), "100.000000 available")
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -281,9 +263,8 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -316,9 +297,8 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -335,7 +315,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Contains(t, validationErr.Message, "must be specified by id or type")
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -353,9 +332,8 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -371,7 +349,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Equal(t, "chaos-marine-001", notFoundErr.Reference)
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -406,7 +383,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
 			AccountID: distributionAccPubKey,
@@ -426,16 +402,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountEnv, *asset).Return(float64(50000), nil)
 
-		mockEventProducer.On("WriteMessages", mock.Anything, mock.MatchedBy(func(msgs []events.Message) bool {
-			if len(msgs) != 1 {
-				return false
-			}
-			msg := msgs[0]
-			return msg.Topic == events.PaymentReadyToPayTopic &&
-				msg.Type == events.PaymentReadyToPayDirectPayment
-		})).Return(nil)
-
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -447,7 +414,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Equal(t, data.ReadyPaymentStatus, payment.Status)
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -469,9 +435,8 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -486,7 +451,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Contains(t, err.Error(), "no receiver wallet")
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 
@@ -504,9 +468,8 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 
 		horizonClientMock := &horizonclient.MockClient{}
 		mockDistService := &mocks.MockDistributionAccountService{}
-		mockEventProducer := events.NewMockProducer(t)
 
-		service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
 		})
 
@@ -522,7 +485,6 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		assert.Contains(t, notFoundErr.Message, "no receiver found with contact info")
 
 		mockDistService.AssertExpectations(t)
-		mockEventProducer.AssertExpectations(t)
 		horizonClientMock.AssertExpectations(t)
 	})
 }
@@ -572,21 +534,11 @@ func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
 	}
 
 	mockDistService := &mocks.MockDistributionAccountService{}
-	mockEventProducer := events.NewMockProducer(t)
 	horizonClientMock := &horizonclient.MockClient{}
 
 	mockDistService.On("GetBalance", mock.Anything, &circleDistAccount, *asset).Return(float64(1000), nil)
 
-	mockEventProducer.On("WriteMessages", mock.Anything, mock.MatchedBy(func(msgs []events.Message) bool {
-		if len(msgs) != 1 {
-			return false
-		}
-		msg := msgs[0]
-		return msg.Topic == events.CirclePaymentReadyToPayTopic &&
-			msg.Type == events.PaymentReadyToPayDirectPayment
-	})).Return(nil)
-
-	service := NewDirectPaymentService(models, mockEventProducer, mockDistService, engine.SubmitterEngine{
+	service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 		HorizonClient: horizonClientMock,
 	})
 
@@ -600,7 +552,6 @@ func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
 	assert.Nil(t, payment.Disbursement)
 
 	mockDistService.AssertExpectations(t)
-	mockEventProducer.AssertExpectations(t)
 	horizonClientMock.AssertExpectations(t)
 }
 
@@ -623,7 +574,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
-	service := NewDirectPaymentService(models, nil, nil, engine.SubmitterEngine{})
+	service := NewDirectPaymentService(models, nil, engine.SubmitterEngine{})
 
 	type payment struct {
 		asset  *data.Asset
@@ -743,7 +694,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 		Type: schema.DistributionAccountStellarDBVault,
 	}
 
-	service := NewDirectPaymentService(models, nil, nil, engine.SubmitterEngine{})
+	service := NewDirectPaymentService(models, nil, engine.SubmitterEngine{})
 
 	mockDistService := &mocks.MockDistributionAccountService{}
 	mockDistService.On("GetBalance", mock.Anything, distributionAccount, *asset).Return(100.0, nil)
@@ -857,7 +808,6 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 
 	service := &DirectPaymentService{
 		Models:                     models,
-		EventProducer:              nil,
 		DistributionAccountService: mockDistAccountService,
 		Resolvers:                  NewResolverFactory(models),
 		SubmitterEngine: engine.SubmitterEngine{
