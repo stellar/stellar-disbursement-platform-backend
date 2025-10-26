@@ -76,19 +76,17 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     true,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`WEB_AUTH_ENDPOINT="https://test.com/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://test.com/sep24"`,
 			},
 		},
 		{
@@ -96,11 +94,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     false,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -117,19 +113,17 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     true,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://tenant.example.com/sep24"`,
 			},
 		},
 		{
@@ -137,11 +131,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: true,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.PublicNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     false,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -157,19 +149,17 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     true,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`WEB_AUTH_ENDPOINT="https://test.com/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://test.com/sep24"`,
 			},
 		},
 		{
@@ -177,11 +167,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: false,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     false,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
@@ -198,19 +186,17 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			tenantInContext:   testTenant,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     true,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
-				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
-				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+				`WEB_AUTH_ENDPOINT="https://tenant.example.com/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://tenant.example.com/sep24"`,
 			},
 		},
 		{
@@ -218,11 +204,9 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			isTenantInContext: true,
 			s: StellarTomlHandler{
 				// DistributionAccountResolver: <---- this is being injected in the test below
-				NetworkPassphrase:        network.TestNetworkPassphrase,
-				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-				EnableAnchorPlatform:     false,
-				BaseURL:                  "https://sdp-domain",
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				BaseURL:               "https://sdp-domain",
 			},
 			wantLines: []string{
 				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
@@ -421,8 +405,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NetworkPassphrase:           network.TestNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
-			EnableAnchorPlatform:        true,
-			AnchorPlatformBaseSepURL:    "http://default-tenant.stellar.local:8000",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -474,8 +456,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NetworkPassphrase:           network.PublicNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
-			EnableAnchorPlatform:        true,
-			AnchorPlatformBaseSepURL:    "http://default-tenant.stellar.local:8000",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -528,8 +508,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
 			InstanceName:                "SDP Pubnet",
-			EnableAnchorPlatform:        true,
-			AnchorPlatformBaseSepURL:    "https://instance.example.com",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -593,8 +571,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			NetworkPassphrase:           network.PublicNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 			Models:                      models,
-			EnableAnchorPlatform:        true,
-			AnchorPlatformBaseSepURL:    "http://default-tenant.stellar.local:8000",
 			BaseURL:                     "https://sdp-domain",
 		}
 
@@ -631,9 +607,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			DistributionAccountResolver: distAccResolver,
 			NetworkPassphrase:           network.PublicNetworkPassphrase,
 			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
 			Models:                      models,
-			EnableAnchorPlatform:        false,
 			BaseURL:                     "https://sdp-domain",
 		}
 

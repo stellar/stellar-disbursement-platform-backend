@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 )
 
@@ -63,9 +63,9 @@ func createMockHTTPClient(t *testing.T, clientDomainKP *keypair.Full) *mocks.HTT
 	return mockClient
 }
 
-func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtManager *anchorplatform.JWTManager, setupHTTPMock bool) (*sep10Service, error) {
+func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtManager *sepauth.JWTManager, setupHTTPMock bool) (*sep10Service, error) {
 	if jwtManager == nil {
-		jwtManager = &anchorplatform.JWTManager{}
+		jwtManager = &sepauth.JWTManager{}
 	}
 
 	service, err := NewSEP10Service(
@@ -406,7 +406,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 	t.Parallel()
 	kps := newTestKeypairs()
 
-	jwtManager, err := anchorplatform.NewJWTManager("emperors-light-123", 3600000)
+	jwtManager, err := sepauth.NewJWTManager("emperors-light-123", 3600000)
 	require.NoError(t, err)
 
 	service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
@@ -630,7 +630,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 	kps := newTestKeypairs()
 	wrongKP := keypair.MustRandom()
 
-	jwtManager, err := anchorplatform.NewJWTManager("emperors-light-123", 3600000)
+	jwtManager, err := sepauth.NewJWTManager("emperors-light-123", 3600000)
 	require.NoError(t, err)
 
 	service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)

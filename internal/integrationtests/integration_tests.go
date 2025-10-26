@@ -48,7 +48,6 @@ type IntegrationTestsOpts struct {
 	ReceiverAccountStellarMemo string
 	Sep10SigningPublicKey      string
 	RecaptchaSiteKey           string
-	AnchorPlatformBaseSepURL   string
 	ServerAPIBaseURL           string
 	AdminServerBaseURL         string
 	AdminServerAccountID       string
@@ -57,7 +56,6 @@ type IntegrationTestsOpts struct {
 	CircleAPIKey               string
 	HorizonURL                 string
 	NetworkPassphrase          string
-	EnableAnchorPlatform       bool
 	SingleTenantMode           bool
 }
 
@@ -69,7 +67,6 @@ type IntegrationTestsService struct {
 	tenantManager         *tenant.Manager
 	serverAPI             ServerAPIIntegrationTestsInterface
 	adminAPI              AdminAPIIntegrationTestsInterface
-	anchorPlatform        AnchorPlatformIntegrationTestsInterface
 	horizonClient         horizonclient.ClientInterface
 	sdpSepServices        SDPSepServicesIntegrationTestsInterface
 }
@@ -128,29 +125,16 @@ func (it *IntegrationTestsService) initServices(_ context.Context, opts Integrat
 		HTTP:       httpclient.DefaultClient(),
 	}
 
-	if !opts.EnableAnchorPlatform {
-		it.sdpSepServices = &SDPSepServicesIntegrationTests{
-			HTTPClient:                httpclient.DefaultClient(),
-			SDPBaseURL:                opts.ServerAPIBaseURL,
-			TenantName:                opts.TenantName,
-			ReceiverAccountPublicKey:  opts.ReceiverAccountPublicKey,
-			ReceiverAccountPrivateKey: opts.ReceiverAccountPrivateKey,
-			Sep10SigningPublicKey:     opts.Sep10SigningPublicKey,
-			DisbursedAssetCode:        opts.DisbursedAssetCode,
-			NetworkPassphrase:         opts.NetworkPassphrase,
-			SingleTenantMode:          opts.SingleTenantMode,
-		}
-	}
-
-	// initialize anchor platform integration tests service
-	it.anchorPlatform = &AnchorPlatformIntegrationTests{
+	it.sdpSepServices = &SDPSepServicesIntegrationTests{
 		HTTPClient:                httpclient.DefaultClient(),
+		SDPBaseURL:                opts.ServerAPIBaseURL,
 		TenantName:                opts.TenantName,
-		AnchorPlatformBaseSepURL:  opts.AnchorPlatformBaseSepURL,
 		ReceiverAccountPublicKey:  opts.ReceiverAccountPublicKey,
 		ReceiverAccountPrivateKey: opts.ReceiverAccountPrivateKey,
 		Sep10SigningPublicKey:     opts.Sep10SigningPublicKey,
 		DisbursedAssetCode:        opts.DisbursedAssetCode,
+		NetworkPassphrase:         opts.NetworkPassphrase,
+		SingleTenantMode:          opts.SingleTenantMode,
 	}
 
 	// initialize server api integration tests service
@@ -269,11 +253,7 @@ func (it *IntegrationTestsService) registerReceiverWalletIfNeeded(ctx context.Co
 		return nil
 	}
 
-	if opts.EnableAnchorPlatform {
-		return it.registerWithAnchorPlatform(ctx, opts, disbursement)
-	} else {
-		return it.registerWithInternalSEP(ctx, opts, disbursement)
-	}
+	return it.registerWithInternalSEP(ctx, opts, disbursement)
 }
 
 func (it *IntegrationTestsService) registerWithInternalSEP(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
@@ -351,58 +331,6 @@ func (it *IntegrationTestsService) registerWithInternalSEP(ctx context.Context, 
 	}
 
 	log.Ctx(ctx).Info("✅ SEP-24 registration completed successfully")
-	return nil
-}
-
-// registerWithAnchorPlatform is a function that registers the receiver wallet through the SEP-24 flow if needed,
-// i.e. if the registration contact type does not include the wallet address, used with Anchor Platform
-func (it *IntegrationTestsService) registerWithAnchorPlatform(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
-	log.Ctx(ctx).Info("Starting challenge transaction on anchor platform")
-	challengeTx, err := it.anchorPlatform.StartChallengeTransaction()
-	if err != nil {
-		return fmt.Errorf("creating SEP10 challenge transaction: %w", err)
-	}
-
-	log.Ctx(ctx).Info("Signing challenge transaction with Sep10SigningKey")
-	signedTx, err := it.anchorPlatform.SignChallengeTransaction(challengeTx)
-	if err != nil {
-		return fmt.Errorf("signing SEP10 challenge transaction: %w", err)
-	}
-
-	log.Ctx(ctx).Info("Sending challenge transaction to anchor platform")
-	authSEP10Token, err := it.anchorPlatform.SendSignedChallengeTransaction(signedTx)
-	if err != nil {
-		return fmt.Errorf("sending SEP10 challenge transaction: %w", err)
-	}
-
-	log.Ctx(ctx).Info("Creating SEP24 deposit transaction on anchor platform")
-	authSEP24Token, _, err := it.anchorPlatform.CreateSep24DepositTransaction(authSEP10Token)
-	if err != nil {
-		return fmt.Errorf("creating SEP24 deposit transaction: %w", err)
-	}
-
-	disbursementInstructions, err := readDisbursementCSV(opts.DisbursementCSVFilePath, opts.DisbursementCSVFileName)
-	if err != nil {
-		return fmt.Errorf("reading disbursement CSV: %w", err)
-	}
-
-	log.Ctx(ctx).Info("Completing receiver registration using server API")
-	if err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
-		OTP:               data.TestnetAlwaysValidOTP,
-		PhoneNumber:       disbursementInstructions[0].Phone,
-		Email:             disbursementInstructions[0].Email,
-		VerificationValue: disbursementInstructions[0].VerificationValue,
-		VerificationField: disbursement.VerificationField,
-		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
-	}); err != nil {
-		return fmt.Errorf("registering receiver: %w", err)
-	}
-
-	log.Ctx(ctx).Info("Validating receiver data after completing registration")
-	if err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain); err != nil {
-		return fmt.Errorf("validating receiver after registration: %w", err)
-	}
-
 	return nil
 }
 
@@ -513,14 +441,8 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 	distributionAccType := schema.AccountType(opts.DistributionAccountType)
 
 	// Use appropriate base URL based on whether we're using Anchor Platform or Internal SEP
-	// For Internal SEP, use 3-part domain with tenant name for proper tenant extraction in SEP-24
-	// For Anchor Platform, use the standard localhost URL
-	var baseURL string
-	if opts.EnableAnchorPlatform {
-		baseURL = "http://localhost:8000"
-	} else {
-		baseURL = fmt.Sprintf("http://%s.stellar.local:8000", opts.TenantName)
-	}
+	// Use 3-part domain with tenant name for proper tenant extraction in SEP-24
+	baseURL := fmt.Sprintf("http://%s.stellar.local:8000", opts.TenantName)
 
 	t, err := it.adminAPI.CreateTenant(ctx, CreateTenantRequest{
 		Name:                    opts.TenantName,

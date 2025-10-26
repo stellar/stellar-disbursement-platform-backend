@@ -24,75 +24,12 @@ jobs:
       max-parallel: 1
       matrix:
         platform:
-          # Anchor Platform tests (existing)
-          - "AP-Stellar-phone"
-          - "AP-Stellar-phone-FUTURENET"
-          - "AP-Stellar-phoneWallet"
-          - "AP-Stellar-email"
-          - "AP-Circle-transfers-phone"
-          - "AP-Circle-payouts-phoneWallet"
-          # Internal SEP tests (new)
-          - "Internal-Stellar-phone"
-          - "Internal-Stellar-phoneWallet"
-          - "Internal-Stellar-email"
+          - "Stellar-phone"
+          - "Stellar-phoneWallet"
+          - "Stellar-email"
         include:
-          # Anchor Platform configurations (existing - with AP prefix)
-          - platform: "AP-Stellar-phone"
-            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            ENABLE_ANCHOR_PLATFORM: "true"
-            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
-            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
-            DISBURSED_ASSET_CODE: "USDC"
-            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "AP-Stellar-phoneWallet"
-            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            ENABLE_ANCHOR_PLATFORM: "true"
-            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
-            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
-            DISBURSED_ASSET_CODE: "USDC"
-            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "AP-Stellar-email"
-            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            ENABLE_ANCHOR_PLATFORM: "true"
-            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
-            REGISTRATION_CONTACT_TYPE: "EMAIL"
-            DISBURSED_ASSET_CODE: "USDC"
-            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "AP-Circle-transfers-phone"
-            environment: "Receiver Registration - E2E Integration Tests (Circle)"
-            ENABLE_ANCHOR_PLATFORM: "true"
-            CIRCLE_API_TYPE: "TRANSFERS"
-            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
-            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
-            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
-            DISBURSED_ASSET_CODE: "USDC"
-            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "AP-Circle-payouts-phoneWallet"
-            environment: "Receiver Registration - E2E Integration Tests (Circle)"
-            ENABLE_ANCHOR_PLATFORM: "true"
-            CIRCLE_API_TYPE: "PAYOUTS"
-            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
-            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
-            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
-            DISBURSED_ASSET_CODE: "USDC"
-            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "AP-Stellar-phone-FUTURENET"
-            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            ENABLE_ANCHOR_PLATFORM: "true"
-            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
-            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
-            DISBURSED_ASSET_CODE: "XLM"
-            NETWORK_PASSPHRASE: "Test SDF Future Network ; October 2022"
-            HORIZON_URL: "https://horizon-futurenet.stellar.org"
-          
-          # Internal SEP configurations (new)
           - platform: "Internal-Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            ENABLE_ANCHOR_PLATFORM: "false"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
@@ -100,7 +37,6 @@ jobs:
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
           - platform: "Internal-Stellar-phoneWallet"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            ENABLE_ANCHOR_PLATFORM: "false"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
@@ -108,7 +44,6 @@ jobs:
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
           - platform: "Internal-Stellar-email"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
-            ENABLE_ANCHOR_PLATFORM: "false"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
             REGISTRATION_CONTACT_TYPE: "EMAIL"
@@ -117,7 +52,6 @@ jobs:
 
     environment: ${{ matrix.environment }}
     env:
-      ENABLE_ANCHOR_PLATFORM: ${{ matrix.ENABLE_ANCHOR_PLATFORM }}
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
       DISBURSEMENT_CSV_FILE_NAME: ${{ matrix.DISBURSEMENT_CSV_FILE_NAME }}
       REGISTRATION_CONTACT_TYPE: ${{ matrix.REGISTRATION_CONTACT_TYPE }}
@@ -138,15 +72,9 @@ jobs:
       - name: Run Docker Compose for SDP and TSS
         working-directory: internal/integrationtests/docker
         run: |
-          if [ "${{ matrix.ENABLE_ANCHOR_PLATFORM }}" = "true" ]; then
-            echo "Starting with Anchor Platform profile..."
-            export BASE_URL="http://localhost:8000"
-            docker compose -f docker-compose-e2e-tests.yml --profile anchor-platform up --build -V -d
-          else
-            echo "Starting without Anchor Platform (Internal SEP mode)..."
-            export BASE_URL="http://stellar.local:8000"
-            docker compose -f docker-compose-e2e-tests.yml up --build -V -d
-          fi
+          echo "Starting SDP with internal SEP services..."
+          export BASE_URL="http://stellar.local:8000"
+          docker compose -f docker-compose-e2e-tests.yml up --build -V -d
         shell: bash
 
       - name: Install curl
@@ -180,65 +108,24 @@ jobs:
           docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests create-data"
         shell: bash
 
-      - name: Restart Anchor Platform
-        if: matrix.ENABLE_ANCHOR_PLATFORM == 'true'
-        run: |
-          echo "Restarting Anchor Platform for asset configuration..."
-          docker restart e2e-anchor-platform
-        shell: bash
-
-      - name: Wait for the Anchor Platform to be up
-        if: matrix.ENABLE_ANCHOR_PLATFORM == 'true'
-        run: |
-          wait_for_server() {
-            local endpoint=$1
-            local max_wait_time=$2
-
-            SECONDS=0
-            while ! curl -s $endpoint > /dev/null; do
-              echo "Waiting for server at $endpoint to be up... $SECONDS seconds elapsed"
-              sleep 4
-              if [ $SECONDS -ge $max_wait_time ]; then
-                echo "Server at $endpoint is not up after $max_wait_time seconds."
-                exit 1
-              fi
-            done
-            echo "Server at $endpoint is up."
-          }
-
-          wait_for_server http://localhost:8080/health 120
-          wait_for_server http://localhost:8085/health 120
-        shell: bash
-
       - name: Verify SEP endpoints configuration
         run: |
           echo "Checking stellar.toml configuration..."
           TOML=$(curl -s http://localhost:8000/.well-known/stellar.toml)
           
-          if [ "${{ matrix.ENABLE_ANCHOR_PLATFORM }}" = "true" ]; then
-            echo "Verifying Anchor Platform endpoints in stellar.toml..."
-            if echo "$TOML" | grep -q "TRANSFER_SERVER.*8080"; then
-              echo "✅ TOML correctly points to Anchor Platform SEP-24 endpoints"
-            else
-              echo "❌ TOML does not point to Anchor Platform endpoints"
-              echo "$TOML"
-              exit 1
-            fi
+          echo "Verifying Internal SEP endpoints in stellar.toml..."
+          if echo "$TOML" | grep -q "TRANSFER_SERVER.*8000"; then
+            echo "✅ TOML correctly points to Internal SEP-24 endpoints"
           else
-            echo "Verifying Internal SEP endpoints in stellar.toml..."
-            if echo "$TOML" | grep -q "TRANSFER_SERVER.*8000"; then
-              echo "✅ TOML correctly points to Internal SEP-24 endpoints"
-            else
-              echo "❌ TOML does not point to Internal endpoints"
-              echo "$TOML"
-              exit 1
-            fi
+            echo "❌ TOML does not point to Internal endpoints"
+            echo "$TOML"
+            exit 1
           fi
         shell: bash
 
       - name: Start integration test command
         run: |
-          echo "Running integration tests with ENABLE_ANCHOR_PLATFORM=${{ matrix.ENABLE_ANCHOR_PLATFORM }}"
+          echo "Running integration tests with native SDP SEP services"
           docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
         shell: bash
 

@@ -11,7 +11,6 @@ import (
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -41,7 +40,6 @@ type ServerServiceInterface interface {
 	GetSchedulerJobRegistrars(ctx context.Context,
 		serveOpts serve.ServeOptions,
 		schedulerOptions scheduler.SchedulerOptions,
-		apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
 		tssDBConnectionPool db.DBConnectionPool) ([]scheduler.SchedulerJobRegisterOption, error)
 	SetupConsumers(ctx context.Context, o SetupConsumersOptions) error
 }
@@ -76,7 +74,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	ctx context.Context,
 	serveOpts serve.ServeOptions,
 	schedulerOptions scheduler.SchedulerOptions,
-	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
 	tssDBConnectionPool db.DBConnectionPool,
 ) ([]scheduler.SchedulerJobRegisterOption, error) {
 	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
@@ -91,10 +88,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:       serveOpts.CircleService,
 		}),
-	}
-
-	if serveOpts.EnableAnchorPlatform {
-		sj = append(sj, scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()))
 	}
 
 	if serveOpts.EnableScheduler {
@@ -131,9 +124,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			}),
 		)
 
-		if serveOpts.EnableAnchorPlatform {
-			sj = append(sj, scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models))
-		}
 	}
 
 	return sj, nil
@@ -155,7 +145,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		eventhandlers.NewSendReceiverWalletsInvitationEventHandler(eventhandlers.SendReceiverWalletsInvitationEventHandlerOptions{
 			MtnDBConnectionPool:         o.ServeOpts.MtnDBConnectionPool,
 			AdminDBConnectionPool:       o.ServeOpts.AdminDBConnectionPool,
-			AnchorPlatformBaseSepURL:    o.ServeOpts.AnchorPlatformBasePlatformURL,
 			MessageDispatcher:           o.ServeOpts.MessageDispatcher,
 			MaxInvitationResendAttempts: int64(o.ServeOpts.MaxInvitationResendAttempts),
 			Sep10SigningPrivateKey:      o.ServeOpts.Sep10SigningPrivateKey,
@@ -172,14 +161,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
 		}),
-	}
-
-	if o.ServeOpts.EnableAnchorPlatform {
-		handlers = append(handlers, eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
-		}))
 	}
 
 	paymentCompletedConsumer, err := events.NewKafkaConsumer(
@@ -275,7 +256,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:      "sep24-jwt-secret",
-			Usage:     `The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token`,
+			Usage:     `The JWT secret that's used to sign the SEP-24 JWT token`,
 			OptType:   types.String,
 			ConfigKey: &serveOpts.SEP24JWTSecret,
 			Required:  true,
@@ -302,40 +283,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.Sep10ClientAttributionRequired,
 			FlagDefault: true,
-			Required:    false,
-		},
-		{
-			Name: "anchor-platform-base-platform-url",
-			Usage: "The Base URL of the platform server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint. " +
-				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
-			OptType:   types.String,
-			ConfigKey: &serveOpts.AnchorPlatformBasePlatformURL,
-			Required:  false,
-		},
-		{
-			Name: "anchor-platform-base-sep-url",
-			Usage: "The Base URL of the sep server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file. " +
-				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
-			OptType:   types.String,
-			ConfigKey: &serveOpts.AnchorPlatformBaseSepURL,
-			Required:  false,
-		},
-		{
-			Name: "anchor-platform-outgoing-jwt-secret",
-			Usage: "The JWT secret used to create a JWT token used to send requests to the anchor platform. " +
-				"DEPRECATED: This configuration will be removed in a future version. Use ENABLE_ANCHOR_PLATFORM=false to use SDP's native SEP10/SEP24 endpoints.",
-			OptType:   types.String,
-			ConfigKey: &serveOpts.AnchorPlatformOutgoingJWTSecret,
-			Required:  false,
-		},
-		{
-			Name:        "enable-anchor-platform",
-			Usage:       "Enable Anchor Platform integration for SEP-1 TOML file. When true, SEP-1 TOML points to anchor platform URLs. When false, points to SDP SEP10/SEP24 URLs.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableAnchorPlatform,
-			FlagDefault: false,
 			Required:    false,
 		},
 		{
@@ -654,16 +601,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating message dispatcher: %s", err.Error())
 			}
 
-			// Setup the AP Auth enforcer (only if Anchor Platform is enabled)
-			var apAPIService anchorplatform.AnchorPlatformAPIServiceInterface
-			if serveOpts.EnableAnchorPlatform {
-				apAPIService, err = di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
-				}
-				serveOpts.AnchorPlatformAPIService = apAPIService
-			}
-
 			// Setup Distribution Account Resolver
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
 			distAccResolverOpts.MTNDBConnectionPool = mtnDBConnectionPool
@@ -789,7 +726,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 
 			log.Ctx(ctx).Info("Starting Scheduler Service...")
-			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
+			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, tssDBConnectionPool)
 			if innerErr != nil {
 				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
 			}

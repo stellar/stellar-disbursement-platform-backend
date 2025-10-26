@@ -16,7 +16,6 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -24,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
@@ -52,54 +52,49 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 }
 
 type ServeOptions struct {
-	Environment                     string
-	GitCommit                       string
-	Port                            int
-	Version                         string
-	InstanceName                    string
-	MonitorService                  monitor.MonitorServiceInterface
-	MtnDBConnectionPool             db.DBConnectionPool
-	AdminDBConnectionPool           db.DBConnectionPool
-	EC256PrivateKey                 string
-	Models                          *data.Models
-	CorsAllowedOrigins              []string
-	authManager                     auth.AuthManager
-	EmailMessengerClient            message.MessengerClient
-	MessageDispatcher               message.MessageDispatcherInterface
-	SEP24JWTSecret                  string
-	sep24JWTManager                 *anchorplatform.JWTManager
-	BaseURL                         string
-	ResetTokenExpirationHours       int
-	NetworkPassphrase               string
-	NetworkType                     utils.NetworkType
-	SubmitterEngine                 engine.SubmitterEngine
-	Sep10SigningPublicKey           string
-	Sep10SigningPrivateKey          string
-	Sep10ClientAttributionRequired  bool
-	Sep10Service                    services.SEP10Service
-	AnchorPlatformBaseSepURL        string
-	AnchorPlatformBasePlatformURL   string
-	AnchorPlatformOutgoingJWTSecret string
-	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
-	CrashTrackerClient              crashtracker.CrashTrackerClient
-	ReCAPTCHASiteKey                string
-	ReCAPTCHASiteSecretKey          string
-	CAPTCHAType                     validators.CAPTCHAType
-	ReCAPTCHAV3MinScore             float64
-	DisableMFA                      bool
-	DisableReCAPTCHA                bool
-	PasswordValidator               *authUtils.PasswordValidator
-	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
-	EnableAnchorPlatform            bool
-	tenantManager                   tenant.ManagerInterface
-	DistributionAccountService      services.DistributionAccountServiceInterface
-	DistAccEncryptionPassphrase     string
-	EventProducer                   events.Producer
-	MaxInvitationResendAttempts     int
-	SingleTenantMode                bool
-	CircleService                   circle.ServiceInterface
-	CircleAPIType                   circle.APIType
-	BridgeService                   bridge.ServiceInterface
+	Environment                    string
+	GitCommit                      string
+	Port                           int
+	Version                        string
+	InstanceName                   string
+	MonitorService                 monitor.MonitorServiceInterface
+	MtnDBConnectionPool            db.DBConnectionPool
+	AdminDBConnectionPool          db.DBConnectionPool
+	EC256PrivateKey                string
+	Models                         *data.Models
+	CorsAllowedOrigins             []string
+	authManager                    auth.AuthManager
+	EmailMessengerClient           message.MessengerClient
+	MessageDispatcher              message.MessageDispatcherInterface
+	SEP24JWTSecret                 string
+	sep24JWTManager                *sepauth.JWTManager
+	BaseURL                        string
+	ResetTokenExpirationHours      int
+	NetworkPassphrase              string
+	NetworkType                    utils.NetworkType
+	SubmitterEngine                engine.SubmitterEngine
+	Sep10SigningPublicKey          string
+	Sep10SigningPrivateKey         string
+	Sep10ClientAttributionRequired bool
+	Sep10Service                   services.SEP10Service
+	CrashTrackerClient             crashtracker.CrashTrackerClient
+	ReCAPTCHASiteKey               string
+	ReCAPTCHASiteSecretKey         string
+	CAPTCHAType                    validators.CAPTCHAType
+	ReCAPTCHAV3MinScore            float64
+	DisableMFA                     bool
+	DisableReCAPTCHA               bool
+	PasswordValidator              *authUtils.PasswordValidator
+	EnableScheduler                bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
+	tenantManager                  tenant.ManagerInterface
+	DistributionAccountService     services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase    string
+	EventProducer                  events.Producer
+	MaxInvitationResendAttempts    int
+	SingleTenantMode               bool
+	CircleService                  circle.ServiceInterface
+	CircleAPIType                  circle.APIType
+	BridgeService                  bridge.ServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -132,8 +127,8 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating Stellar Auth manager: %w", err)
 	}
 
-	// Setup Anchor Platform SEP24 JWT manager
-	sep24JWTManager, err := anchorplatform.NewJWTManager(opts.SEP24JWTSecret, 15000)
+	// Setup SEP24 JWT manager
+	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, 15000)
 	if err != nil {
 		return fmt.Errorf("error creating SEP-24 JWT manager: %w", err)
 	}
@@ -180,22 +175,6 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	}
 	if opts.DisableReCAPTCHA {
 		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
-	}
-
-	// Validate Anchor Platform configuration
-	if opts.EnableAnchorPlatform {
-		if opts.AnchorPlatformBaseSepURL == "" {
-			return fmt.Errorf("anchor-platform-base-sep-url is required when enable-anchor-platform is true")
-		}
-		if opts.AnchorPlatformBasePlatformURL == "" {
-			return fmt.Errorf("anchor-platform-base-platform-url is required when enable-anchor-platform is true")
-		}
-		if opts.AnchorPlatformOutgoingJWTSecret == "" {
-			return fmt.Errorf("anchor-platform-outgoing-jwt-secret is required when enable-anchor-platform is true")
-		}
-		log.Warnf("Anchor Platform integration is enabled. SEP-1 TOML will point to Anchor Platform URLs.")
-	} else {
-		log.Infof("Anchor Platform integration is disabled. SEP-1 TOML will point to SDP native SEP10/SEP24 URLs.")
 	}
 
 	return nil
@@ -676,13 +655,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		// START SEP-24 endpoints
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
-			AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			NetworkPassphrase:           o.NetworkPassphrase,
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
 			InstanceName:                o.InstanceName,
-			EnableAnchorPlatform:        o.EnableAnchorPlatform,
 			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
 
@@ -694,19 +671,19 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			}
 			r.Get("/info", sep24Handler.GetInfo)
 			// Protect transaction lookup with SEP-10 auth to ensure only authorized clients can access details
-			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
+			r.With(sepauth.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
 
 			// For initiating interactive deposit, allow either the new middleware (preferred) or legacy header path inside handler
-			r.With(anchorplatform.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
+			r.With(sepauth.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
 		})
 
-		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		sep24QueryTokenAuthenticationMiddleware := sepauth.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/wallet-registration/*", httphandler.SEP24InteractiveDepositHandler{
 			App:      sep24frontend.App,
 			BasePath: "app/dist",
 		}.ServeApp)
 
-		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		sep24HeaderTokenAuthenticationMiddleware := sepauth.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Route("/sep24-interactive-deposit", func(r chi.Router) {
 			r.Get("/info", httphandler.ReceiverRegistrationHandler{
 				Models:              o.Models,

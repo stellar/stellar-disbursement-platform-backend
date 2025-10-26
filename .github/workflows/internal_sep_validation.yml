@@ -15,7 +15,7 @@ permissions:
 jobs:
   internal-sep-validation:
     runs-on: ubuntu-latest
-    # environment: "Internal SEP Tests"
+    # environment: "Internal SEP Tests" we need to create this in the github environment
     environment: "Anchor Integration Tests"
     env:
       DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
@@ -24,7 +24,6 @@ jobs:
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
-      ENABLE_ANCHOR_PLATFORM: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -54,7 +53,7 @@ jobs:
           TOML=$(curl -s -H "SDP-Tenant-Name: integration-tests" "http://localhost:8000/.well-known/stellar.toml")
           echo "Stellar TOML received"
           
-          # Verify it points to internal endpoints when AP is disabled
+          # Verify it points to internal endpoints
           if echo "$TOML" | grep -q "TRANSFER_SERVER.*localhost:8000"; then
             echo "✅ TOML correctly points to internal SEP-24 endpoints"
           else

@@ -125,7 +125,7 @@ To enhance security, disbursement responsibilities should be distributed among m
 
 ![high_level_architecture](./docs/images/multi-tenant-architecture.png)
 
-The [SDP Dashboard][sdp-dashboard] and [Anchor Platform] components are separate projects that must be installed and configured alongside the services included in this project.
+The [SDP Dashboard][sdp-dashboard] components are separate projects that must be installed and configured alongside the services included in this project.
 
 In a future iteration of this project, the Transaction Submission Service (TSS) will also be moved to its own repository to be used as an independent service. At that point, this project will include the services contained in the Core module shown in the diagram above.
 
@@ -174,12 +174,9 @@ SEP10_SIGNING_PRIVATE_KEY=S... # Private key for SEP10 signing
 
 # SEP24 Configuration  
 SEP24_JWT_SECRET=jwt_secret_... # JWT secret for SEP24 tokens
-
-# Anchor Platform Integration (Optional)
-ENABLE_ANCHOR_PLATFORM=false   # Set to false to use native SEP10/SEP24
 ```
 
-When `ENABLE_ANCHOR_PLATFORM=false`, the SDP serves its own SEP10/SEP24 endpoints and the `stellar.toml` file points to these native endpoints instead of external Anchor Platform URLs.
+The SDP serves its own SEP10/SEP24 endpoints and the `stellar.toml` file points to these native endpoints instead of external Anchor Platform URLs.
 
 #### Environment Variables
 
@@ -191,7 +188,6 @@ The following environment variables are required for SEP10/SEP24 functionality:
 - `SEP24_JWT_SECRET` - JWT secret for SEP24 token signing
 
 **Optional Variables:**
-- `ENABLE_ANCHOR_PLATFORM` - Set to `false` to use native SEP10/SEP24 (default: `false`)
 - `BASE_URL` - Base URL for generating SEP endpoint URLs in stellar.toml
 
 **Development Setup:**
@@ -286,12 +282,6 @@ The Core service now includes native implementations of SEP10 and SEP24 protocol
 - **Stellar.toml Generation**: Dynamically generates stellar.toml files with appropriate SEP endpoints
 - **Multi-tenant Support**: Supports SEP10/SEP24 across different tenant domains
 - **JWT Token Management**: Handles authentication tokens for secure API access
-
-These endpoints are available when `ENABLE_ANCHOR_PLATFORM=false` and provide a complete wallet integration solution without requiring external Anchor Platform services.
-
-#### Core + Anchor Platform Integration
-
-For a full understanding on how the Core and Anchor Platform components interact, as well as the best security and configuration practices, please refer to the [Anchor Platform Integration Points](https://docs.stellar.org/stellar-disbursement-platform/anchor-platform-integration-points) section of the Stellar Docs.
 
 ### Transaction Submission Service
 
@@ -511,4 +501,3 @@ stateDiagram-v2
 ```
 
 [sdp-dashboard]: https://github.com/stellar/stellar-disbursement-platform-frontend
-[Anchor Platform]: https://github.com/stellar/java-stellar-anchor-sdk

@@ -30,7 +30,3 @@ func ParseEventBrokerType(ebType string) (EventBrokerType, error) {
 type EventReceiverWalletSMSInvitationData struct {
 	ReceiverWalletID string `json:"id"`
 }
-
-type EventPatchAnchorPlatformTransactionCompletionData struct {
-	PaymentID string `json:"payment_id"`
-}

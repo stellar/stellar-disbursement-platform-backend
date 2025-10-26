@@ -39,7 +39,6 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 				"created_at",
 				"updated_at",
 				"invitation_sent_at",
-				"anchor_platform_transaction_synced_at",
 				`COALESCE(anchor_platform_transaction_id, '') AS "anchor_platform_transaction_id"`,
 				`COALESCE(stellar_address, '') AS "stellar_address"`,
 				`COALESCE(stellar_memo, '') AS "stellar_memo"`,
@@ -63,7 +62,6 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 				"rw.created_at",
 				"rw.updated_at",
 				"rw.invitation_sent_at",
-				"rw.anchor_platform_transaction_synced_at",
 				`COALESCE(rw.anchor_platform_transaction_id, '') AS "anchor_platform_transaction_id"`,
 				`COALESCE(rw.stellar_address, '') AS "stellar_address"`,
 				`COALESCE(rw.stellar_memo, '') AS "stellar_memo"`,
@@ -87,7 +85,6 @@ func Test_ReceiversWalletColumnNames(t *testing.T) {
 				`rw.created_at AS "receiver_wallets.created_at"`,
 				`rw.updated_at AS "receiver_wallets.updated_at"`,
 				`rw.invitation_sent_at AS "receiver_wallets.invitation_sent_at"`,
-				`rw.anchor_platform_transaction_synced_at AS "receiver_wallets.anchor_platform_transaction_synced_at"`,
 				`COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallets.anchor_platform_transaction_id"`,
 				`COALESCE(rw.stellar_address, '') AS "receiver_wallets.stellar_address"`,
 				`COALESCE(rw.stellar_memo, '') AS "receiver_wallets.stellar_memo"`,
@@ -236,7 +233,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 					RemainingPayments: "0",
 					ReceivedAmounts:   nil,
 				},
-				AnchorPlatformTransactionID: receiverWallet1.AnchorPlatformTransactionID,
+				SEP24TransactionID: receiverWallet1.SEP24TransactionID,
 			},
 		}
 		assert.Equal(t, expected, actual)
@@ -307,7 +304,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 						},
 					},
 				},
-				AnchorPlatformTransactionID: receiverWallet1.AnchorPlatformTransactionID,
+				SEP24TransactionID: receiverWallet1.SEP24TransactionID,
 			},
 		}
 		assert.Equal(t, expected, actual)
@@ -413,7 +410,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 						},
 					},
 				},
-				AnchorPlatformTransactionID: receiverWallet1.AnchorPlatformTransactionID,
+				SEP24TransactionID: receiverWallet1.SEP24TransactionID,
 			},
 			{
 				ID:       receiverWallet2.ID,
@@ -447,7 +444,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 						},
 					},
 				},
-				AnchorPlatformTransactionID: receiverWallet2.AnchorPlatformTransactionID,
+				SEP24TransactionID: receiverWallet2.SEP24TransactionID,
 			},
 		}
 		assert.Equal(t, expected, actual)
@@ -522,7 +519,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 					RemainingPayments: "0",
 					ReceivedAmounts:   nil,
 				},
-				AnchorPlatformTransactionID: receiverWallet.AnchorPlatformTransactionID,
+				SEP24TransactionID: receiverWallet.SEP24TransactionID,
 			},
 		}
 		assert.Equal(t, expected, actual)
@@ -597,17 +594,17 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
-			Status:                      receiverWallet.Status,
-			StellarAddress:              receiverWallet.StellarAddress,
-			StellarMemo:                 receiverWallet.StellarMemo,
-			StellarMemoType:             receiverWallet.StellarMemoType,
-			StatusHistory:               receiverWallet.StatusHistory,
-			OTPCreatedAt:                receiverWallet.OTPCreatedAt,
-			CreatedAt:                   receiverWallet.CreatedAt,
-			UpdatedAt:                   actual.UpdatedAt,
-			OTP:                         "123456",
-			OTPConfirmedAt:              nil,
-			AnchorPlatformTransactionID: receiverWallet.AnchorPlatformTransactionID,
+			Status:             receiverWallet.Status,
+			StellarAddress:     receiverWallet.StellarAddress,
+			StellarMemo:        receiverWallet.StellarMemo,
+			StellarMemoType:    receiverWallet.StellarMemoType,
+			StatusHistory:      receiverWallet.StatusHistory,
+			OTPCreatedAt:       receiverWallet.OTPCreatedAt,
+			CreatedAt:          receiverWallet.CreatedAt,
+			UpdatedAt:          actual.UpdatedAt,
+			OTP:                "123456",
+			OTPConfirmedAt:     nil,
+			SEP24TransactionID: receiverWallet.SEP24TransactionID,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -1224,19 +1221,19 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
-			OTP:                         receiverWallet.OTP,
-			Status:                      receiverWallet.Status,
-			StatusHistory:               actual.StatusHistory,
-			OTPCreatedAt:                actual.OTPCreatedAt,
-			OTPConfirmedAt:              actual.OTPConfirmedAt,
-			OTPConfirmedWith:            actual.OTPConfirmedWith,
-			CreatedAt:                   actual.CreatedAt,
-			UpdatedAt:                   actual.UpdatedAt,
-			StellarAddress:              receiverWallet.StellarAddress,
-			StellarMemo:                 receiverWallet.StellarMemo,
-			StellarMemoType:             receiverWallet.StellarMemoType,
-			AnchorPlatformTransactionID: receiverWallet.AnchorPlatformTransactionID,
-			InvitationSentAt:            actual.InvitationSentAt,
+			OTP:                receiverWallet.OTP,
+			Status:             receiverWallet.Status,
+			StatusHistory:      actual.StatusHistory,
+			OTPCreatedAt:       actual.OTPCreatedAt,
+			OTPConfirmedAt:     actual.OTPConfirmedAt,
+			OTPConfirmedWith:   actual.OTPConfirmedWith,
+			CreatedAt:          actual.CreatedAt,
+			UpdatedAt:          actual.UpdatedAt,
+			StellarAddress:     receiverWallet.StellarAddress,
+			StellarMemo:        receiverWallet.StellarMemo,
+			StellarMemoType:    receiverWallet.StellarMemoType,
+			SEP24TransactionID: receiverWallet.SEP24TransactionID,
+			InvitationSentAt:   actual.InvitationSentAt,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -1261,19 +1258,19 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 				DeepLinkSchema:    wallet.DeepLinkSchema,
 				Enabled:           true,
 			},
-			Status:                      receiverWallet.Status,
-			OTP:                         receiverWallet.OTP,
-			StatusHistory:               actual.StatusHistory,
-			OTPCreatedAt:                actual.OTPCreatedAt,
-			OTPConfirmedAt:              actual.OTPConfirmedAt,
-			OTPConfirmedWith:            actual.OTPConfirmedWith,
-			CreatedAt:                   actual.CreatedAt,
-			UpdatedAt:                   actual.UpdatedAt,
-			StellarAddress:              receiverWallet.StellarAddress,
-			StellarMemo:                 "",
-			StellarMemoType:             "",
-			AnchorPlatformTransactionID: receiverWallet.AnchorPlatformTransactionID,
-			InvitationSentAt:            actual.InvitationSentAt,
+			Status:             receiverWallet.Status,
+			OTP:                receiverWallet.OTP,
+			StatusHistory:      actual.StatusHistory,
+			OTPCreatedAt:       actual.OTPCreatedAt,
+			OTPConfirmedAt:     actual.OTPConfirmedAt,
+			OTPConfirmedWith:   actual.OTPConfirmedWith,
+			CreatedAt:          actual.CreatedAt,
+			UpdatedAt:          actual.UpdatedAt,
+			StellarAddress:     receiverWallet.StellarAddress,
+			StellarMemo:        "",
+			StellarMemoType:    "",
+			SEP24TransactionID: receiverWallet.SEP24TransactionID,
+			InvitationSentAt:   actual.InvitationSentAt,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -1283,72 +1280,6 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 		actual, err := receiverWalletModel.GetByStellarAccountAndMemo(ctx, receiverWallet.StellarAddress, wallet.SEP10ClientDomain, &receiverWallet.StellarMemo)
 		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Empty(t, actual)
-	})
-}
-
-func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
-
-	t.Run("doesn't update when there's no receiver wallet IDs", func(t *testing.T) {
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool)
-		require.NoError(t, err)
-		assert.Empty(t, receiverWallets)
-	})
-
-	t.Run("doesn't update receiver wallets not in the REGISTERED status", func(t *testing.T) {
-		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
-		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
-
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
-		require.NoError(t, err)
-		assert.Empty(t, receiverWallets)
-	})
-
-	t.Run("updates anchor platform transaction synced at successfully", func(t *testing.T) {
-		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
-		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
-
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
-		require.NoError(t, err)
-		require.Len(t, receiverWallets, 1)
-		assert.Equal(t, receiverWallet.ID, receiverWallets[0].ID)
-	})
-
-	t.Run("doesn't updates anchor platform transaction synced at when is already synced", func(t *testing.T) {
-		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
-		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
-
-		const q = "UPDATE receiver_wallets SET anchor_platform_transaction_synced_at = NOW() WHERE id = $1"
-		_, err := dbConnectionPool.ExecContext(ctx, q, receiverWallet.ID)
-		require.NoError(t, err)
-
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
-		require.NoError(t, err)
-		assert.Empty(t, receiverWallets)
 	})
 }
 
@@ -1582,13 +1513,13 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 		now := time.Now()
 
 		update := ReceiverWalletUpdate{
-			Status:                      RegisteredReceiversWalletStatus,
-			AnchorPlatformTransactionID: "test-tx-id",
-			StellarAddress:              "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-			StellarMemo:                 utils.Ptr("123456"),
-			StellarMemoType:             utils.Ptr(schema.MemoTypeID),
-			OTPConfirmedAt:              now,
-			OTPConfirmedWith:            "test@stellar.org",
+			Status:             RegisteredReceiversWalletStatus,
+			SEP24TransactionID: "test-tx-id",
+			StellarAddress:     "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			StellarMemo:        utils.Ptr("123456"),
+			StellarMemoType:    utils.Ptr(schema.MemoTypeID),
+			OTPConfirmedAt:     now,
+			OTPConfirmedWith:   "test@stellar.org",
 		}
 
 		err := receiverWalletModel.Update(ctx, receiverWallet.ID, update, dbConnectionPool)
@@ -1614,7 +1545,7 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, RegisteredReceiversWalletStatus, updated.Status)
-		assert.Equal(t, "test-tx-id", updated.AnchorPlatformTransactionID)
+		assert.Equal(t, "test-tx-id", updated.SEP24TransactionID)
 		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", updated.StellarAddress)
 		assert.Equal(t, "123456", updated.StellarMemo)
 		assert.Equal(t, schema.MemoTypeID, updated.StellarMemoType)
@@ -1735,8 +1666,7 @@ func Test_ReceiverWalletModel_UpdateStatusToReady(t *testing.T) {
 		assert.Empty(t, rw.OTPConfirmedAt)
 		assert.Empty(t, rw.OTPConfirmedWith)
 		assert.Empty(t, rw.OTPCreatedAt)
-		assert.Empty(t, rw.AnchorPlatformTransactionID)
-		assert.Empty(t, rw.AnchorPlatformTransactionSyncedAt)
+		assert.Empty(t, rw.SEP24TransactionID)
 	})
 }
 
