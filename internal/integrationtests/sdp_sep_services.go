@@ -134,9 +134,9 @@ func (s *SDPSepServicesIntegrationTests) GetSEP10Challenge(ctx context.Context) 
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("reading response body: %w", err)
+		body, bodyErr := io.ReadAll(resp.Body)
+		if bodyErr != nil {
+			return nil, fmt.Errorf("reading response body: %w", bodyErr)
 		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
@@ -240,9 +240,9 @@ func (s *SDPSepServicesIntegrationTests) ValidateSEP10Challenge(ctx context.Cont
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("reading response body: %w", err)
+		body, bodyErr := io.ReadAll(resp.Body)
+		if bodyErr != nil {
+			return nil, fmt.Errorf("reading response body: %w", bodyErr)
 		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
