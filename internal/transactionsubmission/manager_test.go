@@ -484,13 +484,13 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				Version:       "version123",
 			}
 
-			mockRpcClient := &mocks.MockRPCClient{}
+			mockRPCClient := &mocks.MockRPCClient{}
 
 			handlerFactory := NewTransactionHandlerFactory(
 				submitterEngine,
 				store.NewTransactionModel(dbConnectionPool),
 				monitorService,
-				mockRpcClient,
+				mockRPCClient,
 			)
 
 			manager := &Manager{

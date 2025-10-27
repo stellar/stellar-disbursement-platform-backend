@@ -378,7 +378,7 @@ func (e *HorizonErrorWrapper) handleExtrasResultCodes(msgBuilder *strings.Builde
 
 // IsRetryable returns true if the error should be retried
 func (e *HorizonErrorWrapper) IsRetryable() bool {
-	return !(e.IsHorizonError() && e.ShouldMarkAsError())
+	return !e.IsHorizonError() || !e.ShouldMarkAsError()
 }
 
 // ShouldReportToCrashTracker returns true if the error should be reported to crash tracker
@@ -398,6 +398,8 @@ var (
 )
 
 // RPCErrorWrapper wraps RPC simulation errors to provide consistent error handling
+//
+//nolint:errname // This is both an error and a wrapper
 type RPCErrorWrapper struct {
 	SimulationError *stellar.SimulationError
 	Err             error
@@ -413,7 +415,8 @@ func NewRPCErrorWrapper(err error) *RPCErrorWrapper {
 		return existingWrapper
 	}
 
-	if simErr, ok := err.(*stellar.SimulationError); ok {
+	var simErr *stellar.SimulationError
+	if errors.As(err, &simErr) {
 		return &RPCErrorWrapper{
 			SimulationError: simErr,
 			Err:             err,

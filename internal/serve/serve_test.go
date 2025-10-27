@@ -178,10 +178,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 			RPCRequestAuthHeaderValue: "test",
 		}
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
 
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
 	})
 
@@ -194,9 +194,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
 	})
 
@@ -209,9 +209,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
 	})
 
@@ -225,9 +225,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC request header value must be set when RPC request header key is set")
 	})
 
@@ -241,9 +241,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC request header key must be set when RPC request header value is set")
 	})
 
@@ -256,9 +256,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -273,27 +273,27 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
 	t.Run("embedded wallets enabled without WASM hash: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableEmbeddedWallets: true,
-			RpcConfig:             stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			RPCConfig:             stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "embedded wallets WASM hash must be set when embedded wallets are enabled")
 	})
 
 	t.Run("SEP-45 enabled without contract ID: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableSep45: true,
-			RpcConfig:   stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			RPCConfig:   stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "SEP-45 contract ID must be set when SEP-45 is enabled")
 	})
 
@@ -301,19 +301,19 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableEmbeddedWallets:   true,
 			EmbeddedWalletsWasmHash: "abc123",
-			RpcConfig:               stellar.RPCOptions{},
+			RPCConfig:               stellar.RPCOptions{},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
 	})
 
 	t.Run("SEP-45 enabled without RPC URL: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableSep45:     true,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:       stellar.RPCOptions{},
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       stellar.RPCOptions{},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
 	})
 
@@ -321,19 +321,19 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableEmbeddedWallets:   true,
 			EmbeddedWalletsWasmHash: "abc123",
-			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			RPCConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
 	t.Run("SEP-45 enabled with valid configuration: should not return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableSep45:     true,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -342,10 +342,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 			EnableEmbeddedWallets:   true,
 			EmbeddedWalletsWasmHash: "abc123",
 			EnableSep45:             true,
-			Sep45ContractId:         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			Sep45ContractID:         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -358,10 +358,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig:       rpcOptions,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       rpcOptions,
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -376,10 +376,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig:       rpcOptions,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       rpcOptions,
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 }
@@ -553,7 +553,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		EnableEmbeddedWallets:           true,
 		EmbeddedWalletsWasmHash:         "abc123",
 		EmbeddedWalletService:           mEmbeddedWalletService,
-		RpcConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		RPCConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)

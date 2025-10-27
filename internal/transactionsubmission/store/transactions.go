@@ -97,7 +97,11 @@ func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
 		return nil, fmt.Errorf("transaction type %q does not support memo", tx.TransactionType)
 	}
 
-	return schema.NewMemo(tx.MemoType, tx.Memo)
+	memo, err := schema.NewMemo(tx.MemoType, tx.Memo)
+	if err != nil {
+		return nil, fmt.Errorf("building memo: %w", err)
+	}
+	return memo, nil
 }
 
 func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {

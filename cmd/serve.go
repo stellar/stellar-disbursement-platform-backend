@@ -17,7 +17,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -233,8 +232,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Name:           "sep45-contract-id",
 			Usage:          "The ID of the SEP-45 web authentication contract (required when --enable-sep45 is true)",
 			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarContractId,
-			ConfigKey:      &serveOpts.Sep45ContractId,
+			CustomSetValue: cmdUtils.SetConfigOptionStellarContractID,
+			ConfigKey:      &serveOpts.Sep45ContractID,
 			Required:       false,
 		},
 		{
@@ -341,7 +340,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 	}
 	// rpc options
-	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&serveOpts.RpcConfig)...)
+	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&serveOpts.RPCConfig)...)
 
 	// crash tracker options
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
@@ -652,7 +651,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Setup Embedded Wallet Service (only if enabled)
 			if serveOpts.EnableEmbeddedWallets {
-				serveOpts.EmbeddedWalletService, err = dependencyinjection.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
+				serveOpts.EmbeddedWalletService, err = di.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
 					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
 					TSSDBConnectionPool: serveOpts.TSSDBConnectionPool,
 					WasmHash:            serveOpts.EmbeddedWalletsWasmHash,
@@ -662,7 +661,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 					log.Ctx(ctx).Fatalf("error creating embedded wallet service: %v", err)
 				}
 
-				serveOpts.WebAuthnService, err = dependencyinjection.NewWebAuthnService(context.Background(), dependencyinjection.WebAuthnServiceOptions{
+				serveOpts.WebAuthnService, err = di.NewWebAuthnService(context.Background(), di.WebAuthnServiceOptions{
 					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
 					SessionTTL:          5 * time.Minute,
 				})

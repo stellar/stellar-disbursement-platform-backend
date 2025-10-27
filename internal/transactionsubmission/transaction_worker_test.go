@@ -1621,7 +1621,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		MaxBaseFee:          100,
 	}
 
-	innerTx, _ := txnbuild.NewTransaction(
+	innerTx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount: &txnbuild.SimpleAccount{
 				AccountID: txJob.ChannelAccount.PublicKey,
@@ -1643,6 +1643,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			IncrementSequenceNum: true,
 		},
 	)
+	require.NoError(t, err)
 
 	handler := &MockTransactionHandler{}
 	handler.On("BuildInnerTransaction",

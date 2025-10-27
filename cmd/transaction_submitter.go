@@ -190,7 +190,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 
 			// Initializing the RPC Client
 			if rpcOptions.RPCUrl != "" {
-				rpcClient, rpcClientErr := di.NewRpcClient(ctx, rpcOptions)
+				rpcClient, rpcClientErr := di.NewRPCClient(ctx, rpcOptions)
 				if rpcClientErr != nil {
 					log.Ctx(ctx).Fatalf("error creating RPC client: %s", rpcClientErr.Error())
 				}

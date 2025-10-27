@@ -91,12 +91,12 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 	channelAccount := "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX"
 	sponsoredAccount := "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT"
 
-	contractIdBytes := strkey.MustDecode(strkey.VersionByteContract, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")
-	var contractId xdr.Hash
-	copy(contractId[:], contractIdBytes)
+	contractIDBytes := strkey.MustDecode(strkey.VersionByteContract, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")
+	var contractID xdr.Hash
+	copy(contractID[:], contractIDBytes)
 	contractAddress := xdr.ScAddress{
 		Type:       xdr.ScAddressTypeScAddressTypeContract,
-		ContractId: (*xdr.ContractId)(&contractId),
+		ContractId: (*xdr.ContractId)(&contractID),
 	}
 	functionSymbol := xdr.ScSymbol("transfer")
 
@@ -233,7 +233,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
 
-		accountId := xdr.MustAddress(distributionAccount)
+		accountID := xdr.MustAddress(distributionAccount)
 
 		invalidOp := xdr.InvokeHostFunctionOp{
 			HostFunction: xdr.HostFunction{
@@ -244,7 +244,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 						FromAddress: &xdr.ContractIdPreimageFromAddress{
 							Address: xdr.ScAddress{
 								Type:      xdr.ScAddressTypeScAddressTypeAccount,
-								AccountId: &accountId,
+								AccountId: &accountID,
 							},
 						},
 					},
@@ -289,14 +289,14 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("rejects operation requiring auth from channel account", func(t *testing.T) {
-			channelAccountId := xdr.MustAddress(channelAccount)
+			channelAccountID := xdr.MustAddress(channelAccount)
 			authEntry := xdr.SorobanAuthorizationEntry{
 				Credentials: xdr.SorobanCredentials{
 					Type: xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
 					Address: &xdr.SorobanAddressCredentials{
 						Address: xdr.ScAddress{
 							Type:      xdr.ScAddressTypeScAddressTypeAccount,
-							AccountId: &channelAccountId,
+							AccountId: &channelAccountID,
 						},
 						Nonce:                     1,
 						SignatureExpirationLedger: 100,
@@ -352,14 +352,14 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		})
 
 		t.Run("rejects operation requiring auth from distribution account", func(t *testing.T) {
-			distributionAccountId := xdr.MustAddress(distributionAccount)
+			distributionAccountID := xdr.MustAddress(distributionAccount)
 			authEntry := xdr.SorobanAuthorizationEntry{
 				Credentials: xdr.SorobanCredentials{
 					Type: xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
 					Address: &xdr.SorobanAddressCredentials{
 						Address: xdr.ScAddress{
 							Type:      xdr.ScAddressTypeScAddressTypeAccount,
-							AccountId: &distributionAccountId,
+							AccountId: &distributionAccountID,
 						},
 						Nonce:                     1,
 						SignatureExpirationLedger: 100,
@@ -416,14 +416,14 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 
 		t.Run("accepts operation requiring auth from other accounts", func(t *testing.T) {
 			otherAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
-			otherAccountId := xdr.MustAddress(otherAccount)
+			otherAccountID := xdr.MustAddress(otherAccount)
 			authEntry := xdr.SorobanAuthorizationEntry{
 				Credentials: xdr.SorobanCredentials{
 					Type: xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
 					Address: &xdr.SorobanAddressCredentials{
 						Address: xdr.ScAddress{
 							Type:      xdr.ScAddressTypeScAddressTypeAccount,
-							AccountId: &otherAccountId,
+							AccountId: &otherAccountID,
 						},
 						Nonce:                     1,
 						SignatureExpirationLedger: 100,
@@ -495,9 +495,9 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		})
 
 		t.Run("accepts operation with contract auth", func(t *testing.T) {
-			authContractIdBytes := strkey.MustDecode(strkey.VersionByteContract, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")
-			var authContractId xdr.Hash
-			copy(authContractId[:], authContractIdBytes)
+			authContractIDBytes := strkey.MustDecode(strkey.VersionByteContract, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")
+			var authContractID xdr.Hash
+			copy(authContractID[:], authContractIDBytes)
 
 			authEntry := xdr.SorobanAuthorizationEntry{
 				Credentials: xdr.SorobanCredentials{
@@ -505,7 +505,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 					Address: &xdr.SorobanAddressCredentials{
 						Address: xdr.ScAddress{
 							Type:       xdr.ScAddressTypeScAddressTypeContract,
-							ContractId: (*xdr.ContractId)(&authContractId),
+							ContractId: (*xdr.ContractId)(&authContractID),
 						},
 						Nonce:                     1,
 						SignatureExpirationLedger: 100,

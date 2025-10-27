@@ -427,16 +427,16 @@ func Test_SetConfigOptionStellarPrivateKey(t *testing.T) {
 }
 
 func Test_SetConfigOptionStellarContractId(t *testing.T) {
-	opts := struct{ stellarContractId string }{}
+	opts := struct{ stellarContractID string }{}
 
 	co := config.ConfigOption{
 		Name:           "stellar-contract-id",
 		OptType:        types.String,
-		CustomSetValue: SetConfigOptionStellarContractId,
-		ConfigKey:      &opts.stellarContractId,
+		CustomSetValue: SetConfigOptionStellarContractID,
+		ConfigKey:      &opts.stellarContractID,
 		Required:       false,
 	}
-	expectedContractId := "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"
+	expectedContractID := "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"
 
 	testCases := []customSetterTestCase[string]{
 		{
@@ -460,18 +460,18 @@ func Test_SetConfigOptionStellarContractId(t *testing.T) {
 		{
 			name:       "🎉 handles Stellar contract id through the CLI flag",
 			args:       []string{"--stellar-contract-id", "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"},
-			wantResult: expectedContractId,
+			wantResult: expectedContractID,
 		},
 		{
 			name:       "🎉 handles Stellar contract id through the ENV flag",
 			envValue:   "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			wantResult: expectedContractId,
+			wantResult: expectedContractID,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts.stellarContractId = ""
+			opts.stellarContractID = ""
 			customSetterTester(t, tc, co)
 		})
 	}
@@ -482,7 +482,7 @@ func Test_SetConfigOptionStellarContractId(t *testing.T) {
 		wantErrContains: "cannot be empty",
 	}
 	t.Run(tc.name, func(t *testing.T) {
-		opts.stellarContractId = ""
+		opts.stellarContractID = ""
 		co.Required = true
 		customSetterTester(t, tc, co)
 	})

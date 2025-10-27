@@ -9,10 +9,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 )
 
-const RpcClientInstanceName = "rpc_client_instance"
+const RPCClientInstanceName = "rpc_client_instance"
 
-func NewRpcClient(ctx context.Context, opts stellar.RPCOptions) (stellar.RPCClient, error) {
-	if instance, ok := GetInstance(RpcClientInstanceName); ok {
+func NewRPCClient(ctx context.Context, opts stellar.RPCOptions) (stellar.RPCClient, error) {
+	if instance, ok := GetInstance(RPCClientInstanceName); ok {
 		if rpcClient, ok := instance.(stellar.RPCClient); ok {
 			return rpcClient, nil
 		}
@@ -27,7 +27,7 @@ func NewRpcClient(ctx context.Context, opts stellar.RPCOptions) (stellar.RPCClie
 	}
 	rpcClient := stellar.NewRPCClientWrapper(opts.RPCUrl, httpClient)
 
-	SetInstance(RpcClientInstanceName, rpcClient)
+	SetInstance(RPCClientInstanceName, rpcClient)
 
 	return rpcClient, nil
 }

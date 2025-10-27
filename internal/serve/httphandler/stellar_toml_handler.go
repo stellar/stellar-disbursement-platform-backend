@@ -23,7 +23,7 @@ type StellarTomlHandler struct {
 	NetworkPassphrase           string
 	Models                      *data.Models
 	Sep10SigningPublicKey       string
-	Sep45ContractId             string
+	Sep45ContractID             string
 	InstanceName                string
 }
 
@@ -62,11 +62,11 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	TRANSFER_SERVER_SEP0024=%q
 `, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024))
 
-	if s.Sep45ContractId != "" {
+	if s.Sep45ContractID != "" {
 		builder.WriteString(fmt.Sprintf(`
 		WEB_AUTH_CONTRACT_ID=%q
 		WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
-		`, s.Sep45ContractId, webAuthForContractsEndpoint))
+		`, s.Sep45ContractID, webAuthForContractsEndpoint))
 	}
 
 	return builder.String()
