@@ -32,6 +32,7 @@ type ServerApiIntegrationTestsInterface interface {
 	StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *AnchorPlatformAuthSEP24Token, body *data.ReceiverRegistrationRequest) error
 	ConfigureCircleAccess(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PatchCircleConfigRequest) error
+	CreateEmbeddedWallet(ctx context.Context, authToken *ServerApiAuthToken, body *CreateEmbeddedWalletRequest) error
 }
 
 type ServerApiIntegrationTests struct {
@@ -46,6 +47,12 @@ type ServerApiIntegrationTests struct {
 
 type ServerApiAuthToken struct {
 	Token string `json:"token"`
+}
+
+type CreateEmbeddedWalletRequest struct {
+	Token        string `json:"token"`
+	PublicKey    string `json:"public_key"`
+	CredentialID string `json:"credential_id"`
 }
 
 // Login login the integration test user on SDP server API.
@@ -290,6 +297,41 @@ func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	if resp.StatusCode/100 != 2 {
 		logErrorResponses(ctx, resp.Body)
 		return fmt.Errorf("statusCode %d when trying to configure Circle access on the server API", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// CreateEmbeddedWallet triggers the embedded wallet creation flow using the SDP server API.
+func (sa *ServerApiIntegrationTests) CreateEmbeddedWallet(ctx context.Context, authToken *ServerApiAuthToken, body *CreateEmbeddedWalletRequest) error {
+	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, "embedded-wallets")
+	if err != nil {
+		return fmt.Errorf("creating url: %w", err)
+	}
+
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("creating json post body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return fmt.Errorf("creating new request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
+
+	resp, err := sa.HttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("making request to server API post EMBEDDED WALLET: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		logErrorResponses(ctx, resp.Body)
+		return fmt.Errorf("error trying to create embedded wallet on the server API")
 	}
 
 	return nil

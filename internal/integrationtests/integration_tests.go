@@ -2,6 +2,8 @@ package integrationtests
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -57,6 +59,9 @@ type IntegrationTestsOpts struct {
 	CircleAPIKey               string
 	HorizonURL                 string
 	NetworkPassphrase          string
+	EnableEmbeddedWallets      bool
+	EmbeddedWalletCredentialID string
+	EmbeddedWalletPublicKey    string
 }
 
 type IntegrationTestsService struct {
@@ -180,6 +185,10 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		return fmt.Errorf("registering receiver wallet if needed: %w", err)
 	}
 
+	if err = it.createEmbeddedWalletIfNeeded(ctx, opts, authToken); err != nil {
+		return fmt.Errorf("creating embedded wallet if needed: %w", err)
+	}
+
 	if err = it.ensureTransactionCompletion(ctx, opts, disbursement); err != nil {
 		return err
 	}
@@ -298,6 +307,154 @@ func (it *IntegrationTestsService) registerReceiverWalletIfNeeded(ctx context.Co
 	return nil
 }
 
+func (it *IntegrationTestsService) createEmbeddedWalletIfNeeded(ctx context.Context, opts IntegrationTestsOpts, authToken *ServerApiAuthToken) error {
+	if !opts.EnableEmbeddedWallets {
+		log.Ctx(ctx).Info("⏭ Skipping embedded wallet creation flow")
+		return nil
+	}
+
+	if opts.EmbeddedWalletCredentialID == "" || opts.EmbeddedWalletPublicKey == "" {
+		return fmt.Errorf("embedded wallet credential id and public key must be provided when embedded wallets are enabled")
+	}
+
+	log.Ctx(ctx).Info("Checking for existing embedded wallet with provided credential ID")
+	existingWallet, err := it.models.EmbeddedWallets.GetByCredentialID(ctx, it.mtnDbConnectionPool, opts.EmbeddedWalletCredentialID)
+	if err == nil {
+		if existingWallet.WalletStatus == data.SuccessWalletStatus && existingWallet.ContractAddress != "" {
+			log.Ctx(ctx).Infof("Embedded wallet already exists with credential ID %s and contract address %s", opts.EmbeddedWalletCredentialID, existingWallet.ContractAddress)
+			return nil
+		}
+	} else if !errors.Is(err, data.ErrRecordNotFound) {
+		return fmt.Errorf("checking existing embedded wallet: %w", err)
+	}
+
+	log.Ctx(ctx).Info("Waiting for embedded wallet invitation token to be generated")
+	invitation, err := it.waitForEmbeddedWalletInvitation(ctx)
+	if err != nil {
+		return fmt.Errorf("waiting for embedded wallet invitation: %w", err)
+	}
+	log.Ctx(ctx).Infof("Embedded wallet invitation ready with token %s", invitation.Token)
+
+	req := &CreateEmbeddedWalletRequest{
+		Token:        invitation.Token,
+		PublicKey:    opts.EmbeddedWalletPublicKey,
+		CredentialID: opts.EmbeddedWalletCredentialID,
+	}
+
+	log.Ctx(ctx).Info("Triggering embedded wallet creation through server API")
+	if err = it.serverAPI.CreateEmbeddedWallet(ctx, authToken, req); err != nil {
+		return fmt.Errorf("creating embedded wallet: %w", err)
+	}
+
+	log.Ctx(ctx).Info("Waiting for embedded wallet contract deployment to complete")
+	wallet, err := it.waitForEmbeddedWalletReady(ctx, opts.EmbeddedWalletCredentialID)
+	if err != nil {
+		return fmt.Errorf("waiting for embedded wallet readiness: %w", err)
+	}
+
+	if wallet.ContractAddress == "" {
+		return fmt.Errorf("embedded wallet contract address is empty for credential id %s", opts.EmbeddedWalletCredentialID)
+	}
+	log.Ctx(ctx).Infof("Embedded wallet ready with contract address %s", wallet.ContractAddress)
+
+	return nil
+}
+
+func (it *IntegrationTestsService) enableEmbeddedWalletForWallet(ctx context.Context, walletID string) error {
+	const query = `
+		UPDATE wallets
+		SET embedded = TRUE,
+		    deep_link_schema = 'SELF',
+		    updated_at = NOW()
+		WHERE id = $1
+	`
+
+	if _, err := it.mtnDbConnectionPool.ExecContext(ctx, query, walletID); err != nil {
+		return fmt.Errorf("updating wallet %s to embedded: %w", walletID, err)
+	}
+
+	return nil
+}
+
+func (it *IntegrationTestsService) waitForEmbeddedWalletInvitation(ctx context.Context) (*data.EmbeddedWallet, error) {
+	var wallet data.EmbeddedWallet
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM embedded_wallets
+		WHERE wallet_status = $1 AND credential_id IS NULL
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, data.EmbeddedWalletColumnNames("", ""))
+
+	err := retry.Do(
+		func() error {
+			err := it.mtnDbConnectionPool.GetContext(ctx, &wallet, query, data.PendingWalletStatus)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("embedded wallet invitation not available yet")
+				}
+				return err
+			}
+			return nil
+		},
+		retry.Context(ctx),
+		retry.Attempts(18),
+		retry.Delay(10*time.Second),
+		retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			log.Ctx(ctx).Infof("Waiting for embedded wallet invitation (attempt #%d): %v", n+1, err)
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wallet, nil
+}
+
+func (it *IntegrationTestsService) waitForEmbeddedWalletReady(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error) {
+	var wallet data.EmbeddedWallet
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM embedded_wallets
+		WHERE credential_id = $1
+	`, data.EmbeddedWalletColumnNames("", ""))
+
+	err := retry.Do(
+		func() error {
+			err := it.mtnDbConnectionPool.GetContext(ctx, &wallet, query, credentialID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("embedded wallet with credential id %s not found yet", credentialID)
+				}
+				return err
+			}
+
+			if wallet.WalletStatus == data.FailedWalletStatus {
+				return retry.Unrecoverable(fmt.Errorf("embedded wallet creation failed"))
+			}
+
+			if wallet.WalletStatus != data.SuccessWalletStatus || wallet.ContractAddress == "" {
+				return fmt.Errorf("embedded wallet not ready yet (status=%s)", wallet.WalletStatus)
+			}
+
+			return nil
+		},
+		retry.Context(ctx),
+		retry.Attempts(30),
+		retry.Delay(10*time.Second),
+		retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			log.Ctx(ctx).Infof("Waiting for embedded wallet readiness (attempt #%d): %v", n+1, err)
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wallet, nil
+}
+
 // ensureTransactionCompletion is a function that ensures the transaction completion by waiting for the payment to be
 // processed by TSS or Circle, and then ensuring the transaction is present on the Stellar network.
 func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Context, opts IntegrationTestsOpts, disbursement *data.Disbursement) error {
@@ -394,9 +551,16 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		return fmt.Errorf("getting or creating test asset: %w", err)
 	}
 
-	_, err = it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain)
+	wallet, err := it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain)
 	if err != nil {
 		return fmt.Errorf("getting or creating test wallet: %w", err)
+	}
+
+	if opts.EnableEmbeddedWallets {
+		log.Ctx(ctx).Info("Enabling embedded wallet configuration for test wallet")
+		if err = it.enableEmbeddedWalletForWallet(ctx, wallet.ID); err != nil {
+			return fmt.Errorf("configuring embedded wallet: %w", err)
+		}
 	}
 
 	// 4. Provision Circle distribution account if needed

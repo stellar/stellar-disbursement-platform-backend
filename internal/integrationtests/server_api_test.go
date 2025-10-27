@@ -229,6 +229,56 @@ func Test_ProcessDisbursement(t *testing.T) {
 	})
 }
 
+func Test_CreateEmbeddedWallet(t *testing.T) {
+	httpClientMock := httpclientMocks.HttpClientMock{}
+
+	sa := ServerApiIntegrationTests{
+		HttpClient:       &httpClientMock,
+		ServerApiBaseURL: "http://mock_server.com/",
+		TenantName:       "tenant",
+	}
+
+	ctx := context.Background()
+
+	authToken := &ServerApiAuthToken{Token: "valid_token"}
+	reqBody := &CreateEmbeddedWalletRequest{
+		Token:        "wallet_token",
+		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+		CredentialID: "credential-id",
+	}
+
+	t.Run("error calling httpClient.Do", func(t *testing.T) {
+		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(nil, fmt.Errorf("error calling the request")).Once()
+		err := sa.CreateEmbeddedWallet(ctx, authToken, reqBody)
+		require.EqualError(t, err, "making request to server API post EMBEDDED WALLET: error calling the request")
+		httpClientMock.AssertExpectations(t)
+	})
+
+	t.Run("error trying to create embedded wallet on server api", func(t *testing.T) {
+		resp := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(`{"error":"invalid token"}`)),
+			StatusCode: http.StatusBadRequest,
+		}
+		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(resp, nil).Once()
+
+		err := sa.CreateEmbeddedWallet(ctx, authToken, reqBody)
+		require.EqualError(t, err, "error trying to create embedded wallet on the server API")
+		httpClientMock.AssertExpectations(t)
+	})
+
+	t.Run("successfully creates an embedded wallet", func(t *testing.T) {
+		resp := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(`{"status":"PENDING"}`)),
+			StatusCode: http.StatusAccepted,
+		}
+		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(resp, nil).Once()
+
+		err := sa.CreateEmbeddedWallet(ctx, authToken, reqBody)
+		require.NoError(t, err)
+		httpClientMock.AssertExpectations(t)
+	})
+}
+
 func Test_StartDisbursement(t *testing.T) {
 	httpClientMock := httpclientMocks.HttpClientMock{}
 

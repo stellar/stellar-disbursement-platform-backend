@@ -60,6 +60,28 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Required:    true,
 		},
 		{
+			Name:        "enable-embedded-wallets",
+			Usage:       "Enable embedded wallet flow during integration tests",
+			OptType:     types.Bool,
+			ConfigKey:   &integrationTestsOpts.EnableEmbeddedWallets,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
+			Name:      "embedded-wallet-credential-id",
+			Usage:     "Credential ID to use when creating the embedded wallet",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.EmbeddedWalletCredentialID,
+			Required:  false,
+		},
+		{
+			Name:      "embedded-wallet-public-key",
+			Usage:     "Uncompressed hex-encoded P-256 public key used for embedded wallet creation",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.EmbeddedWalletPublicKey,
+			Required:  false,
+		},
+		{
 			Name:      "admin-server-base-url",
 			Usage:     "The Base URL of the admin API of the SDP used for managing tenants",
 			OptType:   types.String,
