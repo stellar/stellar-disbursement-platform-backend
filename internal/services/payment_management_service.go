@@ -41,7 +41,7 @@ func (s *PaymentManagementService) CancelPayment(ctx context.Context, paymentID 
 		}
 
 		// 1. Verify Transition is Possible
-		err = payment.Status.TransitionTo(data.PaymentStatus(data.CanceledPaymentStatus))
+		err = payment.Status.TransitionTo(data.CanceledPaymentStatus)
 		if err != nil {
 			return ErrPaymentNotReadyToCancel
 		}

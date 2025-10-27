@@ -8,7 +8,7 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 )
 
-type HttpClientInterface interface {
+type HTTPClientInterface interface {
 	Do(*http.Request) (*http.Response, error)
 	Get(url string) (resp *http.Response, err error)
 	PostForm(url string, data url.Values) (resp *http.Response, err error)
@@ -17,11 +17,11 @@ type HttpClientInterface interface {
 const TimeoutClientInSeconds = 40
 
 // DefaultClient returns a default HTTP client with a timeout.
-func DefaultClient() HttpClientInterface {
+func DefaultClient() HTTPClientInterface {
 	return &http.Client{Timeout: TimeoutClientInSeconds * time.Second}
 }
 
 var (
-	_ HttpClientInterface = DefaultClient()
+	_ HTTPClientInterface = DefaultClient()
 	_ horizonclient.HTTP  = DefaultClient()
 )

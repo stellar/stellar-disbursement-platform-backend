@@ -15,7 +15,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -41,7 +40,6 @@ type TransactionWorker struct {
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
-	eventProducer       events.Producer
 	jobUUID             string
 	txHandler           TransactionHandlerInterface
 }
@@ -54,7 +52,6 @@ func NewTransactionWorker(
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
-	eventProducer events.Producer,
 	txHandler TransactionHandlerInterface,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
@@ -101,7 +98,6 @@ func NewTransactionWorker(
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
-		eventProducer:       eventProducer,
 		txHandler:           txHandler,
 	}, nil
 }

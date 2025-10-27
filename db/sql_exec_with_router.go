@@ -1,3 +1,4 @@
+//nolint:wrapcheck // Wrapper struct, no extra context needed
 package db
 
 import (
@@ -99,8 +100,8 @@ func (s SQLExecutorWithRouter) Rebind(query string) string {
 	return dbcp.Rebind(query)
 }
 
-func (m SQLExecutorWithRouter) DriverName() string {
-	dbcp, err := m.dataSourceRouter.AnyDataSource()
+func (s SQLExecutorWithRouter) DriverName() string {
+	dbcp, err := s.dataSourceRouter.AnyDataSource()
 	if err != nil {
 		log.Errorf("Error getting driver name: %s", err.Error())
 		return ""

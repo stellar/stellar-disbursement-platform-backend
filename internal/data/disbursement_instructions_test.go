@@ -61,7 +61,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		Amount:            "100.03",
 		ID:                "123456783",
 		VerificationValue: "1990-01-03",
-		ExternalPaymentId: "abc123",
+		ExternalPaymentID: "abc123",
 	}
 
 	emailInstruction1 := DisbursementInstruction{
@@ -91,7 +91,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	expectedEmails := []string{emailInstruction1.Email, emailInstruction2.Email, emailInstruction3.Email}
 	expectedExternalIDs := []string{smsInstruction1.ID, smsInstruction2.ID, smsInstruction3.ID}
 	expectedPayments := []string{smsInstruction1.Amount, smsInstruction2.Amount, smsInstruction3.Amount}
-	expectedExternalPaymentIDs := []string{smsInstruction3.ExternalPaymentId}
+	expectedExternalPaymentIDs := []string{smsInstruction3.ExternalPaymentID}
 
 	disbursementUpdate := &DisbursementUpdate{
 		ID:          disbursement.ID,
@@ -230,10 +230,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			assertEqualReceivers(t, []string{instructions[0].Phone, instructions[1].Phone}, []string{"1", "2"}, receivers)
 
 			// Verify Receiver Verifications
-			receiver1Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[0].ID)
+			receiver1Verifications, err := di.receiverVerificationModel.GetAllByReceiverID(ctx, dbConnectionPool, receivers[0].ID)
 			require.NoError(t, err)
 			assert.Len(t, receiver1Verifications, 0)
-			receiver2Verifications, err := di.receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receivers[1].ID)
+			receiver2Verifications, err := di.receiverVerificationModel.GetAllByReceiverID(ctx, dbConnectionPool, receivers[1].ID)
 			require.NoError(t, err)
 			assert.Len(t, receiver2Verifications, 0)
 
@@ -598,13 +598,13 @@ func assertEqualVerifications(t *testing.T, expectedInstructions []*Disbursement
 	for _, instruction := range expectedInstructions {
 		instructionsMap[instruction.Phone] = instruction
 	}
-	phonesByReceiverId := make(map[string]string)
+	phonesByReceiverID := make(map[string]string)
 	for _, receiver := range receivers {
-		phonesByReceiverId[receiver.ID] = receiver.PhoneNumber
+		phonesByReceiverID[receiver.ID] = receiver.PhoneNumber
 	}
 
 	for _, actual := range actualVerifications {
-		instruction := instructionsMap[phonesByReceiverId[actual.ReceiverID]]
+		instruction := instructionsMap[phonesByReceiverID[actual.ReceiverID]]
 		verified := CompareVerificationValue(actual.HashedValue, instruction.VerificationValue)
 		assert.True(t, verified)
 	}

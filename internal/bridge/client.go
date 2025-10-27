@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -21,6 +22,8 @@ const (
 )
 
 // BridgeErrorResponse represents an error response from the Bridge API.
+//
+//nolint:errname // This is both an error and a response type
 type BridgeErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -54,7 +57,7 @@ type ClientInterface interface {
 type Client struct {
 	baseURL    string
 	apiKey     string
-	httpClient httpclient.HttpClientInterface
+	httpClient httpclient.HTTPClientInterface
 }
 
 type ClientOptions struct {
@@ -105,7 +108,7 @@ func (c *Client) PostKYCLink(ctx context.Context, request KYCLinkRequest) (*KYCL
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var kycResponse KYCLinkInfo
@@ -131,7 +134,7 @@ func (c *Client) GetKYCLink(ctx context.Context, kycLinkID string) (*KYCLinkInfo
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var kycResponse KYCLinkInfo
@@ -166,7 +169,7 @@ func (c *Client) PostVirtualAccount(ctx context.Context, customerID string, requ
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var vaResponse VirtualAccountInfo
@@ -197,7 +200,7 @@ func (c *Client) GetVirtualAccount(ctx context.Context, customerID, virtualAccou
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	// Parse successful response
 	var vaResponse VirtualAccountInfo
@@ -223,7 +226,7 @@ func (c *Client) GetCustomer(ctx context.Context, customerID string) (*CustomerI
 	if err != nil {
 		return nil, fmt.Errorf("making HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	var customerResponse CustomerInfo
 	if jsonErr := json.NewDecoder(resp.Body).Decode(&customerResponse); jsonErr != nil {
@@ -264,7 +267,7 @@ func (c *Client) handleErrorResponse(resp *http.Response) error {
 		return nil
 	}
 
-	defer resp.Body.Close()
+	defer utils.DeferredClose(context.Background(), resp.Body, "closing response body")
 
 	var bridgeError BridgeErrorResponse
 	if jsonErr := json.NewDecoder(resp.Body).Decode(&bridgeError); jsonErr != nil {

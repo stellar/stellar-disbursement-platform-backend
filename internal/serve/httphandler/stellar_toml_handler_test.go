@@ -244,7 +244,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 
 			generalInformation := tc.s.buildGeneralInformation(ctx, req)
 			generalInformation = strings.TrimSpace(generalInformation)
-			generalInformation = strings.Replace(generalInformation, "\t", "", -1)
+			generalInformation = strings.ReplaceAll(generalInformation, "\t", "")
 
 			generalInformationLines := strings.Split(generalInformation, "\n")
 			assert.Equal(t, len(tc.wantLines), len(generalInformationLines))

@@ -75,7 +75,7 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 
 	t.Run("returns empty when the receiver has no verifications registered", func(t *testing.T) {
 		receiverVerificationModel := ReceiverVerificationModel{}
-		actualVerifications, err := receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
+		actualVerifications, err := receiverVerificationModel.GetAllByReceiverID(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
 		assert.Len(t, actualVerifications, 0)
 
@@ -105,7 +105,7 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 		})
 
 		receiverVerificationModel := ReceiverVerificationModel{}
-		actualVerifications, err := receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
+		actualVerifications, err := receiverVerificationModel.GetAllByReceiverID(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
 		assert.Len(t, actualVerifications, 4)
 

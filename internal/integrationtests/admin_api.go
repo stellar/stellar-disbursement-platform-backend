@@ -11,17 +11,18 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-type AdminApiIntegrationTests struct {
-	HttpClient      httpclient.HttpClientInterface
-	AdminApiBaseURL string
-	AccountId       string
-	ApiKey          string
+type AdminAPIIntegrationTests struct {
+	HTTPClient      httpclient.HTTPClientInterface
+	AdminAPIBaseURL string
+	AccountID       string
+	APIKey          string
 }
 
-type AdminApiIntegrationTestsInterface interface {
+type AdminAPIIntegrationTestsInterface interface {
 	CreateTenant(ctx context.Context, body CreateTenantRequest) (*schema.Tenant, error)
 }
 
@@ -36,8 +37,8 @@ type CreateTenantRequest struct {
 	SDPUIBaseURL            string             `json:"sdp_ui_base_url"`
 }
 
-func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body CreateTenantRequest) (*schema.Tenant, error) {
-	reqURL, err := url.JoinPath(aa.AdminApiBaseURL, "tenants")
+func (aa AdminAPIIntegrationTests) CreateTenant(ctx context.Context, body CreateTenantRequest) (*schema.Tenant, error) {
+	reqURL, err := url.JoinPath(aa.AdminAPIBaseURL, "tenants")
 	if err != nil {
 		return nil, fmt.Errorf("building url to create tenant: %w", err)
 	}
@@ -55,11 +56,11 @@ func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body Create
 	req.Header.Set("Authorization", aa.AuthHeader())
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := aa.HttpClient.Do(req)
+	resp, err := aa.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("making request to create tenant: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusCreated {
 		var httpErr httperror.HTTPError
@@ -78,6 +79,6 @@ func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body Create
 }
 
 // AuthHeader returns the auth header using base64 encoding of the account id and api key
-func (aa AdminApiIntegrationTests) AuthHeader() string {
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(aa.AccountId+":"+aa.ApiKey))
+func (aa AdminAPIIntegrationTests) AuthHeader() string {
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(aa.AccountID+":"+aa.APIKey))
 }

@@ -388,10 +388,12 @@ func (am *defaultAuthManager) ExpirationTimeInMinutes() time.Duration {
 	return am.expirationTimeInMinutes
 }
 
+//nolint:wrapcheck // This is a wrapper method
 func (am *defaultAuthManager) MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error) {
 	return am.mfaManager.MFADeviceRemembered(ctx, deviceID, userID)
 }
 
+//nolint:wrapcheck // This is a wrapper method
 func (am *defaultAuthManager) GetMFACode(ctx context.Context, deviceID, userID string) (string, error) {
 	return am.mfaManager.GenerateMFACode(ctx, deviceID, userID)
 }

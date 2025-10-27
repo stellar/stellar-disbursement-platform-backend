@@ -1,3 +1,4 @@
+//nolint:wrapcheck // Wrapper struct, no extra context needed
 package db
 
 import (
@@ -24,7 +25,6 @@ const (
 )
 
 func NewSQLExecuterWithMetrics(sqlExec SQLExecuter, monitorServiceInterface monitor.MonitorServiceInterface) (*SQLExecuterWithMetrics, error) {
-	// TODO: in SDP-874, include the value of {schema_name() || 'public'} in the data sent to the monitoring service.
 	if sqlExec == nil {
 		return nil, fmt.Errorf("sqlExec cannot be nil")
 	}
@@ -60,7 +60,7 @@ func (sqlExec *SQLExecuterWithMetrics) monitorDBQueryDuration(duration time.Dura
 	}
 }
 
-// QueryContext is a wrapper around QueryerContext interface QueryContext that includes monitoring the db query.
+// GetContext is a wrapper around QueryerContext interface GetContext that includes monitoring the db query.
 func (sqlExec *SQLExecuterWithMetrics) GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	then := time.Now()
 

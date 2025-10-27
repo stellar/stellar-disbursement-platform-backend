@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
@@ -23,8 +24,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -53,7 +52,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 		MaxBaseFee:          txnbuild.MinBaseFee,
 	}
 	tssMonitorService := tssMonitor.TSSMonitorService{
-		Client:        monitorMocks.NewMockMonitorClient(t),
+		Client:        monitor.NewMockMonitorClient(t),
 		GitCommitHash: "gitCommitHash0x",
 		Version:       "version123",
 	}
@@ -168,7 +167,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MonitorService:       tssMonitorService,
-				EventProducer:        &events.MockProducer{},
 			},
 		},
 		{
@@ -179,7 +177,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MonitorService:       tssMonitorService,
-				EventProducer:        &events.MockProducer{},
 				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
 			},
 		},
@@ -219,14 +216,13 @@ func Test_NewManager(t *testing.T) {
 	validSubmitterOptions := SubmitterOptions{
 		DBConnectionPool: dbConnectionPool,
 		MonitorService: tssMonitor.TSSMonitorService{
-			Client:        &monitorMocks.MockMonitorClient{},
+			Client:        monitor.NewMockMonitorClient(t),
 			GitCommitHash: "0xABC",
 			Version:       "0.01",
 		},
 		SubmitterEngine:      mSubmitterEngine,
 		NumChannelAccounts:   5,
 		QueuePollingInterval: 10,
-		EventProducer:        &events.MockProducer{},
 	}
 
 	testCases := []struct {
@@ -334,8 +330,6 @@ func Test_NewManager(t *testing.T) {
 					wantCrashTrackerClient = tc.wantCrashTrackerClientFn()
 				}
 
-				wantEventProducer := &events.MockProducer{}
-
 				wantManager := &Manager{
 					dbConnectionPool: wantConnectionPool,
 					chAccModel:       wantChAccModel,
@@ -349,8 +343,6 @@ func Test_NewManager(t *testing.T) {
 
 					crashTrackerClient: wantCrashTrackerClient,
 					monitorService:     submitterOptions.MonitorService,
-
-					eventProducer: wantEventProducer,
 
 					txHandlerFactory: gotManager.txHandlerFactory,
 				}
@@ -439,7 +431,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 			// Create transactions to be used by the tx submitter
 			tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
-			transactions := store.CreateTransactionFixturesNew(t, ctx, dbConnectionPool, 10, store.TransactionFixture{
+			transactions := store.CreateTransactionFixtures(t, ctx, dbConnectionPool, 10, store.TransactionFixture{
 				TransactionType:    store.TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -483,7 +475,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := monitor.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
 
 			monitorService := tssMonitor.TSSMonitorService{

@@ -306,19 +306,19 @@ func (d *DisbursementModel) UpdateStatus(ctx context.Context, sqlExec db.SQLExec
 		return fmt.Errorf("error getting number of rows affected: %w", err)
 	}
 
-	if numRowsAffected == 0 {
+	switch numRowsAffected {
+	case 0:
 		return fmt.Errorf("disbursement %s status was not updated from %s to %s", disbursementID, sourceStatuses, targetStatus)
-	} else if numRowsAffected == 1 {
+	case 1:
 		log.Ctx(ctx).Infof("Set disbursement %s status from %s to %s", disbursementID, sourceStatuses, targetStatus)
-	} else {
+		return nil
+	default:
 		return fmt.Errorf("unexpected number of rows affected: %d when updating disbursement %s status from %s to %s",
 			numRowsAffected,
 			disbursementID,
 			sourceStatuses,
 			targetStatus)
 	}
-
-	return nil
 }
 
 // newDisbursementQuery generates the full query and parameters for a disbursement search query

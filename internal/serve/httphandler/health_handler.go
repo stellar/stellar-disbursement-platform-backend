@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 
 	"github.com/stellar/go/support/render/httpjson"
 )
@@ -38,7 +37,6 @@ type HealthHandler struct {
 	ServiceID        string
 	ReleaseID        string
 	DBConnectionPool db.DBConnectionPool
-	Producer         events.Producer
 }
 
 // ServeHTTP implements the http.Handler interface.
@@ -53,15 +51,6 @@ func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	services := map[string]Status{
 		"database": dbStatus,
-	}
-
-	if h.Producer != nil && h.Producer.BrokerType() == events.KafkaEventBrokerType {
-		eventBrokerStatus := StatusPass
-		if err := h.Producer.Ping(context); err != nil {
-			eventBrokerStatus = StatusFail
-			responseStatus = StatusFail
-		}
-		services["kafka"] = eventBrokerStatus
 	}
 
 	response := HealthResponse{

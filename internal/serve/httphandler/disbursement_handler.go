@@ -178,17 +178,23 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 		return nil, httperror.InternalError(ctx, msg, err, nil)
 	}
 
-	// Monitor disbursement creation
-	labels := monitor.DisbursementLabels{
-		Asset:  newDisbursement.Asset.Code,
-		Wallet: newDisbursement.Wallet.Name,
-	}
-	err = d.MonitorService.MonitorCounters(monitor.DisbursementsCounterTag, labels.ToMap())
-	if err != nil {
-		log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
-	}
+	d.recordCreateDisbursementMetrics(ctx, newDisbursement)
 
 	return newDisbursement, nil
+}
+
+func (d DisbursementHandler) recordCreateDisbursementMetrics(ctx context.Context, disbursement *data.Disbursement) {
+	labels := monitor.DisbursementLabels{
+		Asset:  disbursement.Asset.Code,
+		Wallet: disbursement.Wallet.Name,
+		CommonLabels: monitor.CommonLabels{
+			TenantName: sdpcontext.MustGetTenantNameFromContext(ctx),
+		},
+	}
+
+	if err := d.MonitorService.MonitorCounters(monitor.DisbursementsCounterTag, labels.ToMap()); err != nil {
+		log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
+	}
 }
 
 // DeleteDisbursement deletes a draft or ready disbursement and its associated payments
@@ -315,9 +321,9 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 }
 
 func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) error {
-	buf, header, parseHttpErr := parseCsvFromMultipartRequest(r)
-	if parseHttpErr != nil {
-		return fmt.Errorf("could not parse csv file: %w", parseHttpErr)
+	buf, header, parseHTTPErr := parseCsvFromMultipartRequest(r)
+	if parseHTTPErr != nil {
+		return fmt.Errorf("could not parse csv file: %w", parseHTTPErr)
 	}
 
 	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
@@ -370,7 +376,7 @@ func parseCsvFromMultipartRequest(r *http.Request) (*bytes.Buffer, *multipart.Fi
 	if err != nil {
 		return nil, nil, httperror.BadRequest("could not parse file", err, nil)
 	}
-	defer file.Close()
+	defer utils.DeferredClose(r.Context(), file, "closing file")
 
 	if err = utils.ValidatePathIsNotTraversal(header.Filename); err != nil {
 		return nil, nil, httperror.BadRequest("file name contains invalid traversal pattern", nil, nil)

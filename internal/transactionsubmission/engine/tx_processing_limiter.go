@@ -40,8 +40,6 @@ type TransactionProcessingLimiter interface {
 
 var _ TransactionProcessingLimiter = (*TransactionProcessingLimiterImpl)(nil)
 
-// TransactionProcessingLimiter is an interface that defines the methods that the manager and transaction worker use to
-// share metadata about and adjust the rate at which transactions are processed based on responses from Horizon.
 type TransactionProcessingLimiterImpl struct {
 	CurrNumChannelAccounts        int
 	IndeterminateResponsesCounter int

@@ -165,7 +165,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 
 		totalCount += count
 		if value, parseErr := strconv.ParseFloat(amount, 64); parseErr != nil {
-			return nil, nil, fmt.Errorf("error parsing payment amount: %w", err)
+			return nil, nil, fmt.Errorf("parsing payment amount: %w", parseErr)
 		} else {
 			totalAmount += value
 		}

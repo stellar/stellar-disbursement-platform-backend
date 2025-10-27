@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -105,7 +104,7 @@ func SetConfigOptionEC256PrivateKey(co *config.ConfigOption) error {
 	privateKey := viper.GetString(co.Name)
 
 	// We must remove the literal \n in case of the config options being set this way
-	privateKey = strings.Replace(privateKey, `\n`, "\n", -1)
+	privateKey = strings.ReplaceAll(privateKey, `\n`, "\n")
 
 	_, err := utils.ParseStrongECPrivateKey(privateKey)
 	if err != nil {
@@ -283,37 +282,6 @@ func SetConfigOptionStringList(co *config.ConfigOption) error {
 
 	*key = list
 
-	return nil
-}
-
-func SetConfigOptionEventBrokerType(co *config.ConfigOption) error {
-	ebType := viper.GetString(co.Name)
-
-	ebTypeParsed, err := events.ParseEventBrokerType(ebType)
-	if err != nil {
-		return fmt.Errorf("couldn't parse event broker type in %s: %w", co.Name, err)
-	}
-
-	if ebTypeParsed == events.NoneEventBrokerType {
-		log.Warn("NONE event broker type is deprecated and will be removed in future releases. Please use SCHEDULER instead.")
-	}
-
-	*(co.ConfigKey.(*events.EventBrokerType)) = ebTypeParsed
-	return nil
-}
-
-func SetConfigOptionKafkaSecurityProtocol(co *config.ConfigOption) error {
-	protocol := viper.GetString(co.Name)
-	if protocol == "" {
-		return nil
-	}
-
-	protocolParsed, err := events.ParseKafkaSecurityProtocol(protocol)
-	if err != nil {
-		return fmt.Errorf("couldn't parse kafka security protocol: %w", err)
-	}
-
-	*(co.ConfigKey.(*events.KafkaSecurityProtocol)) = protocolParsed
 	return nil
 }
 

@@ -22,7 +22,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
@@ -74,11 +73,6 @@ func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context,
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]scheduler.SchedulerJobRegisterOption), args.Error(1)
-}
-
-func (m *mockServer) SetupConsumers(ctx context.Context, o SetupConsumersOptions) error {
-	args := m.Called(ctx, o)
-	return args.Error(0)
 }
 
 func Test_serve_wasCalled(t *testing.T) {
@@ -178,7 +172,6 @@ func Test_serve(t *testing.T) {
 		ReCAPTCHAV3MinScore:             0.5,
 		DisableMFA:                      false,
 		DisableReCAPTCHA:                false,
-		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
 		DistributionAccountService:      mDistAccService,
 		MaxInvitationResendAttempts:     3,
@@ -211,13 +204,6 @@ func Test_serve(t *testing.T) {
 	serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(ctx, messageDispatcherOpts)
 	require.NoError(t, err)
 
-	kafkaConfig := events.KafkaConfig{
-		Brokers:          []string{"kafka:9092"},
-		SecurityProtocol: events.KafkaProtocolPlaintext,
-	}
-	serveOpts.EventProducer, err = events.NewKafkaProducer(kafkaConfig)
-	require.NoError(t, err)
-
 	metricOptions := monitor.MetricOptions{
 		MetricType:  monitor.MetricTypePrometheus,
 		Environment: "test",
@@ -246,17 +232,9 @@ func Test_serve(t *testing.T) {
 		DistributionAccountService:              mDistAccService,
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
-		AdminApiKey:                             "admin-api-key",
+		AdminAPIKey:                             "admin-api-key",
 		BaseURL:                                 "https://sdp-backend.stellar.org",
 		SDPUIBaseURL:                            "https://sdp-ui.stellar.org",
-	}
-
-	eventBrokerOptions := cmdUtils.EventBrokerOptions{
-		EventBrokerType: events.KafkaEventBrokerType,
-		BrokerURLs:      []string{"kafka:9092"},
-		ConsumerGroupID: "group-id",
-
-		KafkaSecurityProtocol: events.KafkaProtocolPlaintext,
 	}
 
 	schedulerOpts := scheduler.SchedulerOptions{}
@@ -271,13 +249,6 @@ func Test_serve(t *testing.T) {
 	mServer.
 		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, schedulerOpts, serveOpts.AnchorPlatformAPIService, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
-		Once()
-	mServer.On("SetupConsumers", ctx, SetupConsumersOptions{
-		EventBrokerOptions:  eventBrokerOptions,
-		ServeOpts:           serveOpts,
-		TSSDBConnectionPool: dbConnectionPool,
-	}).
-		Return(nil).
 		Once()
 	mServer.wg.Add(2)
 	defer mServer.AssertExpectations(t)
@@ -318,13 +289,9 @@ func Test_serve(t *testing.T) {
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
-	t.Setenv("EVENT_BROKER", "kafka")
-	t.Setenv("BROKER_URLS", "kafka:9092")
-	t.Setenv("CONSUMER_GROUP_ID", "group-id")
 	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", chAccEncryptionPassphrase)
 	t.Setenv("ENVIRONMENT", "test")
 	t.Setenv("METRICS_TYPE", "PROMETHEUS")
-	t.Setenv("KAFKA_SECURITY_PROTOCOL", string(events.KafkaProtocolPlaintext))
 	t.Setenv("ADMIN_ACCOUNT", "admin-account")
 	t.Setenv("ADMIN_API_KEY", "admin-api-key")
 	t.Setenv("SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS", "600")
