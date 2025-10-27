@@ -185,6 +185,8 @@ func Test_serve(t *testing.T) {
 		DistAccEncryptionPassphrase:     distributionAccPrivKey,
 		CircleService:                   mCircleService,
 		CircleAPIType:                   circle.APITypeTransfers,
+		WebAuthnSessionCacheMaxEntries:  1024,
+		WebAuthnSessionTTLSeconds:       300,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
@@ -314,6 +316,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", distributionAccPrivKey)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
+	t.Setenv("WEBAUTHN_SESSION_TTL_SECONDS", fmt.Sprintf("%d", serveOpts.WebAuthnSessionTTLSeconds))
+	t.Setenv("WEBAUTHN_SESSION_CACHE_MAX_ENTRIES", fmt.Sprintf("%d", serveOpts.WebAuthnSessionCacheMaxEntries))
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")

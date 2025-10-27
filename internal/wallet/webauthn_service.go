@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/go-webauthn/webauthn/protocol"
@@ -41,9 +40,7 @@ type WebAuthnServiceInterface interface {
 var _ WebAuthnServiceInterface = (*WebAuthnService)(nil)
 
 const (
-	// DefaultSessionTTL is the default time-to-live for WebAuthn sessions.
-	DefaultSessionTTL = 5 * time.Minute
-	RPDisplayName     = "Stellar Disbursement Platform"
+	RPDisplayName = "Stellar Disbursement Platform"
 )
 
 // SessionType represents the type of WebAuthn session.
@@ -58,7 +55,6 @@ const (
 type WebAuthnService struct {
 	sdpModels    *data.Models
 	sessionCache SessionCacheInterface
-	sessionTTL   time.Duration
 }
 
 // NewWebAuthnService creates a new WebAuthnService.
@@ -73,7 +69,6 @@ func NewWebAuthnService(models *data.Models, sessionCache SessionCacheInterface)
 	return &WebAuthnService{
 		sdpModels:    models,
 		sessionCache: sessionCache,
-		sessionTTL:   DefaultSessionTTL,
 	}, nil
 }
 
@@ -189,7 +184,7 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 		return nil, fmt.Errorf("beginning WebAuthn registration: %w", err)
 	}
 
-	if err := w.sessionCache.Store(session.Challenge, SessionTypeRegistration, *session, w.sessionTTL); err != nil {
+	if err := w.sessionCache.Store(session.Challenge, SessionTypeRegistration, *session); err != nil {
 		return nil, fmt.Errorf("storing session: %w", err)
 	}
 
@@ -317,7 +312,7 @@ func (w *WebAuthnService) StartPasskeyAuthentication(ctx context.Context) (*prot
 		return nil, fmt.Errorf("beginning WebAuthn discoverable login: %w", err)
 	}
 
-	if err := w.sessionCache.Store(session.Challenge, SessionTypeAuthentication, *session, w.sessionTTL); err != nil {
+	if err := w.sessionCache.Store(session.Challenge, SessionTypeAuthentication, *session); err != nil {
 		return nil, fmt.Errorf("storing session: %w", err)
 	}
 
