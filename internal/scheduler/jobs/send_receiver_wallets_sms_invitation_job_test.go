@@ -169,6 +169,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 
 	walletDeepLink1 := services.WalletDeepLink{
 		DeepLink:         wallet1.DeepLinkSchema,
+		TenantBaseURL:    tenantBaseURL,
 		TenantUIBaseURL:  tenantUIBaseURL,
 		OrganizationName: "MyCustomAid",
 		AssetCode:        asset1.Code,
@@ -181,6 +182,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 
 	walletDeepLink2 := services.WalletDeepLink{
 		DeepLink:         wallet2.DeepLinkSchema,
+		TenantBaseURL:    tenantBaseURL,
 		TenantUIBaseURL:  tenantUIBaseURL,
 		OrganizationName: "MyCustomAid",
 		AssetCode:        asset2.Code,
