@@ -197,7 +197,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	tw.txProcessingLimiter.AdjustLimitIfNeeded(txErr)
 
 	if txErr.ShouldMarkAsError() {
-		if markErr := tw.markTransactionAsError(ctx, txJob, txErr, txErr.Error()); markErr != nil {
+		if markErr := tw.markTransactionAsError(ctx, txJob, txErr.Error()); markErr != nil {
 			return markErr
 		}
 
@@ -226,7 +226,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 }
 
 // markTransactionAsError handles the process of marking a transaction as ERROR and producing events
-func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *TxJob, txErr utils.TransactionError, errorMsg string) error {
+func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *TxJob, errorMsg string) error {
 	updatedTx, updateErr := tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, errorMsg)
 	if updateErr != nil {
 		return fmt.Errorf("updating transaction status to error: %w", updateErr)

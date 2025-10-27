@@ -404,7 +404,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		TenantID:           uuid.NewString(),
 	})
 
-	unphazedTx2 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx2 := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:      uuid.NewString(),
 		TransactionType: TransactionTypeWalletCreation,
 		PublicKey:       "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
@@ -413,7 +413,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		TenantID:        uuid.NewString(),
 	})
 
-	unphazedTx3 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx3 := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:            uuid.NewString(),
 		TransactionType:       TransactionTypeSponsored,
 		SponsoredAccount:      "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
@@ -522,7 +522,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		TenantID:           uuid.NewString(),
 	})
 
-	unphazedTx2 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx2 := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:      uuid.NewString(),
 		TransactionType: TransactionTypeWalletCreation,
 		PublicKey:       "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
@@ -531,7 +531,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		TenantID:        uuid.NewString(),
 	})
 
-	unphazedTx3 := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+	unphazedTx3 := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 		ExternalID:            uuid.NewString(),
 		TransactionType:       TransactionTypeSponsored,
 		SponsoredAccount:      "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT",
@@ -1273,7 +1273,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate_WithTransactionTypes(t *
 	}()
 
 	// Create payment transactions
-	paymentTxs := CreateTransactionFixturesNew(t, ctx, dbTx, 2, TransactionFixture{
+	paymentTxs := CreateTransactionFixtures(t, ctx, dbTx, 2, TransactionFixture{
 		TransactionType:    TransactionTypePayment,
 		AssetCode:          "USDC",
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -1284,7 +1284,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate_WithTransactionTypes(t *
 	})
 
 	// Create wallet creation transactions
-	walletCreationTxs := CreateTransactionFixturesNew(t, ctx, dbTx, 2, TransactionFixture{
+	walletCreationTxs := CreateTransactionFixtures(t, ctx, dbTx, 2, TransactionFixture{
 		TransactionType: TransactionTypeWalletCreation,
 		PublicKey:       "deadbeef",
 		WasmHash:        "cafebabe",

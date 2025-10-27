@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -32,7 +31,7 @@ func Test_NewSponsoredTransactionHandler(t *testing.T) {
 	tssMonitorSvc := tssMonitor.TSSMonitorService{
 		GitCommitHash: "gitCommitHash0x",
 		Version:       "version123",
-		Client:        &sdpMonitorMocks.MockMonitorClient{},
+		Client:        &sdpMonitor.MockMonitorClient{},
 	}
 
 	testCases := []struct {
@@ -123,7 +122,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		}
 		rpcClient := &mocks.MockRPCClient{}
 		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
+			Client: &sdpMonitor.MockMonitorClient{},
 		}
 		sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
@@ -229,7 +228,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		engine := &engine.SubmitterEngine{MaxBaseFee: 100}
 		rpcClient := &mocks.MockRPCClient{}
 		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
+			Client: &sdpMonitor.MockMonitorClient{},
 		}
 		sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
@@ -284,7 +283,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		engine := &engine.SubmitterEngine{MaxBaseFee: 100}
 		rpcClient := &mocks.MockRPCClient{}
 		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
+			Client: &sdpMonitor.MockMonitorClient{},
 		}
 		sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
@@ -470,7 +469,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 			rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(&stellar.SimulationResult{Response: simulationResponse}, (*stellar.SimulationError)(nil))
 
 			monitorSvc := tssMonitor.TSSMonitorService{
-				Client: &sdpMonitorMocks.MockMonitorClient{},
+				Client: &sdpMonitor.MockMonitorClient{},
 			}
 			handler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 			require.NoError(t, err)
@@ -552,7 +551,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 			rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(&stellar.SimulationResult{Response: simulationResponse}, (*stellar.SimulationError)(nil))
 
 			monitorSvc := tssMonitor.TSSMonitorService{
-				Client: &sdpMonitorMocks.MockMonitorClient{},
+				Client: &sdpMonitor.MockMonitorClient{},
 			}
 			handler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 			require.NoError(t, err)
@@ -646,7 +645,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(&stellar.SimulationResult{Response: simulationResponse}, (*stellar.SimulationError)(nil))
 
 		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
+			Client: &sdpMonitor.MockMonitorClient{},
 		}
 		sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
@@ -717,7 +716,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return((*stellar.SimulationResult)(nil), simulationError)
 
 		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
+			Client: &sdpMonitor.MockMonitorClient{},
 		}
 		sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
@@ -758,7 +757,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 		rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return((*stellar.SimulationResult)(nil), networkError)
 
 		monitorSvc := tssMonitor.TSSMonitorService{
-			Client: &sdpMonitorMocks.MockMonitorClient{},
+			Client: &sdpMonitor.MockMonitorClient{},
 		}
 		sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 		require.NoError(t, err)
@@ -797,7 +796,7 @@ func Test_SponsoredTransactionHandler_MonitorTransactionProcessingStarted(t *tes
 	}
 	jobUUID := "job-uuid"
 
-	mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.SponsoredTransactionProcessingStartedTag, mock.Anything).
 		Return(nil).
@@ -830,7 +829,7 @@ func Test_SponsoredTransactionHandler_MonitorTransactionProcessingSuccess(t *tes
 	}
 	jobUUID := "job-uuid"
 
-	mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.SponsoredTransactionTransactionSuccessfulTag, mock.Anything).
 		Return(nil).
@@ -865,7 +864,7 @@ func Test_SponsoredTransactionHandler_MonitorTransactionProcessingFailed(t *test
 	isRetryable := true
 	errStack := "error stack"
 
-	mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.SponsoredTransactionErrorTag, mock.Anything).
 		Return(nil).
@@ -897,7 +896,7 @@ func Test_SponsoredTransactionHandler_MonitorTransactionReconciliationSuccess(t 
 	}
 	jobUUID := "job-uuid"
 
-	mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.SponsoredTransactionReconciliationSuccessfulTag, mock.Anything).
 		Return(nil).
@@ -931,7 +930,7 @@ func Test_SponsoredTransactionHandler_MonitorTransactionReconciliationFailure(t 
 	isHorizonErr := true
 	errStack := "error stack"
 
-	mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.SponsoredTransactionReconciliationFailureTag, mock.Anything).
 		Return(nil).
@@ -952,7 +951,7 @@ func Test_SponsoredTransactionHandler_AddContextLoggerFields(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
 	rpcClient := &mocks.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
-		Client: &sdpMonitorMocks.MockMonitorClient{},
+		Client: &sdpMonitor.MockMonitorClient{},
 	}
 	sponsoredHandler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 	require.NoError(t, err)
@@ -984,7 +983,7 @@ func Test_SponsoredTransactionHandler_MonitoringBehavior(t *testing.T) {
 	jobUUID := "job-uuid"
 
 	t.Run("MonitorTransactionProcessingSuccess", func(t *testing.T) {
-		mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+		mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 		mMonitorClient.
 			On("MonitorCounters", sdpMonitor.SponsoredTransactionTransactionSuccessfulTag, mock.Anything).
 			Return(nil).
@@ -1001,7 +1000,7 @@ func Test_SponsoredTransactionHandler_MonitoringBehavior(t *testing.T) {
 	})
 
 	t.Run("MonitorTransactionProcessingFailed with retryable error", func(t *testing.T) {
-		mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+		mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 		mMonitorClient.
 			On("MonitorCounters", sdpMonitor.SponsoredTransactionErrorTag, mock.Anything).
 			Return(nil).
@@ -1018,7 +1017,7 @@ func Test_SponsoredTransactionHandler_MonitoringBehavior(t *testing.T) {
 	})
 
 	t.Run("MonitorTransactionReconciliationSuccess with reprocessing type", func(t *testing.T) {
-		mMonitorClient := sdpMonitorMocks.NewMockMonitorClient(t)
+		mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 		mMonitorClient.
 			On("MonitorCounters", sdpMonitor.SponsoredTransactionReconciliationSuccessfulTag, mock.Anything).
 			Return(nil).
@@ -1039,7 +1038,7 @@ func Test_SponsoredTransactionHandler_ApplyTransactionData(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
 	rpcClient := &mocks.MockRPCClient{}
 	monitorSvc := tssMonitor.TSSMonitorService{
-		Client: &sdpMonitorMocks.MockMonitorClient{},
+		Client: &sdpMonitor.MockMonitorClient{},
 	}
 	handler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
 	require.NoError(t, err)

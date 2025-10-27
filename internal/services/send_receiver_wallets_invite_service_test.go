@@ -437,13 +437,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: recRW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, walletEmbedded.ID)
@@ -501,13 +495,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Amount:         "1",
 		})
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: recRW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		q := `SELECT COUNT(*) FROM messages WHERE receiver_id = $1 AND wallet_id = $2`
