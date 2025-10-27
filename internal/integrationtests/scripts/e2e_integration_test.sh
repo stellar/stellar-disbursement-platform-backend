@@ -1,5 +1,5 @@
 #!/bin/bash
-# internal/integrationtests/scripts/e2e_integration_test.sh
+# This script is used to run e2e integration tests locally with all necessary steps.
 set -eu
 
 export DIVIDER="----------------------------------------"

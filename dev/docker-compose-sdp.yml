@@ -45,7 +45,6 @@ services:
       ADMIN_PORT: "8003"
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
-      SINGLE_TENANT_MODE: "true"
 
       # scheduler options
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"

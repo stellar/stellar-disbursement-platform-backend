@@ -22,7 +22,7 @@ services:
       - "8000:8000"
       - "8003:8003"
     environment:
-      BASE_URL: http://localhost:8000
+      BASE_URL: http://stellar.local:8000
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable
       ENVIRONMENT: localhost
       LOG_LEVEL: TRACE
@@ -44,7 +44,6 @@ services:
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
-      SINGLE_TENANT_MODE: "true"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "5"
       SCHEDULER_PAYMENT_JOB_SECONDS: "5"
 
@@ -93,11 +92,6 @@ services:
         sleep 5
         ./stellar-disbursement-platform db admin migrate up
         ./stellar-disbursement-platform db tss migrate up
-        ./stellar-disbursement-platform tenants ensure-default \
-          --default-tenant-owner-email "owner@stellar.org" \
-          --default-tenant-owner-first-name "Owner" \
-          --default-tenant-owner-last-name "Name" \
-          --distribution-public-key "${DISTRIBUTION_PUBLIC_KEY}"
         ./stellar-disbursement-platform db auth migrate up --all
         ./stellar-disbursement-platform db sdp migrate up --all
         ./stellar-disbursement-platform db setup-for-network --all

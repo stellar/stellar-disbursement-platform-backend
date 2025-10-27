@@ -127,7 +127,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	// Setup SEP24 JWT manager
-	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, 15000)
+	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, 300000)
 	if err != nil {
 		return fmt.Errorf("error creating SEP-24 JWT manager: %w", err)
 	}

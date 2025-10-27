@@ -293,9 +293,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 			deviceID:          deviceID,
 			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock) {
 				ctx := context.Background()
-				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-					Name: "Test Org",
-				})
+				_, err := models.DBConnectionPool.ExecContext(ctx, `UPDATE organizations SET captcha_disabled = NULL`)
 				require.NoError(t, err)
 
 				authManagerMock.
@@ -317,9 +315,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 			deviceID:          deviceID,
 			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock) {
 				ctx := context.Background()
-				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
-					Name: "Test Org",
-				})
+				_, err := models.DBConnectionPool.ExecContext(ctx, `UPDATE organizations SET captcha_disabled = NULL`)
 				require.NoError(t, err)
 
 				reCAPTCHAValidatorMock.
