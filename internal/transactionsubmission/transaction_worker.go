@@ -551,8 +551,11 @@ func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceN
 			IncrementSequenceNum: true,
 		},
 	)
+	if err != nil {
+		return nil, fmt.Errorf("building payment transaction: %w", err)
+	}
 
-	return paymentTx, err
+	return paymentTx, nil
 }
 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {

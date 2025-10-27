@@ -1593,7 +1593,8 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 						Asset:             wantAsset,
 						SourceAccount:     distributionKP.Address(),
 					}
-					op, _ := txnbuild.NewPaymentToContract(params)
+					op, err := txnbuild.NewPaymentToContract(params)
+					require.NoError(t, err)
 					operation = &op
 				}
 
