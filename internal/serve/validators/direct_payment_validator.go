@@ -191,6 +191,7 @@ func (v *DirectPaymentValidator) validateReceiverReference(receiver *DirectPayme
 		walletAddr := strings.TrimSpace(*receiver.WalletAddress)
 		v.Check(strkey.IsValidEd25519PublicKey(walletAddr) || strkey.IsValidContractAddress(walletAddr),
 			"receiver.wallet_address", "invalid stellar address format")
+		*receiver.WalletAddress = walletAddr
 	}
 
 	if hasID {
@@ -213,6 +214,7 @@ func (v *DirectPaymentValidator) validateWalletReference(wallet *DirectPaymentWa
 		address := strings.TrimSpace(*wallet.Address)
 		v.Check(strkey.IsValidEd25519PublicKey(address) || strkey.IsValidContractAddress(address),
 			"wallet.address", "invalid stellar address format")
+		*wallet.Address = address
 	}
 
 	if hasID {
