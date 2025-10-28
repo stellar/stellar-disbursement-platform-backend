@@ -25,32 +25,58 @@ jobs:
       max-parallel: 1
       matrix:
         platform:
-          - "Stellar-phone"
-          - "Stellar-phoneWallet"
-          - "Stellar-email"
+          - "Stellar-phone" # Stellar distribution account where receivers are registered with their phone number
+          - "Stellar-phone-FUTURENET" # Stellar distribution account where receivers are registered with their phone number
+          - "Stellar-phoneWallet" # Stellar distribution account where receivers are registered with their phone number and wallet address
+          - "Stellar-email" # Stellar distribution account where receivers are registered with their email
+          - "Circle-transfers-phone" # Circle(Transfers) distribution account where receivers are registered with their phone number
+          - "Circle-payouts-phoneWallet" # Circle(Payouts) distribution account where receivers are registered with their phone number and wallet address
         include:
-          - platform: "Internal-Stellar-phone"
+          - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "Internal-Stellar-phoneWallet"
+          - platform: "Stellar-phoneWallet"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-          - platform: "Internal-Stellar-email"
+          - platform: "Stellar-email"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_email.csv"
             REGISTRATION_CONTACT_TYPE: "EMAIL"
             DISBURSED_ASSET_CODE: "USDC"
             DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-
+          - platform: "Circle-transfers-phone"
+            environment: "Receiver Registration - E2E Integration Tests (Circle)"
+            CIRCLE_API_TYPE: "TRANSFERS"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+          - platform: "Circle-payouts-phoneWallet"
+            environment: "Receiver Registration - E2E Integration Tests (Circle)"
+            CIRCLE_API_TYPE: "PAYOUTS"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone_with_wallet.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER_AND_WALLET_ADDRESS"
+            DISBURSED_ASSET_CODE: "USDC"
+            DISBURSED_ASSET_ISSUER: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+          - platform: "Stellar-phone-FUTURENET"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "XLM"
+            NETWORK_PASSPHRASE: "Test SDF Future Network ; October 2022"
+            HORIZON_URL: "https://horizon-futurenet.stellar.org"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
@@ -72,11 +98,7 @@ jobs:
 
       - name: Run Docker Compose for SDP and TSS
         working-directory: internal/integrationtests/docker
-        run: |
-          echo "Starting SDP with internal SEP services..."
-          export BASE_URL="http://stellar.local:8000"
-          docker compose -f docker-compose-e2e-tests.yml up --build -V -d
-        shell: bash
+        run: docker compose -f docker-compose-e2e-tests.yml up --build -V -d
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
