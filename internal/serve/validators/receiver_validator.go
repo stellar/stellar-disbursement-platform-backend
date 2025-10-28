@@ -10,7 +10,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type ReceiverValidator struct {
@@ -80,7 +79,7 @@ func (rv *ReceiverValidator) ValidateCreateReceiverRequest(req *dto.CreateReceiv
 		}
 
 		if memo != "" {
-			_, _, err := schema.ParseMemo(memo)
+			_, err := ValidateWalletAddressMemo(address, memo)
 			rv.CheckError(err, fmt.Sprintf("wallets[%d].memo", i), "invalid memo format. For more information about memo formats, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos")
 		}
 

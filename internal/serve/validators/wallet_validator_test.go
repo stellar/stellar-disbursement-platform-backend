@@ -2,10 +2,14 @@ package validators
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
@@ -285,6 +289,74 @@ func TestAssetReference_Validate(t *testing.T) {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError)
 			}
+		})
+	}
+}
+
+func TestValidateWalletAddressMemo(t *testing.T) {
+	contractAddress := "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53"
+	publicKey := "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH"
+
+	testCases := []struct {
+		name        string
+		address     string
+		memo        string
+		wantType    schema.MemoType
+		wantErr     error
+		errContains string
+	}{
+		{
+			name:    "contract address with memo is rejected",
+			address: contractAddress,
+			memo:    "1234",
+			wantErr: ErrMemoNotSupportedForContract,
+		},
+		{
+			name:     "contract address without memo is allowed",
+			address:  contractAddress,
+			memo:     "",
+			wantType: "",
+			wantErr:  nil,
+		},
+		{
+			name:     "public key numeric memo returns ID type",
+			address:  publicKey,
+			memo:     "123456",
+			wantType: schema.MemoTypeID,
+			wantErr:  nil,
+		},
+		{
+			name:        "public key invalid memo returns parse error",
+			address:     publicKey,
+			memo:        strings.Repeat("x", 40),
+			errContains: "parsing memo",
+		},
+		{
+			name:    "unknown address leaves memo untouched",
+			address: "",
+			memo:    "some-memo",
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			memoType, err := ValidateWalletAddressMemo(tc.address, tc.memo)
+
+			if tc.wantErr != nil {
+				require.Error(t, err)
+				assert.True(t, errors.Is(err, tc.wantErr), "expected error %v, got %v", tc.wantErr, err)
+				return
+			}
+
+			if tc.errContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantType, memoType)
 		})
 	}
 }
