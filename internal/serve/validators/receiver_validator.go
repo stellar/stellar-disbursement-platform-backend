@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -75,12 +76,16 @@ func (rv *ReceiverValidator) ValidateCreateReceiverRequest(req *dto.CreateReceiv
 		rv.Check(address != "", fmt.Sprintf("wallets[%d].address", i), "wallet address is required")
 
 		if address != "" {
-			rv.Check(strkey.IsValidEd25519PublicKey(address), fmt.Sprintf("wallets[%d].address", i), "invalid stellar address format")
+			rv.Check(strkey.IsValidEd25519PublicKey(address) || strkey.IsValidContractAddress(address), fmt.Sprintf("wallets[%d].address", i), "invalid stellar address format")
 		}
 
 		if memo != "" {
 			_, err := ValidateWalletAddressMemo(address, memo)
-			rv.CheckError(err, fmt.Sprintf("wallets[%d].memo", i), "invalid memo format. For more information about memo formats, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos")
+			if errors.Is(err, ErrMemoNotSupportedForContract) {
+				rv.Check(false, fmt.Sprintf("wallets[%d].memo", i), "memos are not supported for contract addresses")
+			} else {
+				rv.CheckError(err, fmt.Sprintf("wallets[%d].memo", i), "invalid memo format. For more information about memo formats, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos")
+			}
 		}
 
 		req.Wallets[i].Address = address

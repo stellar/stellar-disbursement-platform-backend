@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
@@ -396,5 +399,116 @@ func Test_ReceiverWalletsHandler_PatchReceiverWallet_DuplicateStellarAddress(t *
 		require.NoError(t, err)
 
 		assert.Contains(t, string(respBody), "Receiver wallet does not belong to the specified receiver")
+	})
+}
+
+func Test_ReceiverwalletsHandler_PatchReceiverWallet_MemoValidation(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	tnt := schema.Tenant{ID: "tenant-id"}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
+
+	handler := ReceiverWalletsHandler{Models: models}
+	router := chi.NewRouter()
+	router.Patch("/receivers/{receiver_id}/wallets/{receiver_wallet_id}", handler.PatchReceiverWallet)
+
+	createUserManagedReceiverWallet := func(t *testing.T, status data.ReceiversWalletStatus) (*data.Receiver, *data.ReceiverWallet) {
+		t.Helper()
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
+		data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallet.ID)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, status)
+
+		return receiver, rw
+	}
+
+	doPatch := func(body string, receiverID string, receiverWalletID string) (*http.Response, []byte) {
+		req, requestErr := http.NewRequestWithContext(ctx, http.MethodPatch,
+			fmt.Sprintf("/receivers/%s/wallets/%s", receiverID, receiverWalletID), strings.NewReader(body))
+		require.NoError(t, requestErr)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		payload, readErr := io.ReadAll(resp.Body)
+		require.NoError(t, readErr)
+
+		return resp, payload
+	}
+
+	generateContractAddress := func(t *testing.T) string {
+		t.Helper()
+
+		payload := make([]byte, 32)
+		_, randErr := crand.Read(payload)
+		require.NoError(t, randErr)
+
+		addr, encodeErr := strkey.Encode(strkey.VersionByteContract, payload)
+		require.NoError(t, encodeErr)
+
+		return addr
+	}
+
+	t.Run("accepts contract address without memo", func(t *testing.T) {
+		receiver, rw := createUserManagedReceiverWallet(t, data.DraftReceiversWalletStatus)
+		contractAddress := generateContractAddress(t)
+
+		resp, payload := doPatch(fmt.Sprintf(`{"stellar_address": "%s"}`, contractAddress), receiver.ID, rw.ID)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var responseData map[string]interface{}
+		unmarshalErr := json.Unmarshal(payload, &responseData)
+		require.NoError(t, unmarshalErr)
+		assert.Equal(t, contractAddress, responseData["stellar_address"])
+	})
+
+	t.Run("requires clearing memo before switching to contract address", func(t *testing.T) {
+		receiver, rw := createUserManagedReceiverWallet(t, data.RegisteredReceiversWalletStatus)
+		require.NotEmpty(t, rw.StellarMemo)
+
+		contractAddress := generateContractAddress(t)
+
+		resp, payload := doPatch(fmt.Sprintf(`{"stellar_address": "%s"}`, contractAddress), receiver.ID, rw.ID)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Clear memo before assigning a contract address"}`, string(payload))
+	})
+
+	t.Run("rejects memo payload when assigning contract address", func(t *testing.T) {
+		receiver, rw := createUserManagedReceiverWallet(t, data.DraftReceiversWalletStatus)
+
+		contractAddress := generateContractAddress(t)
+
+		resp, payload := doPatch(fmt.Sprintf(`{"stellar_address": "%s","stellar_memo":"memo-value"}`, contractAddress), receiver.ID, rw.ID)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Memos are not supported for contract addresses"}`, string(payload))
+	})
+
+	t.Run("allows clearing memo when switching to contract address", func(t *testing.T) {
+		receiver, rw := createUserManagedReceiverWallet(t, data.RegisteredReceiversWalletStatus)
+		require.NotEmpty(t, rw.StellarMemo)
+
+		contractAddress := generateContractAddress(t)
+
+		resp, payload := doPatch(fmt.Sprintf(`{"stellar_address": "%s","stellar_memo":""}`, contractAddress), receiver.ID, rw.ID)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var responseData map[string]interface{}
+		unmarshalErr := json.Unmarshal(payload, &responseData)
+		require.NoError(t, unmarshalErr)
+		assert.Equal(t, contractAddress, responseData["stellar_address"])
+		_, memoPresent := responseData["stellar_memo"]
+		assert.False(t, memoPresent)
+		_, memoTypePresent := responseData["stellar_memo_type"]
+		assert.False(t, memoTypePresent)
 	})
 }
