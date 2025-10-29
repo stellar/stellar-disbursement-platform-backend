@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add trustlines for distribution account when provisioning tenant [#891](https://github.com/stellar/stellar-disbursement-platform-backend/pull/891)
 - Add support contract account disbursements [#922](https://github.com/stellar/stellar-disbursement-platform-backend/pull/922)
 - Add contract account support for direct payments [#924](https://github.com/stellar/stellar-disbursement-platform-backend/pull/924)
+- Add support for contract addresses for PATCH receiver [#925](https://github.com/stellar/stellar-disbursement-platform-backend/pull/925)
 
 ### Changed
 - Decommissioned Event Broker Kafka support in favor of Scheduler for background jobs. [#914](https://github.com/stellar/stellar-disbursement-platform-backend/pull/914)
