@@ -233,11 +233,6 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 			walletUpdate.StellarMemoType = &memoType
 		}
 
-		// Prevent setting a memo for contract addresses
-		if strkey.IsValidContractAddress(currentReceiverWallet.StellarAddress) && memoProvided && *patchRequest.StellarMemo != "" {
-			return nil, httperror.BadRequest("Memos are not supported for contract addresses", nil, nil)
-		}
-
 		// 4: Update the receiver wallet
 		if txErr = h.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); txErr != nil {
 			return nil, fmt.Errorf("updating receiver wallet %s: %w", receiverWalletID, txErr)

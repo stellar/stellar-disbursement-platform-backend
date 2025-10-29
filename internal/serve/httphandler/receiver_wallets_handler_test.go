@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -446,6 +447,11 @@ func Test_ReceiverwalletsHandler_PatchReceiverWallet_MemoValidation(t *testing.T
 		return resp, payload
 	}
 
+	generateAccountAddress := func(t *testing.T) string {
+		t.Helper()
+		return keypair.MustRandom().Address()
+	}
+
 	generateContractAddress := func(t *testing.T) string {
 		t.Helper()
 
@@ -470,6 +476,27 @@ func Test_ReceiverwalletsHandler_PatchReceiverWallet_MemoValidation(t *testing.T
 		unmarshalErr := json.Unmarshal(payload, &responseData)
 		require.NoError(t, unmarshalErr)
 		assert.Equal(t, contractAddress, responseData["stellar_address"])
+	})
+
+	t.Run("allows switching from contract address to account address with memo", func(t *testing.T) {
+		receiver, rw := createUserManagedReceiverWallet(t, data.DraftReceiversWalletStatus)
+		currentContract := generateContractAddress(t)
+
+		resp, payload := doPatch(fmt.Sprintf(`{"stellar_address": "%s"}`, currentContract), receiver.ID, rw.ID)
+		require.Equal(t, http.StatusOK, resp.StatusCode, string(payload))
+
+		newAccountAddress := generateAccountAddress(t)
+		memo := "987654321"
+
+		resp, payload = doPatch(fmt.Sprintf(`{"stellar_address": "%s","stellar_memo":"%s"}`, newAccountAddress, memo), receiver.ID, rw.ID)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var responseData map[string]interface{}
+		unmarshalErr := json.Unmarshal(payload, &responseData)
+		require.NoError(t, unmarshalErr)
+		assert.Equal(t, newAccountAddress, responseData["stellar_address"])
+		assert.Equal(t, memo, responseData["stellar_memo"])
+		assert.Equal(t, string(schema.MemoTypeID), responseData["stellar_memo_type"])
 	})
 
 	t.Run("requires clearing memo before switching to contract address", func(t *testing.T) {
