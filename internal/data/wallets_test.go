@@ -429,15 +429,15 @@ func Test_WalletModelInsert(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test-wallet://sdp"
-		sep_10_client_domain := "www.test_wallet.com"
+		deepLinkSchema := "test-wallet://sdp"
+		sep10ClientDomain := "www.test_wallet.com"
 		assets := []string{xlm.ID, usdc.ID}
 
 		wallet, err := walletModel.Insert(ctx, WalletInsert{
 			Name:              name,
 			Homepage:          homepage,
-			SEP10ClientDomain: sep_10_client_domain,
-			DeepLinkSchema:    deep_link_schema,
+			SEP10ClientDomain: sep10ClientDomain,
+			DeepLinkSchema:    deepLinkSchema,
 			AssetsIDs:         assets,
 		})
 		require.NoError(t, err)
@@ -479,15 +479,15 @@ func Test_WalletModelInsert(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test-wallet://sdp"
-		sep_10_client_domain := "www.test_wallet.com"
+		deepLinkSchema := "test-wallet://sdp"
+		sep10ClientDomain := "www.test_wallet.com"
 		assets := []string{xlm.ID, xlm.ID, usdc.ID, usdc.ID}
 
 		wallet, err := walletModel.Insert(ctx, WalletInsert{
 			Name:              name,
 			Homepage:          homepage,
-			SEP10ClientDomain: sep_10_client_domain,
-			DeepLinkSchema:    deep_link_schema,
+			SEP10ClientDomain: sep10ClientDomain,
+			DeepLinkSchema:    deepLinkSchema,
 			AssetsIDs:         assets,
 		})
 		require.NoError(t, err)
@@ -528,15 +528,15 @@ func Test_WalletModelInsert(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test-wallet://sdp"
-		sep_10_client_domain := "www.test_wallet.com"
+		deepLinkSchema := "test-wallet://sdp"
+		sep10ClientDomain := "www.test_wallet.com"
 		assets := []string{xlm.ID, usdc.ID}
 
 		wallet, err := walletModel.Insert(ctx, WalletInsert{
 			Name:              name,
 			Homepage:          homepage,
-			SEP10ClientDomain: sep_10_client_domain,
-			DeepLinkSchema:    deep_link_schema,
+			SEP10ClientDomain: sep10ClientDomain,
+			DeepLinkSchema:    deepLinkSchema,
 			AssetsIDs:         assets,
 		})
 		require.NoError(t, err)
@@ -553,8 +553,8 @@ func Test_WalletModelInsert(t *testing.T) {
 		wallet, err = walletModel.Insert(ctx, WalletInsert{
 			Name:              name,
 			Homepage:          homepage,
-			SEP10ClientDomain: sep_10_client_domain,
-			DeepLinkSchema:    deep_link_schema,
+			SEP10ClientDomain: sep10ClientDomain,
+			DeepLinkSchema:    deepLinkSchema,
 			AssetsIDs:         assets,
 		})
 		assert.ErrorIs(t, err, ErrWalletNameAlreadyExists)
@@ -564,8 +564,8 @@ func Test_WalletModelInsert(t *testing.T) {
 		wallet, err = walletModel.Insert(ctx, WalletInsert{
 			Name:              "Another Wallet",
 			Homepage:          homepage,
-			SEP10ClientDomain: sep_10_client_domain,
-			DeepLinkSchema:    deep_link_schema,
+			SEP10ClientDomain: sep10ClientDomain,
+			DeepLinkSchema:    deepLinkSchema,
 			AssetsIDs:         assets,
 		})
 		assert.ErrorIs(t, err, ErrWalletHomepageAlreadyExists)
@@ -575,8 +575,8 @@ func Test_WalletModelInsert(t *testing.T) {
 		wallet, err = walletModel.Insert(ctx, WalletInsert{
 			Name:              "Another Wallet",
 			Homepage:          "https://another-wallet.com",
-			DeepLinkSchema:    deep_link_schema,
-			SEP10ClientDomain: sep_10_client_domain,
+			DeepLinkSchema:    deepLinkSchema,
+			SEP10ClientDomain: sep10ClientDomain,
 			AssetsIDs:         assets,
 		})
 		assert.ErrorIs(t, err, ErrWalletDeepLinkSchemaAlreadyExists)
@@ -586,8 +586,8 @@ func Test_WalletModelInsert(t *testing.T) {
 		wallet, err = walletModel.Insert(ctx, WalletInsert{
 			Name:              "Another Wallet",
 			Homepage:          "https://another-wallet.com",
-			DeepLinkSchema:    deep_link_schema,
-			SEP10ClientDomain: sep_10_client_domain,
+			DeepLinkSchema:    deepLinkSchema,
+			SEP10ClientDomain: sep10ClientDomain,
 			AssetsIDs:         assets,
 		})
 		assert.ErrorIs(t, err, ErrWalletDeepLinkSchemaAlreadyExists)
@@ -598,7 +598,7 @@ func Test_WalletModelInsert(t *testing.T) {
 			Name:              "Another Wallet",
 			Homepage:          "https://another-wallet.com",
 			DeepLinkSchema:    "wallet://another-wallet/sdp",
-			SEP10ClientDomain: sep_10_client_domain,
+			SEP10ClientDomain: sep10ClientDomain,
 			AssetsIDs:         []string{"invalid-id"},
 		})
 		assert.ErrorIs(t, err, ErrInvalidAssetID)
@@ -628,10 +628,10 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test-wallet://sdp"
-		sep_10_client_domain := "www.test_wallet.com"
+		deepLinkSchema := "test-wallet://sdp"
+		sep10ClientDomain := "www.test_wallet.com"
 
-		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deep_link_schema, sep_10_client_domain)
+		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain)
 		require.EqualError(t, err, "error getting or creating wallet: pq: duplicate key value violates unique constraint \"wallets_name_key\"")
 		assert.Empty(t, wallet)
 	})
@@ -640,10 +640,10 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test-wallet://sdp"
-		sep_10_client_domain := "www.test_wallet.com"
+		deepLinkSchema := "test-wallet://sdp"
+		sep10ClientDomain := "www.test_wallet.com"
 
-		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deep_link_schema, sep_10_client_domain)
+		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain)
 		require.NoError(t, err)
 		assert.Equal(t, "test_wallet", wallet.Name)
 		assert.Equal(t, "https://www.test_wallet.com", wallet.Homepage)
@@ -661,10 +661,10 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test-wallet://sdp"
-		sep_10_client_domain := "www.test_wallet.com"
+		deepLinkSchema := "test-wallet://sdp"
+		sep10ClientDomain := "www.test_wallet.com"
 
-		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deep_link_schema, sep_10_client_domain)
+		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain)
 		require.NoError(t, err)
 		assert.Equal(t, expected.ID, wallet.ID)
 	})

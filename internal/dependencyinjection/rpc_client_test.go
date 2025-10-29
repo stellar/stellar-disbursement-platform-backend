@@ -19,7 +19,7 @@ func Test_NewRpcClient(t *testing.T) {
 	t.Run("creates new client when none exists", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		client, err := NewRpcClient(ctx, opts)
+		client, err := NewRPCClient(ctx, opts)
 		require.NoError(t, err)
 		require.NotNil(t, client)
 	})
@@ -27,11 +27,11 @@ func Test_NewRpcClient(t *testing.T) {
 	t.Run("returns existing client when already created", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		client1, err := NewRpcClient(ctx, opts)
+		client1, err := NewRPCClient(ctx, opts)
 		require.NoError(t, err)
 		require.NotNil(t, client1)
 
-		client2, err := NewRpcClient(ctx, opts)
+		client2, err := NewRPCClient(ctx, opts)
 		require.NoError(t, err)
 		require.NotNil(t, client2)
 
@@ -47,7 +47,7 @@ func Test_NewRpcClient(t *testing.T) {
 			RPCRequestAuthHeaderValue: "Bearer test-token",
 		}
 
-		client, err := NewRpcClient(ctx, optsWithAuth)
+		client, err := NewRPCClient(ctx, optsWithAuth)
 		require.NoError(t, err)
 		require.NotNil(t, client)
 	})
@@ -60,7 +60,7 @@ func Test_NewRpcClient(t *testing.T) {
 			RPCRequestAuthHeaderKey: "Authorization",
 		}
 
-		client, err := NewRpcClient(ctx, optsWithIncompleteAuth)
+		client, err := NewRPCClient(ctx, optsWithIncompleteAuth)
 		require.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "error creating HTTP client")
@@ -74,7 +74,7 @@ func Test_NewRpcClient(t *testing.T) {
 			RPCRequestAuthHeaderValue: "Bearer test-token",
 		}
 
-		client, err := NewRpcClient(ctx, optsWithIncompleteAuth)
+		client, err := NewRPCClient(ctx, optsWithIncompleteAuth)
 		require.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "error creating HTTP client")

@@ -97,7 +97,11 @@ func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
 		return nil, fmt.Errorf("transaction type %q does not support memo", tx.TransactionType)
 	}
 
-	return schema.NewMemo(tx.MemoType, tx.Memo)
+	memo, err := schema.NewMemo(tx.MemoType, tx.Memo)
+	if err != nil {
+		return nil, fmt.Errorf("building memo: %w", err)
+	}
+	return memo, nil
 }
 
 func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {
@@ -309,8 +313,8 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 	q := `
 		SELECT
 			` + TransactionColumnNames("", "") + `
-		FROM 
-			submitter_transactions t 
+		FROM
+			submitter_transactions t
 		WHERE
 			t.id = $1
 		`
@@ -321,7 +325,7 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 		}
 		return nil, fmt.Errorf("error querying transaction ID %s: %w", txID, err)
 	}
-	return &transaction, err
+	return &transaction, nil
 }
 
 func (t *TransactionModel) GetAllByExternalIDs(ctx context.Context, externalIDs []string) ([]*Transaction, error) {
@@ -569,7 +573,7 @@ func (t *TransactionModel) UpdateSyncedTransactions(ctx context.Context, dbTx db
 
 // queryFilterForLockedState returns a SQL query filter that can be used to filter transactions based on their locked
 // state.
-func (ca *TransactionModel) queryFilterForLockedState(locked bool, ledgerNumber int32) string {
+func (t *TransactionModel) queryFilterForLockedState(locked bool, ledgerNumber int32) string {
 	if locked {
 		return fmt.Sprintf("(locked_until_ledger_number >= %d)", ledgerNumber)
 	}
@@ -578,7 +582,7 @@ func (ca *TransactionModel) queryFilterForLockedState(locked bool, ledgerNumber 
 
 // Lock locks the transaction with the provided transactionID. It returns a ErrRecordNotFound error if you try to lock a
 // transaction that is already locked.
-func (ca *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, currentLedger, nextLedgerLock int32) (*Transaction, error) {
+func (t *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, currentLedger, nextLedgerLock int32) (*Transaction, error) {
 	q := fmt.Sprintf(`
 		UPDATE
 			submitter_transactions
@@ -593,7 +597,7 @@ func (ca *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, tr
 			AND status = ANY($4)
 		RETURNING
 			`+TransactionColumnNames("", ""),
-		ca.queryFilterForLockedState(false, currentLedger),
+		t.queryFilterForLockedState(false, currentLedger),
 	)
 	var transaction Transaction
 	allowedTxStatuses := []TransactionStatus{TransactionStatusPending, TransactionStatusProcessing}
@@ -609,7 +613,7 @@ func (ca *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, tr
 }
 
 // Unlock lifts the lock from the transactionID with the provided publicKey.
-func (ca *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*Transaction, error) {
+func (t *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*Transaction, error) {
 	q := `
 		UPDATE
 			submitter_transactions
@@ -633,7 +637,7 @@ func (ca *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, 
 }
 
 // PrepareTransactionForReprocessing pushes the transaction with the provided transactionID back to the queue.
-func (ca *TransactionModel) PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string) (*Transaction, error) {
+func (t *TransactionModel) PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string) (*Transaction, error) {
 	q := `
 		UPDATE
 			submitter_transactions

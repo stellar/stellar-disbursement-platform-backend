@@ -2,19 +2,16 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
 type PaymentFromSubmitterServiceInterface interface {
-	SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error
 	SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error
 }
 
@@ -48,28 +45,6 @@ func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, 
 	})
 	if err != nil {
 		return fmt.Errorf("synchronizing payments from submitter: %w", err)
-	}
-
-	return nil
-}
-
-// SyncTransaction syncs the completed TSS transaction with the SDP's payment.
-func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error {
-	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
-		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-			transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, tssDBTx, tx.TransactionID, txSubStore.TransactionTypePayment)
-			if err != nil {
-				if errors.Is(err, txSubStore.ErrRecordNotFound) {
-					return fmt.Errorf("payment transaction ID %s not found or wrong type", tx.TransactionID)
-				}
-				return fmt.Errorf("getting payment transaction ID %s for update: %w", tx.TransactionID, err)
-			}
-
-			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, []*txSubStore.Transaction{transaction})
-		})
-	})
-	if err != nil {
-		return fmt.Errorf("synchronizing payment from submitter: %w", err)
 	}
 
 	return nil
@@ -130,11 +105,12 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 	payment := payments[0]
 
 	var toStatus data.PaymentStatus
-	if transaction.Status == txSubStore.TransactionStatusSuccess {
+	switch transaction.Status {
+	case txSubStore.TransactionStatusSuccess:
 		toStatus = data.SuccessPaymentStatus
-	} else if transaction.Status == txSubStore.TransactionStatusError {
+	case txSubStore.TransactionStatusError:
 		toStatus = data.FailedPaymentStatus
-	} else {
+	default:
 		return fmt.Errorf("invalid transaction status %s. Expected only %s or %s", transaction.Status, txSubStore.TransactionStatusSuccess, txSubStore.TransactionStatusError)
 	}
 

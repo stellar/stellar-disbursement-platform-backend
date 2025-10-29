@@ -82,13 +82,14 @@ func (m *defaultWalletJWTManager) ValidateToken(ctx context.Context, tokenString
 			return "", "", ErrExpiredWalletToken
 		}
 
-		if vErr, ok := err.(*jwtgo.ValidationError); ok {
+		var vErr *jwtgo.ValidationError
+		if errors.As(err, &vErr) {
 			if vErr.Errors&jwtgo.ValidationErrorExpired != 0 {
 				return "", "", ErrExpiredWalletToken
 			}
 		}
 
-		return "", "", fmt.Errorf("%w: %v", ErrInvalidWalletToken, err)
+		return "", "", fmt.Errorf("%w: %s", ErrInvalidWalletToken, err.Error())
 	}
 
 	if !token.Valid {

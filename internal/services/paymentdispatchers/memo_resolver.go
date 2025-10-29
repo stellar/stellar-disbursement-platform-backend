@@ -42,7 +42,11 @@ func (m *MemoResolver) GetMemo(ctx context.Context, receiverWallet data.Receiver
 		return schema.Memo{}, nil
 	}
 
-	return tenant.GenerateMemoForTenant(ctx)
+	tenantMemo, err := tenant.GenerateMemoForTenant(ctx)
+	if err != nil {
+		return schema.Memo{}, fmt.Errorf("generating tenant memo: %w", err)
+	}
+	return tenantMemo, nil
 }
 
 var _ MemoResolverInterface = (*MemoResolver)(nil)

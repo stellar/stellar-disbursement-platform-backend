@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -228,6 +227,19 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 				signatureStrategies[tc.accountType] = distAccSigClient
 
+				mHorizonClient.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+					Return(horizon.Account{
+						AccountID: hostAccountKP.Address(),
+						Sequence:  1,
+					}, nil).
+					Once()
+
+				mHorizonClient.
+					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, nil).
+					Once()
+
 			case schema.DistributionAccountStellarDBVault:
 				distAccSigClient, err := signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
 					DBConnectionPool:            dbConnectionPool,
@@ -253,7 +265,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				mHorizonClient.
 					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, nil).
-					Once()
+					Times(2)
 				mHorizonClient.
 					On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
 					Run(func(args mock.Arguments) {
@@ -265,7 +277,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 						AccountID: tenantAccountKP.Address(),
 						Sequence:  1,
 					}, nil).
-					Once()
+					Times(2)
 
 				signatureStrategies[tc.accountType] = distAccSigClient
 
@@ -306,7 +318,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				UserEmail:               userEmail,
 				OrgName:                 userOrgName,
 				NetworkType:             string(networkType),
-				UiBaseURL:               sdpUIBaseURL,
+				UIBaseURL:               sdpUIBaseURL,
 				BaseURL:                 baseURL,
 				DistributionAccountType: tc.accountType,
 			})
@@ -371,7 +383,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	}
 }
 
-func Test_Manager_RunMigrationsForTenant(t *testing.T) {
+func Test_Manager_applyTenantMigrations(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
@@ -428,9 +440,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 	})
 	require.NoError(t, err)
-	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant1DSN, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
-	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.AuthMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant1DSN, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt1SchemaName, getExpectedTablesAfterMigrationsApplied())
@@ -438,9 +450,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	// Asserting if the Tenant 2 DB Schema wasn't affected by Tenant 1 schema migrations
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, []string{})
 
-	err = p.runMigrationsForTenant(ctx, tenant2DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant2DSN, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
-	err = p.runMigrationsForTenant(ctx, tenant2DSN, migrate.Up, 0, migrations.AuthMigrationRouter)
+	err = p.applyTenantMigrations(ctx, tenant2DSN, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, getExpectedTablesAfterMigrationsApplied())
@@ -648,7 +660,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
 
 				// Needed for createSchemaAndRunMigrations:
-				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
+				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Twice()
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
 
 				// Needed for setupTenantData (this one cannot be mocked):
@@ -704,17 +716,21 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostAccount).
 					Return(&txnbuild.Transaction{}, nil).
 					Once()
+				sigRouter.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
 				mHorizonClient.
 					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, nil).
-					Once()
+					Twice()
 				mHorizonClient.
 					On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
 					Return(horizon.Account{
 						AccountID: distAccAddress,
 						Sequence:  1,
 					}, nil).
-					Once()
+					Twice()
 			},
 		},
 	}
@@ -753,7 +769,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				UserEmail:               email,
 				OrgName:                 orgName,
 				NetworkType:             string(networkType),
-				UiBaseURL:               sdpUIBaseURL,
+				UIBaseURL:               sdpUIBaseURL,
 				BaseURL:                 baseURL,
 				DistributionAccountType: accountType,
 			})

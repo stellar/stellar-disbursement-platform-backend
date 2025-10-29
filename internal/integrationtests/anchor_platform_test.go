@@ -18,14 +18,14 @@ import (
 )
 
 func Test_StartChallengeTransaction(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 	receiverAccountID := "GDJNLIFC2JTGKTD4LA4D77TSEGMQLZKBIEXMMJT64AEWWVYC5JKJHH2X"
 
 	serverPublicKey := "GD57H5NAK3NFZVR66OGPBAV4FUFUQXQTPOQTSKFLW63SVQVQ4FSQAXMA"
 	serverPrivateKey := "SBG2NGVW7VYIZDK4R775UXNRZUODJBS3N3H6ICKKAAMXUSWBOHUXETE4"
 
 	ap := AnchorPlatformIntegrationTests{
-		HttpClient:               &httpClientMock,
+		HTTPClient:               &httpClientMock,
 		TenantName:               "mock_tenant",
 		AnchorPlatformBaseSepURL: "http://mock_anchor.com/",
 		ReceiverAccountPublicKey: receiverAccountID,
@@ -198,10 +198,10 @@ func Test_SignChallengeTransaction(t *testing.T) {
 }
 
 func Test_SendSignedChallengeTransaction(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
 	ap := AnchorPlatformIntegrationTests{
-		HttpClient:               &httpClientMock,
+		HTTPClient:               &httpClientMock,
 		AnchorPlatformBaseSepURL: "http://mock_anchor.com/",
 	}
 
@@ -302,12 +302,12 @@ func Test_SendSignedChallengeTransaction(t *testing.T) {
 }
 
 func Test_CreateSep24DepositTransaction(t *testing.T) {
-	httpClientMock := httpclientMocks.HttpClientMock{}
+	httpClientMock := httpclientMocks.HTTPClientMock{}
 
 	receiverAccountID := "GDJNLIFC2JTGKTD4LA4D77TSEGMQLZKBIEXMMJT64AEWWVYC5JKJHH2X"
 
 	ap := AnchorPlatformIntegrationTests{
-		HttpClient:               &httpClientMock,
+		HTTPClient:               &httpClientMock,
 		AnchorPlatformBaseSepURL: "http://mock_anchor.com/",
 		ReceiverAccountPublicKey: receiverAccountID,
 		DisbursedAssetCode:       "USDC",

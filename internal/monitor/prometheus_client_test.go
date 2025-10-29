@@ -23,18 +23,18 @@ func Test_PrometheusClient_GetMetricType(t *testing.T) {
 	assert.Equal(t, MetricTypePrometheus, metricType)
 }
 
-func Test_PrometheusClient_GetMetricHttpHandler(t *testing.T) {
+func Test_PrometheusClient_GetMetricHTTPHandler(t *testing.T) {
 	mPrometheusClient := &prometheusClient{}
 
-	mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	mHTTPHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{"status": "OK"}`))
 		require.NoError(t, err)
 	})
 
-	mPrometheusClient.httpHandler = mHttpHandler
+	mPrometheusClient.httpHandler = mHTTPHandler
 
-	httpHandler := mPrometheusClient.GetMetricHttpHandler()
+	httpHandler := mPrometheusClient.GetMetricHTTPHandler()
 
 	r := chi.NewRouter()
 	r.Get("/metrics", httpHandler.ServeHTTP)
@@ -45,28 +45,31 @@ func Test_PrometheusClient_GetMetricHttpHandler(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	wantJson := `{"status": "OK"}`
-	assert.JSONEq(t, wantJson, rr.Body.String())
+	wantJSON := `{"status": "OK"}`
+	assert.JSONEq(t, wantJSON, rr.Body.String())
 }
 
 func Test_PrometheusClient_MonitorRequestTime(t *testing.T) {
 	mPrometheusClient := &prometheusClient{}
 
 	metricsRegistry := prometheus.NewRegistry()
-	metricsRegistry.MustRegister(SummaryVecMetrics[HttpRequestDurationTag])
+	metricsRegistry.MustRegister(SummaryVecMetrics[HTTPRequestDurationTag])
 
 	mPrometheusClient.httpHandler = promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
 
-	mLabels := HttpRequestLabels{
+	mLabels := HTTPRequestLabels{
 		Status: "200",
 		Route:  "/mock",
 		Method: "GET",
+		CommonLabels: CommonLabels{
+			TenantName: "test-tenant",
+		},
 	}
 
 	// initializing durations as 1 second
 	mDuration := time.Second * 1
 
-	mPrometheusClient.MonitorHttpRequestDuration(mDuration, mLabels)
+	mPrometheusClient.MonitorHTTPRequestDuration(mDuration, mLabels)
 
 	r := chi.NewRouter()
 	r.Get("/metrics", mPrometheusClient.httpHandler.ServeHTTP)
@@ -83,8 +86,8 @@ func Test_PrometheusClient_MonitorRequestTime(t *testing.T) {
 	assert.NotEmpty(t, data)
 	body := string(data)
 
-	sumMetric := `sdp_http_requests_duration_seconds_sum{method="GET",route="/mock",status="200"} 1`
-	countMetric := `sdp_http_requests_duration_seconds_count{method="GET",route="/mock",status="200"} 1`
+	sumMetric := `sdp_http_requests_duration_seconds_sum{method="GET",route="/mock",status="200",tenant_name="test-tenant"} 1`
+	countMetric := `sdp_http_requests_duration_seconds_count{method="GET",route="/mock",status="200",tenant_name="test-tenant"} 1`
 
 	assert.Contains(t, body, sumMetric)
 	assert.Contains(t, body, countMetric)
@@ -168,6 +171,9 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 		labels := DisbursementLabels{
 			Asset:  "USDC",
 			Wallet: "Mock Wallet",
+			CommonLabels: CommonLabels{
+				TenantName: "test-tenant",
+			},
 		}
 
 		mPrometheusClient.MonitorCounters(DisbursementsCounterTag, labels.ToMap())
@@ -184,7 +190,7 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 		assert.NotEmpty(t, data)
 		body := string(data)
 
-		metric := `sdp_business_disbursements_counter{asset="USDC",wallet="Mock Wallet"} 1`
+		metric := `sdp_business_disbursements_counter{asset="USDC",tenant_name="test-tenant",wallet="Mock Wallet"} 1`
 
 		assert.Contains(t, body, metric)
 
@@ -239,4 +245,177 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 	})
 
 	// TO-DO add tests for counter metrics when these metrics are added in the app
+}
+
+func Test_PrometheusClient_RegisterFunctionMetric(t *testing.T) {
+	client := newPrometheusClient()
+
+	t.Run("gauge function metric", func(t *testing.T) {
+		called := false
+		testFunc := func() float64 {
+			called = true
+			return 123.45
+		}
+
+		opts := FuncMetricOptions{
+			Namespace:  "test",
+			Subservice: "subsys",
+			Name:       "gauge_test",
+			Help:       "Test gauge",
+			Labels:     map[string]string{"pool": "test"},
+			Function:   testFunc,
+		}
+
+		// Should not panic
+		client.RegisterFunctionMetric(FuncGaugeType, opts)
+
+		// Verify function metric is accessible through HTTP handler
+		r := chi.NewRouter()
+		r.Get("/metrics", client.httpHandler.ServeHTTP)
+
+		req, err := http.NewRequest("GET", "/metrics", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		data, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body := string(data)
+
+		// Check that the metric appears in output
+		assert.Contains(t, body, "test_subsys_gauge_test")
+		assert.Contains(t, body, "123.45")
+		assert.True(t, called, "Function should have been called")
+	})
+
+	t.Run("counter function metric", func(t *testing.T) {
+		called := false
+		testFunc := func() float64 {
+			called = true
+			return 456.78
+		}
+
+		opts := FuncMetricOptions{
+			Namespace:  "test",
+			Subservice: "subsys",
+			Name:       "counter_test",
+			Help:       "Test counter",
+			Labels:     map[string]string{"pool": "test"},
+			Function:   testFunc,
+		}
+
+		// Should not panic
+		client.RegisterFunctionMetric(FuncCounterType, opts)
+
+		// Verify function metric is accessible through HTTP handler
+		r := chi.NewRouter()
+		r.Get("/metrics", client.httpHandler.ServeHTTP)
+
+		req, err := http.NewRequest("GET", "/metrics", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		data, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		body := string(data)
+
+		// Check that the metric appears in output
+		assert.Contains(t, body, "test_subsys_counter_test")
+		assert.Contains(t, body, "456.78")
+		assert.True(t, called, "Function should have been called")
+	})
+
+	t.Run("unsupported metric type", func(t *testing.T) {
+		// Capture log output
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.DefaultLogger.SetLevel(log.ErrorLevel)
+
+		opts := FuncMetricOptions{
+			Namespace:  "test",
+			Subservice: "subsys",
+			Name:       "unsupported_test",
+			Help:       "Test unsupported",
+			Function:   func() float64 { return 1.0 },
+		}
+
+		// Should not panic, but should log error
+		client.RegisterFunctionMetric(FuncMetricType("invalid"), opts)
+
+		// Check error was logged
+		assert.Contains(t, buf.String(), "Error Registering Function invalid metric unsupported_test: unsupported metric type")
+	})
+}
+
+func TestPrometheusClient_FunctionMetricIntegration(t *testing.T) {
+	client := newPrometheusClient()
+
+	// Register multiple function metrics
+	value1 := 100.0
+	value2 := 200.0
+
+	opts1 := FuncMetricOptions{
+		Namespace:  DefaultNamespace,
+		Subservice: "db",
+		Name:       "test_connections",
+		Help:       "Test connections gauge",
+		Labels:     map[string]string{"pool": "main"},
+		Function:   func() float64 { return value1 },
+	}
+
+	opts2 := FuncMetricOptions{
+		Namespace:  DefaultNamespace,
+		Subservice: "db",
+		Name:       "test_queries_total",
+		Help:       "Test queries counter",
+		Labels:     map[string]string{"pool": "main"},
+		Function:   func() float64 { return value2 },
+	}
+
+	client.RegisterFunctionMetric(FuncGaugeType, opts1)
+	client.RegisterFunctionMetric(FuncCounterType, opts2)
+
+	// Get metrics output
+	r := chi.NewRouter()
+	r.Get("/metrics", client.httpHandler.ServeHTTP)
+
+	req, err := http.NewRequest("GET", "/metrics", nil)
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	resp := rr.Result()
+	data, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body := string(data)
+
+	// Verify both metrics appear
+	assert.Contains(t, body, "sdp_db_test_connections")
+	assert.Contains(t, body, "sdp_db_test_queries_total")
+	assert.Contains(t, body, "100")
+	assert.Contains(t, body, "200")
+
+	// Update values and verify they change
+	value1 = 150.0
+	value2 = 250.0
+
+	req2, err := http.NewRequest("GET", "/metrics", nil)
+	require.NoError(t, err)
+	rr2 := httptest.NewRecorder()
+	r.ServeHTTP(rr2, req2)
+
+	resp2 := rr2.Result()
+	data2, err := io.ReadAll(resp2.Body)
+	require.NoError(t, err)
+	body2 := string(data2)
+
+	// Values should be updated
+	assert.Contains(t, body2, "150")
+	assert.Contains(t, body2, "250")
 }

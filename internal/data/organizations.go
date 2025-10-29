@@ -52,6 +52,8 @@ type Organization struct {
 	IsLinkShortenerEnabled bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
 	IsMemoTracingEnabled   bool                   `json:"is_memo_tracing_enabled" db:"is_memo_tracing_enabled"`
 	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
+	MFADisabled            *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
+	CAPTCHADisabled        *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
 	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
 }
@@ -70,6 +72,10 @@ type OrganizationUpdate struct {
 	ReceiverRegistrationMessageTemplate *string `json:",omitempty"`
 	OTPMessageTemplate                  *string `json:",omitempty"`
 	PrivacyPolicyLink                   *string `json:",omitempty"`
+
+	// MFA and CAPTCHA settings
+	MFADisabled     *bool `json:",omitempty"`
+	CAPTCHADisabled *bool `json:",omitempty"`
 }
 
 type LogoType string
@@ -226,7 +232,10 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 
 	if ou.PrivacyPolicyLink != nil {
 		if *ou.PrivacyPolicyLink != "" {
-			link, _ := url.ParseRequestURI(*ou.PrivacyPolicyLink)
+			link, err := url.ParseRequestURI(*ou.PrivacyPolicyLink)
+			if err != nil {
+				return fmt.Errorf("invalid privacy policy link: %w", err)
+			}
 			fields = append(fields, "privacy_policy_link = ?")
 			args = append(args, link.String())
 		} else {
@@ -251,6 +260,16 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		} else {
 			fields = append(fields, "payment_cancellation_period_days = NULL")
 		}
+	}
+
+	if ou.MFADisabled != nil {
+		fields = append(fields, "mfa_disabled = ?")
+		args = append(args, *ou.MFADisabled)
+	}
+
+	if ou.CAPTCHADisabled != nil {
+		fields = append(fields, "captcha_disabled = ?")
+		args = append(args, *ou.CAPTCHADisabled)
 	}
 
 	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))

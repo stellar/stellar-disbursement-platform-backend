@@ -12,7 +12,8 @@ import (
 )
 
 func Test_DryRunClient(t *testing.T) {
-	cc, _ := NewDryRunClient()
+	cc, err := NewDryRunClient()
+	require.NoError(t, err)
 
 	// Email
 	stdOut := os.Stdout

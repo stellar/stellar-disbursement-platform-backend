@@ -76,7 +76,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := fmt.Sprintf(`{
+		wantJSON := fmt.Sprintf(`{
 			"id": %q,
 			"external_id": %q,
 			"email": %q,
@@ -92,7 +92,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			"wallets": []
 		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano), receiver.UpdatedAt.Format(time.RFC3339Nano))
 
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	receiverWallet1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, data.DraftReceiversWalletStatus)
@@ -137,7 +137,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := fmt.Sprintf(`{
+		wantJSON := fmt.Sprintf(`{
 			"id": %q,
 			"external_id": %q,
 			"email": %q,
@@ -195,7 +195,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
 			message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano))
 
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	t.Run("successfully returns receiver details with multiple wallets for given ID", func(t *testing.T) {
@@ -241,7 +241,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		wantJson := fmt.Sprintf(`{
+		wantJSON := fmt.Sprintf(`{
 			"id": %q,
 			"external_id": %q,
 			"email": %q,
@@ -338,7 +338,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			receiverWallet2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.UpdatedAt.Format(time.RFC3339Nano),
 			message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.AnchorPlatformTransactionID)
 
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 
 	t.Run("error receiver not found for given ID", func(t *testing.T) {
@@ -351,10 +351,10 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 
-		wantJson := `{
+		wantJSON := `{
 			"error": "could not retrieve receiver with ID: invalid_id"
 		}`
-		assert.JSONEq(t, wantJson, rr.Body.String())
+		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
 }
 
@@ -1455,8 +1455,8 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 		&data.QueryParams{SortBy: data.SortFieldUpdatedAt, SortOrder: data.SortOrderDESC},
 		data.QueryTypeSelectPaginated)
 	require.NoError(t, err)
-	receiversId := handler.Models.Receiver.ParseReceiverIDs(receivers)
-	receiversWallets, err := handler.Models.ReceiverWallet.GetWithReceiverIDs(ctx, dbTx, receiversId)
+	receiversID := handler.Models.Receiver.ParseReceiverIDs(receivers)
+	receiversWallets, err := handler.Models.ReceiverWallet.GetWithReceiverIDs(ctx, dbTx, receiversID)
 	require.NoError(t, err)
 
 	actualResponse := handler.buildReceiversResponse(receivers, receiversWallets)
@@ -1464,7 +1464,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 	ar, err := json.Marshal(actualResponse)
 	require.NoError(t, err)
 
-	wantJson := fmt.Sprintf(`[
+	wantJSON := fmt.Sprintf(`[
 		{
 			"id": %q,
 			"email": "receiver2@mock.com",
@@ -1554,7 +1554,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 		receiverWallet1.CreatedAt.Format(time.RFC3339Nano), receiverWallet1.UpdatedAt.Format(time.RFC3339Nano),
 		message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano))
 
-	assert.JSONEq(t, wantJson, string(ar))
+	assert.JSONEq(t, wantJSON, string(ar))
 
 	err = dbTx.Commit()
 	require.NoError(t, err)
@@ -1897,7 +1897,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 				assert.Equal(t, "horus.lupercal@example.com", receiver.Email)
 				assert.Equal(t, "Cadia-001", receiver.ExternalID)
 
-				verifications, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiverID)
+				verifications, err := models.ReceiverVerification.GetAllByReceiverID(ctx, dbConnectionPool, receiverID)
 				require.NoError(t, err)
 				assert.Len(t, verifications, 2)
 
@@ -1925,7 +1925,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 				assert.Equal(t, "+41555511112", receiver.PhoneNumber)
 				assert.Equal(t, "Terra-001", receiver.ExternalID)
 
-				verifications, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiverID)
+				verifications, err := models.ReceiverVerification.GetAllByReceiverID(ctx, dbConnectionPool, receiverID)
 				require.NoError(t, err)
 				assert.Len(t, verifications, 0)
 
@@ -1966,7 +1966,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 				assert.Equal(t, "+41555511111", receiver.PhoneNumber)
 				assert.Equal(t, "Ultramar-001", receiver.ExternalID)
 
-				verifications, err := models.ReceiverVerification.GetAllByReceiverId(ctx, dbConnectionPool, receiverID)
+				verifications, err := models.ReceiverVerification.GetAllByReceiverID(ctx, dbConnectionPool, receiverID)
 				require.NoError(t, err)
 				assert.Len(t, verifications, 1)
 
@@ -2034,7 +2034,7 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 	})
 
 	existingWalletAddress := "GCQFMQ7U33ICSLAVGBJNX6P66M5GGOTQWCRZ5Y3YXYK3EB3DNCWOAD5K"
-	receiverWalletID, err := models.ReceiverWallet.Insert(ctx, dbConnectionPool, data.ReceiverWalletInsert{
+	receiverWalletID, err := models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbConnectionPool, data.ReceiverWalletInsert{
 		ReceiverID: existingReceiver.ID,
 		WalletID:   wallets[0].ID,
 	})

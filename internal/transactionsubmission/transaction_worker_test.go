@@ -25,9 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -94,7 +92,6 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		chAccModel:         chAccModel,
 		engine:             &submitterEngine,
 		crashTrackerClient: &crashtracker.MockCrashTrackerClient{},
-		eventProducer:      &events.MockProducer{},
 		txHandler:          transactionHandler,
 	}
 }
@@ -114,7 +111,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 
 	// Create txJob:
-	tx := store.CreateTransactionFixtureNew(t, ctx, dbConnectionPool, store.TransactionFixture{
+	tx := store.CreateTransactionFixture(t, ctx, dbConnectionPool, store.TransactionFixture{
 		ExternalID:         uuid.NewString(),
 		TransactionType:    store.TransactionTypePayment,
 		AssetCode:          "USDC",
@@ -193,7 +190,6 @@ func Test_NewTransactionWorker(t *testing.T) {
 		crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 		txProcessingLimiter: wantTxProcessingLimiter,
 		monitorSvc:          tssMonitorSvc,
-		eventProducer:       &events.MockProducer{},
 		txHandler:           &MockTransactionHandler{},
 	}
 
@@ -208,7 +204,6 @@ func Test_NewTransactionWorker(t *testing.T) {
 		crashTrackerClient  crashtracker.CrashTrackerClient
 		txProcessingLimiter engine.TransactionProcessingLimiter
 		monitorSvc          tssMonitor.TSSMonitorService
-		eventProducer       events.Producer
 		txHandler           TransactionHandlerInterface
 		wantError           error
 	}{
@@ -327,7 +322,6 @@ func Test_NewTransactionWorker(t *testing.T) {
 			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 			txProcessingLimiter: wantTxProcessingLimiter,
 			monitorSvc:          tssMonitorSvc,
-			eventProducer:       &events.MockProducer{},
 			txHandler:           &MockTransactionHandler{},
 		},
 	}
@@ -342,7 +336,6 @@ func Test_NewTransactionWorker(t *testing.T) {
 				tc.crashTrackerClient,
 				tc.txProcessingLimiter,
 				tc.monitorSvc,
-				tc.eventProducer,
 				tc.txHandler,
 			)
 
@@ -506,7 +499,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				tw.txModel = mockTxStore
 
 				// PART 2: mock deferred LogAndMonitorTransaction
-				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 					Return(nil).
@@ -566,7 +559,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				tw.chAccModel = mockChAccStore
 
 				// PART 4: mock deferred LogAndMonitorTransaction
-				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 					Return(nil).
@@ -703,7 +696,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			assert.Equal(t, 100, txProcessingLimiter.LimitValue())
 			tw.txProcessingLimiter = txProcessingLimiter
 			// PART 4: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -852,6 +845,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// PART 2: mock LogAndReportErrors
+			// PART 2: mock LogAndReportErrors
 			if tc.crashTrackerMsg != "" {
 				mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
 				mockCrashTrackerClient.
@@ -862,7 +856,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			}
 
 			// PART 3: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -952,7 +946,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 	tw.crashTrackerClient = mockCrashTrackerClient
 
 	// PART 3: mock deferred LogAndMonitorTransaction
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 		Return(nil).
@@ -1062,7 +1056,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// PART 2: mock deferred LogAndMonitorTransaction
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 				Return(nil).
@@ -1512,7 +1506,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 
 			hMock := &horizonclient.MockClient{}
 			if tc.wantHorizonErrorStatusCode == http.StatusOK {
-				hMock.On("Root").Return(horizon.Root{HorizonSequence: int32(currentLedger)}, nil).Once()
+				hMock.On("Root").Return(horizon.Root{HorizonSequence: currentLedger}, nil).Once()
 			} else if tc.wantHorizonErrorStatusCode != 0 {
 				hMock.On("Root").Return(horizon.Root{}, horizonclient.Error{Problem: problem.P{Status: http.StatusBadGateway}}).Once()
 			}
@@ -1627,7 +1621,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		MaxBaseFee:          100,
 	}
 
-	innerTx, _ := txnbuild.NewTransaction(
+	innerTx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount: &txnbuild.SimpleAccount{
 				AccountID: txJob.ChannelAccount.PublicKey,
@@ -1649,6 +1643,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			IncrementSequenceNum: true,
 		},
 	)
+	require.NoError(t, err)
 
 	handler := &MockTransactionHandler{}
 	handler.On("BuildInnerTransaction",
@@ -1766,7 +1761,6 @@ func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) 
 			txHandler:           handler,
 			txProcessingLimiter: mockTxProcessingLimiter,
 			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
-			eventProducer:       &events.MockProducer{},
 		}
 
 		gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
@@ -1852,6 +1846,9 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			horizonError:               nil,
 			wantFinalTransactionStatus: store.TransactionStatusSuccess,
 			wantFinalResultXDR:         resultXDR,
+			prepareMocks: func(t *testing.T, txJob TxJob, _ *crashtracker.MockCrashTrackerClient) {
+				// No mocks needed for this test case
+			},
 		},
 	}
 
@@ -1994,7 +1991,7 @@ func Test_TransactionWorker_handlePreparationError_RPCErrors(t *testing.T) {
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// Mock monitor
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).Return(nil).Once()
 			tw.monitorSvc = tssMonitor.TSSMonitorService{
 				Version:       "0.01",
@@ -2101,7 +2098,7 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrors(t *testing.T) {
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// Mock monitor
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).Return(nil).Once()
 			tw.monitorSvc = tssMonitor.TSSMonitorService{
 				Version:       "0.01",
@@ -2220,7 +2217,7 @@ func Test_TransactionWorker_handlePreparationError_RPCErrorCategorization(t *tes
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
 			// Mock monitor
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).Return(nil).Once()
 			tw.monitorSvc = tssMonitor.TSSMonitorService{
 				Version:       "0.01",
@@ -2360,7 +2357,7 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrorRebuild(t *testing.T
 			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.RPCErrorWrapper")).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
-			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).Return(nil).Once()
 			tssMonitorService := tssMonitor.TSSMonitorService{
 				Version:       "0.01",

@@ -34,17 +34,21 @@ func calculateAndPrintMetrics(ctx context.Context, horizonClient *horizonclient.
 	uniqueLedgers := make(map[int32]bool)
 
 	for _, transactionID := range transactionIDs {
-		tx, _ := txModel.Get(ctx, transactionID)
+		tx, err := txModel.Get(ctx, transactionID)
+		if err != nil {
+			fmt.Printf("failed to get transaction %s from tss", transactionID)
+			continue
+		}
 		transactionsTSS[transactionID] = tx
 	}
 
-	for txnId, txn := range transactionsTSS {
+	for txnID, txn := range transactionsTSS {
 		stellarTxn, err := horizonClient.TransactionDetail(txn.StellarTransactionHash.String)
 		if err != nil {
 			fmt.Printf("failed to retrieve stellar transaction %s from horizon: %v\n", txn.StellarTransactionHash.String, err)
 			continue
 		}
-		transactionsStellar[txnId] = &stellarTxn
+		transactionsStellar[txnID] = &stellarTxn
 	}
 
 	if len(transactionsTSS) == 0 || len(transactionsStellar) == 0 {
@@ -77,12 +81,12 @@ func calculateAndPrintMetrics(ctx context.Context, horizonClient *horizonclient.
 
 	minTxnLatency := time.Duration(math.MaxInt64)
 	maxTxnLatency := time.Duration(0)
-	for _, txId := range transactionIDs {
-		tssTransaction, exists := transactionsTSS[txId]
+	for _, txID := range transactionIDs {
+		tssTransaction, exists := transactionsTSS[txID]
 		if !exists {
 			continue
 		}
-		stellarTransaction, exists := transactionsStellar[txId]
+		stellarTransaction, exists := transactionsStellar[txID]
 		if !exists {
 			continue
 		}
@@ -181,7 +185,7 @@ func generateUniquePublicKey() (string, error) {
 }
 
 // createPaymentTransactions creates bulk payment transactions in the submitter_transactions table for TSS to process.
-func createPaymentTransactions(ctx context.Context, txModel *store.TransactionModel, paymentCount int, assetCode, assetIssuer, destination, tenantId string) []store.Transaction {
+func createPaymentTransactions(ctx context.Context, txModel *store.TransactionModel, paymentCount int, assetCode, assetIssuer, destination, tenantID string) []store.Transaction {
 	transactions := make([]store.Transaction, 0, paymentCount)
 	for i := range paymentCount {
 		externalID := fmt.Sprintf("payment_loadtest_%d_%03d", time.Now().Unix(), i+1)
@@ -194,7 +198,7 @@ func createPaymentTransactions(ctx context.Context, txModel *store.TransactionMo
 				Amount:      0.1,
 				Destination: destination,
 			},
-			TenantID: tenantId,
+			TenantID: tenantID,
 		})
 	}
 
@@ -208,7 +212,7 @@ func createPaymentTransactions(ctx context.Context, txModel *store.TransactionMo
 }
 
 // createWalletCreationTransactions creates bulk wallet creation transactions in the submitter_transactions table for TSS to process.
-func createWalletCreationTransactions(ctx context.Context, txModel *store.TransactionModel, walletCount int, wasmHash, tenantId string) []store.Transaction {
+func createWalletCreationTransactions(ctx context.Context, txModel *store.TransactionModel, walletCount int, wasmHash, tenantID string) []store.Transaction {
 	transactions := make([]store.Transaction, 0, walletCount)
 	for i := range walletCount {
 		externalID := fmt.Sprintf("wallet_loadtest_%d_%03d", time.Now().Unix(), i+1)
@@ -226,7 +230,7 @@ func createWalletCreationTransactions(ctx context.Context, txModel *store.Transa
 				PublicKey: publicKey,
 				WasmHash:  wasmHash,
 			},
-			TenantID: tenantId,
+			TenantID: tenantID,
 		}
 
 		transactions = append(transactions, transaction)
@@ -287,9 +291,9 @@ func main() {
 	// Common flags
 	testType := flag.String("type", "", "Type of load test: 'payment' or 'wallet' (required)")
 	count := flag.Int("count", 0, "Number of transactions to create (required)")
-	databaseUrl := flag.String("databaseUrl", "", "Database connection URL (required)")
-	horizonUrl := flag.String("horizonUrl", "https://horizon-testnet.stellar.org", "Horizon server URL")
-	tenantId := flag.String("tenantId", "", "Tenant ID for multi-tenant testing (required)")
+	databaseURL := flag.String("databaseUrl", "", "Database connection URL (required)")
+	horizonURL := flag.String("horizonUrl", "https://horizon-testnet.stellar.org", "Horizon server URL")
+	tenantID := flag.String("tenantId", "", "Tenant ID for multi-tenant testing (required)")
 
 	// Payment-specific flags
 	assetCode := flag.String("assetCode", "USDC", "Asset code for payments")
@@ -319,12 +323,12 @@ func main() {
 		return
 	}
 
-	if *databaseUrl == "" {
+	if *databaseURL == "" {
 		fmt.Printf("Error: -databaseUrl is required\n")
 		return
 	}
 
-	if *tenantId == "" {
+	if *tenantID == "" {
 		fmt.Printf("Error: -tenantId is required\n")
 		return
 	}
@@ -335,7 +339,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	dbConnectionPool, err := db.OpenDBConnectionPool(*databaseUrl)
+	dbConnectionPool, err := db.OpenDBConnectionPool(*databaseURL)
 	if err != nil {
 		fmt.Printf("Error opening db connection pool: %s\n", err.Error())
 		return
@@ -344,7 +348,7 @@ func main() {
 	txModel := &store.TransactionModel{DBConnectionPool: dbConnectionPool}
 
 	horizonClient := &horizonclient.Client{
-		HorizonURL: *horizonUrl,
+		HorizonURL: *horizonURL,
 		HTTP:       httpclient.DefaultClient(),
 	}
 
@@ -356,18 +360,18 @@ func main() {
 		fmt.Printf("Starting payment load test with %d transactions\n", *count)
 		fmt.Printf("Asset: %s:%s\n", *assetCode, *assetIssuer)
 		fmt.Printf("Destination: %s\n", *paymentDestination)
-		fmt.Printf("Tenant ID: %s\n", *tenantId)
+		fmt.Printf("Tenant ID: %s\n", *tenantID)
 		fmt.Printf("==========================================================\n")
 
-		transactionIDs = createPaymentTransactions(ctx, txModel, *count, *assetCode, *assetIssuer, *paymentDestination, *tenantId)
+		transactionIDs = createPaymentTransactions(ctx, txModel, *count, *assetCode, *assetIssuer, *paymentDestination, *tenantID)
 	} else {
 		testTypeEnum = TestTypeWalletCreation
 		fmt.Printf("Starting wallet creation load test with %d transactions\n", *count)
 		fmt.Printf("WASM Hash: %s\n", *wasmHash)
-		fmt.Printf("Tenant ID: %s\n", *tenantId)
+		fmt.Printf("Tenant ID: %s\n", *tenantID)
 		fmt.Printf("==========================================================\n")
 
-		transactionIDs = createWalletCreationTransactions(ctx, txModel, *count, *wasmHash, *tenantId)
+		transactionIDs = createWalletCreationTransactions(ctx, txModel, *count, *wasmHash, *tenantID)
 	}
 
 	txIDs := make([]string, 0, len(transactionIDs))

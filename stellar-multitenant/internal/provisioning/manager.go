@@ -35,10 +35,12 @@ type ProvisionTenant struct {
 	UserLastName            string
 	UserEmail               string
 	OrgName                 string
-	UiBaseURL               string
+	UIBaseURL               string
 	BaseURL                 string
 	NetworkType             string
 	DistributionAccountType schema.AccountType
+	MFADisabled             *bool
+	CAPTCHADisabled         *bool
 }
 
 var (
@@ -147,7 +149,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*sc
 		Status:                    &tenantStatus,
 		DistributionAccountType:   t.DistributionAccountType,
 		DistributionAccountStatus: t.DistributionAccountStatus,
-		SDPUIBaseURL:              &pt.UiBaseURL,
+		SDPUIBaseURL:              &pt.UIBaseURL,
 		BaseURL:                   &pt.BaseURL,
 	}
 	if t.DistributionAccountType.IsStellar() {
@@ -161,6 +163,12 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*sc
 	err = m.fundTenantDistributionStellarAccountIfNeeded(ctx, *updatedTenant)
 	if err != nil {
 		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
+	}
+
+	if updatedTenant.DistributionAccountType.IsStellar() && updatedTenant.DistributionAccountAddress != nil {
+		if err := m.addTrustlinesForDistributionAccount(ctx, *updatedTenant); err != nil {
+			return t, fmt.Errorf("%w. provisioning trustlines for distribution account: %w", ErrUpdateTenantFailed, err)
+		}
 	}
 
 	return updatedTenant, nil
@@ -190,6 +198,59 @@ func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Conte
 	default:
 		return fmt.Errorf("unsupported accountType=%s", tenant.DistributionAccountType)
 	}
+}
+
+func (m *Manager) addTrustlinesForDistributionAccount(ctx context.Context, tenant schema.Tenant) error {
+	tenantSchemaDSN, err := m.tenantManager.GetDSNForTenant(ctx, tenant.Name)
+	if err != nil {
+		return fmt.Errorf("getting tenant DSN: %w", err)
+	}
+
+	tenantSchemaConnectionPool, models, err := GetTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
+	if err != nil {
+		return fmt.Errorf("opening tenant schema connection: %w", err)
+	}
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool after adding trustlines")
+
+	// Gather the non-native assets currently linked to enabled wallets.
+	wallets, err := models.Wallets.FindWallets(ctx, data.NewFilter(data.FilterEnabledWallets, true))
+	if err != nil {
+		return fmt.Errorf("listing enabled wallets: %w", err)
+	}
+
+	supportedAssets := make(map[string]data.Asset)
+	for _, wallet := range wallets {
+		for _, asset := range wallet.Assets {
+			if asset.IsNative() {
+				continue
+			}
+			key := fmt.Sprintf("%s:%s", asset.Code, asset.Issuer)
+			supportedAssets[key] = asset
+		}
+	}
+
+	if len(supportedAssets) == 0 {
+		log.Ctx(ctx).Info("no non-native supported assets found for tenant during provisioning; skipping trustline setup")
+		return nil
+	}
+
+	distAccount := schema.TransactionAccount{
+		Address: *tenant.DistributionAccountAddress,
+		Type:    tenant.DistributionAccountType,
+		Status:  tenant.DistributionAccountStatus,
+	}
+
+	assetsToTrust := make([]data.Asset, 0, len(supportedAssets))
+	for _, asset := range supportedAssets {
+		assetsToTrust = append(assetsToTrust, asset)
+	}
+
+	_, err = tssSvc.AddTrustlines(ctx, m.SubmitterEngine, distAccount, assetsToTrust)
+	if err != nil {
+		return fmt.Errorf("submitting change trust transaction: %w", err)
+	}
+
+	return nil
 }
 
 // provisionDistributionAccount provisions a distribution account for the tenant if necessary, based on the accountType provided.
@@ -231,7 +292,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 	if err != nil {
 		return fmt.Errorf("opening database connection on tenant schema and getting models: %w", err)
 	}
-	defer tenantSchemaConnectionPool.Close()
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool")
 
 	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.NetworkType), pt.DistributionAccountType.Platform())
 	if err != nil {
@@ -243,9 +304,13 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		return fmt.Errorf("running setup wallets for proper network: %w", err)
 	}
 
-	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: pt.OrgName})
+	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+		Name:            pt.OrgName,
+		MFADisabled:     pt.MFADisabled,
+		CAPTCHADisabled: pt.CAPTCHADisabled,
+	})
 	if err != nil {
-		return fmt.Errorf("updating organization's name: %w", err)
+		return fmt.Errorf("updating organization's name and settings: %w", err)
 	}
 
 	// Creating new user and sending invitation email
@@ -281,13 +346,13 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 
 	// Applying migrations
 	log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-	runTntMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.SDPMigrationRouter)
+	runTntMigrationsErr := m.applyTenantMigrations(ctx, dsn, migrations.SDPMigrationRouter)
 	if runTntMigrationsErr != nil {
 		return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
 	}
 
 	log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.AuthMigrationRouter)
+	runTntAuthMigrationsErr := m.applyTenantMigrations(ctx, dsn, migrations.AuthMigrationRouter)
 	if runTntAuthMigrationsErr != nil {
 		return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
 	}
@@ -314,12 +379,13 @@ func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *schema.Te
 	return nil
 }
 
-func (m *Manager) runMigrationsForTenant(
-	ctx context.Context, dbURL string,
-	dir migrate.MigrationDirection, count int,
+// applyTenantMigrations applies the migrations on the tenant schema when provisioning a new tenant.
+func (m *Manager) applyTenantMigrations(
+	ctx context.Context,
+	dbURL string,
 	migrationRouter migrations.MigrationRouter,
 ) error {
-	n, err := db.Migrate(dbURL, dir, count, migrationRouter)
+	n, err := db.Migrate(dbURL, migrate.Up, 0, migrationRouter)
 	if err != nil {
 		return fmt.Errorf("applying SDP migrations: %w", err)
 	}

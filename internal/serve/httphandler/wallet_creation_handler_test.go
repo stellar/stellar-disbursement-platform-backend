@@ -26,21 +26,23 @@ func Test_WalletCreationHandler_CreateWallet(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(CreateWalletRequest{
+	requestBody, err := json.Marshal(CreateWalletRequest{
 		Token:        "123",
 		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(nil)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
 	var respBody WalletResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 
 	assert.Equal(t, data.PendingWalletStatus, respBody.Status)
@@ -117,9 +119,11 @@ func Test_WalletCreationHandler_CreateWallet_ValidationErrors(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			requestBody, _ := json.Marshal(tc.requestBody)
+			requestBody, err := json.Marshal(tc.requestBody)
+			require.NoError(t, err)
 
-			req, _ := http.NewRequest(http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+			req, err := http.NewRequest(http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+			require.NoError(t, err)
 			http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
 			assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -138,16 +142,18 @@ func Test_WalletCreationHandler_CreateWallet_InternalError(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(CreateWalletRequest{
+	requestBody, err := json.Marshal(CreateWalletRequest{
 		Token:        "123",
 		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(errors.New("foobar"))
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
@@ -160,16 +166,18 @@ func Test_WalletCreationHandler_CreateWallet_InvalidToken(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(CreateWalletRequest{
+	requestBody, err := json.Marshal(CreateWalletRequest{
 		Token:        "123",
 		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(services.ErrInvalidToken)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -182,16 +190,18 @@ func Test_WalletCreationHandler_CreateWallet_InvalidStatus(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(CreateWalletRequest{
+	requestBody, err := json.Marshal(CreateWalletRequest{
 		Token:        "123",
 		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "test-credential-id",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "test-credential-id").Return(services.ErrCreateWalletInvalidStatus)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -204,16 +214,18 @@ func Test_WalletCreationHandler_CreateWallet_CredentialIDConflict(t *testing.T) 
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(CreateWalletRequest{
+	requestBody, err := json.Marshal(CreateWalletRequest{
 		Token:        "123",
 		PublicKey:    "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
 		CredentialID: "duplicate-credential-id",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	walletService.On("CreateWallet", mock.Anything, "123", "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23", "duplicate-credential-id").Return(services.ErrCredentialIDAlreadyExists)
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallet/", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	http.HandlerFunc(handler.CreateWallet).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusConflict, rr.Result().StatusCode)
@@ -277,7 +289,8 @@ func Test_WalletCreationHandler_GetWallet(t *testing.T) {
 			r.Get("/embedded-wallets/{credentialID}", handler.GetWallet)
 
 			rr := httptest.NewRecorder()
-			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/"+tc.credentialID, nil)
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/"+tc.credentialID, nil)
+			require.NoError(t, err)
 
 			r.ServeHTTP(rr, req)
 
@@ -304,7 +317,8 @@ func Test_WalletCreationHandler_GetWallet_EmptyCredentialID(t *testing.T) {
 	r.Get("/embedded-wallets/{credentialID}", handler.GetWallet)
 
 	rr := httptest.NewRecorder()
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/ ", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/embedded-wallets/ ", nil)
+	require.NoError(t, err)
 
 	r.ServeHTTP(rr, req)
 

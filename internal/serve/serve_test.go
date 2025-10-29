@@ -25,7 +25,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
@@ -179,10 +178,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 			RPCRequestAuthHeaderValue: "test",
 		}
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
 
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
 	})
 
@@ -195,9 +194,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
 	})
 
@@ -210,9 +209,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC request header key or value is set")
 	})
 
@@ -226,9 +225,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC request header value must be set when RPC request header key is set")
 	})
 
@@ -242,9 +241,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC request header key must be set when RPC request header value is set")
 	})
 
@@ -257,9 +256,9 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -274,27 +273,27 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig: rpcOptions,
+			RPCConfig: rpcOptions,
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
 	t.Run("embedded wallets enabled without WASM hash: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableEmbeddedWallets: true,
-			RpcConfig:             stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			RPCConfig:             stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "embedded wallets WASM hash must be set when embedded wallets are enabled")
 	})
 
 	t.Run("SEP-45 enabled without contract ID: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableSep45: true,
-			RpcConfig:   stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			RPCConfig:   stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "SEP-45 contract ID must be set when SEP-45 is enabled")
 	})
 
@@ -302,19 +301,19 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableEmbeddedWallets:   true,
 			EmbeddedWalletsWasmHash: "abc123",
-			RpcConfig:               stellar.RPCOptions{},
+			RPCConfig:               stellar.RPCOptions{},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
 	})
 
 	t.Run("SEP-45 enabled without RPC URL: should return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableSep45:     true,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:       stellar.RPCOptions{},
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       stellar.RPCOptions{},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.EqualError(t, err, "RPC URL must be set when RPC-dependent features are enabled")
 	})
 
@@ -322,19 +321,19 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableEmbeddedWallets:   true,
 			EmbeddedWalletsWasmHash: "abc123",
-			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			RPCConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
 	t.Run("SEP-45 enabled with valid configuration: should not return error", func(t *testing.T) {
 		serveOptions := ServeOptions{
 			EnableSep45:     true,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -343,10 +342,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 			EnableEmbeddedWallets:   true,
 			EmbeddedWalletsWasmHash: "abc123",
 			EnableSep45:             true,
-			Sep45ContractId:         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			RpcConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+			Sep45ContractID:         "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:               stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -359,10 +358,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig:       rpcOptions,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       rpcOptions,
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 
@@ -377,10 +376,10 @@ func Test_Serve_callsValidateRpc(t *testing.T) {
 		}
 
 		serveOptions := ServeOptions{
-			RpcConfig:       rpcOptions,
-			Sep45ContractId: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			RPCConfig:       rpcOptions,
+			Sep45ContractID: "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 		}
-		err := serveOptions.ValidateRpc()
+		err := serveOptions.ValidateRPC()
 		require.NoError(t, err)
 	})
 }
@@ -392,24 +391,17 @@ func Test_handleHTTP_Health(t *testing.T) {
 	require.NoError(t, err)
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mLabels := monitor.HttpRequestLabels{
+	mLabels := monitor.HTTPRequestLabels{
 		Status: "200",
 		Route:  "/health",
 		Method: "GET",
+		CommonLabels: monitor.CommonLabels{
+			TenantName: "no_tenant",
+		},
 	}
 	mMonitorService.
-		On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
+		On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
 		Return(nil).
-		Once()
-
-	producerMock := events.NewMockProducer(t)
-	producerMock.
-		On("Ping", mock.Anything).
-		Return(nil).
-		Once()
-	producerMock.
-		On("BrokerType").
-		Return(events.KafkaEventBrokerType).
 		Once()
 
 	handlerMux := handleHTTP(ServeOptions{
@@ -421,7 +413,6 @@ func Test_handleHTTP_Health(t *testing.T) {
 		SEP24JWTSecret:        "jwt_secret_1234567890",
 		Version:               "x.y.z",
 		tenantManager:         tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
-		EventProducer:         producerMock,
 		AdminDBConnectionPool: dbConnectionPool,
 	})
 
@@ -440,8 +431,7 @@ func Test_handleHTTP_Health(t *testing.T) {
 		"service_id": "serve",
 		"release_id": "1234567890abcdef",
 		"services": {
-			"database": "pass",
-			"kafka": "pass"
+			"database": "pass"
 		}
 	}`
 	assert.JSONEq(t, wantBody, string(body))
@@ -488,7 +478,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	t.Helper()
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
+	mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
 
 	messengerClientMock := message.MessengerClientMock{}
 	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil)
@@ -520,16 +510,6 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
 		Return(distAccount, nil).
-		Maybe()
-
-	producerMock := events.NewMockProducer(t)
-	producerMock.
-		On("Ping", mock.Anything).
-		Return(nil).
-		Maybe()
-	producerMock.
-		On("BrokerType").
-		Return(events.KafkaEventBrokerType).
 		Maybe()
 
 	// Setup embedded wallet service mock
@@ -569,12 +549,11 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
-		EventProducer:                   producerMock,
 		BridgeService:                   bridge.NewMockService(t),
 		EnableEmbeddedWallets:           true,
 		EmbeddedWalletsWasmHash:         "abc123",
 		EmbeddedWalletService:           mEmbeddedWalletService,
-		RpcConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
+		RPCConfig:                       stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)

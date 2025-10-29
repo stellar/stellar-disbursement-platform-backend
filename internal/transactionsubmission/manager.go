@@ -13,7 +13,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
@@ -30,7 +29,6 @@ type SubmitterOptions struct {
 	QueuePollingInterval int
 	MonitorService       tssMonitor.TSSMonitorService
 	CrashTrackerClient   crashtracker.CrashTrackerClient
-	EventProducer        events.Producer
 	RPCClient            stellar.RPCClient
 
 	SubmitterEngine  engine.SubmitterEngine
@@ -75,8 +73,6 @@ type Manager struct {
 	// crash & metrics monitoring:
 	monitorService     tssMonitor.TSSMonitorService
 	crashTrackerClient crashtracker.CrashTrackerClient
-	// event producer:
-	eventProducer events.Producer
 	// transaction handler:
 	txHandlerFactory TransactionHandlerFactoryInterface
 }
@@ -144,8 +140,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		crashTrackerClient: crashTrackerClient,
 		monitorService:     opts.MonitorService,
 
-		eventProducer: opts.EventProducer,
-
 		txHandlerFactory: txHandlerFactory,
 	}, nil
 }
@@ -205,7 +199,6 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.crashTrackerClient,
 					m.txProcessingLimiter,
 					m.monitorService,
-					m.eventProducer,
 					txHandler,
 				)
 				if err != nil {
