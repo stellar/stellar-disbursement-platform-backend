@@ -170,10 +170,6 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 
 	// Validate required fields in the request body
 	patchRequest.StellarAddress = strings.TrimSpace(patchRequest.StellarAddress)
-	if patchRequest.StellarMemo != nil {
-		trimmed := strings.TrimSpace(*patchRequest.StellarMemo)
-		*patchRequest.StellarMemo = trimmed
-	}
 	if patchRequest.StellarAddress == "" {
 		httperror.BadRequest("stellar_address is required", nil, nil).Render(rw)
 		return
@@ -206,6 +202,10 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 		}
 
 		// 3. Validate memo if provided
+		if patchRequest.StellarMemo != nil {
+			trimmed := strings.TrimSpace(*patchRequest.StellarMemo)
+			*patchRequest.StellarMemo = trimmed
+		}
 		memoProvided := patchRequest.StellarMemo != nil
 		if strkey.IsValidContractAddress(patchRequest.StellarAddress) {
 			// An empty memo must be explicitly provided to clear existing memos if replacing with a contract address
