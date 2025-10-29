@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -210,12 +211,26 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 
 	account, err := s.fetchAccountFromHorizon(result.ClientAccountID)
 	if err != nil {
+		// Check if it's a 404 (account not found) error
+		var hErr *horizonclient.Error
+		if errors.As(err, &hErr) && hErr.Problem.Status == 404 {
+			// Account doesn't exist - verify with just the client's master key
+			if verifyErr := s.verifySignaturesForNonExistentAccount(
+				result.Transaction,
+				result.ClientAccountID,
+				result.ClientDomain,
+			); verifyErr != nil {
+				return nil, verifyErr
+			}
+			// Generate token without threshold check for non-existent account
+			return s.generateToken(result.Transaction, result.ClientAccountID, result.HomeDomain, result.Memo, result.ClientDomain)
+		}
 		return nil, fmt.Errorf("fetching account from horizon: %w", err)
 	}
 
+	// Account exists - verify with threshold
 	if err := s.verifySignaturesWithThreshold(
 		result.Transaction,
-		result.ClientAccountID,
 		result.ClientDomain,
 		account,
 	); err != nil {
@@ -383,16 +398,54 @@ func (s *sep10Service) verifyClientSignature(tx *txnbuild.Transaction, network, 
 	return s.verifySignature(tx, network, clientAccountID, "client")
 }
 
-func (s *sep10Service) verifySignaturesWithThreshold(
+// verifySignaturesForNonExistentAccount verifies signatures for accounts that don't exist on the network yet.
+// For non-existent accounts, we only verify the client's master key signature (and client_domain if present).
+func (s *sep10Service) verifySignaturesForNonExistentAccount(
 	tx *txnbuild.Transaction,
 	clientAccountID string,
 	clientDomain string,
-	account *horizon.Account,
 ) error {
-	if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientAccountID); err != nil {
-		return fmt.Errorf("verifying client signature: %w", err)
+	// Check signature count
+	// Expected: server signature + client signature + optional client_domain signature
+	expectedSigCount := 2 // server + client
+	if clientDomain != "" {
+		expectedSigCount = 3 // server + client + client_domain
 	}
 
+	actualSigCount := len(tx.Signatures())
+	if actualSigCount != expectedSigCount {
+		return fmt.Errorf(
+			"there is more than one client signer on challenge transaction for an account that doesn't exist: expected %d signatures, got %d",
+			expectedSigCount,
+			actualSigCount,
+		)
+	}
+
+	// Verify client signature
+	if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientAccountID); err != nil {
+		return fmt.Errorf("verifying client signature for non-existent account: %w", err)
+	}
+
+	// Verify client_domain signature if present
+	if clientDomain != "" {
+		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
+		if err != nil {
+			return fmt.Errorf("fetching client domain signing key: %w", err)
+		}
+		if err = s.verifyClientSignature(tx, s.NetworkPassphrase, clientDomainAccountID); err != nil {
+			return fmt.Errorf("verifying client domain signature for non-existent account: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *sep10Service) verifySignaturesWithThreshold(
+	tx *txnbuild.Transaction,
+	clientDomain string,
+	account *horizon.Account,
+) error {
+	// Verify client_domain signature if present
 	if clientDomain != "" {
 		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
 		if err != nil {
@@ -403,6 +456,8 @@ func (s *sep10Service) verifySignaturesWithThreshold(
 		}
 	}
 
+	// Verify that the cumulative weight of signatures meets the medium threshold
+	// This allows any combination of account signers (master or non-master) to authenticate
 	threshold := int(account.Thresholds.MedThreshold)
 	if err := s.verifyThreshold(tx, account, threshold); err != nil {
 		return fmt.Errorf("verifying signature threshold: %w", err)

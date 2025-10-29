@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stretchr/testify/assert"
@@ -479,7 +480,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		validationReq := ValidationRequest{Transaction: challengeResp.Transaction}
 		_, err = service.ValidateChallenge(context.Background(), validationReq)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "verifying client signature")
+		assert.ErrorContains(t, err, "verifying client domain signature")
 	})
 
 	t.Run("wrong client signature", func(t *testing.T) {
@@ -510,7 +511,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		_, err = service.ValidateChallenge(context.Background(), validationReq)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "verifying client signature")
+		assert.ErrorContains(t, err, "verifying client domain signature")
 	})
 
 	t.Run("expired transaction", func(t *testing.T) {
@@ -623,6 +624,249 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "verifying signature threshold")
 	})
+
+	t.Run("non-existent account without client_domain", func(t *testing.T) {
+		// Create a new account that doesn't exist on Horizon
+		nonExistentKP := keypair.MustRandom()
+
+		// Create service with ClientAttributionRequired = false
+		nonExistentService, err := NewSEP10Service(
+			jwtManager,
+			"Test SDF Network ; September 2015",
+			kps.server.Seed(),
+			"https://stellar.local:8000",
+			true,
+			nil,   // HorizonClient will be set below
+			false, // ClientAttributionRequired = false
+		)
+		require.NoError(t, err)
+
+		sep10Svc := nonExistentService.(*sep10Service)
+
+		// Mock Horizon client to return 404
+		mockHorizonClient := &horizonclient.MockClient{}
+		mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
+			Return(horizon.Account{}, &horizonclient.Error{
+				Problem: problem.P{
+					Status: 404,
+					Title:  "Resource Missing",
+					Detail: "The resource at the url requested was not found.",
+				},
+			})
+		sep10Svc.HorizonClient = mockHorizonClient
+
+		// Create challenge without client_domain
+		challengeReq := ChallengeRequest{
+			Account:    nonExistentKP.Address(),
+			HomeDomain: "stellar.local:8000",
+		}
+
+		challengeResp, err := sep10Svc.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		// Sign with only client (no client_domain)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", nonExistentKP)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		// Validate - should succeed for non-existent account
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		validationResp, err := sep10Svc.ValidateChallenge(context.Background(), validationReq)
+		assert.NoError(t, err)
+		assert.NotNil(t, validationResp)
+		assert.NotEmpty(t, validationResp.Token)
+	})
+
+	t.Run("non-existent account with client_domain", func(t *testing.T) {
+		// Create a new account that doesn't exist on Horizon
+		nonExistentKP := keypair.MustRandom()
+
+		// Create service with ClientAttributionRequired = false
+		nonExistentService, err := NewSEP10Service(
+			jwtManager,
+			"Test SDF Network ; September 2015",
+			kps.server.Seed(),
+			"https://stellar.local:8000",
+			true,
+			nil,   // HorizonClient will be set below
+			false, // ClientAttributionRequired = false
+		)
+		require.NoError(t, err)
+
+		sep10Svc := nonExistentService.(*sep10Service)
+
+		// Mock Horizon client to return 404
+		mockHorizonClient := &horizonclient.MockClient{}
+		mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
+			Return(horizon.Account{}, &horizonclient.Error{
+				Problem: problem.P{
+					Status: 404,
+					Title:  "Resource Missing",
+					Detail: "The resource at the url requested was not found.",
+				},
+			})
+		sep10Svc.HorizonClient = mockHorizonClient
+		sep10Svc.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		// Create challenge with client_domain
+		challengeReq := ChallengeRequest{
+			Account:      nonExistentKP.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		}
+
+		challengeResp, err := sep10Svc.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		// Sign with client and client_domain
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", nonExistentKP, kps.clientDomain)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		// Validate - should succeed for non-existent account with client_domain
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		validationResp, err := sep10Svc.ValidateChallenge(context.Background(), validationReq)
+		assert.NoError(t, err)
+		assert.NotNil(t, validationResp)
+		assert.NotEmpty(t, validationResp.Token)
+	})
+
+	t.Run("succeeds with non-master signer signature", func(t *testing.T) {
+		// Create account with a non-master signer
+		clientKP := keypair.MustRandom()
+		nonMasterSignerKP := keypair.MustRandom()
+
+		nonMasterService, err := createSEP10Service(t, &testKeypairs{
+			client:       clientKP,
+			server:       kps.server,
+			clientDomain: kps.clientDomain,
+		}, "https://stellar.local:8000", jwtManager, false)
+		require.NoError(t, err)
+
+		// Mock Horizon to return account with non-master signer
+		mockHorizonClient := &horizonclient.MockClient{}
+		mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
+			Return(horizon.Account{
+				AccountID: clientKP.Address(),
+				Thresholds: horizon.AccountThresholds{
+					LowThreshold:  1,
+					MedThreshold:  1,
+					HighThreshold: 1,
+				},
+				Signers: []horizon.Signer{
+					{Key: clientKP.Address(), Weight: 1, Type: "ed25519_public_key"},
+					{Key: nonMasterSignerKP.Address(), Weight: 1, Type: "ed25519_public_key"},
+				},
+			}, nil)
+		nonMasterService.HorizonClient = mockHorizonClient
+		nonMasterService.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		// Create and sign challenge with non-master signer only
+		challengeReq := ChallengeRequest{
+			Account:      clientKP.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		}
+
+		challengeResp, err := nonMasterService.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		// Sign with non-master signer and client_domain (not master key)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", nonMasterSignerKP, kps.clientDomain)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		// Should succeed - non-master signer has sufficient weight
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		validationResp, err := nonMasterService.ValidateChallenge(context.Background(), validationReq)
+		assert.NoError(t, err)
+		assert.NotNil(t, validationResp)
+		assert.NotEmpty(t, validationResp.Token)
+	})
+
+	t.Run("non-existent account with extra signatures should fail", func(t *testing.T) {
+		// Create a new account that doesn't exist on Horizon
+		nonExistentKP := keypair.MustRandom()
+		extraKP := keypair.MustRandom()
+
+		// Create service with ClientAttributionRequired = false
+		nonExistentService, err := NewSEP10Service(
+			jwtManager,
+			"Test SDF Network ; September 2015",
+			kps.server.Seed(),
+			"https://stellar.local:8000",
+			true,
+			nil,   // HorizonClient will be set below
+			false, // ClientAttributionRequired = false
+		)
+		require.NoError(t, err)
+
+		sep10Svc := nonExistentService.(*sep10Service)
+
+		// Mock Horizon client to return 404
+		mockHorizonClient := &horizonclient.MockClient{}
+		mockHorizonClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
+			Return(horizon.Account{}, &horizonclient.Error{
+				Problem: problem.P{
+					Status: 404,
+					Title:  "Resource Missing",
+					Detail: "The resource at the url requested was not found.",
+				},
+			})
+		sep10Svc.HorizonClient = mockHorizonClient
+
+		// Create challenge without client_domain
+		challengeReq := ChallengeRequest{
+			Account:    nonExistentKP.Address(),
+			HomeDomain: "stellar.local:8000",
+		}
+
+		challengeResp, err := sep10Svc.CreateChallenge(context.Background(), challengeReq)
+		require.NoError(t, err)
+		require.NotEmpty(t, challengeResp.Transaction)
+
+		parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+		require.NoError(t, err)
+		tx, isSimple := parsed.Transaction()
+		require.True(t, isSimple)
+
+		// Sign with client and extra signature
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", nonExistentKP, extraKP)
+		require.NoError(t, err)
+
+		signedTxBase64, err := signedTx.Base64()
+		require.NoError(t, err)
+
+		// Validate - should fail due to extra signature
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		_, err = sep10Svc.ValidateChallenge(context.Background(), validationReq)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "there is more than one client signer")
+	})
 }
 
 func TestSEP10Service_SignatureValidation(t *testing.T) {
@@ -630,11 +874,11 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 	kps := newTestKeypairs()
 	wrongKP := keypair.MustRandom()
 
-	jwtManager, err := sepauth.NewJWTManager("emperors-light-123", 3600000)
-	require.NoError(t, err)
+	jwtManager, outerErr := sepauth.NewJWTManager("emperors-light-123", 3600000)
+	require.NoError(t, outerErr)
 
-	service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
-	require.NoError(t, err)
+	service, outerErr := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
+	require.NoError(t, outerErr)
 
 	t.Run("wrong server signature (extra wrong signature is ignored)", func(t *testing.T) {
 		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
@@ -802,7 +1046,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		_, err = service.ValidateChallenge(context.Background(), validationReq)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "verifying client signature")
+		assert.ErrorContains(t, err, "verifying client domain signature")
 	})
 
 	t.Run("valid signatures but wrong client domain account", func(t *testing.T) {
