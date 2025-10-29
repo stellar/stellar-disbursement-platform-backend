@@ -1640,6 +1640,21 @@ func Test_HorizonErrorWrapper_ShouldMarkAsError(t *testing.T) {
 			wantResult: true,
 		},
 		{
+			name: "returns true if op code is entry_archived",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction": "tx_fee_bump_inner_failed",
+							"operations":  []string{"entry_archived"},
+						},
+					},
+				},
+			},
+			wantResult: true,
+		},
+		{
 			name: "returns false if tx code not in failed tx codes",
 			hErr: horizonclient.Error{
 				Problem: problem.P{
