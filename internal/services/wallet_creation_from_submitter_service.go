@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/stellar/go/hash"
 	"github.com/stellar/go/strkey"
@@ -29,6 +31,8 @@ type WalletCreationFromSubmitterService struct {
 	tssModel          *store.TransactionModel
 	networkPassphrase string
 }
+
+const autoRegistrationIdentifier = "AUTO_REGISTRATION"
 
 var _ WalletCreationFromSubmitterServiceInterface = (*WalletCreationFromSubmitterService)(nil)
 
@@ -204,6 +208,7 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 		}
 
 		update.ContractAddress = contractAddress
+		embeddedWallet.ContractAddress = contractAddress
 		update.WalletStatus = data.SuccessWalletStatus
 	case store.TransactionStatusError:
 		update.WalletStatus = data.FailedWalletStatus
@@ -216,5 +221,88 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 		return fmt.Errorf("updating embedded wallet with token %s: %w", embeddedWallet.Token, err)
 	}
 
+	if transaction.Status == store.TransactionStatusSuccess && embeddedWallet.ReceiverWalletID != "" {
+		if embeddedWallet.RequiresSEP24Registration {
+			log.Ctx(ctx).Debugf("embedded wallet %s requires SEP24 registration. Receiver wallet %s remains READY", embeddedWallet.Token, embeddedWallet.ReceiverWalletID)
+		} else {
+			if err := s.autoRegisterEmbeddedWallet(ctx, sdpDBTx, embeddedWallet); err != nil {
+				return fmt.Errorf("auto registering receiver wallet %s: %w", embeddedWallet.ReceiverWalletID, err)
+			}
+		}
+	}
+
 	return nil
+}
+
+func (s *WalletCreationFromSubmitterService) autoRegisterEmbeddedWallet(ctx context.Context, sdpDBTx db.DBTransaction, embeddedWallet *data.EmbeddedWallet) error {
+	receiverWallet, err := s.sdpModels.ReceiverWallet.GetByID(ctx, sdpDBTx, embeddedWallet.ReceiverWalletID)
+	if err != nil {
+		return fmt.Errorf("getting embedded wallet %s: %w", embeddedWallet.ReceiverWalletID, err)
+	}
+
+	if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
+		return nil
+	}
+
+	receiver, err := s.sdpModels.Receiver.Get(ctx, sdpDBTx, receiverWallet.Receiver.ID)
+	if err != nil {
+		return fmt.Errorf("getting receiver %s: %w", receiverWallet.Receiver.ID, err)
+	}
+
+	if strings.TrimSpace(embeddedWallet.ContractAddress) == "" {
+		return fmt.Errorf("embedded wallet %s missing contract address", embeddedWallet.Token)
+	}
+
+	now := time.Now()
+	walletUpdate := data.ReceiverWalletUpdate{
+		Status:           data.RegisteredReceiversWalletStatus,
+		StellarAddress:   embeddedWallet.ContractAddress,
+		OTPConfirmedAt:   now,
+		OTPConfirmedWith: autoRegistrationIdentifier,
+	}
+	if err := s.sdpModels.ReceiverWallet.Update(ctx, receiverWallet.ID, walletUpdate, sdpDBTx); err != nil {
+		return fmt.Errorf("updating receiver wallet %s: %w", receiverWallet.ID, err)
+	}
+
+	verificationFields, err := s.verificationFieldsForReceiverWallet(ctx, sdpDBTx, receiverWallet.ID)
+	if err != nil {
+		return err
+	}
+
+	if len(verificationFields) == 0 {
+		return nil
+	}
+
+	confirmedByID := autoRegistrationIdentifier
+	for _, field := range verificationFields {
+		update := data.ReceiverVerificationUpdate{
+			ReceiverID:        receiver.ID,
+			VerificationField: field,
+			ConfirmedAt:       &now,
+			ConfirmedByID:     confirmedByID,
+		}
+
+		if err := s.sdpModels.ReceiverVerification.UpdateReceiverVerification(ctx, update, sdpDBTx); err != nil {
+			log.Ctx(ctx).Errorf("auto-register: confirming verification %s for receiver %s: %v", field, receiver.ID, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *WalletCreationFromSubmitterService) verificationFieldsForReceiverWallet(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) ([]data.VerificationType, error) {
+	query := `
+		SELECT DISTINCT d.verification_field
+		FROM payments p
+		JOIN disbursements d ON d.id = p.disbursement_id
+		WHERE p.receiver_wallet_id = $1
+		  AND d.verification_field IS NOT NULL
+	`
+
+	fields := []data.VerificationType{}
+	if err := sqlExec.SelectContext(ctx, &fields, query, receiverWalletID); err != nil {
+		return nil, fmt.Errorf("querying verification fields for receiver wallet %s: %w", receiverWalletID, err)
+	}
+
+	return fields, nil
 }

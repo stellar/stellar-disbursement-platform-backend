@@ -512,6 +512,11 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
 		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
 		assert.Nil(t, msg.AssetID)
+
+		verifications, err := models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, data.VerificationTypeSEP24Registration)
+		require.NoError(t, err)
+		require.Len(t, verifications, 1)
+		assert.True(t, data.CompareVerificationValue(verifications[0].HashedValue, receiverPhoneOnly.ID))
 	})
 
 	t.Run("skips embedded wallet when embedded wallet service is nil", func(t *testing.T) {

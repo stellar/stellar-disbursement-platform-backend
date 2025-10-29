@@ -127,6 +127,15 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		requiresSEP24 := rwa.VerificationField == data.VerificationTypeSEP24Registration
 
+		// Seeding receiver_verifications table if SEP-24 registration is required
+		if requiresSEP24 {
+			if err := s.ensureSEP24ReceiverVerification(ctx, rwa.ReceiverWallet.Receiver.ID); err != nil {
+				log.Ctx(ctx).Errorf("ensuring SEP24 verification row for receiver %s: %v", rwa.ReceiverWallet.Receiver.ID, err)
+				continue
+			}
+		}
+
+		// Update embedded_wallets with receiver_wallet_id and requires_sep24_registration
 		if wallet.Embedded {
 			if err := s.updateEmbeddedWalletDeepLink(ctx, &wdl, rwa.ReceiverWallet.ID, requiresSEP24); err != nil {
 				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
@@ -252,6 +261,29 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 
 	if err := s.Models.EmbeddedWallets.Update(ctx, s.Models.DBConnectionPool, token, update); err != nil {
 		return fmt.Errorf("linking embedded wallet token to receiver wallet %s: %w", receiverWalletID, err)
+	}
+
+	return nil
+}
+
+func (s SendReceiverWalletInviteService) ensureSEP24ReceiverVerification(ctx context.Context, receiverID string) error {
+	existing, err := s.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, s.Models.DBConnectionPool, []string{receiverID}, data.VerificationTypeSEP24Registration)
+	if err != nil {
+		return fmt.Errorf("checking existing SEP24 verification row: %w", err)
+	}
+
+	if len(existing) > 0 {
+		return nil
+	}
+
+	verificationValue := receiverID
+	_, err = s.Models.ReceiverVerification.Insert(ctx, s.Models.DBConnectionPool, data.ReceiverVerificationInsert{
+		ReceiverID:        receiverID,
+		VerificationField: data.VerificationTypeSEP24Registration,
+		VerificationValue: verificationValue,
+	})
+	if err != nil {
+		return fmt.Errorf("creating SEP24 verification row: %w", err)
 	}
 
 	return nil

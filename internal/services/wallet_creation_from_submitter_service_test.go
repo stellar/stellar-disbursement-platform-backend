@@ -274,6 +274,100 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 	})
 }
 
+func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
+	t.Run("auto registers embedded wallet when SEP24 is not required", func(t *testing.T) {
+		dbt := dbtest.Open(t)
+		defer dbt.Close()
+
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		defer dbConnectionPool.Close()
+
+		testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
+		ctx := testCtx.ctx
+		service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
+
+		walletName := fmt.Sprintf("ew-%s", uuid.NewString()[:8])
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, walletName, "https://embedded.example", walletName+".stellar", "embedded://")
+		data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		walletToken := uuid.NewString()
+		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
+		requiresSEP24 := false
+		update := data.EmbeddedWalletUpdate{
+			ReceiverWalletID:          receiverWallet.ID,
+			RequiresSEP24Registration: &requiresSEP24,
+		}
+		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
+
+		transactions := createEmbeddedWalletTSSTxs(t, testCtx, embeddedWallet.Token)
+		prepareEmbeddedWalletTxsForSync(t, testCtx, transactions)
+
+		require.NoError(t, service.SyncBatchTransactions(ctx, len(transactions), testCtx.tenantID))
+
+		updatedEmbeddedWallet, err := testCtx.sdpModel.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, embeddedWallet.Token)
+		require.NoError(t, err)
+		assert.Equal(t, data.SuccessWalletStatus, updatedEmbeddedWallet.WalletStatus)
+		assert.True(t, strkey.IsValidContractAddress(updatedEmbeddedWallet.ContractAddress))
+
+		updatedReceiverWallet, err := testCtx.sdpModel.ReceiverWallet.GetByID(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.RegisteredReceiversWalletStatus, updatedReceiverWallet.Status)
+		require.NotNil(t, updatedReceiverWallet.OTPConfirmedAt)
+		assert.Equal(t, autoRegistrationIdentifier, updatedReceiverWallet.OTPConfirmedWith)
+		assert.Equal(t, updatedEmbeddedWallet.ContractAddress, updatedReceiverWallet.StellarAddress)
+	})
+
+	t.Run("skips auto registration when embedded wallet requires SEP24", func(t *testing.T) {
+		dbt := dbtest.Open(t)
+		defer dbt.Close()
+
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		defer dbConnectionPool.Close()
+
+		testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
+		ctx := testCtx.ctx
+		service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
+
+		walletName := fmt.Sprintf("ewsep24-%s", uuid.NewString()[:6])
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, walletName, "https://embedded.example", walletName+".stellar", "embedded://")
+		data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		walletToken := uuid.NewString()
+		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
+		requiresSEP24 := true
+		update := data.EmbeddedWalletUpdate{
+			ReceiverWalletID:          receiverWallet.ID,
+			RequiresSEP24Registration: &requiresSEP24,
+		}
+		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
+
+		transactions := createEmbeddedWalletTSSTxs(t, testCtx, embeddedWallet.Token)
+		prepareEmbeddedWalletTxsForSync(t, testCtx, transactions)
+
+		require.NoError(t, service.SyncBatchTransactions(ctx, len(transactions), testCtx.tenantID))
+
+		updatedEmbeddedWallet, err := testCtx.sdpModel.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, embeddedWallet.Token)
+		require.NoError(t, err)
+		assert.Equal(t, data.SuccessWalletStatus, updatedEmbeddedWallet.WalletStatus)
+		assert.True(t, strkey.IsValidContractAddress(updatedEmbeddedWallet.ContractAddress))
+
+		updatedReceiverWallet, err := testCtx.sdpModel.ReceiverWallet.GetByID(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.ReadyReceiversWalletStatus, updatedReceiverWallet.Status)
+		assert.Nil(t, updatedReceiverWallet.OTPConfirmedAt)
+		assert.Empty(t, updatedReceiverWallet.OTPConfirmedWith)
+		assert.Empty(t, updatedReceiverWallet.StellarAddress)
+	})
+}
+
 func Test_WalletCreationFromSubmitterService_calculateContractAddress(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
