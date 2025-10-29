@@ -731,6 +731,12 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			resultCodes:     map[string]interface{}{"operations": []string{"op_no_issuer"}},
 			crashTrackerMsg: crashTrackerMessage,
 		},
+		// - 400: with entry_archived error code
+		{
+			name:            "400 (entry_archived) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"entry_archived"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
 	}
 
 	for _, tc := range testCases {
