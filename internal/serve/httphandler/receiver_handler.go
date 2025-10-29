@@ -16,7 +16,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type ReceiverHandler struct {
@@ -236,9 +235,9 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 
 				// Only set memo and memo type if memo is provided
 				if w.Memo != "" {
-					_, memoType, parseErr := schema.ParseMemo(w.Memo)
-					if parseErr != nil {
-						return nil, fmt.Errorf("parsing memo value: %w", parseErr)
+					memoType, memoErr := validators.ValidateWalletAddressMemo(w.Address, w.Memo)
+					if memoErr != nil {
+						return nil, fmt.Errorf("validating memo value: %w", memoErr)
 					}
 					walletUpdate.StellarMemo = &w.Memo
 					walletUpdate.StellarMemoType = &memoType

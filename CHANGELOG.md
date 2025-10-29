@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - [#818](https://github.com/stellar/stellar-disbursement-platform-backend/pull/818)
 - Add organization level MFA and ReCAPTCHA settings [#861](https://github.com/stellar/stellar-disbursement-platform-backend/pull/861)
 - Add trustlines for distribution account when provisioning tenant [#891](https://github.com/stellar/stellar-disbursement-platform-backend/pull/891)
+- Add support contract account disbursements [#922](https://github.com/stellar/stellar-disbursement-platform-backend/pull/922)
 
 ### Changed
 - Decommissioned Event Broker Kafka support in favor of Scheduler for background jobs. [#914](https://github.com/stellar/stellar-disbursement-platform-backend/pull/914)

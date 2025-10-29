@@ -2,6 +2,7 @@ package validators
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type AssetReferenceType string
@@ -54,6 +56,29 @@ type PatchWalletRequest struct {
 
 type WalletValidator struct {
 	*Validator
+}
+
+var ErrMemoNotSupportedForContract = errors.New("wallet address memo is not supported for contract addresses")
+
+// ValidateWalletAddressMemo asserts whether the supplied memo can be used with
+// the given wallet address, and returns the detected memo type if memo is valid.
+func ValidateWalletAddressMemo(walletAddress, memo string) (schema.MemoType, error) {
+	if memo == "" {
+		return "", nil
+	}
+
+	switch {
+	case strkey.IsValidContractAddress(walletAddress):
+		return "", ErrMemoNotSupportedForContract
+	case strkey.IsValidEd25519PublicKey(walletAddress):
+		_, memoType, err := schema.ParseMemo(memo)
+		if err != nil {
+			return "", fmt.Errorf("parsing memo %s: %w", memo, err)
+		}
+		return memoType, nil
+	default:
+		return "", nil
+	}
 }
 
 func NewWalletValidator() *WalletValidator {

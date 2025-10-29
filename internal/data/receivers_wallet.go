@@ -614,7 +614,7 @@ func (rwu ReceiverWalletUpdate) Validate() error {
 	}
 
 	if rwu.StellarAddress != "" {
-		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) {
+		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) && !strkey.IsValidContractAddress(rwu.StellarAddress) {
 			return fmt.Errorf("invalid stellar address")
 		}
 	}
@@ -633,6 +633,21 @@ func (rwu ReceiverWalletUpdate) Validate() error {
 func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update ReceiverWalletUpdate, sqlExec db.SQLExecuter) error {
 	if err := update.Validate(); err != nil {
 		return fmt.Errorf("validating receiver wallet update: %w", err)
+	}
+
+	if update.StellarMemo != nil || update.StellarMemoType != nil {
+		stellarAddress := update.StellarAddress
+		if stellarAddress == "" {
+			existing, err := rw.GetByID(ctx, sqlExec, id)
+			if err != nil {
+				return fmt.Errorf("checking stored stellar address for memo validation: %w", err)
+			}
+			stellarAddress = existing.StellarAddress
+		}
+
+		if strkey.IsValidContractAddress(stellarAddress) {
+			return ErrMemosNotSupportedForContractAddresses
+		}
 	}
 
 	fields := []string{}
@@ -703,10 +718,11 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 }
 
 var (
-	ErrWalletNotRegistered         = errors.New("receiver wallet not registered")
-	ErrPaymentsInProgressForWallet = errors.New("receiver wallet has payments in progress")
-	ErrUnregisterUserManagedWallet = errors.New("user managed wallet cannot be unregistered")
-	ErrDuplicateWalletAddress      = errors.New("wallet address already in use")
+	ErrWalletNotRegistered                   = errors.New("receiver wallet not registered")
+	ErrPaymentsInProgressForWallet           = errors.New("receiver wallet has payments in progress")
+	ErrUnregisterUserManagedWallet           = errors.New("user managed wallet cannot be unregistered")
+	ErrDuplicateWalletAddress                = errors.New("wallet address already in use")
+	ErrMemosNotSupportedForContractAddresses = errors.New("memos are not supported for contract addresses")
 )
 
 // UpdateStatusToReady updates the status of a receiver wallet to "READY" and clears the stellar address and memo.
