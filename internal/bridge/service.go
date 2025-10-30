@@ -424,7 +424,7 @@ func (s *Service) OptInForExistingCustomer(ctx context.Context, customerID, user
 	customerInfo, err := s.client.GetCustomer(ctx, customerID)
 	if err != nil {
 		log.Ctx(ctx).Errorf("Error validating Bridge customer ID %s during onboarding: %v", customerID, err)
-		return nil, fmt.Errorf("%w: %v", ErrBridgeInvalidCustomerID, err)
+		return nil, fmt.Errorf("%w: %w", ErrBridgeInvalidCustomerID, err)
 	}
 	if customerInfo.Status != CustomerStatusActive {
 		log.Ctx(ctx).Errorf("Bridge customer ID %s is not active, current status is %q", customerID, customerInfo.Status)

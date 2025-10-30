@@ -19,7 +19,7 @@ import (
 // logErrorResponses logs the response body for requests with error status.
 func logErrorResponses(ctx context.Context, body io.ReadCloser) {
 	respBody, err := io.ReadAll(body)
-	defer body.Close()
+	defer utils.DeferredClose(ctx, body, "closing response body")
 	if err == nil {
 		log.Ctx(ctx).Infof("error message response: %s", string(respBody))
 	}

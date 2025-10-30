@@ -17,10 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
@@ -45,7 +42,6 @@ type ServerServiceInterface interface {
 		schedulerOptions scheduler.SchedulerOptions,
 		apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
 		tssDBConnectionPool db.DBConnectionPool) ([]scheduler.SchedulerJobRegisterOption, error)
-	SetupConsumers(ctx context.Context, o SetupConsumersOptions) error
 }
 
 type ServerService struct{}
@@ -96,154 +92,59 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}),
 	}
 
-	if serveOpts.EnableScheduler {
-		if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
-			log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
-		}
+	if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+	}
 
-		if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
-			log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
-		}
+	if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+	}
 
+	sj = append(sj,
+		scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
+			JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+			Models:              models,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			CircleService:       serveOpts.CircleService,
+			CircleAPIType:       serveOpts.CircleAPIType,
+		}),
+		scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
+			JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+			Models:              models,
+			TSSDBConnectionPool: tssDBConnectionPool,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+		}),
+		scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
+		scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
+			Models:                      models,
+			MessageDispatcher:           serveOpts.MessageDispatcher,
+			EmbeddedWalletService:       serveOpts.EmbeddedWalletService,
+			MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
+			Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
+			JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
+		}),
+	)
+
+	// Add embedded wallet sync jobs only if enabled
+	if serveOpts.EnableEmbeddedWallets {
 		sj = append(sj,
-			scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
-				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
-				Models:              models,
-				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-				CircleService:       serveOpts.CircleService,
-				CircleAPIType:       serveOpts.CircleAPIType,
-			}),
-			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
-				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
-				Models:              models,
-				TSSDBConnectionPool: tssDBConnectionPool,
-				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-			}),
-			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
-			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
-			scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
-				Models:                      models,
-				MessageDispatcher:           serveOpts.MessageDispatcher,
-				EmbeddedWalletService:       serveOpts.EmbeddedWalletService,
-				MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
-				Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
-				CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
-				JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
-			}),
+			scheduler.WithWalletCreationFromSubmitterJobOption(
+				schedulerOptions.PaymentJobIntervalSeconds,
+				models,
+				tssDBConnectionPool,
+				serveOpts.NetworkPassphrase,
+			),
+			scheduler.WithSponsoredTransactionFromSubmitterJobOption(
+				schedulerOptions.PaymentJobIntervalSeconds,
+				models,
+				tssDBConnectionPool,
+			),
 		)
-
-		// Add embedded wallet sync jobs only if enabled
-		if serveOpts.EnableEmbeddedWallets {
-			sj = append(sj,
-				scheduler.WithWalletCreationFromSubmitterJobOption(
-					schedulerOptions.PaymentJobIntervalSeconds,
-					models,
-					tssDBConnectionPool,
-					serveOpts.NetworkPassphrase,
-				),
-				scheduler.WithSponsoredTransactionFromSubmitterJobOption(
-					schedulerOptions.PaymentJobIntervalSeconds,
-					models,
-					tssDBConnectionPool,
-				),
-			)
-		}
 	}
 
 	return sj, nil
-}
-
-type SetupConsumersOptions struct {
-	EventBrokerOptions  cmdUtils.EventBrokerOptions
-	ServeOpts           serve.ServeOptions
-	TSSDBConnectionPool db.DBConnectionPool
-}
-
-func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOptions) error {
-	kafkaConfig := cmdUtils.KafkaConfig(o.EventBrokerOptions)
-
-	receiverInvitationConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.ReceiverWalletNewInvitationTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewSendReceiverWalletsInvitationEventHandler(eventhandlers.SendReceiverWalletsInvitationEventHandlerOptions{
-			MtnDBConnectionPool:         o.ServeOpts.MtnDBConnectionPool,
-			AdminDBConnectionPool:       o.ServeOpts.AdminDBConnectionPool,
-			AnchorPlatformBaseSepURL:    o.ServeOpts.AnchorPlatformBasePlatformURL,
-			MessageDispatcher:           o.ServeOpts.MessageDispatcher,
-			EmbeddedWalletService:       o.ServeOpts.EmbeddedWalletService,
-			MaxInvitationResendAttempts: int64(o.ServeOpts.MaxInvitationResendAttempts),
-			Sep10SigningPrivateKey:      o.ServeOpts.Sep10SigningPrivateKey,
-			CrashTrackerClient:          o.ServeOpts.CrashTrackerClient.Clone(),
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("creating Receiver Invitation Kafka Consumer: %w", err)
-	}
-
-	paymentCompletedConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.PaymentCompletedTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-		}),
-		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
-	}
-
-	// Stellar and Circle have their dedicated paymentReadyToPay consumer that reads from their dedicated topics.
-	// This is to avoid the noisy neighbor problem where slow circle payments can block stellar payments and vice versa.
-	stellarPaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.PaymentReadyToPayTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewStellarPaymentToSubmitterEventHandler(eventhandlers.StellarPaymentToSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
-	}
-
-	circlePaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
-		kafkaConfig,
-		events.CirclePaymentReadyToPayTopic,
-		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewCirclePaymentToSubmitterEventHandler(eventhandlers.CirclePaymentToSubmitterEventHandlerOptions{
-			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
-			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
-			CircleService:         o.ServeOpts.CircleService,
-			CircleAPIType:         o.ServeOpts.CircleAPIType,
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
-	}
-
-	producer, err := events.NewKafkaProducer(kafkaConfig)
-	if err != nil {
-		return fmt.Errorf("creating Kafka producer: %w", err)
-	}
-
-	go events.NewEventConsumer(receiverInvitationConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(paymentCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(stellarPaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(circlePaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-
-	return nil
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
@@ -347,8 +248,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Name:           "sep45-contract-id",
 			Usage:          "The ID of the SEP-45 web authentication contract (required when --enable-sep45 is true)",
 			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarContractId,
-			ConfigKey:      &serveOpts.Sep45ContractId,
+			CustomSetValue: cmdUtils.SetConfigOptionStellarContractID,
+			ConfigKey:      &serveOpts.Sep45ContractID,
 			Required:       false,
 		},
 		{
@@ -430,14 +331,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    false,
 		},
 		{
-			Name:        "enable-scheduler",
-			Usage:       "Enable Scheduler Jobs. Deprecated: Use event-broker-type=SCHEDULER instead.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableScheduler,
-			FlagDefault: false,
-			Required:    false,
-		},
-		{
 			Name:        "max-invitation-resend-attempts",
 			Usage:       "The maximum number of attempts to resend the invitation to the Receiver Wallets.",
 			OptType:     types.Int,
@@ -463,7 +356,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 	}
 	// rpc options
-	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&serveOpts.RpcConfig)...)
+	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&serveOpts.RPCConfig)...)
 
 	// crash tracker options
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
@@ -491,7 +384,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Name:      "admin-api-key",
 			Usage:     "API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
 			OptType:   types.String,
-			ConfigKey: &adminServeOpts.AdminApiKey,
+			ConfigKey: &adminServeOpts.AdminAPIKey,
 			Required:  true,
 		},
 		cmdUtils.TenantXLMBootstrapAmount(&adminServeOpts.TenantAccountNativeAssetBootstrapAmount),
@@ -550,10 +443,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault:    string(message.MessengerTypeDryRun),
 			Required:       true,
 		})
-
-	// event config options:
-	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
-	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
 	// distribution account resolver options:
 	distAccResolverOpts := signing.DistributionAccountResolverOptions{}
@@ -778,7 +667,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Setup Embedded Wallet Service (only if enabled)
 			if serveOpts.EnableEmbeddedWallets {
-				serveOpts.EmbeddedWalletService, err = dependencyinjection.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
+				serveOpts.EmbeddedWalletService, err = di.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
 					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
 					TSSDBConnectionPool: serveOpts.TSSDBConnectionPool,
 					WasmHash:            serveOpts.EmbeddedWalletsWasmHash,
@@ -788,7 +677,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 					log.Ctx(ctx).Fatalf("error creating embedded wallet service: %v", err)
 				}
 
-				serveOpts.WebAuthnService, err = dependencyinjection.NewWebAuthnService(context.Background(), dependencyinjection.WebAuthnServiceOptions{
+				serveOpts.WebAuthnService, err = di.NewWebAuthnService(context.Background(), di.WebAuthnServiceOptions{
 					MTNDBConnectionPool:    serveOpts.MtnDBConnectionPool,
 					SessionTTL:             time.Duration(serveOpts.WebAuthnSessionTTLSeconds) * time.Second,
 					SessionCacheMaxEntries: serveOpts.WebAuthnSessionCacheMaxEntries,
@@ -797,54 +686,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 					log.Ctx(ctx).Fatalf("error creating WebAuthn service: %v", err)
 				}
 				log.Info("WebAuthn passkey authentication enabled")
-			}
-
-			// Validate the Event Broker Type and Scheduler Jobs
-			if serveOpts.EnableScheduler {
-				log.Ctx(ctx).Warn("The 'enable-scheduler' flag is deprecated. Please use 'event-broker-type=SCHEDULER' instead.")
-			}
-
-			switch eventBrokerOptions.EventBrokerType {
-			case events.KafkaEventBrokerType:
-				if serveOpts.EnableScheduler {
-					log.Ctx(ctx).Fatalf("Both 'event-broker-type=KAFKA' and 'enable-scheduler=true' are set. Please use only one approach.")
-				}
-			case events.NoneEventBrokerType:
-				if !serveOpts.EnableScheduler {
-					log.Ctx(ctx).Fatalf("No background processing method is enabled. Please set event-broker-type=SCHEDULER or event-broker-type=KAFKA.")
-				} else {
-					log.Ctx(ctx).Warn("Using event-broker-type=NONE with enable-scheduler=true is deprecated. Please use event-broker-type=SCHEDULER instead.")
-				}
-			case events.SchedulerEventBrokerType:
-				if serveOpts.EnableScheduler {
-					log.Ctx(ctx).Warn("Both event-broker-type=SCHEDULER and enable-scheduler=true are set. The enable-scheduler flag is redundant and can be removed.")
-				}
-				serveOpts.EnableScheduler = true
-			}
-
-			// Initialize event producer based on the event broker type
-			switch eventBrokerOptions.EventBrokerType {
-			case events.KafkaEventBrokerType:
-				kafkaProducer, kafkaErr := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
-				if kafkaErr != nil {
-					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
-				}
-				defer kafkaProducer.Close(ctx)
-				serveOpts.EventProducer = kafkaProducer
-
-				kafkaErr = serverService.SetupConsumers(ctx, SetupConsumersOptions{
-					EventBrokerOptions:  eventBrokerOptions,
-					ServeOpts:           serveOpts,
-					TSSDBConnectionPool: tssDBConnectionPool,
-				})
-				if kafkaErr != nil {
-					log.Fatalf("error setting up consumers: %v", kafkaErr)
-				}
-			case events.NoneEventBrokerType:
-				log.Ctx(ctx).Warn("Event Broker Type is NONE (deprecated). Using NoopProducer for logging events.")
-				serveOpts.EventProducer = events.NoopProducer{}
-			case events.SchedulerEventBrokerType:
-				serveOpts.EventProducer = events.NoopProducer{}
 			}
 
 			log.Ctx(ctx).Info("Starting Scheduler Service...")
@@ -860,6 +701,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			log.Ctx(ctx).Info("Starting Tenant Server...")
 			adminServeOpts.SingleTenantMode = serveOpts.SingleTenantMode
+			adminServeOpts.DisableMFA = serveOpts.DisableMFA
+			adminServeOpts.DisableReCAPTCHA = serveOpts.DisableReCAPTCHA
 			go serverService.StartAdminServe(adminServeOpts, &serveadmin.HTTPServer{})
 
 			// Starting Application Server

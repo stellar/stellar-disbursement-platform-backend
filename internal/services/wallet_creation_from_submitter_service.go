@@ -68,40 +68,40 @@ func (s *WalletCreationFromSubmitterService) calculateContractAddress(
 	}
 	var uint256Val xdr.Uint256
 	copy(uint256Val[:], rawAddress)
-	distributionAccountId := xdr.AccountId{
+	distributionAccountID := xdr.AccountId{
 		Type:    xdr.PublicKeyTypePublicKeyTypeEd25519,
 		Ed25519: &uint256Val,
 	}
 
-	distributionScAddress := xdr.ScAddress{
+	distributionSCAddress := xdr.ScAddress{
 		Type:      xdr.ScAddressTypeScAddressTypeAccount,
-		AccountId: &distributionAccountId,
+		AccountId: &distributionAccountID,
 	}
 
-	contractIdPreimage := xdr.ContractIdPreimage{
+	contractIDPreimage := xdr.ContractIdPreimage{
 		Type: xdr.ContractIdPreimageTypeContractIdPreimageFromAddress,
 		FromAddress: &xdr.ContractIdPreimageFromAddress{
-			Address: distributionScAddress,
+			Address: distributionSCAddress,
 			Salt:    salt,
 		},
 	}
 
 	networkHash := hash.Hash([]byte(s.networkPassphrase))
-	hashIdPreimage := xdr.HashIdPreimage{
+	hashIDPreimage := xdr.HashIdPreimage{
 		Type: xdr.EnvelopeTypeEnvelopeTypeContractId,
 		ContractId: &xdr.HashIdPreimageContractId{
 			NetworkId:          xdr.Hash(networkHash),
-			ContractIdPreimage: contractIdPreimage,
+			ContractIdPreimage: contractIDPreimage,
 		},
 	}
 
-	preimageXDR, err := hashIdPreimage.MarshalBinary()
+	preimageXDR, err := hashIDPreimage.MarshalBinary()
 	if err != nil {
 		return "", fmt.Errorf("marshaling preimage: %w", err)
 	}
 
-	contractIdHash := hash.Hash(preimageXDR)
-	contractAddress, err := strkey.Encode(strkey.VersionByteContract, contractIdHash[:])
+	contractIDHash := hash.Hash(preimageXDR)
+	contractAddress, err := strkey.Encode(strkey.VersionByteContract, contractIDHash[:])
 	if err != nil {
 		return "", fmt.Errorf("encoding contract address: %w", err)
 	}

@@ -105,7 +105,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				Sep45ContractID:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
@@ -127,7 +127,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				Sep45ContractID:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
@@ -185,7 +185,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.TestNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				Sep45ContractID:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
@@ -207,7 +207,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.TestNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-				Sep45ContractId:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				Sep45ContractID:          "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
@@ -244,7 +244,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 
 			generalInformation := tc.s.buildGeneralInformation(ctx, req)
 			generalInformation = strings.TrimSpace(generalInformation)
-			generalInformation = strings.Replace(generalInformation, "\t", "", -1)
+			generalInformation = strings.ReplaceAll(generalInformation, "\t", "")
 
 			generalInformationLines := strings.Split(generalInformation, "\n")
 			assert.Equal(t, len(tc.wantLines), len(generalInformationLines))

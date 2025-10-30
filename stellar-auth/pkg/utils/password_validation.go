@@ -3,11 +3,14 @@ package utils
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	_ "embed"
 	"fmt"
 	"io"
 	"strings"
 	"unicode"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -64,7 +67,7 @@ func GetPasswordValidatorInstance() (*PasswordValidator, error) {
 	if err != nil {
 		return &pwValidator, fmt.Errorf("error creating gzip reader: %w", err)
 	}
-	defer gzipReader.Close()
+	defer utils.DeferredClose(context.Background(), gzipReader, "closing gzip reader")
 
 	contents, err := io.ReadAll(gzipReader)
 	if err != nil {

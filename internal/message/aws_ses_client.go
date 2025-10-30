@@ -28,22 +28,22 @@ type awsSESClient struct {
 	senderID     string
 }
 
-func (t *awsSESClient) MessengerType() MessengerType {
+func (c *awsSESClient) MessengerType() MessengerType {
 	return MessengerTypeAWSEmail
 }
 
-func (a *awsSESClient) SendMessage(ctx context.Context, message Message) error {
-	err := message.ValidateFor(a.MessengerType())
+func (c *awsSESClient) SendMessage(ctx context.Context, message Message) error {
+	err := message.ValidateFor(c.MessengerType())
 	if err != nil {
 		return fmt.Errorf("validating message to send an email through AWS: %w", err)
 	}
 
-	emailTemplate, err := generateAWSEmail(message, a.senderID)
+	emailTemplate, err := generateAWSEmail(message, c.senderID)
 	if err != nil {
 		return fmt.Errorf("generating AWS SES email template: %w", err)
 	}
 
-	_, err = a.emailService.SendEmail(ctx, emailTemplate)
+	_, err = c.emailService.SendEmail(ctx, emailTemplate)
 	if err != nil {
 		return fmt.Errorf("sending AWS SES email: %w", err)
 	}

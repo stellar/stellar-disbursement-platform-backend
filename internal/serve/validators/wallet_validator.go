@@ -58,9 +58,7 @@ type WalletValidator struct {
 	*Validator
 }
 
-var (
-	ErrMemoNotSupportedForContract = errors.New("wallet address memo is not supported for contract addresses")
-)
+var ErrMemoNotSupportedForContract = errors.New("wallet address memo is not supported for contract addresses")
 
 // ValidateWalletAddressMemo asserts whether the supplied memo can be used with
 // the given wallet address, and returns the detected memo type if memo is valid.

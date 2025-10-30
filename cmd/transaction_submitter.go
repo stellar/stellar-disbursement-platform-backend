@@ -14,7 +14,6 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
@@ -33,7 +32,7 @@ type TxSubmitterServiceInterface interface {
 type TxSubmitterService struct{}
 
 // StartSubmitter starts the Transaction Submission Service
-func (t *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.SubmitterOptions) {
+func (s *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.SubmitterOptions) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -125,10 +124,6 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
 	)
 
-	// event broker options:
-	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
-	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
-
 	// rpc options
 	rpcOptions := stellar.RPCOptions{}
 	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&rpcOptions)...)
@@ -195,7 +190,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 
 			// Initializing the RPC Client
 			if rpcOptions.RPCUrl != "" {
-				rpcClient, rpcClientErr := di.NewRpcClient(ctx, rpcOptions)
+				rpcClient, rpcClientErr := di.NewRPCClient(ctx, rpcOptions)
 				if rpcClientErr != nil {
 					log.Ctx(ctx).Fatalf("error creating RPC client: %s", rpcClientErr.Error())
 				}
@@ -215,18 +210,6 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-
-			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
-				}
-				defer kafkaProducer.Close(ctx)
-				tssOpts.EventProducer = kafkaProducer
-			} else {
-				log.Ctx(ctx).Warn("Event Broker Type is NONE. Using Noop producer for logging events")
-				tssOpts.EventProducer = events.NoopProducer{}
-			}
 
 			// Starting Metrics Server (background job)
 			go submitterService.StartMetricsServe(ctx, metricsServeOpts, &serve.HTTPServer{}, tssOpts.CrashTrackerClient)

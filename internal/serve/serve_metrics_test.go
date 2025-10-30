@@ -16,7 +16,7 @@ import (
 func Test_ServeMetrics(t *testing.T) {
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
-	mMonitorService.On("GetMetricHttpHandler").
+	mMonitorService.On("GetMetricHTTPHandler").
 		Return(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}), nil).Twice()
@@ -37,7 +37,7 @@ func Test_ServeMetrics(t *testing.T) {
 		assert.Equal(t, time.Second*10, conf.WriteTimeout)
 		assert.Equal(t, time.Minute*2, conf.IdleTimeout)
 		assert.Nil(t, conf.TLS)
-		assert.ObjectsAreEqualValues(handleMetricsHttp(opts), conf.Handler)
+		assert.ObjectsAreEqualValues(handleMetricsHTTP(opts), conf.Handler)
 	}).Once()
 
 	// test and assert

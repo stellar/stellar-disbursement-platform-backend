@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -428,16 +427,16 @@ func Test_SetConfigOptionStellarPrivateKey(t *testing.T) {
 }
 
 func Test_SetConfigOptionStellarContractId(t *testing.T) {
-	opts := struct{ stellarContractId string }{}
+	opts := struct{ stellarContractID string }{}
 
 	co := config.ConfigOption{
 		Name:           "stellar-contract-id",
 		OptType:        types.String,
-		CustomSetValue: SetConfigOptionStellarContractId,
-		ConfigKey:      &opts.stellarContractId,
+		CustomSetValue: SetConfigOptionStellarContractID,
+		ConfigKey:      &opts.stellarContractID,
 		Required:       false,
 	}
-	expectedContractId := "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"
+	expectedContractID := "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"
 
 	testCases := []customSetterTestCase[string]{
 		{
@@ -461,18 +460,18 @@ func Test_SetConfigOptionStellarContractId(t *testing.T) {
 		{
 			name:       "🎉 handles Stellar contract id through the CLI flag",
 			args:       []string{"--stellar-contract-id", "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"},
-			wantResult: expectedContractId,
+			wantResult: expectedContractID,
 		},
 		{
 			name:       "🎉 handles Stellar contract id through the ENV flag",
 			envValue:   "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-			wantResult: expectedContractId,
+			wantResult: expectedContractID,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts.stellarContractId = ""
+			opts.stellarContractID = ""
 			customSetterTester(t, tc, co)
 		})
 	}
@@ -483,7 +482,7 @@ func Test_SetConfigOptionStellarContractId(t *testing.T) {
 		wantErrContains: "cannot be empty",
 	}
 	t.Run(tc.name, func(t *testing.T) {
-		opts.stellarContractId = ""
+		opts.stellarContractID = ""
 		co.Required = true
 		customSetterTester(t, tc, co)
 	})
@@ -690,47 +689,6 @@ func Test_SetConfigOptionStringList(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.topics = []string{}
 			customSetterTester[[]string](t, tc, co)
-		})
-	}
-}
-
-func Test_SetConfigOptionEventBrokerType(t *testing.T) {
-	opts := struct{ eventBrokerType events.EventBrokerType }{}
-
-	co := config.ConfigOption{
-		Name:           "event-broker-type",
-		OptType:        types.String,
-		CustomSetValue: SetConfigOptionEventBrokerType,
-		ConfigKey:      &opts.eventBrokerType,
-	}
-
-	testCases := []customSetterTestCase[events.EventBrokerType]{
-		{
-			name:            "returns an error if event broker type is empty",
-			args:            []string{"--event-broker-type", ""},
-			wantErrContains: "couldn't parse event broker type in event-broker-type: invalid event broker type",
-		},
-		{
-			name:       "🎉 handles event broker type (through CLI args): KAFKA",
-			args:       []string{"--event-broker-type", "kafka"},
-			wantResult: events.KafkaEventBrokerType,
-		},
-		{
-			name:       "🎉 handles event broker type (through CLI args): NONE",
-			args:       []string{"--event-broker-type", "NONE"},
-			wantResult: events.NoneEventBrokerType,
-		},
-		{
-			name:            "returns an error if a invalid event broker type",
-			args:            []string{"--event-broker-type", "invalid"},
-			wantErrContains: "couldn't parse event broker type in event-broker-type: invalid event broker type",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			opts.eventBrokerType = ""
-			customSetterTester[events.EventBrokerType](t, tc, co)
 		})
 	}
 }

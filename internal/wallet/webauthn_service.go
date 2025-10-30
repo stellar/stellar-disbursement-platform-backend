@@ -89,11 +89,16 @@ func (w *WebAuthnService) createWebAuthn(ctx context.Context) (*webauthn.WebAuth
 		return nil, fmt.Errorf("extracting RPID from origin: %w", err)
 	}
 
-	return webauthn.New(&webauthn.Config{
+	service, err := webauthn.New(&webauthn.Config{
 		RPDisplayName: RPDisplayName,
 		RPID:          rpID,
 		RPOrigins:     []string{origin},
 	})
+	if err != nil {
+		return nil, fmt.Errorf("creating WebAuthn service: %w", err)
+	}
+
+	return service, nil
 }
 
 // extractRPIDFromOrigin extracts the Relying Party ID from a given origin URL.

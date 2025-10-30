@@ -23,7 +23,7 @@ type StellarTomlHandler struct {
 	NetworkPassphrase           string
 	Models                      *data.Models
 	Sep10SigningPublicKey       string
-	Sep45ContractId             string
+	Sep45ContractID             string
 	InstanceName                string
 }
 
@@ -62,11 +62,11 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	TRANSFER_SERVER_SEP0024=%q
 `, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024))
 
-	if s.Sep45ContractId != "" {
+	if s.Sep45ContractID != "" {
 		builder.WriteString(fmt.Sprintf(`
 		WEB_AUTH_CONTRACT_ID=%q
 		WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
-		`, s.Sep45ContractId, webAuthForContractsEndpoint))
+		`, s.Sep45ContractID, webAuthForContractsEndpoint))
 	}
 
 	return builder.String()
@@ -126,7 +126,7 @@ func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// return a stellar.toml file for this tenant.
 		organization, innerErr := s.Models.Organizations.Get(ctx)
 		if innerErr != nil {
-			httperror.InternalError(ctx, "Cannot retrieve organization", err, nil).Render(w)
+			httperror.InternalError(ctx, "Cannot retrieve organization", innerErr, nil).Render(w)
 			return
 		}
 

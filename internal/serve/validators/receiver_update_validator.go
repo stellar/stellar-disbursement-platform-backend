@@ -21,7 +21,7 @@ type UpdateReceiverValidator struct {
 	*Validator
 }
 
-// NewReceiverRegistrationValidator creates a new ReceiverRegistrationValidator with the provided configuration.
+// NewUpdateReceiverValidator creates a new UpdateReceiverValidator.
 func NewUpdateReceiverValidator() *UpdateReceiverValidator {
 	return &UpdateReceiverValidator{
 		Validator: NewValidator(),

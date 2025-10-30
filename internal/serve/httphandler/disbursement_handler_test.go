@@ -24,7 +24,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
@@ -190,7 +189,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 	user := &auth.User{
 		ID:    "user-id",
 		Email: "email@email.com",
@@ -318,6 +318,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 				labels := monitor.DisbursementLabels{
 					Asset:  asset.Code,
 					Wallet: wallet.Name,
+					CommonLabels: monitor.CommonLabels{
+						TenantName: "default-tenant",
+					},
 				}
 				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 			},
@@ -403,7 +406,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			requestBody, err := json.Marshal(tc.reqBody)
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
-			req, _ := http.NewRequestWithContext(ctx, "POST", "/disbursements", bytes.NewReader(requestBody))
+			req, err := http.NewRequestWithContext(ctx, "POST", "/disbursements", bytes.NewReader(requestBody))
+			require.NoError(t, err)
 			http.HandlerFunc(handler.PostDisbursement).ServeHTTP(rr, req)
 			resp := rr.Result()
 			respBody, err := io.ReadAll(resp.Body)
@@ -908,7 +912,8 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
-	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
 		On("GetUserByID", mock.Anything, mock.Anything).
@@ -1249,11 +1254,9 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fileContent, err := createCSVFile(t, tc.csvRecords)
-			require.NoError(t, err)
+			fileContent := createCSVFile(t, tc.csvRecords)
 
-			req, err := createInstructionsMultipartRequest(t, ctx, tc.multipartFieldName, tc.actualFileName, tc.disbursementID, fileContent)
-			require.NoError(t, err)
+			req := createInstructionsMultipartRequest(t, ctx, tc.multipartFieldName, tc.actualFileName, tc.disbursementID, fileContent)
 
 			// Record the response
 			rr := httptest.NewRecorder()
@@ -1574,7 +1577,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	require.NotNil(t, user)
 
 	authManagerMock := &auth.AuthManagerMock{}
-	mockEventProducer := events.MockProducer{}
 	mockDistAccSvc := svcMocks.NewMockDistributionAccountService(t)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
@@ -1589,7 +1591,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		DisbursementManagementService: &services.DisbursementManagementService{
 			Models:                     models,
 			AuthManager:                authManagerMock,
-			EventProducer:              &mockEventProducer,
 			DistributionAccountService: mockDistAccSvc,
 		},
 	}
@@ -1763,11 +1764,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
 
-		mockEventProducer.
-			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
-			Return(nil).
-			Once()
-
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
@@ -1794,11 +1790,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
-
-		mockEventProducer.
-			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
-			Return(nil).
-			Once()
 
 		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 			Name:          "ready disbursement #3",
@@ -1915,7 +1906,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
-	mockEventProducer.AssertExpectations(t)
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
@@ -2166,7 +2156,8 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 
 	// Setup fixtures
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
@@ -2182,6 +2173,9 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	labels := monitor.DisbursementLabels{
 		Asset:  asset.Code,
 		Wallet: enabledWallet.Name,
+		CommonLabels: monitor.CommonLabels{
+			TenantName: "default-tenant",
+		},
 	}
 
 	// Setup Mocks
@@ -2383,18 +2377,16 @@ func addInstructionsIfNeeded(t *testing.T, csvRecords [][]string, writer *multip
 	t.Helper()
 
 	if len(csvRecords) > 0 {
-		csvContent, err := createCSVFile(t, csvRecords)
-		require.NoError(t, err)
-
 		part, err := writer.CreateFormFile("file", "instructions.csv")
 		require.NoError(t, err)
 
+		csvContent := createCSVFile(t, csvRecords)
 		_, err = io.Copy(part, csvContent)
 		require.NoError(t, err)
 	}
 }
 
-func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
+func createCSVFile(t *testing.T, records [][]string) io.Reader {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -2404,10 +2396,10 @@ func createCSVFile(t *testing.T, records [][]string) (io.Reader, error) {
 		require.NoError(t, err)
 	}
 	writer.Flush()
-	return &buf, nil
+	return &buf
 }
 
-func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multipartFieldName, fileName, disbursementID string, fileContent io.Reader) (*http.Request, error) {
+func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multipartFieldName, fileName, disbursementID string, fileContent io.Reader) *http.Request {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -2434,7 +2426,7 @@ func createInstructionsMultipartRequest(t *testing.T, ctx context.Context, multi
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return req, nil
+	return req
 }
 
 func buildURLWithQueryParams(baseURL, endpoint string, queryParams map[string]string) string {

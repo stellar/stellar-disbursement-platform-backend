@@ -60,8 +60,8 @@ func Test_Twilio_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 	testPhoneNumber := "+14155111111"
 	testMessage := "foo bar"
 	testSenderID := "senderID"
-	mTwilioApi := newMockTwilioApiInterface(t)
-	mTwilioApi.
+	mTwilioAPI := newMockTwilioAPIInterface(t)
+	mTwilioAPI.
 		On("CreateMessage", &twilioAPI.CreateMessageParams{
 			To:                  &testPhoneNumber,
 			Body:                &testMessage,
@@ -70,7 +70,7 @@ func Test_Twilio_SendMessage_errorIsHandledCorrectly(t *testing.T) {
 		Return(nil, fmt.Errorf("test twilio error")).
 		Once()
 
-	mTwilio := twilioClient{apiService: mTwilioApi, senderID: "senderID"}
+	mTwilio := twilioClient{apiService: mTwilioAPI, senderID: "senderID"}
 	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14155111111", Body: "foo bar"})
 	assert.EqualError(t, err, "sending Twilio SMS: test twilio error")
 }
@@ -85,8 +85,8 @@ func Test_Twilio_SendMessage_doesntReturnErrorButResponseContainsErrorEmbedded(t
 	wantErrCode := 12345
 	wantErrMessage := "Foo bar error message"
 
-	mTwilioApi := newMockTwilioApiInterface(t)
-	mTwilioApi.
+	mTwilioAPI := newMockTwilioAPIInterface(t)
+	mTwilioAPI.
 		On("CreateMessage", &twilioAPI.CreateMessageParams{
 			To:                  &testPhoneNumber2,
 			Body:                &testMessage2,
@@ -98,7 +98,7 @@ func Test_Twilio_SendMessage_doesntReturnErrorButResponseContainsErrorEmbedded(t
 		}, nil).
 		Once()
 
-	mTwilio := twilioClient{apiService: mTwilioApi, senderID: "senderID"}
+	mTwilio := twilioClient{apiService: mTwilioAPI, senderID: "senderID"}
 	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14152222222", Body: "foo bar"})
 	assert.EqualError(t, err, `sending Twilio message returned an error {code= "12345", message= "Foo bar error message"}`)
 }
@@ -108,8 +108,8 @@ func Test_Twilio_SendMessage_success(t *testing.T) {
 	testPhoneNumber := "+14153333333"
 	testMessage := "foo bar"
 	testSenderID := "senderID"
-	mTwilioApi := newMockTwilioApiInterface(t)
-	mTwilioApi.
+	mTwilioAPI := newMockTwilioAPIInterface(t)
+	mTwilioAPI.
 		On("CreateMessage", &twilioAPI.CreateMessageParams{
 			To:                  &testPhoneNumber,
 			Body:                &testMessage,
@@ -118,7 +118,7 @@ func Test_Twilio_SendMessage_success(t *testing.T) {
 		Return(&twilioAPI.ApiV2010Message{}, nil).
 		Once()
 
-	mTwilio := twilioClient{apiService: mTwilioApi, senderID: "senderID"}
+	mTwilio := twilioClient{apiService: mTwilioAPI, senderID: "senderID"}
 	err := mTwilio.SendMessage(context.Background(), Message{ToPhoneNumber: "+14153333333", Body: "foo bar"})
 	require.NoError(t, err)
 }

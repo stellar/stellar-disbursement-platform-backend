@@ -218,7 +218,7 @@ func Test_DistributionAccountDBVaultSignatureClient_getKPsForAccounts(t *testing
 		{
 			name:            "return an error if one of the encrypted seeds cannot be decrypted with the expected passphrase",
 			accounts:        []string{undecryptableKeyChAccKP.Address()},
-			wantErrContains: "cannot decrypt private key: cipher: message authentication failed",
+			wantErrContains: "cannot decrypt private key: decrypting and authenticating message: cipher: message authentication failed",
 		},
 	}
 

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
@@ -14,15 +15,21 @@ import (
 var ErrNoDataSourcesAvailable = errors.New("no data sources are available")
 
 type MultiTenantDataSourceRouter struct {
-	dataSources   sync.Map
-	tenantManager ManagerInterface
-	mu            sync.Mutex
+	dataSources    sync.Map
+	tenantManager  ManagerInterface
+	mu             sync.Mutex
+	monitorService monitor.MonitorServiceInterface
 }
 
 func NewMultiTenantDataSourceRouter(tenantManager ManagerInterface) *MultiTenantDataSourceRouter {
 	return &MultiTenantDataSourceRouter{
 		tenantManager: tenantManager,
 	}
+}
+
+func (m *MultiTenantDataSourceRouter) WithMonitoring(monitorService monitor.MonitorServiceInterface) *MultiTenantDataSourceRouter {
+	m.monitorService = monitorService
+	return m
 }
 
 func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBConnectionPool, error) {
@@ -67,9 +74,17 @@ func (m *MultiTenantDataSourceRouter) getOrCreateDataSourceForTenantWithLock(
 		return nil, fmt.Errorf("getting database DSN for tenant %s: %w", currentTenant.ID, err)
 	}
 
-	dbcp, err := db.OpenDBConnectionPool(u)
-	if err != nil {
-		return nil, fmt.Errorf("opening database connection pool for tenant %s: %w", currentTenant.ID, err)
+	var dbcp db.DBConnectionPool
+	if m.monitorService == nil {
+		dbcp, err = db.OpenDBConnectionPool(u)
+		if err != nil {
+			return nil, fmt.Errorf("opening database connection pool for tenant %s: %w", currentTenant.ID, err)
+		}
+	} else {
+		dbcp, err = db.OpenDBConnectionPoolWithMetrics(ctx, u, m.monitorService)
+		if err != nil {
+			return nil, fmt.Errorf("opening database connection pool with metrics for tenant %s: %w", currentTenant.ID, err)
+		}
 	}
 
 	// Store the new connection pool in the map.

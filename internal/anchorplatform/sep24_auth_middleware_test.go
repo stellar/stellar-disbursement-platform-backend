@@ -269,8 +269,8 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.SEP10StellarAccount())
 		require.Equal(t, validTransactionID, contextClaims.TransactionID())
 		require.Empty(t, contextClaims.SEP10StellarMemo())
-		require.True(t, contextClaims.ExpiresAt().After(now.Add(time.Duration(4000*time.Millisecond))))
-		require.True(t, contextClaims.ExpiresAt().Before(now.Add(time.Duration(5000*time.Millisecond))))
+		require.True(t, contextClaims.ExpiresAt().After(now.Add(4000*time.Millisecond)))
+		require.True(t, contextClaims.ExpiresAt().Before(now.Add(5000*time.Millisecond)))
 	})
 
 	t.Run("token with empty client domain but valid in testnet 🎉", func(t *testing.T) {
@@ -592,8 +592,8 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.SEP10StellarAccount())
 		require.Equal(t, validTransactionID, contextClaims.TransactionID())
 		require.Empty(t, contextClaims.SEP10StellarMemo())
-		require.True(t, contextClaims.ExpiresAt().After(now.Add(time.Duration(4000*time.Millisecond))))
-		require.True(t, contextClaims.ExpiresAt().Before(now.Add(time.Duration(5000*time.Millisecond))))
+		require.True(t, contextClaims.ExpiresAt().After(now.Add(4000*time.Millisecond)))
+		require.True(t, contextClaims.ExpiresAt().Before(now.Add(5000*time.Millisecond)))
 	})
 
 	t.Run("token with empty client domain is valid in testnet 🎉", func(t *testing.T) {

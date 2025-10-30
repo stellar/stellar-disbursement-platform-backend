@@ -82,10 +82,10 @@ func (h *WalletCreationTransactionHandler) BuildInnerTransaction(ctx context.Con
 	publicKeyHash := sha256.Sum256(publicKeyBytes)
 	salt := xdr.Uint256(publicKeyHash)
 
-	distributionAccountId := xdr.MustAddress(distributionAccount)
+	distributionAccountID := xdr.MustAddress(distributionAccount)
 	distributionScAddress := xdr.ScAddress{
 		Type:      xdr.ScAddressTypeScAddressTypeAccount,
-		AccountId: &distributionAccountId,
+		AccountId: &distributionAccountID,
 	}
 	argAdmin := xdr.ScVal{
 		Type:    xdr.ScValTypeScvAddress,

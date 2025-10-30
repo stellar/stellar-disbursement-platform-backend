@@ -49,8 +49,8 @@ func (m *defaultJWTManager) parseToken(tokenString string) (*jwtgo.Token, *claim
 		return esPublicKey, nil
 	})
 	if err != nil {
-		vErr, ok := err.(*jwtgo.ValidationError)
-		if !ok {
+		var vErr *jwtgo.ValidationError
+		if !errors.As(err, &vErr) {
 			return nil, nil, fmt.Errorf("parsing token: %w", err)
 		}
 

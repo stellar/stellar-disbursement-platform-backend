@@ -22,12 +22,6 @@ data:
   HORIZON_URL: "https://horizon-testnet.stellar.org"
   {{- end }}
   TSS_METRICS_PORT: {{ include "tss.metricsPort" . | quote }}
-  EVENT_BROKER_TYPE: {{ .Values.global.eventBroker.type | quote }}
-  {{- if eq .Values.global.eventBroker.type "KAFKA" }}
-  BROKER_URLS: {{ .Values.global.eventBroker.urls | quote }}
-  CONSUMER_GROUP_ID: {{ .Values.global.eventBroker.consumerGroupId | quote }}
-  KAFKA_SECURITY_PROTOCOL: {{ .Values.global.eventBroker.kafka.securityProtocol | quote }}
-  {{- end }}
   {{- if .Values.global.distributionPublicKey }}
   DISTRIBUTION_PUBLIC_KEY: {{ .Values.global.distributionPublicKey | quote }}
   {{- end }}

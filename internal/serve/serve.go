@@ -21,7 +21,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
@@ -81,8 +80,8 @@ type ServeOptions struct {
 	EnableEmbeddedWallets           bool
 	EmbeddedWalletsWasmHash         string
 	EnableSep45                     bool
-	Sep45ContractId                 string
-	RpcConfig                       stellar.RPCOptions
+	Sep45ContractID                 string
+	RPCConfig                       stellar.RPCOptions
 	AnchorPlatformBaseSepURL        string
 	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
@@ -95,11 +94,9 @@ type ServeOptions struct {
 	DisableMFA                      bool
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
-	EnableScheduler                 bool // Deprecated: Use EventBrokerType=SCHEDULER instead.
 	tenantManager                   tenant.ManagerInterface
 	DistributionAccountService      services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase     string
-	EventProducer                   events.Producer
 	MaxInvitationResendAttempts     int
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
@@ -183,23 +180,23 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	return nil
 }
 
-// ValidateRpc validates the RPC options.
-func (opts *ServeOptions) ValidateRpc() error {
-	if opts.RpcConfig.RPCUrl == "" && (opts.RpcConfig.RPCRequestAuthHeaderKey != "" || opts.RpcConfig.RPCRequestAuthHeaderValue != "") {
+// ValidateRPC validates the RPC options.
+func (opts *ServeOptions) ValidateRPC() error {
+	if opts.RPCConfig.RPCUrl == "" && (opts.RPCConfig.RPCRequestAuthHeaderKey != "" || opts.RPCConfig.RPCRequestAuthHeaderValue != "") {
 		return fmt.Errorf("RPC URL must be set when RPC request header key or value is set")
 	}
 
-	if opts.RpcConfig.RPCRequestAuthHeaderKey != "" && opts.RpcConfig.RPCRequestAuthHeaderValue == "" {
+	if opts.RPCConfig.RPCRequestAuthHeaderKey != "" && opts.RPCConfig.RPCRequestAuthHeaderValue == "" {
 		return fmt.Errorf("RPC request header value must be set when RPC request header key is set")
 	}
 
-	if opts.RpcConfig.RPCRequestAuthHeaderKey == "" && opts.RpcConfig.RPCRequestAuthHeaderValue != "" {
+	if opts.RPCConfig.RPCRequestAuthHeaderKey == "" && opts.RPCConfig.RPCRequestAuthHeaderValue != "" {
 		return fmt.Errorf("RPC request header key must be set when RPC request header value is set")
 	}
 
 	// RPC-dependent feature validation
-	hasRpcFeatures := opts.EnableEmbeddedWallets || opts.EnableSep45
-	if hasRpcFeatures && opts.RpcConfig.RPCUrl == "" {
+	hasRPCFeatures := opts.EnableEmbeddedWallets || opts.EnableSep45
+	if hasRPCFeatures && opts.RPCConfig.RPCUrl == "" {
 		return fmt.Errorf("RPC URL must be set when RPC-dependent features are enabled")
 	}
 
@@ -209,7 +206,7 @@ func (opts *ServeOptions) ValidateRpc() error {
 	}
 
 	// SEP-45 feature validation
-	if opts.EnableSep45 && opts.Sep45ContractId == "" {
+	if opts.EnableSep45 && opts.Sep45ContractID == "" {
 		return fmt.Errorf("SEP-45 contract ID must be set when SEP-45 is enabled")
 	}
 
@@ -221,7 +218,7 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 		return fmt.Errorf("validating security options: %w", err)
 	}
 
-	if err := opts.ValidateRpc(); err != nil {
+	if err := opts.ValidateRPC(); err != nil {
 		return fmt.Errorf("validating RPC options: %w", err)
 	}
 
@@ -299,11 +296,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models: o.Models,
 			}
-			r.Get("/{id}", apiKeyHandler.GetApiKeyByID)
-			r.Get("/", apiKeyHandler.GetAllApiKeys)
+			r.Get("/{id}", apiKeyHandler.GetAPIKeyByID)
+			r.Get("/", apiKeyHandler.GetAllAPIKeys)
 			r.Post("/", apiKeyHandler.CreateAPIKey)
 			r.Patch("/{id}", apiKeyHandler.UpdateKey)
-			r.Delete("/{id}", apiKeyHandler.DeleteApiKey)
+			r.Delete("/{id}", apiKeyHandler.DeleteAPIKey)
 		})
 
 		// Statistics endpoints
@@ -357,7 +354,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				DisbursementManagementService: &services.DisbursementManagementService{
 					Models:                     o.Models,
 					AuthManager:                authManager,
-					EventProducer:              o.EventProducer,
 					CrashTrackerClient:         o.CrashTrackerClient,
 					DistributionAccountService: o.DistributionAccountService,
 				},
@@ -399,12 +395,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:                      o.Models,
 				DBConnectionPool:            o.MtnDBConnectionPool,
 				AuthManager:                 o.authManager,
-				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				DirectPaymentService: services.NewDirectPaymentService(
 					o.Models,
-					o.EventProducer,
 					o.DistributionAccountService,
 					o.SubmitterEngine,
 				),
@@ -461,7 +455,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
 				Models:             o.Models,
 				CrashTrackerClient: o.CrashTrackerClient,
-				EventProducer:      o.EventProducer,
 			}
 
 			r.With(middleware.RequirePermission(
@@ -521,7 +514,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Write operations
 			r.With(middleware.RequirePermission(
 				data.WriteWallets,
-				middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", walletsHandler.PostWallets)
 				r.Delete("/{id}", walletsHandler.DeleteWallet)
@@ -529,7 +522,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.RequirePermission(
 				data.WriteWallets,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
@@ -719,11 +712,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}
 
 		// RPC endpoints for wallet and dashboard (only if RPC URL is set)
-		if o.RpcConfig.RPCUrl != "" {
+		if o.RPCConfig.RPCUrl != "" {
 			rpcProxyHandler := httphandler.RPCProxyHandler{
-				RPCUrl:             o.RpcConfig.RPCUrl,
-				RPCAuthHeaderKey:   o.RpcConfig.RPCRequestAuthHeaderKey,
-				RPCAuthHeaderValue: o.RpcConfig.RPCRequestAuthHeaderValue,
+				RPCUrl:             o.RPCConfig.RPCUrl,
+				RPCAuthHeaderKey:   o.RPCConfig.RPCRequestAuthHeaderKey,
+				RPCAuthHeaderValue: o.RPCConfig.RPCRequestAuthHeaderValue,
 			}
 			r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).
 				Post("/rpc/wallet", rpcProxyHandler.ServeHTTP)
@@ -739,7 +732,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			ServiceID:        ServiceID,
 			Version:          o.Version,
 			DBConnectionPool: o.AdminDBConnectionPool,
-			Producer:         o.EventProducer,
 		}.ServeHTTP)
 
 		// START SEP-24 endpoints
@@ -749,7 +741,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkPassphrase:           o.NetworkPassphrase,
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
-			Sep45ContractId:             o.Sep45ContractId,
+			Sep45ContractID:             o.Sep45ContractID,
 			InstanceName:                o.InstanceName,
 		}.ServeHTTP)
 
@@ -780,7 +772,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
 				ReCAPTCHADisabled:           o.DisableReCAPTCHA,
 				NetworkPassphrase:           o.NetworkPassphrase,
-				EventProducer:               o.EventProducer,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			}.VerifyReceiverRegistration)

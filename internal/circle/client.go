@@ -52,7 +52,7 @@ type ClientInterface interface {
 type Client struct {
 	BasePath       string
 	APIKey         string
-	httpClient     httpclient.HttpClientInterface
+	httpClient     httpclient.HTTPClientInterface
 	tenantManager  tenant.ManagerInterface
 	monitorService monitor.MonitorServiceInterface
 }
@@ -98,7 +98,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -301,7 +301,7 @@ func (client *Client) GetBusinessBalances(ctx context.Context) (*Balances, error
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusOK {
 		handleErr := client.handleError(ctx, resp)
@@ -324,7 +324,7 @@ func (client *Client) GetAccountConfiguration(ctx context.Context) (*AccountConf
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing response body")
 
 	if resp.StatusCode != http.StatusOK {
 		handleErr := client.handleError(ctx, resp)
@@ -405,7 +405,7 @@ func (client *Client) request(ctx context.Context, path, u, method string, isAut
 		retry.LastErrorOnly(true),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unsuccessful after multiple attempts: %w", err)
 	}
 
 	return resp, nil
@@ -423,12 +423,6 @@ func parseRetryAfter(retryAfter string) time.Duration {
 }
 
 func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoint string, startTime time.Time, resp *http.Response, reqErr error) {
-	t, err := sdpcontext.GetTenantFromContext(ctx)
-	if err != nil {
-		log.Ctx(ctx).Errorf("getting tenant from context: %v", err)
-		return
-	}
-
 	duration := time.Since(startTime)
 	status, statusCode := monitor.ParseHTTPResponseStatus(resp, reqErr)
 
@@ -437,15 +431,17 @@ func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoi
 		Endpoint:   endpoint,
 		Status:     status,
 		StatusCode: statusCode,
-		TenantName: t.Name,
+		CommonLabels: monitor.CommonLabels{
+			TenantName: sdpcontext.MustGetTenantNameFromContext(ctx),
+		},
 	}.ToMap()
 
 	if monitorErr := client.monitorService.MonitorHistogram(duration.Seconds(), monitor.CircleAPIRequestDurationTag, labels); monitorErr != nil {
-		log.Ctx(ctx).Errorf("monitoring histogram: %v", err)
+		log.Ctx(ctx).Errorf("monitoring histogram: %v", monitorErr)
 	}
 
 	if monitorErr := client.monitorService.MonitorCounters(monitor.CircleAPIRequestsTotalTag, labels); monitorErr != nil {
-		log.Ctx(ctx).Errorf("monitoring counter: %v", err)
+		log.Ctx(ctx).Errorf("monitoring counter: %v", monitorErr)
 	}
 }
 

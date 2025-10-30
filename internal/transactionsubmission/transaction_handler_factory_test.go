@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	sdpMonitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
+	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -16,7 +16,7 @@ func TestTransactionHandlerFactory_GetTransactionHandler(t *testing.T) {
 	engine := &engine.SubmitterEngine{}
 	txModel := &store.TransactionModel{}
 	monitorSvc := tssMonitor.TSSMonitorService{
-		Client: &sdpMonitorMocks.MockMonitorClient{},
+		Client: &sdpMonitor.MockMonitorClient{},
 	}
 	rpcClient := &mocks.MockRPCClient{}
 

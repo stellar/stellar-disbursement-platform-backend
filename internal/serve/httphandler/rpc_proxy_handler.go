@@ -45,7 +45,11 @@ func (h RPCProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httperror.BadRequest("Failed to read request body", err, nil).Render(w)
 		return
 	}
-	defer r.Body.Close()
+	defer func(body io.ReadCloser) {
+		if err := body.Close(); err != nil {
+			log.Ctx(ctx).Warnf("Failed to close request body: %v", err)
+		}
+	}(r.Body)
 
 	if len(body) == 0 {
 		httperror.BadRequest("Request body cannot be empty", nil, nil).Render(w)

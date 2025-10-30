@@ -114,7 +114,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			receiverUpdate.PhoneNumber = &reqBody.PhoneNumber
 		}
 		if reqBody.ExternalID != "" {
-			receiverUpdate.ExternalId = &reqBody.ExternalID
+			receiverUpdate.ExternalID = &reqBody.ExternalID
 		}
 
 		if !receiverUpdate.IsEmpty() {
