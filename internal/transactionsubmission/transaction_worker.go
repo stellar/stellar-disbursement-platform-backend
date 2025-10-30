@@ -167,6 +167,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 // Errors marked as definitive error, that won't be resolved with retries:
 //   - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
 //   - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//   - 400: with error code "entry_archived"
 //
 // Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
 //   - 400 - tx_bad_seq: Bad Request

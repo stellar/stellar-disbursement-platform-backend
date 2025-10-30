@@ -646,7 +646,16 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 		}
 
 		if strkey.IsValidContractAddress(stellarAddress) {
-			return ErrMemosNotSupportedForContractAddresses
+			memoIsClear := update.StellarMemo != nil && *update.StellarMemo == ""
+			memoTypeIsClear := update.StellarMemoType == nil || (update.StellarMemoType != nil && *update.StellarMemoType == "")
+
+			if !memoIsClear {
+				return ErrMemosNotSupportedForContractAddresses
+			}
+
+			if !memoTypeIsClear {
+				return ErrMemosNotSupportedForContractAddresses
+			}
 		}
 	}
 
