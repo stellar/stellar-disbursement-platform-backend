@@ -30,9 +30,9 @@ func (r CreateSponsoredTransactionRequest) Validate() *httperror.HTTPError {
 
 	validator.Check(len(strings.TrimSpace(r.OperationXDR)) > 0, "operation_xdr", "operation_xdr should not be empty")
 	if r.OperationXDR != "" {
-		var op xdr.Operation
-		if err := xdr.SafeUnmarshalBase64(r.OperationXDR, &op); err != nil {
-			validator.AddError("operation_xdr", "operation_xdr is not valid base64-encoded operation XDR")
+		var invoke xdr.InvokeHostFunctionOp
+		if err := xdr.SafeUnmarshalBase64(r.OperationXDR, &invoke); err != nil {
+			validator.AddError("operation_xdr", "operation_xdr is not valid base64-encoded InvokeHostFunctionOp XDR")
 		}
 	}
 
