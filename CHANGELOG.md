@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix HTML validation to allow apostrophes in invitation messages while maintaining security against XSS attacks [#930](https://github.com/stellar/stellar-disbursement-platform-backend/pull/930)
 
 ## [5.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/5.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.1.0...5.0.0))
 
