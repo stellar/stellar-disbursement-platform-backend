@@ -103,6 +103,8 @@ type ServeOptions struct {
 	CircleAPIType                   circle.APIType
 	BridgeService                   bridge.ServiceInterface
 	EmbeddedWalletService           services.EmbeddedWalletServiceInterface
+	WebAuthnSessionCacheMaxEntries  int
+	WebAuthnSessionTTLSeconds       int
 	WebAuthnService                 wallet.WebAuthnServiceInterface
 	walletJWTManager                wallet.WalletJWTManager
 }

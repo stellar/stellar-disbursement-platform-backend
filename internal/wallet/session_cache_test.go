@@ -10,20 +10,21 @@ import (
 )
 
 func Test_NewInMemorySessionCache(t *testing.T) {
-	cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+	cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+	require.NoError(t, err)
 	require.NotNil(t, cache)
-	assert.NotNil(t, cache.cache)
 }
 
 func Test_InMemorySessionCache_Store(t *testing.T) {
-	cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+	cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+	require.NoError(t, err)
 
 	session := webauthn.SessionData{
 		Challenge: "test-challenge",
 		UserID:    []byte("user-123"),
 	}
 
-	err := cache.Store("test-key", SessionTypeRegistration, session, 5*time.Minute)
+	err = cache.Store("test-key", SessionTypeRegistration, session)
 	require.NoError(t, err)
 
 	retrieved, err := cache.Get("test-key", SessionTypeRegistration)
@@ -34,19 +35,21 @@ func Test_InMemorySessionCache_Store(t *testing.T) {
 
 func Test_InMemorySessionCache_Get(t *testing.T) {
 	t.Run("returns ErrSessionNotFound if key does not exist", func(t *testing.T) {
-		cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+		require.NoError(t, err)
 
-		_, err := cache.Get("non-existent-key", SessionTypeRegistration)
+		_, err = cache.Get("non-existent-key", SessionTypeRegistration)
 		assert.ErrorIs(t, err, ErrSessionNotFound)
 	})
 
 	t.Run("returns ErrSessionTypeMismatch if session type does not match", func(t *testing.T) {
-		cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+		require.NoError(t, err)
 
 		session := webauthn.SessionData{
 			Challenge: "test-challenge",
 		}
-		err := cache.Store("test-key", SessionTypeRegistration, session, 5*time.Minute)
+		err = cache.Store("test-key", SessionTypeRegistration, session)
 		require.NoError(t, err)
 
 		_, err = cache.Get("test-key", SessionTypeAuthentication)
@@ -54,28 +57,30 @@ func Test_InMemorySessionCache_Get(t *testing.T) {
 	})
 
 	t.Run("returns ErrSessionNotFound if session is expired", func(t *testing.T) {
-		cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+		cache, err := NewInMemorySessionCache(1*time.Millisecond, 128)
+		require.NoError(t, err)
 
 		session := webauthn.SessionData{
 			Challenge: "test-challenge",
 		}
-		err := cache.Store("test-key", SessionTypeRegistration, session, 1*time.Nanosecond)
+		err = cache.Store("test-key", SessionTypeRegistration, session)
 		require.NoError(t, err)
 
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(3 * time.Millisecond)
 
 		_, err = cache.Get("test-key", SessionTypeRegistration)
 		assert.ErrorIs(t, err, ErrSessionNotFound)
 	})
 
 	t.Run("successfully retrieves a valid session", func(t *testing.T) {
-		cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+		require.NoError(t, err)
 
 		session := webauthn.SessionData{
 			Challenge: "test-challenge-2",
 			UserID:    []byte("user-456"),
 		}
-		err := cache.Store("test-key-2", SessionTypeAuthentication, session, 5*time.Minute)
+		err = cache.Store("test-key-2", SessionTypeAuthentication, session)
 		require.NoError(t, err)
 
 		retrieved, err := cache.Get("test-key-2", SessionTypeAuthentication)
@@ -87,12 +92,13 @@ func Test_InMemorySessionCache_Get(t *testing.T) {
 
 func Test_InMemorySessionCache_Delete(t *testing.T) {
 	t.Run("successfully deletes a session", func(t *testing.T) {
-		cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+		require.NoError(t, err)
 
 		session := webauthn.SessionData{
 			Challenge: "test-challenge",
 		}
-		err := cache.Store("test-key", SessionTypeRegistration, session, 5*time.Minute)
+		err = cache.Store("test-key", SessionTypeRegistration, session)
 		require.NoError(t, err)
 
 		_, err = cache.Get("test-key", SessionTypeRegistration)
@@ -105,7 +111,8 @@ func Test_InMemorySessionCache_Delete(t *testing.T) {
 	})
 
 	t.Run("does not error when deleting non-existent key", func(t *testing.T) {
-		cache := NewInMemorySessionCache(5*time.Minute, 10*time.Minute)
+		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+		require.NoError(t, err)
 
 		assert.NotPanics(t, func() {
 			cache.Delete("non-existent-key")

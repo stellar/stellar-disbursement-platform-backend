@@ -221,6 +221,22 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:  false,
 		},
 		{
+			Name:        "webauthn-session-cache-max-entries",
+			Usage:       "Maximum number of WebAuthn sessions stored for passkey flows",
+			OptType:     types.Int,
+			ConfigKey:   &serveOpts.WebAuthnSessionCacheMaxEntries,
+			FlagDefault: 1024,
+			Required:    false,
+		},
+		{
+			Name:        "webauthn-session-ttl-seconds",
+			Usage:       "Duration that WebAuthn sessions remain valid, in seconds",
+			OptType:     types.Int,
+			ConfigKey:   &serveOpts.WebAuthnSessionTTLSeconds,
+			FlagDefault: 300,
+			Required:    false,
+		},
+		{
 			Name:        "enable-sep45",
 			Usage:       "Enable SEP-45 web authentication features that require Stellar RPC integration",
 			OptType:     types.Bool,
@@ -662,8 +678,9 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				}
 
 				serveOpts.WebAuthnService, err = di.NewWebAuthnService(context.Background(), di.WebAuthnServiceOptions{
-					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
-					SessionTTL:          5 * time.Minute,
+					MTNDBConnectionPool:    serveOpts.MtnDBConnectionPool,
+					SessionTTL:             time.Duration(serveOpts.WebAuthnSessionTTLSeconds) * time.Second,
+					SessionCacheMaxEntries: serveOpts.WebAuthnSessionCacheMaxEntries,
 				})
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating WebAuthn service: %v", err)
