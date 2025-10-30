@@ -18,10 +18,11 @@ func TestNewReceiverValidator(t *testing.T) {
 
 func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 	testCases := []struct {
-		name        string
-		request     dto.CreateReceiverRequest
-		expectError bool
-		errorFields []string
+		name           string
+		request        dto.CreateReceiverRequest
+		expectError    bool
+		errorFields    []string
+		expectedErrors map[string]string
 	}{
 		{
 			name: "valid request with email and verifications",
@@ -38,7 +39,7 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "valid request with phone and wallet",
+			name: "valid request with phone and public key address",
 			request: dto.CreateReceiverRequest{
 				PhoneNumber: "+12345678901",
 				ExternalID:  "Rivendell-456",
@@ -50,6 +51,18 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 				},
 			},
 			expectError: false,
+		},
+		{
+			name: "valid request with phone and contract address",
+			request: dto.CreateReceiverRequest{
+				PhoneNumber: "+12345678901",
+				ExternalID:  "Rivendell-456",
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "CCWI7ARG6VMMREIKK2AOW6BYYDFCQQH52KW2J5AMPZKRRIFAMDQ44TUZ",
+					},
+				},
+			},
 		},
 		{
 			name: "missing contact information",
@@ -179,6 +192,24 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 			expectError: true,
 			errorFields: []string{"verifications[0].value"},
 		},
+		{
+			name: "invalid memo for contract address",
+			request: dto.CreateReceiverRequest{
+				PhoneNumber: "+12345678901",
+				ExternalID:  "Rivendell-456",
+				Wallets: []dto.ReceiverWalletRequest{
+					{
+						Address: "CCWI7ARG6VMMREIKK2AOW6BYYDFCQQH52KW2J5AMPZKRRIFAMDQ44TUZ",
+						Memo:    "should-not-be-here",
+					},
+				},
+			},
+			expectError: true,
+			errorFields: []string{"wallets[0].memo"},
+			expectedErrors: map[string]string{
+				"wallets[0].memo": "memos are not supported for contract addresses",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -192,6 +223,10 @@ func TestReceiverValidator_ValidateCreateReceiverRequest(t *testing.T) {
 				for _, field := range tc.errorFields {
 					_, exists := validator.Errors[field]
 					assert.True(t, exists, "Expected error field '%s' not found in validation errors", field)
+
+					if expectedMsg, ok := tc.expectedErrors[field]; ok {
+						assert.Equal(t, expectedMsg, validator.Errors[field])
+					}
 				}
 			} else {
 				require.False(t, validator.HasErrors(), "Expected no validation errors but found: %v", validator.Errors)

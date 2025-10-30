@@ -2,8 +2,10 @@ package paymentdispatchers
 
 import (
 	"context"
+	"crypto/sha256"
 	"testing"
 
+	"github.com/stellar/go/strkey"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -129,6 +131,21 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			},
 			wantErrContains: "",
 		},
+		{
+			name: "🟢 skip memo for contract accounts",
+			getCtxFn: func(t *testing.T) context.Context {
+				ctx := context.Background()
+				return sdpcontext.SetTenantInContext(ctx, &tnt)
+			},
+			receiverWallet: data.ReceiverWallet{
+				StellarAddress:  generateContractAddress(t),
+				StellarMemo:     "123456",
+				StellarMemoType: schema.MemoTypeID,
+			},
+			orgMemoEnabled:  true,
+			expectedMemo:    schema.Memo{},
+			wantErrContains: "",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -152,4 +169,12 @@ func Test_MemoResolver_GetMemo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func generateContractAddress(t *testing.T) string {
+	t.Helper()
+	sum := sha256.Sum256([]byte("contract-wallet"))
+	addr, err := strkey.Encode(strkey.VersionByteContract, sum[:])
+	require.NoError(t, err)
+	return addr
 }

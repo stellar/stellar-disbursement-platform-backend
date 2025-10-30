@@ -372,6 +372,12 @@ func TestReceiverResolver_Validate(t *testing.T) {
 			},
 		},
 		{
+			name: "valid contract wallet address reference",
+			ref: ReceiverReference{
+				WalletAddress: testutils.StringPtr("CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53"),
+			},
+		},
+		{
 			name: "empty string references",
 			ref: ReceiverReference{
 				ID: testutils.StringPtr(""),
@@ -625,6 +631,12 @@ func TestWalletResolver_Validate(t *testing.T) {
 			name: "valid address reference",
 			ref: WalletReference{
 				Address: testutils.StringPtr("GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON"),
+			},
+		},
+		{
+			name: "valid contract address reference",
+			ref: WalletReference{
+				Address: testutils.StringPtr("CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53"),
 			},
 		},
 		{

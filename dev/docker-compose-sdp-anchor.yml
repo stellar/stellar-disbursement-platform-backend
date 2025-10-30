@@ -53,9 +53,6 @@ services:
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
-      # Kafka Configuration - possible values: KAFKA; SCHEDULER
-      EVENT_BROKER_TYPE: "SCHEDULER"
-
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin
       ADMIN_API_KEY: api_key_1234567890

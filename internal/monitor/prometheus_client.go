@@ -12,6 +12,7 @@ import (
 
 type prometheusClient struct {
 	httpHandler http.Handler
+	registry    *prometheus.Registry
 }
 
 func (p *prometheusClient) GetMetricType() MetricType {
@@ -24,9 +25,10 @@ func (p *prometheusClient) GetMetricHTTPHandler() http.Handler {
 
 func (p *prometheusClient) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) {
 	SummaryVecMetrics[HTTPRequestDurationTag].With(prometheus.Labels{
-		"status": labels.Status,
-		"route":  labels.Route,
-		"method": labels.Method,
+		"status":      labels.Status,
+		"route":       labels.Route,
+		"method":      labels.Method,
+		"tenant_name": labels.TenantName,
 	}).Observe(duration.Seconds())
 }
 
@@ -63,6 +65,36 @@ func (p *prometheusClient) MonitorHistogram(value float64, tag MetricTag, labels
 	histogram.With(labels).Observe(value)
 }
 
+func (p *prometheusClient) RegisterFunctionMetric(metricType FuncMetricType, opts FuncMetricOptions) {
+	var metric prometheus.Collector
+
+	switch metricType {
+	case FuncGaugeType:
+		metric = prometheus.NewGaugeFunc(
+			prometheus.GaugeOpts{
+				Namespace: opts.Namespace, Subsystem: opts.Subservice, Name: opts.Name,
+				Help:        opts.Help,
+				ConstLabels: opts.Labels,
+			},
+			opts.Function,
+		)
+	case FuncCounterType:
+		metric = prometheus.NewCounterFunc(
+			prometheus.CounterOpts{
+				Namespace: opts.Namespace, Subsystem: opts.Subservice, Name: opts.Name,
+				Help:        opts.Help,
+				ConstLabels: opts.Labels,
+			},
+			opts.Function,
+		)
+	default:
+		log.Errorf("Error Registering Function %s metric %s: unsupported metric type", metricType, opts.Name)
+		return
+	}
+
+	p.registry.MustRegister(metric)
+}
+
 func newPrometheusClient() *prometheusClient {
 	// register Prometheus metrics
 	metricsRegistry := prometheus.NewRegistry()
@@ -75,7 +107,10 @@ func newPrometheusClient() *prometheusClient {
 		metricsRegistry.MustRegister(metric)
 	}
 
-	return &prometheusClient{httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})}
+	return &prometheusClient{
+		httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}),
+		registry:    metricsRegistry,
+	}
 }
 
 // Ensuring that promtheusClient is implementing MonitorClient interface

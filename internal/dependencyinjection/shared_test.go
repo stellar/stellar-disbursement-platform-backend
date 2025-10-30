@@ -1,8 +1,10 @@
 package dependencyinjection
 
 import (
+	"context"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -11,11 +13,12 @@ import (
 )
 
 func Test_openDBConnectionPool(t *testing.T) {
+	ctx := context.Background()
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
 	t.Run("handle options without metrics", func(t *testing.T) {
-		dbConnectionPool, err := openDBConnectionPool(dbt.DSN, nil)
+		dbConnectionPool, err := openDBConnectionPool(ctx, dbt.DSN, nil)
 		require.NoError(t, err)
 		defer dbConnectionPool.Close()
 
@@ -24,7 +27,9 @@ func Test_openDBConnectionPool(t *testing.T) {
 
 	t.Run("handle options with metrics", func(t *testing.T) {
 		mMonitorService := monitorMocks.NewMockMonitorService(t)
-		dbConnectionPool, err := openDBConnectionPool(dbt.DSN, mMonitorService)
+		// Expect 8 RegisterFunctionMetric calls for database connection pool metrics
+		mMonitorService.On("RegisterFunctionMetric", mock.Anything, mock.Anything).Times(8)
+		dbConnectionPool, err := openDBConnectionPool(ctx, dbt.DSN, mMonitorService)
 		require.NoError(t, err)
 		defer dbConnectionPool.Close()
 

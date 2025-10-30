@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [5.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/5.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.1.0...5.0.0))
+
+### Added
+
+- Improve observability for the SDP service by adding the following : 
+  - tag metrics by tenant name to differentiate between tenants
+  - configure Summary metrics with percentiles for HTTP request durations (0.5, 0.9, 0.95, 0.99)
+  - rework Grafana dashboard to include tenant tag and new metrics
+  - [#818](https://github.com/stellar/stellar-disbursement-platform-backend/pull/818)
+- Add organization level MFA and ReCAPTCHA settings [#861](https://github.com/stellar/stellar-disbursement-platform-backend/pull/861)
+- Add trustlines for distribution account when provisioning tenant [#891](https://github.com/stellar/stellar-disbursement-platform-backend/pull/891)
+- Add support for contract account disbursements [#922](https://github.com/stellar/stellar-disbursement-platform-backend/pull/922)
+- Add contract account support for direct payments [#924](https://github.com/stellar/stellar-disbursement-platform-backend/pull/924)
+- Add support for contract addresses for PATCH receiver [#925](https://github.com/stellar/stellar-disbursement-platform-backend/pull/925)
+- Mark tx failures due to archived entries as error [#926](https://github.com/stellar/stellar-disbursement-platform-backend/pull/926)
+
+### Changed
+- Decommissioned Event Broker Kafka support in favor of Scheduler for background jobs. [#914](https://github.com/stellar/stellar-disbursement-platform-backend/pull/914)
+- Allow configuring `resources` limits and requests for services in the Helm charts [#904](https://github.com/stellar/stellar-disbursement-platform-backend/pull/904)
+- Enable short linking by default [#916](https://github.com/stellar/stellar-disbursement-platform-backend/pull/916)
+- Make POST /wallets and PATCH /wallets permissions consistent [#909](https://github.com/stellar/stellar-disbursement-platform-backend/pull/909)
+
 ## [4.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/4.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.0.1...4.1.0))
 
 ### Added

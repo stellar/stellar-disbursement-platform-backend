@@ -178,17 +178,23 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 		return nil, httperror.InternalError(ctx, msg, err, nil)
 	}
 
-	// Monitor disbursement creation
-	labels := monitor.DisbursementLabels{
-		Asset:  newDisbursement.Asset.Code,
-		Wallet: newDisbursement.Wallet.Name,
-	}
-	err = d.MonitorService.MonitorCounters(monitor.DisbursementsCounterTag, labels.ToMap())
-	if err != nil {
-		log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
-	}
+	d.recordCreateDisbursementMetrics(ctx, newDisbursement)
 
 	return newDisbursement, nil
+}
+
+func (d DisbursementHandler) recordCreateDisbursementMetrics(ctx context.Context, disbursement *data.Disbursement) {
+	labels := monitor.DisbursementLabels{
+		Asset:  disbursement.Asset.Code,
+		Wallet: disbursement.Wallet.Name,
+		CommonLabels: monitor.CommonLabels{
+			TenantName: sdpcontext.MustGetTenantNameFromContext(ctx),
+		},
+	}
+
+	if err := d.MonitorService.MonitorCounters(monitor.DisbursementsCounterTag, labels.ToMap()); err != nil {
+		log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
+	}
 }
 
 // DeleteDisbursement deletes a draft or ready disbursement and its associated payments

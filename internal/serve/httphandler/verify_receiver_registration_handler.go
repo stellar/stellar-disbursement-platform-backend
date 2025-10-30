@@ -17,8 +17,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -62,7 +60,6 @@ type VerifyReceiverRegistrationHandler struct {
 	ReCAPTCHAValidator          validators.ReCAPTCHAValidator
 	ReCAPTCHADisabled           bool
 	NetworkPassphrase           string
-	EventProducer               events.Producer
 	CrashTrackerClient          crashtracker.CrashTrackerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
 }
@@ -317,131 +314,77 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 
-	opts := db.TransactionOptions{
-		DBConnectionPool: v.Models.DBConnectionPool,
-		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
-			// STEP 2: find the receivers with the given phone number
-			receivers, err := v.Models.Receiver.GetByContacts(ctx, dbTx, contactInfo)
+	err := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		// STEP 2: find the receivers with the given phone number
+		receivers, err := v.Models.Receiver.GetByContacts(ctx, dbTx, contactInfo)
+		if err != nil {
+			return fmt.Errorf("retrieving receiver with contact info %s: %w", truncatedContactInfo, err)
+		}
+		if len(receivers) == 0 {
+			err = fmt.Errorf("receiver with contact info %s not found in our server", truncatedContactInfo)
+			return &InformationNotFoundError{cause: err}
+		}
+		receiver := receivers[0]
+
+		// STEP 3: process OTP
+		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
+		if err != nil {
+			return fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, err)
+		}
+
+		// STEP 4: process receiverVerification PII info that matches the pair [receiverID, verificationType]
+		err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
+		if err != nil {
+			return fmt.Errorf("processing receiver verification entry for receiver with contact info %s: %w", truncatedContactInfo, err)
+		}
+
+		// STEP 5: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
+		if !wasAlreadyRegistered {
+			err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
 			if err != nil {
-				err = fmt.Errorf("retrieving receiver with contact info %s: %w", truncatedContactInfo, err)
-				return nil, err
+				return fmt.Errorf("processing anchor platform transaction ID: %w", err)
 			}
-			if len(receivers) == 0 {
-				err = fmt.Errorf("receiver with contact info %s not found in our server", truncatedContactInfo)
-				return nil, &InformationNotFoundError{cause: err}
-			}
-			receiver := receivers[0]
+		}
 
-			// STEP 3: process OTP
-			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
-			if err != nil {
-				return nil, fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, err)
-			}
-
-			// STEP 4: process receiverVerification PII info that matches the pair [receiverID, verificationType]
-			err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
-			if err != nil {
-				return nil, fmt.Errorf("processing receiver verification entry for receiver with contact info %s: %w", truncatedContactInfo, err)
-			}
-
-			// STEP 5: build event message to trigger a transaction in the TSS
-			msg, err := v.buildPaymentsReadyToPayEventMessage(ctx, dbTx, &receiverWallet)
-			if err != nil {
-				return nil, fmt.Errorf("preparing payments ready-to-pay event message: %w", err)
-			}
-			postCommitFn = func() error {
-				postErr := events.ProduceEvents(ctx, v.EventProducer, msg)
-				if postErr != nil {
-					v.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing ready-to-pay message (post SEP-24) on the event producer")
-				}
-
-				return nil
-			}
-
-			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
-			if !wasAlreadyRegistered {
-				err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
-				if err != nil {
-					return nil, fmt.Errorf("processing anchor platform transaction ID: %w", err)
-				}
-			}
-
-			return postCommitFn, nil
-		},
-	}
-
-	if atomicFnErr := db.RunInTransactionWithPostCommit(ctx, &opts); atomicFnErr != nil {
+		return nil
+	})
+	if err != nil {
 		var infoNotFoundErr *InformationNotFoundError
 		// if error is due to verification attempts being exceeded, we want to display the message with what that limit is clearly
 		// to the user
 		var verficationAttemptsExceededErr *VerificationAttemptsExceededError
 
 		switch {
-		case errors.Is(atomicFnErr, ErrOTPMaxAttemptsExceeded):
-			httperror.BadRequest("Maximum OTP verification attempts exceeded. Please request a new OTP.", atomicFnErr, nil).
+		case errors.Is(err, ErrOTPMaxAttemptsExceeded):
+			httperror.BadRequest("Maximum OTP verification attempts exceeded. Please request a new OTP.", err, nil).
 				WithErrorCode(httperror.Code400_4).
 				Render(w)
 			return
-		case errors.Is(atomicFnErr, ErrOTPExpired):
-			httperror.BadRequest("OTP has expired. Please request a new one.", atomicFnErr, nil).
+		case errors.Is(err, ErrOTPExpired):
+			httperror.BadRequest("OTP has expired. Please request a new one.", err, nil).
 				WithErrorCode(httperror.Code400_5).
 				Render(w)
 			return
-		case errors.Is(atomicFnErr, ErrOTPDoesNotMatch):
-			httperror.BadRequest("Invalid OTP. Please check and try again.", atomicFnErr, nil).
+		case errors.Is(err, ErrOTPDoesNotMatch):
+			httperror.BadRequest("Invalid OTP. Please check and try again.", err, nil).
 				WithErrorCode(httperror.Code400_6).
 				Render(w)
 			return
-		case errors.As(atomicFnErr, &infoNotFoundErr):
+		case errors.As(err, &infoNotFoundErr):
 			log.Ctx(ctx).Error(infoNotFoundErr.cause)
-			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).WithErrorCode(httperror.Code400_2).Render(w)
+			httperror.BadRequest(InformationNotFoundOnServer, err, nil).WithErrorCode(httperror.Code400_2).Render(w)
 			return
-		case errors.As(atomicFnErr, &verficationAttemptsExceededErr):
+		case errors.As(err, &verficationAttemptsExceededErr):
 			log.Ctx(ctx).Error(verficationAttemptsExceededErr.cause)
-			httperror.BadRequest(verficationAttemptsExceededErr.Error(), atomicFnErr, nil).WithErrorCode(httperror.Code400_3).Render(w)
+			httperror.BadRequest(verficationAttemptsExceededErr.Error(), err, nil).WithErrorCode(httperror.Code400_3).Render(w)
 			return
 		default:
-			httperror.InternalError(ctx, "", atomicFnErr, nil).WithErrorCode(httperror.Code500_0).Render(w)
+			httperror.InternalError(ctx, "", err, nil).WithErrorCode(httperror.Code500_0).Render(w)
 			return
 		}
 	}
 
 	httpjson.Render(w, map[string]string{"message": "ok"}, httpjson.JSON)
-}
-
-func (v VerifyReceiverRegistrationHandler) buildPaymentsReadyToPayEventMessage(ctx context.Context, sqlExec db.SQLExecuter, rw *data.ReceiverWallet) (*events.Message, error) {
-	payments, err := v.Models.Payment.GetReadyByReceiverWalletID(ctx, sqlExec, rw.ID)
-	if err != nil {
-		return nil, fmt.Errorf("getting payments for receiver wallet ID %s", rw.ID)
-	}
-
-	if len(payments) == 0 {
-		log.Ctx(ctx).Warnf("no payments ready to pay for receiver wallet ID %s", rw.ID)
-		return nil, nil
-	}
-
-	distAccount, err := v.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("resolving distribution account: %w", err)
-	}
-
-	msg, err := events.NewPaymentReadyToPayMessage(ctx, distAccount.Type.Platform(), rw.ID, events.PaymentReadyToPayReceiverVerificationCompleted)
-	if err != nil {
-		return nil, fmt.Errorf("creating new message: %w", err)
-	}
-
-	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
-	for _, payment := range payments {
-		paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
-	}
-	msg.Data = paymentsReadyToPay
-
-	err = msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
-	}
-
-	return msg, nil
 }
 
 // incrementOTPAttempts increments the OTP attempts counter and returns the appropriate error.

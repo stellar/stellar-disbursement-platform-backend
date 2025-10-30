@@ -65,6 +65,11 @@ Security is a critical aspect of the SDP. The measures outlined in this document
 
 Google's reCAPTCHA has been integrated into the SDP to prevent automated attacks and ensure that interactions are performed by humans, not bots.
 
+
+ReCAPTCHA can be configured at two levels:
+1. **Environment level (default)**: Set the `DISABLE_RECAPTCHA` environment variable to `true` to disable for all tenants
+2. **Organization level**: Each tenant can override the environment default through the organization settings (via API or UI)
+
 The SDP supports both reCAPTCHA v2 ("I'm not a robot") and reCAPTCHA v3 (invisible, score-based) implementations:
 
 - **reCAPTCHA v2**: Traditional checkbox-based verification
@@ -80,15 +85,21 @@ The SDP supports both reCAPTCHA v2 ("I'm not a robot") and reCAPTCHA v3 (invisib
 
 ReCAPTCHA is enabled by default and can be disabled in the development environment by setting the `DISABLE_RECAPTCHA` environment variable to `true`.
 
-**Note:** Disabling reCAPTCHA is supported for pubnet environments but this might reduce security!.
+The organization-level setting takes precedence over the environment default when explicitly set. If not set at the organization level, the environment default is used.
+
+**Note:** Disabling reCAPTCHA is supported for pubnet environments but this might reduce security!
 
 ### Enforcement of Multi-Factor Authentication
 
 Multi-Factor Authentication (MFA) provides an additional layer of security to user accounts. It is enforced by default on the SDP and it relies on OTPs sent to the account's email.
 
-MFA is enabled by default and can be disabled in the development environment by setting the `DISABLE_MFA` environment variable to `true`.
+MFA can be configured at two levels:
+1. **Environment level (default)**: Set the `DISABLE_MFA` environment variable to `true` to disable for all tenants
+2. **Organization level**: Each tenant can override the environment default through the organization settings (via API or UI)
 
-**Note:** Disabling MFA is not supported for production environments due to security risks.
+The organization-level setting takes precedence over the environment default when explicitly set. If not set at the organization level, the environment default is used.
+
+**Note:** Disabling MFA is not recommended for production environments due to security risks.
 
 ### Best Practices for Wallet Management
 
@@ -279,56 +290,8 @@ The tables below are shared by the transaction submission service and core servi
 
 Note that the `submitter_transactions` table is used by the TSS and will be managed by the service when moved to its own project.
 
-### Event Brokers & Background jobs
-
-The SDP can use either an Event Broker or Background jobs to handle asynchronous tasks. The choice depends on the requirements of the organization using the SDP.
-Currently, the SDP only supports Kafka as an Event Broker even though it has been designed to support other brokers through the use of interfaces.
-
-> [!NOTE]  
-> In order to avoid concurrency issues, the SDP only supports one Event Broker or Background Jobs at a time.
-
-#### Configuration Options
-
-The SDP configuration is controlled by the `EVENT_BROKER_TYPE` environment variable:
-
-* `EVENT_BROKER_TYPE=KAFKA` - Uses Kafka for event handling (recommended for multi-tenant deployments)
-* `EVENT_BROKER_TYPE=SCHEDULER` - Uses background jobs (recommended for single-tenant deployments)
-
-
-#### Kafka
-We recommend Kafka for organizations that require high throughput and low latency. Organizations that plan on hosting multiple tenants on the SDP should consider using Kafka.
-
-**1. Topics**
-
-* `events.receiver-wallets.new_invitation`: This topic is used to send disbursement invites to recipients. *[Producer: Core, Consumer: Core]*
-* `events.payment.ready_to_pay`: This topic is used to submit payments from the Core to the TSS. *[Producer: Core, Consumer: TSS]*
-* `events.payment.circle_ready_to_pay`: This topic is used to submit Circle payments. *[Producer: Core, Consumer: Core]*
-* `events.payment.payment_completed`: This topic is used to notify the Core that a payment has been completed. *[Producer: TSS, Consumer: Core]*
-
-For each of the topics above, there is a dead letter topic that is used to store messages that could not be processed. The dead letter topics are named as follows:
-* `events.receiver-wallets.new_invitation.dlq`
-* `events.payment.ready_to_pay.dlq`
-* `events.payment.circle_ready_to_pay.dlq`
-* `events.payment.payment_completed.dlq`
-
-
-**2. Configuration**
-
-In order to use Kafka, you need to set the following environment variables for SDP and TSS. 
-
-```sh
-  EVENT_BROKER_TYPE: "KAFKA"
-  BROKER_URLS: # comma separated list of broker urls
-  CONSUMER_GROUP_ID: # consumer group id
-  KAFKA_SECURITY_PROTOCOL: # possible values "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT" or "SSL"
-  KAFKA_SASL_USERNAME: # username for SASL authentication. Required if KAFKA_SECURITY_PROTOCOL is "SASL_SSL" or "SASL_PLAINTEXT"
-  KAFKA_SASL_PASSWORD: # password for SASL authentication. Required if KAFKA_SECURITY_PROTOCOL is "SASL_SSL" or "SASL_PLAINTEXT"
-  KAFKA_SSL_ACCESS_KEY: # access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is "SSL"
-  KAFKA_SSL_ACCESS_CERTIFICATE: # certificate in PEM format that matches the access key. Required if KAFKA_SECURITY_PROTOCOL is "SSL"
-```
-
-#### Background Jobs
-We recommend Background Jobs for organizations that require a simpler setup and do not need high throughput or low latency. Organizations that plan on hosting a single tenant on the SDP should consider using Background Jobs.
+### Background jobs
+The SDP uses Background jobs to handle asynchronous tasks.
 
 **1. Jobs**
 
@@ -342,10 +305,9 @@ We recommend Background Jobs for organizations that require a simpler setup and 
 
 **2. Configuration**
 
-In order to use Background Jobs, we need to set the following environment variable for Core. 
+The following environment variables can be used to configure the intervals of the jobs listed above.
 
 ```sh
-  EVENT_BROKER_TYPE: "SCHEDULER"
   SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: # interval in seconds
   SCHEDULER_PAYMENT_JOB_SECONDS: # interval in seconds
 ```

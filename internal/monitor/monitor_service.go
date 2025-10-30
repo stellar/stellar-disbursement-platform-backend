@@ -4,13 +4,27 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/stellar/go/support/log"
 )
 
-//go:generate mockery --name=MonitorServiceInterface --case=underscore --structname=MockMonitorService
+const DefaultNamespace = "sdp"
+
+type Subservice string
+
+const (
+	DBSubservice       Subservice = "db"
+	HTTPSubservice     Subservice = "http"
+	CircleSubservice   Subservice = "circle"
+	AnchorSubservice   Subservice = "anchor_platform"
+	BusinessSubservice Subservice = "business"
+)
+
 type MonitorServiceInterface interface {
 	Start(opts MetricOptions) error
 	GetMetricType() (MetricType, error)
 	GetMetricHTTPHandler() (http.Handler, error)
+	RegisterFunctionMetric(metricType FuncMetricType, opts FuncMetricOptions)
 	MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) error
 	MonitorDBQueryDuration(duration time.Duration, tag MetricTag, labels DBQueryLabels) error
 	MonitorCounters(tag MetricTag, labels map[string]string) error
@@ -103,4 +117,29 @@ func (m *MonitorService) MonitorCounters(tag MetricTag, labels map[string]string
 	m.MonitorClient.MonitorCounters(tag, labels)
 
 	return nil
+}
+
+type FuncMetricOptions struct {
+	Namespace  string
+	Name       string
+	Help       string
+	Subservice string
+	Labels     map[string]string
+	Function   func() float64
+}
+
+type FuncMetricType string
+
+const (
+	FuncGaugeType   FuncMetricType = "gauge"
+	FuncCounterType FuncMetricType = "counter"
+)
+
+func (m *MonitorService) RegisterFunctionMetric(metricType FuncMetricType, opts FuncMetricOptions) {
+	if m.MonitorClient == nil {
+		log.Errorf("Error Registering Function %s metric %s: client was not initialized", metricType, opts.Name)
+		return
+	}
+
+	m.MonitorClient.RegisterFunctionMetric(metricType, opts)
 }

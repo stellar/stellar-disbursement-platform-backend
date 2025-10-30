@@ -334,7 +334,7 @@ func (r *ReceiverResolver) Validate(ref ReceiverReference) error {
 	}
 	if ref.WalletAddress != nil && strings.TrimSpace(*ref.WalletAddress) != "" {
 		referenceCount++
-		if !strkey.IsValidEd25519PublicKey(*ref.WalletAddress) {
+		if !strkey.IsValidEd25519PublicKey(*ref.WalletAddress) && !strkey.IsValidContractAddress(*ref.WalletAddress) {
 			return ValidationError{
 				EntityType: EntityTypeReceiver,
 				Field:      FieldWalletAddress,
@@ -442,7 +442,7 @@ func (r *WalletResolver) Validate(ref WalletReference) error {
 	}
 	if ref.Address != nil && strings.TrimSpace(*ref.Address) != "" {
 		referenceCount++
-		if !strkey.IsValidEd25519PublicKey(*ref.Address) {
+		if !strkey.IsValidEd25519PublicKey(*ref.Address) && !strkey.IsValidContractAddress(*ref.Address) {
 			return ValidationError{
 				EntityType: EntityTypeWallet,
 				Field:      FieldAddress,

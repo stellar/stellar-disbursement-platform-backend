@@ -24,7 +24,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
@@ -190,7 +189,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 	user := &auth.User{
 		ID:    "user-id",
 		Email: "email@email.com",
@@ -318,6 +318,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 				labels := monitor.DisbursementLabels{
 					Asset:  asset.Code,
 					Wallet: wallet.Name,
+					CommonLabels: monitor.CommonLabels{
+						TenantName: "default-tenant",
+					},
 				}
 				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 			},
@@ -909,7 +912,8 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
-	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
 		On("GetUserByID", mock.Anything, mock.Anything).
@@ -1573,7 +1577,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	require.NotNil(t, user)
 
 	authManagerMock := &auth.AuthManagerMock{}
-	mockEventProducer := events.MockProducer{}
 	mockDistAccSvc := svcMocks.NewMockDistributionAccountService(t)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
@@ -1588,7 +1591,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		DisbursementManagementService: &services.DisbursementManagementService{
 			Models:                     models,
 			AuthManager:                authManagerMock,
-			EventProducer:              &mockEventProducer,
 			DistributionAccountService: mockDistAccSvc,
 		},
 	}
@@ -1762,11 +1764,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
 
-		mockEventProducer.
-			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
-			Return(nil).
-			Once()
-
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
@@ -1793,11 +1790,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
-
-		mockEventProducer.
-			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
-			Return(nil).
-			Once()
 
 		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 			Name:          "ready disbursement #3",
@@ -1914,7 +1906,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
-	mockEventProducer.AssertExpectations(t)
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
@@ -2165,7 +2156,8 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 
 	// Setup fixtures
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
@@ -2181,6 +2173,9 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	labels := monitor.DisbursementLabels{
 		Asset:  asset.Code,
 		Wallet: enabledWallet.Name,
+		CommonLabels: monitor.CommonLabels{
+			TenantName: "default-tenant",
+		},
 	}
 
 	// Setup Mocks

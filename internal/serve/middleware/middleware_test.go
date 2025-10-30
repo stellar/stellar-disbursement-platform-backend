@@ -98,6 +98,9 @@ func Test_MetricsRequestHandler(t *testing.T) {
 			Status: "200",
 			Route:  "/mock",
 			Method: "GET",
+			CommonLabels: monitor.CommonLabels{
+				TenantName: "no_tenant",
+			},
 		}
 
 		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
@@ -119,6 +122,9 @@ func Test_MetricsRequestHandler(t *testing.T) {
 			Status: "404",
 			Route:  "undefined",
 			Method: "GET",
+			CommonLabels: monitor.CommonLabels{
+				TenantName: "no_tenant",
+			},
 		}
 
 		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
@@ -138,9 +144,15 @@ func Test_MetricsRequestHandler(t *testing.T) {
 			Status: "405",
 			Route:  "undefined",
 			Method: "POST",
+			CommonLabels: monitor.CommonLabels{
+				TenantName: "no_tenant",
+			},
 		}
 
-		mMonitorService.On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
+		mMonitorService.
+			On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
+			Return(nil).
+			Once()
 
 		// test
 		req, err := http.NewRequest("POST", "/mock", nil)
@@ -694,18 +706,9 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, expectedRespBody, string(respBody))
 
-		logEntries := debugEntries()
-		assert.Len(t, logEntries, 3)
-
-		// Find the request start and finish logs (skip the warning log)
-		var requestLogs []logrus.Entry
-		for _, e := range logEntries {
-			if e.Message == "starting request" || e.Message == "finished request" {
-				requestLogs = append(requestLogs, e)
-			}
-		}
-
+		requestLogs := debugEntries()
 		assert.Len(t, requestLogs, 2)
+
 		for i, e := range requestLogs {
 			entry, err := e.String()
 			require.NoError(t, err)
