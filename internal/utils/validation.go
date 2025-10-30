@@ -19,8 +19,13 @@ import (
 
 var (
 	// RxPhone is a regex used to validate phone number, according with the E.164 standard https://en.wikipedia.org/wiki/E.164
-	rxPhone                   = regexp.MustCompile(`^\+[1-9]{1}[0-9]{9,14}$`)
-	rxOTP                     = regexp.MustCompile(`^\d{6}$`)
+	rxPhone = regexp.MustCompile(`^\+[1-9]{1}[0-9]{9,14}$`)
+	rxOTP   = regexp.MustCompile(`^\d{6}$`)
+	// Any HTML-like tag: <a ...>, </div>, <STYLE>...</STYLE>, etc.
+	rxHTMLTag = regexp.MustCompile(`(?i)<\s*/?\s*[a-z][a-z0-9]*(\s+[^>]*)?>`)
+	// "javascript:" URL scheme anywhere in the string.
+	rxJSScheme                = regexp.MustCompile(`(?i)\bjavascript\s*:`)
+	rxCSSExpr                 = regexp.MustCompile(`(?i)\bexpression\s*\(`)
 	ErrInvalidE164PhoneNumber = fmt.Errorf("the provided phone number is not a valid E.164 number")
 	ErrEmptyPhoneNumber       = fmt.Errorf("phone number cannot be empty")
 	ErrEmptyEmail             = fmt.Errorf("email field is required")
@@ -218,13 +223,18 @@ func ValidateURLScheme(link string, scheme ...string) error {
 
 // ValidateNoHTML returns an error if the input contains any of the following HTML-related characters: [<, >, &, ', "],
 // either in encoded or decoded form.
-func ValidateNoHTML(input string) error {
-	if escapedStr := html.EscapeString(input); escapedStr != input {
-		return errors.New(`input contains one or more of the following HTML-related charactetes [<, >, &, ', "]`)
+func ValidateNoHTML(s string) error {
+	if s == "" {
+		return nil
 	}
 
-	if unescapedStr := html.UnescapeString(input); unescapedStr != input {
-		return errors.New("input contains HTML entities")
+	if rxHTMLTag.MatchString(s) || rxJSScheme.MatchString(s) || rxCSSExpr.MatchString(s) {
+		return errors.New("input contains HTML or active content")
+	}
+
+	unescaped := html.UnescapeString(s)
+	if rxHTMLTag.MatchString(unescaped) || rxJSScheme.MatchString(unescaped) || rxCSSExpr.MatchString(unescaped) {
+		return errors.New("input contains HTML or active content")
 	}
 
 	return nil
