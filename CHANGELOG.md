@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - [#818](https://github.com/stellar/stellar-disbursement-platform-backend/pull/818)
 - Add organization level MFA and ReCAPTCHA settings [#861](https://github.com/stellar/stellar-disbursement-platform-backend/pull/861)
 - Add trustlines for distribution account when provisioning tenant [#891](https://github.com/stellar/stellar-disbursement-platform-backend/pull/891)
-- Add support to contract account disbursements [#922](https://github.com/stellar/stellar-disbursement-platform-backend/pull/922)
+- Add support for contract account disbursements [#922](https://github.com/stellar/stellar-disbursement-platform-backend/pull/922)
 - Add contract account support for direct payments [#924](https://github.com/stellar/stellar-disbursement-platform-backend/pull/924)
 - Add support for contract addresses for PATCH receiver [#925](https://github.com/stellar/stellar-disbursement-platform-backend/pull/925)
 - Mark tx failures due to archived entries as error [#926](https://github.com/stellar/stellar-disbursement-platform-backend/pull/926)
