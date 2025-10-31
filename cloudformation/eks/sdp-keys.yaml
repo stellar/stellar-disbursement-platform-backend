@@ -360,12 +360,6 @@ Resources:
       Name: !Sub /${namespace}/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE
       Description: "Channel account encryption passphrase"
       SecretString: !If [GenerateChannelKeys, !GetAtt ChannelKeyGenPair.secretKey, !Ref ChannelAccountEncryptionPassphrase]
-  
-  SecretPlatformApiAuthSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /${namespace}/SECRET_PLATFORM_API_AUTH_SECRET
-      SecretString: "mySdpToAnchorPlatformSecret"
 
   SecretSep10JwtSecret:
     Type: AWS::SecretsManager::Secret
@@ -390,12 +384,6 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub /${namespace}/SEP24_JWT_SECRET
-      SecretString: "jwt_secret_1234567890"
-
-  AnchorPlatformOutgoingJwtSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /${namespace}/ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
       SecretString: "jwt_secret_1234567890"
       
   RecaptchaSiteSecretKey:

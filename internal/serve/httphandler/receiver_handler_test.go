@@ -326,7 +326,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 							"received_amount": "0"
 						}
 					],
-					"anchor_platform_transaction_id": %q
+					"sep24_transaction_id": %q
 				}
 			]
 		}`, receiver.ID, receiver.ExternalID, receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano),
@@ -336,7 +336,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			receiverWallet2.ID, receiverWallet2.Receiver.ID, receiverWallet2.Wallet.ID,
 			receiverWallet2.StellarAddress, receiverWallet2.StellarMemo, receiverWallet2.StellarMemoType,
 			receiverWallet2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.UpdatedAt.Format(time.RFC3339Nano),
-			message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.AnchorPlatformTransactionID)
+			message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.SEP24TransactionID)
 
 		assert.JSONEq(t, wantJSON, rr.Body.String())
 	})
@@ -730,7 +730,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 										"received_amount": "0"
 									}
 								],
-								"anchor_platform_transaction_id": %q
+								"sep24_transaction_id": %q
 							}
 						]
 					},
@@ -788,7 +788,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 										"received_amount": "50.0000000"
 									}
 								],
-								"anchor_platform_transaction_id": %q
+								"sep24_transaction_id": %q
 							}
 						]
 					},
@@ -817,12 +817,12 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 				receiverWallet3.ID, receiverWallet3.Receiver.ID, receiverWallet3.Wallet.ID,
 				receiverWallet3.StellarAddress, receiverWallet3.StellarMemo, receiverWallet3.StellarMemoType,
 				receiverWallet3.CreatedAt.Format(time.RFC3339Nano), receiverWallet3.UpdatedAt.Format(time.RFC3339Nano),
-				message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet3.AnchorPlatformTransactionID,
+				message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet3.SEP24TransactionID,
 				receiver2.ID, receiver2.CreatedAt.Format(time.RFC3339Nano), receiver2.UpdatedAt.Format(time.RFC3339Nano),
 				receiverWallet2.ID, receiverWallet2.Receiver.ID, receiverWallet2.Wallet.ID, receiverWallet2.StellarAddress,
 				receiverWallet2.StellarMemo, receiverWallet2.StellarMemoType,
 				receiverWallet2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.UpdatedAt.Format(time.RFC3339Nano),
-				message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.AnchorPlatformTransactionID,
+				message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.SEP24TransactionID,
 				receiver1.ID, receiver1.CreatedAt.Format(time.RFC3339Nano), receiver1.UpdatedAt.Format(time.RFC3339Nano)),
 		},
 		{
@@ -930,7 +930,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 										"received_amount": "50.0000000"
 									}
 								],
-								"anchor_platform_transaction_id": %q
+								"sep24_transaction_id": %q
 							}
 						]
 					}
@@ -939,7 +939,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 				receiverWallet2.ID, receiverWallet2.Receiver.ID, receiverWallet2.Wallet.ID,
 				receiverWallet2.StellarAddress, receiverWallet2.StellarMemo, receiverWallet2.StellarMemoType,
 				receiverWallet2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.UpdatedAt.Format(time.RFC3339Nano),
-				message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.AnchorPlatformTransactionID),
+				message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.SEP24TransactionID),
 		},
 		{
 			name: "fetch last page of receivers with limit 1 and sort by created_at",
@@ -1219,7 +1219,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 										"received_amount": "0"
 									}
 								],
-								"anchor_platform_transaction_id": %q
+								"sep24_transaction_id": %q
 							}
 						]
 					},
@@ -1277,7 +1277,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 										"received_amount": "50.0000000"
 									}
 								],
-								"anchor_platform_transaction_id": %q
+								"sep24_transaction_id": %q
 							}
 						]
 					}
@@ -1286,12 +1286,12 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 				receiverWallet3.ID, receiverWallet3.Receiver.ID, receiverWallet3.Wallet.ID,
 				receiverWallet3.StellarAddress, receiverWallet3.StellarMemo, receiverWallet3.StellarMemoType,
 				receiverWallet3.CreatedAt.Format(time.RFC3339Nano), receiverWallet3.UpdatedAt.Format(time.RFC3339Nano),
-				message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet3.AnchorPlatformTransactionID,
+				message3.CreatedAt.Format(time.RFC3339Nano), message4.CreatedAt.Format(time.RFC3339Nano), receiverWallet3.SEP24TransactionID,
 				receiver2.ID, receiver2.CreatedAt.Format(time.RFC3339Nano), receiver2.UpdatedAt.Format(time.RFC3339Nano),
 				receiverWallet2.ID, receiverWallet2.Receiver.ID, receiverWallet2.Wallet.ID,
 				receiverWallet2.StellarAddress, receiverWallet2.StellarMemo, receiverWallet2.StellarMemoType,
 				receiverWallet2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.UpdatedAt.Format(time.RFC3339Nano),
-				message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.AnchorPlatformTransactionID),
+				message1.CreatedAt.Format(time.RFC3339Nano), message2.CreatedAt.Format(time.RFC3339Nano), receiverWallet2.SEP24TransactionID),
 		},
 		{
 			name: "fetch receivers with email = receiver1@mock.com",

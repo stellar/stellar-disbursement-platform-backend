@@ -35,8 +35,6 @@ func Test_MetricTag_ListAll_IncludesExistingMetrics(t *testing.T) {
 		FailureQueryDurationTag,
 		HTTPRequestDurationTag,
 		DisbursementsCounterTag,
-		AnchorPlatformAuthProtectionEnsuredCounterTag,
-		AnchorPlatformAuthProtectionMissingCounterTag,
 		CircleAPIRequestDurationTag,
 		CircleAPIRequestsTotalTag,
 	}
@@ -50,7 +48,7 @@ func Test_MetricTag_ListAll_Count(t *testing.T) {
 	allTags := MetricTag("").ListAll()
 
 	// Verify we have all expected metrics (existing + new DB metrics)
-	expectedCount := 8 + 9 // 8 existing + 9 new DB metrics
+	expectedCount := 8 + 7 // 8 existing + 7 new DB metrics
 	assert.Equal(t, expectedCount, len(allTags),
 		"ListAll() should return %d metrics", expectedCount)
 }

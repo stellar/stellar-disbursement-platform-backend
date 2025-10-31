@@ -1,19 +1,20 @@
-name: SDP<>AnchorPlatform Integration
+name: Internal SEP Services Validation
+# this workflow tests that SDP's SEP implementations adhere to Stellar's SEP specifications
 
 on:
   push:
     branches:
       - main
   pull_request:
-  workflow_call: # allows this workflow to be called from another workflow
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
-  anchor-integration:
+  internal-sep-validation:
     runs-on: ubuntu-latest
-    environment: "Anchor Integration Tests"
+    environment: "Internal SEP Tests"
     env:
       DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
       DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
@@ -25,21 +26,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Run Docker Compose for SDP and Anchor Platform
+      - name: Run Docker Compose for SDP
         working-directory: dev
-        run: docker compose -f docker-compose-sdp-anchor.yml down && docker compose -f docker-compose-sdp-anchor.yml up --build -d
+        run: |
+          export SEP10_CLIENT_ATTRIBUTION_REQUIRED=false
+          docker compose -f docker-compose-sdp.yml down && docker compose -f docker-compose-sdp.yml up --build -d
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
 
-      - name: Wait for localhost:8080/health
+      - name: Wait for localhost:8000/health
         timeout-minutes: 5
         run: |
-          until curl --output /dev/null --silent --head --fail http://localhost:8080/health; do
-            echo 'Waiting for anchor-platform to be up and running...'
+          until curl --output /dev/null --silent --fail http://localhost:8000/health; do
+            echo 'Waiting for SDP to be up and running...'
             sleep 15
           done
-          echo 'Anchor-platform is up and running.'
+          echo 'SDP is up and running.'
 
       - name: Install NodeJs
         uses: actions/setup-node@v6
@@ -54,4 +57,4 @@ jobs:
       - name: Docker logs
         if: always()
         working-directory: dev
-        run: docker compose -f docker-compose-sdp-anchor.yml logs && docker compose -f docker-compose-sdp-anchor.yml down
+        run: docker compose -f docker-compose-sdp.yml logs && docker compose -f docker-compose-sdp.yml down

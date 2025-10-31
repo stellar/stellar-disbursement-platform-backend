@@ -1,4 +1,4 @@
-package anchorplatform
+package sepauth
 
 import (
 	"testing"

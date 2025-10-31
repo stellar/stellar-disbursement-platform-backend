@@ -122,12 +122,10 @@ kubectl apply -f <your-ingress-file>.yaml
 6. Update your `/etc/hosts` file by adding:
 
 ```bash
-# SDP + Anchor Platform:
 127.0.0.1 sdp.localhost.com
-127.0.0.1 ap.localhost.com
 ```
 
-🎉 Now, you should be able to access your services at `https://sdp.localhost.com` and `https://ap.localhost.com`. Keep in mind that browsers will display a security warning when accessing your site due to the use of a self-signed certificate. You can add an exception for your local domains to trust the self-signed certificate.
+🎉 Now, you should be able to access your services at `https://sdp.localhost.com`. Keep in mind that browsers will display a security warning when accessing your site due to the use of a self-signed certificate. You can add an exception for your local domains to trust the self-signed certificate.
 
 ### Creating local secrets for the deployments
 

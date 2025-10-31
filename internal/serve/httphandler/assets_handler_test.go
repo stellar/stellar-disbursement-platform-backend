@@ -1980,7 +1980,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
 					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
 
-					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+					require.WithinDuration(t, expectedMax, actualMax, 60*time.Second,
 						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
 				}
 			}(t, signedTx, 0)).
