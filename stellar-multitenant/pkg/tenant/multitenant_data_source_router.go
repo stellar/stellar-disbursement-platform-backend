@@ -19,6 +19,7 @@ type MultiTenantDataSourceRouter struct {
 	tenantManager  ManagerInterface
 	mu             sync.Mutex
 	monitorService monitor.MonitorServiceInterface
+	poolConfig     db.DBPoolConfig
 }
 
 func NewMultiTenantDataSourceRouter(tenantManager ManagerInterface) *MultiTenantDataSourceRouter {
@@ -29,6 +30,12 @@ func NewMultiTenantDataSourceRouter(tenantManager ManagerInterface) *MultiTenant
 
 func (m *MultiTenantDataSourceRouter) WithMonitoring(monitorService monitor.MonitorServiceInterface) *MultiTenantDataSourceRouter {
 	m.monitorService = monitorService
+	return m
+}
+
+// WithPoolConfig sets the DB pool configuration used for tenant pools.
+func (m *MultiTenantDataSourceRouter) WithPoolConfig(cfg db.DBPoolConfig) *MultiTenantDataSourceRouter {
+	m.poolConfig = cfg
 	return m
 }
 
@@ -75,18 +82,24 @@ func (m *MultiTenantDataSourceRouter) getOrCreateDataSourceForTenantWithLock(
 	}
 
 	var dbcp db.DBConnectionPool
-	if m.monitorService == nil {
+
+	hasMonitoring := m.monitorService != nil
+	hasPoolConfig := m.poolConfig != db.DBPoolConfig{}
+
+	switch {
+	case !hasMonitoring && !hasPoolConfig:
 		dbcp, err = db.OpenDBConnectionPool(u)
-		if err != nil {
-			return nil, fmt.Errorf("opening database connection pool for tenant %s: %w", currentTenant.ID, err)
-		}
-	} else {
+	case !hasMonitoring && hasPoolConfig:
+		dbcp, err = db.OpenDBConnectionPoolWithConfig(u, m.poolConfig)
+	case hasMonitoring && !hasPoolConfig:
 		dbcp, err = db.OpenDBConnectionPoolWithMetrics(ctx, u, m.monitorService)
-		if err != nil {
-			return nil, fmt.Errorf("opening database connection pool with metrics for tenant %s: %w", currentTenant.ID, err)
-		}
+	case hasMonitoring && hasPoolConfig:
+		dbcp, err = db.OpenDBConnectionPoolWithMetricsAndConfig(ctx, u, m.monitorService, m.poolConfig)
 	}
 
+	if err != nil {
+		return nil, fmt.Errorf("opening database connection pool for tenant %s: %w", currentTenant.ID, err)
+	}
 	// Store the new connection pool in the map.
 	m.dataSources.Store(currentTenant.ID, dbcp)
 

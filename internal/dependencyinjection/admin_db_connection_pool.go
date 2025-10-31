@@ -30,7 +30,7 @@ func NewAdminDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions)
 		return nil, fmt.Errorf("getting Admin database DSN: %w", err)
 	}
 
-	dbConnectionPool, err := openDBConnectionPool(ctx, adminDSN, opts.MonitorService)
+	dbConnectionPool, err := openDBConnectionPool(ctx, adminDSN, opts)
 	if err != nil {
 		return nil, fmt.Errorf("opening Admin DB connection pool: %w", err)
 	}

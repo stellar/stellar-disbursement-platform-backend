@@ -316,6 +316,23 @@ The following environment variables can be used to configure the intervals of th
 >Prior to version 3.7.0, background jobs were configured using ENABLE_SCHEDULER=true and EVENT_BROKER_TYPE=NONE.
 >This configuration has been deprecated in favor of using EVENT_BROKER_TYPE=SCHEDULER.
 
+### Database connection pool
+
+Tune the per-tenant PostgreSQL connection pool with env vars (defaults shown):
+
+```sh
+# Maximum open connections per pool (default: 10)
+DB_MAX_OPEN_CONNS=10
+# Maximum idle connections retained (default: 0)
+DB_MAX_IDLE_CONNS=0
+# Close idle connections after N seconds (default: 2)
+DB_CONN_MAX_IDLE_TIME_SECONDS=2
+# Recycle connections after N seconds (default: 300 = 5 minutes)
+DB_CONN_MAX_LIFETIME_SECONDS=300
+```
+
+These settings help prevent idle connection buildup across multi-tenant scheduler cycles, especially on constrained databases.
+
 ## Wallets
 
 Please check the [Making Your Wallet SDP-Ready](https://docs.stellar.org/stellar-disbursement-platform/making-your-wallet-sdp-ready) section of the Stellar Docs for more information on how to integrate your wallet with the SDP.
