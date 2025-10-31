@@ -221,8 +221,8 @@ func ValidateURLScheme(link string, scheme ...string) error {
 	return nil
 }
 
-// ValidateNoHTML returns an error if the input contains any of the following HTML-related characters: [<, >, &, ', "],
-// either in encoded or decoded form.
+// ValidateNoHTML returns an error if the input contains HTML tags, JavaScript schemes, or CSS expressions,
+// as detected by regular expressions, either in encoded or decoded form.
 func ValidateNoHTML(s string) error {
 	if s == "" {
 		return nil
