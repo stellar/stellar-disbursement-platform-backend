@@ -116,7 +116,8 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 	if err == nil {
 		return ErrCredentialIDAlreadyExists
 	}
-
+	// TODO(philip): Replace this with a scheduled job that picks up pending wallet creations
+	// and creates a TSS transaction for processing.
 	return db.RunInTransaction(ctx, e.tssModel.DBConnectionPool, nil, func(tssTx db.DBTransaction) error {
 		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, e.sdpModels.DBConnectionPool, token)
 		if err != nil {
@@ -217,9 +218,16 @@ func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account,
 			},
 		}
 
-		_, err = e.tssModel.BulkInsert(ctx, sdpTx, []store.Transaction{*tssTransaction})
-		if err != nil {
-			return "", fmt.Errorf("creating TSS transaction for processing: %w", err)
+		// TODO(philip): Replace this with a scheduled job that picks up pending sponsored transactions
+		// and creates a TSS transaction for processing.
+		if err := db.RunInTransaction(ctx, e.tssModel.DBConnectionPool, nil, func(tssTx db.DBTransaction) error {
+			_, bulkErr := e.tssModel.BulkInsert(ctx, tssTx, []store.Transaction{*tssTransaction})
+			if bulkErr != nil {
+				return fmt.Errorf("creating TSS transaction for processing: %w", bulkErr)
+			}
+			return nil
+		}); err != nil {
+			return "", err
 		}
 
 		return sponsoredTx.ID, nil

@@ -31,9 +31,9 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		rr := httptest.NewRecorder()
 		ctx := context.Background()
 
-		validOperationXDR := "AAAAAAAAABgAAAAAAAAAAQECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAAAACHRyYW5zZmVyAAAAAwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAAEgAAAAAAAAAAF86FwjfRjFGWkbfT4T7U0u/BtWDhZ0dYhuaV6RufuUsAAAAKAAAAAAAAAAAAAAAAAA9CQAAAAAA="
+		const validInvokeHostFunctionOpXDR = "AAAAAAAAAAEBAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAAAAAAAAXzoXCN9GMUZaRt9PhPtTS78G1YOFnR1iG5pXpG5+5SwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAACgAAAAAAAAAAAAAAAAAPQkAAAAAA"
 		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
-			OperationXDR: validOperationXDR,
+			OperationXDR: validInvokeHostFunctionOpXDR,
 		})
 		require.NoError(t, err)
 
@@ -232,5 +232,13 @@ func Test_CreateSponsoredTransactionRequest_Validate(t *testing.T) {
 		}
 		err := req.Validate()
 		assert.NotNil(t, err)
+	})
+
+	t.Run("returns nil when operation_xdr is a valid invoke host function op", func(t *testing.T) {
+		req := CreateSponsoredTransactionRequest{
+			OperationXDR: "AAAAAAAAAAEBAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAAAAAAAAXzoXCN9GMUZaRt9PhPtTS78G1YOFnR1iG5pXpG5+5SwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAACgAAAAAAAAAAAAAAAAAPQkAAAAAA",
+		}
+		err := req.Validate()
+		assert.Nil(t, err)
 	})
 }
