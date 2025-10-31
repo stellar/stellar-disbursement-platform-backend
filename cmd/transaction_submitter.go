@@ -123,6 +123,12 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
 	)
 
+	// DB pool tuning options (tss)
+	configOpts = append(
+		configOpts,
+		cmdUtils.DBPoolConfigOptions(&globalOptions.DBPool)...,
+	)
+
 	cmd := &cobra.Command{
 		Use:   "tss",
 		Short: "Run the Transaction Submission Service",
@@ -153,7 +159,14 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			tssOpts.MonitorService = tssMonitorSvc
 
 			// Initializing the TSSDBConnectionPool
-			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: &tssMonitorSvc}
+			dbcpOptions := di.DBConnectionPoolOptions{
+				DatabaseURL:            globalOptions.DatabaseURL,
+				MonitorService:         &tssMonitorSvc,
+				MaxOpenConns:           globalOptions.DBPool.DBMaxOpenConns,
+				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
+				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
+				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+			}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
