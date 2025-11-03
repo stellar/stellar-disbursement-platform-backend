@@ -220,6 +220,20 @@ func WithStellarPaymentToSubmitterJobOption(options jobs.StellarPaymentToSubmitt
 	}
 }
 
+func WithWalletCreationToSubmitterJobOption(options jobs.WalletCreationToSubmitterJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewWalletCreationToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
+func WithSponsoredTransactionsToSubmitterJobOption(options jobs.SponsoredTransactionsToSubmitterJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSponsoredTransactionsToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
 func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewCircleReconciliationJob(options)

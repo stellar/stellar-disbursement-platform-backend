@@ -375,3 +375,36 @@ func Test_SponsoredTransactionModel_Update(t *testing.T) {
 		assert.NotNil(t, updated.UpdatedAt)
 	})
 }
+
+func Test_SponsoredTransactionModel_GetPendingForSubmission(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	defer DeleteAllSponsoredTransactionsFixtures(t, ctx, dbConnectionPool)
+
+	pending1 := CreateSponsoredTransactionFixture(t, ctx, dbConnectionPool, "", "")
+	pending2 := CreateSponsoredTransactionFixture(t, ctx, dbConnectionPool, "", "")
+	successTx := CreateSponsoredTransactionFixture(t, ctx, dbConnectionPool, "", "")
+	_, err = dbConnectionPool.ExecContext(ctx, "UPDATE sponsored_transactions SET status = $1 WHERE id = $2", SuccessSponsoredTransactionStatus, successTx.ID)
+	require.NoError(t, err)
+
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer dbTx.Rollback()
+
+	transactions, err := models.SponsoredTransactions.GetPendingForSubmission(ctx, dbTx, 5)
+	require.NoError(t, err)
+	require.Len(t, transactions, 2)
+
+	ids := []string{transactions[0].ID, transactions[1].ID}
+	assert.Contains(t, ids, pending1.ID)
+	assert.Contains(t, ids, pending2.ID)
+}

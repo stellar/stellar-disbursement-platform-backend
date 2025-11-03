@@ -208,3 +208,25 @@ func (m *SponsoredTransactionModel) Update(ctx context.Context, sqlExec db.SQLEx
 
 	return nil
 }
+
+func (m *SponsoredTransactionModel) GetPendingForSubmission(ctx context.Context, sqlExec db.SQLExecuter, batchSize int) ([]*SponsoredTransaction, error) {
+	if batchSize <= 0 {
+		return nil, fmt.Errorf("batch size must be greater than 0")
+	}
+
+	query := fmt.Sprintf(`
+        SELECT %s
+        FROM sponsored_transactions st
+        WHERE st.status = $1
+        ORDER BY st.updated_at ASC
+        LIMIT $2
+        FOR UPDATE SKIP LOCKED
+    `, SponsoredTransactionColumnNames("st", ""))
+
+	transactions := make([]*SponsoredTransaction, 0)
+	if err := sqlExec.SelectContext(ctx, &transactions, query, PendingSponsoredTransactionStatus, batchSize); err != nil {
+		return nil, fmt.Errorf("getting pending sponsored transactions for submission: %w", err)
+	}
+
+	return transactions, nil
+}

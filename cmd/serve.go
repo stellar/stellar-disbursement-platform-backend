@@ -130,6 +130,18 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	// Add embedded wallet sync jobs only if enabled
 	if serveOpts.EnableEmbeddedWallets {
 		sj = append(sj,
+			scheduler.WithWalletCreationToSubmitterJobOption(jobs.WalletCreationToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				TSSDBConnectionPool: tssDBConnectionPool,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			}),
+			scheduler.WithSponsoredTransactionsToSubmitterJobOption(jobs.SponsoredTransactionsToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				TSSDBConnectionPool: tssDBConnectionPool,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			}),
 			scheduler.WithWalletCreationFromSubmitterJobOption(
 				schedulerOptions.PaymentJobIntervalSeconds,
 				models,
@@ -669,7 +681,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			if serveOpts.EnableEmbeddedWallets {
 				serveOpts.EmbeddedWalletService, err = di.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
 					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
-					TSSDBConnectionPool: serveOpts.TSSDBConnectionPool,
 					WasmHash:            serveOpts.EmbeddedWalletsWasmHash,
 				})
 				log.Info("Embedded wallet features enabled")
