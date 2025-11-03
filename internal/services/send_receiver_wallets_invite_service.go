@@ -22,8 +22,7 @@ import (
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
-	
-  (ctx context.Context) error
+	SendInvite(ctx context.Context) error
 }
 
 type SendReceiverWalletInviteService struct {
@@ -322,12 +321,7 @@ func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context
 }
 
 // shouldSendInvitation returns true if we should send the invitation to the receiver. It will be used to either
-// send the invitation for the first time, or to resend it 
-
-
-
-
-matically according to the organization's Resend
+// send the invitation for the first time, or to resend it automatically according to the organization's Resend
 // Interval and the maximum number of resend attempts.
 func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
 	receiver := rwa.ReceiverWallet.Receiver
