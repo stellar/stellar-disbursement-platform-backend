@@ -63,7 +63,7 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("getting receiver wallets with receiver IDs: %w", innerErr)
 		}
 
-		receiverVerifications, innerErr := rh.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiver.ID)
+		receiverVerifications, innerErr := rh.Models.ReceiverVerification.GetAllByReceiverID(ctx, dbTx, receiver.ID)
 		if innerErr != nil {
 			return nil, fmt.Errorf("getting receiver verifications for receiver ID: %w", innerErr)
 		}
@@ -138,7 +138,7 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, httpResponse, httpjson.JSON)
 }
 
-// GetReceiverVerification returns a list of verification types
+// GetReceiverVerificationTypes returns a list of verification types.
 func (rh ReceiverHandler) GetReceiverVerificationTypes(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, data.GetAllVerificationTypes(), httpjson.JSON)
 }
@@ -168,7 +168,7 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 		receiverInsert := data.ReceiverInsert{
 			Email:       &req.Email,
 			PhoneNumber: &req.PhoneNumber,
-			ExternalId:  &req.ExternalID,
+			ExternalID:  &req.ExternalID,
 		}
 
 		if req.Email == "" {
@@ -223,7 +223,7 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 				}
 
 				var receiverWalletID string
-				if receiverWalletID, txErr = rh.Models.ReceiverWallet.Insert(ctx, dbTx, walletInsert); txErr != nil {
+				if receiverWalletID, txErr = rh.Models.ReceiverWallet.GetOrInsertReceiverWallet(ctx, dbTx, walletInsert); txErr != nil {
 					return nil, fmt.Errorf("creating receiver wallet: %w", txErr)
 				}
 
@@ -258,7 +258,7 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 
 		// Step 5: Retrieve verification records for response
 		var receiverVerifications []data.ReceiverVerification
-		if receiverVerifications, txErr = rh.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiver.ID); txErr != nil {
+		if receiverVerifications, txErr = rh.Models.ReceiverVerification.GetAllByReceiverID(ctx, dbTx, receiver.ID); txErr != nil {
 			return nil, fmt.Errorf("getting receiver verifications: %w", txErr)
 		}
 

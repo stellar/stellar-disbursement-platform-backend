@@ -458,7 +458,7 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 				ID:                "123456789",
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
-				ExternalPaymentId: "",
+				ExternalPaymentID: "",
 			},
 		},
 		{
@@ -468,14 +468,14 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 				ID:                "  123456789  ",
 				Amount:            "  100.5  ",
 				VerificationValue: "  1990-01-01  ",
-				ExternalPaymentId: "  123456789  ",
+				ExternalPaymentID: "  123456789  ",
 			},
 			expectedInstruction: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
-				ExternalPaymentId: "123456789",
+				ExternalPaymentID: "123456789",
 			},
 		},
 		{

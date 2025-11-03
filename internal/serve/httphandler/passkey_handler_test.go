@@ -94,9 +94,10 @@ func Test_PasskeyHandler_StartPasskeyRegistration(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(StartPasskeyRegistrationRequest{
+	requestBody, err := json.Marshal(StartPasskeyRegistrationRequest{
 		Token: "valid-token",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	expectedCreation := &protocol.CredentialCreation{
@@ -110,13 +111,14 @@ func Test_PasskeyHandler_StartPasskeyRegistration(t *testing.T) {
 		Return(expectedCreation, nil).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/start", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/start", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	http.HandlerFunc(handler.StartPasskeyRegistration).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 
 	var respBody protocol.CredentialCreation
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, expectedCreation.Response.Challenge, respBody.Response.Challenge)
 }
@@ -157,7 +159,8 @@ func Test_PasskeyHandler_StartPasskeyRegistration_ValidationErrors(t *testing.T)
 
 			rr := httptest.NewRecorder()
 
-			req, _ := http.NewRequest(http.MethodPost, "/embedded-wallets/passkey/registration/start", strings.NewReader(tc.requestBody))
+			req, err := http.NewRequest(http.MethodPost, "/embedded-wallets/passkey/registration/start", strings.NewReader(tc.requestBody))
+			require.NoError(t, err)
 			http.HandlerFunc(handler.StartPasskeyRegistration).ServeHTTP(rr, req)
 
 			assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -204,9 +207,10 @@ func Test_PasskeyHandler_StartPasskeyRegistration_ServiceErrors(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			requestBody, _ := json.Marshal(StartPasskeyRegistrationRequest{
+			requestBody, err := json.Marshal(StartPasskeyRegistrationRequest{
 				Token: "test-token",
 			})
+			require.NoError(t, err)
 			ctx := context.Background()
 
 			mockWebAuthnService.
@@ -214,7 +218,8 @@ func Test_PasskeyHandler_StartPasskeyRegistration_ServiceErrors(t *testing.T) {
 				Return(nil, tc.serviceError).
 				Once()
 
-			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/start", strings.NewReader(string(requestBody)))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/start", strings.NewReader(string(requestBody)))
+			require.NoError(t, err)
 			http.HandlerFunc(handler.StartPasskeyRegistration).ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Result().StatusCode)
@@ -251,13 +256,14 @@ func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 		Return("jwt-token", nil).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/finish?token=valid-token", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/finish?token=valid-token", nil)
+	require.NoError(t, err)
 	http.HandlerFunc(handler.FinishPasskeyRegistration).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusCreated, rr.Result().StatusCode)
 
 	var respBody PasskeyRegistrationResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, "jwt-token", respBody.Token)
 	assert.NotEmpty(t, respBody.CredentialID)
@@ -278,7 +284,8 @@ func Test_PasskeyHandler_FinishPasskeyRegistration_MissingTokenQueryParam(t *tes
 	rr := httptest.NewRecorder()
 	ctx := context.Background()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/finish", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/finish", nil)
+	require.NoError(t, err)
 	http.HandlerFunc(handler.FinishPasskeyRegistration).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -346,7 +353,8 @@ func Test_PasskeyHandler_FinishPasskeyRegistration_ServiceErrors(t *testing.T) {
 				Return(nil, tc.serviceError).
 				Once()
 
-			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/finish?token=test-token", nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/registration/finish?token=test-token", nil)
+			require.NoError(t, err)
 			http.HandlerFunc(handler.FinishPasskeyRegistration).ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Result().StatusCode)
@@ -378,13 +386,14 @@ func Test_PasskeyHandler_StartPasskeyAuthentication(t *testing.T) {
 		Return(expectedAssertion, nil).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/start", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/start", nil)
+	require.NoError(t, err)
 	http.HandlerFunc(handler.StartPasskeyAuthentication).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 
 	var respBody protocol.CredentialAssertion
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, expectedAssertion.Response.Challenge, respBody.Response.Challenge)
 }
@@ -407,7 +416,8 @@ func Test_PasskeyHandler_StartPasskeyAuthentication_InternalError(t *testing.T) 
 		Return(nil, errors.New("database error")).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/start", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/start", nil)
+	require.NoError(t, err)
 	http.HandlerFunc(handler.StartPasskeyAuthentication).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
@@ -443,13 +453,14 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication(t *testing.T) {
 		Return("jwt-token", nil).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+	require.NoError(t, err)
 	http.HandlerFunc(handler.FinishPasskeyAuthentication).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 
 	var respBody PasskeyAuthenticationResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, "jwt-token", respBody.Token)
 	assert.Equal(t, mockEmbeddedWallet.CredentialID, respBody.CredentialID)
@@ -513,7 +524,8 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_ServiceErrors(t *testing.T)
 				Return(nil, tc.serviceError).
 				Once()
 
-			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+			require.NoError(t, err)
 			http.HandlerFunc(handler.FinishPasskeyAuthentication).ServeHTTP(rr, req)
 
 			assert.Equal(t, tc.expectedStatusCode, rr.Result().StatusCode)
@@ -551,7 +563,8 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_JWTGenerationError(t *testi
 		Return("", errors.New("JWT signing error")).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+	require.NoError(t, err)
 	http.HandlerFunc(handler.FinishPasskeyAuthentication).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
@@ -591,7 +604,8 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_TokenExpiration(t *testing.
 		Return("jwt-token", nil).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
+	require.NoError(t, err)
 	http.HandlerFunc(handler.FinishPasskeyAuthentication).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
@@ -652,9 +666,10 @@ func Test_PasskeyHandler_RefreshToken(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(RefreshTokenRequest{
+	requestBody, err := json.Marshal(RefreshTokenRequest{
 		Token: "valid-token",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
@@ -674,14 +689,15 @@ func Test_PasskeyHandler_RefreshToken(t *testing.T) {
 		Return("refreshed-token", nil).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 
 	var respBody RefreshTokenResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, "refreshed-token", respBody.Token)
 
@@ -702,7 +718,8 @@ func Test_PasskeyHandler_RefreshToken_InvalidRequestBody(t *testing.T) {
 	rr := httptest.NewRecorder()
 	ctx := context.Background()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader("invalid-json"))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader("invalid-json"))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
 
@@ -720,12 +737,14 @@ func Test_PasskeyHandler_RefreshToken_ValidationError(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(RefreshTokenRequest{
+	requestBody, err := json.Marshal(RefreshTokenRequest{
 		Token: "",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
 
@@ -772,9 +791,10 @@ func Test_PasskeyHandler_RefreshToken_ValidateTokenErrors(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			requestBody, _ := json.Marshal(RefreshTokenRequest{
+			requestBody, err := json.Marshal(RefreshTokenRequest{
 				Token: "test-token",
 			})
+			require.NoError(t, err)
 			ctx := context.Background()
 
 			mockJWTManager.
@@ -782,7 +802,8 @@ func Test_PasskeyHandler_RefreshToken_ValidateTokenErrors(t *testing.T) {
 				Return("", "", tc.validationError).
 				Once()
 
-			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 			http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
 
@@ -816,9 +837,10 @@ func Test_PasskeyHandler_RefreshToken_GenerateTokenErrors(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			requestBody, _ := json.Marshal(RefreshTokenRequest{
+			requestBody, err := json.Marshal(RefreshTokenRequest{
 				Token: "test-token",
 			})
+			require.NoError(t, err)
 			ctx := context.Background()
 
 			contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
@@ -834,7 +856,8 @@ func Test_PasskeyHandler_RefreshToken_GenerateTokenErrors(t *testing.T) {
 				Return("", tc.generateError).
 				Once()
 
-			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 			http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
 
@@ -854,9 +877,10 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	requestBody, _ := json.Marshal(RefreshTokenRequest{
+	requestBody, err := json.Marshal(RefreshTokenRequest{
 		Token: "valid-token",
 	})
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	credentialID := "test-credential-id"
@@ -881,14 +905,15 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 		Return("refreshed-token-with-address", nil).
 		Once()
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 
 	var respBody RefreshTokenResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, "refreshed-token-with-address", respBody.Token)
 }
@@ -923,9 +948,10 @@ func Test_PasskeyHandler_RefreshToken_WalletLookupError(t *testing.T) {
 			}
 
 			rr := httptest.NewRecorder()
-			requestBody, _ := json.Marshal(RefreshTokenRequest{
+			requestBody, err := json.Marshal(RefreshTokenRequest{
 				Token: "valid-token",
 			})
+			require.NoError(t, err)
 			ctx := context.Background()
 
 			credentialID := "test-credential-id"
@@ -940,7 +966,8 @@ func Test_PasskeyHandler_RefreshToken_WalletLookupError(t *testing.T) {
 				Return((*data.EmbeddedWallet)(nil), tc.lookupError).
 				Once()
 
-			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 			http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
 

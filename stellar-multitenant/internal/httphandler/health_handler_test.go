@@ -21,10 +21,10 @@ func Test_HealthHandler(t *testing.T) {
 
 	// assert response
 	assert.Equal(t, http.StatusOK, rr.Code)
-	wantJson := `{
+	wantJSON := `{
 			"status": "pass",
 			"version": "x.y.z",
 			"release_id": "1234567890abcdef"
 		}`
-	assert.JSONEq(t, wantJson, rr.Body.String())
+	assert.JSONEq(t, wantJSON, rr.Body.String())
 }

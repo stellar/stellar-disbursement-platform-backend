@@ -57,9 +57,6 @@ services:
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
-      # Kafka Configuration - possible values: KAFKA; SCHEDULER
-      EVENT_BROKER_TYPE: "SCHEDULER"
-
       # SEP-45 configuration
       ENABLE_SEP45: ${ENABLE_SEP45:-false}
       SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID:-}

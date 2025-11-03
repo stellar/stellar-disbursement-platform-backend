@@ -31,12 +31,14 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		rr := httptest.NewRecorder()
 		ctx := context.Background()
 
-		validOperationXDR := "AAAAAAAAABgAAAAAAAAAAQECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAAAACHRyYW5zZmVyAAAAAwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAAEgAAAAAAAAAAF86FwjfRjFGWkbfT4T7U0u/BtWDhZ0dYhuaV6RufuUsAAAAKAAAAAAAAAAAAAAAAAA9CQAAAAAA="
-		requestBody, _ := json.Marshal(CreateSponsoredTransactionRequest{
-			OperationXDR: validOperationXDR,
+		const validInvokeHostFunctionOpXDR = "AAAAAAAAAAEBAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAAAAAAAAXzoXCN9GMUZaRt9PhPtTS78G1YOFnR1iG5pXpG5+5SwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAACgAAAAAAAAAAAAAAAAAPQkAAAAAA"
+		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
+			OperationXDR: validInvokeHostFunctionOpXDR,
 		})
+		require.NoError(t, err)
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
@@ -48,7 +50,8 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		ctx := context.Background()
 		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader("invalid-json"))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader("invalid-json"))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -56,13 +59,15 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 
 	t.Run("returns bad request when operation_xdr is empty", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		requestBody, _ := json.Marshal(CreateSponsoredTransactionRequest{
+		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
 			OperationXDR: "",
 		})
+		require.NoError(t, err)
 		ctx := context.Background()
 		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -70,13 +75,15 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 
 	t.Run("returns bad request when operation_xdr is invalid base64", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		requestBody, _ := json.Marshal(CreateSponsoredTransactionRequest{
+		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
 			OperationXDR: "invalid-base64-!!!",
 		})
+		require.NoError(t, err)
 		ctx := context.Background()
 		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -88,7 +95,8 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		ctx := context.Background()
 		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(requestBody))
+		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
@@ -106,7 +114,8 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 		rr := httptest.NewRecorder()
 		ctx := context.Background()
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallets/sponsored-transactions/", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallets/sponsored-transactions/", nil)
+		require.NoError(t, err)
 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", "")
@@ -124,7 +133,8 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 
 		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(nil, data.ErrRecordNotFound).Once()
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+		require.NoError(t, err)
 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", transactionID)
@@ -142,7 +152,8 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 
 		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(nil, errors.New("service error")).Once()
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+		require.NoError(t, err)
 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", transactionID)
@@ -171,7 +182,8 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 
 		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(mockTransaction, nil).Once()
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+		require.NoError(t, err)
 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", transactionID)
@@ -181,7 +193,7 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
 		var respBody GetSponsoredTransactionResponse
-		err := json.Unmarshal(rr.Body.Bytes(), &respBody)
+		err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 		require.NoError(t, err)
 
 		assert.Equal(t, string(data.SuccessSponsoredTransactionStatus), respBody.Status)
@@ -220,5 +232,13 @@ func Test_CreateSponsoredTransactionRequest_Validate(t *testing.T) {
 		}
 		err := req.Validate()
 		assert.NotNil(t, err)
+	})
+
+	t.Run("returns nil when operation_xdr is a valid invoke host function op", func(t *testing.T) {
+		req := CreateSponsoredTransactionRequest{
+			OperationXDR: "AAAAAAAAAAEBAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAAAAAAAAXzoXCN9GMUZaRt9PhPtTS78G1YOFnR1iG5pXpG5+5SwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAACgAAAAAAAAAAAAAAAAAPQkAAAAAA",
+		}
+		err := req.Validate()
+		assert.Nil(t, err)
 	})
 }

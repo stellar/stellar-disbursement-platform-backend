@@ -317,10 +317,10 @@ func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, r *ReceiverInsert) *Receiver {
 	t.Helper()
 
-	if r.ExternalId == nil {
+	if r.ExternalID == nil {
 		randString, err := utils.RandomString(56)
 		require.NoError(t, err)
-		r.ExternalId = &randString
+		r.ExternalID = &randString
 	}
 
 	query := `
@@ -332,7 +332,7 @@ func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
-	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalId)
+	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalID)
 	require.NoError(t, err)
 
 	return &receiver
@@ -534,8 +534,8 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		RETURNING
 			id
 	`
-	var newId string
-	err := sqlExec.GetContext(ctx, &newId, query,
+	var newID string
+	err := sqlExec.GetContext(ctx, &newID, query,
 		p.ReceiverWallet.Receiver.ID,
 		disbursementID,
 		p.ReceiverWallet.ID,
@@ -553,7 +553,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 	require.NoError(t, err)
 
 	// get payment
-	payment, err := model.Get(ctx, newId, sqlExec)
+	payment, err := model.Get(ctx, newID, sqlExec)
 	require.NoError(t, err)
 	return payment
 }

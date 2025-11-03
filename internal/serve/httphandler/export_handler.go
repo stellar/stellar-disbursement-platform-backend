@@ -55,6 +55,7 @@ type PaymentCSV struct {
 	Amount                  string
 	StellarTransactionID    string
 	Status                  data.PaymentStatus
+	Type                    data.PaymentType
 	DisbursementID          string `csv:"Disbursement.ID"`
 	Asset                   data.Asset
 	Wallet                  data.Wallet
@@ -156,19 +157,24 @@ func (e ExportHandler) convertPaymentsToCSV(payments []data.Payment, receiversMa
 			Amount:                  payment.Amount,
 			StellarTransactionID:    payment.StellarTransactionID,
 			Status:                  payment.Status,
-			DisbursementID:          payment.Disbursement.ID,
+			Type:                    payment.Type,
 			Asset:                   payment.Asset,
-			Wallet:                  payment.ReceiverWallet.Wallet,
-			ReceiverID:              payment.ReceiverWallet.Receiver.ID,
 			ReceiverPhoneNumber:     receiver.PhoneNumber,
 			ReceiverEmail:           receiver.Email,
 			ReceiverExternalID:      receiver.ExternalID,
-			ReceiverWalletAddress:   payment.ReceiverWallet.StellarAddress,
-			ReceiverWalletStatus:    payment.ReceiverWallet.Status,
 			CreatedAt:               payment.CreatedAt,
 			UpdatedAt:               payment.UpdatedAt,
 			ExternalPaymentID:       payment.ExternalPaymentID,
 			CircleTransferRequestID: payment.CircleTransferRequestID,
+		}
+		if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil {
+			paymentCSV.DisbursementID = payment.Disbursement.ID
+		}
+		if payment.ReceiverWallet != nil {
+			paymentCSV.Wallet = payment.ReceiverWallet.Wallet
+			paymentCSV.ReceiverID = payment.ReceiverWallet.Receiver.ID
+			paymentCSV.ReceiverWalletAddress = payment.ReceiverWallet.StellarAddress
+			paymentCSV.ReceiverWalletStatus = payment.ReceiverWallet.Status
 		}
 		paymentCSVs = append(paymentCSVs, paymentCSV)
 	}

@@ -16,14 +16,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
-	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletInvitationData) error
+	
+  (ctx context.Context) error
 }
 
 type SendReceiverWalletInviteService struct {
@@ -50,7 +50,7 @@ func (s SendReceiverWalletInviteService) validate() error {
 // For instance, the Wallet Foo is in two Ready Payments, one with USDC and the other with EUROC.
 // So the receiver who has a Stellar Address pending registration (status:READY) in this wallet will receive both invites for USDC and EUROC.
 // This would not impact the user receiving both token amounts. It's only for the registration process.
-func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletInvitationData) error {
+func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 	if s.Models == nil {
 		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
 	}
@@ -95,9 +95,9 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		walletsMap[wallet.ID] = wallet
 	}
 
-	receiverWallets, err := s.resolveReceiverWalletsPendingRegistration(ctx, receiverWalletInvitationData)
+	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrations(ctx, s.Models.DBConnectionPool)
 	if err != nil {
-		return fmt.Errorf("resolving receiver wallets pending registration: %w", err)
+		return fmt.Errorf("getting all receiver wallets pending registration: %w", err)
 	}
 
 	receiverWalletsAsset, err := s.Models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
@@ -143,73 +143,16 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			}
 		}
 
-		registrationLink, err := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
-		if err != nil {
-			log.Ctx(ctx).Errorf("getting registration link for receiver wallet ID %s: %v", rwa.ReceiverWallet.ID, err)
+		registrationLink, errLink := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
+		if errLink != nil {
+			log.Ctx(ctx).Errorf("getting registration link for receiver wallet ID %s: %v", rwa.ReceiverWallet.ID, errLink)
 			continue
 		}
 
-		disbursementReceiverRegistrationMessageTemplate := rwa.DisbursementReceiverRegistrationMsgTemplate
-		if disbursementReceiverRegistrationMessageTemplate != nil && *disbursementReceiverRegistrationMessageTemplate != "" {
-			if !strings.Contains(*disbursementReceiverRegistrationMessageTemplate, "{{.RegistrationLink}}") {
-				*disbursementReceiverRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(*disbursementReceiverRegistrationMessageTemplate))
-			}
-
-			msgTemplate, err = template.New("").Parse(*disbursementReceiverRegistrationMessageTemplate)
-			if err != nil {
-				return fmt.Errorf("parsing disbursement receiver registration message template: %w", err)
-			}
-		}
-
-		content := new(strings.Builder)
-		err = msgTemplate.Execute(content, struct {
-			OrganizationName string
-			RegistrationLink template.HTML
-		}{
-			OrganizationName: organization.Name,
-			RegistrationLink: template.HTML(registrationLink),
-		})
-		if err != nil {
-			return fmt.Errorf("executing registration message template: %w", err)
-		}
-
-		msg := message.Message{
-			Type: message.MessageTypeReceiverInvitation,
-			Body: content.String(),
-			TemplateVariables: map[string]string{
-				"OrganizationName": organization.Name,
-				"RegistrationLink": registrationLink,
-			},
-		}
-		if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
-			msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
-		}
-		if rwa.ReceiverWallet.Receiver.Email != "" {
-			msg.ToEmail = rwa.ReceiverWallet.Receiver.Email
-			msg.Title = "You have a payment waiting for you from " + organization.Name
-		}
-
-		msgToInsert := &data.MessageInsert{
-			AssetID:          &rwa.Asset.ID,
-			ReceiverID:       rwa.ReceiverWallet.Receiver.ID,
-			WalletID:         wallet.ID,
-			ReceiverWalletID: &rwa.ReceiverWallet.ID,
-			TextEncrypted:    msg.Body,
-			TitleEncrypted:   msg.Title,
-		}
-
-		if messengerType, sendErr := s.messageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority); sendErr != nil {
-			errMsg := fmt.Sprintf(
-				"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
-				rwa.ReceiverWallet.Receiver.ID, rwa.ReceiverWallet.ID, messengerType,
-			)
-			// call crash tracker client to log and report error
-			s.crashTrackerClient.LogAndReportErrors(ctx, sendErr, errMsg)
-			msgToInsert.Status = data.FailureMessageStatus
-			msgToInsert.Type = messengerType
-		} else {
-			msgToInsert.Status = data.SuccessMessageStatus
-			msgToInsert.Type = messengerType
+		msgToInsert, errMsg := s.prepareMessage(ctx, rwa, msgTemplate, organization, registrationLink, wallet)
+		if errMsg != nil {
+			log.Ctx(ctx).Errorf("prepare message for receiver wallet ID %s: %v", rwa.ReceiverWallet.ID, errMsg)
+			continue
 		}
 
 		msgsToInsert = append(msgsToInsert, msgToInsert)
@@ -223,16 +166,82 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 	}
 
 	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if _, err := s.Models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
+		if _, err = s.Models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
 			return fmt.Errorf("updating receiver wallets' invitation sent at: %w", err)
 		}
 
-		if err := s.Models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
+		if err = s.Models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
 			return fmt.Errorf("inserting messages in the database: %w", err)
 		}
 
 		return nil
 	})
+}
+
+func (s SendReceiverWalletInviteService) prepareMessage(ctx context.Context, rwa data.ReceiverWalletAsset, msgTemplate *template.Template, organization *data.Organization, registrationLink string, wallet data.Wallet) (*data.MessageInsert, error) {
+	disbursementReceiverRegistrationMessageTemplate := rwa.DisbursementReceiverRegistrationMsgTemplate
+	if disbursementReceiverRegistrationMessageTemplate != nil && *disbursementReceiverRegistrationMessageTemplate != "" {
+		if !strings.Contains(*disbursementReceiverRegistrationMessageTemplate, "{{.RegistrationLink}}") {
+			*disbursementReceiverRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(*disbursementReceiverRegistrationMessageTemplate))
+		}
+		var err error
+		msgTemplate, err = template.New("").Parse(*disbursementReceiverRegistrationMessageTemplate)
+		if err != nil {
+			return nil, fmt.Errorf("parsing disbursement receiver registration message template: %w", err)
+		}
+	}
+
+	content := new(strings.Builder)
+	err := msgTemplate.Execute(content, struct {
+		OrganizationName string
+		RegistrationLink template.HTML
+	}{
+		OrganizationName: organization.Name,
+		RegistrationLink: template.HTML(registrationLink),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("executing registration message template: %w", err)
+	}
+
+	msg := message.Message{
+		Type: message.MessageTypeReceiverInvitation,
+		Body: content.String(),
+		TemplateVariables: map[message.TemplateVariable]string{
+			message.TemplateVarOrgName:                  organization.Name,
+			message.TemplateVarReceiverRegistrationLink: registrationLink,
+		},
+	}
+	if rwa.ReceiverWallet.Receiver.PhoneNumber != "" {
+		msg.ToPhoneNumber = rwa.ReceiverWallet.Receiver.PhoneNumber
+	}
+	if rwa.ReceiverWallet.Receiver.Email != "" {
+		msg.ToEmail = rwa.ReceiverWallet.Receiver.Email
+		msg.Title = "You have a payment waiting for you from " + organization.Name
+	}
+
+	msgToInsert := &data.MessageInsert{
+		AssetID:          &rwa.Asset.ID,
+		ReceiverID:       rwa.ReceiverWallet.Receiver.ID,
+		WalletID:         wallet.ID,
+		ReceiverWalletID: &rwa.ReceiverWallet.ID,
+		TextEncrypted:    msg.Body,
+		TitleEncrypted:   msg.Title,
+	}
+
+	if messengerType, sendErr := s.messageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority); sendErr != nil {
+		errMsg := fmt.Sprintf(
+			"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
+			rwa.ReceiverWallet.Receiver.ID, rwa.ReceiverWallet.ID, messengerType,
+		)
+		// call crash tracker client to log and report error
+		s.crashTrackerClient.LogAndReportErrors(ctx, sendErr, errMsg)
+		msgToInsert.Status = data.FailureMessageStatus
+		msgToInsert.Type = messengerType
+	} else {
+		msgToInsert.Status = data.SuccessMessageStatus
+		msgToInsert.Type = messengerType
+	}
+	return msgToInsert, nil
 }
 
 func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx context.Context, wdl *WalletDeepLink, receiverWalletID string, requiresSEP24 bool) error {
@@ -312,31 +321,13 @@ func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context
 	return shortenedRegistrationLink, nil
 }
 
-// resolveReceiverWalletsPendingRegistration returns the receiver wallets pending registration based on the receiverWalletInvitationData.
-// If the receiverWalletInvitationData is empty, it will return all receiver wallets pending registration.
-func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistration(ctx context.Context, receiverWalletInvitationData []schemas.EventReceiverWalletInvitationData) ([]*data.ReceiverWallet, error) {
-	var err error
-	var receiverWallets []*data.ReceiverWallet
-	if len(receiverWalletInvitationData) == 0 {
-		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrations(ctx, s.Models.DBConnectionPool)
-		if err != nil {
-			return nil, fmt.Errorf("getting all receiver wallets pending registration: %w", err)
-		}
-	} else {
-		receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletInvitationData))
-		for _, receiverWallet := range receiverWalletInvitationData {
-			receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
-		}
-		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, s.Models.DBConnectionPool, receiverWalletIDsPendingRegistration)
-		if err != nil {
-			return nil, fmt.Errorf("getting receiver wallets pending registration by rw ids %v: %w", receiverWalletIDsPendingRegistration, err)
-		}
-	}
-	return receiverWallets, err
-}
-
 // shouldSendInvitation returns true if we should send the invitation to the receiver. It will be used to either
-// send the invitation for the first time, or to resend it automatically according to the organization's Resend
+// send the invitation for the first time, or to resend it 
+
+
+
+
+matically according to the organization's Resend
 // Interval and the maximum number of resend attempts.
 func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
 	receiver := rwa.ReceiverWallet.Receiver

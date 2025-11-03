@@ -24,12 +24,12 @@ type awsSNSClient struct {
 	senderID   string
 }
 
-func (t *awsSNSClient) MessengerType() MessengerType {
+func (c *awsSNSClient) MessengerType() MessengerType {
 	return MessengerTypeAWSSMS
 }
 
-func (a *awsSNSClient) SendMessage(ctx context.Context, message Message) error {
-	err := message.ValidateFor(a.MessengerType())
+func (c *awsSNSClient) SendMessage(ctx context.Context, message Message) error {
+	err := message.ValidateFor(c.MessengerType())
 	if err != nil {
 		return fmt.Errorf("validating message to send an SMS through AWS: %w", err)
 	}
@@ -40,10 +40,10 @@ func (a *awsSNSClient) SendMessage(ctx context.Context, message Message) error {
 			DataType:    aws.String("String"),
 		},
 	}
-	if a.senderID != "" {
+	if c.senderID != "" {
 		// SenderID is optional per AWS docs: https://docs.aws.amazon.com/sns/latest/dg/sms_publish-to-phone.html#sms_publish_sdk
 		messageAttributes["AWS.SNS.SMS.SenderID"] = types.MessageAttributeValue{
-			StringValue: aws.String(a.senderID),
+			StringValue: aws.String(c.senderID),
 			DataType:    aws.String("String"),
 		}
 	}
@@ -54,7 +54,7 @@ func (a *awsSNSClient) SendMessage(ctx context.Context, message Message) error {
 		MessageAttributes: messageAttributes,
 	}
 
-	_, err = a.snsService.Publish(ctx, params)
+	_, err = c.snsService.Publish(ctx, params)
 	if err != nil {
 		return fmt.Errorf("sending AWS SNS SMS: %w", err)
 	}

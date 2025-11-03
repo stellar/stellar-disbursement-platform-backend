@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
@@ -185,9 +184,9 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, errors.New("unexpected error")).
@@ -198,9 +197,9 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -212,16 +211,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		)
 		mockCrashTrackerClient.On("LogAndReportErrors", ctx, mockErr, mockMsg).Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -338,9 +328,9 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				Type:          message.MessageTypeReceiverInvitation,
 				ToPhoneNumber: receiverPhoneOnly.PhoneNumber,
 				Body:          contentWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -350,24 +340,15 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail: receiverEmailOnly.Email,
 				Body:    contentWallet2,
 				Title:   titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeAWSEmail, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, wallet1.ID)
@@ -463,13 +444,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: recRW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		embeddedWalletRow, err := models.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, mockToken)
@@ -537,13 +512,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Amount:         "1",
 		})
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: recRW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		q := `SELECT COUNT(*) FROM messages WHERE receiver_id = $1 AND wallet_id = $2`
@@ -622,9 +591,9 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -635,24 +604,15 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentWallet2,
 				Title:         titleWallet2,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -737,13 +697,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendIntervalDays: new(int64)})
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -817,13 +771,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			UpdatedAt:        time.Now().AddDate(0, 0, int(smsResendInterval*3)),
 		})
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -864,13 +812,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverInvitationResendIntervalDays: &smsResendInterval})
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -930,21 +872,15 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentWallet1,
 				Title:         titleWallet1,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -1055,9 +991,9 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement3,
 				Title:         titleDisbursement3,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
@@ -1068,24 +1004,15 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver2.Email,
 				Body:          contentDisbursement4,
 				Title:         titleDisbursement4,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink2.OrganizationName,
-					"RegistrationLink": deepLink2,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink2.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink2,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-			{
-				ReceiverWalletID: rec2RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -1198,21 +1125,15 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 				ToEmail:       receiver1.Email,
 				Body:          contentDisbursement,
 				Title:         titleDisbursement,
-				TemplateVariables: map[string]string{
-					"OrganizationName": walletDeepLink1.OrganizationName,
-					"RegistrationLink": deepLink1,
+				TemplateVariables: map[message.TemplateVariable]string{
+					message.TemplateVarOrgName:                  walletDeepLink1.OrganizationName,
+					message.TemplateVarReceiverRegistrationLink: deepLink1,
 				},
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(message.MessengerTypeTwilioSMS, nil).
 			Once()
 
-		reqs := []schemas.EventReceiverWalletInvitationData{
-			{
-				ReceiverWalletID: rec1RW.ID,
-			},
-		}
-
-		err = s.SendInvite(ctx, reqs...)
+		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)

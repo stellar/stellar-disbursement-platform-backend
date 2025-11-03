@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -30,7 +31,7 @@ type AnchorPlatformIntegrationTestsInterface interface {
 }
 
 type AnchorPlatformIntegrationTests struct {
-	HttpClient                httpclient.HttpClientInterface
+	HTTPClient                httpclient.HTTPClientInterface
 	TenantName                string
 	AnchorPlatformBaseSepURL  string
 	ReceiverAccountPublicKey  string
@@ -86,7 +87,7 @@ func (ap AnchorPlatformIntegrationTests) StartChallengeTransaction() (*Challenge
 	q.Add("home_domain", mtnHomeDomain)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := ap.HttpClient.Do(req)
+	resp, err := ap.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request to anchor platform get AUTH: %w", err)
 	}
@@ -164,7 +165,7 @@ func (ap AnchorPlatformIntegrationTests) SendSignedChallengeTransaction(signedCh
 	// POST auth endpoint on anchor platform expects the content-type to be x-www-form-urlencoded
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := ap.HttpClient.Do(req)
+	resp, err := ap.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request to anchor platform post AUTH: %w", err)
 	}
@@ -186,7 +187,7 @@ func (ap AnchorPlatformIntegrationTests) SendSignedChallengeTransaction(signedCh
 // CreateSep24DepositTransaction creates a new sep24 deposit transaction on the anchor platform.
 // To make this request, an auth token is required and it needs to be obtained through SEP-10.
 func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken *AnchorPlatformAuthToken) (*AnchorPlatformAuthSEP24Token, *AnchorPlatformDepositResponse, error) {
-	depositUrl, err := url.JoinPath(ap.AnchorPlatformBaseSepURL, sep24DepositURL)
+	depositURL, err := url.JoinPath(ap.AnchorPlatformBaseSepURL, sep24DepositURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating url: %w", err)
 	}
@@ -194,7 +195,7 @@ func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken
 	// creates the multipart/form-data with the necessary fields to complete the request on the anchor platform
 	b := &bytes.Buffer{}
 	w := multipart.NewWriter(b)
-	defer w.Close()
+	defer utils.DeferredClose(context.Background(), w, "closing multipart writer")
 	formValues := map[string]string{
 		"asset_code":                  ap.DisbursedAssetCode,
 		"account":                     ap.ReceiverAccountPublicKey,
@@ -204,16 +205,19 @@ func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken
 	for k, v := range formValues {
 		err = w.WriteField(k, v)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error writing %q field to form data: %w", k, err)
+			return nil, nil, fmt.Errorf("writing %q field to form data: %w", k, err)
 		}
 	}
 	// we need to close *multipart.Writter before pass as parameter in http.NewRequestWithContext
-	w.Close()
+	err = w.Close()
+	if err != nil {
+		return nil, nil, fmt.Errorf("closing multipart writer: %w", err)
+	}
 
 	ctx := context.Background()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, depositUrl, b)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, depositURL, b)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating new request: %w", err)
+		return nil, nil, fmt.Errorf("creating new request: %w", err)
 	}
 
 	// POST sep24/transactions/deposit/interactive endpoint on anchor platform expects the content-type to be multipart/form-data
@@ -221,7 +225,7 @@ func (ap AnchorPlatformIntegrationTests) CreateSep24DepositTransaction(authToken
 	// sets in the header the authorization token received in SendSignedChallengeTransaction
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
 
-	resp, err := ap.HttpClient.Do(req)
+	resp, err := ap.HTTPClient.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error making request to anchor platform post SEP24 Deposit: %w", err)
 	}

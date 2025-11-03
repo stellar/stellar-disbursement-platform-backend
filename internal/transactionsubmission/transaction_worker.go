@@ -15,7 +15,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -41,7 +40,6 @@ type TransactionWorker struct {
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
-	eventProducer       events.Producer
 	jobUUID             string
 	txHandler           TransactionHandlerInterface
 }
@@ -54,7 +52,6 @@ func NewTransactionWorker(
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
-	eventProducer events.Producer,
 	txHandler TransactionHandlerInterface,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
@@ -101,7 +98,6 @@ func NewTransactionWorker(
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
-		eventProducer:       eventProducer,
 		txHandler:           txHandler,
 	}, nil
 }
@@ -201,7 +197,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	tw.txProcessingLimiter.AdjustLimitIfNeeded(txErr)
 
 	if txErr.ShouldMarkAsError() {
-		if markErr := tw.markTransactionAsError(ctx, txJob, txErr, txErr.Error()); markErr != nil {
+		if markErr := tw.markTransactionAsError(ctx, txJob, txErr.Error()); markErr != nil {
 			return markErr
 		}
 
@@ -230,7 +226,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 }
 
 // markTransactionAsError handles the process of marking a transaction as ERROR and producing events
-func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *TxJob, txErr utils.TransactionError, errorMsg string) error {
+func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *TxJob, errorMsg string) error {
 	updatedTx, updateErr := tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, errorMsg)
 	if updateErr != nil {
 		return fmt.Errorf("updating transaction status to error: %w", updateErr)

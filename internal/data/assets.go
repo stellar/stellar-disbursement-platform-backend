@@ -273,20 +273,21 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 	query := `
 		WITH latest_payments_by_wallet AS (
 			-- Gets the latest payment by wallet with its asset
-		SELECT
-			p.id AS payment_id,
-			d.wallet_id,
-			COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
-			COALESCE(d.verification_field::text, '') as verification_field,
-			p.asset_id
+      SELECT
+        p.id AS payment_id,
+        rw.wallet_id,
+        COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
+        COALESCE(d.verification_field::text, '') as verification_field,
+        p.asset_id
 			FROM
 				payments p
-				INNER JOIN disbursements d ON d.id = p.disbursement_id
+				INNER JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
 				INNER JOIN assets a ON a.id = p.asset_id
+				LEFT JOIN disbursements d ON (p.type = 'DISBURSEMENT' AND d.id = p.disbursement_id)
 			WHERE
 				p.status = $1
 			GROUP BY
-				p.id, p.asset_id, d.wallet_id, d.receiver_registration_message_template, d.verification_field
+				p.id, p.asset_id, rw.wallet_id, d.receiver_registration_message_template, d.verification_field
 			ORDER BY
 				p.updated_at DESC
 		), messages_resent_since_invitation AS (

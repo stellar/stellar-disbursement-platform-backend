@@ -12,13 +12,12 @@ var FuturenetWallets = []data.Wallet{
 		DeepLinkSchema:    "https://demo-wallet.stellar.org",
 		SEP10ClientDomain: "demo-wallet-server.stellar.org",
 		Assets: []data.Asset{
-			assets.USDCAssetTestnet,
 			assets.XLMAsset,
 		},
 	},
 	{
 		Name:        "User Managed Wallet",
-		Assets:      assets.AllAssetsTestnet,
+		Assets:      assets.AllAssetsFuturenet,
 		UserManaged: true,
 	},
 	{

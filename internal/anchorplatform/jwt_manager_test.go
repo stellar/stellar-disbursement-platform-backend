@@ -51,8 +51,8 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 	assert.Equal(t, "123456", claims.SEP10StellarMemo())
 	assert.Equal(t, "test.com", claims.ClientDomain())
 	assert.Equal(t, "test-home-domain.com:3000", claims.HomeDomain())
-	assert.True(t, claims.ExpiresAt().After(now.Add(time.Duration(4000*time.Millisecond))))
-	assert.True(t, claims.ExpiresAt().Before(now.Add(time.Duration(5000*time.Millisecond))))
+	assert.True(t, claims.ExpiresAt().After(now.Add(4000*time.Millisecond)))
+	assert.True(t, claims.ExpiresAt().Before(now.Add(5000*time.Millisecond)))
 }
 
 func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {
@@ -71,6 +71,6 @@ func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {
 	assert.Nil(t, claims.Valid())
 	assert.Equal(t, "test-transaction-id", claims.ID)
 	assert.Equal(t, "stellar-disbursement-platform-backend", claims.Subject)
-	assert.True(t, claims.ExpiresAt.After(now.Add(time.Duration(4000*time.Millisecond))))
-	assert.True(t, claims.ExpiresAt.Before(now.Add(time.Duration(5000*time.Millisecond))))
+	assert.True(t, claims.ExpiresAt.After(now.Add(4000*time.Millisecond)))
+	assert.True(t, claims.ExpiresAt.Before(now.Add(5000*time.Millisecond)))
 }

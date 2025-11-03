@@ -20,7 +20,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
@@ -279,7 +278,8 @@ func Test_PaymentHandler_BuildInnerTransaction(t *testing.T) {
 						Asset:             wantAsset,
 						SourceAccount:     distributionKP.Address(),
 					}
-					op, _ := txnbuild.NewPaymentToContract(params)
+					op, err := txnbuild.NewPaymentToContract(params)
+					require.NoError(t, err)
 					operation = &op
 				}
 
@@ -313,7 +313,7 @@ func Test_PaymentHandler_MonitorTransactionProcessingStarted(t *testing.T) {
 	}
 	jobUUID := "job-uuid"
 
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentProcessingStartedTag, mock.Anything).
 		Return(nil).
@@ -343,7 +343,7 @@ func Test_PaymentHandler_MonitorTransactionProcessingSuccess(t *testing.T) {
 	}
 	jobUUID := "job-uuid"
 
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentTransactionSuccessfulTag, mock.Anything).
 		Return(nil).
@@ -375,7 +375,7 @@ func Test_PaymentHandler_MonitorTransactionProcessingFailed(t *testing.T) {
 	isRetryable := true
 	errStack := "error stack"
 
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
 		Return(nil).
@@ -404,7 +404,7 @@ func Test_PaymentHandler_MonitorTransactionReconciliationSuccess(t *testing.T) {
 	}
 	jobUUID := "job-uuid"
 
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentReconciliationSuccessfulTag, mock.Anything).
 		Return(nil).
@@ -435,7 +435,7 @@ func Test_PaymentHandler_MonitorTransactionReconciliationFailure(t *testing.T) {
 	isHorizonErr := true
 	errStack := "error stack"
 
-	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentReconciliationFailureTag, mock.Anything).
 		Return(nil).

@@ -21,7 +21,7 @@ func Test_GetRoutePattern(t *testing.T) {
 		{expectedRoutePattern: "undefined", method: "POST"},
 	}
 
-	mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	mHTTPHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -38,7 +38,7 @@ func Test_GetRoutePattern(t *testing.T) {
 
 			r := chi.NewRouter()
 			r.Use(mAssertRoutePattern)
-			r.Get("/mock", mHttpHandler.ServeHTTP)
+			r.Get("/mock", mHTTPHandler.ServeHTTP)
 
 			req, err := http.NewRequest(tc.method, "/mock", nil)
 			require.NoError(t, err)
@@ -52,7 +52,7 @@ func Test_UnwrapInterfaceToPointer(t *testing.T) {
 	// Test with a string
 	strValue := "test"
 	strValuePtr := &strValue
-	i := interface{}(strValuePtr)
+	i := any(strValuePtr)
 
 	unwrappedValue := UnwrapInterfaceToPointer[string](i)
 	assert.Equal(t, "test", *unwrappedValue)
@@ -63,7 +63,7 @@ func Test_UnwrapInterfaceToPointer(t *testing.T) {
 	}
 	testStructValue := testStruct{Name: "test"}
 	testStructValuePtr := &testStructValue
-	i = interface{}(testStructValuePtr)
+	i = any(testStructValuePtr)
 	assert.Equal(t, testStruct{Name: "test"}, *UnwrapInterfaceToPointer[testStruct](i))
 }
 
@@ -80,37 +80,37 @@ func Test_IsEmpty(t *testing.T) {
 	// Define test cases
 	testCases := []testCase{
 		// String
-		{name: "String empty", isEmptyFn: func() bool { return IsEmpty[string]("") }, expected: true},
-		{name: "String non-empty", isEmptyFn: func() bool { return IsEmpty[string]("not empty") }, expected: false},
+		{name: "String empty", isEmptyFn: func() bool { return IsEmpty("") }, expected: true},
+		{name: "String non-empty", isEmptyFn: func() bool { return IsEmpty("not empty") }, expected: false},
 		// Int
-		{name: "Int zero", isEmptyFn: func() bool { return IsEmpty[int](0) }, expected: true},
-		{name: "Int non-zero", isEmptyFn: func() bool { return IsEmpty[int](1) }, expected: false},
+		{name: "Int zero", isEmptyFn: func() bool { return IsEmpty(0) }, expected: true},
+		{name: "Int non-zero", isEmptyFn: func() bool { return IsEmpty(1) }, expected: false},
 		// Slice:
 		{name: "Slice nil", isEmptyFn: func() bool { return IsEmpty[[]string](nil) }, expected: true},
-		{name: "Slice empty", isEmptyFn: func() bool { return IsEmpty[[]string]([]string{}) }, expected: false},
-		{name: "Slice non-empty", isEmptyFn: func() bool { return IsEmpty[[]string]([]string{"not empty"}) }, expected: false},
+		{name: "Slice empty", isEmptyFn: func() bool { return IsEmpty([]string{}) }, expected: false},
+		{name: "Slice non-empty", isEmptyFn: func() bool { return IsEmpty([]string{"not empty"}) }, expected: false},
 		// Struct:
-		{name: "Struct zero", isEmptyFn: func() bool { return IsEmpty[testStruct](testStruct{}) }, expected: true},
-		{name: "Struct non-zero", isEmptyFn: func() bool { return IsEmpty[testStruct](testStruct{Name: "not empty"}) }, expected: false},
+		{name: "Struct zero", isEmptyFn: func() bool { return IsEmpty(testStruct{}) }, expected: true},
+		{name: "Struct non-zero", isEmptyFn: func() bool { return IsEmpty(testStruct{Name: "not empty"}) }, expected: false},
 		// Pointer:
 		{name: "Pointer nil", isEmptyFn: func() bool { return IsEmpty[*string](nil) }, expected: true},
-		{name: "Pointer non-nil", isEmptyFn: func() bool { return IsEmpty[*string](new(string)) }, expected: false},
+		{name: "Pointer non-nil", isEmptyFn: func() bool { return IsEmpty(new(string)) }, expected: false},
 		// Function:
 		{name: "Function nil", isEmptyFn: func() bool { return IsEmpty[func() string](nil) }, expected: true},
-		{name: "Function non-nil", isEmptyFn: func() bool { return IsEmpty[func() string](func() string { return "not empty" }) }, expected: false},
+		{name: "Function non-nil", isEmptyFn: func() bool { return IsEmpty(func() string { return "not empty" }) }, expected: false},
 		// Interface:
-		{name: "Interface nil", isEmptyFn: func() bool { return IsEmpty[interface{}](nil) }, expected: true},
-		{name: "Interface non-nil", isEmptyFn: func() bool { return IsEmpty[interface{}](new(string)) }, expected: false},
+		{name: "Interface nil", isEmptyFn: func() bool { return IsEmpty[any](nil) }, expected: true},
+		{name: "Interface non-nil", isEmptyFn: func() bool { return IsEmpty[any](new(string)) }, expected: false},
 		// Any:
 		{name: "Any nil", isEmptyFn: func() bool { return IsEmpty[any](nil) }, expected: true},
 		{name: "Any non-nil", isEmptyFn: func() bool { return IsEmpty[any](new(string)) }, expected: false},
 		// Map:
 		{name: "Map nil", isEmptyFn: func() bool { return IsEmpty[map[string]string](nil) }, expected: true},
-		{name: "Map empty", isEmptyFn: func() bool { return IsEmpty[map[string]string](map[string]string{}) }, expected: false},
-		{name: "Map non-empty", isEmptyFn: func() bool { return IsEmpty[map[string]string](map[string]string{"not empty": "not empty"}) }, expected: false},
+		{name: "Map empty", isEmptyFn: func() bool { return IsEmpty(map[string]string{}) }, expected: false},
+		{name: "Map non-empty", isEmptyFn: func() bool { return IsEmpty(map[string]string{"not empty": "not empty"}) }, expected: false},
 		// Channel:
 		{name: "Channel nil", isEmptyFn: func() bool { return IsEmpty[chan string](nil) }, expected: true},
-		{name: "Channel non-nil", isEmptyFn: func() bool { return IsEmpty[chan string](make(chan string)) }, expected: false},
+		{name: "Channel non-nil", isEmptyFn: func() bool { return IsEmpty(make(chan string)) }, expected: false},
 	}
 
 	// Run test cases
@@ -124,19 +124,19 @@ func Test_IsEmpty(t *testing.T) {
 func Test_MapSlice(t *testing.T) {
 	testCases := []struct {
 		name              string
-		prepareMapSliceFn func() interface{}
-		wantMapped        interface{}
+		prepareMapSliceFn func() any
+		wantMapped        any
 	}{
 		{
 			name: "map to string slice to uppercased string slice",
-			prepareMapSliceFn: func() interface{} {
+			prepareMapSliceFn: func() any {
 				return MapSlice([]string{"a", "b", "c"}, strings.ToUpper)
 			},
 			wantMapped: []string{"A", "B", "C"},
 		},
 		{
 			name: "map int slice to string slice",
-			prepareMapSliceFn: func() interface{} {
+			prepareMapSliceFn: func() any {
 				return MapSlice([]int{1, 2, 3}, func(input int) string { return fmt.Sprintf("%d", input) })
 			},
 			wantMapped: []string{"1", "2", "3"},
@@ -183,7 +183,7 @@ func Test_GetTypeName(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		instance       interface{}
+		instance       any
 		expectedResult string
 	}{
 		{

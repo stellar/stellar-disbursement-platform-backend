@@ -30,12 +30,6 @@ data:
 Values from the `global` section
   */}}
   {{- with .Values.global }}
-  EVENT_BROKER_TYPE: {{ .eventBroker.type | quote }}
-  {{- if eq .eventBroker.type "KAFKA" }}
-  BROKER_URLS: {{ .eventBroker.urls | quote }}
-  CONSUMER_GROUP_ID: {{ .eventBroker.consumerGroupId | quote }}
-  KAFKA_SECURITY_PROTOCOL: {{ .eventBroker.kafka.securityProtocol | quote }}
-  {{- end }}
   SINGLE_TENANT_MODE: {{ .singleTenantMode | quote }}
   {{- if .distributionPublicKey }}
   DISTRIBUTION_PUBLIC_KEY: {{ .distributionPublicKey | quote }}

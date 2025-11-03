@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/support/log"
 )
 
 func GetRoutePattern(r *http.Request) string {
@@ -128,4 +131,14 @@ func ParseBoolQueryParam(r *http.Request, param string) (*bool, error) {
 		return nil, fmt.Errorf("invalid '%s' parameter value: %w", param, err)
 	}
 	return &parsedValue, nil
+}
+
+// DeferredClose is a function that closes an `io.Closer` resource and logs an error if it fails.
+func DeferredClose(ctx context.Context, closer io.Closer, errMsg string) {
+	if err := closer.Close(); err != nil {
+		if errMsg == "" {
+			errMsg = "closing resource"
+		}
+		log.Ctx(ctx).Errorf("%s: %v", errMsg, err)
+	}
 }

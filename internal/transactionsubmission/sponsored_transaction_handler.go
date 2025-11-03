@@ -85,8 +85,8 @@ func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context,
 	}
 
 	if len(operation.Auth) != 0 {
-		channelAccountId := xdr.MustAddress(txJob.ChannelAccount.PublicKey)
-		distributionAccountId := xdr.MustAddress(distributionAccount)
+		channelAccountID := xdr.MustAddress(txJob.ChannelAccount.PublicKey)
+		distributionAccountID := xdr.MustAddress(distributionAccount)
 
 		for _, auth := range operation.Auth {
 			if auth.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress {
@@ -96,13 +96,13 @@ func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context,
 				return nil, fmt.Errorf("auth credentials address cannot be nil")
 			}
 			if auth.Credentials.Address.Address.Type == xdr.ScAddressTypeScAddressTypeAccount {
-				authAccountId := *auth.Credentials.Address.Address.AccountId
+				authAccountID := *auth.Credentials.Address.Address.AccountId
 
 				// Ensure the inner operation doesn't require auth from infrastructure accounts
-				if authAccountId.Equals(channelAccountId) {
+				if authAccountID.Equals(channelAccountID) {
 					return nil, fmt.Errorf("sponsored operation cannot require authorization from channel account")
 				}
-				if authAccountId.Equals(distributionAccountId) {
+				if authAccountID.Equals(distributionAccountID) {
 					return nil, fmt.Errorf("sponsored operation cannot require authorization from distribution account")
 				}
 			}

@@ -111,8 +111,11 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 			IncrementSequenceNum: true,
 		},
 	)
+	if err != nil {
+		return nil, fmt.Errorf("building payment transaction: %w", err)
+	}
 
-	return paymentTx, err
+	return paymentTx, nil
 }
 
 func (h *PaymentTransactionHandler) MonitorTransactionProcessingStarted(ctx context.Context, txJob *TxJob, jobUUID string) {

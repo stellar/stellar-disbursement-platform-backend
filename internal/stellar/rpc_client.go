@@ -14,8 +14,8 @@ type RPCClientWrapper struct {
 	client *client.Client
 }
 
-func NewRPCClientWrapper(rpcUrl string, httpClient *http.Client) *RPCClientWrapper {
-	innerClient := client.NewClient(rpcUrl, httpClient)
+func NewRPCClientWrapper(rpcURL string, httpClient *http.Client) *RPCClientWrapper {
+	innerClient := client.NewClient(rpcURL, httpClient)
 	return &RPCClientWrapper{client: innerClient}
 }
 
@@ -75,7 +75,11 @@ type headerTransport struct {
 
 func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Add(t.key, t.value)
-	return t.base.RoundTrip(req)
+	res, err := t.base.RoundTrip(req)
+	if err != nil {
+		return nil, fmt.Errorf("error in RoundTrip: %w", err)
+	}
+	return res, nil
 }
 
 var _ RPCClient = (*RPCClientWrapper)(nil)

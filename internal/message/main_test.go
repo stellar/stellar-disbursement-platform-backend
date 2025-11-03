@@ -74,9 +74,6 @@ func Test_GetClient(t *testing.T) {
 		TwilioWhatsAppFromNumber: "+14155238886",
 		TwilioWhatsAppReceiverInvitationTemplateSID: "HXabcdef123456784",
 		TwilioWhatsAppReceiverOTPTemplateSID:        "HXabcdef123456783",
-		TwilioWhatsAppUserInvitationTemplateSID:     "HXabcdef123456782",
-		TwilioWhatsAppUserForgotPasswordTemplateSID: "HXabcdef123456781",
-		TwilioWhatsAppUserMFATemplateSID:            "HXabcdef123456780",
 	}
 	gotClient, err = GetClient(opts)
 	require.NoError(t, err)

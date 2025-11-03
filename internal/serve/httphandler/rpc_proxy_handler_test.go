@@ -67,7 +67,8 @@ func Test_RPCProxyHandler_ServeHTTP(t *testing.T) {
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(`{"jsonrpc":"2.0","result":{"status":"healthy"},"id":1}`))
+					_, err = w.Write([]byte(`{"jsonrpc":"2.0","result":{"status":"healthy"},"id":1}`))
+					require.NoError(t, err)
 				}))
 			},
 			expectedStatus:    http.StatusOK,
@@ -92,7 +93,8 @@ func Test_RPCProxyHandler_ServeHTTP(t *testing.T) {
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(`{"jsonrpc":"2.0","result":{"transactionData":"AAAA...","minResourceFee":"100"},"id":1}`))
+					_, err = w.Write([]byte(`{"jsonrpc":"2.0","result":{"transactionData":"AAAA...","minResourceFee":"100"},"id":1}`))
+					require.NoError(t, err)
 				}))
 			},
 			expectedStatus:    http.StatusOK,

@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -314,6 +315,33 @@ func Test_TenantHandler_Post(t *testing.T) {
 			}).
 			Return(msgClientErr).
 			Once()
+
+		if accountType.IsStellar() {
+			sigRouter.
+				On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccToReturn).
+				Return(&txnbuild.Transaction{}, nil).
+				Once()
+
+			if accountType == schema.DistributionAccountStellarDBVault {
+				sigRouter.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostAccount).
+					Return(&txnbuild.Transaction{}, nil).
+					Maybe()
+			}
+		}
+
+		mHorizonClient.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: distAccAddress}).
+			Return(horizon.Account{
+				AccountID: distAccAddress,
+				Sequence:  1,
+			}, nil).
+			Maybe()
+
+		mHorizonClient.
+			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, nil).
+			Maybe()
 
 		if msgClientErr != nil {
 			crashTrackerMock.

@@ -127,11 +127,11 @@ func Test_SendInvitationMessage(t *testing.T) {
 						ToEmail: email,
 						Title:   invitationMessageTitle,
 						Body:    content,
-						TemplateVariables: map[string]string{
-							"FirstName":          firstName,
-							"Role":               roles[0],
-							"ForgotPasswordLink": forgotPasswordLink,
-							"OrganizationName":   "MyCustomAid",
+						TemplateVariables: map[message.TemplateVariable]string{
+							message.TemplateVarFirstName:          firstName,
+							message.TemplateVarRole:               roles[0],
+							message.TemplateVarForgotPasswordLink: forgotPasswordLink,
+							message.TemplateVarOrgName:            "MyCustomAid",
 						},
 					}).
 					Return(errors.New("foobar")).
@@ -154,11 +154,11 @@ func Test_SendInvitationMessage(t *testing.T) {
 						ToEmail: email,
 						Title:   invitationMessageTitle,
 						Body:    content,
-						TemplateVariables: map[string]string{
-							"FirstName":          firstName,
-							"Role":               roles[0],
-							"ForgotPasswordLink": forgotPasswordLink,
-							"OrganizationName":   "MyCustomAid",
+						TemplateVariables: map[message.TemplateVariable]string{
+							message.TemplateVarFirstName:          firstName,
+							message.TemplateVarRole:               roles[0],
+							message.TemplateVarForgotPasswordLink: forgotPasswordLink,
+							message.TemplateVarOrgName:            "MyCustomAid",
 						},
 					}).
 					Return(nil).

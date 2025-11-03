@@ -134,7 +134,7 @@ type APSep24TransactionPatchPostError struct {
 	// SourceAccount string `json:"source_account,omitempty"`
 }
 
-// APTransactionStatus is the body of the Stellar transaction stored in the Anchor Platform.
+// APStellarTransaction is the body of the Stellar transaction stored in the Anchor Platform.
 type APStellarTransaction struct {
 	ID       string          `json:"id"`
 	Memo     string          `json:"memo,omitempty"`
@@ -159,7 +159,7 @@ type APAmount struct {
 	Asset  string `json:"asset"`
 }
 
-// NewAnchorPlatformStellarAsset creates a stellar asset using the [Asset Identification Format](https://stellar.org/protocol/sep-38#asset-identification-format)
+// NewStellarAssetInAIF creates a stellar asset using the [Asset Identification Format](https://stellar.org/protocol/sep-38#asset-identification-format).
 func NewStellarAssetInAIF(assetCode, assetIssuer string) string {
 	assetIssuer = strings.TrimSpace(assetIssuer)
 	if assetIssuer != "" {

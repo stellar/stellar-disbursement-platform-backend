@@ -467,7 +467,10 @@ func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string) e
 	if err != nil {
 		return fmt.Errorf("delete api key: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
 	if rows == 0 {
 		return ErrRecordNotFound
 	}
