@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- Add configurable database connection pool settings to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
+
+### Changed
+- Default Max Open Connections per pool changed from 30 to 20 to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
+
 ## [5.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/5.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.1.0...5.0.0))
 
 ### Added
@@ -19,7 +27,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add contract account support for direct payments [#924](https://github.com/stellar/stellar-disbursement-platform-backend/pull/924)
 - Add support for contract addresses for PATCH receiver [#925](https://github.com/stellar/stellar-disbursement-platform-backend/pull/925)
 - Mark tx failures due to archived entries as error [#926](https://github.com/stellar/stellar-disbursement-platform-backend/pull/926)
-- Add configurable database connection pool settings to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
 
 ### Changed
 - Decommissioned Event Broker Kafka support in favor of Scheduler for background jobs. [#914](https://github.com/stellar/stellar-disbursement-platform-backend/pull/914)

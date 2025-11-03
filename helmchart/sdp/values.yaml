@@ -226,9 +226,9 @@ sdp:
       CIRCLE_API_TYPE: "TRANSFERS"
 
       ## Database connection pool tuning (SDP/Core)
-      DB_MAX_OPEN_CONNS: "10"
-      DB_MAX_IDLE_CONNS: "0"
-      DB_CONN_MAX_IDLE_TIME_SECONDS: "2"
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "2"
+      DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
       DB_CONN_MAX_LIFETIME_SECONDS: "300"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
@@ -538,9 +538,9 @@ tss:
       QUEUE_POLLING_INTERVAL: "6"
 
       ## Database connection pool tuning (tss)
-      DB_MAX_OPEN_CONNS: "10"
-      DB_MAX_IDLE_CONNS: "0"
-      DB_CONN_MAX_IDLE_TIME_SECONDS: "2"
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "2"
+      DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
       DB_CONN_MAX_LIFETIME_SECONDS: "300"
 
   ## @extra tss.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.

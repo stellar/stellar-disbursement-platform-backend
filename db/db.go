@@ -16,11 +16,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
-const (
-	MaxDBConnIdleTime = 2 * time.Second
-	MaxOpenDBConns    = 20
-)
-
 // DBPoolConfig represents tunables for the sql.DB pool.
 type DBPoolConfig struct {
 	MaxOpenConns    int
@@ -30,9 +25,9 @@ type DBPoolConfig struct {
 }
 
 var DefaultDBPoolConfig = DBPoolConfig{
-	MaxOpenConns:    MaxOpenDBConns,
-	MaxIdleConns:    1,
-	ConnMaxIdleTime: MaxDBConnIdleTime,
+	MaxOpenConns:    20,
+	MaxIdleConns:    2,
+	ConnMaxIdleTime: 10 * time.Second,
 	ConnMaxLifetime: 5 * time.Minute,
 }
 

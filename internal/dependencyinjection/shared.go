@@ -24,7 +24,7 @@ func openDBConnectionPool(ctx context.Context, dsn string, opts DBConnectionPool
 	if opts.MaxOpenConns > 0 {
 		cfg.MaxOpenConns = opts.MaxOpenConns
 	}
-	if opts.MaxIdleConns > 0 { // leave default unless explicitly set >0
+	if opts.MaxIdleConns >= 0 {
 		cfg.MaxIdleConns = opts.MaxIdleConns
 	}
 	if opts.ConnMaxIdleTimeSeconds > 0 {

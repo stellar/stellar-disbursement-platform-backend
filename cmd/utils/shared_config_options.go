@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -35,7 +36,7 @@ func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
 			Usage:       "Maximum number of open DB connections per pool",
 			OptType:     types.Int,
 			ConfigKey:   &opts.DBMaxOpenConns,
-			FlagDefault: 5,
+			FlagDefault: db.DefaultDBPoolConfig.MaxOpenConns,
 			Required:    false,
 		},
 		{
@@ -43,7 +44,7 @@ func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
 			Usage:       "Maximum number of idle DB connections retained per pool",
 			OptType:     types.Int,
 			ConfigKey:   &opts.DBMaxIdleConns,
-			FlagDefault: 0,
+			FlagDefault: db.DefaultDBPoolConfig.MaxIdleConns,
 			Required:    false,
 		},
 		{
@@ -51,7 +52,7 @@ func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
 			Usage:       "Maximum idle time in seconds before a connection is closed",
 			OptType:     types.Int,
 			ConfigKey:   &opts.DBConnMaxIdleTimeSeconds,
-			FlagDefault: 2,
+			FlagDefault: db.DefaultDBPoolConfig.ConnMaxIdleTime,
 			Required:    false,
 		},
 		{
@@ -59,7 +60,7 @@ func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
 			Usage:       "Maximum lifetime in seconds for a single connection",
 			OptType:     types.Int,
 			ConfigKey:   &opts.DBConnMaxLifetimeSeconds,
-			FlagDefault: 300,
+			FlagDefault: db.DefaultDBPoolConfig.ConnMaxLifetime,
 			Required:    false,
 		},
 	}
