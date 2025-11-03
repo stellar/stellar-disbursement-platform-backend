@@ -21,13 +21,13 @@ func GetAllVerificationTypes() []VerificationType {
 	}
 }
 
-func GetAllVerificationTypesForEmbeddedWallet() []VerificationType {
+func GetEmbeddedWalletVerificationTypes() []VerificationType {
 	return []VerificationType{
 		VerificationTypeSEP24Registration,
 	}
 }
 
-func GetAllVerificationTypesForPartnerWallet() []VerificationType {
+func GetNonEmbeddedWalletVerificationTypes() []VerificationType {
 	return []VerificationType{
 		VerificationTypeDateOfBirth,
 		VerificationTypeYearMonth,

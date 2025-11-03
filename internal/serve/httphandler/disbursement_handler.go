@@ -53,7 +53,7 @@ type PostDisbursementRequest struct {
 	ReceiverRegistrationMessageTemplate string                       `json:"receiver_registration_message_template"`
 }
 
-func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *validators.Validator {
+func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbursementRequest) *validators.Validator {
 	v := validators.NewValidator()
 
 	v.Check(req.Name != "", "name", "name is required")
@@ -65,12 +65,25 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 	)
 	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 	if !req.RegistrationContactType.IncludesWalletAddress {
-		v.Check(
-			slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
-			"verification_field",
-			fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
-		)
 		v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
+		var wallet *data.Wallet
+		if fetchedWallet, err := d.Models.Wallets.Get(ctx, req.WalletID); err == nil {
+			wallet = fetchedWallet
+		}
+		walletIsEmbedded := wallet != nil && wallet.Embedded
+		if walletIsEmbedded {
+			v.Check(
+				req.VerificationField == "" || slices.Contains(data.GetEmbeddedWalletVerificationTypes(), req.VerificationField),
+				"verification_field",
+				fmt.Sprintf("verification_field must be empty or one of %v", data.GetEmbeddedWalletVerificationTypes()),
+			)
+		} else {
+			v.Check(
+				slices.Contains(data.GetNonEmbeddedWalletVerificationTypes(), req.VerificationField),
+				"verification_field",
+				fmt.Sprintf("verification_field must be one of %v", data.GetNonEmbeddedWalletVerificationTypes()),
+			)
+		}
 	} else {
 		v.Check(req.VerificationField == "", "verification_field", "verification_field is not allowed for this registration contact type")
 		v.Check(req.WalletID == "", "wallet_id", "wallet_id is not allowed for this registration contact type")
@@ -607,7 +620,7 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 }
 
 func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
-	v := d.validateRequest(req)
+	v := d.validateRequest(ctx, req)
 	if v.HasErrors() {
 		return nil, httperror.BadRequest("", nil, v.Errors)
 	}

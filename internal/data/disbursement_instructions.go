@@ -119,7 +119,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.D
 			}
 			return fmt.Errorf("registering supplied wallets: %w", err)
 		}
-	} else {
+	} else if opts.Disbursement.VerificationField != "" {
 		err = di.processReceiverVerifications(ctx, dbTx, receiversByIDMap, opts.Instructions, opts.Disbursement, registrationContactType.ReceiverContactType)
 		if err != nil {
 			return fmt.Errorf("processing receiver verifications: %w", err)
