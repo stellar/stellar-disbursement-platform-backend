@@ -46,6 +46,8 @@ func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverReque
 			appendNewVerificationValue(verificationField, updateReceiverInfo.Pin)
 		case data.VerificationTypeNationalID:
 			appendNewVerificationValue(verificationField, updateReceiverInfo.NationalID)
+		case data.VerificationTypeSEP24Registration:
+			// TODO: VerificationTypeSEP24Registration should just use one of the above
 		}
 	}
 

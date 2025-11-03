@@ -461,6 +461,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			labels := monitor.DisbursementLabels{
 				Asset:  asset.Code,
 				Wallet: embeddedWallet.Name,
+				CommonLabels: monitor.CommonLabels{
+					TenantName: "default-tenant",
+				},
 			}
 			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 		},
@@ -526,6 +529,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			labels := monitor.DisbursementLabels{
 				Asset:  asset.Code,
 				Wallet: embeddedWallet.Name,
+				CommonLabels: monitor.CommonLabels{
+					TenantName: "default-tenant",
+				},
 			}
 			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 		},
