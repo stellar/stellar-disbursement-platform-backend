@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
@@ -67,21 +68,24 @@ func Test_Serve(t *testing.T) {
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 
+	testKP, err := keypair.Random()
+	require.NoError(t, err)
+
 	opts := ServeOptions{
-		CrashTrackerClient:              mockCrashTrackerClient,
-		MtnDBConnectionPool:             dbConnectionPool,
-		AdminDBConnectionPool:           dbConnectionPool,
-		EC256PrivateKey:                 privateKeyStr,
-		Environment:                     "test",
-		GitCommit:                       "1234567890abcdef",
-		Models:                          models,
-		Port:                            8000,
-		ResetTokenExpirationHours:       1,
-		SEP24JWTSecret:                  "jwt_secret_1234567890",
-		AnchorPlatformBasePlatformURL:   "https://test.com",
-		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
-		Version:                         "x.y.z",
-		NetworkPassphrase:               network.TestNetworkPassphrase,
+		CrashTrackerClient:        mockCrashTrackerClient,
+		MtnDBConnectionPool:       dbConnectionPool,
+		AdminDBConnectionPool:     dbConnectionPool,
+		EC256PrivateKey:           privateKeyStr,
+		Environment:               "test",
+		GitCommit:                 "1234567890abcdef",
+		Models:                    models,
+		Port:                      8000,
+		ResetTokenExpirationHours: 1,
+		SEP24JWTSecret:            "jwt_secret_1234567890",
+		Version:                   "x.y.z",
+		Sep10SigningPrivateKey:    testKP.Seed(),
+		Sep10SigningPublicKey:     testKP.Address(),
+		NetworkPassphrase:         network.TestNetworkPassphrase,
 	}
 
 	// Mock supportHTTPRun
@@ -293,24 +297,28 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Return(distAccount, nil).
 		Maybe()
 
+	testKP, err := keypair.Random()
+	require.NoError(t, err)
+
 	serveOptions := ServeOptions{
-		CrashTrackerClient:              crashTrackerClient,
-		MtnDBConnectionPool:             dbConnectionPool,
-		AdminDBConnectionPool:           dbConnectionPool,
-		EC256PrivateKey:                 privateKeyStr,
-		EmailMessengerClient:            &messengerClientMock,
-		Environment:                     "test",
-		GitCommit:                       "1234567890abcdef",
-		MonitorService:                  mMonitorService,
-		ResetTokenExpirationHours:       1,
-		SEP24JWTSecret:                  "jwt_secret_1234567890",
-		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
-		AnchorPlatformBasePlatformURL:   "https://test.com",
-		MessageDispatcher:               messageDispatcherMock,
-		Version:                         "x.y.z",
-		NetworkPassphrase:               network.TestNetworkPassphrase,
-		SubmitterEngine:                 submitterEngine,
-		BridgeService:                   bridge.NewMockService(t),
+		CrashTrackerClient:        crashTrackerClient,
+		MtnDBConnectionPool:       dbConnectionPool,
+		AdminDBConnectionPool:     dbConnectionPool,
+		EC256PrivateKey:           privateKeyStr,
+		EmailMessengerClient:      &messengerClientMock,
+		Environment:               "test",
+		GitCommit:                 "1234567890abcdef",
+		MonitorService:            mMonitorService,
+		ResetTokenExpirationHours: 1,
+		SEP24JWTSecret:            "jwt_secret_1234567890",
+		BaseURL:                   "https://test.com",
+		MessageDispatcher:         messageDispatcherMock,
+		Version:                   "x.y.z",
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		SubmitterEngine:           submitterEngine,
+		Sep10SigningPrivateKey:    testKP.Seed(),
+		Sep10SigningPublicKey:     testKP.Address(),
+		BridgeService:             bridge.NewMockService(t),
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -335,6 +343,9 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	}{
 		{http.MethodGet, "/organization/logo"},
 		{http.MethodGet, "/health"},
+		{http.MethodGet, "/sep24/info"},
+		{http.MethodGet, "/sep10/auth"},
+		{http.MethodPost, "/sep10/auth"},
 		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
 		{http.MethodPost, "/mfa"},
@@ -345,7 +356,6 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	for _, endpoint := range unauthenticatedEndpoints {
 		t.Run(fmt.Sprintf("%s %s", endpoint.method, endpoint.path), func(t *testing.T) {
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
-			req.Header.Set("SDP-Tenant-Name", "aid-org")
 
 			w := httptest.NewRecorder()
 			handlerMux.ServeHTTP(w, req)

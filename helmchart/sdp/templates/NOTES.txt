@@ -72,26 +72,7 @@ Your release is named {{ .Release.Name }} and deployed to namespace {{ .Release.
    Visit http://127.0.0.1:8081 to use the Dashboard
 {{- end }}
 
-{{- if .Values.anchorPlatform.ingress.enabled }}
-3. Access the Anchor Platform:
-   {{- if .Values.anchorPlatform.ingress.tls }}
-   https://{{ include "sdp.ap.domain" . }}
-   {{- else }}
-   http://{{ include "sdp.ap.domain" . }}
-   {{- end }}
-{{- else }}
-3. Access the AP Service:
-   AP SEP Port: {{ include "sdp.ap.sepPort" . }}
-   AP Platform Port: {{ include "sdp.ap.platformPort" . }}
-   {{- if contains "ClusterIP" .Values.global.service.type }}
-
-   Run these commands to port-forward to the AP service:
-   export AP_POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=ap" -o jsonpath="{.items[0].metadata.name}")
-   kubectl --namespace {{ .Release.Namespace }} port-forward $AP_POD_NAME {{ include "sdp.ap.sepPort" . }}:ap-sep {{ include "sdp.ap.platformPort" . }}:ap-platform
-   {{- end }}
-{{- end }}
-
-4. View logs:
+3. View logs:
    # SDP logs
    kubectl logs --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "sdp.name" . }}" -f
 

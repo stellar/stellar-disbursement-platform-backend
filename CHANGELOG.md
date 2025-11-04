@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
+    - Add SEP10 /auth endpoints 
+    - Add SEP24 /info endpoints
+    - Add SEP24 interactive deposit endpoint
+    - Remove Anchor Platform integration from the SDP and deprecate related env variables. 
 - Add configurable database connection pool settings to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
 
 ### Changed

@@ -95,10 +95,9 @@ jobs:
         run: docker compose -f docker-compose-e2e-tests.yml down -v
         shell: bash
 
-      - name: Run Docker Compose for SDP, Anchor Platform and TSS
+      - name: Run Docker Compose for SDP and TSS
         working-directory: internal/integrationtests/docker
         run: docker compose -f docker-compose-e2e-tests.yml up --build -V -d
-        shell: bash
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
@@ -131,35 +130,24 @@ jobs:
           docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests create-data"
         shell: bash
 
-      - name: Restart Anchor Platform
+      - name: Verify SEP endpoints configuration
         run: |
-          docker restart e2e-anchor-platform
-        shell: bash
-
-      - name: Wait for the Anchor Platform to be up
-        run: |
-          wait_for_server() {
-            local endpoint=$1
-            local max_wait_time=$2
-
-            SECONDS=0
-            while ! curl -s $endpoint > /dev/null; do
-              echo "Waiting for server at $endpoint to be up... $SECONDS seconds elapsed"
-              sleep 4
-              if [ $SECONDS -ge $max_wait_time ]; then
-                echo "Server at $endpoint is not up after $max_wait_time seconds."
-                exit 1
-              fi
-            done
-            echo "Server at $endpoint is up."
-          }
-
-          wait_for_server http://localhost:8080/health 120
-          wait_for_server http://localhost:8085/health 120
+          echo "Checking stellar.toml configuration..."
+          TOML=$(curl -s http://localhost:8000/.well-known/stellar.toml)
+          
+          echo "Verifying SEP endpoints in stellar.toml..."
+          if echo "$TOML" | grep -q "TRANSFER_SERVER.*8000"; then
+            echo "✅ TOML correctly points to SEP-24 endpoints"
+          else
+            echo "❌ TOML does not point to SEP-24 endpoints"
+            echo "$TOML"
+            exit 1
+          fi
         shell: bash
 
       - name: Start integration test command
         run: |
+          echo "Running integration tests with native SDP SEP services"
           docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
         shell: bash
 

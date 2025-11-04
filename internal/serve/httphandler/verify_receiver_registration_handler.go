@@ -14,10 +14,10 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -55,7 +55,6 @@ var (
 )
 
 type VerifyReceiverRegistrationHandler struct {
-	AnchorPlatformAPIService    anchorplatform.AnchorPlatformAPIServiceInterface
 	Models                      *data.Models
 	ReCAPTCHAValidator          validators.ReCAPTCHAValidator
 	ReCAPTCHADisabled           bool
@@ -65,11 +64,11 @@ type VerifyReceiverRegistrationHandler struct {
 }
 
 // validate validates the request [header, body, body.reCAPTCHA_token], and returns the decoded payload, or an http error.
-func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj data.ReceiverRegistrationRequest, sep24Claims *anchorplatform.SEP24JWTClaims, httpErr *httperror.HTTPError) {
+func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj data.ReceiverRegistrationRequest, sep24Claims *sepauth.SEP24JWTClaims, httpErr *httperror.HTTPError) {
 	ctx := r.Context()
 
 	// STEP 1: Validate SEP-24 JWT token
-	sep24Claims = anchorplatform.GetSEP24Claims(ctx)
+	sep24Claims = sepauth.GetSEP24Claims(ctx)
 	if sep24Claims == nil {
 		err := fmt.Errorf("no SEP-24 claims found in the request context")
 		log.Ctx(ctx).Error(err)
@@ -199,7 +198,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	ctx context.Context,
 	dbTx db.DBTransaction,
-	sep24Claims anchorplatform.SEP24JWTClaims,
+	sep24Claims sepauth.SEP24JWTClaims,
 	receiver data.Receiver, otp string,
 	contactInfo string,
 ) (receiverWallet data.ReceiverWallet, wasAlreadyRegistered bool, err error) {
@@ -261,34 +260,24 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	return *rw, false, nil
 }
 
-// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the "pending_anchor" status, and updates
-// the receiver wallet with the anchor platform transaction ID.
-func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
-	// STEP 1: update receiver wallet with the anchor platform transaction ID.
+// processTransactionID patches the receiver wallet with the SEP-24 transaction ID.
+func (v VerifyReceiverRegistrationHandler) processTransactionID(ctx context.Context, dbTx db.DBTransaction, sep24Claims sepauth.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
 	err := v.Models.ReceiverWallet.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
-		AnchorPlatformTransactionID: sep24Claims.TransactionID(),
+		SEP24TransactionID: sep24Claims.TransactionID(),
 	}, dbTx)
 	if err != nil {
-		return fmt.Errorf("updating receiver wallet with anchor platform transaction ID: %w", err)
+		return fmt.Errorf("updating receiver wallet with transaction ID: %w", err)
 	}
 
-	// STEP 2: PATCH transaction on the AnchorPlatform, signaling that it is pending anchor
-	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-		ID:     sep24Claims.TransactionID(),
-		SEP:    "24",
-		Status: anchorplatform.APTransactionStatusPendingAnchor,
-	}
-	err = v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
-	if err != nil {
-		return fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), err)
-	}
+	log.Ctx(ctx).Infof("Updated receiver wallet %s with SEP-24 transaction ID %s",
+		receiverWallet.ID, sep24Claims.TransactionID())
 
 	return nil
 }
 
 // VerifyReceiverRegistration is the handler for the SEP-24 `POST /wallet-registration/verification` endpoint. It is
 // where the SDP verifies the receiver's PII & OTP, update the receiver wallet with the Stellar account and memo, found
-// in the JWT token, and PATCH the transaction on the AnchorPlatform.
+// in the JWT token.
 func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -340,9 +329,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 		// STEP 5: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
 		if !wasAlreadyRegistered {
-			err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
+			err = v.processTransactionID(ctx, dbTx, *sep24Claims, receiverWallet)
 			if err != nil {
-				return fmt.Errorf("processing anchor platform transaction ID: %w", err)
+				return fmt.Errorf("processing transaction ID: %w", err)
 			}
 		}
 

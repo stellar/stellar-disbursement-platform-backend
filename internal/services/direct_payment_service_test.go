@@ -905,3 +905,179 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 	mockDistAccountService.AssertExpectations(t)
 	mockHorizonClient.AssertExpectations(t)
 }
+
+func Test_TrustlineNotFoundError_Error(t *testing.T) {
+	err := TrustlineNotFoundError{
+		Asset: data.Asset{
+			Code:   "USDC",
+			Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		},
+		DistributionAccount: "GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS",
+	}
+
+	expectedMsg := "distribution account GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS does not have a trustline for asset USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_AccountNotFoundError_Error(t *testing.T) {
+	err := AccountNotFoundError{
+		Address: "GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS",
+	}
+
+	expectedMsg := "distribution account GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS not found on the Stellar network"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_CircleAccountNotActivatedError_Error(t *testing.T) {
+	testCases := []struct {
+		name        string
+		accountType string
+		status      string
+		expected    string
+	}{
+		{
+			name:        "Circle wallet pending",
+			accountType: "CIRCLE",
+			status:      string(schema.AccountStatusPendingUserActivation),
+			expected:    "Circle distribution account is in PENDING_USER_ACTIVATION state, please complete the CIRCLE activation process",
+		},
+		{
+			name:        "Circle account inactive",
+			accountType: "CIRCLE",
+			status:      "INACTIVE",
+			expected:    "Circle distribution account is in INACTIVE state, please complete the CIRCLE activation process",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CircleAccountNotActivatedError{
+				AccountType: tc.accountType,
+				Status:      tc.status,
+			}
+			assert.Equal(t, tc.expected, err.Error())
+		})
+	}
+}
+
+func Test_CircleAssetNotSupportedError_Error(t *testing.T) {
+	err := CircleAssetNotSupportedError{
+		Asset: data.Asset{
+			Code:   "EUROC",
+			Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		},
+	}
+
+	expectedMsg := "asset EUROC is not supported by Circle for this distribution account"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_WalletNotEnabledError_Error(t *testing.T) {
+	err := WalletNotEnabledError{
+		WalletName: "Vibrant Assist",
+	}
+
+	expectedMsg := "wallet 'Vibrant Assist' is not enabled for payments"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_ReceiverWalletNotFoundError_Error(t *testing.T) {
+	err := ReceiverWalletNotFoundError{
+		ReceiverID: "receiver-123",
+		WalletID:   "wallet-456",
+	}
+
+	expectedMsg := "no receiver wallet: receiver=receiver-123 wallet=wallet-456"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_ReceiverWalletNotReadyForPaymentError_Error(t *testing.T) {
+	testCases := []struct {
+		name   string
+		status data.ReceiversWalletStatus
+	}{
+		{
+			name:   "Draft status",
+			status: data.DraftReceiversWalletStatus,
+		},
+		{
+			name:   "Ready status",
+			status: data.ReadyReceiversWalletStatus,
+		},
+		{
+			name:   "Flagged status",
+			status: data.FlaggedReceiversWalletStatus,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ReceiverWalletNotReadyForPaymentError{
+				CurrentStatus: tc.status,
+			}
+			expectedMsg := "receiver wallet is not ready for payment, current status is " + string(tc.status)
+			assert.Equal(t, expectedMsg, err.Error())
+		})
+	}
+}
+
+func Test_AssetNotSupportedByWalletError_Error(t *testing.T) {
+	err := AssetNotSupportedByWalletError{
+		AssetCode:  "EUROC",
+		WalletName: "Vibrant Assist",
+	}
+
+	expectedMsg := "asset 'EUROC' is not supported by wallet 'Vibrant Assist'"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_InsufficientBalanceForDirectPaymentError_Error(t *testing.T) {
+	testCases := []struct {
+		name               string
+		requestedAmount    float64
+		availableBalance   float64
+		totalPendingAmount float64
+		assetCode          string
+		expectedError      string
+	}{
+		{
+			name:               "Simple insufficient balance",
+			requestedAmount:    100.0,
+			availableBalance:   50.0,
+			totalPendingAmount: 0.0,
+			assetCode:          "USDC",
+			expectedError:      "insufficient balance for direct payment: requested 100.000000 USDC, but only 50.000000 available (0.000000 in pending payments). Need 50.000000 more USDC",
+		},
+		{
+			name:               "Insufficient with pending payments",
+			requestedAmount:    100.0,
+			availableBalance:   120.0,
+			totalPendingAmount: 30.0,
+			assetCode:          "USDC",
+			expectedError:      "insufficient balance for direct payment: requested 100.000000 USDC, but only 120.000000 available (30.000000 in pending payments). Need 10.000000 more USDC",
+		},
+		{
+			name:               "Large amount with pending",
+			requestedAmount:    1000.50,
+			availableBalance:   500.25,
+			totalPendingAmount: 200.75,
+			assetCode:          "XLM",
+			expectedError:      "insufficient balance for direct payment: requested 1000.500000 XLM, but only 500.250000 available (200.750000 in pending payments). Need 701.000000 more XLM",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := InsufficientBalanceForDirectPaymentError{
+				Asset: data.Asset{
+					Code:   tc.assetCode,
+					Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				},
+				RequestedAmount:    tc.requestedAmount,
+				AvailableBalance:   tc.availableBalance,
+				TotalPendingAmount: tc.totalPendingAmount,
+			}
+			assert.Equal(t, tc.expectedError, err.Error())
+		})
+	}
+}
