@@ -563,8 +563,7 @@ CREATE TABLE public.receiver_wallets (
     otp_created_at timestamp with time zone,
     otp_confirmed_at timestamp with time zone,
     sep24_transaction_id text,
-    invitation_sent_at timestamp with time zone,
-    anchor_platform_transaction_synced_at timestamp with time zone
+    invitation_sent_at timestamp with time zone
 );
 
 
@@ -1128,11 +1127,11 @@ b24fd41a-5cb9-4f3e-be5a-a6d2a657da4e	DATE_OF_BIRTH	$2a$04$J/WuvEtcrPp/n6f2cFsL3O
 -- Data for Name: receiver_wallets; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.receiver_wallets (id, receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, created_at, updated_at, status, status_history, otp, otp_created_at, otp_confirmed_at, anchor_platform_transaction_id, invitation_sent_at, anchor_platform_transaction_synced_at) FROM stdin;
-c08eea5f-0c25-4611-a869-31bf4844b468	b24fd41a-5cb9-4f3e-be5a-a6d2a657da4e	7a0c5a0a-33c1-42b9-a27b-d657567c2925	\N	\N	\N	2024-06-12 16:37:07.976312+00	2024-06-12 16:37:10.908561+00	READY	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-06-12T16:37:07.976312+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-06-12T16:37:08.210896+00:00\\"}"}	\N	\N	\N	\N	2024-06-12 16:37:10.908561+00	\N
-8ec2ff7b-8193-420b-ac40-698dc4d0f139	560177da-47a7-4e1c-8361-757fc3ba4c7f	7a0c5a0a-33c1-42b9-a27b-d657567c2925	\N	\N	\N	2024-06-12 16:37:07.976312+00	2024-06-12 16:37:10.908561+00	READY	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-06-12T16:37:07.976312+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-06-12T16:37:08.210896+00:00\\"}"}	\N	\N	\N	\N	2024-06-12 16:37:10.908561+00	\N
-5a7476b8-df72-4663-b2b3-5031829e04e4	677820fb-68c4-4595-b0ec-ffa7df5390ef	7a0c5a0a-33c1-42b9-a27b-d657567c2925	GBBMN6CHPVLHATN6B7GP2KYOCTLOGF4IML7WRL4VMIOXXJNSV5GCUDAB	\N	\N	2024-06-12 16:37:07.976312+00	2024-06-12 16:42:10.550569+00	REGISTERED	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-06-12T16:37:07.976312+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-06-12T16:37:08.210896+00:00\\"}"}	422610	2024-06-12 16:37:27.818973+00	2024-06-12 16:37:47.054832+00	2c9b47ba-da5e-426d-a4ca-bbf722e1877e	2024-06-12 16:37:10.908561+00	2024-06-12 16:42:10.550569+00
-d8366a73-7fce-44f9-b892-9e80383ba84e	179c2ed5-6dce-46f5-967f-60c4bdfe8f03	79308ea6-da07-4520-9db4-1b9b390d5d7e	\N	\N	\N	2024-07-03 15:34:39.618582+00	2024-07-03 15:43:31.471024+00	READY	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-07-03T15:34:39.618582+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-07-03T15:34:39.819203+00:00\\"}"}	487190	2024-07-03 15:43:31.471024+00	\N	\N	2024-07-03 15:34:40.68967+00	\N
+COPY public.receiver_wallets (id, receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, created_at, updated_at, status, status_history, otp, otp_created_at, otp_confirmed_at, sep24_transaction_id, invitation_sent_at) FROM stdin;
+c08eea5f-0c25-4611-a869-31bf4844b468	b24fd41a-5cb9-4f3e-be5a-a6d2a657da4e	7a0c5a0a-33c1-42b9-a27b-d657567c2925	\N	\N	\N	2024-06-12 16:37:07.976312+00	2024-06-12 16:37:10.908561+00	READY	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-06-12T16:37:07.976312+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-06-12T16:37:08.210896+00:00\\"}"}	\N	\N	\N	\N	2024-06-12 16:37:10.908561+00
+8ec2ff7b-8193-420b-ac40-698dc4d0f139	560177da-47a7-4e1c-8361-757fc3ba4c7f	7a0c5a0a-33c1-42b9-a27b-d657567c2925	\N	\N	\N	2024-06-12 16:37:07.976312+00	2024-06-12 16:37:10.908561+00	READY	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-06-12T16:37:07.976312+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-06-12T16:37:08.210896+00:00\\"}"}	\N	\N	\N	\N	2024-06-12 16:37:10.908561+00
+5a7476b8-df72-4663-b2b3-5031829e04e4	677820fb-68c4-4595-b0ec-ffa7df5390ef	7a0c5a0a-33c1-42b9-a27b-d657567c2925	GBBMN6CHPVLHATN6B7GP2KYOCTLOGF4IML7WRL4VMIOXXJNSV5GCUDAB	\N	\N	2024-06-12 16:37:07.976312+00	2024-06-12 16:42:10.550569+00	REGISTERED	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-06-12T16:37:07.976312+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-06-12T16:37:08.210896+00:00\\"}"}	422610	2024-06-12 16:37:27.818973+00	2024-06-12 16:37:47.054832+00	2c9b47ba-da5e-426d-a4ca-bbf722e1877e	2024-06-12 16:37:10.908561+00
+d8366a73-7fce-44f9-b892-9e80383ba84e	179c2ed5-6dce-46f5-967f-60c4bdfe8f03	79308ea6-da07-4520-9db4-1b9b390d5d7e	\N	\N	\N	2024-07-03 15:34:39.618582+00	2024-07-03 15:43:31.471024+00	READY	{"{\\"status\\": \\"DRAFT\\", \\"timestamp\\": \\"2024-07-03T15:34:39.618582+00:00\\"}","{\\"status\\": \\"READY\\", \\"timestamp\\": \\"2024-07-03T15:34:39.819203+00:00\\"}"}	487190	2024-07-03 15:43:31.471024+00	\N	\N	2024-07-03 15:34:40.68967+00
 \.
 
 
