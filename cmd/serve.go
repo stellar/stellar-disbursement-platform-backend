@@ -397,6 +397,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		cmdUtils.SchedulerConfigOptions(&schedulerOpts)...,
 	)
 
+	// DB pool tuning options (serve)
+	configOpts = append(
+		configOpts,
+		cmdUtils.DBPoolConfigOptions(&globalOptions.DBPool)...,
+	)
+
 	// bridge integration options
 	bridgeIntegrationOpts := cmdUtils.BridgeIntegrationOptions{}
 	configOpts = append(
@@ -456,7 +462,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ctx := cmd.Context()
 
 			// Setup the Admin DB connection pool
-			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: monitorService}
+			dbcpOptions := di.DBConnectionPoolOptions{
+				DatabaseURL:            globalOptions.DatabaseURL,
+				MonitorService:         monitorService,
+				MaxOpenConns:           globalOptions.DBPool.DBMaxOpenConns,
+				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
+				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
+				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+			}
 			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)

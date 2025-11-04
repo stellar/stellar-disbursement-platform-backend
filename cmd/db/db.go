@@ -33,7 +33,13 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			utils.PropagatePersistentPreRun(cmd, args)
 
-			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(cmd.Context(), di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(cmd.Context(), di.DBConnectionPoolOptions{
+				DatabaseURL:            globalOptions.DatabaseURL,
+				MaxOpenConns:           globalOptions.DBPool.DBMaxOpenConns,
+				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
+				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
+				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+			})
 			if err != nil {
 				log.Ctx(cmd.Context()).Fatalf("getting Admin database connection pool: %v", err)
 			}
