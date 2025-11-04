@@ -153,21 +153,6 @@ func (manager *JWTManager) GenerateSEP10Token(issuer, subject, jti, clientDomain
 	return token, nil
 }
 
-// GenerateDefaultToken will generate a JWT token string using the token manager and only the default claims.
-func (manager *JWTManager) GenerateDefaultToken(id string) (string, error) {
-	claims := jwt.RegisteredClaims{
-		ID:        id,
-		Subject:   "stellar-disbursement-platform-backend",
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Millisecond * time.Duration(manager.expirationMiliseconds))),
-	}
-
-	token, err := manager.signToken(claims)
-	if err != nil {
-		return "", fmt.Errorf("generating default token: %w", err)
-	}
-	return token, nil
-}
-
 // ParseDefaultTokenClaims will parse the default claims from a JWT token string.
 func (manager *JWTManager) ParseDefaultTokenClaims(tokenString string) (*jwt.RegisteredClaims, error) {
 	return parseTokenClaims(manager.secret, tokenString, &jwt.RegisteredClaims{}, "default")

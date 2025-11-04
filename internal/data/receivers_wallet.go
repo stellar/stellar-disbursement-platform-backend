@@ -79,7 +79,7 @@ type ReceiverWallet struct {
 	OTPCreatedAt       *time.Time                   `json:"-" db:"otp_created_at"`
 	OTPConfirmedAt     *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
 	OTPConfirmedWith   string                       `json:"otp_confirmed_with,omitempty" db:"otp_confirmed_with"`
-	SEP24TransactionID string                       `json:"sep24_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
+	SEP24TransactionID string                       `json:"sep24_transaction_id,omitempty" db:"sep24_transaction_id"`
 	InvitedAt          *time.Time                   `json:"invited_at,omitempty" db:"invited_at"`
 	LastMessageSentAt  *time.Time                   `json:"last_message_sent_at,omitempty" db:"last_message_sent_at"`
 	InvitationSentAt   *time.Time                   `json:"invitation_sent_at" db:"invitation_sent_at"`
@@ -114,7 +114,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 		SELECT
 			rw.id,
 			rw.receiver_id,
-			rw.anchor_platform_transaction_id,
+			rw.sep24_transaction_id,
 			rw.stellar_address,
 			rw.stellar_memo,
 			rw.stellar_memo_type,
@@ -169,7 +169,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 	SELECT 
 		rwc.id,
 		rwc.receiver_id as "receiver.id",
-		COALESCE(rwc.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
+		COALESCE(rwc.sep24_transaction_id, '') as sep24_transaction_id,
 		COALESCE(rwc.stellar_address, '') as stellar_address,
 		COALESCE(rwc.stellar_memo, '') as stellar_memo,
 		COALESCE(rwc.stellar_memo_type::text, '') as stellar_memo_type,
@@ -221,7 +221,7 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"invitation_sent_at",
 		},
 		CoalesceColumns: []string{
-			"anchor_platform_transaction_id",
+			"sep24_transaction_id",
 			"stellar_address",
 			"stellar_memo",
 			"stellar_memo_type::text AS stellar_memo_type",
@@ -311,7 +311,7 @@ func (rw *ReceiverWalletModel) GetBySEP24TransactionID(ctx context.Context, tran
 		FROM
 			receiver_wallets rw
 		WHERE
-			rw.anchor_platform_transaction_id = $1
+			rw.sep24_transaction_id = $1
 		LIMIT 1
 	`
 
@@ -593,7 +593,7 @@ func (rw *ReceiverWalletModel) UpdateInvitationSentAt(ctx context.Context, sqlEx
 
 type ReceiverWalletUpdate struct {
 	Status             ReceiversWalletStatus `db:"status"`
-	SEP24TransactionID string                `db:"anchor_platform_transaction_id"`
+	SEP24TransactionID string                `db:"sep24_transaction_id"`
 	StellarAddress     string                `db:"stellar_address"`
 	StellarMemo        *string               `db:"stellar_memo"`
 	StellarMemoType    *schema.MemoType      `db:"stellar_memo_type"`
@@ -669,7 +669,7 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 		args = append(args, update.Status)
 	}
 	if update.SEP24TransactionID != "" {
-		fields = append(fields, "anchor_platform_transaction_id = ?")
+		fields = append(fields, "sep24_transaction_id = ?")
 		args = append(args, update.SEP24TransactionID)
 	}
 	if update.StellarAddress != "" {
@@ -775,7 +775,7 @@ func (rw *ReceiverWalletModel) UpdateStatusToReady(ctx context.Context, id strin
 					otp_confirmed_at = NULL,
 					otp_confirmed_with = NULL,
 					otp_created_at = NULL,
-					anchor_platform_transaction_id = NULL
+					sep24_transaction_id = NULL
 			WHERE id = $2
 	`
 		_, err = tx.ExecContext(ctx, q, statusMessage, id)

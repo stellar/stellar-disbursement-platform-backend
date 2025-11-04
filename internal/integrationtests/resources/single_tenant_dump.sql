@@ -562,7 +562,7 @@ CREATE TABLE public.receiver_wallets (
     otp text,
     otp_created_at timestamp with time zone,
     otp_confirmed_at timestamp with time zone,
-    anchor_platform_transaction_id text,
+    sep24_transaction_id text,
     invitation_sent_at timestamp with time zone,
     anchor_platform_transaction_synced_at timestamp with time zone
 );

@@ -92,26 +92,6 @@ func Test_JWTManager_GenerateAndParseSEP24MoreInfoToken(t *testing.T) {
 	assert.Nil(t, claims.Valid())
 }
 
-func Test_JWTManager_GenerateAndParseDefaultToken(t *testing.T) {
-	jwtManager, err := NewJWTManager("1234567890ab", 5000)
-	require.NoError(t, err)
-
-	// valid claims 🎉
-	tokenStr, err := jwtManager.GenerateDefaultToken("test-transaction-id")
-	require.NoError(t, err)
-	require.NotEmpty(t, tokenStr)
-	now := time.Now()
-
-	// parse claims
-	claims, err := jwtManager.ParseDefaultTokenClaims(tokenStr)
-	require.NoError(t, err)
-	assert.Nil(t, claims.Valid())
-	assert.Equal(t, "test-transaction-id", claims.ID)
-	assert.Equal(t, "stellar-disbursement-platform-backend", claims.Subject)
-	assert.True(t, claims.ExpiresAt.After(now.Add(4000*time.Millisecond)))
-	assert.True(t, claims.ExpiresAt.Before(now.Add(5000*time.Millisecond)))
-}
-
 func Test_JWTManager_GenerateAndParseSEP10Token(t *testing.T) {
 	jwtManager, err := NewJWTManager("1234567890ab", 5000)
 	require.NoError(t, err)

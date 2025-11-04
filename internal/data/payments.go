@@ -208,8 +208,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 		WHERE
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
-			AND rw.anchor_platform_transaction_id IS NOT NULL
-			AND rw.anchor_platform_transaction_synced_at IS NULL
+			AND rw.sep24_transaction_id IS NOT NULL
 		ORDER BY
 			p.created_at
 		FOR UPDATE OF p, rw SKIP LOCKED
@@ -616,22 +615,6 @@ func (p *PaymentModel) RetryFailedPayments(ctx context.Context, sqlExec db.SQLEx
 
 	if numRowsAffected != int64(len(paymentIDs)) {
 		return ErrMismatchNumRowsAffected
-	}
-
-	// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
-	const updateReceiverWallets = `
-		UPDATE
-			receiver_wallets
-		SET
-			anchor_platform_transaction_synced_at = NULL
-		WHERE
-			id IN (
-				SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
-			)
-		`
-	_, err = sqlExec.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
-	if err != nil {
-		return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
 	}
 
 	return nil

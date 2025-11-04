@@ -83,7 +83,7 @@ global:
   distributionPublicKey: #required
   distributionPrivateKey: #required
 
-  ## @param global.sep10PublicKey platform SEP10 signing public key.
+  ## @param global.sep10PublicKey SEP10 signing public key.
   ## @param global.sep10PrivateKey The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.
   sep10PublicKey: #required
   sep10PrivateKey: #required
@@ -166,7 +166,7 @@ sdp:
   ## @param sdp.configMap.annotations Annotations to be added to the ConfigMap.
   ## @extra sdp.configMap.data Used to inject non-sensitive environment variables into the SDP deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @extra sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts. Required if global.distributionPublicKey not set.
-  ## @extra sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY platform SEP10 signing public key. Required if global.sep10PublicKey not set.
+  ## @extra sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY SEP10 signing public key. Required if global.sep10PublicKey not set.
   ## @extra sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
   ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
   ## @param sdp.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".

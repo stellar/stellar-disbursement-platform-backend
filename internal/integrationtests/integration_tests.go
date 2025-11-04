@@ -440,7 +440,6 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 	// 1. Create new tenant and add owner user
 	distributionAccType := schema.AccountType(opts.DistributionAccountType)
 
-	// Use appropriate base URL based on whether we're using Anchor Platform or Internal SEP
 	// Use 3-part domain with tenant name for proper tenant extraction in SEP-24
 	baseURL := fmt.Sprintf("http://%s.stellar.local:8000", opts.TenantName)
 

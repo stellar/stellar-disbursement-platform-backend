@@ -37,9 +37,9 @@ wait_for_server() {
   echo "Server at $endpoint is up."
 }
 
-# Configuration arrays with Internal SEP
-Config_Internal_Stellar_Env_Phone_XLM_Testnet=(
-  "platform=InternalSEP_Stellar"
+# Configuration arrays
+Config_Stellar_Env_Phone_XLM_Testnet=(
+  "platform=Stellar-Phone"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
   "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
@@ -53,8 +53,8 @@ Config_Internal_Stellar_Env_Phone_XLM_Testnet=(
   "BASE_URL=http://stellar.local:8000"
 )
 
-Config_Internal_Stellar_Env_Email_XLM_Testnet=(
-  "platform=InternalSEP_Stellar"
+Config_Stellar_Env_Email_XLM_Testnet=(
+  "platform=Stellar-Email"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv"
   "REGISTRATION_CONTACT_TYPE=EMAIL"
@@ -68,8 +68,8 @@ Config_Internal_Stellar_Env_Email_XLM_Testnet=(
   "BASE_URL=http://stellar.local:8000"
 )
 
-Config_Internal_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
-  "platform=InternalSEP_Stellar"
+Config_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
+  "platform=Stellar-PhoneWallet"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv"
   "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
@@ -83,11 +83,11 @@ Config_Internal_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
   "BASE_URL=http://stellar.local:8000"
 )
 
-echo "🔧 Test Mode: Internal - Running Internal SEP tests"
+echo "🔧 Test Mode: Running SEP tests"
 options=(
-  Config_Internal_Stellar_Env_Phone_XLM_Testnet[@]
-  Config_Internal_Stellar_Env_Email_XLM_Testnet[@]
-  Config_Internal_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
+  Config_Stellar_Env_Phone_XLM_Testnet[@]
+  Config_Stellar_Env_Email_XLM_Testnet[@]
+  Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
 )
 
 # Iterate over each configuration
@@ -105,7 +105,6 @@ for config_name in "${options[@]}"; do
   done
 
   DOCKER_PROFILE=""
-  echo "Using Internal SEP services"
 
   DESCRIPTION="$platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
 

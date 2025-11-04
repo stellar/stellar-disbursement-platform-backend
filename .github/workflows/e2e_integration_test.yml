@@ -136,11 +136,11 @@ jobs:
           echo "Checking stellar.toml configuration..."
           TOML=$(curl -s http://localhost:8000/.well-known/stellar.toml)
           
-          echo "Verifying Internal SEP endpoints in stellar.toml..."
+          echo "Verifying SEP endpoints in stellar.toml..."
           if echo "$TOML" | grep -q "TRANSFER_SERVER.*8000"; then
-            echo "✅ TOML correctly points to Internal SEP-24 endpoints"
+            echo "✅ TOML correctly points to SEP-24 endpoints"
           else
-            echo "❌ TOML does not point to Internal endpoints"
+            echo "❌ TOML does not point to SEP-24 endpoints"
             echo "$TOML"
             exit 1
           fi
