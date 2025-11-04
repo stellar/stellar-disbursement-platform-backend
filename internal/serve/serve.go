@@ -629,16 +629,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 	})
 
-	mux.Group(func(r chi.Router) {
-		sep10Handler := httphandler.SEP10Handler{
-			SEP10Service: o.Sep10Service,
-		}
-
-		r.Get("/auth", sep10Handler.GetChallenge)
-		r.Post("/auth", sep10Handler.PostChallenge)
-	})
-
-	// SEP-24 and miscellaneous endpoints that are tenant-unaware
+	// SEP-1, SEP-10, SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
 			ReleaseID:        o.GitCommit,
@@ -647,7 +638,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			DBConnectionPool: o.AdminDBConnectionPool,
 		}.ServeHTTP)
 
-		// START SEP-24 endpoints
+		// SEP 1 TOML file endpoint
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			NetworkPassphrase:           o.NetworkPassphrase,
@@ -657,6 +648,16 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
 
+		// SEP-10 endpoints
+		r.Route("/sep10", func(r chi.Router) {
+			sep10Handler := httphandler.SEP10Handler{
+				SEP10Service: o.Sep10Service,
+			}
+
+			r.Get("/auth", sep10Handler.GetChallenge)
+			r.Post("/auth", sep10Handler.PostChallenge)
+		})
+		// SEP-24 endpoints
 		r.Route("/sep24", func(r chi.Router) {
 			sep24Handler := httphandler.SEP24Handler{
 				Models:             o.Models,

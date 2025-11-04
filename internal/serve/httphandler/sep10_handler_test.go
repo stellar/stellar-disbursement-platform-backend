@@ -34,9 +34,9 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		}).Return(expectedChallenge, nil)
 
 		r := chi.NewRouter()
-		r.Get("/auth", handler.GetChallenge)
+		r.Get("/sep10/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&memo=123&home_domain=stellar.org&client_domain=client.stellar.org", nil)
+		req := httptest.NewRequest(http.MethodGet, "/sep10/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&memo=123&home_domain=stellar.org&client_domain=client.stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -56,9 +56,9 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		handler := SEP10Handler{SEP10Service: mockService}
 
 		r := chi.NewRouter()
-		r.Get("/auth", handler.GetChallenge)
+		r.Get("/sep10/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?memo=123&home_domain=stellar.org", nil)
+		req := httptest.NewRequest(http.MethodGet, "/sep10/auth?memo=123&home_domain=stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -72,9 +72,9 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		handler := SEP10Handler{SEP10Service: mockService}
 
 		r := chi.NewRouter()
-		r.Get("/auth", handler.GetChallenge)
+		r.Get("/sep10/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?account=invalid-account&client_domain=client.stellar.org", nil)
+		req := httptest.NewRequest(http.MethodGet, "/sep10/auth?account=invalid-account&client_domain=client.stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -88,9 +88,9 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		handler := SEP10Handler{SEP10Service: mockService}
 
 		r := chi.NewRouter()
-		r.Get("/auth", handler.GetChallenge)
+		r.Get("/sep10/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&memo=invalid-memo&client_domain=client.stellar.org", nil)
+		req := httptest.NewRequest(http.MethodGet, "/sep10/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&memo=invalid-memo&client_domain=client.stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -109,9 +109,9 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		}).Return(nil, fmt.Errorf("service error"))
 
 		r := chi.NewRouter()
-		r.Get("/auth", handler.GetChallenge)
+		r.Get("/sep10/auth", handler.GetChallenge)
 
-		req := httptest.NewRequest(http.MethodGet, "/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&client_domain=client.stellar.org", nil)
+		req := httptest.NewRequest(http.MethodGet, "/sep10/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&client_domain=client.stellar.org", nil)
 		w := httptest.NewRecorder()
 
 		r.ServeHTTP(w, req)
@@ -139,9 +139,9 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		mockService.On("ValidateChallenge", mock.Anything, reqBody).Return(expectedResponse, nil)
 
 		r := chi.NewRouter()
-		r.Post("/auth", handler.PostChallenge)
+		r.Post("/sep10/auth", handler.PostChallenge)
 
-		req := httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBuffer(reqBodyBytes))
+		req := httptest.NewRequest(http.MethodPost, "/sep10/auth", bytes.NewBuffer(reqBodyBytes))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
@@ -171,9 +171,9 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		mockService.On("ValidateChallenge", mock.Anything, reqBody).Return(expectedResponse, nil)
 
 		r := chi.NewRouter()
-		r.Post("/auth", handler.PostChallenge)
+		r.Post("/sep10/auth", handler.PostChallenge)
 
-		req := httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBufferString("transaction=AAAA..."))
+		req := httptest.NewRequest(http.MethodPost, "/sep10/auth", bytes.NewBufferString("transaction=AAAA..."))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		w := httptest.NewRecorder()
 
@@ -193,9 +193,9 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		handler := SEP10Handler{SEP10Service: mockService}
 
 		r := chi.NewRouter()
-		r.Post("/auth", handler.PostChallenge)
+		r.Post("/sep10/auth", handler.PostChallenge)
 
-		req := httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBufferString("data"))
+		req := httptest.NewRequest(http.MethodPost, "/sep10/auth", bytes.NewBufferString("data"))
 		req.Header.Set("Content-Type", "text/plain")
 		w := httptest.NewRecorder()
 
@@ -210,9 +210,9 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		handler := SEP10Handler{SEP10Service: mockService}
 
 		r := chi.NewRouter()
-		r.Post("/auth", handler.PostChallenge)
+		r.Post("/sep10/auth", handler.PostChallenge)
 
-		req := httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBufferString("invalid json"))
+		req := httptest.NewRequest(http.MethodPost, "/sep10/auth", bytes.NewBufferString("invalid json"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
@@ -227,9 +227,9 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		handler := SEP10Handler{SEP10Service: mockService}
 
 		r := chi.NewRouter()
-		r.Post("/auth", handler.PostChallenge)
+		r.Post("/sep10/auth", handler.PostChallenge)
 
-		req := httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBufferString("other=data"))
+		req := httptest.NewRequest(http.MethodPost, "/sep10/auth", bytes.NewBufferString("other=data"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		w := httptest.NewRecorder()
 
@@ -250,9 +250,9 @@ func Test_SEP10Handler_PostChallenge(t *testing.T) {
 		mockService.On("ValidateChallenge", mock.Anything, reqBody).Return(nil, fmt.Errorf("validation failed"))
 
 		r := chi.NewRouter()
-		r.Post("/auth", handler.PostChallenge)
+		r.Post("/sep10/auth", handler.PostChallenge)
 
-		req := httptest.NewRequest(http.MethodPost, "/auth", bytes.NewBufferString("transaction=AAAA..."))
+		req := httptest.NewRequest(http.MethodPost, "/sep10/auth", bytes.NewBufferString("transaction=AAAA..."))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		w := httptest.NewRecorder()
 

@@ -277,7 +277,7 @@ func (v VerifyReceiverRegistrationHandler) processTransactionID(ctx context.Cont
 
 // VerifyReceiverRegistration is the handler for the SEP-24 `POST /wallet-registration/verification` endpoint. It is
 // where the SDP verifies the receiver's PII & OTP, update the receiver wallet with the Stellar account and memo, found
-// in the JWT token, and PATCH the transaction on the AnchorPlatform.
+// in the JWT token.
 func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

@@ -58,10 +58,10 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 
 	t, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
-		webAuthEndpoint = fmt.Sprintf("%s://%s/auth", parsedBaseURL.Scheme, req.Host)
+		webAuthEndpoint = fmt.Sprintf("%s://%s/sep10/auth", parsedBaseURL.Scheme, req.Host)
 		transferServerSep0024 = fmt.Sprintf("%s://%s/sep24", parsedBaseURL.Scheme, req.Host)
 	} else {
-		webAuthEndpoint = *t.BaseURL + "/auth"
+		webAuthEndpoint = *t.BaseURL + "/sep10/auth"
 		transferServerSep0024 = *t.BaseURL + "/sep24"
 	}
 

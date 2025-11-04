@@ -90,7 +90,7 @@ type ReceiverRegistrationRequest struct {
 
 // GetSEP10Challenge gets a challenge from SDP's internal SEP-10 service
 func (s *SDPSepServicesIntegrationTests) GetSEP10Challenge(ctx context.Context) (*SEP10ChallengeResponse, error) {
-	authURL, err := url.JoinPath(s.SDPBaseURL, "auth")
+	authURL, err := url.JoinPath(s.SDPBaseURL, "sep10/auth")
 	if err != nil {
 		return nil, fmt.Errorf("creating auth URL: %w", err)
 	}
@@ -205,7 +205,7 @@ func (s *SDPSepServicesIntegrationTests) SignSEP10Challenge(challengeResp *SEP10
 
 // ValidateSEP10Challenge submits signed challenge to get JWT token
 func (s *SDPSepServicesIntegrationTests) ValidateSEP10Challenge(ctx context.Context, signedChallenge *SignedSEP10Challenge) (*SEP10AuthToken, error) {
-	authURL, err := url.JoinPath(s.SDPBaseURL, "auth")
+	authURL, err := url.JoinPath(s.SDPBaseURL, "sep10/auth")
 	if err != nil {
 		return nil, fmt.Errorf("creating auth URL: %w", err)
 	}

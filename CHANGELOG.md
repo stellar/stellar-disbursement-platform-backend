@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
+    - Add SEP10 /auth endpoints 
+    - Add SEP24 /info endpoints
+    - Add SEP24 interactive deposit endpoint
+    - Remove Anchor Platform integration from the SDP and deprecate related env variables. 
 - Add configurable database connection pool settings to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
 
 ### Changed
@@ -101,12 +106,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Update wallet POST to allow accept new asset references [#696](https://github.com/stellar/stellar-disbursement-platform-backend/pull/696)
 - Update PATCH endpoint to extend update capabilities [#697](https://github.com/stellar/stellar-disbursement-platform-backend/pull/697)
 - Add `supported_assets` filter to `GET /wallets` endpoint [#734](https://github.com/stellar/stellar-disbursement-platform-backend/pull/734)
-- Add SEP10 /auth endpoints [#770](https://github.com/stellar/stellar-disbursement-platform-backend/pull/770)
 - Add OTP attempt tracking and validation with maximum attempts limit and expiration checks for receiver wallet registration [#773](https://github.com/stellar/stellar-disbursement-platform-backend/pull/773)
-- Add SEP24 /info endpoints [#773](https://github.com/stellar/stellar-disbursement-platform-backend/pull/773)
-- Add SEP24 interactive deposit endpoint [#802](https://github.com/stellar/stellar-disbursement-platform-backend/pull/802)
-- Add Anchor Platform enabled FF and remove docker support [#803](https://github.com/stellar/stellar-disbursement-platform-backend/pull/803)
-[#802](https://github.com/stellar/stellar-disbursement-platform-backend/pull/802)
 - Add asset filtering by trustline with balance information for `GET /assets` [#791](https://github.com/stellar/stellar-disbursement-platform-backend/pull/791)
 - Add AWS EKS CloudFormation deployment stacks [#519](https://github.com/stellar/stellar-disbursement-platform-backend/pull/519)
 
