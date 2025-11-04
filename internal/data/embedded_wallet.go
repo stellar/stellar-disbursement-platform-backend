@@ -269,9 +269,12 @@ func (ew *EmbeddedWalletModel) GetPendingForSubmission(ctx context.Context, sqlE
         FROM embedded_wallets ew
         WHERE
             ew.wallet_status = $1
-            AND COALESCE(ew.public_key, '') <> ''
-            AND COALESCE(ew.credential_id, '') <> ''
-            AND COALESCE(ew.wasm_hash, '') <> ''
+            AND ew.public_key IS NOT NULL
+            AND ew.public_key <> ''
+            AND ew.credential_id IS NOT NULL
+            AND ew.credential_id <> ''
+            AND ew.wasm_hash IS NOT NULL
+            AND ew.wasm_hash <> ''
         ORDER BY ew.updated_at ASC
         LIMIT $2
         FOR UPDATE SKIP LOCKED

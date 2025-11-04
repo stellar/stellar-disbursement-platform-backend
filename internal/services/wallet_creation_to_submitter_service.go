@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/stellar/go/support/log"
@@ -111,9 +110,6 @@ func (s *WalletCreationToSubmitterService) SendBatchWalletCreations(ctx context.
 
 			update := data.EmbeddedWalletUpdate{WalletStatus: data.ProcessingWalletStatus}
 			if err := s.sdpModels.EmbeddedWallets.Update(ctx, sdpTx, wallet.Token, update); err != nil {
-				if errors.Is(err, data.ErrEmbeddedWalletCredentialIDAlreadyExists) {
-					return fmt.Errorf("credential ID already exists for wallet %s: %w", wallet.Token, err)
-				}
 				return fmt.Errorf("updating embedded wallet %s: %w", wallet.Token, err)
 			}
 		}
