@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -18,6 +19,52 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
+
+// DBPoolOptions contains tunables for the PostgreSQL connection pool.
+type DBPoolOptions struct {
+	DBMaxOpenConns           int
+	DBMaxIdleConns           int
+	DBConnMaxIdleTimeSeconds int
+	DBConnMaxLifetimeSeconds int
+}
+
+// DBPoolConfigOptions returns config options for tuning the DB connection pool.
+func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:        "db-max-open-conns",
+			Usage:       "Maximum number of open DB connections per pool",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBMaxOpenConns,
+			FlagDefault: db.DefaultDBPoolConfig.MaxOpenConns,
+			Required:    false,
+		},
+		{
+			Name:        "db-max-idle-conns",
+			Usage:       "Maximum number of idle DB connections retained per pool",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBMaxIdleConns,
+			FlagDefault: db.DefaultDBPoolConfig.MaxIdleConns,
+			Required:    false,
+		},
+		{
+			Name:        "db-conn-max-idle-time-seconds",
+			Usage:       "Maximum idle time in seconds before a connection is closed",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBConnMaxIdleTimeSeconds,
+			FlagDefault: db.DefaultConnMaxIdleTimeSeconds,
+			Required:    false,
+		},
+		{
+			Name:        "db-conn-max-lifetime-seconds",
+			Usage:       "Maximum lifetime in seconds for a single connection",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBConnMaxLifetimeSeconds,
+			FlagDefault: db.DefaultConnMaxLifetimeSeconds,
+			Required:    false,
+		},
+	}
+}
 
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
 func TwilioConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption {
