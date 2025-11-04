@@ -16,6 +16,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
+const (
+	DefaultConnMaxIdleTimeSeconds = 10
+	DefaultConnMaxLifetimeSeconds = 300
+)
+
 // DBPoolConfig represents tunables for the sql.DB pool.
 type DBPoolConfig struct {
 	MaxOpenConns    int
@@ -27,8 +32,8 @@ type DBPoolConfig struct {
 var DefaultDBPoolConfig = DBPoolConfig{
 	MaxOpenConns:    20,
 	MaxIdleConns:    2,
-	ConnMaxIdleTime: 10 * time.Second,
-	ConnMaxLifetime: 5 * time.Minute,
+	ConnMaxIdleTime: DefaultConnMaxIdleTimeSeconds * time.Second,
+	ConnMaxLifetime: DefaultConnMaxLifetimeSeconds * time.Second,
 }
 
 // DBConnectionPool is an interface that wraps the sqlx.DB structs methods and includes the RunInTransaction helper.

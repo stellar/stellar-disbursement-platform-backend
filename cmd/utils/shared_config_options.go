@@ -52,7 +52,7 @@ func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
 			Usage:       "Maximum idle time in seconds before a connection is closed",
 			OptType:     types.Int,
 			ConfigKey:   &opts.DBConnMaxIdleTimeSeconds,
-			FlagDefault: db.DefaultDBPoolConfig.ConnMaxIdleTime,
+			FlagDefault: db.DefaultConnMaxIdleTimeSeconds,
 			Required:    false,
 		},
 		{
@@ -60,7 +60,7 @@ func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
 			Usage:       "Maximum lifetime in seconds for a single connection",
 			OptType:     types.Int,
 			ConfigKey:   &opts.DBConnMaxLifetimeSeconds,
-			FlagDefault: db.DefaultDBPoolConfig.ConnMaxLifetime,
+			FlagDefault: db.DefaultConnMaxLifetimeSeconds,
 			Required:    false,
 		},
 	}
