@@ -2,7 +2,6 @@ name: Integration Tests
 
 on:
   workflow_call: # allows this workflow to be called from another workflow, like `docker_image_public_release`
-  pull_request: # TODO: Remove before merging.
 
 env:
   USER_EMAIL: "sdp_user@stellar.org"

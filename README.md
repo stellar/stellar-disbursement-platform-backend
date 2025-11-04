@@ -391,12 +391,12 @@ The following environment variables can be used to configure the intervals of th
 Tune the per-tenant PostgreSQL connection pool with env vars (defaults shown):
 
 ```sh
-# Maximum open connections per pool (default: 10)
-DB_MAX_OPEN_CONNS=10
-# Maximum idle connections retained (default: 0)
-DB_MAX_IDLE_CONNS=0
-# Close idle connections after N seconds (default: 2)
-DB_CONN_MAX_IDLE_TIME_SECONDS=2
+# Maximum open connections per pool (default: 20)
+DB_MAX_OPEN_CONNS=20
+# Maximum idle connections retained (default: 2)
+DB_MAX_IDLE_CONNS=2
+# Close idle connections after N seconds (default: 10 seconds)
+DB_CONN_MAX_IDLE_TIME_SECONDS=10
 # Recycle connections after N seconds (default: 300 = 5 minutes)
 DB_CONN_MAX_LIFETIME_SECONDS=300
 ```
