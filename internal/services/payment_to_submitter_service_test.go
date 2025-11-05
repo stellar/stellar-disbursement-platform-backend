@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -296,7 +295,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 					assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
 					assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
 					assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Issuer, tx.AssetIssuer)
-					assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
+					assert.Equal(t, expectedPayments[tx.ExternalID].Amount, tx.Amount.StringFixed(7))
 					assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
 					assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
 					assert.Equal(t, testTenant.ID, tx.TenantID)

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 
@@ -18,8 +18,8 @@ import (
 
 //go:generate mockery --name=DistributionAccountServiceInterface --case=underscore --structname=MockDistributionAccountService --filename=distribution_account_service.go
 type DistributionAccountServiceInterface interface {
-	GetBalances(context context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error)
-	GetBalance(context context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error)
+	GetBalances(context context.Context, account *schema.TransactionAccount) (map[data.Asset]decimal.Decimal, error)
+	GetBalance(context context.Context, account *schema.TransactionAccount, asset data.Asset) (decimal.Decimal, error)
 }
 
 // ErrNoBalanceForAsset signals that the distribution account has no balance for the requested asset.
@@ -74,12 +74,12 @@ func NewDistributionAccountService(opts DistributionAccountServiceOptions) (*Dis
 	return &DistributionAccountService{strategies: strategies}, nil
 }
 
-func (s *DistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+func (s *DistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (decimal.Decimal, error) {
 	//nolint:wrapcheck // This is a wrapper method
 	return s.strategies[account.Type].GetBalance(ctx, account, asset)
 }
 
-func (s *DistributionAccountService) GetBalances(ctx context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+func (s *DistributionAccountService) GetBalances(ctx context.Context, account *schema.TransactionAccount) (map[data.Asset]decimal.Decimal, error) {
 	//nolint:wrapcheck // This is a wrapper method
 	return s.strategies[account.Type].GetBalances(ctx, account)
 }
@@ -99,13 +99,13 @@ func NewStellarDistributionAccountService(horizonClient horizonclient.ClientInte
 
 var _ DistributionAccountServiceInterface = (*StellarDistributionAccountService)(nil)
 
-func (s *StellarDistributionAccountService) GetBalances(_ context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+func (s *StellarDistributionAccountService) GetBalances(_ context.Context, account *schema.TransactionAccount) (map[data.Asset]decimal.Decimal, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
 	if err != nil {
 		return nil, fmt.Errorf("getting details for account from Horizon: %w", err)
 	}
 
-	balances := make(map[data.Asset]float64)
+	balances := make(map[data.Asset]decimal.Decimal)
 	for _, b := range accountDetails.Balances {
 		var code, issuer string
 		if b.Asset.Type == "native" {
@@ -115,24 +115,24 @@ func (s *StellarDistributionAccountService) GetBalances(_ context.Context, accou
 			issuer = b.Asset.Issuer
 		}
 
-		assetBal, parseAssetBalErr := strconv.ParseFloat(b.Balance, 64)
-		if parseAssetBalErr != nil {
-			return nil, fmt.Errorf("parsing balance to float: %w", parseAssetBalErr)
+		balance, parseErr := decimal.NewFromString(b.Balance)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing balance %s to decimal: %w", b.Balance, parseErr)
 		}
 
 		balances[data.Asset{
 			Code:   code,
 			Issuer: issuer,
-		}] = assetBal
+		}] = balance
 	}
 
 	return balances, nil
 }
 
-func (s *StellarDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+func (s *StellarDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (decimal.Decimal, error) {
 	accBalances, err := s.GetBalances(ctx, account)
 	if err != nil {
-		return 0, fmt.Errorf("getting balances for distribution account: %w", err)
+		return decimal.Zero, fmt.Errorf("getting balances for distribution account: %w", err)
 	}
 
 	code := asset.Code
@@ -148,7 +148,7 @@ func (s *StellarDistributionAccountService) GetBalance(ctx context.Context, acco
 		return assetBalance, nil
 	}
 
-	return 0, fmt.Errorf("%w: balance for asset %s not found for distribution account", ErrNoBalanceForAsset, asset)
+	return decimal.Zero, fmt.Errorf("%w: balance for asset %s not found for distribution account", ErrNoBalanceForAsset, asset)
 }
 
 type CircleDistributionAccountService struct {
@@ -158,7 +158,7 @@ type CircleDistributionAccountService struct {
 
 var _ DistributionAccountServiceInterface = (*CircleDistributionAccountService)(nil)
 
-func (s *CircleDistributionAccountService) GetBalances(ctx context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+func (s *CircleDistributionAccountService) GetBalances(ctx context.Context, account *schema.TransactionAccount) (map[data.Asset]decimal.Decimal, error) {
 	if !account.IsCircle() {
 		return nil, fmt.Errorf("distribution account is not a Circle account")
 	}
@@ -171,7 +171,7 @@ func (s *CircleDistributionAccountService) GetBalances(ctx context.Context, acco
 		return nil, fmt.Errorf("getting wallet by ID: %w", err)
 	}
 
-	balances := make(map[data.Asset]float64)
+	balances := make(map[data.Asset]decimal.Decimal)
 	for _, b := range businessBalances.Available {
 		asset, err := circle.ParseStellarAsset(b.Currency, s.NetworkType)
 		if err != nil {
@@ -179,27 +179,27 @@ func (s *CircleDistributionAccountService) GetBalances(ctx context.Context, acco
 			continue
 		}
 
-		assetBal, err := strconv.ParseFloat(b.Amount, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parsing balance to float: %w", err)
+		balance, parseErr := decimal.NewFromString(b.Amount)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing balance %s to decimal: %w", b.Amount, parseErr)
 		}
 
-		balances[asset] = assetBal
+		balances[asset] = balance
 	}
 
 	return balances, nil
 }
 
-func (s *CircleDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+func (s *CircleDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (decimal.Decimal, error) {
 	accBalances, err := s.GetBalances(ctx, account)
 	if err != nil {
-		return 0, fmt.Errorf("getting balances for distribution account: %w", err)
+		return decimal.Zero, fmt.Errorf("getting balances for distribution account: %w", err)
 	}
 
 	asset = data.Asset{Code: asset.Code, Issuer: asset.Issuer} // scrub the other fields
 	assetBalance, ok := accBalances[asset]
 	if !ok {
-		return 0, fmt.Errorf("%w: balance for asset %v not found for distribution account", ErrNoBalanceForAsset, asset)
+		return decimal.Zero, fmt.Errorf("%w: balance for asset %v not found for distribution account", ErrNoBalanceForAsset, asset)
 	}
 
 	return assetBalance, nil

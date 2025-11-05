@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -169,7 +170,7 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "",
 				Status:             TransactionStatusPending,
-				Amount:             1,
+				Amount:             decimal.NewFromInt(1),
 				TenantID:           uuid.NewString(),
 			})
 			for _, tx := range lockedTransactions {
@@ -183,7 +184,7 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "",
 				Status:             TransactionStatusPending,
-				Amount:             1,
+				Amount:             decimal.NewFromInt(1),
 				TenantID:           uuid.NewString(),
 			})
 

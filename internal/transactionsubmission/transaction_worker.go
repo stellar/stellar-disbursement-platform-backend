@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -499,7 +498,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string, asset txnbuild.Asset) (*txnbuild.Transaction, error) {
 	var operation txnbuild.Operation
 	var txMemo txnbuild.Memo
-	amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+	amount := txJob.Transaction.Amount.StringFixed(6)
 
 	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
 		memo, err := txJob.Transaction.BuildMemo()

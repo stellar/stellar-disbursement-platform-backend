@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/go/xdr"
@@ -33,7 +34,7 @@ type Transaction struct {
 	StatusHistory TransactionStatusHistory `db:"status_history"`
 	AssetCode     string                   `db:"asset_code"`
 	AssetIssuer   string                   `db:"asset_issuer"`
-	Amount        float64                  `db:"amount"`
+	Amount        decimal.Decimal          `db:"amount"`
 	Destination   string                   `db:"destination"`
 	Memo          string                   `db:"memo"`
 	MemoType      schema.MemoType          `db:"memo_type"`
@@ -91,7 +92,7 @@ func (tx *Transaction) validate() error {
 			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", tx.AssetIssuer)
 		}
 	}
-	if tx.Amount <= 0 {
+	if tx.Amount.LessThanOrEqual(decimal.Zero) {
 		return fmt.Errorf("amount must be positive")
 	}
 	if !strkey.IsValidEd25519PublicKey(tx.Destination) && !strkey.IsValidContractAddress(tx.Destination) {
