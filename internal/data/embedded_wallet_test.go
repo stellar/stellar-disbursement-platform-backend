@@ -343,3 +343,37 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 		assert.Equal(t, "", unchangedWallet2.CredentialID)
 	})
 }
+
+func Test_EmbeddedWalletModel_GetPendingForSubmission(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+	hash := strings.Repeat("a", 64)
+	pubKey := strings.Repeat("b", 130)
+
+	pending1 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", hash, "", "cred-1", pubKey, PendingWalletStatus)
+	pending2 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", hash, "", "cred-2", pubKey, PendingWalletStatus)
+	CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", hash, "", "cred-3", pubKey, SuccessWalletStatus)
+
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer dbTx.Rollback()
+
+	result, err := models.EmbeddedWallets.GetPendingForSubmission(ctx, dbTx, 5)
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+
+	ids := []string{result[0].Token, result[1].Token}
+	assert.Contains(t, ids, pending1.Token)
+	assert.Contains(t, ids, pending2.Token)
+}

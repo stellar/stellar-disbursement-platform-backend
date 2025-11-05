@@ -258,3 +258,32 @@ func (ew *EmbeddedWalletModel) Update(ctx context.Context, sqlExec db.SQLExecute
 
 	return nil
 }
+
+func (ew *EmbeddedWalletModel) GetPendingForSubmission(ctx context.Context, sqlExec db.SQLExecuter, batchSize int) ([]*EmbeddedWallet, error) {
+	if batchSize <= 0 {
+		return nil, fmt.Errorf("batch size must be greater than 0")
+	}
+
+	query := fmt.Sprintf(`
+        SELECT %s
+        FROM embedded_wallets ew
+        WHERE
+            ew.wallet_status = $1
+            AND ew.public_key IS NOT NULL
+            AND ew.public_key <> ''
+            AND ew.credential_id IS NOT NULL
+            AND ew.credential_id <> ''
+            AND ew.wasm_hash IS NOT NULL
+            AND ew.wasm_hash <> ''
+        ORDER BY ew.updated_at ASC
+        LIMIT $2
+        FOR UPDATE SKIP LOCKED
+    `, EmbeddedWalletColumnNames("ew", ""))
+
+	wallets := make([]*EmbeddedWallet, 0)
+	if err := sqlExec.SelectContext(ctx, &wallets, query, PendingWalletStatus, batchSize); err != nil {
+		return nil, fmt.Errorf("getting pending embedded wallets for submission: %w", err)
+	}
+
+	return wallets, nil
+}

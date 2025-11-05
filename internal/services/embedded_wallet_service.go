@@ -9,8 +9,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
 var (
@@ -46,16 +44,12 @@ var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
 // EmbeddedWalletService handles wallet creation and transaction sponsorship
 type EmbeddedWalletService struct {
 	sdpModels *data.Models
-	tssModel  *store.TransactionModel
 	wasmHash  string
 }
 
-func NewEmbeddedWalletService(sdpModels *data.Models, tssModel *store.TransactionModel, wasmHash string) (*EmbeddedWalletService, error) {
+func NewEmbeddedWalletService(sdpModels *data.Models, wasmHash string) (*EmbeddedWalletService, error) {
 	if sdpModels == nil {
 		return nil, fmt.Errorf("sdpModels cannot be nil")
-	}
-	if tssModel == nil {
-		return nil, fmt.Errorf("tssModel cannot be nil")
 	}
 	if wasmHash == "" {
 		return nil, fmt.Errorf("wasmHash cannot be empty")
@@ -63,14 +57,12 @@ func NewEmbeddedWalletService(sdpModels *data.Models, tssModel *store.Transactio
 
 	return &EmbeddedWalletService{
 		sdpModels: sdpModels,
-		tssModel:  tssModel,
 		wasmHash:  wasmHash,
 	}, nil
 }
 
 type EmbeddedWalletServiceOptions struct {
 	MTNDBConnectionPool db.DBConnectionPool
-	TSSDBConnectionPool db.DBConnectionPool
 	WasmHash            string
 }
 
@@ -104,22 +96,8 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 		return ErrMissingCredentialID
 	}
 
-	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("getting tenant from context: %w", err)
-	}
-
-	_, err = e.sdpModels.EmbeddedWallets.GetByCredentialID(ctx, e.sdpModels.DBConnectionPool, credentialID)
-	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
-		return fmt.Errorf("checking credential ID availability: %w", err)
-	}
-	if err == nil {
-		return ErrCredentialIDAlreadyExists
-	}
-	// TODO(philip): Replace this with a scheduled job that picks up pending wallet creations
-	// and creates a TSS transaction for processing.
-	return db.RunInTransaction(ctx, e.tssModel.DBConnectionPool, nil, func(tssTx db.DBTransaction) error {
-		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, e.sdpModels.DBConnectionPool, token)
+	return db.RunInTransaction(ctx, e.sdpModels.DBConnectionPool, nil, func(sdpTx db.DBTransaction) error {
+		embeddedWallet, err := e.sdpModels.EmbeddedWallets.GetByToken(ctx, sdpTx, token)
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
 				return ErrInvalidToken
@@ -131,38 +109,28 @@ func (e *EmbeddedWalletService) CreateWallet(ctx context.Context, token, publicK
 			return ErrCreateWalletInvalidStatus
 		}
 
-		tssTransaction := &store.Transaction{
-			ExternalID:      embeddedWallet.Token,
-			TransactionType: store.TransactionTypeWalletCreation,
-			TenantID:        currentTenant.ID,
-			WalletCreation: store.WalletCreation{
-				PublicKey: publicKey,
-				WasmHash:  e.wasmHash,
-			},
+		credentialWallet, err := e.sdpModels.EmbeddedWallets.GetByCredentialID(ctx, sdpTx, credentialID)
+		if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
+			return fmt.Errorf("checking credential ID availability: %w", err)
+		}
+		if err == nil && credentialWallet != nil && credentialWallet.Token != embeddedWallet.Token {
+			return ErrCredentialIDAlreadyExists
 		}
 
-		_, err = e.tssModel.BulkInsert(ctx, tssTx, []store.Transaction{*tssTransaction})
-		if err != nil {
-			return fmt.Errorf("creating wallet transaction in TSS: %w", err)
+		embeddedWalletUpdate := data.EmbeddedWalletUpdate{
+			WasmHash:     e.wasmHash,
+			CredentialID: credentialID,
+			PublicKey:    publicKey,
 		}
 
-		return db.RunInTransaction(ctx, e.sdpModels.DBConnectionPool, nil, func(sdpTx db.DBTransaction) error {
-			embeddedWalletUpdate := data.EmbeddedWalletUpdate{
-				WasmHash:     e.wasmHash,
-				CredentialID: credentialID,
-				PublicKey:    publicKey,
-				WalletStatus: data.ProcessingWalletStatus,
+		if err := e.sdpModels.EmbeddedWallets.Update(ctx, sdpTx, embeddedWallet.Token, embeddedWalletUpdate); err != nil {
+			if errors.Is(err, data.ErrEmbeddedWalletCredentialIDAlreadyExists) {
+				return ErrCredentialIDAlreadyExists
 			}
+			return fmt.Errorf("updating embedded wallet %s: %w", embeddedWallet.Token, err)
+		}
 
-			if err := e.sdpModels.EmbeddedWallets.Update(ctx, sdpTx, embeddedWallet.Token, embeddedWalletUpdate); err != nil {
-				if errors.Is(err, data.ErrEmbeddedWalletCredentialIDAlreadyExists) {
-					return ErrCredentialIDAlreadyExists
-				}
-				return fmt.Errorf("updating embedded wallet %s: %w", embeddedWallet.Token, err)
-			}
-
-			return nil
-		})
+		return nil
 	})
 }
 
@@ -201,33 +169,6 @@ func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account,
 		sponsoredTx, err := e.sdpModels.SponsoredTransactions.Insert(ctx, sdpTx, insert)
 		if err != nil {
 			return "", fmt.Errorf("creating sponsored transaction: %w", err)
-		}
-
-		currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
-		if err != nil {
-			return "", fmt.Errorf("getting tenant from context: %w", err)
-		}
-
-		tssTransaction := &store.Transaction{
-			ExternalID:      sponsoredTx.ID,
-			TransactionType: store.TransactionTypeSponsored,
-			TenantID:        currentTenant.ID,
-			Sponsored: store.Sponsored{
-				SponsoredAccount:      account,
-				SponsoredOperationXDR: operationXDR,
-			},
-		}
-
-		// TODO(philip): Replace this with a scheduled job that picks up pending sponsored transactions
-		// and creates a TSS transaction for processing.
-		if err := db.RunInTransaction(ctx, e.tssModel.DBConnectionPool, nil, func(tssTx db.DBTransaction) error {
-			_, bulkErr := e.tssModel.BulkInsert(ctx, tssTx, []store.Transaction{*tssTransaction})
-			if bulkErr != nil {
-				return fmt.Errorf("creating TSS transaction for processing: %w", bulkErr)
-			}
-			return nil
-		}); err != nil {
-			return "", err
 		}
 
 		return sponsoredTx.ID, nil
