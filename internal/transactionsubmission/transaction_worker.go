@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
@@ -18,9 +17,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -44,7 +40,6 @@ type TransactionWorker struct {
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
-	eventProducer       events.Producer
 	jobUUID             string
 }
 
@@ -56,7 +51,6 @@ func NewTransactionWorker(
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
-	eventProducer events.Producer,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -98,7 +92,6 @@ func NewTransactionWorker(
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
-		eventProducer:       eventProducer,
 	}, nil
 }
 
@@ -174,6 +167,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 // Errors marked as definitive error, that won't be resolved with retries:
 //   - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
 //   - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//   - 400: with error code "entry_archived"
 //
 // Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
 //   - 400 - tx_bad_seq: Bad Request
@@ -212,27 +206,12 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			if hErrWrapper.ShouldMarkAsError() {
 				metricsMetadata.PaymentEventType = sdpMonitor.PaymentFailedLabel
 
-				// Building the payment completed event before updating the transaction status. This way, if the message
-				// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
-				// will be re-tried.
-				var msg *events.Message
-				msg, err = tw.buildPaymentCompletedEvent(events.PaymentCompletedErrorType, &txJob.Transaction, data.FailedPaymentStatus, hErrWrapper.Error())
-				if err != nil {
-					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-				}
-
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
 					return fmt.Errorf("updating transaction status to error: %w", err)
 				}
 				txJob.Transaction = *updatedTx
-
-				// Publishing a new event on the event producer
-				err = events.ProduceEvents(ctx, tw.eventProducer, msg)
-				if err != nil {
-					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-				}
 
 				// report any terminal errors, excluding those caused by the external account not being valid
 				if !hErrWrapper.IsDestinationAccountNotReady() {
@@ -281,24 +260,11 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("transaction was not successful for some reason")
 	}
 
-	// Building the payment completed event before updating the transaction status. This way, if the message fails to be
-	// built, the transaction will be marked for reprocessing -> reconciliation and the event will be re-tried.
-	msg, err := tw.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &txJob.Transaction, data.SuccessPaymentStatus, "")
-	if err != nil {
-		return fmt.Errorf("building payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-	}
-
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
 	if err != nil {
 		return utils.NewTransactionStatusUpdateError("SUCCESS", txJob.Transaction.ID, false, err)
 	}
 	txJob.Transaction = *updatedTx
-
-	// Publishing a new event on the event producer
-	err = events.ProduceEvents(ctx, tw.eventProducer, msg)
-	if err != nil {
-		return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
-	}
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
@@ -376,34 +342,6 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	})
 
 	return nil
-}
-
-func (tw *TransactionWorker) buildPaymentCompletedEvent(eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus, statusMsg string) (*events.Message, error) {
-	if paymentStatus != data.SuccessPaymentStatus && paymentStatus != data.FailedPaymentStatus {
-		return nil, fmt.Errorf("invalid payment status to produce payment completed event")
-	}
-
-	msg := &events.Message{
-		Topic:    events.PaymentCompletedTopic,
-		Key:      tx.ExternalID,
-		TenantID: tx.TenantID,
-		Type:     eventType,
-		Data: schemas.EventPaymentCompletedData{
-			TransactionID:        tx.ID,
-			PaymentID:            tx.ExternalID,
-			PaymentStatus:        string(paymentStatus),
-			PaymentStatusMessage: statusMsg,
-			PaymentCompletedAt:   time.Now(),
-			StellarTransactionID: tx.StellarTransactionHash.String,
-		},
-	}
-
-	err := msg.Validate()
-	if err != nil {
-		return nil, fmt.Errorf("validating message: %w", err)
-	}
-
-	return msg, nil
 }
 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
@@ -521,35 +459,8 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 
-	memo, err := txJob.Transaction.BuildMemo()
-	if err != nil {
-		return nil, fmt.Errorf("building memo: %w", err)
-	}
-
 	// build the inner payment transaction
-	paymentTx, err := txnbuild.NewTransaction(
-		txnbuild.TransactionParams{
-			SourceAccount: &txnbuild.SimpleAccount{
-				AccountID: txJob.ChannelAccount.PublicKey,
-				Sequence:  horizonAccount.Sequence,
-			},
-			Operations: []txnbuild.Operation{
-				&txnbuild.Payment{
-					SourceAccount: distributionAccount.Address,
-					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32),
-					Destination:   txJob.Transaction.Destination,
-					Asset:         asset,
-				},
-			},
-			Memo:    memo,
-			BaseFee: int64(tw.engine.MaxBaseFee),
-			Preconditions: txnbuild.Preconditions{
-				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
-				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)}, // currently, 8-10 ledgers in the future
-			},
-			IncrementSequenceNum: true,
-		},
-	)
+	paymentTx, err := tw.buildInnerTxn(txJob, horizonAccount.Sequence, distributionAccount.Address, asset)
 	if err != nil {
 		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
 	}
@@ -583,6 +494,69 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 
 	return feeBumpTx, nil
+}
+
+func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string, asset txnbuild.Asset) (*txnbuild.Transaction, error) {
+	var operation txnbuild.Operation
+	var txMemo txnbuild.Memo
+	amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+
+	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
+		memo, err := txJob.Transaction.BuildMemo()
+		if err != nil {
+			return nil, fmt.Errorf("building memo: %w", err)
+		}
+		txMemo = memo
+
+		operation = &txnbuild.Payment{
+			SourceAccount: distributionAccount,
+			Amount:        amount,
+			Destination:   txJob.Transaction.Destination,
+			Asset:         asset,
+		}
+	} else if strkey.IsValidContractAddress(txJob.Transaction.Destination) {
+		if txJob.Transaction.Memo != "" {
+			return nil, fmt.Errorf("memo is not supported for contract destination (%s)", txJob.Transaction.Destination)
+		}
+		params := txnbuild.PaymentToContractParams{
+			NetworkPassphrase: tw.engine.SignatureService.NetworkPassphrase(),
+			Destination:       txJob.Transaction.Destination,
+			Amount:            amount,
+			Asset:             asset,
+			SourceAccount:     distributionAccount,
+		}
+		op, err := txnbuild.NewPaymentToContract(params)
+		if err != nil {
+			return nil, fmt.Errorf("building payment to contract operation: %w", err)
+		}
+		operation = &op
+	} else {
+		return nil, fmt.Errorf("invalid destination account (%s)", txJob.Transaction.Destination)
+	}
+
+	paymentTx, err := txnbuild.NewTransaction(
+		txnbuild.TransactionParams{
+			SourceAccount: &txnbuild.SimpleAccount{
+				AccountID: txJob.ChannelAccount.PublicKey,
+				Sequence:  channelAccountSequenceNum,
+			},
+			Operations: []txnbuild.Operation{
+				operation,
+			},
+			Memo:    txMemo,
+			BaseFee: int64(tw.engine.MaxBaseFee),
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
+				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)}, // currently, 8-10 ledgers in the future
+			},
+			IncrementSequenceNum: true,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("building payment transaction: %w", err)
+	}
+
+	return paymentTx, nil
 }
 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {

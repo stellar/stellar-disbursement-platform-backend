@@ -2,27 +2,15 @@ version: '3.8'
 services:
   db:
     extends:
-      file: docker-compose-sdp-anchor.yml
+      file: docker-compose-sdp.yml
       service: db
   sdp-api:
     extends:
-      file: docker-compose-sdp-anchor.yml
+      file: docker-compose-sdp.yml
       service: sdp-api
     depends_on:
       db:
         condition: service_started
-  db-anchor-platform:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: db-anchor-platform
-    depends_on:
-      - sdp-api
-  anchor-platform:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: anchor-platform
-    depends_on:
-      - db-anchor-platform
   sdp-tss:
     extends:
       file: docker-compose-tss.yml
@@ -39,9 +27,8 @@ services:
       - sdp-api
   demo-wallet:
     extends:
-      file: docker-compose-sdp-anchor.yml
+      file: docker-compose-sdp.yml
       service: demo-wallet
-
 volumes:
   postgres-db:
     name: ${COMPOSE_PROJECT_NAME}_postgres-db

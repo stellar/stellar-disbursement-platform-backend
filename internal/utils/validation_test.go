@@ -381,6 +381,25 @@ func Test_ValidateURLScheme(t *testing.T) {
 	}
 }
 
+func Test_ValidateNoHTML_Valid(t *testing.T) {
+	validTestCases := []string{
+		"Hello, World!",
+		"This is a test string with numbers 1234567890.",
+		"Special characters !?#$",
+		"Mixed content: Hello123!@#",
+		"Whitespace    \n\t  ",
+		"This doesn't contain any HTML tags or scripts.",
+		"Text with word expression but not as code.",
+	}
+
+	for i, tc := range validTestCases {
+		t.Run(fmt.Sprintf("valid/%d(%s)", i, tc), func(t *testing.T) {
+			err := ValidateNoHTML(tc)
+			require.NoError(t, err, "ValidateNoHTML(%q) returned an unexpected error: %v", tc, err)
+		})
+	}
+}
+
 func Test_ValidateNoHTML(t *testing.T) {
 	rawHTMLTestCases := []string{
 		"<a href='evil.com'>Click here</a>",

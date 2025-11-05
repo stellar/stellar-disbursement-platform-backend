@@ -64,27 +64,25 @@ func (rwsh *ReceiversWalletStatusHistory) Scan(src interface{}) error {
 var _ sql.Scanner = (*ReceiversWalletStatusHistory)(nil)
 
 type ReceiverWallet struct {
-	ID               string                       `json:"id" db:"id"`
-	Receiver         Receiver                     `json:"receiver" db:"receiver"`
-	Wallet           Wallet                       `json:"wallet" db:"wallet"`
-	StellarAddress   string                       `json:"stellar_address,omitempty" db:"stellar_address"`
-	StellarMemo      string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
-	StellarMemoType  schema.MemoType              `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
-	Status           ReceiversWalletStatus        `json:"status" db:"status"`
-	StatusHistory    ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	CreatedAt        time.Time                    `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time                    `json:"updated_at" db:"updated_at"`
-	OTP              string                       `json:"-" db:"otp"`
-	OTPAttempts      int                          `json:"-" db:"otp_attempts"`
-	OTPCreatedAt     *time.Time                   `json:"-" db:"otp_created_at"`
-	OTPConfirmedAt   *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
-	OTPConfirmedWith string                       `json:"otp_confirmed_with,omitempty" db:"otp_confirmed_with"`
-	// AnchorPlatformAccountID is the ID of the SEP24 transaction initiated by the Anchor Platform where the receiver wallet was registered.
-	AnchorPlatformTransactionID       string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
-	AnchorPlatformTransactionSyncedAt *time.Time `json:"anchor_platform_transaction_synced_at,omitempty" db:"anchor_platform_transaction_synced_at"`
-	InvitedAt                         *time.Time `json:"invited_at,omitempty" db:"invited_at"`
-	LastMessageSentAt                 *time.Time `json:"last_message_sent_at,omitempty" db:"last_message_sent_at"`
-	InvitationSentAt                  *time.Time `json:"invitation_sent_at" db:"invitation_sent_at"`
+	ID                 string                       `json:"id" db:"id"`
+	Receiver           Receiver                     `json:"receiver" db:"receiver"`
+	Wallet             Wallet                       `json:"wallet" db:"wallet"`
+	StellarAddress     string                       `json:"stellar_address,omitempty" db:"stellar_address"`
+	StellarMemo        string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
+	StellarMemoType    schema.MemoType              `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
+	Status             ReceiversWalletStatus        `json:"status" db:"status"`
+	StatusHistory      ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	CreatedAt          time.Time                    `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time                    `json:"updated_at" db:"updated_at"`
+	OTP                string                       `json:"-" db:"otp"`
+	OTPAttempts        int                          `json:"-" db:"otp_attempts"`
+	OTPCreatedAt       *time.Time                   `json:"-" db:"otp_created_at"`
+	OTPConfirmedAt     *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
+	OTPConfirmedWith   string                       `json:"otp_confirmed_with,omitempty" db:"otp_confirmed_with"`
+	SEP24TransactionID string                       `json:"sep24_transaction_id,omitempty" db:"sep24_transaction_id"`
+	InvitedAt          *time.Time                   `json:"invited_at,omitempty" db:"invited_at"`
+	LastMessageSentAt  *time.Time                   `json:"last_message_sent_at,omitempty" db:"last_message_sent_at"`
+	InvitationSentAt   *time.Time                   `json:"invitation_sent_at" db:"invitation_sent_at"`
 	ReceiverWalletStats
 }
 
@@ -116,7 +114,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 		SELECT
 			rw.id,
 			rw.receiver_id,
-			rw.anchor_platform_transaction_id,
+			rw.sep24_transaction_id,
 			rw.stellar_address,
 			rw.stellar_memo,
 			rw.stellar_memo_type,
@@ -171,7 +169,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 	SELECT 
 		rwc.id,
 		rwc.receiver_id as "receiver.id",
-		COALESCE(rwc.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
+		COALESCE(rwc.sep24_transaction_id, '') as sep24_transaction_id,
 		COALESCE(rwc.stellar_address, '') as stellar_address,
 		COALESCE(rwc.stellar_memo, '') as stellar_memo,
 		COALESCE(rwc.stellar_memo_type::text, '') as stellar_memo_type,
@@ -221,10 +219,9 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 			"invitation_sent_at",
-			"anchor_platform_transaction_synced_at",
 		},
 		CoalesceColumns: []string{
-			"anchor_platform_transaction_id",
+			"sep24_transaction_id",
 			"stellar_address",
 			"stellar_memo",
 			"stellar_memo_type::text AS stellar_memo_type",
@@ -303,6 +300,30 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	}
 
 	return receiverWallets, nil
+}
+
+func (rw *ReceiverWalletModel) GetBySEP24TransactionID(ctx context.Context, transactionID string) (*ReceiverWallet, error) {
+	var receiverWallet ReceiverWallet
+
+	query := `
+		SELECT
+			` + ReceiverWalletColumnNames("rw", "") + `
+		FROM
+			receiver_wallets rw
+		WHERE
+			rw.sep24_transaction_id = $1
+		LIMIT 1
+	`
+
+	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallet, query, transactionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("error querying receiver wallet by transaction ID: %w", err)
+	}
+
+	return &receiverWallet, nil
 }
 
 const getPendingRegistrationReceiverWalletsBaseQuery = `
@@ -527,27 +548,6 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	return &receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID ...string) ([]ReceiverWallet, error) {
-	query := `
-		UPDATE
-			receiver_wallets
-		SET
-			anchor_platform_transaction_synced_at = NOW()
-		WHERE
-			id = ANY($1)
-			AND anchor_platform_transaction_synced_at IS NULL
-			AND status = $2 -- 'REGISTERED'::receiver_wallet_status
-		RETURNING ` + ReceiverWalletColumnNames("", "")
-
-	var receiverWallets []ReceiverWallet
-	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), RegisteredReceiversWalletStatus)
-	if err != nil {
-		return nil, fmt.Errorf("updating anchor platform transaction synced at: %w", err)
-	}
-
-	return receiverWallets, nil
-}
-
 // RetryInvitationMessage sets null the invitation_sent_at of a receiver wallet.
 func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
@@ -592,14 +592,14 @@ func (rw *ReceiverWalletModel) UpdateInvitationSentAt(ctx context.Context, sqlEx
 }
 
 type ReceiverWalletUpdate struct {
-	Status                      ReceiversWalletStatus `db:"status"`
-	AnchorPlatformTransactionID string                `db:"anchor_platform_transaction_id"`
-	StellarAddress              string                `db:"stellar_address"`
-	StellarMemo                 *string               `db:"stellar_memo"`
-	StellarMemoType             *schema.MemoType      `db:"stellar_memo_type"`
-	OTPConfirmedAt              time.Time             `db:"otp_confirmed_at"`
-	OTPConfirmedWith            string                `db:"otp_confirmed_with"`
-	OTPAttempts                 *int                  `db:"otp_attempts"`
+	Status             ReceiversWalletStatus `db:"status"`
+	SEP24TransactionID string                `db:"sep24_transaction_id"`
+	StellarAddress     string                `db:"stellar_address"`
+	StellarMemo        *string               `db:"stellar_memo"`
+	StellarMemoType    *schema.MemoType      `db:"stellar_memo_type"`
+	OTPConfirmedAt     time.Time             `db:"otp_confirmed_at"`
+	OTPConfirmedWith   string                `db:"otp_confirmed_with"`
+	OTPAttempts        *int                  `db:"otp_attempts"`
 }
 
 func (rwu ReceiverWalletUpdate) Validate() error {
@@ -614,7 +614,7 @@ func (rwu ReceiverWalletUpdate) Validate() error {
 	}
 
 	if rwu.StellarAddress != "" {
-		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) {
+		if !strkey.IsValidEd25519PublicKey(rwu.StellarAddress) && !strkey.IsValidContractAddress(rwu.StellarAddress) {
 			return fmt.Errorf("invalid stellar address")
 		}
 	}
@@ -635,6 +635,30 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 		return fmt.Errorf("validating receiver wallet update: %w", err)
 	}
 
+	if update.StellarMemo != nil || update.StellarMemoType != nil {
+		stellarAddress := update.StellarAddress
+		if stellarAddress == "" {
+			existing, err := rw.GetByID(ctx, sqlExec, id)
+			if err != nil {
+				return fmt.Errorf("checking stored stellar address for memo validation: %w", err)
+			}
+			stellarAddress = existing.StellarAddress
+		}
+
+		if strkey.IsValidContractAddress(stellarAddress) {
+			memoIsClear := update.StellarMemo != nil && *update.StellarMemo == ""
+			memoTypeIsClear := update.StellarMemoType == nil || (update.StellarMemoType != nil && *update.StellarMemoType == "")
+
+			if !memoIsClear {
+				return ErrMemosNotSupportedForContractAddresses
+			}
+
+			if !memoTypeIsClear {
+				return ErrMemosNotSupportedForContractAddresses
+			}
+		}
+	}
+
 	fields := []string{}
 	args := []interface{}{}
 
@@ -644,9 +668,9 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 		fields = append(fields, "status_history = array_prepend(create_receiver_wallet_status_history(NOW(), ?, ''), status_history)")
 		args = append(args, update.Status)
 	}
-	if update.AnchorPlatformTransactionID != "" {
-		fields = append(fields, "anchor_platform_transaction_id = ?")
-		args = append(args, update.AnchorPlatformTransactionID)
+	if update.SEP24TransactionID != "" {
+		fields = append(fields, "sep24_transaction_id = ?")
+		args = append(args, update.SEP24TransactionID)
 	}
 	if update.StellarAddress != "" {
 		fields = append(fields, "stellar_address = ?")
@@ -703,10 +727,11 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 }
 
 var (
-	ErrWalletNotRegistered         = errors.New("receiver wallet not registered")
-	ErrPaymentsInProgressForWallet = errors.New("receiver wallet has payments in progress")
-	ErrUnregisterUserManagedWallet = errors.New("user managed wallet cannot be unregistered")
-	ErrDuplicateWalletAddress      = errors.New("wallet address already in use")
+	ErrWalletNotRegistered                   = errors.New("receiver wallet not registered")
+	ErrPaymentsInProgressForWallet           = errors.New("receiver wallet has payments in progress")
+	ErrUnregisterUserManagedWallet           = errors.New("user managed wallet cannot be unregistered")
+	ErrDuplicateWalletAddress                = errors.New("wallet address already in use")
+	ErrMemosNotSupportedForContractAddresses = errors.New("memos are not supported for contract addresses")
 )
 
 // UpdateStatusToReady updates the status of a receiver wallet to "READY" and clears the stellar address and memo.
@@ -750,8 +775,7 @@ func (rw *ReceiverWalletModel) UpdateStatusToReady(ctx context.Context, id strin
 					otp_confirmed_at = NULL,
 					otp_confirmed_with = NULL,
 					otp_created_at = NULL,
-					anchor_platform_transaction_id = NULL,
-					anchor_platform_transaction_synced_at = NULL
+					sep24_transaction_id = NULL
 			WHERE id = $2
 	`
 		_, err = tx.ExecContext(ctx, q, statusMessage, id)

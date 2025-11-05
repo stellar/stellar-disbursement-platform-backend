@@ -1,0 +1,60 @@
+name: Internal SEP Services Validation
+# this workflow tests that SDP's SEP implementations adhere to Stellar's SEP specifications
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  internal-sep-validation:
+    runs-on: ubuntu-latest
+    environment: "Internal SEP Tests"
+    env:
+      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run Docker Compose for SDP
+        working-directory: dev
+        run: |
+          export SEP10_CLIENT_ATTRIBUTION_REQUIRED=false
+          docker compose -f docker-compose-sdp.yml down && docker compose -f docker-compose-sdp.yml up --build -d
+
+      - name: Install curl
+        run: sudo apt-get update && sudo apt-get install -y curl
+
+      - name: Wait for localhost:8000/health
+        timeout-minutes: 5
+        run: |
+          until curl --output /dev/null --silent --fail http://localhost:8000/health; do
+            echo 'Waiting for SDP to be up and running...'
+            sleep 15
+          done
+          echo 'SDP is up and running.'
+
+      - name: Install NodeJs
+        uses: actions/setup-node@v6
+        with:
+          node-version: 14
+
+      - name: Anchor Validation Tests (@stellar/anchor-tests)
+        run: |
+          docker pull stellar/anchor-tests:latest
+          docker run --network host stellar/anchor-tests:latest --home-domain http://localhost:8000 --seps 1 10
+
+      - name: Docker logs
+        if: always()
+        working-directory: dev
+        run: docker compose -f docker-compose-sdp.yml logs && docker compose -f docker-compose-sdp.yml down

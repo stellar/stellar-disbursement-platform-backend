@@ -3,7 +3,23 @@
 set -eu
 
 export DIVIDER="----------------------------------------"
-# prepare
+
+# Load environment variables from .env file
+load_env_file() {
+  if [ -f ".env" ]; then
+    echo "📋 Loading environment variables from .env file..."
+    set -a
+    source .env
+    set +a  
+    echo "Environment variables loaded successfully"
+  else
+    echo "Warning: .env file not found in current directory"
+  fi
+}
+
+echo "🚀 E2E Integration Test Script"
+echo $DIVIDER
+load_env_file
 
 wait_for_server() {
   local endpoint=$1
@@ -21,76 +37,61 @@ wait_for_server() {
   echo "Server at $endpoint is up."
 }
 
-# Configuration arrays with key-value strings
-Config_Stellar_Env_Phone_USDC_Testnet=(
-  "platform=Stellar"
-  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
-  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
-  "DISBURSED_ASSET_CODE=USDC"
-  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-)
-
-Config_CircleTransfer_DBVault_Phone_USDC_Testnet=(
-  "platform=Circle"
-  "CIRCLE_API_TYPE=TRANSFERS"
-  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
-  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
-  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
-  "DISBURSED_ASSET_CODE=USDC"
-  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-)
-
-Config_CirclePayouts_DBVault_PhoneWithWallet_USDC_Testnet=(
-  "platform=Circle"
-  "CIRCLE_API_TYPE=PAYOUTS"
-  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
-  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv"
-  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
-  "DISBURSED_ASSET_CODE=USDC"
-  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-)
-
-Config_Stellar_Env_Email_USDC_Testnet=(
-  "platform=Stellar"
-  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv"
-  "REGISTRATION_CONTACT_TYPE=EMAIL"
-  "DISBURSED_ASSET_CODE=USDC"
-  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-)
-
-Config_Stellar_Env_PhoneWithWallet_USDC_Testnet=(
-  "platform=Stellar"
-  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv"
-  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
-  "DISBURSED_ASSET_CODE=USDC"
-  "DISBURSED_ASSET_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-)
-
-Config_Stellar_Env_Phone_XLM_Futurenet=(
-  "platform=Stellar"
+# Configuration arrays
+Config_Stellar_Env_Phone_XLM_Testnet=(
+  "platform=Stellar-Phone"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
   "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
   "DISBURSED_ASSET_CODE=XLM"
-  "NETWORK_PASSPHRASE=Test SDF Future Network ; October 2022"
-  "HORIZON_URL=https://horizon-futurenet.stellar.org"
+  "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
+  "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
+  "HORIZON_URL=https://horizon-testnet.stellar.org"
+  "USER_EMAIL=integration-test-user@stellar.local"
+  "USER_PASSWORD=Password123!"
+  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+  "BASE_URL=http://stellar.local:8000"
 )
 
+Config_Stellar_Env_Email_XLM_Testnet=(
+  "platform=Stellar-Email"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_email.csv"
+  "REGISTRATION_CONTACT_TYPE=EMAIL"
+  "DISBURSED_ASSET_CODE=XLM"
+  "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
+  "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
+  "HORIZON_URL=https://horizon-testnet.stellar.org"
+  "USER_EMAIL=integration-test-user@stellar.local"
+  "USER_PASSWORD=Password123!"
+  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+  "BASE_URL=http://stellar.local:8000"
+)
+
+Config_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
+  "platform=Stellar-PhoneWallet"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone_with_wallet.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
+  "DISBURSED_ASSET_CODE=XLM"
+  "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
+  "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
+  "HORIZON_URL=https://horizon-testnet.stellar.org"
+  "USER_EMAIL=integration-test-user@stellar.local"
+  "USER_PASSWORD=Password123!"
+  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+  "BASE_URL=http://stellar.local:8000"
+)
+
+echo "🔧 Test Mode: Running SEP tests"
 options=(
-  Config_Stellar_Env_Phone_USDC_Testnet[@]
-  Config_CircleTransfer_DBVault_Phone_USDC_Testnet[@]
-  Config_CirclePayouts_DBVault_PhoneWithWallet_USDC_Testnet[@]
-  Config_Stellar_Env_Email_USDC_Testnet[@]
-  Config_Stellar_Env_PhoneWithWallet_USDC_Testnet[@]
-  Config_Stellar_Env_Phone_XLM_Futurenet[@]
+  Config_Stellar_Env_Phone_XLM_Testnet[@]
+  Config_Stellar_Env_Email_XLM_Testnet[@]
+  Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
 )
 
 # Iterate over each configuration
 for config_name in "${options[@]}"; do
-  # Use indirect variable reference to get the array
   config=("${!config_name}")
 
   echo -e "\n====> 👀 Starting e2e setup and integration test for ${config_name}"
@@ -103,19 +104,21 @@ for config_name in "${options[@]}"; do
     export "$key"="$value"
   done
 
-  # Example of using the exported variables
-  DESCRIPTION="$platform$CIRCLE_API_TYPE - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
+  DOCKER_PROFILE=""
+
+  DESCRIPTION="$platform - $DISTRIBUTION_ACCOUNT_TYPE - $REGISTRATION_CONTACT_TYPE"
 
   echo $DIVIDER
   echo "====> 👀Step 1: start preparation"
-  docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
+  docker compose -f docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE down -v
+  docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v
   docker volume ls -f name='e2e' --format '{{.Name}}' | xargs docker volume rm
   echo "====> ✅Step 1: finish preparation"
 
   # Run docker compose
   echo $DIVIDER
-  echo "====> 👀Step 2: build sdp-api, anchor-platform and tss ($DESCRIPTION)"
-  docker compose -f ../docker/docker-compose-e2e-tests.yml up --build -d
+  echo "====> 👀Step 2: build sdp-api, tss"
+  docker compose -f docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE up --build -d
   wait_for_server "http://localhost:8000/health" 20
   echo "====> ✅Step 2: finishing build"
 
@@ -125,27 +128,19 @@ for config_name in "${options[@]}"; do
   docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests create-data"
   echo "====> ✅Step 3: finish creating integration test data ($DESCRIPTION)"
 
-  # Restart anchor platform container
-  echo $DIVIDER
-  echo "====> 👀Step 4: restart anchor platform container so the new created asset shows up in the toml file"
-  docker restart e2e-anchor-platform
-  echo "waiting for anchor platform to initialize"
-  wait_for_server "http://localhost:8080/health" 120
-  wait_for_server "http://localhost:8085/health" 120
-  echo "====> ✅Step 4: finish restarting anchor platform container"
-
   # Run integration tests
   echo $DIVIDER
-  echo "====> 👀Step 5: run integration tests command"
+  echo "====> 👀Step 4: run integration tests command"
   docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
-  echo "====> ✅Step 5: finish running integration test data ($DESCRIPTION)"
+  echo "====> ✅Step 4: finish running integration test data ($DESCRIPTION)"
 
   # Cleanup container and volumes
   echo $DIVIDER
-  echo "====> 👀Step 6: cleaning up e2e containers and volumes"
-  docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
+  echo "====> 👀Step 5: cleaning up e2e containers and volumes"
+  docker compose -f docker/docker-compose-e2e-tests.yml $DOCKER_PROFILE down -v
+  docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v
   docker volume ls -f name='e2e' --format '{{.Name}}' | xargs docker volume rm
-  echo "====> ✅Step 6: finish cleaning up containers and volumes"
+  echo "====> ✅Step 5: finish cleaning up containers and volumes"
 done
 
 echo $DIVIDER

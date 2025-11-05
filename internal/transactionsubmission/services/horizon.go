@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -14,6 +16,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -221,6 +224,97 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	return nil
 }
 
+// AddTrustlines ensures the provided account trusts all supplied assets and returns how many trustlines were added.
+func AddTrustlines(
+	ctx context.Context,
+	submitterEngine engine.SubmitterEngine,
+	account schema.TransactionAccount,
+	assets []data.Asset,
+) (int, error) {
+	if account.Address == "" {
+		return 0, fmt.Errorf("transaction account address cannot be empty")
+	}
+
+	assetCandidates := make(map[string]data.Asset)
+	for _, asset := range assets {
+		if asset.IsNative() {
+			continue
+		}
+		assetCandidates[getAssetID(asset.Code, asset.Issuer)] = asset
+	}
+
+	if len(assetCandidates) == 0 {
+		return 0, nil
+	}
+
+	accountDetails, err := submitterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
+	if err != nil {
+		return 0, fmt.Errorf("getting account details for %s: %w", account.Address, err)
+	}
+
+	existingTrustlines := make(map[string]struct{})
+	for _, balance := range accountDetails.Balances {
+		if balance.Asset.Type == "native" {
+			continue
+		}
+		existingTrustlines[getAssetID(balance.Asset.Code, balance.Asset.Issuer)] = struct{}{}
+	}
+
+	// sort keys to keep deterministic operation ordering for easier debugging/testing
+	assetKeys := make([]string, 0, len(assetCandidates))
+	for key := range assetCandidates {
+		assetKeys = append(assetKeys, key)
+	}
+	sort.Strings(assetKeys)
+
+	changeTrustOps := make([]txnbuild.Operation, 0, len(assetCandidates))
+	for _, key := range assetKeys {
+		asset := assetCandidates[key]
+		if _, ok := existingTrustlines[key]; ok {
+			log.Ctx(ctx).Debugf("account %s already has trustline for %s; skipping", account.Address, key)
+			continue
+		}
+
+		changeTrustOps = append(changeTrustOps, &txnbuild.ChangeTrust{
+			Line:          txnbuild.ChangeTrustAssetWrapper{Asset: asset.ToBasicAsset()},
+			Limit:         "",
+			SourceAccount: account.Address,
+		})
+	}
+
+	if len(changeTrustOps) == 0 {
+		log.Ctx(ctx).Infof("account %s already has trustlines for all provided assets", account.Address)
+		return 0, nil
+	}
+
+	transaction, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+		SourceAccount: &txnbuild.SimpleAccount{
+			AccountID: account.Address,
+			Sequence:  accountDetails.Sequence,
+		},
+		IncrementSequenceNum: true,
+		Operations:           changeTrustOps,
+		BaseFee:              int64(submitterEngine.MaxBaseFee),
+		Preconditions:        txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("creating change trust transaction: %w", err)
+	}
+
+	signedTx, err := submitterEngine.SignStellarTransaction(ctx, transaction, account)
+	if err != nil {
+		return 0, fmt.Errorf("signing change trust transaction: %w", err)
+	}
+
+	log.Ctx(ctx).Infof("adding %d trustlines to account %s", len(changeTrustOps), account.Address)
+	_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(signedTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+	if err != nil {
+		return 0, fmt.Errorf("submitting change trust transaction to network: %w", utils.NewHorizonErrorWrapper(err))
+	}
+
+	return len(changeTrustOps), nil
+}
+
 // CreateAndFundAccount creates and funds a new destination account on the Stellar network with the given amount of native asset from the source account.
 func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, amountNativeAssetToSend int, sourceAcc, destinationAcc string) error {
 	hostAccount := submitterEngine.HostDistributionAccount()
@@ -314,4 +408,9 @@ func getAccountDetails(client horizonclient.ClientInterface, accountID string) (
 	}
 
 	return &account, nil
+}
+
+// getAssetID returns asset identifier formatted as CODE:issuer.
+func getAssetID(code, issuer string) string {
+	return fmt.Sprintf("%s:%s", strings.ToUpper(code), issuer)
 }

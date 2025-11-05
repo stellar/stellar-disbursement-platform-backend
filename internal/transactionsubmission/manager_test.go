@@ -23,7 +23,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -167,7 +166,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MonitorService:       tssMonitorService,
-				EventProducer:        &events.MockProducer{},
 			},
 		},
 		{
@@ -178,7 +176,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MonitorService:       tssMonitorService,
-				EventProducer:        &events.MockProducer{},
 				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
 			},
 		},
@@ -225,7 +222,6 @@ func Test_NewManager(t *testing.T) {
 		SubmitterEngine:      mSubmitterEngine,
 		NumChannelAccounts:   5,
 		QueuePollingInterval: 10,
-		EventProducer:        &events.MockProducer{},
 	}
 
 	testCases := []struct {
@@ -333,8 +329,6 @@ func Test_NewManager(t *testing.T) {
 					wantCrashTrackerClient = tc.wantCrashTrackerClientFn()
 				}
 
-				wantEventProducer := &events.MockProducer{}
-
 				wantManager := &Manager{
 					dbConnectionPool: wantConnectionPool,
 					chAccModel:       wantChAccModel,
@@ -348,8 +342,6 @@ func Test_NewManager(t *testing.T) {
 
 					crashTrackerClient: wantCrashTrackerClient,
 					monitorService:     submitterOptions.MonitorService,
-
-					eventProducer: wantEventProducer,
 				}
 				assert.Equal(t, wantManager, gotManager)
 
@@ -482,10 +474,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			mMonitorClient := monitor.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
 
-			mockEventProducer := &events.MockProducer{}
-			mockEventProducer.On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).Return(nil).Once()
-			defer mockEventProducer.AssertExpectations(t)
-
 			manager := &Manager{
 				dbConnectionPool: dbConnectionPool,
 				chAccModel:       store.NewChannelAccountModel(dbConnectionPool),
@@ -503,8 +491,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
-
-				eventProducer: mockEventProducer,
 			}
 
 			go manager.ProcessTransactions(ctx)

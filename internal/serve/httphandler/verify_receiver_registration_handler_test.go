@@ -23,19 +23,17 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
@@ -50,7 +48,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 	// create valid sep24 token
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
 	defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-	sep24JWTClaims := &anchorplatform.SEP24JWTClaims{
+	sep24JWTClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: wallet.SEP10ClientDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -61,12 +59,12 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 
 	testCases := []struct {
 		name                       string
-		contextSep24Claims         *anchorplatform.SEP24JWTClaims
+		contextSep24Claims         *sepauth.SEP24JWTClaims
 		requestBody                string
 		isRecaptchaValidFnResponse []interface{}
 		isReCAPTCHADisabled        bool
 		wantHTTPErr                *httperror.HTTPError
-		wantSep24Claims            *anchorplatform.SEP24JWTClaims
+		wantSep24Claims            *sepauth.SEP24JWTClaims
 		wantResult                 data.ReceiverRegistrationRequest
 	}{
 		{
@@ -154,14 +152,12 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			handler := &VerifyReceiverRegistrationHandler{
-				Models:                   models,
-				AnchorPlatformAPIService: &mockAnchorPlatformService,
-				ReCAPTCHADisabled:        tc.isReCAPTCHADisabled,
+				Models:            models,
+				ReCAPTCHADisabled: tc.isReCAPTCHADisabled,
 			}
 
 			var requestBody io.Reader
@@ -173,7 +169,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 			require.NoError(t, err)
 
 			if tc.contextSep24Claims != nil {
-				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, tc.contextSep24Claims))
+				req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, tc.contextSep24Claims))
 			}
 
 			if tc.isRecaptchaValidFnResponse != nil {
@@ -213,12 +209,10 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 	handler := &VerifyReceiverRegistrationHandler{
-		Models:                   models,
-		AnchorPlatformAPIService: &mockAnchorPlatformService,
-		ReCAPTCHAValidator:       reCAPTCHAValidator,
+		Models:             models,
+		ReCAPTCHAValidator: reCAPTCHAValidator,
 	}
 
 	// receiver without receiver_verification row:
@@ -373,16 +367,14 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 	handler := &VerifyReceiverRegistrationHandler{
-		Models:                   models,
-		AnchorPlatformAPIService: &mockAnchorPlatformService,
+		Models: models,
 	}
 
 	// create valid sep24 token
 	defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
-	sep24JWTClaims := &anchorplatform.SEP24JWTClaims{
+	sep24JWTClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: wallet.SEP10ClientDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -393,7 +385,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 
 	testCases := []struct {
 		name                        string
-		sep24Claims                 *anchorplatform.SEP24JWTClaims
+		sep24Claims                 *sepauth.SEP24JWTClaims
 		currentReceiverWalletStatus data.ReceiversWalletStatus
 		// shouldOTPMatch is used to simulate the case where the OTP provided in the request body is equals or different from the one saved in the DB
 		shouldOTPMatch           bool
@@ -502,275 +494,6 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 	}
 }
 
-func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-	handler := &VerifyReceiverRegistrationHandler{Models: models}
-
-	// creeate fixtures
-	phoneNumber := "+380445555555"
-	defer data.DeleteAllFixtures(t, ctx, dbConnectionPool)
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
-	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-
-	// create valid sep24 token
-	sep24Claims := &anchorplatform.SEP24JWTClaims{
-		ClientDomainClaim: wallet.SEP10ClientDomain,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        "test-transaction-id",
-			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-		},
-	}
-
-	// mocks
-	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-		ID:     "test-transaction-id",
-		Status: "pending_anchor",
-		SEP:    "24",
-	}
-
-	testCases := []struct {
-		name            string
-		mockReturnError error
-		wantErrContains string
-	}{
-		{
-			name:            "returns an error if the Anchor Platdorm API returns an error",
-			mockReturnError: fmt.Errorf("error updating transaction on anchor platform"),
-			wantErrContains: "error updating transaction on anchor platform",
-		},
-		{
-			name: "🎉 successfully updates the transaction on the Anchor Platform",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// dbTX
-			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
-			require.NoError(t, err)
-			defer func() {
-				require.NoError(t, dbTx.Rollback())
-			}()
-
-			// mocks
-			mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
-			defer mockAnchorPlatformService.AssertExpectations(t)
-			handler.AnchorPlatformAPIService = &mockAnchorPlatformService
-			mockAnchorPlatformService.
-				On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).
-				Return(tc.mockReturnError).Once()
-
-			// assertions
-			err = handler.processAnchorPlatformID(ctx, dbTx, *sep24Claims, *receiverWallet)
-			if tc.wantErrContains == "" {
-				require.NoError(t, err)
-
-				// make sure the receiverWallet was updated in the DB with the anchor platform transaction ID
-				var rw data.ReceiverWallet
-				err = dbTx.GetContext(ctx, &rw, "SELECT id, anchor_platform_transaction_id FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
-				require.NoError(t, err)
-				assert.Equal(t, "test-transaction-id", rw.AnchorPlatformTransactionID)
-			} else {
-				require.ErrorContains(t, err, tc.wantErrContains)
-			}
-		})
-	}
-}
-
-func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	tnt := schema.Tenant{ID: "tenant-id"}
-	ctx := context.Background()
-	ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
-
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
-
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
-	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-
-	t.Run("doesn't return error when there's no payment", func(t *testing.T) {
-		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-
-		handler := VerifyReceiverRegistrationHandler{
-			Models: models,
-		}
-
-		pausedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet: wallet,
-			Asset:  asset,
-			Status: data.PausedDisbursementStatus,
-		})
-
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:         "100",
-			Status:         data.PausedPaymentStatus,
-			Disbursement:   pausedDisbursement,
-			Asset:          *asset,
-			ReceiverWallet: rw,
-		})
-
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
-
-		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctx, dbConnectionPool, rw)
-		assert.NoError(t, err)
-		assert.Nil(t, msg)
-
-		entries := getEntries()
-		assert.Len(t, entries, 1)
-		assert.Equal(t, fmt.Sprintf("no payments ready to pay for receiver wallet ID %s", rw.ID), entries[0].Message)
-	})
-
-	t.Run("returns error when tenant isn't in the context", func(t *testing.T) {
-		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		ctxWithoutTenant := context.Background()
-		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
-		distAccountResolverMock.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-			Once()
-		handler := VerifyReceiverRegistrationHandler{
-			Models:                      models,
-			DistributionAccountResolver: distAccountResolverMock,
-		}
-
-		disbursement := data.CreateDisbursementFixture(t, ctxWithoutTenant, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet: wallet,
-			Asset:  asset,
-			Status: data.StartedDisbursementStatus,
-		})
-
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: rw,
-		})
-
-		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctxWithoutTenant, dbConnectionPool, rw)
-		assert.EqualError(t, err, "creating new message: getting tenant from context: tenant not found in context")
-		assert.Nil(t, msg)
-	})
-
-	t.Run("🎉 successfully builds the message for stellar payment", func(t *testing.T) {
-		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-
-		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
-		distAccountResolverMock.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-			Once()
-		handler := VerifyReceiverRegistrationHandler{
-			Models:                      models,
-			DistributionAccountResolver: distAccountResolverMock,
-		}
-
-		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet: wallet,
-			Asset:  asset,
-			Status: data.StartedDisbursementStatus,
-		})
-
-		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: rw,
-		})
-
-		expectedMessage := events.Message{
-			Topic:    events.PaymentReadyToPayTopic,
-			Key:      rw.ID,
-			TenantID: tnt.ID,
-			Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
-			Data: schemas.EventPaymentsReadyToPayData{
-				TenantID: tnt.ID,
-				Payments: []schemas.PaymentReadyToPay{
-					{
-						ID: payment.ID,
-					},
-				},
-			},
-		}
-
-		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctx, dbConnectionPool, rw)
-		assert.NoError(t, err)
-		assert.Equal(t, expectedMessage, *msg)
-	})
-
-	t.Run("🎉 successfully builds the message for circle payment", func(t *testing.T) {
-		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-
-		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
-		distAccountResolverMock.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
-			Once()
-		handler := VerifyReceiverRegistrationHandler{
-			Models:                      models,
-			DistributionAccountResolver: distAccountResolverMock,
-		}
-
-		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet: wallet,
-			Asset:  asset,
-			Status: data.StartedDisbursementStatus,
-		})
-
-		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: rw,
-		})
-
-		expectedMessage := events.Message{
-			Topic:    events.CirclePaymentReadyToPayTopic,
-			Key:      rw.ID,
-			TenantID: tnt.ID,
-			Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
-			Data: schemas.EventPaymentsReadyToPayData{
-				TenantID: tnt.ID,
-				Payments: []schemas.PaymentReadyToPay{
-					{
-						ID: payment.ID,
-					},
-				},
-			},
-		}
-
-		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctx, dbConnectionPool, rw)
-		assert.NoError(t, err)
-		assert.Equal(t, expectedMessage, *msg)
-	})
-}
-
 func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testing.T) {
 	ctx := context.Background()
 	models := data.SetupModels(t)
@@ -778,7 +501,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 	// create valid sep24 token
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: wallet.SEP10ClientDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -858,7 +581,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, reqErr)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -906,7 +629,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, reqErr)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -919,7 +642,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
-		expectedErr := `processing receiver verification entry for receiver with contact info +38...555: verification of type %s not found for receiver id %s`
+		expectedErr := `verification of type %s not found for receiver id %s`
 		require.Contains(t, buf.String(), fmt.Sprintf(expectedErr, data.VerificationTypeDateOfBirth, receiver.ID))
 	})
 
@@ -969,7 +692,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -1018,7 +741,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -1031,72 +754,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
-		wantErrContains := fmt.Sprintf("processing OTP for receiver with contact info +38...555: receiver wallet not found for receiverID=%s and clientDomain=home.page", receiver.ID)
-		require.Contains(t, buf.String(), wantErrContains)
-	})
-
-	t.Run("returns an error when processAnchorPlatformID() fails - anchor platform returns an error", func(t *testing.T) {
-		// mocks
-		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "token").
-			Return(true, nil).
-			Once()
-
-		apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-			ID:     "test-transaction-id",
-			Status: "pending_anchor",
-			SEP:    "24",
-		}
-		mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
-		defer mockAnchorPlatformService.AssertExpectations(t)
-		mockAnchorPlatformService.
-			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).
-			Return(fmt.Errorf("error updating transaction on anchor platform")).Once()
-
-		// create handler
-		handler := &VerifyReceiverRegistrationHandler{
-			Models:                   models,
-			ReCAPTCHAValidator:       reCAPTCHAValidator,
-			AnchorPlatformAPIService: mockAnchorPlatformService,
-		}
-
-		// update database with the entries needed
-		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
-		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeDateOfBirth,
-			VerificationValue: "1990-01-01",
-		})
-		_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-		_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
-		require.NoError(t, err)
-
-		// set the logger to a buffer so we can check the error message
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		// setup router and execute request
-		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		// execute and validate response
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		wantBody := `{"error": "An internal error occurred while processing this request.", "error_code": "500_0"}`
-		assert.JSONEq(t, wantBody, string(respBody))
-
-		// validate logs
-		wantErrContains := fmt.Sprintf("processing anchor platform transaction ID: updating transaction with ID %s on anchor platform API", validClaims.TransactionID())
+		wantErrContains := fmt.Sprintf("receiver wallet not found for receiverID=%s and clientDomain=home.page", receiver.ID)
 		require.Contains(t, buf.String(), wantErrContains)
 	})
 
@@ -1127,20 +785,10 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					Return(true, nil).
 					Maybe()
 
-				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-					ID:     "test-transaction-id",
-					Status: "pending_anchor",
-					SEP:    "24",
-				}
-				mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
-				defer mockAnchorPlatformService.AssertExpectations(t)
-				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
-
 				// create handler
 				handler := &VerifyReceiverRegistrationHandler{
-					Models:                   models,
-					ReCAPTCHAValidator:       reCAPTCHAValidator,
-					AnchorPlatformAPIService: mockAnchorPlatformService,
+					Models:             models,
+					ReCAPTCHAValidator: reCAPTCHAValidator,
 				}
 
 				// update database with the entries needed
@@ -1161,7 +809,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 				req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 				require.NoError(t, err)
-				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
+				req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, &sep24Claims))
 				rr := httptest.NewRecorder()
 				r.ServeHTTP(rr, req)
 
@@ -1234,20 +882,10 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					Return(true, nil).
 					Maybe()
 
-				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-					ID:     "test-transaction-id",
-					Status: "pending_anchor",
-					SEP:    "24",
-				}
-				mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
-				defer mockAnchorPlatformService.AssertExpectations(t)
-				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil)
-
 				// create handler
 				handler := &VerifyReceiverRegistrationHandler{
-					Models:                   models,
-					ReCAPTCHAValidator:       reCAPTCHAValidator,
-					AnchorPlatformAPIService: mockAnchorPlatformService,
+					Models:             models,
+					ReCAPTCHAValidator: reCAPTCHAValidator,
 				}
 
 				// update database with the entries needed
@@ -1268,7 +906,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 				req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBodyEmail)))
 				require.NoError(t, err)
-				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
+				req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, &sep24Claims))
 				rr := httptest.NewRecorder()
 				r.ServeHTTP(rr, req)
 
@@ -1317,7 +955,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 				req, err = http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBodyEmail)))
 				require.NoError(t, err)
-				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
+				req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, &sep24Claims))
 				rr = httptest.NewRecorder()
 				r.ServeHTTP(rr, req)
 
@@ -1382,7 +1020,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -1433,7 +1071,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -1483,7 +1121,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -1502,142 +1140,85 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.Equal(t, 1, otpAttempts)
 	})
 
-	t.Run("🎉 successfully register receiver's stellar address and produce event", func(t *testing.T) {
-		testCases := []struct {
-			name                       string
-			produccesEventSuccessfully bool
-		}{
-			{
-				name:                       "produces event successfully",
-				produccesEventSuccessfully: true,
-			},
-			{
-				name:                       "fails to produce event",
-				produccesEventSuccessfully: false,
-			},
+	t.Run("🎉 successfully register receiver's stellar address", func(t *testing.T) {
+		_, ctx = tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+		// update database with the entries needed
+		defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+		require.NoError(t, err)
+
+		// Creating a payment ready to pay
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.StartedDisbursementStatus,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+		})
+
+		sep24Claims := *validClaims
+
+		// mocks
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		mockCrashTracker := &crashtracker.MockCrashTrackerClient{}
+		defer mockCrashTracker.AssertExpectations(t)
+
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Maybe()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:                      models,
+			ReCAPTCHAValidator:          reCAPTCHAValidator,
+			CrashTrackerClient:          mockCrashTracker,
+			DistributionAccountResolver: distAccountResolverMock,
 		}
 
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				tnt := schema.Tenant{ID: "tenant-id"}
-				ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, &sep24Claims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
 
-				// update database with the entries needed
-				defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-				defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-				defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-				defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		wantBody := `{"message": "ok"}`
+		assert.JSONEq(t, wantBody, string(respBody))
 
-				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
-				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-					ReceiverID:        receiver.ID,
-					VerificationField: data.VerificationTypeDateOfBirth,
-					VerificationValue: "1990-01-01",
-				})
-				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-				_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
-				require.NoError(t, err)
-
-				// Creating a payment ready to pay
-				asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-				disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-					Wallet: wallet,
-					Asset:  asset,
-					Status: data.StartedDisbursementStatus,
-				})
-				payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-					Amount:         "100",
-					Status:         data.ReadyPaymentStatus,
-					Disbursement:   disbursement,
-					Asset:          *asset,
-					ReceiverWallet: receiverWallet,
-				})
-
-				sep24Claims := *validClaims
-
-				// mocks
-				reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
-				reCAPTCHAValidator.
-					On("IsTokenValid", mock.Anything, "token").
-					Return(true, nil).
-					Once()
-
-				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-					ID:     "test-transaction-id",
-					Status: "pending_anchor",
-					SEP:    "24",
-				}
-				mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
-				defer mockAnchorPlatformService.AssertExpectations(t)
-				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
-
-				mockCrashTracker := &crashtracker.MockCrashTrackerClient{}
-				defer mockCrashTracker.AssertExpectations(t)
-				mockEventProducer := events.NewMockProducer(t)
-
-				distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
-				distAccountResolverMock.
-					On("DistributionAccountFromContext", mock.Anything).
-					Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-					Maybe()
-
-				if tc.produccesEventSuccessfully {
-					mockEventProducer.
-						On("WriteMessages", mock.Anything, []events.Message{
-							{
-								Topic:    events.PaymentReadyToPayTopic,
-								Key:      receiverWallet.ID,
-								TenantID: tnt.ID,
-								Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
-								Data: schemas.EventPaymentsReadyToPayData{
-									TenantID: tnt.ID,
-									Payments: []schemas.PaymentReadyToPay{{ID: payment.ID}},
-								},
-							},
-						}).
-						Return(nil).
-						Once()
-				} else {
-					mockEventProducer.
-						On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
-						Return(errors.New("FOO BAR")).
-						Once()
-					mockCrashTracker.
-						On("LogAndReportErrors", mock.Anything, mock.Anything, "writing ready-to-pay message (post SEP-24) on the event producer").
-						Return(nil).
-						Once()
-				}
-
-				// create handler
-				handler := &VerifyReceiverRegistrationHandler{
-					Models:                      models,
-					ReCAPTCHAValidator:          reCAPTCHAValidator,
-					AnchorPlatformAPIService:    mockAnchorPlatformService,
-					EventProducer:               mockEventProducer,
-					CrashTrackerClient:          mockCrashTracker,
-					DistributionAccountResolver: distAccountResolverMock,
-				}
-
-				// setup router and execute request
-				r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-				req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-				require.NoError(t, err)
-				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
-				rr := httptest.NewRecorder()
-				r.ServeHTTP(rr, req)
-
-				// execute and validate response
-				resp := rr.Result()
-				respBody, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				assert.Equal(t, http.StatusOK, resp.StatusCode)
-				wantBody := `{"message": "ok"}`
-				assert.JSONEq(t, wantBody, string(respBody))
-
-				// validate if the receiver wallet has been updated
-				query := `
+		// validate if the receiver wallet has been updated
+		query := `
 				SELECT
 					rw.status,
 					rw.stellar_address,
@@ -1649,15 +1230,13 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				WHERE
 					rw.id = $1
 			`
-				receiverWalletUpdated := data.ReceiverWallet{}
-				err = dbConnectionPool.GetContext(ctx, &receiverWalletUpdated, query, receiverWallet.ID)
-				require.NoError(t, err)
+		receiverWalletUpdated := data.ReceiverWallet{}
+		err = dbConnectionPool.GetContext(ctx, &receiverWalletUpdated, query, receiverWallet.ID)
+		require.NoError(t, err)
 
-				assert.Equal(t, data.RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
-				assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
-				require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
-			})
-		}
+		assert.Equal(t, data.RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
+		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
+		require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
 	})
 }
 

@@ -269,11 +269,11 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			contactType: data.RegistrationContactTypePhoneAndWalletAddress,
 			hasErrors:   true,
 			expectedErrors: map[string]interface{}{
-				"line 3 - wallet address": "invalid wallet address. Must be a valid Stellar public key",
+				"line 3 - wallet address": "invalid wallet address. Must be a valid Stellar public key or contract address",
 			},
 		},
 		{
-			name: "🔴 WalletAddressMemo is not valid for WalletAddress contact type",
+			name: "🔴 WalletAddressMemo is not valid for G WalletAddress contact type",
 			instruction: &data.DisbursementInstruction{
 				WalletAddress:     "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH",
 				WalletAddressMemo: "this-string-is-not-a-valid-memo-because-it's-not-uint-and-too-long-for-a-text-and-not-a-valid-hex",
@@ -286,6 +286,22 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			hasErrors:   true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - wallet address memo": "invalid wallet address memo. For more information, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos",
+			},
+		},
+		{
+			name: "🔴 WalletAddressMemo is not valid for C WalletAddress contact type",
+			instruction: &data.DisbursementInstruction{
+				WalletAddress:     "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
+				WalletAddressMemo: "1234",
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
+			},
+			lineNumber:  3,
+			contactType: data.RegistrationContactTypePhoneAndWalletAddress,
+			hasErrors:   true,
+			expectedErrors: map[string]interface{}{
+				"line 3 - wallet address memo": "wallet address memo is not supported for contract addresses",
 			},
 		},
 
@@ -368,6 +384,18 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationTypePin,
 			hasErrors:         false,
 		},
+		{
+			name: "🟢 successfully validates instructions (C WalletAddress)",
+			instruction: &data.DisbursementInstruction{
+				WalletAddress: "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
+				Phone:         "+380445555555",
+				ID:            "123456789",
+				Amount:        "100.5",
+			},
+			lineNumber:  3,
+			contactType: data.RegistrationContactTypePhoneAndWalletAddress,
+			hasErrors:   false,
+		},
 	}
 
 	memos := []schema.Memo{
@@ -379,7 +407,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 
 	for _, memo := range memos {
 		tests = append(tests, TestCase{
-			name: fmt.Sprintf("🟢 successfully validates instructions (WalletAddress,%s)", memo.Type),
+			name: fmt.Sprintf("🟢 successfully validates instructions (G WalletAddress,%s)", memo.Type),
 			instruction: &data.DisbursementInstruction{
 				WalletAddress:     "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH",
 				WalletAddressMemo: memo.Value,

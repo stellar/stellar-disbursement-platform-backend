@@ -10,15 +10,61 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
+
+// DBPoolOptions contains tunables for the PostgreSQL connection pool.
+type DBPoolOptions struct {
+	DBMaxOpenConns           int
+	DBMaxIdleConns           int
+	DBConnMaxIdleTimeSeconds int
+	DBConnMaxLifetimeSeconds int
+}
+
+// DBPoolConfigOptions returns config options for tuning the DB connection pool.
+func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:        "db-max-open-conns",
+			Usage:       "Maximum number of open DB connections per pool",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBMaxOpenConns,
+			FlagDefault: db.DefaultDBPoolConfig.MaxOpenConns,
+			Required:    false,
+		},
+		{
+			Name:        "db-max-idle-conns",
+			Usage:       "Maximum number of idle DB connections retained per pool",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBMaxIdleConns,
+			FlagDefault: db.DefaultDBPoolConfig.MaxIdleConns,
+			Required:    false,
+		},
+		{
+			Name:        "db-conn-max-idle-time-seconds",
+			Usage:       "Maximum idle time in seconds before a connection is closed",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBConnMaxIdleTimeSeconds,
+			FlagDefault: db.DefaultConnMaxIdleTimeSeconds,
+			Required:    false,
+		},
+		{
+			Name:        "db-conn-max-lifetime-seconds",
+			Usage:       "Maximum lifetime in seconds for a single connection",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBConnMaxLifetimeSeconds,
+			FlagDefault: db.DefaultConnMaxLifetimeSeconds,
+			Required:    false,
+		},
+	}
+}
 
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
 func TwilioConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption {
@@ -165,85 +211,6 @@ func SingleTenantRoutingConfigOptions(opts *TenantRoutingOptions) *config.Config
 		OptType:   types.String,
 		ConfigKey: &opts.TenantID,
 		Required:  false,
-	}
-}
-
-type EventBrokerOptions struct {
-	EventBrokerType events.EventBrokerType
-	BrokerURLs      []string
-	ConsumerGroupID string
-
-	// KAFKA specific options
-	KafkaSecurityProtocol  events.KafkaSecurityProtocol
-	KafkaSASLUsername      string
-	KafkaSASLPassword      string
-	KafkaAccessKey         string
-	KafkaAccessCertificate string
-}
-
-func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
-	return []*config.ConfigOption{
-		{
-			Name:           "event-broker-type",
-			Usage:          `Specifies the type of event broker to be used. Options: "KAFKA", "NONE".`,
-			OptType:        types.String,
-			ConfigKey:      &opts.EventBrokerType,
-			CustomSetValue: SetConfigOptionEventBrokerType,
-			FlagDefault:    string(events.KafkaEventBrokerType),
-			Required:       true,
-		},
-		{
-			Name:           "broker-urls",
-			Usage:          "A comma-separated list of the message broker URLs.",
-			OptType:        types.String,
-			ConfigKey:      &opts.BrokerURLs,
-			CustomSetValue: SetConfigOptionURLList,
-			Required:       false,
-		},
-		{
-			Name:      "consumer-group-id",
-			Usage:     "Specifies a group ID for the broker consumers.",
-			OptType:   types.String,
-			ConfigKey: &opts.ConsumerGroupID,
-			Required:  false,
-		},
-
-		{
-			Name:           "kafka-security-protocol",
-			Usage:          "Kafka Security Protocol. Options: PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL",
-			OptType:        types.String,
-			CustomSetValue: SetConfigOptionKafkaSecurityProtocol,
-			ConfigKey:      &opts.KafkaSecurityProtocol,
-			Required:       false,
-		},
-		{
-			Name:      "kafka-sasl-username",
-			Usage:     "Specifies the Kafka SASL Username, required when the kafka security protocol is set to either `SASL_PLAINTEXT` or `SASL_SSL`.",
-			OptType:   types.String,
-			ConfigKey: &opts.KafkaSASLUsername,
-			Required:  false,
-		},
-		{
-			Name:      "kafka-sasl-password",
-			Usage:     "Specifies the Kafka SASL Password, required when the kafka security protocol is set to either `SASL_PLAINTEXT` or `SASL_SSL`.",
-			OptType:   types.String,
-			ConfigKey: &opts.KafkaSASLPassword,
-			Required:  false,
-		},
-		{
-			Name:      "kafka-ssl-access-key",
-			Usage:     "The Kafka Access Key (keystore) in PEM format, required when the kafka security protocol is set to `SSL`.",
-			OptType:   types.String,
-			ConfigKey: &opts.KafkaAccessKey,
-			Required:  false,
-		},
-		{
-			Name:      "kafka-ssl-access-certificate",
-			Usage:     "The Kafka SSL Access Certificate in PEM format that matches with the Kafka Access Key, required when the kafka security protocol is set to `SSL`.",
-			OptType:   types.String,
-			ConfigKey: &opts.KafkaAccessCertificate,
-			Required:  false,
-		},
 	}
 }
 
@@ -425,16 +392,5 @@ func HorizonURL(targetPointer interface{}) *config.ConfigOption {
 		ConfigKey:   targetPointer,
 		FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
 		Required:    true,
-	}
-}
-
-func KafkaConfig(opts EventBrokerOptions) events.KafkaConfig {
-	return events.KafkaConfig{
-		Brokers:              opts.BrokerURLs,
-		SecurityProtocol:     opts.KafkaSecurityProtocol,
-		SASLUsername:         opts.KafkaSASLUsername,
-		SASLPassword:         opts.KafkaSASLPassword,
-		SSLAccessKey:         opts.KafkaAccessKey,
-		SSLAccessCertificate: opts.KafkaAccessCertificate,
 	}
 }

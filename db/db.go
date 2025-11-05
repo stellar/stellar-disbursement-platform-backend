@@ -17,9 +17,24 @@ import (
 )
 
 const (
-	MaxDBConnIdleTime = 10 * time.Second
-	MaxOpenDBConns    = 30
+	DefaultConnMaxIdleTimeSeconds = 10
+	DefaultConnMaxLifetimeSeconds = 300
 )
+
+// DBPoolConfig represents tunables for the sql.DB pool.
+type DBPoolConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxIdleTime time.Duration
+	ConnMaxLifetime time.Duration
+}
+
+var DefaultDBPoolConfig = DBPoolConfig{
+	MaxOpenConns:    20,
+	MaxIdleConns:    2,
+	ConnMaxIdleTime: DefaultConnMaxIdleTimeSeconds * time.Second,
+	ConnMaxLifetime: DefaultConnMaxLifetimeSeconds * time.Second,
+}
 
 // DBConnectionPool is an interface that wraps the sqlx.DB structs methods and includes the RunInTransaction helper.
 //
@@ -101,42 +116,6 @@ func RunInTransactionWithResult[T any](ctx context.Context, dbConnectionPool DBC
 	return result, nil
 }
 
-// RunInTransactionWithPostCommit runs the given atomic function in an atomic database transaction.
-// If the atomic function succeeds, it returns a postCommit function to be executed after the transaction is committed.
-func RunInTransactionWithPostCommit(ctx context.Context, opts *TransactionOptions) error {
-	dbConnectionPool := opts.DBConnectionPool
-	atomicFunction := opts.AtomicFunctionWithPostCommit
-	txOpts := opts.TxOptions
-
-	dbTx, err := dbConnectionPool.BeginTxx(ctx, txOpts)
-	if err != nil {
-		return fmt.Errorf("creating db transaction for RunInTransactionWithResult: %w", err)
-	}
-
-	defer func() {
-		DBTxRollback(ctx, dbTx, err, "rolling back transaction due to error")
-	}()
-
-	postCommit, err := atomicFunction(dbTx)
-	if err != nil {
-		return NewTransactionExecutionError(err)
-	}
-
-	err = dbTx.Commit()
-	if err != nil {
-		return fmt.Errorf("committing transaction in RunInTransactionWithPostCommit: %w", err)
-	}
-
-	// Execute the postCommit function if it's not nil.
-	if postCommit != nil {
-		if postCommitErr := postCommit(); postCommitErr != nil {
-			return fmt.Errorf("executing postCommit function: %w", postCommitErr)
-		}
-	}
-
-	return nil
-}
-
 // RunInTransaction runs the given atomic function in an atomic database transaction and returns an error. Boilerplate
 // code for database transactions.
 func RunInTransaction(ctx context.Context, dbConnectionPool DBConnectionPool, opts *sql.TxOptions, atomicFunction func(dbTx DBTransaction) error) error {
@@ -200,14 +179,17 @@ func DBTxRollback(ctx context.Context, dbTx DBTransaction, err error, logMessage
 	}
 }
 
-// OpenDBConnectionPool opens a new database connection pool. It returns an error if it can't connect to the database.
-func OpenDBConnectionPool(dataSourceName string) (DBConnectionPool, error) {
+// OpenDBConnectionPoolWithConfig opens a new database connection pool. It returns an error if it can't connect to the database.
+func OpenDBConnectionPoolWithConfig(dataSourceName string, cfg DBPoolConfig) (DBConnectionPool, error) {
 	sqlxDB, err := sqlx.Open("postgres", dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("error creating app DB connection pool: %w", err)
 	}
-	sqlxDB.SetConnMaxIdleTime(MaxDBConnIdleTime)
-	sqlxDB.SetMaxOpenConns(MaxOpenDBConns)
+
+	sqlxDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	sqlxDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	sqlxDB.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+	sqlxDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
 	err = sqlxDB.Ping()
 	if err != nil {
@@ -217,13 +199,27 @@ func OpenDBConnectionPool(dataSourceName string) (DBConnectionPool, error) {
 	return &DBConnectionPoolImplementation{DB: sqlxDB, dataSourceName: dataSourceName}, nil
 }
 
+// OpenDBConnectionPool opens a new database connection pool with default settings.
+func OpenDBConnectionPool(dataSourceName string) (DBConnectionPool, error) {
+	return OpenDBConnectionPoolWithConfig(dataSourceName, DefaultDBPoolConfig)
+}
+
 // OpenDBConnectionPoolWithMetrics opens a new database connection pool with the monitor service. It returns an error if it can't connect to the database.
 func OpenDBConnectionPoolWithMetrics(ctx context.Context, dataSourceName string, monitorService monitor.MonitorServiceInterface) (DBConnectionPool, error) {
-	dbConnectionPool, err := OpenDBConnectionPool(dataSourceName)
+	dbConnectionPool, err := OpenDBConnectionPoolWithConfig(dataSourceName, DefaultDBPoolConfig)
 	if err != nil {
 		return nil, fmt.Errorf("error opening a new db connection pool: %w", err)
 	}
 
+	return NewDBConnectionPoolWithMetrics(ctx, dbConnectionPool, monitorService)
+}
+
+// OpenDBConnectionPoolWithMetricsAndConfig opens a new database connection pool with metrics and explicit config.
+func OpenDBConnectionPoolWithMetricsAndConfig(ctx context.Context, dataSourceName string, monitorService monitor.MonitorServiceInterface, cfg DBPoolConfig) (DBConnectionPool, error) {
+	dbConnectionPool, err := OpenDBConnectionPoolWithConfig(dataSourceName, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error opening a new db connection pool: %w", err)
+	}
 	return NewDBConnectionPoolWithMetrics(ctx, dbConnectionPool, monitorService)
 }
 

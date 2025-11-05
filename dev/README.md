@@ -1,6 +1,7 @@
 # Quick Start Guide
 
 ## Table of Contents
+
 - [Quick Start Guide](#quick-start-guide)
   - [Table of Contents](#table-of-contents)
   - [Introduction](#introduction)
@@ -15,7 +16,6 @@
   - [Additional Development Environment Details](#additional-development-environment-details)
     - [Stellar Accounts and .env File](#stellar-accounts-and-env-file)
     - [Building the SDP Docker Containers](#building-the-sdp-docker-containers)
-    - [Using Kafka for Event Handling](#using-kafka-for-event-handling)
     - [Remote Debugging](#remote-debugging)
       - [Ensure Docker Containers are Running:](#ensure-docker-containers-are-running)
       - [Using VS Code:](#using-vs-code)
@@ -24,8 +24,8 @@
       - [Start Prometheus and Grafana containers](#start-prometheus-and-grafana-containers)
       - [Load the SDP Grafana Dashboard](#load-the-sdp-grafana-dashboard)
   - [Troubleshooting](#troubleshooting)
-      - [Sample Tenant Management Postman collection](#sample-tenant-management-postman-collection)
-      - [Distribution account out of funds](#distribution-account-out-of-funds)
+    - [Sample Tenant Management Postman collection](#sample-tenant-management-postman-collection)
+    - [Distribution account out of funds](#distribution-account-out-of-funds)
 
 ## Introduction
 
@@ -35,11 +35,11 @@ Follow these instructions to get started with the Stellar Disbursement Platform 
 
 ### Pre-requisites
 
-* **Docker:** Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
-* **Git:** You will need Git to clone the repository. You can download it from [here](https://git-scm.com/downloads).
-* **Go:** Required to run the setup wizard that generates your `.env`. Install from [golang.org/dl](https://golang.org/dl/).
-* **jq:** Useful for some optional scripts and diagnostics. You can install it using Homebrew:
-```sh  
+- **Docker:** Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
+- **Git:** You will need Git to clone the repository. You can download it from [here](https://git-scm.com/downloads).
+- **Go:** Required to run the setup wizard that generates your `.env`. Install from [golang.org/dl](https://golang.org/dl/).
+- **jq:** Useful for some optional scripts and diagnostics. You can install it using Homebrew:
+```sh
 brew install jq
 ```
 
@@ -50,10 +50,12 @@ git clone https://github.com/stellar/stellar-disbursement-platform.git
 ```
 
 ### Update local DNS
+
 This update is needed to simulate the multi-tenant capabilities of the SDP. The SDP uses the subdomain of the request URL to resolve the tenant.
 Be sure that the added tenant hosts are included in the host configuration file.
 To check it, you can run the command `cat /etc/hosts`.
 To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
+
 ```
 127.0.0.1       bluecorp.stellar.local
 127.0.0.1       redcorp.stellar.local
@@ -147,7 +149,6 @@ The setup wizard automatically handles mainnet configuration when you select "pu
 ### Mainnet Startup
 
 Use the setup wizard to create and launch a mainnet configuration:
-
 ```sh
 ./setup
 ```
@@ -160,14 +161,14 @@ Use the setup wizard to create and launch a mainnet configuration:
 
 > Note: The legacy `dev/scripts/make_env.sh` has been removed. Use the setup wizard instead (`./setup`).
 
-
 ### Login to the SDP and send a Disbursement
+
 > [!NOTE]  
 > In the following section, we will assume you're using the `bluecorp` tenant that was provisioned when you started the stack.
 
 The startup prints Login information for each tenant.  
 ```
-🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉  
+🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉
 Login URLs for each tenant:
 🔗Tenant `redcorp`: [http://redcorp.stellar.local:3000](http://redcorp.stellar.local:3000)
   username: `owner@redcorp.local`
@@ -198,7 +199,7 @@ Login URLs for each tenant:
    - A sample file template is available [sample-disbursement.csv](./sample/sample-disbursement.csv).
    - Make sure to update the invalid phone numbers before using it.
    - Here is an example of a disbursement file with a single payment:
-   
+
    ```csv
    phone,id,amount,verification
    +13163955627,4ba1,.1,1987-12-01
@@ -206,8 +207,8 @@ Login URLs for each tenant:
 
    - In this example, when registering, the payment receiver will be asked to verify their phone number and date of birth which will need to match the payment file instructions.
 
-   - Upload the CSV and then click the Review button.  When you are ready to start the disbursement, click the `Confirm disbursement` button.
-   
+   - Upload the CSV and then click the Review button. When you are ready to start the disbursement, click the `Confirm disbursement` button.
+
    <img src="images/disbursement2.png" alt="alt text" width="40%">
 
 4. **View the Disbursement Details Dashboard**
@@ -215,6 +216,22 @@ Login URLs for each tenant:
    Navigate to Disbursement Details and see the payment in the disbursement is currently in a `Ready` state. This means the receiver has yet to accept the invitation and deposit the funds.
 
    <img src="images/disbursement_detail.png" alt="Disbursement Details" width="40%">
+
+### SEP10/SEP24 Endpoints
+
+The SDP now provides native SEP10 and SEP24 endpoints for wallet integration:
+
+**SEP10 Authentication Endpoints:**
+- `GET /auth` - Generate authentication challenge
+- `POST /auth` - Validate challenge and receive JWT token
+
+**SEP24 Interactive Deposit Endpoints:**
+- `GET /sep24/info` - Get supported assets and capabilities  
+- `POST /sep24/transactions/deposit/interactive` - Initiate interactive deposit
+- `GET /sep24/transactions` - Get transaction status
+
+**Stellar.toml Configuration:**
+The SDP automatically generates `stellar.toml` files that point to the native SEP10/SEP24 endpoints.
 
 ### Receive Payment to Digital Wallet (Deposit Flow)
 
@@ -224,7 +241,7 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
 2. Click on `Generate Keypair for new account` to generate a new keypair. Make sure to save your public key & secret if you want to use this account later.
 3. Click `Create account` (in front of public key) to actually create the account on the Stellar testnet.
 4. Your newly created account will have 10,000 XLM.
-   
+
    <img src="images/demo_wallet.png" alt="Demo Wallet" width="40%">
 
 5. Clicking `Add Home Domain`  to edit the home domain. Enter `http://bluecorp.stellar.local:8000` and click the `Override` button.
@@ -241,7 +258,7 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
 
 8. To verify the payment, enter the passcode and date of birth. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
 
-    <img src="images/sep24_deposit3.png" alt="Verify Payment" width="40%">
+<img src="images/sep24_deposit3.png" alt="Verify Payment" width="40%">
 
 9. The SEP-24 interactive pop-up will confirm the registration was successful. At this point, the SDP can associate the wallet address with the receiver phone number. It should then start processing the transaction to send the payment. If you check the dashboard, the payment should be in a `PENDING` state.
 
@@ -262,20 +279,20 @@ You need to create and configure two Stellar accounts to use the SDP. You can ei
 1. Create and fund a Distribution account that will be used for sending funds to receivers. Follow the instructions [here](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account).
 2. Create a SEP-10 account for authentication. It can be created the same way as the distribution account but it doesn't need to be funded.
 3. Create a `.env` file in the `dev` directory by copying the [env.example](.backup/.env.example) file:
-    ```sh
-    cp .env.example .env
-    ```
+   ```sh
+   cp .env.example .env
+   ```
 4. Update the `.env` file with the public and private keys of the two accounts created in the previous steps.
 
 **Option 2: Use the setup wizard to create accounts and `.env` automatically**
 
 From the repo root, run the wizard:
 
-```sh
+   ```sh
 ./setup                # interactive wizard
 # or non-interactive:
 go run tools/sdp-setup/main.go -network testnet -auto-gen-account -auto-fund -xlm-amount 20 -env dev/.env
-```
+   ```
 
 This will generate SEP-10 and distribution keys, fund the distribution with XLM + USDC on testnet, and write `dev/.env`.
 
@@ -284,25 +301,10 @@ This will generate SEP-10 and distribution keys, fund the distribution with XLM 
 The setup wizard launches the local environment (Docker Compose), initializes tenants, and adds test users. It spins up the following services:
 
 - `sdp_v2_database`: The main SDP and TSS database.
-- `anchor-platform-postgres-db`: Database used by the anchor platform.
-- `anchor-platform`: A local instance of the anchor platform.
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
 - `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000`.
-
-
-### Using Kafka for Event Handling
-
-Using Kafka for event handling is optional. If you want to use Kafka, you can start the Kafka service by running the following command from the `dev` directory:
-
-```sh
-docker compose -p sdp-multi-tenant -f docker-compose.yml -f docker-compose-kafka.yml up -d
-```
-
-This will start the following containers on top of the ones listed above:
-- `kafka`: Kafka service running on ports `9092`, `9094`(external).
-- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
 
 ### Remote Debugging
 
@@ -311,6 +313,7 @@ To help collaborators debug remotely against the Docker containers, the environm
 Follow these steps to debug remotely using VS Code or IntelliJ GoLang:
 
 #### Ensure Docker Containers are Running:
+
 Make sure the Docker containers are up and running using the setup wizard:
 
 ```sh
@@ -318,6 +321,7 @@ Make sure the Docker containers are up and running using the setup wizard:
 ```
 
 #### Using VS Code:
+
 1. **Open the Project in VS Code:**
 2. **Place the `launch.json` file in the `.vscode` directory within your project.** A sample `launch.json` is available [here](./sample/launch.json).
 3. **Open the Debug panel** by clicking on the Debug icon in the Activity Bar on the side of VS Code.
@@ -325,6 +329,7 @@ Make sure the Docker containers are up and running using the setup wizard:
 5. **Click the green play button or press `F5` to start debugging.**
 
 #### Using IntelliJ GoLang:
+
 1. **Open the Project in IntelliJ:**
    Open your project in IntelliJ.
 
@@ -344,9 +349,9 @@ The debugger should now attach to the running Docker container, and you should b
 
 ### Monitoring the SDP
 
-The SDP supports monitoring via Prometheus and Grafana. 
+The SDP supports monitoring via Prometheus and Grafana.
 
-#### Start Prometheus and Grafana containers 
+#### Start Prometheus and Grafana containers
 
 The containers can be started by running the following command from the `dev` directory:
 
@@ -355,8 +360,9 @@ docker compose -p sdp-multi-tenant -f docker-compose-monitoring.yml up -d
 ```
 
 This will start the following services:
-* `prometheus`: Prometheus service running on port `9090`.
-* `grafana`: Grafana service running on port `3002`. 
+
+- `prometheus`: Prometheus service running on port `9090`.
+- `grafana`: Grafana service running on port `3002`.
 
 #### Load the SDP Grafana Dashboard
 
@@ -367,7 +373,6 @@ This will start the following services:
 3. Click on the `+` icon on the left sidebar and select `Import Dashboard`.
 4. Copy the contents of the [dashboard.json](../resources/grafana/dashboard.json) file and paste it into the `Import via dashboard JSON model` text box.
 
-
 ## Troubleshooting
 
 #### Sample Tenant Management Postman collection
@@ -376,20 +381,22 @@ A sample [Postman collection](./sample/SDP.postman_collection.json) is available
 
 #### Distribution account out of funds
 
-Making payments requires transaction fees that are paid in XLM from the distribution account.  Payments will start failing if the distribution account does not have enough XLM to pay for these fees. To check this:
+Making payments requires transaction fees that are paid in XLM from the distribution account. Payments will start failing if the distribution account does not have enough XLM to pay for these fees. To check this:
+
 - Find the distribution account public key in `dev/docker-compose.yml` under the variable `DISTRIBUTION_PUBLIC_KEY`
-- Access [https://horizon-testnet.stellar.org/accounts/:accountId](https://horizon-testnet.stellar.org/accounts/GARGKDIDH7WMKV5WWPK4BH4CKEQIZGWUCA4EUXCY5VICHTHLEBXVNVMW) in your browser and check the balance.  
+- Access [https://horizon-testnet.stellar.org/accounts/:accountId](https://horizon-testnet.stellar.org/accounts/GARGKDIDH7WMKV5WWPK4BH4CKEQIZGWUCA4EUXCY5VICHTHLEBXVNVMW) in your browser and check the balance.
 - You could also check the balance using [demo wallet](https://demo-wallet.stellar.org/account?secretKey=YOUR_SECRET_KEY)
 - If the balance is indeed low, here are some of the options to add additional XLM to the distribution account:
 
 -- From the repo root, use the funding tool to add XLM/USDC to an existing account:
-   ```sh
+```sh
    go run tools/sdp-create-and-fund/main.go --secret SECRET_KEY --fundxlm
-   ```
+```
+
 -- Create a new funded account via Demo Wallet website and send funds to the Distribution account.
-  - Access [https://demo-wallet.stellar.org/](https://demo-wallet.stellar.org/) in your browser.
-  - Click on `Generate Keypair for new account` to create a new testnet account. Your account comes with 10,000 XLM.
-  - Click on `Send` and enter the distribution account public key and the amount you want to send.
-  - Using Freighter or Stellar Laboratory, swap the XLM for USDC if you wish to test with USDC.
-  - Just use the newly created account (with 10,000 XLM) as the distribution account by updating the `DISTRIBUTION_PUBLIC_KEY` variable in `dev/docker-compose.yml` and restarting the `sdp-api` container.
-  
+
+- Access [https://demo-wallet.stellar.org/](https://demo-wallet.stellar.org/) in your browser.
+- Click on `Generate Keypair for new account` to create a new testnet account. Your account comes with 10,000 XLM.
+- Click on `Send` and enter the distribution account public key and the amount you want to send.
+- Using Freighter or Stellar Laboratory, swap the XLM for USDC if you wish to test with USDC.
+- Just use the newly created account (with 10,000 XLM) as the distribution account by updating the `DISTRIBUTION_PUBLIC_KEY` variable in `dev/docker-compose.yml` and restarting the `sdp-api` container.

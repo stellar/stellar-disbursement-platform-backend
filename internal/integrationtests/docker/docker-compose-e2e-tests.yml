@@ -22,7 +22,7 @@ services:
       - "8000:8000"
       - "8003:8003"
     environment:
-      BASE_URL: http://localhost:8000
+      BASE_URL: http://stellar.local:8000
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable
       ENVIRONMENT: localhost
       LOG_LEVEL: TRACE
@@ -34,22 +34,18 @@ services:
       NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
       HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
-      ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
-      ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
+      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
+      SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false"
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
-      EVENT_BROKER_TYPE: "KAFKA"
-      BROKER_URLS: "kafka:9092"
-      CONSUMER_GROUP_ID: "group-id"
-      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
-      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "0" # disabled - we're using kafka for this.
-      SCHEDULER_PAYMENT_JOB_SECONDS: "0" # disabled - we're using kafka for this.
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "5"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "5"
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin
@@ -82,10 +78,8 @@ services:
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
       EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
-      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       SEP24_JWT_SECRET: jwt_secret_1234567890
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
-      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
@@ -105,10 +99,6 @@ services:
     depends_on:
       db:
         condition: service_started
-      kafka:
-        condition: service_started
-      kafka-init:
-        condition: service_completed_successfully
 
   tss:
     container_name: e2e-sdp-tss
@@ -131,16 +121,9 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
-
-      # multi-tenant
-      EVENT_BROKER_TYPE: "KAFKA"
-      BROKER_URLS: "kafka:9092"
-      CONSUMER_GROUP_ID: "group-id"
-      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
     depends_on:
       - db
       - sdp-api
-      - kafka
     entrypoint: ""
     command:
       - sh
@@ -151,162 +134,8 @@ services:
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
 
-  db-anchor-platform:
-    container_name: e2e-anchor-platform-postgres-db
-    image: postgres:14-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: e2e-postgres
-      PGPORT: 5433
-    ports:
-      - "5433:5433"
-    volumes:
-      - e2e-postgres-ap-db:/data/postgres
-
-  anchor-platform:
-    container_name: e2e-anchor-platform
-    image: stellar/anchor-platform:2.6.0
-    command: --sep-server --platform-server --platform linux/amd64
-    ports:
-      - "8080:8080" # sep-server
-      - "8085:8085" # platform-server
-      - "8082:8082" # metrics
-    depends_on:
-      - db-anchor-platform
-    environment:
-      HOST_URL: http://localhost:8080
-      SEP_SERVER_PORT: 8080
-      CALLBACK_API_BASE_URL: http://sdp-api:8000
-      CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
-      PLATFORM_SERVER_AUTH_TYPE: JWT
-      APP_LOGGING_LEVEL: INFO
-      DATA_TYPE: postgres
-      DATA_SERVER: db-anchor-platform:5433
-      DATA_DATABASE: e2e-postgres
-      DATA_FLYWAY_ENABLED: "true"
-      DATA_DDL_AUTO: update
-      METRICS_ENABLED: "false"  # Metrics would be available at port 8082
-      METRICS_EXTRAS_ENABLED: "false"
-      SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local:8000" # Comma separated list of home domains
-      SEP10_HOME_DOMAIN: ""
-      SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
-      # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
-      # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
-      SEP24_ENABLED: "true"
-      SEP24_INTERACTIVE_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
-      SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
-      SEP24_MORE_INFO_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
-      STELLAR_NETWORK_NETWORK: ${NETWORK_NETWORK:-TESTNET}
-      STELLAR_NETWORK_NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
-      STELLAR_NETWORK_HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
-      SEP1_ENABLED: "true"
-      SEP1_TOML_TYPE: url
-      SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
-      ASSETS_TYPE: json
-      ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
-        {
-          "assets": [
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "USDC",
-              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            },
-            {
-              "sep24_enabled": true,
-              "schema": "stellar",
-              "code": "XLM",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "deposit": {
-                "enabled": true,
-                "fee_minimum": 0,
-                "fee_percent": 0,
-                "min_amount": 1,
-                "max_amount": 10000
-              },
-              "withdraw": {"enabled": false}
-            }
-          ]
-        }
-
-      # secrets:
-      SECRET_DATA_USERNAME: postgres
-      SECRET_DATA_PASSWORD: postgres
-      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
-      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
-
-  kafka:
-    container_name: e2e-kafka
-    image: apache/kafka:3.7.0
-    ports:
-      - "9094:9094"
-      - "9092:9092"
-    volumes:
-      - "kafka-data:/var/lib/kafka/data"
-    environment:
-      # KRaft settings
-      - KAFKA_NODE_ID=0
-      - KAFKA_PROCESS_ROLES=controller,broker
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-      # Listeners
-      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - CLUSTER_ID=e2e-test-cluster
-    healthcheck:
-      test: /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1
-      start_period: 15s
-      interval: 10s
-      timeout: 10s
-      retries: 10
-
-  kafka-init:
-    container_name: e2e-kafka-init
-    image: apache/kafka:3.7.0
-    entrypoint: [ "/bin/bash", "-c" ]
-    command: |
-      "
-        # Create consumer offsets topic explicitly
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic __consumer_offsets --partitions 50 --replication-factor 1 --bootstrap-server kafka:9092 || echo 'Consumer offsets topic may already exist'
-        
-        # Wait a bit for the topic to be fully created
-        sleep 2
-        
-        # Create application topics
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay --bootstrap-server kafka:9092
-      
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
-        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay.dlq --bootstrap-server kafka:9092
-      "
-    depends_on:
-      kafka:
-        condition: service_healthy
 volumes:
   e2e-postgres-db:
     driver: local
   e2e-postgres-ap-db:
-    driver: local
-  kafka-data:
     driver: local

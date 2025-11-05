@@ -14,7 +14,6 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
@@ -124,9 +123,11 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
 	)
 
-	// event broker options:
-	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
-	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
+	// DB pool tuning options (tss)
+	configOpts = append(
+		configOpts,
+		cmdUtils.DBPoolConfigOptions(&globalOptions.DBPool)...,
+	)
 
 	cmd := &cobra.Command{
 		Use:   "tss",
@@ -158,7 +159,14 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			tssOpts.MonitorService = tssMonitorSvc
 
 			// Initializing the TSSDBConnectionPool
-			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: &tssMonitorSvc}
+			dbcpOptions := di.DBConnectionPoolOptions{
+				DatabaseURL:            globalOptions.DatabaseURL,
+				MonitorService:         &tssMonitorSvc,
+				MaxOpenConns:           globalOptions.DBPool.DBMaxOpenConns,
+				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
+				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
+				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+			}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
@@ -198,18 +206,6 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-
-			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
-				}
-				defer kafkaProducer.Close(ctx)
-				tssOpts.EventProducer = kafkaProducer
-			} else {
-				log.Ctx(ctx).Warn("Event Broker Type is NONE. Using Noop producer for logging events")
-				tssOpts.EventProducer = events.NoopProducer{}
-			}
 
 			// Starting Metrics Server (background job)
 			go submitterService.StartMetricsServe(ctx, metricsServeOpts, &serve.HTTPServer{}, tssOpts.CrashTrackerClient)

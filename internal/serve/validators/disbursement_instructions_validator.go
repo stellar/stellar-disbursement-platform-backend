@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -8,7 +9,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type DisbursementInstructionsValidator struct {
@@ -48,11 +48,17 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 	if iv.contactType.IncludesWalletAddress {
 		iv.Check(instruction.WalletAddress != "", fmt.Sprintf("line %d - wallet address", lineNumber), "wallet address cannot be empty")
 		if instruction.WalletAddress != "" {
-			iv.Check(strkey.IsValidEd25519PublicKey(instruction.WalletAddress), fmt.Sprintf("line %d - wallet address", lineNumber), "invalid wallet address. Must be a valid Stellar public key")
+			iv.Check(strkey.IsValidEd25519PublicKey(instruction.WalletAddress) || strkey.IsValidContractAddress(instruction.WalletAddress), fmt.Sprintf("line %d - wallet address", lineNumber), "invalid wallet address. Must be a valid Stellar public key or contract address")
 		}
 		if instruction.WalletAddressMemo != "" {
-			_, _, err := schema.ParseMemo(instruction.WalletAddressMemo)
-			iv.CheckError(err, fmt.Sprintf("line %d - wallet address memo", lineNumber), "invalid wallet address memo. For more information, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos")
+			_, err := ValidateWalletAddressMemo(instruction.WalletAddress, instruction.WalletAddressMemo)
+			if err != nil {
+				if errors.Is(err, ErrMemoNotSupportedForContract) {
+					iv.AddError(fmt.Sprintf("line %d - wallet address memo", lineNumber), err.Error())
+				} else {
+					iv.CheckError(err, fmt.Sprintf("line %d - wallet address memo", lineNumber), "invalid wallet address memo. For more information, visit https://docs.stellar.org/learn/encyclopedia/transactions-specialized/memos")
+				}
+			}
 		}
 	} else {
 		// 4. Validate verification field
