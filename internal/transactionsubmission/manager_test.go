@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
@@ -433,7 +434,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: keypair.MustRandom().Address(),
 				Status:             store.TransactionStatusPending,
-				Amount:             1,
+				Amount:             decimal.NewFromInt(1),
 				TenantID:           tnt.ID,
 			})
 
