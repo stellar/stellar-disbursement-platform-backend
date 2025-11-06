@@ -8,7 +8,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
 const EmbeddedWalletServiceInstanceName = "embedded_wallet_service_instance"
@@ -32,10 +31,7 @@ func NewEmbeddedWalletService(ctx context.Context, opts services.EmbeddedWalletS
 		return nil, fmt.Errorf("creating SDP models: %w", err)
 	}
 
-	// Create TSS transaction model from TSS DB connection pool
-	tssModel := &store.TransactionModel{DBConnectionPool: opts.TSSDBConnectionPool}
-
-	newInstance, err := services.NewEmbeddedWalletService(sdpModels, tssModel, opts.WasmHash)
+	newInstance, err := services.NewEmbeddedWalletService(sdpModels, opts.WasmHash)
 	if err != nil {
 		return nil, fmt.Errorf("creating embedded wallet service: %w", err)
 	}
