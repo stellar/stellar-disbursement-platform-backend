@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 
@@ -98,20 +98,22 @@ func (e AssetNotSupportedByWalletError) Error() string {
 
 type InsufficientBalanceForDirectPaymentError struct {
 	Asset              data.Asset
-	RequestedAmount    float64
-	AvailableBalance   float64
-	TotalPendingAmount float64
+	RequestedAmount    decimal.Decimal
+	AvailableBalance   decimal.Decimal
+	TotalPendingAmount decimal.Decimal
 }
 
 func (e InsufficientBalanceForDirectPaymentError) Error() string {
-	shortfall := (e.RequestedAmount + e.TotalPendingAmount) - e.AvailableBalance
+	requiredAmount := e.RequestedAmount.Add(e.TotalPendingAmount)
+	shortfall := requiredAmount.Sub(e.AvailableBalance)
+
 	return fmt.Sprintf(
-		"insufficient balance for direct payment: requested %.6f %s, but only %.6f available (%.6f in pending payments). Need %.6f more %s",
-		e.RequestedAmount,
+		"insufficient balance for direct payment: requested %s %s, but only %s available (%s in pending payments). Need %s more %s",
+		e.RequestedAmount.String(),
 		e.Asset.Code,
-		e.AvailableBalance,
-		e.TotalPendingAmount,
-		shortfall,
+		e.AvailableBalance.String(),
+		e.TotalPendingAmount.String(),
+		shortfall.String(),
 		e.Asset.Code,
 	)
 }
@@ -324,7 +326,7 @@ func (s *DirectPaymentService) validateBalance(
 	asset *data.Asset,
 	amount string,
 ) error {
-	amountFloat, err := strconv.ParseFloat(amount, 64)
+	requestedAmount, err := decimal.NewFromString(amount)
 	if err != nil {
 		return fmt.Errorf("parsing amount: %w", err)
 	}
@@ -363,10 +365,11 @@ func (s *DirectPaymentService) validateBalance(
 		return fmt.Errorf("calculating pending amounts: %w", err)
 	}
 
-	if availableBalance < (amountFloat + totalPending) {
+	requiredAmount := requestedAmount.Add(totalPending)
+	if availableBalance.LessThan(requiredAmount) {
 		return InsufficientBalanceForDirectPaymentError{
 			Asset:              *asset,
-			RequestedAmount:    amountFloat,
+			RequestedAmount:    requestedAmount,
 			AvailableBalance:   availableBalance,
 			TotalPendingAmount: totalPending,
 		}
@@ -379,26 +382,26 @@ func (s *DirectPaymentService) calculatePendingAmountForAsset(
 	ctx context.Context,
 	dbTx db.DBTransaction,
 	targetAsset data.Asset,
-) (float64, error) {
+) (decimal.Decimal, error) {
 	pendingPayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 		Filters: map[data.FilterKey]any{
 			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
 		},
 	}, dbTx, data.QueryTypeSelectAll)
 	if err != nil {
-		return 0, fmt.Errorf("getting pending payments: %w", err)
+		return decimal.Zero, fmt.Errorf("getting pending payments: %w", err)
 	}
 
-	totalPending := 0.0
+	totalPending := decimal.Zero
 	for _, payment := range pendingPayments {
 		if payment.Asset.Equals(targetAsset) {
-			amount, parseErr := strconv.ParseFloat(payment.Amount, 64)
+			amount, parseErr := decimal.NewFromString(payment.Amount)
 			if parseErr != nil {
 				log.Ctx(ctx).Warnf("Failed to parse payment amount %s for payment %s: %v",
 					payment.Amount, payment.ID, parseErr)
 				continue
 			}
-			totalPending += amount
+			totalPending = totalPending.Add(amount)
 		}
 	}
 
