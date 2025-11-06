@@ -109,11 +109,11 @@ func (e InsufficientBalanceForDirectPaymentError) Error() string {
 
 	return fmt.Sprintf(
 		"insufficient balance for direct payment: requested %s %s, but only %s available (%s in pending payments). Need %s more %s",
-		e.RequestedAmount.String(),
+		e.RequestedAmount.StringFixed(6),
 		e.Asset.Code,
-		e.AvailableBalance.String(),
-		e.TotalPendingAmount.String(),
-		shortfall.String(),
+		e.AvailableBalance.StringFixed(6),
+		e.TotalPendingAmount.StringFixed(6),
+		shortfall.StringFixed(6),
 		e.Asset.Code,
 	)
 }

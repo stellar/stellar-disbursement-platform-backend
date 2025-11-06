@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/protocols/horizon/base"
@@ -1649,7 +1650,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			},
 		}, nil).Once()
 
-		distServiceMock.On("GetBalance", mock.Anything, &stellarDistAccount, *asset).Return(float64(1000), nil)
+		distServiceMock.On("GetBalance", mock.Anything, &stellarDistAccount, *asset).Return(decimal.NewFromFloat(1000), nil)
 
 		directPaymentService := services.NewDirectPaymentService(
 			models,
@@ -1848,7 +1849,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			},
 		}, nil).Once()
 
-		distServiceMock.On("GetBalance", mock.Anything, &stellarDistAccount, *asset).Return(float64(100), nil)
+		distServiceMock.On("GetBalance", mock.Anything, &stellarDistAccount, *asset).Return(decimal.NewFromFloat(100), nil)
 
 		directPaymentService := services.NewDirectPaymentService(
 			models,
@@ -2003,7 +2004,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			},
 		}, nil).Once()
 
-		distServiceMock.On("GetBalance", mock.Anything, &stellarDistAccount, *asset).Return(float64(1000), nil)
+		distServiceMock.On("GetBalance", mock.Anything, &stellarDistAccount, *asset).Return(decimal.NewFromFloat(1000), nil)
 
 		directPaymentService := services.NewDirectPaymentService(
 			models,

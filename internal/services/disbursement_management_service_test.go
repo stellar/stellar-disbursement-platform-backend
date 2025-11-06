@@ -965,7 +965,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
 				mDistAccService.
 					On("GetBalance", ctx, &stellarDistAccountEnv, *asset).
-					Return(0.0, errors.New("GetBalance error")).
+					Return(decimal.Zero, errors.New("GetBalance error")).
 					Once()
 			},
 			expectedErrContains: fmt.Sprintf("getting balance for asset (%s,%s) on distribution account %v: GetBalance error", asset.Code, asset.Issuer, stellarDistAccountEnv),
@@ -976,7 +976,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
 				mDistAccService.
 					On("GetBalance", ctx, &stellarDistAccountEnv, *asset).
-					Return(99.99, nil).
+					Return(decimal.NewFromFloat(99.99), nil).
 					Once()
 			},
 			expectedErrContains: expectedInsufficientBalanceErr(stellarDistAccountEnv).Error(),
@@ -987,7 +987,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
 				mDistAccService.
 					On("GetBalance", ctx, &stellarDistAccountDBVault, *asset).
-					Return(99.99, nil).
+					Return(decimal.NewFromFloat(99.99), nil).
 					Once()
 			},
 			expectedErrContains: expectedInsufficientBalanceErr(stellarDistAccountDBVault).Error(),
@@ -998,7 +998,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
 				mDistAccService.
 					On("GetBalance", ctx, &circleDistAccountDBVault, *asset).
-					Return(99.99, nil).
+					Return(decimal.NewFromFloat(99.99), nil).
 					Once()
 			},
 			expectedErrContains: expectedInsufficientBalanceErr(circleDistAccountDBVault).Error(),
@@ -1009,7 +1009,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
 				mDistAccService.
 					On("GetBalance", ctx, &stellarDistAccountEnv, *asset).
-					Return(100.00, nil).
+					Return(decimal.NewFromFloat(100.00), nil).
 					Once()
 			},
 		},
@@ -1019,7 +1019,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
 				mDistAccService.
 					On("GetBalance", ctx, &stellarDistAccountDBVault, *asset).
-					Return(100.00, nil).
+					Return(decimal.NewFromFloat(100.00), nil).
 					Once()
 			},
 		},
@@ -1029,7 +1029,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
 				mDistAccService.
 					On("GetBalance", ctx, &circleDistAccountDBVault, *asset).
-					Return(100.00, nil).
+					Return(decimal.NewFromFloat(100.00), nil).
 					Once()
 			},
 		},
@@ -1144,7 +1144,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement_AmountDis
 			mDistAccService := mocks.NewMockDistributionAccountService(t)
 			mDistAccService.
 				On("GetBalance", ctx, &stellarDistAccount, *asset).
-				Return(tc.availableBalance, nil).
+				Return(decimal.NewFromFloat(tc.availableBalance), nil).
 				Once()
 
 			svc := &DisbursementManagementService{
