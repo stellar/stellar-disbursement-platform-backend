@@ -64,6 +64,7 @@ func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbur
 		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
 	)
 	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+
 	if !req.RegistrationContactType.IncludesWalletAddress {
 		v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
 		var wallet *data.Wallet
@@ -71,17 +72,11 @@ func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbur
 			wallet = fetchedWallet
 		}
 		walletIsEmbedded := wallet != nil && wallet.Embedded
-		if walletIsEmbedded {
+		if !walletIsEmbedded || req.VerificationField != "" {
 			v.Check(
-				req.VerificationField == "" || slices.Contains(data.GetEmbeddedWalletVerificationTypes(), req.VerificationField),
+				slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
 				"verification_field",
-				fmt.Sprintf("verification_field must be empty or one of %v", data.GetEmbeddedWalletVerificationTypes()),
-			)
-		} else {
-			v.Check(
-				slices.Contains(data.GetNonEmbeddedWalletVerificationTypes(), req.VerificationField),
-				"verification_field",
-				fmt.Sprintf("verification_field must be one of %v", data.GetNonEmbeddedWalletVerificationTypes()),
+				fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
 			)
 		}
 	} else {
@@ -154,13 +149,6 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 
 	if !wallet.Enabled {
 		return nil, httperror.BadRequest("Wallet is not enabled", errors.New("wallet is not enabled"), nil)
-	}
-
-	if req.VerificationField == data.VerificationTypeSEP24Registration && !wallet.Embedded {
-		extra := map[string]interface{}{
-			"verification_field": fmt.Sprintf("%s requires an embedded wallet", data.VerificationTypeSEP24Registration),
-		}
-		return nil, httperror.BadRequest("verification_field is only allowed for embedded wallets", nil, extra)
 	}
 
 	// Get Asset

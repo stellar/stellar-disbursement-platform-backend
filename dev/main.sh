@@ -142,7 +142,7 @@ if [ "$HTTPS_MODE" = true ]; then
     FRONTEND_PROTOCOL="https"
     FRONTEND_PORT="3443"
 else
-    FRONTEND_PROTOCOL="http"
+    FRONTEND_PROTOCOL="https"
     FRONTEND_PORT="3000"
 fi
 

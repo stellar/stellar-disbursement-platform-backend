@@ -27,7 +27,6 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				"created_at",
 				"updated_at",
 				"wallet_status",
-				"requires_sep24_registration",
 				`COALESCE(wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(contract_address, '') AS "contract_address"`,
 				`COALESCE(credential_id, '') AS "credential_id"`,
@@ -43,7 +42,6 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				"ew.created_at",
 				"ew.updated_at",
 				"ew.wallet_status",
-				"ew.requires_sep24_registration",
 				`COALESCE(ew.wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "contract_address"`,
 				`COALESCE(ew.credential_id, '') AS "credential_id"`,
@@ -59,7 +57,6 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`ew.created_at AS "embedded_wallets.created_at"`,
 				`ew.updated_at AS "embedded_wallets.updated_at"`,
 				`ew.wallet_status AS "embedded_wallets.wallet_status"`,
-				`ew.requires_sep24_registration AS "embedded_wallets.requires_sep24_registration"`,
 				`COALESCE(ew.wasm_hash, '') AS "embedded_wallets.wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "embedded_wallets.contract_address"`,
 				`COALESCE(ew.credential_id, '') AS "embedded_wallets.credential_id"`,
@@ -112,7 +109,6 @@ func Test_EmbeddedWalletModel_GetByToken(t *testing.T) {
 		assert.Equal(t, expectedContractAddress, wallet.ContractAddress)
 		assert.Equal(t, PendingWalletStatus, wallet.WalletStatus)
 		assert.Equal(t, "", wallet.ReceiverWalletID)
-		assert.False(t, wallet.RequiresSEP24Registration)
 		assert.NotNil(t, wallet.CreatedAt)
 		assert.NotNil(t, wallet.UpdatedAt)
 	})

@@ -74,7 +74,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 				"wallet_id":                 "wallet_id is required",
 				"asset_id":                  "asset_id is required",
 				"registration_contact_type": fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
-				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetNonEmbeddedWalletVerificationTypes()),
+				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
 			},
 		},
 		{
@@ -104,7 +104,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 			expectedErrors: map[string]interface{}{
 				"registration_contact_type": fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
-				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetNonEmbeddedWalletVerificationTypes()),
+				"verification_field":        fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
 			},
 		},
 		{
@@ -165,29 +165,6 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 				RegistrationContactType: data.RegistrationContactTypePhone,
 			},
 		},
-		{
-			name: "🟢 embedded wallet allows SEP24 verification_field",
-			request: PostDisbursementRequest{
-				Name:                    "embedded disbursement",
-				AssetID:                 "asset-id",
-				WalletID:                embeddedWallet.ID,
-				RegistrationContactType: data.RegistrationContactTypePhone,
-				VerificationField:       data.VerificationTypeSEP24Registration,
-			},
-		},
-		{
-			name: "🔴 embedded wallet rejects unsupported verification_field",
-			request: PostDisbursementRequest{
-				Name:                    "embedded disbursement",
-				AssetID:                 "asset-id",
-				WalletID:                embeddedWallet.ID,
-				RegistrationContactType: data.RegistrationContactTypePhone,
-				VerificationField:       data.VerificationTypeDateOfBirth,
-			},
-			expectedErrors: map[string]interface{}{
-				"verification_field": fmt.Sprintf("verification_field must be empty or one of %v", data.GetEmbeddedWalletVerificationTypes()),
-			},
-		},
 	}
 
 	for _, rct := range data.AllRegistrationContactTypes() {
@@ -196,7 +173,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 		if !rct.IncludesWalletAddress {
 			name = fmt.Sprintf("�[%s]registration_contact_type without wallet address REQUIRES verification_field", rct)
 			expectedErrors = map[string]interface{}{
-				"verification_field": fmt.Sprintf("verification_field must be one of %v", data.GetNonEmbeddedWalletVerificationTypes()),
+				"verification_field": fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
 			}
 		} else {
 			name = fmt.Sprintf("🟢[%s]registration_contact_type with wallet address DOES NOT REQUIRE registration_contact_type", rct)
@@ -348,20 +325,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			wantStatusCode: http.StatusConflict,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
 				return `{"error":"disbursement already exists"}`
-			},
-		},
-		{
-			name: "🔴 embedded wallet requires empty or SEP24 verification",
-			reqBody: map[string]interface{}{
-				"name":                      "invalid embedded verification",
-				"asset_id":                  asset.ID,
-				"wallet_id":                 embeddedWallet.ID,
-				"registration_contact_type": data.RegistrationContactTypePhone,
-				"verification_field":        data.VerificationTypeDateOfBirth,
-			},
-			wantStatusCode: http.StatusBadRequest,
-			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"The request was invalid in some way.", "extras":{"verification_field":"verification_field must be empty or one of [SEP24_REGISTRATION]"}}`
 			},
 		},
 	}
@@ -522,76 +485,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	}
 
 	testCases = append(testCases, embeddedSuccess)
-
-	embeddedSEP24Success := TestCase{
-		name: "🟢 embedded wallet allows SEP24 verification_field",
-		prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
-			labels := monitor.DisbursementLabels{
-				Asset:  asset.Code,
-				Wallet: embeddedWallet.Name,
-				CommonLabels: monitor.CommonLabels{
-					TenantName: "default-tenant",
-				},
-			}
-			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
-		},
-		reqBody: map[string]interface{}{
-			"name":                      "embedded sep24 verification",
-			"asset_id":                  asset.ID,
-			"wallet_id":                 embeddedWallet.ID,
-			"registration_contact_type": data.RegistrationContactTypePhone.String(),
-			"verification_field":        data.VerificationTypeSEP24Registration,
-		},
-		wantStatusCode: http.StatusCreated,
-		wantResponseBodyFn: func(d *data.Disbursement) string {
-			require.NotNil(t, d)
-			require.Equal(t, data.VerificationTypeSEP24Registration, d.VerificationField)
-			wallet := d.Wallet
-			assetResp := d.Asset
-			respMap := map[string]interface{}{
-				"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
-				"id":                                     d.ID,
-				"name":                                   "embedded sep24 verification",
-				"receiver_registration_message_template": "",
-				"registration_contact_type":              data.RegistrationContactTypePhone.String(),
-				"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
-				"status":                                 data.DraftDisbursementStatus,
-				"status_history": []map[string]interface{}{
-					{
-						"status":    data.DraftDisbursementStatus,
-						"timestamp": d.StatusHistory[0].Timestamp,
-						"user_id":   user.ID,
-					},
-				},
-				"asset": map[string]interface{}{
-					"code":       assetResp.Code,
-					"id":         assetResp.ID,
-					"issuer":     assetResp.Issuer,
-					"created_at": assetResp.CreatedAt.Format(time.RFC3339Nano),
-					"updated_at": assetResp.UpdatedAt.Format(time.RFC3339Nano),
-					"deleted_at": nil,
-				},
-				"wallet": map[string]interface{}{
-					"id":                   wallet.ID,
-					"name":                 wallet.Name,
-					"deep_link_schema":     wallet.DeepLinkSchema,
-					"homepage":             wallet.Homepage,
-					"sep_10_client_domain": wallet.SEP10ClientDomain,
-					"created_at":           wallet.CreatedAt.Format(time.RFC3339Nano),
-					"updated_at":           wallet.UpdatedAt.Format(time.RFC3339Nano),
-					"enabled":              wallet.Enabled,
-					"embedded":             wallet.Embedded,
-				},
-			}
-			respMap["verification_field"] = data.VerificationTypeSEP24Registration
-
-			resp, err := json.Marshal(respMap)
-			require.NoError(t, err)
-			return string(resp)
-		},
-	}
-
-	testCases = append(testCases, embeddedSEP24Success)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

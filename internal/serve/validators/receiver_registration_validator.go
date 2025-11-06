@@ -65,8 +65,6 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	case data.VerificationTypeNationalID:
 		code, validationErr := utils.ValidateNationalIDVerification(verification)
 		rv.CheckError(validationErr, "verification", "").WithErrorCode(code)
-	case data.VerificationTypeSEP24Registration:
-		// TODO: VerificationTypeSEP24Registration should just use one of the above
 	}
 
 	receiverInfo.PhoneNumber = phone

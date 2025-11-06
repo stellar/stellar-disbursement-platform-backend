@@ -115,7 +115,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		Wallet:            walletEmbedded,
 		Status:            data.ReadyDisbursementStatus,
 		Asset:             asset1,
-		VerificationField: data.VerificationTypeSEP24Registration,
+		VerificationField: data.VerificationTypeNationalID,
 	})
 
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
@@ -432,6 +432,13 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 			Amount:         "1",
 		})
 
+		_, err = models.ReceiverVerification.Insert(ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiverPhoneOnly.ID,
+			VerificationField: data.VerificationTypeNationalID,
+			VerificationValue: "ABCD1234",
+		})
+		require.NoError(t, err)
+
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, mock.MatchedBy(func(msg message.Message) bool {
 				return msg.ToPhoneNumber == receiverPhoneOnly.PhoneNumber &&
@@ -450,7 +457,6 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		embeddedWalletRow, err := models.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, mockToken)
 		require.NoError(t, err)
 		require.Equal(t, recRW.ID, embeddedWalletRow.ReceiverWalletID)
-		assert.True(t, embeddedWalletRow.RequiresSEP24Registration)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, walletEmbedded.ID)
 		require.NoError(t, err)
@@ -488,10 +494,10 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
 		assert.Nil(t, msg.AssetID)
 
-		verifications, err := models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, data.VerificationTypeSEP24Registration)
+		verifications, err := models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, data.VerificationTypeNationalID)
 		require.NoError(t, err)
 		require.Len(t, verifications, 1)
-		assert.True(t, data.CompareVerificationValue(verifications[0].HashedValue, receiverPhoneOnly.ID))
+		assert.True(t, data.CompareVerificationValue(verifications[0].HashedValue, "ABCD1234"))
 	})
 
 	t.Run("skips embedded wallet when embedded wallet service is nil", func(t *testing.T) {

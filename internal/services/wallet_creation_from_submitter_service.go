@@ -222,8 +222,12 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 	}
 
 	if transaction.Status == store.TransactionStatusSuccess && embeddedWallet.ReceiverWalletID != "" {
-		if embeddedWallet.RequiresSEP24Registration {
-			log.Ctx(ctx).Debugf("embedded wallet %s requires SEP24 registration. Receiver wallet %s remains READY", embeddedWallet.Token, embeddedWallet.ReceiverWalletID)
+		requiresManualVerification, requirementErr := s.requiresManualVerification(ctx, sdpDBTx, embeddedWallet.ReceiverWalletID)
+		if requirementErr != nil {
+			return fmt.Errorf("checking verification requirements for receiver wallet %s: %w", embeddedWallet.ReceiverWalletID, requirementErr)
+		}
+		if requiresManualVerification {
+			log.Ctx(ctx).Debugf("embedded wallet %s requires manual verification. Receiver wallet %s remains READY", embeddedWallet.Token, embeddedWallet.ReceiverWalletID)
 		} else {
 			if err := s.autoRegisterEmbeddedWallet(ctx, sdpDBTx, embeddedWallet); err != nil {
 				return fmt.Errorf("auto registering receiver wallet %s: %w", embeddedWallet.ReceiverWalletID, err)
@@ -232,6 +236,44 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 	}
 
 	return nil
+}
+
+func (s *WalletCreationFromSubmitterService) requiresManualVerification(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (bool, error) {
+	verificationFields, err := s.verificationFieldsForReceiverWallet(ctx, sqlExec, receiverWalletID)
+	if err != nil {
+		return false, fmt.Errorf("determining verification fields for receiver wallet %s: %w", receiverWalletID, err)
+	}
+	if len(verificationFields) == 0 {
+		return false, nil
+	}
+
+	receiverWallet, err := s.sdpModels.ReceiverWallet.GetByID(ctx, sqlExec, receiverWalletID)
+	if err != nil {
+		return false, fmt.Errorf("getting receiver wallet %s: %w", receiverWalletID, err)
+	}
+
+	receiverID := receiverWallet.Receiver.ID
+	for _, field := range verificationFields {
+		existing, getErr := s.sdpModels.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, sqlExec, []string{receiverID}, field)
+		if getErr != nil {
+			return false, fmt.Errorf("fetching %s verification for receiver %s: %w", field, receiverID, getErr)
+		}
+		if len(existing) == 0 {
+			return true, nil
+		}
+		verified := false
+		for _, verification := range existing {
+			if verification.ConfirmedAt != nil {
+				verified = true
+				break
+			}
+		}
+		if !verified {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (s *WalletCreationFromSubmitterService) autoRegisterEmbeddedWallet(ctx context.Context, sdpDBTx db.DBTransaction, embeddedWallet *data.EmbeddedWallet) error {

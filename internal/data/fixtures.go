@@ -722,14 +722,14 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 
 	q := fmt.Sprintf(`
 		INSERT INTO embedded_wallets
-			(token, wasm_hash, contract_address, credential_id, public_key, wallet_status, receiver_wallet_id, requires_sep24_registration)
+			(token, wasm_hash, contract_address, credential_id, public_key, wallet_status, receiver_wallet_id)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8)
+			($1, $2, $3, $4, $5, $6, $7)
 		RETURNING %s
 	`, EmbeddedWalletColumnNames("", ""))
 	wallet := EmbeddedWallet{}
 
-	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), utils.SQLNullString(publicKey), status, utils.SQLNullString(""), false)
+	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), utils.SQLNullString(publicKey), status, utils.SQLNullString(""))
 	require.NoError(t, err)
 	return &wallet
 }

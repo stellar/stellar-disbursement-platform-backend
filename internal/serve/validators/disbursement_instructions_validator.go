@@ -76,8 +76,6 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 		case data.VerificationTypeNationalID:
 			_, validationErr := utils.ValidateNationalIDVerification(verification)
 			iv.CheckError(validationErr, fmt.Sprintf("line %d - national id", lineNumber), "")
-		case data.VerificationTypeSEP24Registration:
-			// TODO: VerificationTypeSEP24Registration should just use one of the above
 		}
 	}
 }

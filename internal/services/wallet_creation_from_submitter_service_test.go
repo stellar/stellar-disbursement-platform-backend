@@ -296,10 +296,8 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 
 		walletToken := uuid.NewString()
 		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
-		requiresSEP24 := false
 		update := data.EmbeddedWalletUpdate{
-			ReceiverWalletID:          receiverWallet.ID,
-			RequiresSEP24Registration: &requiresSEP24,
+			ReceiverWalletID: receiverWallet.ID,
 		}
 		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
 
@@ -321,7 +319,7 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		assert.Equal(t, updatedEmbeddedWallet.ContractAddress, updatedReceiverWallet.StellarAddress)
 	})
 
-	t.Run("skips auto registration when embedded wallet requires SEP24", func(t *testing.T) {
+	t.Run("skips auto registration when verification is still pending", func(t *testing.T) {
 		dbt := dbtest.Open(t)
 		defer dbt.Close()
 
@@ -337,15 +335,29 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, walletName, "https://embedded.example", walletName+".stellar", "embedded://")
 		data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
 
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDTEST", "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Disbursements, &data.Disbursement{
+			Wallet:            wallet,
+			Status:            data.ReadyDisbursementStatus,
+			Asset:             asset,
+			VerificationField: data.VerificationTypeDateOfBirth,
+		})
+
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+			Amount:         "10",
+		})
+
 		walletToken := uuid.NewString()
 		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
-		requiresSEP24 := true
 		update := data.EmbeddedWalletUpdate{
-			ReceiverWalletID:          receiverWallet.ID,
-			RequiresSEP24Registration: &requiresSEP24,
+			ReceiverWalletID: receiverWallet.ID,
 		}
 		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
 
