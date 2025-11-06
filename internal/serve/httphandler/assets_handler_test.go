@@ -176,8 +176,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			assert.NotNil(t, asset.Enabled)
 			if asset.Code == "EURT" {
 				assert.NotNil(t, asset.Balance)
-				expectedBalance, err := decimal.NewFromString("50.0")
-				require.NoError(t, err)
+				expectedBalance := decimal.RequireFromString("50.0")
 				assert.True(t, expectedBalance.Equal(*asset.Balance), "expected balance 50.0, got %s", asset.Balance.String())
 			}
 		}
@@ -245,8 +244,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			assert.True(t, asset.Enabled)
 			if asset.Code == "EURT" {
 				assert.NotNil(t, asset.Balance)
-				expectedBalance, err := decimal.NewFromString("50.0")
-				require.NoError(t, err)
+				expectedBalance := decimal.RequireFromString("50.0")
 				assert.True(t, expectedBalance.Equal(*asset.Balance), "expected balance 50.0, got %s", asset.Balance.String())
 			}
 		}
