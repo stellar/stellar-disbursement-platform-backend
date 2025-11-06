@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -1073,9 +1074,9 @@ func Test_InsufficientBalanceForDirectPaymentError_Error(t *testing.T) {
 					Code:   tc.assetCode,
 					Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				},
-				RequestedAmount:    tc.requestedAmount,
-				AvailableBalance:   tc.availableBalance,
-				TotalPendingAmount: tc.totalPendingAmount,
+				RequestedAmount:    decimal.NewFromFloat(tc.requestedAmount),
+				AvailableBalance:   decimal.NewFromFloat(tc.availableBalance),
+				TotalPendingAmount: decimal.NewFromFloat(tc.totalPendingAmount),
 			}
 			assert.Equal(t, tc.expectedError, err.Error())
 		})

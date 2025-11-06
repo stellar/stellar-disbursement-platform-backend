@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/protocols/horizon/base"
@@ -619,9 +620,9 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			DisbursementAsset:   *usdt,
 			DistributionAddress: distributionAcc.ID(),
 			DisbursementID:      disbursementInsufficientBalance.ID,
-			AvailableBalance:    11111.0,
-			DisbursementAmount:  22222.0,
-			TotalPendingAmount:  1100.0,
+			AvailableBalance:    decimal.NewFromFloat(11111.0),
+			DisbursementAmount:  decimal.NewFromFloat(22222.0),
+			TotalPendingAmount:  decimal.NewFromFloat(1100.0),
 		}
 
 		require.ErrorContains(t, err, fmt.Sprintf("validating balance for disbursement: %v", expectedErr))
@@ -944,9 +945,9 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testin
 			DisbursementAsset:   *asset,
 			DistributionAddress: account.ID(),
 			DisbursementID:      disbursementNew.ID,
-			AvailableBalance:    99.99,
-			DisbursementAmount:  90.00,
-			TotalPendingAmount:  10.00,
+			AvailableBalance:    decimal.NewFromFloat(99.99),
+			DisbursementAmount:  decimal.NewFromFloat(90.00),
+			TotalPendingAmount:  decimal.NewFromFloat(10.00),
 		}
 	}
 
