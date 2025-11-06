@@ -567,56 +567,56 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A1",
-		VerificationField:                   VerificationTypeYearMonth,
+		VerificationField:                   VerificationTypeDateOfBirth,
 	})
 	disbursementA2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletA,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A2",
-		VerificationField:                   VerificationTypePin,
+		VerificationField:                   VerificationTypeNationalID,
 	})
 	disbursementB1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletB,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B1",
-		VerificationField:                   VerificationTypeNationalID,
+		VerificationField:                   VerificationTypePin,
 	})
 	disbursementB2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletB,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B2",
-		VerificationField:                   VerificationTypeDateOfBirth,
+		VerificationField:                   VerificationTypeYearMonth,
 	})
 	disbursementC1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletC,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template C1",
-		VerificationField:                   VerificationTypeYearMonth,
+		VerificationField:                   VerificationTypeDateOfBirth,
 	})
 	disbursementC2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletC,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template C2",
-		VerificationField:                   VerificationTypePin,
+		VerificationField:                   VerificationTypeNationalID,
 	})
 	disbursementD1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletD,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template D1",
-		VerificationField:                   VerificationTypeNationalID,
+		VerificationField:                   VerificationTypePin,
 	})
 	disbursementD2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletD,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template D2",
-		VerificationField:                   VerificationTypeDateOfBirth,
+		VerificationField:                   VerificationTypeYearMonth,
 	})
 
 	// 2. Create receivers, and receiver wallets:

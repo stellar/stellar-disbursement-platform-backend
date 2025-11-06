@@ -64,7 +64,6 @@ func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbur
 		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
 	)
 	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
-
 	if !req.RegistrationContactType.IncludesWalletAddress {
 		v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
 		var wallet *data.Wallet
@@ -334,7 +333,8 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 		return fmt.Errorf("could not parse csv file: %w", parseHTTPErr)
 	}
 
-	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
+	skipVerification := disbursement.Wallet != nil && disbursement.Wallet.Embedded && disbursement.VerificationField == ""
+	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, skipVerification); err != nil {
 		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
 			disbursement.RegistrationContactType,
 			err)
@@ -653,7 +653,7 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 }
 
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
-func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType) error {
+func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType, skipVerification bool) error {
 	const (
 		phoneHeader             = "phone"
 		emailHeader             = "email"
@@ -690,11 +690,11 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 
 	rules := map[data.RegistrationContactType]headerRules{
 		data.RegistrationContactTypePhone: {
-			required:   []string{phoneHeader, verificationHeader},
+			required:   []string{phoneHeader},
 			disallowed: []string{emailHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmail: {
-			required:   []string{emailHeader, verificationHeader},
+			required:   []string{emailHeader},
 			disallowed: []string{phoneHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmailAndWalletAddress: {
@@ -705,6 +705,11 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 			required:   []string{phoneHeader, walletAddressHeader},
 			disallowed: []string{emailHeader, verificationHeader},
 		},
+	}
+
+	rule := rules[registrationContactType]
+	if !skipVerification {
+		rule.required = append(rule.required, verificationHeader)
 	}
 
 	// Validate headers according to the rules

@@ -51,7 +51,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
-	partnerWallet := wallets[0]
+	wallet := wallets[0]
 
 	embeddedWalletFixture := data.CreateWalletFixture(t, ctx, dbConnectionPool, "SDP Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
 	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWalletFixture.ID)
@@ -82,7 +82,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
 				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                partnerWallet.ID,
+				WalletID:                wallet.ID,
 				RegistrationContactType: data.RegistrationContactTypePhoneAndWalletAddress,
 				VerificationField:       data.VerificationTypeDateOfBirth,
 			},
@@ -96,7 +96,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:     "disbursement 1",
 				AssetID:  "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID: partnerWallet.ID,
+				WalletID: wallet.ID,
 				RegistrationContactType: data.RegistrationContactType{
 					ReceiverContactType: "invalid1",
 				},
@@ -112,7 +112,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                                "disbursement 1",
 				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                            partnerWallet.ID,
+				WalletID:                            wallet.ID,
 				RegistrationContactType:             data.RegistrationContactTypePhone,
 				VerificationField:                   data.VerificationTypeDateOfBirth,
 				ReceiverRegistrationMessageTemplate: "<a href='evil.com'>Redeem money</a>",
@@ -126,7 +126,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                                "disbursement 1",
 				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                            partnerWallet.ID,
+				WalletID:                            wallet.ID,
 				RegistrationContactType:             data.RegistrationContactTypePhone,
 				VerificationField:                   data.VerificationTypeDateOfBirth,
 				ReceiverRegistrationMessageTemplate: "javascript:alert(localStorage.getItem('sdp_session'))",
@@ -140,7 +140,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
 				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                partnerWallet.ID,
+				WalletID:                wallet.ID,
 				RegistrationContactType: data.RegistrationContactTypePhone,
 				VerificationField:       data.VerificationTypeDateOfBirth,
 			},
@@ -150,7 +150,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                                "disbursement 1",
 				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                            partnerWallet.ID,
+				WalletID:                            wallet.ID,
 				RegistrationContactType:             data.RegistrationContactTypePhone,
 				VerificationField:                   data.VerificationTypeDateOfBirth,
 				ReceiverRegistrationMessageTemplate: "My custom invitation message",
@@ -171,7 +171,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 		var name string
 		var expectedErrors map[string]interface{}
 		if !rct.IncludesWalletAddress {
-			name = fmt.Sprintf("�[%s]registration_contact_type without wallet address REQUIRES verification_field", rct)
+			name = fmt.Sprintf("🔴[%s]registration_contact_type without wallet address REQUIRES verification_field", rct)
 			expectedErrors = map[string]interface{}{
 				"verification_field": fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
 			}
@@ -188,7 +188,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			expectedErrors: expectedErrors,
 		}
 		if !rct.IncludesWalletAddress {
-			newTestCase.request.WalletID = partnerWallet.ID
+			newTestCase.request.WalletID = wallet.ID
 		}
 
 		testCases = append(testCases, newTestCase)
@@ -260,15 +260,15 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
 				return `{
-						"error": "The request was invalid in some way.",
-						"extras": {
-							"name": "name is required",
-							"wallet_id": "wallet_id is required",
-							"asset_id": "asset_id is required",
-							"registration_contact_type": "registration_contact_type must be one of [EMAIL PHONE_NUMBER EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER_AND_WALLET_ADDRESS]",
-							"verification_field": "verification_field must be one of [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"
-						}
-					}`
+					"error": "The request was invalid in some way.",
+					"extras": {
+						"name": "name is required",
+						"wallet_id": "wallet_id is required",
+						"asset_id": "asset_id is required",
+						"registration_contact_type": "registration_contact_type must be one of [EMAIL PHONE_NUMBER EMAIL_AND_WALLET_ADDRESS PHONE_NUMBER_AND_WALLET_ADDRESS]",
+						"verification_field": "verification_field must be one of [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"
+					}
+				}`
 			},
 		},
 		{
@@ -2274,12 +2274,11 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
 	data.CreateWalletAssets(t, ctx, dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
 
-	labels := monitor.DisbursementLabels{
-		Asset:  asset.Code,
-		Wallet: enabledWallet.Name,
-		CommonLabels: monitor.CommonLabels{
-			TenantName: "default-tenant",
-		},
+	walletNamesByID := map[string]string{
+		enabledWallet.ID:     enabledWallet.Name,
+		disabledWallet.ID:    disabledWallet.Name,
+		userManagedWallet.ID: userManagedWallet.Name,
+		embeddedWallet.ID:    embeddedWallet.Name,
 	}
 
 	// Setup Mocks
@@ -2298,10 +2297,6 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 		})
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mMonitorService.
-		On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).
-		Return(nil).
-		Maybe()
 
 	// Setup handler
 	handler := &DisbursementHandler{
@@ -2323,13 +2318,12 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 			disbursementData: map[string]interface{}{
 				"name":                      "embedded wallet without verification",
 				"asset_id":                  asset.ID,
-				"wallet_id":                 enabledWallet.ID,
+				"wallet_id":                 embeddedWallet.ID,
 				"registration_contact_type": data.RegistrationContactTypePhone,
-				"verification_field":        "",
 			},
 			csvRecords: [][]string{
-				{"phone", "id", "amount", "verification"},
-				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+				{"phone", "id", "amount"},
+				{"+380445555555", "123456789", "100.5"},
 			},
 			expectedStatus: http.StatusCreated,
 		},
@@ -2430,7 +2424,27 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
+			walletName := enabledWallet.Name
+			if walletID, ok := tc.disbursementData["wallet_id"].(string); ok {
+				if name, exists := walletNamesByID[walletID]; exists {
+					walletName = name
+				}
+			}
+
+			labels := monitor.DisbursementLabels{
+				Asset:        asset.Code,
+				Wallet:       walletName,
+				CommonLabels: monitor.CommonLabels{TenantName: "default-tenant"},
+			}
+
+			mMonitorService.
+				On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).
+				Return(nil).
+				Maybe()
+
 			// Create multipart form data
 			body := &bytes.Buffer{}
 			writer := multipart.NewWriter(body)

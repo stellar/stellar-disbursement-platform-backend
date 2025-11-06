@@ -273,12 +273,12 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 	query := `
 		WITH latest_payments_by_wallet AS (
 			-- Gets the latest payment by wallet with its asset
-      SELECT
-        p.id AS payment_id,
-        rw.wallet_id,
-        COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
-        COALESCE(d.verification_field::text, '') as verification_field,
-        p.asset_id
+			SELECT
+				p.id AS payment_id,
+				rw.wallet_id,
+				COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
+				COALESCE(d.verification_field::text, '') as verification_field,
+				p.asset_id
 			FROM
 				payments p
 				INNER JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
@@ -313,13 +313,13 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 		SELECT DISTINCT
 			lpw.wallet_id,
 			lpw.receiver_registration_message_template,
+			lpw.verification_field,
 			rw.id AS "receiver_wallet.id",
 			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
 			COALESCE(mrsi.total_invitation_resent_attempts, 0) AS "receiver_wallet.total_invitation_resent_attempts",
 			r.id AS "receiver_wallet.receiver.id",
 			COALESCE(r.phone_number, '') AS "receiver_wallet.receiver.phone_number",
 			COALESCE(r.email, '') AS "receiver_wallet.receiver.email",
-			lpw.verification_field,
 			` + AssetColumnNames("a", "asset", true) + `
 		FROM
 			assets a

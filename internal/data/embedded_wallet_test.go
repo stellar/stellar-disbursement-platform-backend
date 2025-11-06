@@ -32,6 +32,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`COALESCE(credential_id, '') AS "credential_id"`,
 				`COALESCE(public_key, '') AS "public_key"`,
 				`COALESCE(receiver_wallet_id, '') AS "receiver_wallet_id"`,
+				`COALESCE(verification_field::text, '') AS "verification_field"`,
 			}, ", "),
 		},
 		{
@@ -47,6 +48,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`COALESCE(ew.credential_id, '') AS "credential_id"`,
 				`COALESCE(ew.public_key, '') AS "public_key"`,
 				`COALESCE(ew.receiver_wallet_id, '') AS "receiver_wallet_id"`,
+				`COALESCE(ew.verification_field::text, '') AS "verification_field"`,
 			}, ", "),
 		},
 		{
@@ -62,6 +64,7 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`COALESCE(ew.credential_id, '') AS "embedded_wallets.credential_id"`,
 				`COALESCE(ew.public_key, '') AS "embedded_wallets.public_key"`,
 				`COALESCE(ew.receiver_wallet_id, '') AS "embedded_wallets.receiver_wallet_id"`,
+				`COALESCE(ew.verification_field::text, '') AS "embedded_wallets.verification_field"`,
 			}, ", "),
 		},
 	}
@@ -109,6 +112,7 @@ func Test_EmbeddedWalletModel_GetByToken(t *testing.T) {
 		assert.Equal(t, expectedContractAddress, wallet.ContractAddress)
 		assert.Equal(t, PendingWalletStatus, wallet.WalletStatus)
 		assert.Equal(t, "", wallet.ReceiverWalletID)
+		assert.Equal(t, VerificationType(""), wallet.VerificationField)
 		assert.NotNil(t, wallet.CreatedAt)
 		assert.NotNil(t, wallet.UpdatedAt)
 	})
@@ -166,6 +170,17 @@ func Test_EmbeddedWalletUpdate_Validate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("validates VerificationField", func(t *testing.T) {
+		update := EmbeddedWalletUpdate{VerificationField: "INVALID"}
+		err := update.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "invalid verification field")
+
+		update = EmbeddedWalletUpdate{VerificationField: VerificationTypeDateOfBirth}
+		err = update.Validate()
+		require.NoError(t, err)
+	})
+
 	t.Run("validates a full valid update", func(t *testing.T) {
 		update := EmbeddedWalletUpdate{
 			WasmHash:        "abcdef123456",
@@ -219,6 +234,27 @@ func Test_EmbeddedWalletInsert_Validate(t *testing.T) {
 		assert.EqualError(t, err, "validating wallet status: invalid embedded wallet status \"INVALID_STATUS\"")
 
 		insert.WalletStatus = SuccessWalletStatus
+		err = insert.Validate()
+		require.NoError(t, err)
+	})
+
+	t.Run("validates verification field", func(t *testing.T) {
+		insert := EmbeddedWalletInsert{
+			Token:             "token-123",
+			WasmHash:          "abcdef123456",
+			WalletStatus:      PendingWalletStatus,
+			VerificationField: "INVALID",
+		}
+		err := insert.Validate()
+		require.Error(t, err)
+		assert.EqualError(t, err, "invalid verification field")
+
+		insert = EmbeddedWalletInsert{
+			Token:             "token-123",
+			WasmHash:          "abcdef123456",
+			WalletStatus:      PendingWalletStatus,
+			VerificationField: VerificationTypeDateOfBirth,
+		}
 		err = insert.Validate()
 		require.NoError(t, err)
 	})

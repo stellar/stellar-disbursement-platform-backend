@@ -275,7 +275,7 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 }
 
 func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
-	t.Run("auto registers embedded wallet when SEP24 is not required", func(t *testing.T) {
+	t.Run("auto registers embedded wallet when verification not required", func(t *testing.T) {
 		dbt := dbtest.Open(t)
 		defer dbt.Close()
 
@@ -297,7 +297,8 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		walletToken := uuid.NewString()
 		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
 		update := data.EmbeddedWalletUpdate{
-			ReceiverWalletID: receiverWallet.ID,
+			ReceiverWalletID:  receiverWallet.ID,
+			VerificationField: "",
 		}
 		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
 
@@ -357,7 +358,8 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		walletToken := uuid.NewString()
 		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
 		update := data.EmbeddedWalletUpdate{
-			ReceiverWalletID: receiverWallet.ID,
+			ReceiverWalletID:  receiverWallet.ID,
+			VerificationField: disbursement.VerificationField,
 		}
 		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
 
@@ -377,6 +379,94 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		assert.Nil(t, updatedReceiverWallet.OTPConfirmedAt)
 		assert.Empty(t, updatedReceiverWallet.OTPConfirmedWith)
 		assert.Empty(t, updatedReceiverWallet.StellarAddress)
+	})
+
+	t.Run("auto registers when previous disbursement requires verification but current does not", func(t *testing.T) {
+		dbt := dbtest.Open(t)
+		defer dbt.Close()
+
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		defer dbConnectionPool.Close()
+
+		testCtx := setupEmbeddedWalletTestContext(t, dbConnectionPool)
+		ctx := testCtx.ctx
+		service := NewWalletCreationFromSubmitterService(testCtx.sdpModel, dbConnectionPool, testNetworkPassphrase)
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "ew-verification-order", "https://embedded.example", "ew-verification-order.stellar", "embedded://")
+		data.MakeWalletEmbedded(t, ctx, dbConnectionPool, wallet.ID)
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "VER1", "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
+		disbursementWithVerification := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Disbursements, &data.Disbursement{
+			Wallet:            wallet,
+			Status:            data.ReadyDisbursementStatus,
+			Asset:             asset,
+			VerificationField: data.VerificationTypeDateOfBirth,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   disbursementWithVerification,
+			Asset:          *asset,
+			Status:         data.ReadyPaymentStatus,
+			Amount:         "25",
+		})
+
+		firstToken := uuid.NewString()
+		embeddedWalletNeedsVerification := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, firstToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
+		updateNeedsVerification := data.EmbeddedWalletUpdate{
+			ReceiverWalletID:  receiverWallet.ID,
+			VerificationField: disbursementWithVerification.VerificationField,
+		}
+		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWalletNeedsVerification.Token, updateNeedsVerification))
+
+		transactions := createEmbeddedWalletTSSTxs(t, testCtx, embeddedWalletNeedsVerification.Token)
+		prepareEmbeddedWalletTxsForSync(t, testCtx, transactions)
+
+		require.NoError(t, service.SyncBatchTransactions(ctx, len(transactions), testCtx.tenantID))
+
+		receiverWalletAfterFirstSync, err := testCtx.sdpModel.ReceiverWallet.GetByID(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.ReadyReceiversWalletStatus, receiverWalletAfterFirstSync.Status)
+
+		disbursementWithoutVerification := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Disbursements, &data.Disbursement{
+			Wallet:            wallet,
+			Status:            data.ReadyDisbursementStatus,
+			Asset:             asset,
+			VerificationField: "",
+		})
+
+		_, err = dbConnectionPool.ExecContext(ctx, "UPDATE disbursements SET verification_field = NULL WHERE id = $1", disbursementWithoutVerification.ID)
+		require.NoError(t, err)
+		disbursementWithoutVerification, err = testCtx.sdpModel.Disbursements.Get(ctx, dbConnectionPool, disbursementWithoutVerification.ID)
+		require.NoError(t, err)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, testCtx.sdpModel.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   disbursementWithoutVerification,
+			Asset:          *asset,
+			Status:         data.ReadyPaymentStatus,
+			Amount:         "50",
+		})
+
+		secondToken := uuid.NewString()
+		embeddedWalletNoVerification := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, secondToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
+		updateNoVerification := data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}
+		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWalletNoVerification.Token, updateNoVerification))
+
+		transactionsNoVerification := createEmbeddedWalletTSSTxs(t, testCtx, embeddedWalletNoVerification.Token)
+		prepareEmbeddedWalletTxsForSync(t, testCtx, transactionsNoVerification)
+
+		require.NoError(t, service.SyncBatchTransactions(ctx, len(transactionsNoVerification), testCtx.tenantID))
+
+		receiverWalletAfterSecondSync, err := testCtx.sdpModel.ReceiverWallet.GetByID(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.RegisteredReceiversWalletStatus, receiverWalletAfterSecondSync.Status)
+		require.NotNil(t, receiverWalletAfterSecondSync.OTPConfirmedAt)
+		assert.Equal(t, autoRegistrationIdentifier, receiverWalletAfterSecondSync.OTPConfirmedWith)
 	})
 }
 
