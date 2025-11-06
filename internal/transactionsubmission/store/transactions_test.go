@@ -165,7 +165,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 		assert.Equal(t, "external-id-1", refreshedTx.ExternalID)
 		assert.Equal(t, "USDC", refreshedTx.AssetCode)
 		assert.Equal(t, "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", refreshedTx.AssetIssuer)
-		assert.Equal(t, decimal.NewFromInt(1), refreshedTx.Amount)
+		assert.True(t, decimal.NewFromInt(1).Equal(refreshedTx.Amount))
 		assert.Equal(t, "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y", refreshedTx.Destination)
 		assert.Equal(t, TransactionStatusPending, refreshedTx.Status)
 		assert.Equal(t, "tenant-id-1", refreshedTx.TenantID)
