@@ -545,8 +545,9 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 	sigRouter.
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAccount, hostAccount).
 		Return(&txnbuild.Transaction{}, nil).
-		Once().
-		On("Delete", ctx, chTxAccount).
+		Once()
+	mChannelAccountStore.
+		On("DeleteIfLockedUntil", ctx, channelAccount.PublicKey, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(nil).
 		Once()
 
@@ -607,33 +608,40 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 		Return(len(channelAccounts), nil).
 		Once()
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").Return(currLedgerNum, nil).Times(len(channelAccounts)).
-		On("GetLedgerBounds").Return(ledgerBounds, nil).Times(len(channelAccounts))
+		On("GetLedgerNumber").Return(currLedgerNum, nil).Once().
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
+	mChannelAccountStore.
+		On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 2).
+		Return(channelAccounts, nil).
+		Once()
 	for _, acc := range channelAccounts {
-		mChannelAccountStore.
-			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 1).
-			Return([]*store.ChannelAccount{acc}, nil).
-			Once()
 		mHorizonClient.
 			On("AccountDetail", horizonclient.AccountRequest{AccountID: acc.PublicKey}).
 			Return(horizon.Account{}, nil).
-			Once().
-			On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
-			Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
-			Once().
-			On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
-			Return(horizon.Transaction{}, nil).
 			Once()
-		mDistAccResolver.
-			On("HostDistributionAccount").
-			Return(hostAccount).
-			Once()
-		chTxAcc := schema.NewDefaultChannelAccount(acc.PublicKey)
-		sigRouter.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAcc, hostAccount).
-			Return(&txnbuild.Transaction{}, nil).
-			Once().
-			On("Delete", ctx, chTxAcc).
+	}
+	mHorizonClient.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
+		Once().
+		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+		Return(horizon.Transaction{}, nil).
+		Once()
+	mDistAccResolver.
+		On("HostDistributionAccount").
+		Return(hostAccount).
+		Once()
+	chTxAccs := []schema.TransactionAccount{
+		schema.NewDefaultChannelAccount(channelAccounts[0].PublicKey),
+		schema.NewDefaultChannelAccount(channelAccounts[1].PublicKey),
+	}
+	sigRouter.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAccs[0], chTxAccs[1], hostAccount).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+	for _, acc := range channelAccounts {
+		mChannelAccountStore.
+			On("DeleteIfLockedUntil", ctx, acc.PublicKey, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 			Return(nil).
 			Once()
 	}
@@ -815,7 +823,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 
 	err = cas.DeleteChannelAccount(ctx, DeleteChannelAccountsOptions{ChannelAccountID: channelAccount.PublicKey})
 	assert.ErrorContains(t, err, fmt.Sprintf(
-		"deleting account %[1]s in DeleteChannelAccount: deleting account %[1]s onchain: submitting remove account transaction to the network for account %[1]s: horizon response error: foo bar",
+		"deleting account %[1]s in DeleteChannelAccount: deleting accounts [%[1]s] onchain: submitting remove account transaction to the network for accounts [%[1]s]: horizon response error: foo bar",
 		channelAccount.PublicKey,
 	))
 }
@@ -992,41 +1000,45 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	mLedgerNumberTracker.
 		On("GetLedgerNumber").
 		Return(currLedgerNum, nil).
-		Times(currChannelAccountsCount-wantEnsureCount).
+		Once().
 		On("GetLedgerBounds").
 		Return(ledgerBounds, nil).
-		Times(currChannelAccountsCount - wantEnsureCount)
-	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
-		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
-		Times(currChannelAccountsCount - wantEnsureCount)
-
+		Once()
+	mChannelAccountStore.
+		On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 2).
+		Return(channelAccounts, nil).
+		Once()
 	for _, acc := range channelAccounts {
-		mChannelAccountStore.
-			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 1).
-			Return([]*store.ChannelAccount{acc}, nil).
-			Once()
 		mHorizonClient.
 			On("AccountDetail", horizonclient.AccountRequest{AccountID: acc.PublicKey}).
 			Return(horizon.Account{}, nil).
 			Once()
-		mDistAccResolver.
-			On("HostDistributionAccount").
-			Return(hostAccount).
-			Once()
-		chTxAcc := schema.NewDefaultChannelAccount(acc.PublicKey)
-		sigRouter.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAcc, hostAccount).
-			Return(&txnbuild.Transaction{}, nil).
-			Once().
-			On("Delete", ctx, chTxAcc).
+	}
+	mHorizonClient.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
+		Once().
+		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+		Return(horizon.Transaction{}, nil).
+		Once()
+	mDistAccResolver.
+		On("HostDistributionAccount").
+		Return(hostAccount).
+		Once()
+	chTxAccs := []schema.TransactionAccount{
+		schema.NewDefaultChannelAccount(channelAccounts[0].PublicKey),
+		schema.NewDefaultChannelAccount(channelAccounts[1].PublicKey),
+	}
+	sigRouter.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAccs[0], chTxAccs[1], hostAccount).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+	for _, acc := range channelAccounts {
+		mChannelAccountStore.
+			On("DeleteIfLockedUntil", ctx, acc.PublicKey, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 			Return(nil).
 			Once()
 	}
-	mHorizonClient.
-		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
-		Return(horizon.Transaction{}, nil).
-		Times(currChannelAccountsCount - wantEnsureCount)
 
 	err = cas.EnsureChannelAccountsCount(ctx, wantEnsureCount)
 	require.NoError(t, err)

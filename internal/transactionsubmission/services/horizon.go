@@ -28,6 +28,10 @@ var ErrInvalidNumOfChannelAccountsToCreate = errors.New("invalid number of chann
 // due to the signature limit.
 const MaximumCreateAccountOperationsPerStellarTx = 19
 
+// MaximumDeleteChannelAccountOperationsPerStellarTx is the max number of sponsored accounts we can delete in one transaction
+// due to the signature limit.
+const MaximumDeleteChannelAccountOperationsPerStellarTx = 19
+
 // MaxNumberOfChannelAccounts is the limit for the number of accounts tx submission service should manage.
 const MaxNumberOfChannelAccounts = 1000
 
@@ -150,8 +154,13 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	return newAccountAddresses, nil
 }
 
-// DeleteChannelAccountOnChain creates, signs, and broadcasts a transaction to delete a channel account onchain.
-func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, chAccAddress string) error {
+// DeleteChannelAccountOnChain creates, signs, and broadcasts a transaction to delete multiple channel accounts onchain.
+// All accounts are deleted in a single transaction.
+func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, chAccAddresses []string) error {
+	if len(chAccAddresses) == 0 {
+		return fmt.Errorf("at least one channel account address must be provided")
+	}
+
 	hostAccount := submiterEngine.HostDistributionAccount()
 	rootAccount, err := submiterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
 		AccountID: hostAccount.Address,
@@ -165,13 +174,12 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 		return fmt.Errorf("failed to get ledger bounds: %w", err)
 	}
 
-	// TODO: Currently, this transaction deletes a single sponsored account onchain, we may want to
-	// attempt to delete more accounts per tx in the future up to the limit of operations and
-	// signatures a single tx will allow
-	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
-		SourceAccount:        &rootAccount,
-		IncrementSequenceNum: true,
-		Operations: []txnbuild.Operation{
+	// Build operations for all channel accounts: Payment, RevokeSponsorship, and AccountMerge for each
+	var operations []txnbuild.Operation
+	var chAccsToDelete []schema.TransactionAccount
+
+	for _, chAccAddress := range chAccAddresses {
+		operations = append(operations,
 			&txnbuild.Payment{
 				SourceAccount: rootAccount.AccountID,
 				Destination:   chAccAddress,
@@ -186,8 +194,15 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 				Destination:   hostAccount.Address,
 				SourceAccount: chAccAddress,
 			},
-		},
-		BaseFee: int64(submiterEngine.MaxBaseFee),
+		)
+		chAccsToDelete = append(chAccsToDelete, schema.NewDefaultChannelAccount(chAccAddress))
+	}
+
+	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+		SourceAccount:        &rootAccount,
+		IncrementSequenceNum: true,
+		Operations:           operations,
+		BaseFee:              int64(submiterEngine.MaxBaseFee),
 		Preconditions: txnbuild.Preconditions{
 			LedgerBounds: ledgerBounds,
 			TimeBounds:   txnbuild.NewTimeout(15),
@@ -195,31 +210,29 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	})
 	if err != nil {
 		return fmt.Errorf(
-			"constructing remove channel account transaction for account %s: %w",
-			chAccAddress,
+			"constructing remove channel account transaction for accounts %v: %w",
+			chAccAddresses,
 			err,
 		)
 	}
 
-	// the root account authorizes the sponsorship revocation, while the channel account authorizes
+	// The root account authorizes the sponsorship revocation, while each channel account authorizes
 	// merging into the distribution account.
-	// Channel account signing:
-	chAccToDelete := schema.NewDefaultChannelAccount(chAccAddress)
-	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, chAccToDelete, hostAccount)
+	// Sign with all channel accounts and the host account
+	signers := append(chAccsToDelete, hostAccount)
+	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, signers...)
 	if err != nil {
-		return fmt.Errorf("signing remove account transaction for account %s: %w", chAccAddress, err)
+		return fmt.Errorf("signing remove account transaction for accounts %v: %w", chAccAddresses, err)
 	}
 
 	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
 		hError := utils.NewHorizonErrorWrapper(err)
-		return fmt.Errorf("submitting remove account transaction to the network for account %s: %w", chAccAddress, hError)
+		return fmt.Errorf("submitting remove account transaction to the network for accounts %v: %w", chAccAddresses, hError)
 	}
 
-	err = submiterEngine.Delete(ctx, chAccToDelete)
-	if err != nil {
-		return fmt.Errorf("deleting channel account %s from the store: %w", chAccAddress, err)
-	}
+	// Note: Account deletion from the database store is handled by the caller
+	// to avoid lock conflicts when accounts are already locked by GetAndLockAll
 
 	return nil
 }
