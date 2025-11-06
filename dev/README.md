@@ -67,9 +67,7 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 Use the unified setup wizard to generate accounts and a ready-to-use `.env`:
 
 ```sh
-./setup                # interactive wizard
-# or non-interactive:
-go run tools/sdp-setup/main.go -network testnet -auto-gen-account -auto-fund -xlm-amount 20 -env dev/.env
+make setup
 ```
 
 The wizard generates new keypairs and funds the distribution account with XLM on testnet (USDC auto-funding may be skipped depending on SDK compatibility), then writes `dev/.env` with values like:
@@ -94,11 +92,7 @@ DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVW
 
 Start all services and provision sample tenants using the setup wizard:
 ```sh
-./setup            # interactive wizard that includes launch option
-# or:
-make setup         # same as above
-# or:
-go run tools/sdp-setup/main.go
+make setup
 ```
 
 The setup wizard will:
@@ -114,11 +108,6 @@ Volumes and data isolation
 - The Postgres volumes are network-scoped using the pattern `${COMPOSE_PROJECT_NAME}_postgres-db-${NETWORK_TYPE}` and `${COMPOSE_PROJECT_NAME}_postgres-ap-db-${NETWORK_TYPE}`. Compose reads `NETWORK_TYPE` from `dev/.env`.
 - Compose project name is automatically derived from the setup name (e.g., `sdp-testnet`, `sdp-mainnet1`).
 - To fully reset data, manually remove Docker volumes or recreate the environment through the setup wizard.
-
-Note on ports
-
-- Default host ports are fixed (e.g., 8000/8080/4000, etc.). Running multiple stacks simultaneously may cause port conflicts.
-- If you need concurrent stacks, temporarily adjust published ports in the compose files or run on separate hosts.
 
 ## Mainnet Deployment
 
@@ -140,17 +129,11 @@ The setup wizard automatically handles mainnet configuration when you select "pu
    - **SEP10 Signing Account**: Used for authentication only, no funding required
    - **Assets**: Must use mainnet asset issuers (not testnet issuers)
 
-3. **Security Considerations**:
-   - The wizard enforces security settings automatically for mainnet
-   - Separate databases prevent testnet/mainnet data contamination
-   - Safety confirmations prevent accidental mainnet deployment
-   - Test thoroughly on testnet before mainnet deployment
-
 ### Mainnet Startup
 
 Use the setup wizard to create and launch a mainnet configuration:
 ```sh
-./setup
+make setup
 ```
 
 1. Select "Create new configuration" or choose an existing mainnet `.env` file
@@ -159,7 +142,7 @@ Use the setup wizard to create and launch a mainnet configuration:
 4. Choose to launch the environment when prompted
 5. The system will detect mainnet configuration and enforce security settings automatically
 
-> Note: The legacy `dev/scripts/make_env.sh` has been removed. Use the setup wizard instead (`./setup`).
+> Note: The legacy `dev/scripts/make_env.sh` has been removed. Use the setup wizard instead (`make setup`).
 
 ### Login to the SDP and send a Disbursement
 
@@ -288,11 +271,9 @@ You need to create and configure two Stellar accounts to use the SDP. You can ei
 
 From the repo root, run the wizard:
 
-   ```sh
-./setup                # interactive wizard
-# or non-interactive:
-go run tools/sdp-setup/main.go -network testnet -auto-gen-account -auto-fund -xlm-amount 20 -env dev/.env
-   ```
+```sh
+make setup
+```
 
 This will generate SEP-10 and distribution keys, fund the distribution with XLM + USDC on testnet, and write `dev/.env`.
 
@@ -317,7 +298,7 @@ Follow these steps to debug remotely using VS Code or IntelliJ GoLang:
 Make sure the Docker containers are up and running using the setup wizard:
 
 ```sh
-./setup
+make setup
 ```
 
 #### Using VS Code:

@@ -33,6 +33,3 @@ volumes:
   postgres-db:
     name: ${COMPOSE_PROJECT_NAME}_postgres-db
     driver: local
-  postgres-ap-db:
-    name: ${COMPOSE_PROJECT_NAME}_postgres-ap-db
-    driver: local

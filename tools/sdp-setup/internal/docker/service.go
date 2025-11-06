@@ -38,10 +38,15 @@ func NewService(config Config) (*Service, error) {
 	}
 
 	return &Service{
-		workDir:   defaultWorkDir,
-		config:    finalConfig,
-		tenantSvc: tenant.NewService(finalConfig.AdminURL, finalConfig.AdminUser, finalConfig.AdminKey, defaultWorkDir),
-		env:       env,
+		workDir: defaultWorkDir,
+		config:  finalConfig,
+		tenantSvc: tenant.NewService(tenant.ServiceOpts{
+			BaseURL:     finalConfig.AdminURL,
+			AdminUser:   finalConfig.AdminUser,
+			AdminKey:    finalConfig.AdminKey,
+			WorkDir:     defaultWorkDir,
+			DatabaseURL: env["DATABASE_URL"]}),
+		env: env,
 	}, nil
 }
 
@@ -193,14 +198,6 @@ func (s *Service) initializeMultiTenantEnvironment() error {
 	if err := s.tenantSvc.InitializeDefaultTenants(); err != nil {
 		return fmt.Errorf("failed to initialize tenants: %w", err)
 	}
-	fmt.Println("✅ Tenants initialized")
-
-	// Only proceed with user creation if tenant creation succeeded
-	if err := s.tenantSvc.AddTestUsers(s.env); err != nil {
-		return fmt.Errorf("failed to add test users: %w", err)
-	}
-	fmt.Println("✅ Test users added")
-
 	fmt.Println("✅ Multi-tenant environment initialized successfully")
 	return nil
 }
@@ -258,7 +255,7 @@ func (s *Service) ensureExclusiveProject(target string) error {
 		return nil
 	}
 	fmt.Printf("Detected other running SDP projects: %s\n", strings.Join(others, ", "))
-	if !ui.Confirm("Stop these projects now") {
+	if !ui.ConfirmWithDefault("Stop these projects now", ui.ConfirmationDefaultYes) {
 		fmt.Printf("⚠️  Cannot proceed with conflicting projects running.\n")
 		fmt.Printf("   To launch manually later, stop conflicting projects first.\n")
 		return ErrUserDeclined

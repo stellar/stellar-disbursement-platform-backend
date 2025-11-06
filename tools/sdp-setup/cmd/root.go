@@ -338,7 +338,7 @@ func chooseRunConfiguration() (ConfigurationChoice, error) {
 	items := buildConfigurationMenu(configs)
 
 	// Present user choice
-	choice := ui.Select("Select a run configuration or create new", items)
+	choice := ui.Select("Select an existing run configuration or create new", items)
 
 	// Handle "Create new" selection
 	if choice == "Create new configuration" || choice == "" {
@@ -409,16 +409,17 @@ func setupAccountsInteractive(network utils.NetworkType) accounts.Info {
 // handleLaunch manages the launch process for the configured environment
 func handleLaunch(opts *Options, envPath string) error {
 	project := envfile.ComposeProject("sdp", strings.TrimSpace(opts.SetupName))
-	if !ui.Confirm(fmt.Sprintf("Launch local environment now (project=%s, setup=%s)", project, opts.SetupName)) {
+	launchLabel := fmt.Sprintf("Launch local environment now (project=%s, setup=%s)", project, opts.SetupName)
+	if !ui.ConfirmWithDefault(launchLabel, ui.ConfirmationDefaultYes) {
 		fmt.Println("🐳 Next steps:")
-		fmt.Println("   Run ./setup again and choose to launch when prompted")
+		fmt.Println("   Run `make setup` again and choose to launch when prompted")
 		fmt.Println()
 		return nil
 	}
 
 	if err := docker.Preflight(); err != nil {
 		fmt.Printf("❌ Preflight failed: %v\n", err)
-		fmt.Println("   Fix the above issues and run ./setup again to launch")
+		fmt.Println("   Fix the above issues and run `make setup` again to launch")
 		return nil
 	}
 

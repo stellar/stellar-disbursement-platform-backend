@@ -6,8 +6,7 @@ A simple interactive wizard to configure the Stellar Disbursement Platform.
 
 From the project root:
 ```bash
-./setup            # interactive wizard
-make setup         # same as above
+make setup         # interactive wizard
 ```
 
 Or directly:

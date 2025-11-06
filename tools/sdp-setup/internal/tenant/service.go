@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var defaultTenants = []string{"redcorp", "bluecorp", "pinkcorp"}
@@ -18,22 +20,26 @@ type Service struct {
 	adminUser string
 	adminKey  string
 	workDir   string
+	dbURL     string
+}
+
+type ServiceOpts struct {
+	BaseURL     string
+	AdminUser   string
+	AdminKey    string
+	WorkDir     string
+	DatabaseURL string
 }
 
 // NewService creates a new tenant service
-func NewService(baseURL, adminUser, adminKey, workDir string) *Service {
+func NewService(opts ServiceOpts) *Service {
 	return &Service{
-		baseURL:   baseURL,
-		adminUser: adminUser,
-		adminKey:  adminKey,
-		workDir:   workDir,
+		baseURL:   opts.BaseURL,
+		adminUser: opts.AdminUser,
+		adminKey:  opts.AdminKey,
+		workDir:   opts.WorkDir,
+		dbURL:     opts.DatabaseURL,
 	}
-}
-
-// Tenant represents tenant information
-type Tenant struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
 }
 
 // InitializeDefaultTenants creates the default tenants if they don't exist
@@ -51,41 +57,78 @@ func (s *Service) InitializeDefaultTenants() error {
 			continue
 		}
 
+		// 1. Create tenant
 		if err = s.createTenant(tenantName); err != nil {
 			return fmt.Errorf("failed to create tenant %s: %w", tenantName, err)
 		}
 		fmt.Printf("✅Tenant %s created.\n", tenantName)
-	}
-	return nil
-}
 
-// AddTestUsers creates test users for all existing tenants
-func (s *Service) AddTestUsers(env map[string]string) error {
-	fmt.Println("====> initialize test users (host CLI)")
-
-	tenants, err := s.FetchTenants()
-	if err != nil {
-		return fmt.Errorf("failed to fetch tenants: %w", err)
-	}
-
-	dbName := env["DATABASE_NAME"]
-	if dbName == "" {
-		dbName = "sdp_mtn"
-	}
-	dbURL := fmt.Sprintf("postgres://postgres@localhost:5432/%s?sslmode=disable", dbName)
-
-	for _, tenant := range tenants {
-		if err := s.addUserForTenant(tenant, dbURL); err != nil {
+		// 2. Add user for tenant
+		var tenant schema.Tenant
+		tenant, err = s.FetchTenant(tenantName)
+		if err != nil {
+			fmt.Printf("⚠️  Fetching tenant %s failed: %v\n", tenantName, err)
+			continue
+		}
+		if err = s.addUserForTenant(tenant); err != nil {
 			fmt.Printf("⚠️  Adding user for tenant %s failed: %v\n", tenant.Name, err)
 			continue
 		}
-		fmt.Printf("✅ Added user for tenant %s\n", tenant.Name)
 	}
 	return nil
 }
 
+// addUser create default user for tenant
+//func (s *Service) addDefaultUser(env map[string]string, string tenantName) error {
+//	fmt.Println("====> initialize test users (host CLI)")
+//
+//
+//	dbName := env["DATABASE_NAME"]
+//	if dbName == "" {
+//		dbName = "sdp_mtn"
+//	}
+//	dbURL := fmt.Sprintf("postgres://postgres@localhost:5432/%s?sslmode=disable", dbName)
+//
+//	for _, tenant := range tenants {
+//
+//		fmt.Printf("✅ Added user for tenant %s\n", tenant.Name)
+//	}
+//	return nil
+//}
+
+// FetchTenant retrieves an existing tenant by name
+func (s *Service) FetchTenant(name string) (schema.Tenant, error) {
+	if name == "" {
+		return schema.Tenant{}, fmt.Errorf("tenant name cannot be empty")
+	}
+	req, err := s.buildAuthenticatedRequest("GET", fmt.Sprintf("/tenants/%s", name), nil)
+	if err != nil {
+		return schema.Tenant{}, fmt.Errorf("creating GET request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return schema.Tenant{}, fmt.Errorf("fetching tenant: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			fmt.Printf("Warning: failed to close response body: %v\n", closeErr)
+		}
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return schema.Tenant{}, fmt.Errorf("GET /tenants/:name response code = %d", resp.StatusCode)
+	}
+
+	var tenant schema.Tenant
+	if err = json.NewDecoder(resp.Body).Decode(&tenant); err != nil {
+		return schema.Tenant{}, fmt.Errorf("decoding GET /tenants/%s: %w", name, err)
+	}
+	return tenant, nil
+}
+
 // FetchTenants retrieves all existing tenants
-func (s *Service) FetchTenants() ([]Tenant, error) {
+func (s *Service) FetchTenants() ([]schema.Tenant, error) {
 	req, err := s.buildAuthenticatedRequest("GET", "/tenants", nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating GET request: %w", err)
@@ -105,7 +148,7 @@ func (s *Service) FetchTenants() ([]Tenant, error) {
 		return nil, fmt.Errorf("GET /tenants: http %d", resp.StatusCode)
 	}
 
-	var tenants []Tenant
+	var tenants []schema.Tenant
 	if err := json.NewDecoder(resp.Body).Decode(&tenants); err != nil {
 		return nil, fmt.Errorf("decoding tenants response: %w", err)
 	}
@@ -113,11 +156,11 @@ func (s *Service) FetchTenants() ([]Tenant, error) {
 }
 
 // addUserForTenant creates a test user for a specific tenant
-func (s *Service) addUserForTenant(tenant Tenant, dbURL string) error {
+func (s *Service) addUserForTenant(tenant schema.Tenant) error {
 	email := fmt.Sprintf("owner@%s.local", strings.TrimSpace(tenant.Name))
 	args := []string{
 		"run", "..", "--log-level", "ERROR", "auth", "add-user", email, "john", "doe",
-		"--password", "--owner", "--roles", "owner", "--tenant-id", tenant.ID, "--database-url", dbURL,
+		"--password", "--owner", "--roles", "owner", "--tenant-id", tenant.ID, "--database-url", s.dbURL,
 	}
 
 	cmd := exec.Command("go", args...)
@@ -136,7 +179,7 @@ func (s *Service) addUserForTenant(tenant Tenant, dbURL string) error {
 }
 
 // buildTenantNameSet creates a set of existing tenant names for quick lookup
-func (s *Service) buildTenantNameSet(tenants []Tenant) map[string]bool {
+func (s *Service) buildTenantNameSet(tenants []schema.Tenant) map[string]bool {
 	existingNames := make(map[string]bool)
 	for _, tenant := range tenants {
 		existingNames[tenant.Name] = true
