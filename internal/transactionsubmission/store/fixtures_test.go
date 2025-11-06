@@ -42,7 +42,7 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 		assert.Equal(t, tx.AssetCode, createdTx.AssetCode)
 		assert.Equal(t, tx.AssetIssuer, createdTx.AssetIssuer)
 		assert.Equal(t, tx.ExternalID, createdTx.ExternalID)
-		assert.Equal(t, tx.Amount, createdTx.Amount)
+		assert.True(t, tx.Amount.Equal(createdTx.Amount))
 		assert.Empty(t, createdTx.CompletedAt)
 	})
 
@@ -59,7 +59,7 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 		assert.Equal(t, tx.AssetCode, createdTx.AssetCode)
 		assert.Equal(t, tx.AssetIssuer, createdTx.AssetIssuer)
 		assert.Equal(t, tx.ExternalID, createdTx.ExternalID)
-		assert.Equal(t, tx.Amount, createdTx.Amount)
+		assert.True(t, tx.Amount.Equal(createdTx.Amount))
 		assert.False(t, createdTx.CompletedAt.IsZero())
 	})
 }
