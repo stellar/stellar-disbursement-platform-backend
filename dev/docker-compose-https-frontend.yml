@@ -1,5 +1,9 @@
 version: '3.8'
 services:
+  sdp-frontend:
+    extends:
+      file: docker-compose-frontend.yml
+      service: sdp-frontend
   sdp-frontend-proxy:
     image: nginx:1.25-alpine
     container_name: sdp-frontend-mtn-https
