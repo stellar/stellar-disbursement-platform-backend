@@ -260,12 +260,12 @@ func (s *ChannelAccountsService) deleteChannelAccountsBatch(ctx context.Context,
 		}
 	}
 
-	// Delete accounts that don't exist on-chain from signature service only
+	// Delete accounts that don't exist on-chain from database store
+	// Use DeleteIfLockedUntil to ensure we only delete accounts that were locked with the expected ledger number
 	for _, publicKey := range accountsNotOnChain {
-		chAccToDelete := schema.NewDefaultChannelAccount(publicKey)
-		err := s.SignatureService.SignerRouter.Delete(ctx, chAccToDelete)
+		err := s.GetChannelAccountStore().DeleteIfLockedUntil(ctx, publicKey, lockedUntilLedgerNumber)
 		if err != nil {
-			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
+			return fmt.Errorf("deleting %s from database store: %w", publicKey, err)
 		}
 	}
 
