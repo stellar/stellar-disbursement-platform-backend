@@ -91,7 +91,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "returns error when fails to retrieve ledger bounds",
 			numOfChanAccToCreate: 2,
-			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, _ *sdpUtils.PrivateKeyEncrypterMock) {
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *sdpUtils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
@@ -100,9 +100,13 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 					}, nil).
 					Once()
 				mLedgerNumberTracker.
+					On("GetLedgerNumber").Return(currLedgerNumber, nil).Times(3).
 					On("GetLedgerBounds").
 					Return(nil, fmt.Errorf("unexpected error")).
 					Once()
+				privateKeyEncrypterMock.
+					On("Encrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return("encryptedkey", nil).Twice().
+					On("Decrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return(keypair.MustRandom().Seed(), nil).Maybe()
 			},
 			wantErrContains: "failed to get ledger bounds: unexpected error",
 		},
@@ -117,8 +121,8 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 						Sequence:  1,
 					}, nil).
 					Once()
+				// GetLedgerBounds is not called when encryption fails during BatchInsert
 				mLedgerNumberTracker.
-					On("GetLedgerBounds").Return(ledgerBounds, nil).Once().
 					On("GetLedgerNumber").Return(currLedgerNumber, nil).Once()
 				privateKeyEncrypterMock.
 					On("Encrypt", mock.AnythingOfType("string"), chAccEncrypterPass).
@@ -158,7 +162,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 					On("Encrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return("encryptedkey", nil).Twice().
 					On("Decrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return(keypair.MustRandom().Seed(), nil).Twice()
 			},
-			wantErrContains: "creating sponsored channel accounts: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout, Detail=Foo bar detail",
+			wantErrContains: "submitting batch transaction for channel account creation: submitting transaction for channel account creation",
 		},
 		{
 			name:                 "🎉 successfully creates channel accounts on-chain (ENCRYPTED)",
@@ -301,7 +305,7 @@ func Test_DeleteChannelAccountsOnChain(t *testing.T) {
 					Once()
 			},
 			chAccAddressesToDelete: []string{chAccAddress},
-			wantErrContains:        `retrieving host account from distribution seed: horizon error: "Resource Missing" - check horizon.Error.Problem for more information`,
+			wantErrContains:        "failed to retrieve host account",
 		},
 		{
 			name: "returns error when GetLedgerBounds fails",
@@ -369,10 +373,7 @@ func Test_DeleteChannelAccountsOnChain(t *testing.T) {
 					}).
 					Once()
 			},
-			wantErrContains: fmt.Sprintf(
-				`submitting remove account transaction to the network for accounts %v: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout`,
-				[]string{chAccAddress},
-			),
+			wantErrContains: "submitting batch transaction for channel account deletion: submitting transaction for channel account deletion",
 		},
 		{
 			name:                   "🎉 Successfully deletes channel account on chain",

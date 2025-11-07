@@ -312,16 +312,9 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 
-	// current ledger number
-	currLedgerNumber := 100
-	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
-	}
-
 	defer mLedgerNumberTracker.AssertExpectations(t)
 
-	mLedgerNumberTracker.
-		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
+	// GetLedgerBounds is not called when BatchInsert fails early
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil)
@@ -823,7 +816,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 
 	err = cas.DeleteChannelAccount(ctx, DeleteChannelAccountsOptions{ChannelAccountID: channelAccount.PublicKey})
 	assert.ErrorContains(t, err, fmt.Sprintf(
-		"deleting account %[1]s in DeleteChannelAccount: deleting accounts [%[1]s] onchain: submitting remove account transaction to the network for accounts [%[1]s]: horizon response error: foo bar",
+		"deleting account %[1]s in DeleteChannelAccount: deleting accounts [%[1]s] onchain: submitting batch transaction for channel account deletion",
 		channelAccount.PublicKey,
 	))
 }
