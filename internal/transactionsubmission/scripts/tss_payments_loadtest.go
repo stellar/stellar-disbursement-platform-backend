@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
@@ -136,7 +137,7 @@ func createPaymentTransactions(ctx context.Context, txModel *store.TransactionMo
 			ExternalID:  externalID,
 			AssetCode:   assetCode,
 			AssetIssuer: assetIssuer,
-			Amount:      0.1,
+			Amount:      decimal.NewFromFloat(0.1),
 			Destination: destination,
 		})
 	}
