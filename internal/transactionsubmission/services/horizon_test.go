@@ -282,6 +282,10 @@ func Test_DeleteChannelAccountsOnChain(t *testing.T) {
 	chAccAddress := keypair.MustRandom().Address()
 	chTxAcc := schema.NewDefaultChannelAccount(chAccAddress)
 
+	// Create additional channel account addresses for multi-account test
+	chAccAddress2 := keypair.MustRandom().Address()
+	chAccAddress3 := keypair.MustRandom().Address()
+
 	testCases := []struct {
 		name                   string
 		prepareMocksFn         func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter)
@@ -395,6 +399,46 @@ func Test_DeleteChannelAccountsOnChain(t *testing.T) {
 					Return(&txnbuild.Transaction{}, nil).
 					Once()
 				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, nil).
+					Once()
+			},
+		},
+		{
+			name:                   "🎉 Successfully deletes multiple channel accounts on chain and verifies transaction and signer interactions",
+			chAccAddressesToDelete: []string{chAccAddress, chAccAddress2, chAccAddress3},
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter) {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
+					Return(horizon.Account{
+						AccountID: hostAccount.Address,
+						Sequence:  1,
+					}, nil).
+					Once()
+				mLedgerNumberTracker.
+					On("GetLedgerBounds").
+					Return(ledgerBounds, nil).
+					Once()
+				// Create channel account objects for verification
+				chTxAcc1 := schema.NewDefaultChannelAccount(chAccAddress)
+				chTxAcc2 := schema.NewDefaultChannelAccount(chAccAddress2)
+				chTxAcc3 := schema.NewDefaultChannelAccount(chAccAddress3)
+				// Verify SignStellarTransaction is called with transaction containing operations for all accounts
+				// and signed by all channel accounts + host account
+				sigRouter.
+					On("SignStellarTransaction", ctx, mock.MatchedBy(func(tx *txnbuild.Transaction) bool {
+						// Verify transaction has 3 operations per channel account (Payment, RevokeSponsorship, AccountMerge)
+						// 3 accounts * 3 operations = 9 operations
+						return len(tx.Operations()) == 9
+					}), chTxAcc1, chTxAcc2, chTxAcc3, hostAccount).
+					Return(func(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...schema.TransactionAccount) (*txnbuild.Transaction, error) {
+						// Return the same transaction that was passed in to preserve operations
+						return stellarTx, nil
+					}).
+					Once()
+				horizonClientMock.On("SubmitTransactionWithOptions", mock.MatchedBy(func(tx *txnbuild.Transaction) bool {
+					// Verify submitted transaction has correct number of operations
+					return len(tx.Operations()) == 9
+				}), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, nil).
 					Once()
 			},
