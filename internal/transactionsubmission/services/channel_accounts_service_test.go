@@ -1058,11 +1058,31 @@ func Test_ChannelAccounts_EnsureChannelAccountsCount_MinLimit_Failure(t *testing
 		},
 	}
 
-	numAccountsToEnsure := 0 // Less than MinNumberOfChannelAccounts (which is 1)
+	testCases := []struct {
+		name                string
+		numAccountsToEnsure int
+	}{
+		{
+			name:                "zero accounts",
+			numAccountsToEnsure: 0,
+		},
+		{
+			name:                "negative one account",
+			numAccountsToEnsure: -1,
+		},
+		{
+			name:                "negative one thousand accounts",
+			numAccountsToEnsure: -1000,
+		},
+	}
 
-	err = cas.EnsureChannelAccountsCount(ctx, numAccountsToEnsure)
-	require.Error(t, err)
-	require.EqualError(t, err, fmt.Sprintf("count entered %d is less than the minimum channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, MinNumberOfChannelAccounts))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err = cas.EnsureChannelAccountsCount(ctx, tc.numAccountsToEnsure)
+			require.Error(t, err)
+			require.EqualError(t, err, fmt.Sprintf("count entered %d is less than the minimum channel accounts count limit %d in EnsureChannelAccountsCount", tc.numAccountsToEnsure, MinNumberOfChannelAccounts))
+		})
+	}
 }
 
 func Test_ChannelAccounts_ViewChannelAccounts_Success(t *testing.T) {
