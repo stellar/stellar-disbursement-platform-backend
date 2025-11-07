@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/protocols/horizon"
@@ -1215,8 +1216,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{
-						{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}: 100.0,
+					Return(map[data.Asset]decimal.Decimal{
+						{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}: decimal.NewFromFloat(100.0),
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -1232,8 +1233,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{
-						{Code: "XLM", Issuer: ""}: 120.0,
+					Return(map[data.Asset]decimal.Decimal{
+						{Code: "XLM", Issuer: ""}: decimal.NewFromFloat(120.0),
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -1250,7 +1251,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{}, nil).Once()
+					Return(map[data.Asset]decimal.Decimal{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(nil, errors.New("foobar")).
 					Once()
@@ -1291,7 +1292,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{}, nil).Once()
+					Return(map[data.Asset]decimal.Decimal{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&schema.Tenant{
 						ID:                         tntID,

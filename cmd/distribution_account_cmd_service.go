@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"math"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
@@ -13,7 +13,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -113,21 +112,24 @@ func (s *DistributionAccountService) createNewStellarAccountFromAccount(ctx cont
 }
 
 func (s *DistributionAccountService) buildCreateAccountOperation(ctx context.Context, newAccount schema.TransactionAccount, numberOfTrustlines int) txnbuild.Operation {
-	baseReserveFee := 0.5
-	minimumFundingAmount := (2 * baseReserveFee) + (float64(numberOfTrustlines) * baseReserveFee) // 2 base reserves to exist on the ledger + 1 base reserve per trustline
-	fundingAmount := math.Max(float64(s.nativeAssetBootstrapAmount), minimumFundingAmount)
+	baseReserveFee := decimal.NewFromFloat(0.5)
+	baseReserves := decimal.NewFromInt(2).Mul(baseReserveFee)                              // 2 base reserves to exist on the ledger
+	trustlineReserves := decimal.NewFromInt(int64(numberOfTrustlines)).Mul(baseReserveFee) // 1 base reserve per trustline
+	minimumFundingAmount := baseReserves.Add(trustlineReserves)
+	bootstrapAmount := decimal.NewFromInt(int64(s.nativeAssetBootstrapAmount))
+	fundingAmount := decimal.Max(bootstrapAmount, minimumFundingAmount)
 
-	log.Ctx(ctx).Infof("💰 Funding new account %q with %.2f XLMs", newAccount.Address, fundingAmount)
+	log.Ctx(ctx).Infof("💰 Funding new account %q with %s XLMs", newAccount.Address, fundingAmount.StringFixed(2))
 
 	return &txnbuild.CreateAccount{
 		Destination: newAccount.Address,
-		Amount:      utils.FloatToString(fundingAmount),
+		Amount:      fundingAmount.String(),
 	}
 }
 
 func (s *DistributionAccountService) buildMergeAccountsOperations(ctx context.Context,
 	newAccount, oldAccount schema.TransactionAccount,
-	oldAccBalances map[data.Asset]float64,
+	oldAccBalances map[data.Asset]decimal.Decimal,
 ) []txnbuild.Operation {
 	var mergeOps []txnbuild.Operation
 
@@ -146,12 +148,12 @@ func (s *DistributionAccountService) buildMergeAccountsOperations(ctx context.Co
 				SourceAccount: newAccount.Address,
 			})
 
-		if balance != 0 {
-			log.Ctx(ctx).Infof("💸 Transferring %.2f %s to account %q", balance, asset.Code, newAccount.Address)
+		if !balance.IsZero() {
+			log.Ctx(ctx).Infof("💸 Transferring %s %s to account %q", balance.StringFixed(2), asset.Code, newAccount.Address)
 			mergeOps = append(mergeOps, &txnbuild.Payment{
 				Destination: newAccount.Address,
 				Asset:       asset.ToBasicAsset(),
-				Amount:      utils.FloatToString(balance),
+				Amount:      balance.String(),
 			})
 		}
 
