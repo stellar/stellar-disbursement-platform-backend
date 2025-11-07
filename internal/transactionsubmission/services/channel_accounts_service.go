@@ -245,7 +245,7 @@ func (s *ChannelAccountsService) deleteChannelAccountsBatch(ctx context.Context,
 		for _, account := range accountsToDeleteOnChain {
 			log.Ctx(ctx).Infof("♻️  - %s", account)
 		}
-		err := DeleteChannelAccountOnChain(ctx, s.SubmitterEngine, accountsToDeleteOnChain)
+		err := DeleteChannelAccountsOnChain(ctx, s.SubmitterEngine, accountsToDeleteOnChain)
 		if err != nil {
 			return fmt.Errorf("deleting accounts %v onchain: %w", accountsToDeleteOnChain, err)
 		}

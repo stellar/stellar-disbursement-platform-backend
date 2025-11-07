@@ -258,7 +258,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	}
 }
 
-func Test_DeleteChannelAccountOnChain(t *testing.T) {
+func Test_DeleteChannelAccountsOnChain(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -426,7 +426,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 				LedgerNumberTracker: mLedgerNumberTracker,
 			}
 
-			err = DeleteChannelAccountOnChain(ctx, submitterEngine, tc.chAccAddressesToDelete)
+			err = DeleteChannelAccountsOnChain(ctx, submitterEngine, tc.chAccAddressesToDelete)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)

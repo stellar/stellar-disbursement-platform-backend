@@ -154,9 +154,9 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	return newAccountAddresses, nil
 }
 
-// DeleteChannelAccountOnChain creates, signs, and broadcasts a transaction to delete multiple channel accounts onchain.
+// DeleteChannelAccountsOnChain creates, signs, and broadcasts a transaction to delete multiple channel accounts onchain.
 // All accounts are deleted in a single transaction.
-func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, chAccAddresses []string) error {
+func DeleteChannelAccountsOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, chAccAddresses []string) error {
 	if len(chAccAddresses) == 0 {
 		return fmt.Errorf("at least one channel account address must be provided")
 	}
