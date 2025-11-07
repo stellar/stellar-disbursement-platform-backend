@@ -112,8 +112,10 @@ func (s *DistributionAccountService) createNewStellarAccountFromAccount(ctx cont
 }
 
 func (s *DistributionAccountService) buildCreateAccountOperation(ctx context.Context, newAccount schema.TransactionAccount, numberOfTrustlines int) txnbuild.Operation {
-	baseReserveFee := decimal.RequireFromString("0.5")
-	minimumFundingAmount := decimal.NewFromInt(2).Mul(baseReserveFee).Add(decimal.NewFromInt(int64(numberOfTrustlines)).Mul(baseReserveFee)) // 2 base reserves to exist on the ledger + 1 base reserve per trustline
+	baseReserveFee, _ := decimal.NewFromString("0.5")
+	baseReserves := decimal.NewFromInt(2).Mul(baseReserveFee)                              // 2 base reserves to exist on the ledger
+	trustlineReserves := decimal.NewFromInt(int64(numberOfTrustlines)).Mul(baseReserveFee) // 1 base reserve per trustline
+	minimumFundingAmount := baseReserves.Add(trustlineReserves)
 	bootstrapAmount := decimal.NewFromInt(int64(s.nativeAssetBootstrapAmount))
 	fundingAmount := decimal.Max(bootstrapAmount, minimumFundingAmount)
 
