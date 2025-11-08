@@ -5,4 +5,4 @@ services:
     ports:
       - "3000:80"
     volumes:
-      - ./env-config.js:/usr/share/nginx/html/settings/env-config.js
+      - ./env-config-${NETWORK_TYPE:-testnet}.js:/usr/share/nginx/html/settings/env-config.js

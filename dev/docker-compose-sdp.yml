@@ -30,6 +30,7 @@ services:
       METRICS_TYPE: PROMETHEUS
       EMAIL_SENDER_TYPE: DRY_RUN
       SMS_SENDER_TYPE: DRY_RUN
+      HORIZON_URL: "${HORIZON_URL:-https://horizon-testnet.stellar.org}"
       NETWORK_PASSPHRASE: "${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
       SEP10_CLIENT_ATTRIBUTION_REQUIRED: ${SEP10_CLIENT_ATTRIBUTION_REQUIRED:-true}
@@ -43,7 +44,7 @@ services:
       # multi-tenant
       ADMIN_PORT: "8003"
       INSTANCE_NAME: "SDP Testnet on Docker"
-      TENANT_XLM_BOOTSTRAP_AMOUNT: 5
+      TENANT_XLM_BOOTSTRAP_AMOUNT: ${TENANT_XLM_BOOTSTRAP_AMOUNT:-5}
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options

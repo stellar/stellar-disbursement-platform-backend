@@ -11,7 +11,7 @@ services:
       DATABASE_URL: postgres://postgres@db:5432/${DATABASE_NAME:-sdp_mtn}?sslmode=disable
       NETWORK_PASSPHRASE: "${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
       HORIZON_URL: "${HORIZON_URL:-https://horizon-testnet.stellar.org}"
-      NUM_CHANNEL_ACCOUNTS: "3"
+      NUM_CHANNEL_ACCOUNTS: ${NUM_CHANNEL_ACCOUNTS:-3}
       MAX_BASE_FEE: "1000000"
       TSS_METRICS_PORT: "9002"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
@@ -28,6 +28,5 @@ services:
       - -c
       - |
         sleep 10
-        ./stellar-disbursement-platform channel-accounts delete --delete-all-accounts
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss

@@ -1,4 +1,4 @@
-package envfile
+package config
 
 import (
 	"bufio"
