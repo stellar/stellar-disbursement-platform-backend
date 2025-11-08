@@ -47,16 +47,16 @@ func (status EmbeddedWalletStatus) Validate() error {
 }
 
 type EmbeddedWallet struct {
-	Token             string               `json:"token" db:"token"`
-	WasmHash          string               `json:"wasm_hash" db:"wasm_hash"`
-	ContractAddress   string               `json:"contract_address" db:"contract_address"`
-	CredentialID      string               `json:"credential_id" db:"credential_id"`
-	PublicKey         string               `json:"public_key" db:"public_key"`
-	ReceiverWalletID  string               `json:"receiver_wallet_id" db:"receiver_wallet_id"`
-	VerificationField VerificationType     `json:"verification_field,omitempty" db:"verification_field"`
-	CreatedAt         *time.Time           `json:"created_at" db:"created_at"`
-	UpdatedAt         *time.Time           `json:"updated_at" db:"updated_at"`
-	WalletStatus      EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
+	Token                string               `json:"token" db:"token"`
+	WasmHash             string               `json:"wasm_hash" db:"wasm_hash"`
+	ContractAddress      string               `json:"contract_address" db:"contract_address"`
+	CredentialID         string               `json:"credential_id" db:"credential_id"`
+	PublicKey            string               `json:"public_key" db:"public_key"`
+	ReceiverWalletID     string               `json:"receiver_wallet_id" db:"receiver_wallet_id"`
+	RequiresVerification bool                 `json:"requires_verification" db:"requires_verification"`
+	CreatedAt            *time.Time           `json:"created_at" db:"created_at"`
+	UpdatedAt            *time.Time           `json:"updated_at" db:"updated_at"`
+	WalletStatus         EmbeddedWalletStatus `json:"wallet_status" db:"wallet_status"`
 }
 
 type EmbeddedWalletModel struct {
@@ -72,6 +72,7 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 			"wallet_status",
+			"requires_verification",
 		},
 		CoalesceStringColumns: []string{
 			"wasm_hash",
@@ -79,7 +80,6 @@ func EmbeddedWalletColumnNames(tableReference, resultAlias string) string {
 			"credential_id",
 			"public_key",
 			"receiver_wallet_id",
-			"verification_field::text",
 		},
 	}.Build()
 	return strings.Join(columns, ", ")
@@ -128,10 +128,10 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 }
 
 type EmbeddedWalletInsert struct {
-	Token             string               `db:"token"`
-	WasmHash          string               `db:"wasm_hash"`
-	VerificationField VerificationType     `db:"verification_field"`
-	WalletStatus      EmbeddedWalletStatus `db:"wallet_status"`
+	Token                string               `db:"token"`
+	WasmHash             string               `db:"wasm_hash"`
+	RequiresVerification bool                 `db:"requires_verification"`
+	WalletStatus         EmbeddedWalletStatus `db:"wallet_status"`
 }
 
 func (ewi EmbeddedWalletInsert) Validate() error {
@@ -152,10 +152,6 @@ func (ewi EmbeddedWalletInsert) Validate() error {
 		return fmt.Errorf("validating wallet status: %w", err)
 	}
 
-	if !isValidVerificationType(ewi.VerificationField) {
-		return fmt.Errorf("invalid verification field")
-	}
-
 	return nil
 }
 
@@ -168,7 +164,7 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 		INSERT INTO embedded_wallets (
 			token,
 			wasm_hash,
-			verification_field,
+			requires_verification,
 			wallet_status
 		) VALUES (
 			$1, $2, $3, $4
@@ -178,7 +174,7 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 	err := sqlExec.GetContext(ctx, &wallet, query,
 		insert.Token,
 		insert.WasmHash,
-		utils.SQLNullString(string(insert.VerificationField)),
+		insert.RequiresVerification,
 		insert.WalletStatus)
 	if err != nil {
 		return nil, fmt.Errorf("inserting embedded wallet: %w", err)
@@ -188,13 +184,13 @@ func (ew *EmbeddedWalletModel) Insert(ctx context.Context, sqlExec db.SQLExecute
 }
 
 type EmbeddedWalletUpdate struct {
-	WasmHash          string               `db:"wasm_hash"`
-	ContractAddress   string               `db:"contract_address"`
-	CredentialID      string               `db:"credential_id"`
-	PublicKey         string               `db:"public_key"`
-	WalletStatus      EmbeddedWalletStatus `db:"wallet_status"`
-	ReceiverWalletID  string               `db:"receiver_wallet_id"`
-	VerificationField VerificationType     `db:"verification_field"`
+	WasmHash             string               `db:"wasm_hash"`
+	ContractAddress      string               `db:"contract_address"`
+	CredentialID         string               `db:"credential_id"`
+	PublicKey            string               `db:"public_key"`
+	WalletStatus         EmbeddedWalletStatus `db:"wallet_status"`
+	ReceiverWalletID     string               `db:"receiver_wallet_id"`
+	RequiresVerification *bool                `db:"requires_verification"`
 }
 
 func (ewu EmbeddedWalletUpdate) Validate() error {
@@ -227,23 +223,7 @@ func (ewu EmbeddedWalletUpdate) Validate() error {
 		}
 	}
 
-	if !isValidVerificationType(ewu.VerificationField) {
-		return fmt.Errorf("invalid verification field")
-	}
-
 	return nil
-}
-
-func isValidVerificationType(value VerificationType) bool {
-	if value == "" {
-		return true
-	}
-	for _, valid := range GetAllVerificationTypes() {
-		if value == valid {
-			return true
-		}
-	}
-	return false
 }
 
 func (ew *EmbeddedWalletModel) Update(ctx context.Context, sqlExec db.SQLExecuter, token string, update EmbeddedWalletUpdate) error {

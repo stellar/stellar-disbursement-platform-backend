@@ -222,13 +222,13 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 	}
 
 	if transaction.Status == store.TransactionStatusSuccess && embeddedWallet.ReceiverWalletID != "" {
-		if embeddedWallet.VerificationField == "" {
+		if !embeddedWallet.RequiresVerification {
 			if err := s.autoRegisterEmbeddedWallet(ctx, sdpDBTx, embeddedWallet); err != nil {
 				return fmt.Errorf("auto registering receiver wallet %s: %w", embeddedWallet.ReceiverWalletID, err)
-			} else {
-				// TODO: update receiver wallet to READY and start opt verification.
-				log.Ctx(ctx).Debugf("embedded wallet %s requires manual verification. Receiver wallet %s remains READY", embeddedWallet.Token, embeddedWallet.ReceiverWalletID)
 			}
+		} else {
+			// TODO: update receiver wallet to READY and start opt verification.
+			log.Ctx(ctx).Debugf("embedded wallet %s requires manual verification. Receiver wallet %s remains READY", embeddedWallet.Token, embeddedWallet.ReceiverWalletID)
 		}
 	}
 

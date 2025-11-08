@@ -455,7 +455,7 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		embeddedWalletRow, err := models.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, mockToken)
 		require.NoError(t, err)
 		require.Equal(t, recRW.ID, embeddedWalletRow.ReceiverWalletID)
-		assert.Equal(t, disbursementEmbedded.VerificationField, embeddedWalletRow.VerificationField)
+		assert.Equal(t, disbursementEmbedded.VerificationField != "", embeddedWalletRow.RequiresVerification)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiverPhoneOnly.ID}, walletEmbedded.ID)
 		require.NoError(t, err)

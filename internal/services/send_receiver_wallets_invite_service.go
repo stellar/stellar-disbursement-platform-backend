@@ -253,7 +253,11 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 
 	wdl.Token = token
 
-	update := data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWalletID, VerificationField: verificationField}
+	requiresVerification := verificationField != ""
+	update := data.EmbeddedWalletUpdate{
+		ReceiverWalletID:     receiverWalletID,
+		RequiresVerification: &requiresVerification,
+	}
 
 	if err := s.Models.EmbeddedWallets.Update(ctx, s.Models.DBConnectionPool, token, update); err != nil {
 		return fmt.Errorf("linking embedded wallet token to receiver wallet %s: %w", receiverWalletID, err)

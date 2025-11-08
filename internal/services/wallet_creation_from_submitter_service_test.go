@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -297,8 +298,8 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		walletToken := uuid.NewString()
 		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
 		update := data.EmbeddedWalletUpdate{
-			ReceiverWalletID:  receiverWallet.ID,
-			VerificationField: "",
+			ReceiverWalletID:     receiverWallet.ID,
+			RequiresVerification: utils.Ptr(false),
 		}
 		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
 
@@ -320,7 +321,7 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		assert.Equal(t, updatedEmbeddedWallet.ContractAddress, updatedReceiverWallet.StellarAddress)
 	})
 
-	t.Run("skips auto registration when verification is still pending", func(t *testing.T) {
+	t.Run("skips auto registration when verification is required", func(t *testing.T) {
 		dbt := dbtest.Open(t)
 		defer dbt.Close()
 
@@ -358,8 +359,8 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		walletToken := uuid.NewString()
 		embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, walletToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
 		update := data.EmbeddedWalletUpdate{
-			ReceiverWalletID:  receiverWallet.ID,
-			VerificationField: disbursement.VerificationField,
+			ReceiverWalletID:     receiverWallet.ID,
+			RequiresVerification: utils.Ptr(true),
 		}
 		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
 
@@ -418,8 +419,8 @@ func Test_WalletCreationFromSubmitterService_AutoRegistration(t *testing.T) {
 		firstToken := uuid.NewString()
 		embeddedWalletNeedsVerification := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, firstToken, testWasmHash, "", "", "", data.ProcessingWalletStatus)
 		updateNeedsVerification := data.EmbeddedWalletUpdate{
-			ReceiverWalletID:  receiverWallet.ID,
-			VerificationField: disbursementWithVerification.VerificationField,
+			ReceiverWalletID:     receiverWallet.ID,
+			RequiresVerification: utils.Ptr(true),
 		}
 		require.NoError(t, testCtx.sdpModel.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWalletNeedsVerification.Token, updateNeedsVerification))
 
