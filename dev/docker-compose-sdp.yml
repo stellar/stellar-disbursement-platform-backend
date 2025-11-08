@@ -1,18 +1,16 @@
 version: '3.8'
 services:
   db:
-    container_name: sdp_v2_database-mtn
     image: postgres:14-alpine
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
-      POSTGRES_DB: sdp_mtn
+      POSTGRES_DB: ${DATABASE_NAME:-sdp_mtn}
       PGDATA: /data/postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres-db:/data/postgres
   sdp-api:
-    container_name: sdp-api-mtn
     image: stellar/sdp-v2:development
     build:
       context: ../
@@ -24,7 +22,7 @@ services:
       - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
-      DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
+      DATABASE_URL: postgres://postgres@db:5432/${DATABASE_NAME:-sdp_mtn}?sslmode=disable
       ENVIRONMENT: localhost
       LOG_LEVEL: INFO
       PORT: "8000"
@@ -32,20 +30,22 @@ services:
       METRICS_TYPE: PROMETHEUS
       EMAIL_SENDER_TYPE: DRY_RUN
       SMS_SENDER_TYPE: DRY_RUN
-      NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+      HORIZON_URL: "${HORIZON_URL:-https://horizon-testnet.stellar.org}"
+      NETWORK_PASSPHRASE: "${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
       SEP10_CLIENT_ATTRIBUTION_REQUIRED: ${SEP10_CLIENT_ATTRIBUTION_REQUIRED:-true}
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
-      DISABLE_MFA: "true"
+      DISABLE_MFA: "${DISABLE_MFA:-true}"
       DISABLE_RECAPTCHA: "true"
       CORS_ALLOWED_ORIGINS: "*"
 
       # multi-tenant
       ADMIN_PORT: "8003"
       INSTANCE_NAME: "SDP Testnet on Docker"
-      TENANT_XLM_BOOTSTRAP_AMOUNT: 5
+      TENANT_XLM_BOOTSTRAP_AMOUNT: ${TENANT_XLM_BOOTSTRAP_AMOUNT:-5}
+      SINGLE_TENANT_MODE: "false"
 
       # scheduler options
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
@@ -87,8 +87,6 @@ services:
         ./stellar-disbursement-platform db setup-for-network --all
         echo "starting dlv stellar-disbursement-platform"
         /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
-    volumes:
-      - ./scripts/add_test_users.sh:/app/github.com/stellar/stellar-disbursement-platform/dev/scripts/add_test_users.sh
 
   demo-wallet:
     build:
@@ -101,6 +99,5 @@ services:
 
 volumes:
   postgres-db:
-    driver: local
-  postgres-ap-db:
+    name: ${COMPOSE_PROJECT_NAME:-sdp}_postgres-db-${NETWORK_TYPE:-testnet}
     driver: local

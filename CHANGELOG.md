@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Added Launch Wizard through `make setup` command to simplify initial setup and mainnet configuration for docker compose [#875](https://github.com/stellar/stellar-disbursement-platform-backend/pull/875)
 - Support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
     - Add SEP10 /auth endpoints 
     - Add SEP24 /info endpoints
