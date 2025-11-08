@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -222,7 +223,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 			ExternalID:  paymentID,
 			AssetCode:   asset.Code,
 			AssetIssuer: asset.Issuer,
-			Amount:      100,
+			Amount:      decimal.NewFromInt(100),
 			Destination: rw1.StellarAddress,
 			TenantID:    tenantID,
 		})
@@ -256,7 +257,7 @@ func createTSSTxs(t *testing.T, testCtx *testContext, payments ...*data.Payment)
 			ExternalID:  payment.ID,
 			AssetCode:   payment.Asset.Code,
 			AssetIssuer: payment.Asset.Issuer,
-			Amount:      amount,
+			Amount:      decimal.NewFromFloat(amount),
 			Destination: payment.ReceiverWallet.StellarAddress,
 			TenantID:    testCtx.tenantID,
 		})
