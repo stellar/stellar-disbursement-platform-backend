@@ -78,6 +78,19 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴 wallet_id does not exist",
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "non-existent-wallet-id",
+				RegistrationContactType: data.RegistrationContactTypePhone,
+				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+			expectedErrors: map[string]interface{}{
+				"wallet_id": "wallet_id could not be retrieved",
+			},
+		},
+		{
 			name: "🔴 wallet_id and verification_field not allowed for user managed wallet",
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
@@ -282,7 +295,12 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"Wallet ID could not be retrieved"}`
+				return `{
+					"error": "The request was invalid in some way.",
+					"extras": {
+						"wallet_id": "wallet_id could not be retrieved"
+					}
+				}`
 			},
 		},
 		{
@@ -418,9 +436,26 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		testCases = append(testCases, successfulTestCase)
 	}
 
-	embeddedSuccess := TestCase{
-		name: "🟢 embedded wallet allows empty verification_field",
-		prepareMocksFn: func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
+	embeddedCases := []struct {
+		name          string
+		verification  data.VerificationType
+		responseLabel string
+	}{
+		{
+			name:          "🟢 embedded wallet allows no verification",
+			verification:  data.VerificationType(""),
+			responseLabel: "embedded empty verification",
+		},
+		{
+			name:          "🟢 embedded wallet accepts verification",
+			verification:  data.VerificationTypeDateOfBirth,
+			responseLabel: "embedded with verification",
+		},
+	}
+
+	for _, embeddedCase := range embeddedCases {
+		caseCopy := embeddedCase
+		prepare := func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
 			labels := monitor.DisbursementLabels{
 				Asset:  asset.Code,
 				Wallet: embeddedWallet.Name,
@@ -429,23 +464,27 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 				},
 			}
 			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
-		},
-		reqBody: map[string]interface{}{
-			"name":                      "embedded empty verification",
+		}
+
+		reqBody := map[string]interface{}{
+			"name":                      caseCopy.responseLabel,
 			"asset_id":                  asset.ID,
 			"wallet_id":                 embeddedWallet.ID,
 			"registration_contact_type": data.RegistrationContactTypePhone.String(),
-		},
-		wantStatusCode: http.StatusCreated,
-		wantResponseBodyFn: func(d *data.Disbursement) string {
+		}
+		if caseCopy.verification != "" {
+			reqBody["verification_field"] = caseCopy.verification
+		}
+
+		wantFn := func(d *data.Disbursement) string {
 			require.NotNil(t, d)
-			require.Equal(t, data.VerificationType(""), d.VerificationField)
+			require.Equal(t, caseCopy.verification, d.VerificationField)
 			wallet := d.Wallet
 			assetResp := d.Asset
 			respMap := map[string]interface{}{
 				"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
 				"id":                                     d.ID,
-				"name":                                   "embedded empty verification",
+				"name":                                   caseCopy.responseLabel,
 				"receiver_registration_message_template": "",
 				"registration_contact_type":              data.RegistrationContactTypePhone.String(),
 				"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
@@ -477,14 +516,23 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 					"embedded":             wallet.Embedded,
 				},
 			}
+			if caseCopy.verification != "" {
+				respMap["verification_field"] = caseCopy.verification
+			}
 
 			resp, err := json.Marshal(respMap)
 			require.NoError(t, err)
 			return string(resp)
-		},
-	}
+		}
 
-	testCases = append(testCases, embeddedSuccess)
+		testCases = append(testCases, TestCase{
+			name:               caseCopy.name,
+			prepareMocksFn:     prepare,
+			reqBody:            reqBody,
+			wantStatusCode:     http.StatusCreated,
+			wantResponseBodyFn: wantFn,
+		})
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1370,6 +1418,64 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			assert.Contains(t, bodyStr, tc.expectedMessage)
 		})
 		authManagerMock.AssertExpectations(t)
+	}
+}
+
+func Test_validateCSVHeaders(t *testing.T) {
+	makeReader := func(headers []string) io.Reader {
+		var buf bytes.Buffer
+		writer := csv.NewWriter(&buf)
+		require.NoError(t, writer.Write(headers))
+		writer.Flush()
+		return bytes.NewReader(buf.Bytes())
+	}
+
+	testCases := []struct {
+		name                   string
+		headers                []string
+		rct                    data.RegistrationContactType
+		skipVerification       bool
+		expectedErrorSubstring string
+	}{
+		{
+			name:                   "phone contact requires verification when not skipped",
+			headers:                []string{"phone"},
+			rct:                    data.RegistrationContactTypePhone,
+			skipVerification:       false,
+			expectedErrorSubstring: "verification column is required",
+		},
+		{
+			name:             "phone contact tolerates missing verification when skipped",
+			headers:          []string{"phone"},
+			rct:              data.RegistrationContactTypePhone,
+			skipVerification: true,
+		},
+		{
+			name:             "phone and wallet contact does not require verification",
+			headers:          []string{"phone", "walletAddress"},
+			rct:              data.RegistrationContactTypePhoneAndWalletAddress,
+			skipVerification: false,
+		},
+		{
+			name:                   "phone and wallet contact disallows verification header",
+			headers:                []string{"phone", "walletAddress", "verification"},
+			rct:                    data.RegistrationContactTypePhoneAndWalletAddress,
+			skipVerification:       false,
+			expectedErrorSubstring: "verification column is not allowed",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reader := makeReader(tc.headers)
+			err := validateCSVHeaders(reader, tc.rct, tc.skipVerification)
+			if tc.expectedErrorSubstring == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedErrorSubstring)
+		})
 	}
 }
 

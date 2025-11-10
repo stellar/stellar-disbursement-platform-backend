@@ -227,7 +227,6 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 				return fmt.Errorf("auto registering receiver wallet %s: %w", embeddedWallet.ReceiverWalletID, err)
 			}
 		} else {
-			// TODO: update receiver wallet to READY and start opt verification.
 			log.Ctx(ctx).Debugf("embedded wallet %s requires manual verification. Receiver wallet %s remains READY", embeddedWallet.Token, embeddedWallet.ReceiverWalletID)
 		}
 	}

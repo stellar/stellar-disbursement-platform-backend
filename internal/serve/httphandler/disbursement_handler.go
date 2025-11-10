@@ -65,10 +65,15 @@ func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbur
 	)
 	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 	if !req.RegistrationContactType.IncludesWalletAddress {
-		v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
+		trimmedWalletID := strings.TrimSpace(req.WalletID)
+		v.Check(trimmedWalletID != "", "wallet_id", "wallet_id is required")
 		var wallet *data.Wallet
-		if fetchedWallet, err := d.Models.Wallets.Get(ctx, req.WalletID); err == nil {
-			wallet = fetchedWallet
+		if trimmedWalletID != "" {
+			if fetchedWallet, err := d.Models.Wallets.Get(ctx, trimmedWalletID); err == nil {
+				wallet = fetchedWallet
+			} else {
+				v.Check(false, "wallet_id", "wallet_id could not be retrieved")
+			}
 		}
 		walletIsEmbedded := wallet != nil && wallet.Embedded
 		if !walletIsEmbedded || req.VerificationField != "" {
@@ -708,17 +713,17 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 	}
 
 	rule := rules[registrationContactType]
-	if !skipVerification {
+	if !registrationContactType.IncludesWalletAddress && !skipVerification {
 		rule.required = append(rule.required, verificationHeader)
 	}
 
 	// Validate headers according to the rules
-	for _, req := range rules[registrationContactType].required {
+	for _, req := range rule.required {
 		if !hasHeaders[req] {
 			return fmt.Errorf("%s column is required", req)
 		}
 	}
-	for _, dis := range rules[registrationContactType].disallowed {
+	for _, dis := range rule.disallowed {
 		if hasHeaders[dis] {
 			return fmt.Errorf("%s column is not allowed for this registration contact type", dis)
 		}

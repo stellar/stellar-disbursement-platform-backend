@@ -453,12 +453,10 @@ $7, $8, $9, $10 ,$11, $12)
 }
 
 func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const deleteEmbeddedWallets = "DELETE FROM embedded_wallets"
-	_, err := sqlExec.ExecContext(ctx, deleteEmbeddedWallets)
-	require.NoError(t, err)
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, sqlExec)
 
 	const deleteReceiverWallets = "DELETE FROM receiver_wallets"
-	_, err = sqlExec.ExecContext(ctx, deleteReceiverWallets)
+	_, err := sqlExec.ExecContext(ctx, deleteReceiverWallets)
 	require.NoError(t, err)
 }
 
