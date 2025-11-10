@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Added Launch Wizard through `make setup` command to simplify initial setup and mainnet configuration for docker compose [#875](https://github.com/stellar/stellar-disbursement-platform-backend/pull/875)
 - Support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
     - Add SEP10 /auth endpoints 
     - Add SEP24 /info endpoints
@@ -24,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Fix HTML validation to allow apostrophes in invitation messages while maintaining security against XSS attacks [#930](https://github.com/stellar/stellar-disbursement-platform-backend/pull/930)
 - Refactor to replace float64 with shopspring decimal [#936](https://github.com/stellar/stellar-disbursement-platform-backend/pull/936)
-- `channel-accounts ensure` command should have a minimum of 1 [#939](https://github.com/stellar/stellar-disbursement-platform-backend/pull/939).
+- `channel-accounts ensure` command should have a minimum of 1 [#939](https://github.com/stellar/stellar-disbursement-platform-backend/pull/939)
 
 ## [5.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/5.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.1.0...5.0.0))
 
