@@ -701,7 +701,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -737,15 +737,14 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 			},
 		}).
 		Once()
-	chTxAcc := schema.NewDefaultChannelAccount(channelAccount.PublicKey)
-	mChAccSigClient.
-		On("Delete", ctx, chTxAcc).
-		Return(errors.New("sig service error")).
+	mChannelAccountStore.
+		On("DeleteIfLockedUntil", ctx, channelAccount.PublicKey, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
+		Return(errors.New("delete from store error")).
 		Once()
 
 	err = cas.DeleteChannelAccount(ctx, DeleteChannelAccountsOptions{ChannelAccountID: channelAccount.PublicKey})
 	require.Error(t, err)
-	require.ErrorContains(t, err, fmt.Sprintf(`deleting account %[1]s in DeleteChannelAccount: deleting %[1]s from signature service: sig service error`, channelAccount.PublicKey))
+	require.ErrorContains(t, err, fmt.Sprintf(`deleting account %[1]s in DeleteChannelAccount: deleting %[1]s from database store: delete from store error`, channelAccount.PublicKey))
 }
 
 func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) {
