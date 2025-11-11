@@ -29,14 +29,14 @@ func SEP10HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.Ha
 
 			authHeader := req.Header.Get("Authorization")
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(rw)
+				httperror.Forbidden("Missing or invalid authorization header", nil, nil).Render(rw)
 				return
 			}
 
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
 			if err != nil {
-				httperror.Unauthorized("Invalid token", err, nil).Render(rw)
+				httperror.Forbidden("Invalid token", err, nil).Render(rw)
 				return
 			}
 
