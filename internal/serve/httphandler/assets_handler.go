@@ -143,12 +143,15 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assetCode := strings.TrimSpace(strings.ToUpper(assetRequest.Code))
+	// Preserve original case - Stellar asset codes are case-sensitive!
+	// Only uppercase for comparison with native asset code (XLM)
+	assetCode := strings.TrimSpace(assetRequest.Code)
 	assetIssuer := strings.TrimSpace(assetRequest.Issuer)
 
 	v := validators.NewValidator()
 	v.Check(assetCode != "", "code", "code is required")
-	if assetCode != stellarNativeAssetCode {
+	// Compare uppercase for native asset check, but preserve original case for storage
+	if strings.ToUpper(assetCode) != stellarNativeAssetCode {
 		v.Check(strkey.IsValidEd25519PublicKey(assetIssuer), "issuer", "issuer is invalid")
 	}
 
