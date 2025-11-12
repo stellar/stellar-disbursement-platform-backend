@@ -171,6 +171,10 @@ func DeleteChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 		return fmt.Errorf("at least one channel account address must be provided")
 	}
 
+	if len(chAccAddresses) > MaximumDeleteChannelAccountOperationsPerStellarTx {
+		return fmt.Errorf("cannot delete more than %d channel accounts", MaximumDeleteChannelAccountOperationsPerStellarTx)
+	}
+
 	hostAccount := submiterEngine.HostDistributionAccount()
 	rootAccount, err := submiterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
 		AccountID: hostAccount.Address,
