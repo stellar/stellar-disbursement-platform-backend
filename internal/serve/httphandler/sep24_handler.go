@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
@@ -123,6 +124,8 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: r.URL.Query().Get("external_transaction_id") should be handled here.
+	// TODO: r.URL.Query().Get("stellar_transaction_id") should be handled here.
 	transactionID := r.URL.Query().Get("id")
 	if transactionID == "" {
 		httperror.BadRequest("id parameter is required", nil, nil).Render(w)
@@ -138,8 +141,12 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	receiverWallet, err := h.Models.ReceiverWallet.GetBySEP24TransactionID(ctx, transactionID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
+			// TODO:This will fail the stellar-anchor-test when the transactionID is expected to be not found.
+			// For example, if the trsnaction ID is not valid, we will always return incomplete status. However, the stellar-anchor-test expects a 404 error.
 			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
+			// The sep10Claims.Subject is the Stellar address. It is either the account of the deposit request or the account of the SEP-10 challenge.
+			transaction["to"] = sep10Claims.Subject
 
 			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusIncomplete)
 			if moreInfoErr != nil {
@@ -273,6 +280,19 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	}
 
 	txnID := uuid.New().String()
+
+	// Check if the account is a valid Stellar address
+	if !strkey.IsValidEd25519PublicKey(account) {
+		httperror.BadRequest("Invalid account", nil, nil).Render(w)
+		return
+	}
+
+	// Check if assetCode is defined in the assets table
+	exists, err := h.Models.Assets.ExistsByCodeOrID(ctx, assetCode)
+	if !exists || err != nil {
+		httperror.BadRequest("Asset not found", err, nil).Render(w)
+		return
+	}
 
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24Token(
 		account,
