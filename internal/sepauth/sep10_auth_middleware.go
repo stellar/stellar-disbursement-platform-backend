@@ -2,9 +2,11 @@ package sepauth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
@@ -26,17 +28,25 @@ func SEP10HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
-
 			authHeader := req.Header.Get("Authorization")
+			if authHeader == "" {
+				httperror.Unauthorized("Missing authorization header", nil, nil).Render(rw)
+				return
+			}
+
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(rw)
+				httperror.Unauthorized("Invalid authorization header", nil, nil).Render(rw)
 				return
 			}
 
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
 			if err != nil {
-				httperror.Forbidden("Invalid token", err, nil).Render(rw)
+				if errors.Is(err, jwt.ErrTokenExpired) {
+					httperror.BadRequest("Expired token", err, nil).Render(rw)
+					return
+				}
+				httperror.Unauthorized("Invalid token", err, nil).Render(rw)
 				return
 			}
 
