@@ -453,8 +453,10 @@ $7, $8, $9, $10 ,$11, $12)
 }
 
 func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM receiver_wallets"
-	_, err := sqlExec.ExecContext(ctx, query)
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, sqlExec)
+
+	const deleteReceiverWallets = "DELETE FROM receiver_wallets"
+	_, err := sqlExec.ExecContext(ctx, deleteReceiverWallets)
 	require.NoError(t, err)
 }
 
@@ -718,14 +720,14 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 
 	q := fmt.Sprintf(`
 		INSERT INTO embedded_wallets
-			(token, wasm_hash, contract_address, credential_id, public_key, wallet_status)
+			(token, wasm_hash, contract_address, credential_id, public_key, wallet_status, receiver_wallet_id)
 		VALUES
-			($1, $2, $3, $4, $5, $6)
+			($1, $2, $3, $4, $5, $6, $7)
 		RETURNING %s
 	`, EmbeddedWalletColumnNames("", ""))
 	wallet := EmbeddedWallet{}
 
-	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), utils.SQLNullString(publicKey), status)
+	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), utils.SQLNullString(publicKey), status, utils.SQLNullString(""))
 	require.NoError(t, err)
 	return &wallet
 }

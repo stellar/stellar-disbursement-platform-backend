@@ -11,6 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_EmbeddedWalletColumnNames(t *testing.T) {
@@ -27,10 +28,12 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				"created_at",
 				"updated_at",
 				"wallet_status",
+				"requires_verification",
 				`COALESCE(wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(contract_address, '') AS "contract_address"`,
 				`COALESCE(credential_id, '') AS "credential_id"`,
 				`COALESCE(public_key, '') AS "public_key"`,
+				`COALESCE(receiver_wallet_id, '') AS "receiver_wallet_id"`,
 			}, ", "),
 		},
 		{
@@ -41,10 +44,12 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				"ew.created_at",
 				"ew.updated_at",
 				"ew.wallet_status",
+				"ew.requires_verification",
 				`COALESCE(ew.wasm_hash, '') AS "wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "contract_address"`,
 				`COALESCE(ew.credential_id, '') AS "credential_id"`,
 				`COALESCE(ew.public_key, '') AS "public_key"`,
+				`COALESCE(ew.receiver_wallet_id, '') AS "receiver_wallet_id"`,
 			}, ", "),
 		},
 		{
@@ -55,10 +60,12 @@ func Test_EmbeddedWalletColumnNames(t *testing.T) {
 				`ew.created_at AS "embedded_wallets.created_at"`,
 				`ew.updated_at AS "embedded_wallets.updated_at"`,
 				`ew.wallet_status AS "embedded_wallets.wallet_status"`,
+				`ew.requires_verification AS "embedded_wallets.requires_verification"`,
 				`COALESCE(ew.wasm_hash, '') AS "embedded_wallets.wasm_hash"`,
 				`COALESCE(ew.contract_address, '') AS "embedded_wallets.contract_address"`,
 				`COALESCE(ew.credential_id, '') AS "embedded_wallets.credential_id"`,
 				`COALESCE(ew.public_key, '') AS "embedded_wallets.public_key"`,
+				`COALESCE(ew.receiver_wallet_id, '') AS "embedded_wallets.receiver_wallet_id"`,
 			}, ", "),
 		},
 	}
@@ -105,6 +112,8 @@ func Test_EmbeddedWalletModel_GetByToken(t *testing.T) {
 		assert.Equal(t, expectedWasmHash, wallet.WasmHash)
 		assert.Equal(t, expectedContractAddress, wallet.ContractAddress)
 		assert.Equal(t, PendingWalletStatus, wallet.WalletStatus)
+		assert.Equal(t, "", wallet.ReceiverWalletID)
+		assert.False(t, wallet.RequiresVerification)
 		assert.NotNil(t, wallet.CreatedAt)
 		assert.NotNil(t, wallet.UpdatedAt)
 	})
@@ -319,6 +328,20 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 		assert.Equal(t, newPublicKey, updatedWallet.PublicKey)
 		assert.Equal(t, newStatus, updatedWallet.WalletStatus)
 		assert.True(t, updatedWallet.UpdatedAt.After(*updatedWallet.CreatedAt))
+	})
+
+	t.Run("successfully toggles requires verification flag", func(t *testing.T) {
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash3", "contract3", "", "", PendingWalletStatus)
+		update := EmbeddedWalletUpdate{
+			RequiresVerification: utils.Ptr(true),
+		}
+
+		err := embeddedWalletModel.Update(ctx, dbConnectionPool, createdWallet.Token, update)
+		require.NoError(t, err)
+
+		updatedWallet, getErr := embeddedWalletModel.GetByToken(ctx, dbConnectionPool, createdWallet.Token)
+		require.NoError(t, getErr)
+		assert.True(t, updatedWallet.RequiresVerification)
 	})
 
 	t.Run("returns error when updating to duplicate credential_id", func(t *testing.T) {

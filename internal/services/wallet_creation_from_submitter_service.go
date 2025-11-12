@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/stellar/go/hash"
 	"github.com/stellar/go/strkey"
@@ -29,6 +31,8 @@ type WalletCreationFromSubmitterService struct {
 	tssModel          *store.TransactionModel
 	networkPassphrase string
 }
+
+const autoRegistrationIdentifier = "AUTO_REGISTRATION"
 
 var _ WalletCreationFromSubmitterServiceInterface = (*WalletCreationFromSubmitterService)(nil)
 
@@ -204,6 +208,7 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 		}
 
 		update.ContractAddress = contractAddress
+		embeddedWallet.ContractAddress = contractAddress
 		update.WalletStatus = data.SuccessWalletStatus
 	case store.TransactionStatusError:
 		update.WalletStatus = data.FailedWalletStatus
@@ -214,6 +219,44 @@ func (s *WalletCreationFromSubmitterService) syncEmbeddedWalletWithTransaction(c
 	err = s.sdpModels.EmbeddedWallets.Update(ctx, sdpDBTx, embeddedWallet.Token, update)
 	if err != nil {
 		return fmt.Errorf("updating embedded wallet with token %s: %w", embeddedWallet.Token, err)
+	}
+
+	if transaction.Status == store.TransactionStatusSuccess && embeddedWallet.ReceiverWalletID != "" {
+		if !embeddedWallet.RequiresVerification {
+			if err := s.autoRegisterEmbeddedWallet(ctx, sdpDBTx, embeddedWallet); err != nil {
+				return fmt.Errorf("auto registering receiver wallet %s: %w", embeddedWallet.ReceiverWalletID, err)
+			}
+		} else {
+			log.Ctx(ctx).Debugf("embedded wallet %s requires manual verification. Receiver wallet %s remains READY", embeddedWallet.Token, embeddedWallet.ReceiverWalletID)
+		}
+	}
+
+	return nil
+}
+
+func (s *WalletCreationFromSubmitterService) autoRegisterEmbeddedWallet(ctx context.Context, sdpDBTx db.DBTransaction, embeddedWallet *data.EmbeddedWallet) error {
+	receiverWallet, err := s.sdpModels.ReceiverWallet.GetByID(ctx, sdpDBTx, embeddedWallet.ReceiverWalletID)
+	if err != nil {
+		return fmt.Errorf("getting embedded wallet %s: %w", embeddedWallet.ReceiverWalletID, err)
+	}
+
+	if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
+		return nil
+	}
+
+	if strings.TrimSpace(embeddedWallet.ContractAddress) == "" {
+		return fmt.Errorf("embedded wallet %s missing contract address", embeddedWallet.Token)
+	}
+
+	now := time.Now()
+	walletUpdate := data.ReceiverWalletUpdate{
+		Status:           data.RegisteredReceiversWalletStatus,
+		StellarAddress:   embeddedWallet.ContractAddress,
+		OTPConfirmedAt:   now,
+		OTPConfirmedWith: autoRegistrationIdentifier,
+	}
+	if err = s.sdpModels.ReceiverWallet.Update(ctx, receiverWallet.ID, walletUpdate, sdpDBTx); err != nil {
+		return fmt.Errorf("updating receiver wallet %s: %w", receiverWallet.ID, err)
 	}
 
 	return nil
