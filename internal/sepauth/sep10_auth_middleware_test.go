@@ -117,14 +117,14 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		{
 			name:               "invalid authorization header format (no Bearer prefix)",
 			authHeader:         "InvalidToken123",
-			expectedStatusCode: http.StatusUnauthorized,
+			expectedStatusCode: http.StatusBadRequest,
 			expectClaimsInCtx:  false,
 			expectedError:      "Invalid authorization header",
 		},
 		{
 			name:               "invalid authorization header format (lowercase bearer)",
 			authHeader:         "bearer " + createValidToken(),
-			expectedStatusCode: http.StatusUnauthorized,
+			expectedStatusCode: http.StatusBadRequest,
 			expectClaimsInCtx:  false,
 			expectedError:      "Invalid authorization header",
 		},

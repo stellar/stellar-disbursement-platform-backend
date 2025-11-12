@@ -35,7 +35,7 @@ func SEP10HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.Ha
 			}
 
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				httperror.Unauthorized("Invalid authorization header", nil, nil).Render(rw)
+				httperror.BadRequest("Invalid authorization header", nil, nil).Render(rw)
 				return
 			}
 
