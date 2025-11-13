@@ -152,6 +152,17 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if the transaction ID was created as a SEP-24 transaction in the database
+	_, err := h.Models.SEP24Transactions.GetByID(ctx, transactionID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("Transaction not found", nil, nil).Render(w)
+			return
+		}
+		httperror.InternalError(ctx, "Failed to get transaction", err, nil).Render(w)
+		return
+	}
+
 	transaction := map[string]any{
 		"id":       transactionID,
 		"kind":     SEP24OperationKindDeposit,
@@ -345,6 +356,17 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		"type": "interactive_customer_info_needed",
 		"url":  interactiveURL,
 		"id":   txnID,
+	}
+
+	// Save the transaction ID to the database
+	_, err = h.Models.SEP24Transactions.Insert(ctx, txnID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordAlreadyExists) {
+			httperror.BadRequest("Transaction ID already exists", err, nil).Render(w)
+			return
+		}
+		httperror.InternalError(ctx, "Failed to save transaction", err, nil).Render(w)
+		return
 	}
 
 	log.Ctx(ctx).Infof("SEP-24 deposit initiated - ID: %s, Account: %s, Asset: %s, ClientDomain: %s",
