@@ -267,6 +267,11 @@ func Test_SEP24Handler_GetInfo(t *testing.T) {
 func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 	t.Parallel()
 	models := data.SetupModels(t)
+	ctx := context.Background()
+
+	// Create assets needed by the tests
+	data.CreateAssetFixture(t, ctx, models.DBConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	data.CreateAssetFixture(t, ctx, models.DBConnectionPool, "XLM", "")
 
 	jwtManager, err := sepauth.NewJWTManager("test-secret-key-for-testing-purposes-only", 300000)
 	require.NoError(t, err)
