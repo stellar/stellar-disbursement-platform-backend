@@ -71,7 +71,7 @@ func SignAuthEntry(entry xdr.SorobanAuthorizationEntry, validUntil uint32, signi
 
 	encoded, err := entry.MarshalBinary()
 	if err != nil {
-		return entry, fmt.Errorf("copying authorization entry: %w", err)
+		return entry, fmt.Errorf("marshalling authorization entry: %w", err)
 	}
 
 	var clone xdr.SorobanAuthorizationEntry

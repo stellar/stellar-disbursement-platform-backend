@@ -81,7 +81,7 @@ type SEP45ServiceOptions struct {
 	TOMLClient                stellartoml.ClientInterface
 	NetworkPassphrase         string
 	WebAuthVerifyContractID   string
-	SEP45SigningKeypair       *keypair.Full
+	ServerSigningKeypair      *keypair.Full
 	BaseURL                   string
 	ClientAttributionRequired bool
 	AllowHTTPRetry            bool
@@ -97,14 +97,14 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 	if strings.TrimSpace(opts.WebAuthVerifyContractID) == "" {
 		return nil, fmt.Errorf("web_auth_verify contract ID cannot be empty")
 	}
-	if opts.SEP45SigningKeypair == nil {
-		return nil, fmt.Errorf("sep45 signing keypair cannot be nil")
+	if opts.ServerSigningKeypair == nil {
+		return nil, fmt.Errorf("server signing keypair cannot be nil")
 	}
 	if strings.TrimSpace(opts.BaseURL) == "" {
 		return nil, fmt.Errorf("base URL cannot be empty")
 	}
 
-	signingKP := opts.SEP45SigningKeypair
+	signingKP := opts.ServerSigningKeypair
 	signingPKBytes, err := strkey.Decode(strkey.VersionByteAccountID, signingKP.Address())
 	if err != nil {
 		return nil, fmt.Errorf("decoding signing public key: %w", err)
@@ -167,7 +167,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	if clientDomain != "" {
 		key, err := s.fetchSigningKeyFromClientDomain(clientDomain)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fetching signing key for client_domain %s: %w", clientDomain, err)
 		}
 		clientDomainAccount = key
 	}
@@ -291,7 +291,7 @@ func (s *sep45Service) signServerAuthEntry(ctx context.Context, result *stellar.
 	}
 	validUntil := ledgerNumber + uint32(signatureExpirationLedgers)
 
-	signedEntries := make([]xdr.SorobanAuthorizationEntry, 0, len(*authXDR))
+	signedEntries := make(xdr.SorobanAuthorizationEntries, 0, len(*authXDR))
 	for _, entryB64 := range *authXDR {
 		var entry xdr.SorobanAuthorizationEntry
 		if err := xdr.SafeUnmarshalBase64(entryB64, &entry); err != nil {
@@ -305,7 +305,7 @@ func (s *sep45Service) signServerAuthEntry(ctx context.Context, result *stellar.
 		signedEntries = append(signedEntries, signedEntry)
 	}
 
-	return xdr.SorobanAuthorizationEntries(signedEntries), nil
+	return signedEntries, nil
 }
 
 func (s *sep45Service) fetchSigningKeyFromClientDomain(clientDomain string) (string, error) {
