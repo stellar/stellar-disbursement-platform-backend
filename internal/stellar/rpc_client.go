@@ -47,6 +47,19 @@ func (w *RPCClientWrapper) SimulateTransaction(ctx context.Context, request prot
 	}, nil
 }
 
+func (w *RPCClientWrapper) GetLatestLedgerSequence(ctx context.Context) (uint32, error) {
+	if w.client == nil {
+		return 0, errors.New("RPC client not initialized")
+	}
+
+	resp, err := w.client.GetLatestLedger(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("getting latest ledger sequence: %w", err)
+	}
+
+	return resp.Sequence, nil
+}
+
 func NewHTTPClientWithAuth(authHeaderKey, authHeaderValue string) (*http.Client, error) {
 	if authHeaderKey == "" && authHeaderValue == "" {
 		return http.DefaultClient, nil
