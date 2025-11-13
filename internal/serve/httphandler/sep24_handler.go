@@ -278,6 +278,10 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		account = req["account"]
 		lang = req["lang"]
 	} else {
+		if parseErr := r.ParseForm(); parseErr != nil {
+			httperror.BadRequest("Invalid form data", parseErr, nil).Render(w)
+			return
+		}
 		assetCode = r.FormValue("asset_code")
 		account = r.FormValue("account")
 		lang = r.FormValue("lang")
