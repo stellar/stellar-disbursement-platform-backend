@@ -172,8 +172,6 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	receiverWallet, err := h.Models.ReceiverWallet.GetBySEP24TransactionID(ctx, transactionID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
-			// TODO:This will fail the stellar-anchor-test when the transactionID is expected to be not found.
-			// For example, if the trsnaction ID is not valid, we will always return incomplete status. However, the stellar-anchor-test expects a 404 error.
 			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
 			// The sep10Claims.Subject is the Stellar address. It is either the account of the deposit request or the account of the SEP-10 challenge.
