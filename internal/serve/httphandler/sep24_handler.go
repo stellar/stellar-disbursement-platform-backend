@@ -124,8 +124,28 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: r.URL.Query().Get("external_transaction_id") should be handled here.
-	// TODO: r.URL.Query().Get("stellar_transaction_id") should be handled here.
+	// Only one of the following parameters should be present:
+	//   - r.URL.Query().Get("external_transaction_id")
+	//   - r.URL.Query().Get("stellar_transaction_id")
+	//   - r.URL.Query().Get("id")
+	// If more than one is present, return a 400 error
+	if r.URL.Query().Get("external_transaction_id") != "" && r.URL.Query().Get("stellar_transaction_id") != "" && r.URL.Query().Get("id") != "" {
+		httperror.BadRequest("Only one of the following parameters should be present: external_transaction_id, stellar_transaction_id, or id", nil, nil).Render(w)
+		return
+	}
+
+	if r.URL.Query().Get("external_transaction_id") != "" {
+		// Implement this when there is a use case for it.
+		httperror.NotFound("Get a transaction by the external transaction ID not supported", nil, nil).Render(w)
+		return
+	}
+
+	if r.URL.Query().Get("stellar_transaction_id") != "" {
+		// Implement this when there is a use case for it.
+		httperror.NotFound("Get a transaction by the stellar transaction ID is not supported", nil, nil).Render(w)
+		return
+	}
+
 	transactionID := r.URL.Query().Get("id")
 	if transactionID == "" {
 		httperror.BadRequest("id parameter is required", nil, nil).Render(w)
