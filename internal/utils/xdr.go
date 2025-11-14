@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -24,6 +25,27 @@ func NewSymbolStringEntry(key, value string) xdr.ScMapEntry {
 			Str:  &str,
 		},
 	}
+}
+
+// ExtractArgsMap converts a single-map SCVec argument list into a Go map.
+func ExtractArgsMap(args xdr.ScVec) (map[string]string, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("authorization entry must contain a single argument map")
+	}
+	argMap, ok := args[0].GetMap()
+	if !ok || argMap == nil {
+		return nil, fmt.Errorf("authorization entry arguments must be a map")
+	}
+	result := make(map[string]string, len(*argMap))
+	for _, entry := range *argMap {
+		symbol := entry.Key.MustSym()
+		strVal, ok := entry.Val.GetStr()
+		if !ok {
+			return nil, fmt.Errorf("authorization argument %s must be a string", symbol)
+		}
+		result[string(symbol)] = strings.TrimSpace(string(strVal))
+	}
+	return result, nil
 }
 
 // BuildAuthorizationPayload produces the hash payload Soroban expects for signature verification.
