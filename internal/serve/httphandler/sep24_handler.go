@@ -360,7 +360,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	_, err = h.Models.SEP24Transactions.Insert(ctx, txnID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordAlreadyExists) {
-			httperror.BadRequest("Transaction ID already exists", err, nil).Render(w)
+			httperror.BadRequest("Transaction ID collision detected. Please try again.", err, nil).Render(w)
 			return
 		}
 		httperror.InternalError(ctx, "Failed to save transaction", err, nil).Render(w)
