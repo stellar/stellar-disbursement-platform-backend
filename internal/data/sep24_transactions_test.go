@@ -59,7 +59,6 @@ func Test_SEP24TransactionModel_Insert(t *testing.T) {
 		assert.ErrorIs(t, err, ErrRecordAlreadyExists)
 		assert.Nil(t, duplicateTransaction)
 	})
-
 }
 
 func Test_SEP24TransactionModel_GetByID(t *testing.T) {
@@ -134,4 +133,3 @@ func Test_SEP24TransactionModel_Insert_UniqueViolationErrorCode(t *testing.T) {
 		assert.ErrorIs(t, err, ErrRecordAlreadyExists)
 	})
 }
-
