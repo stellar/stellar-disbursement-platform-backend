@@ -2,11 +2,8 @@ package sepauth
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
-
-	"github.com/golang-jwt/jwt/v4"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
@@ -29,30 +26,16 @@ func SEP10HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
-			authHeader := req.Header.Get("Authorization")
-			if authHeader == "" {
-				httperror.Unauthorized("Missing authorization header", nil, nil).Render(rw)
-				return
-			}
 
+			authHeader := req.Header.Get("Authorization")
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				httperror.BadRequest("Invalid authorization header", nil, nil).Render(rw)
+				httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(rw)
 				return
 			}
 
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
 			if err != nil {
-				var validationErr *jwt.ValidationError
-				if errors.As(err, &validationErr) && validationErr.Errors&jwt.ValidationErrorExpired != 0 {
-					httperror.BadRequest("Expired token", err, nil).Render(rw)
-					return
-				}
-				// Check error message as fallback for wrapped errors
-				if err != nil && (errors.Is(err, jwt.ErrTokenExpired) || strings.Contains(strings.ToLower(err.Error()), "expired")) {
-					httperror.BadRequest("Expired token", err, nil).Render(rw)
-					return
-				}
 				httperror.Unauthorized("Invalid token", err, nil).Render(rw)
 				return
 			}
