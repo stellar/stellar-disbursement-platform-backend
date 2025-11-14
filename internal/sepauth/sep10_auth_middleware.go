@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
