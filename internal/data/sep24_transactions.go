@@ -12,11 +12,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
+// SEP24Transaction represents a SEP-24 transaction record stored in the database.
+// This table is used to track transaction IDs created by SDP for SEP-24 compliance,
+// ensuring that only valid SDP-created transactions can be queried via the GET /transaction endpoint.
 type SEP24Transaction struct {
 	ID        string    `json:"id" db:"id"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
+// SEP24TransactionModel provides database operations for SEP-24 transactions.
 type SEP24TransactionModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
@@ -42,7 +46,7 @@ func (m *SEP24TransactionModel) Insert(ctx context.Context, transactionID string
 				return nil, ErrRecordAlreadyExists
 			}
 		}
-		return nil, fmt.Errorf("error inserting SEP24 transaction ID: %w", err)
+		return nil, fmt.Errorf("error inserting SEP24 transaction: %w", err)
 	}
 
 	return &transaction, nil
@@ -62,7 +66,7 @@ func (m *SEP24TransactionModel) GetByID(ctx context.Context, transactionID strin
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
-		return nil, fmt.Errorf("error querying SEP24 transaction ID: %w", err)
+		return nil, fmt.Errorf("error querying SEP24 transaction: %w", err)
 	}
 
 	return &transaction, nil
