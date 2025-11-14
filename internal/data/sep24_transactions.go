@@ -42,7 +42,7 @@ func (m *SEP24TransactionModel) Insert(ctx context.Context, transactionID string
 				return nil, ErrRecordAlreadyExists
 			}
 		}
-		return nil, fmt.Errorf("error inserting SEP24 transaction: %w", err)
+		return nil, fmt.Errorf("error inserting SEP24 transaction ID: %w", err)
 	}
 
 	return &transaction, nil
@@ -62,7 +62,7 @@ func (m *SEP24TransactionModel) GetByID(ctx context.Context, transactionID strin
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
-		return nil, fmt.Errorf("error querying SEP24 transaction: %w", err)
+		return nil, fmt.Errorf("error querying SEP24 transaction ID: %w", err)
 	}
 
 	return &transaction, nil
