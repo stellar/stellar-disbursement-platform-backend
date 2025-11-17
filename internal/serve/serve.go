@@ -198,7 +198,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 			WebAuthVerifyContractID:   opts.Sep45ContractID,
 			ServerSigningKeypair:      signingKP,
 			BaseURL:                   opts.BaseURL,
-			ClientAttributionRequired: opts.Sep10ClientAttributionRequired,
 			AllowHTTPRetry:            allowHTTPRetry,
 		})
 		if sep45Err != nil {

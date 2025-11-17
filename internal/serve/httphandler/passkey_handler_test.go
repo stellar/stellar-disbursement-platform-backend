@@ -680,6 +680,28 @@ func Test_PasskeyHandler_RefreshToken(t *testing.T) {
 		Return(credentialID, contractAddress, nil).
 		Once()
 
+	embeddedWallet := &data.EmbeddedWallet{
+		ContractAddress:      contractAddress,
+		CredentialID:         credentialID,
+		RequiresVerification: true,
+		ReceiverWalletID:     "rw-1",
+	}
+	mockEmbeddedWalletService.
+		On("GetWalletByCredentialID", mock.Anything, credentialID).
+		Return(embeddedWallet, nil).
+		Once()
+
+	mockEmbeddedWalletService.
+		On("GetReceiverWalletByID", mock.Anything, "rw-1").
+		Return(&data.ReceiverWallet{ID: "rw-1", Status: data.ReadyReceiversWalletStatus}, nil).
+		Once()
+
+	pendingAsset := &data.Asset{ID: "asset-1", Code: "USDC", Issuer: "GDUKMGUGDZQK6YH6Q7"}
+	mockEmbeddedWalletService.
+		On("GetPendingDisbursementAsset", mock.Anything, contractAddress).
+		Return(pendingAsset, nil).
+		Once()
+
 	var capturedExpiresAt time.Time
 	mockJWTManager.
 		On("GenerateToken", mock.Anything, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
@@ -700,9 +722,129 @@ func Test_PasskeyHandler_RefreshToken(t *testing.T) {
 	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, "refreshed-token", respBody.Token)
+	assert.True(t, respBody.IsVerificationPending)
+	require.NotNil(t, respBody.PendingAsset)
+	assert.Equal(t, pendingAsset.Code, respBody.PendingAsset.Code)
+	assert.Equal(t, pendingAsset.Issuer, respBody.PendingAsset.Issuer)
 
 	expectedExpiry := time.Now().Add(WalletTokenExpiration)
 	assert.WithinDuration(t, expectedExpiry, capturedExpiresAt, 5*time.Second)
+}
+
+func Test_PasskeyHandler_RefreshToken_ReceiverAlreadyRegistered(t *testing.T) {
+	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	handler := PasskeyHandler{
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
+	}
+
+	rr := httptest.NewRecorder()
+	requestBody, err := json.Marshal(RefreshTokenRequest{
+		Token: "valid-token",
+	})
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	credentialID := "test-credential-id"
+
+	mockJWTManager.
+		On("ValidateToken", mock.Anything, "valid-token").
+		Return(credentialID, contractAddress, nil).
+		Once()
+
+	embeddedWallet := &data.EmbeddedWallet{
+		ContractAddress:      contractAddress,
+		CredentialID:         credentialID,
+		RequiresVerification: true,
+		ReceiverWalletID:     "rw-registered",
+	}
+	mockEmbeddedWalletService.
+		On("GetWalletByCredentialID", mock.Anything, credentialID).
+		Return(embeddedWallet, nil).
+		Once()
+
+	mockEmbeddedWalletService.
+		On("GetReceiverWalletByID", mock.Anything, "rw-registered").
+		Return(&data.ReceiverWallet{ID: "rw-registered", Status: data.RegisteredReceiversWalletStatus}, nil).
+		Once()
+	mockEmbeddedWalletService.
+		On("GetPendingDisbursementAsset", mock.Anything, contractAddress).
+		Return((*data.Asset)(nil), nil).
+		Once()
+
+	mockJWTManager.
+		On("GenerateToken", mock.Anything, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
+		Return("refreshed-token", nil).
+		Once()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Result().StatusCode)
+
+	var respBody RefreshTokenResponse
+	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
+	require.NoError(t, err)
+	assert.Equal(t, "refreshed-token", respBody.Token)
+	assert.False(t, respBody.IsVerificationPending)
+	assert.Nil(t, respBody.PendingAsset)
+}
+
+func Test_PasskeyHandler_RefreshToken_AssetLookupError(t *testing.T) {
+	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	handler := PasskeyHandler{
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
+	}
+
+	rr := httptest.NewRecorder()
+	requestBody, err := json.Marshal(RefreshTokenRequest{Token: "valid-token"})
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	credentialID := "test-credential-id"
+	assetErr := errors.New("asset lookup failed")
+
+	mockJWTManager.
+		On("ValidateToken", mock.Anything, "valid-token").
+		Return(credentialID, contractAddress, nil).
+		Once()
+
+	embeddedWallet := &data.EmbeddedWallet{
+		ContractAddress:      contractAddress,
+		CredentialID:         credentialID,
+		RequiresVerification: true,
+		ReceiverWalletID:     "rw-asset",
+	}
+	mockEmbeddedWalletService.
+		On("GetWalletByCredentialID", mock.Anything, credentialID).
+		Return(embeddedWallet, nil).
+		Once()
+	mockEmbeddedWalletService.
+		On("GetReceiverWalletByID", mock.Anything, "rw-asset").
+		Return(&data.ReceiverWallet{ID: "rw-asset", Status: data.ReadyReceiversWalletStatus}, nil).
+		Once()
+	mockEmbeddedWalletService.
+		On("GetPendingDisbursementAsset", mock.Anything, contractAddress).
+		Return((*data.Asset)(nil), assetErr).
+		Once()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
 }
 
 func Test_PasskeyHandler_RefreshToken_InvalidRequestBody(t *testing.T) {
@@ -851,6 +993,27 @@ func Test_PasskeyHandler_RefreshToken_GenerateTokenErrors(t *testing.T) {
 				Return(credentialID, contractAddress, nil).
 				Once()
 
+			embeddedWallet := &data.EmbeddedWallet{
+				ContractAddress:      contractAddress,
+				CredentialID:         credentialID,
+				RequiresVerification: true,
+				ReceiverWalletID:     "rw-2",
+			}
+			mockEmbeddedWalletService.
+				On("GetWalletByCredentialID", mock.Anything, credentialID).
+				Return(embeddedWallet, nil).
+				Once()
+
+			mockEmbeddedWalletService.
+				On("GetReceiverWalletByID", mock.Anything, "rw-2").
+				Return(&data.ReceiverWallet{ID: "rw-2", Status: data.ReadyReceiversWalletStatus}, nil).
+				Once()
+
+			mockEmbeddedWalletService.
+				On("GetPendingDisbursementAsset", mock.Anything, contractAddress).
+				Return((*data.Asset)(nil), nil).
+				Once()
+
 			mockJWTManager.
 				On("GenerateToken", mock.Anything, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
 				Return("", tc.generateError).
@@ -892,12 +1055,23 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 		Return(credentialID, oldContractAddress, nil).
 		Once()
 
+	embeddedWallet := &data.EmbeddedWallet{
+		CredentialID:         credentialID,
+		ContractAddress:      newContractAddress,
+		RequiresVerification: true,
+		ReceiverWalletID:     "rw-3",
+	}
 	mockEmbeddedWalletService.
 		On("GetWalletByCredentialID", mock.Anything, credentialID).
-		Return(&data.EmbeddedWallet{
-			CredentialID:    credentialID,
-			ContractAddress: newContractAddress,
-		}, nil).
+		Return(embeddedWallet, nil).
+		Once()
+	mockEmbeddedWalletService.
+		On("GetReceiverWalletByID", mock.Anything, "rw-3").
+		Return(&data.ReceiverWallet{ID: "rw-3", Status: data.ReadyReceiversWalletStatus}, nil).
+		Once()
+	mockEmbeddedWalletService.
+		On("GetPendingDisbursementAsset", mock.Anything, newContractAddress).
+		Return((*data.Asset)(nil), nil).
 		Once()
 
 	mockJWTManager.
@@ -916,6 +1090,7 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 	err = json.Unmarshal(rr.Body.Bytes(), &respBody)
 	require.NoError(t, err)
 	assert.Equal(t, "refreshed-token-with-address", respBody.Token)
+	assert.True(t, respBody.IsVerificationPending)
 }
 
 func Test_PasskeyHandler_RefreshToken_WalletLookupError(t *testing.T) {

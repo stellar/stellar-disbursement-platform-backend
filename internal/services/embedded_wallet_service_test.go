@@ -233,6 +233,67 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	})
 }
 
+func Test_EmbeddedWalletService_GetPendingDisbursementAsset(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	require.NoError(t, err)
+
+	contractAddress := "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R4"
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "ew-refresh", "https://example.com", "ew-refresh.stellar", "embedded://")
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, sdpModels.Disbursements, &data.Disbursement{
+		Wallet: wallet,
+		Asset:  asset,
+		Status: data.StartedDisbursementStatus,
+	})
+
+	embeddedWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", testWasmHash, "", "credential", "public-key", data.SuccessWalletStatus)
+	update := data.EmbeddedWalletUpdate{
+		ReceiverWalletID: receiverWallet.ID,
+		ContractAddress:  contractAddress,
+	}
+	require.NoError(t, sdpModels.EmbeddedWallets.Update(ctx, dbConnectionPool, embeddedWallet.Token, update))
+
+	_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, sdpModels.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Status:         data.PendingPaymentStatus,
+		Amount:         "15",
+	})
+
+	resultAsset, err := service.GetPendingDisbursementAsset(ctx, contractAddress)
+	require.NoError(t, err)
+	require.NotNil(t, resultAsset)
+	assert.Equal(t, asset.ID, resultAsset.ID)
+	assert.Equal(t, asset.Code, resultAsset.Code)
+	assert.Equal(t, asset.Issuer, resultAsset.Issuer)
+
+	t.Run("returns nil when no pending asset exists", func(t *testing.T) {
+		assetResult, lookupErr := service.GetPendingDisbursementAsset(ctx, "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMZZ")
+		require.NoError(t, lookupErr)
+		assert.Nil(t, assetResult)
+	})
+
+	t.Run("returns nil when contract address empty", func(t *testing.T) {
+		assetResult, lookupErr := service.GetPendingDisbursementAsset(ctx, "")
+		require.NoError(t, lookupErr)
+		assert.Nil(t, assetResult)
+	})
+}
+
 func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

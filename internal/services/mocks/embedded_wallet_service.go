@@ -91,6 +91,66 @@ func (_m *MockEmbeddedWalletService) GetWalletByCredentialID(ctx context.Context
 	return r0, r1
 }
 
+// GetReceiverWalletByID provides a mock function with given fields: ctx, receiverWalletID
+func (_m *MockEmbeddedWalletService) GetReceiverWalletByID(ctx context.Context, receiverWalletID string) (*data.ReceiverWallet, error) {
+	ret := _m.Called(ctx, receiverWalletID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetReceiverWalletByID")
+	}
+
+	var r0 *data.ReceiverWallet
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*data.ReceiverWallet, error)); ok {
+		return rf(ctx, receiverWalletID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *data.ReceiverWallet); ok {
+		r0 = rf(ctx, receiverWalletID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*data.ReceiverWallet)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, receiverWalletID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetPendingDisbursementAsset provides a mock function with given fields: ctx, contractAddress
+func (_m *MockEmbeddedWalletService) GetPendingDisbursementAsset(ctx context.Context, contractAddress string) (*data.Asset, error) {
+	ret := _m.Called(ctx, contractAddress)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPendingDisbursementAsset")
+	}
+
+	var r0 *data.Asset
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*data.Asset, error)); ok {
+		return rf(ctx, contractAddress)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *data.Asset); ok {
+		r0 = rf(ctx, contractAddress)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*data.Asset)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, contractAddress)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetTransactionStatus provides a mock function with given fields: ctx, transactionID
 func (_m *MockEmbeddedWalletService) GetTransactionStatus(ctx context.Context, transactionID string) (*data.SponsoredTransaction, error) {
 	ret := _m.Called(ctx, transactionID)

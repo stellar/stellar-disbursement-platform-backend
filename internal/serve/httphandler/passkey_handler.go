@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -198,7 +199,9 @@ func (r RefreshTokenRequest) Validate() *httperror.HTTPError {
 }
 
 type RefreshTokenResponse struct {
-	Token string `json:"token"`
+	Token                 string      `json:"token"`
+	IsVerificationPending bool        `json:"is_verification_pending"`
+	PendingAsset          *data.Asset `json:"pending_asset,omitempty"`
 }
 
 func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) {
@@ -229,18 +232,35 @@ func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	if contractAddress == "" {
-		var embeddedWallet *data.EmbeddedWallet
-		embeddedWallet, err = h.EmbeddedWalletService.GetWalletByCredentialID(ctx, credentialID)
+	embeddedWallet, err := h.EmbeddedWalletService.GetWalletByCredentialID(ctx, credentialID)
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidCredentialID) {
+			httperror.Unauthorized("Invalid credential ID", err, nil).Render(rw)
+		} else {
+			httperror.InternalError(ctx, "Failed to lookup wallet", err, nil).Render(rw)
+		}
+		return
+	}
+	if embeddedWallet.ContractAddress != "" {
+		contractAddress = embeddedWallet.ContractAddress
+	}
+	isVerificationPending, err := h.IsVerificationPending(ctx, embeddedWallet)
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidReceiverWalletID) {
+			httperror.InternalError(ctx, "Receiver wallet not found", err, nil).Render(rw)
+		} else {
+			httperror.InternalError(ctx, "Failed to evaluate verification requirement", err, nil).Render(rw)
+		}
+		return
+	}
+
+	var asset *data.Asset
+	if contractAddress != "" {
+		asset, err = h.EmbeddedWalletService.GetPendingDisbursementAsset(ctx, contractAddress)
 		if err != nil {
-			if errors.Is(err, services.ErrInvalidCredentialID) {
-				httperror.Unauthorized("Invalid credential ID", err, nil).Render(rw)
-			} else {
-				httperror.InternalError(ctx, "Failed to lookup wallet", err, nil).Render(rw)
-			}
+			httperror.InternalError(ctx, "Failed to retrieve pending disbursement asset", err, nil).Render(rw)
 			return
 		}
-		contractAddress = embeddedWallet.ContractAddress
 	}
 
 	expiresAt := time.Now().Add(WalletTokenExpiration)
@@ -251,8 +271,27 @@ func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	resp := RefreshTokenResponse{
-		Token: refreshedToken,
+		Token:                 refreshedToken,
+		IsVerificationPending: isVerificationPending,
+		PendingAsset:          asset,
 	}
 
 	httpjson.Render(rw, resp, httpjson.JSON)
+}
+
+func (h PasskeyHandler) IsVerificationPending(ctx context.Context, embeddedWallet *data.EmbeddedWallet) (bool, error) {
+	if embeddedWallet == nil || !embeddedWallet.RequiresVerification {
+		return false, nil
+	}
+
+	if embeddedWallet.ReceiverWalletID == "" {
+		return false, nil
+	}
+
+	receiverWallet, err := h.EmbeddedWalletService.GetReceiverWalletByID(ctx, embeddedWallet.ReceiverWalletID)
+	if err != nil {
+		return false, err
+	}
+
+	return receiverWallet.Status == data.ReadyReceiversWalletStatus, nil
 }

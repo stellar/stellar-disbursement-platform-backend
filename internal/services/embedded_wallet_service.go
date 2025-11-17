@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -19,6 +20,8 @@ var (
 	ErrMissingCredentialID       = fmt.Errorf("credential ID is required")
 	ErrInvalidCredentialID       = fmt.Errorf("credential ID does not exist")
 	ErrCredentialIDAlreadyExists = fmt.Errorf("credential ID already exists")
+	ErrMissingReceiverWalletID   = fmt.Errorf("receiver wallet ID is required")
+	ErrInvalidReceiverWalletID   = fmt.Errorf("receiver wallet does not exist")
 
 	// Sponsored transaction errors
 	ErrMissingAccount      = fmt.Errorf("account is required")
@@ -33,6 +36,10 @@ type EmbeddedWalletServiceInterface interface {
 	CreateWallet(ctx context.Context, token, publicKey, credentialID string) error
 	// GetWalletByCredentialID retrieves an embedded wallet by credential ID
 	GetWalletByCredentialID(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error)
+	// GetReceiverWalletByID retrieves a receiver wallet by ID
+	GetReceiverWalletByID(ctx context.Context, receiverWalletID string) (*data.ReceiverWallet, error)
+	// GetPendingDisbursementAsset fetches the asset tied to a pending disbursement for the provided contract address
+	GetPendingDisbursementAsset(ctx context.Context, contractAddress string) (*data.Asset, error)
 	// SponsorTransaction sponsors a transaction on behalf of the embedded wallet
 	SponsorTransaction(ctx context.Context, account, operationXDR string) (string, error)
 	// GetTransactionStatus retrieves a sponsored transaction by ID
@@ -148,6 +155,40 @@ func (e *EmbeddedWalletService) GetWalletByCredentialID(ctx context.Context, cre
 			return nil, fmt.Errorf("getting wallet by credential ID %s: %w", credentialID, err)
 		}
 		return embeddedWallet, nil
+	})
+}
+
+func (e *EmbeddedWalletService) GetReceiverWalletByID(ctx context.Context, receiverWalletID string) (*data.ReceiverWallet, error) {
+	if receiverWalletID == "" {
+		return nil, ErrMissingReceiverWalletID
+	}
+
+	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.ReceiverWallet, error) {
+		receiverWallet, err := e.sdpModels.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return nil, ErrInvalidReceiverWalletID
+			}
+			return nil, fmt.Errorf("getting receiver wallet by ID %s: %w", receiverWalletID, err)
+		}
+		return receiverWallet, nil
+	})
+}
+
+func (e *EmbeddedWalletService) GetPendingDisbursementAsset(ctx context.Context, contractAddress string) (*data.Asset, error) {
+	if strings.TrimSpace(contractAddress) == "" {
+		return nil, nil
+	}
+
+	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.Asset, error) {
+		asset, err := e.sdpModels.EmbeddedWallets.GetPendingDisbursementAsset(ctx, dbTx, contractAddress)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("getting pending disbursement asset for %s: %w", contractAddress, err)
+		}
+		return asset, nil
 	})
 }
 
