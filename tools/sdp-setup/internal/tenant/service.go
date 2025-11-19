@@ -74,6 +74,7 @@ func (s *Service) initializeSingleTenantEnvironment(ctx context.Context) error {
 		"--default-tenant-distribution-account-type", "DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 		"--distribution-account-encryption-passphrase", s.cfg.DistributionSeed,
 		"--channel-account-encryption-passphrase", s.cfg.DistributionSeed,
+		"--disable-mfa", s.cfg.DisableMFA,
 	}
 
 	cmd := exec.CommandContext(ctx, "go", args...)
