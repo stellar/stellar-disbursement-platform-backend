@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/avast/retry-go/v4"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"

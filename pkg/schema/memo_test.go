@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/require"
 )
 

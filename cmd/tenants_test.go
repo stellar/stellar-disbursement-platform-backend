@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 

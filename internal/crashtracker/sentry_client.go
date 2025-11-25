@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 )
 
 type hubSentryInterface interface {

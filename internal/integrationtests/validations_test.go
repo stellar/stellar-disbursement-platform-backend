@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/go/protocols/horizon/base"
-	"github.com/stellar/go/protocols/horizon/operations"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/operations"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"

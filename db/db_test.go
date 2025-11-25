@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/go/support/db/dbtest"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/db/dbtest"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

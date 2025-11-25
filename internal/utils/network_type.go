@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/network"
 )
 
 type NetworkType string

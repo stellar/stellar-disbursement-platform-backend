@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	migrate "github.com/rubenv/sql-migrate"
-	"github.com/stellar/go/support/db/dbtest"
+	"github.com/stellar/go-stellar-sdk/support/db/dbtest"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 )
