@@ -109,6 +109,10 @@ func ListConfigs(devDir string) ([]ConfigRef, error) {
 		}
 		if strings.HasPrefix(name, ".env.") {
 			suffix := strings.TrimPrefix(name, ".env.")
+			// skip the example file.
+			if suffix == "example" {
+				continue
+			}
 			out = append(out, ConfigRef{Name: suffix, Path: filepath.Join(devDir, name)})
 		}
 	}
