@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/shopspring/decimal"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"

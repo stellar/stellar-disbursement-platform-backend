@@ -11,8 +11,8 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/cors"
-	"github.com/stellar/go/support/http/mutil"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/http/mutil"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
