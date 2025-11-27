@@ -265,10 +265,10 @@ func selectHTTPSMode() bool {
 	useHTTPS := strings.HasPrefix(choice, "HTTPS")
 	if useHTTPS {
 		fmt.Println("✅ HTTPS mode selected")
-		fmt.Println("   The dashboard will run over https on port 3443")
+		fmt.Println("   The dashboard will run over HTTPS on port 3443")
 	} else {
 		fmt.Println("✅ HTTP mode selected")
-		fmt.Println("   The dashboard will run over http on port 3000")
+		fmt.Println("   The dashboard will run over HTTP on port 3000")
 	}
 	fmt.Println()
 

@@ -108,7 +108,7 @@ func (s *Service) prepareHTTPS() error {
 		}
 	}
 
-	return fmt.Errorf("https selected but TLS certs are missing; expected dev/certs/stellar.local.pem and dev/certs/stellar.local-key.pem (generate with mkcert; see dev/README.md)")
+	return fmt.Errorf("HTTPS selected but TLS certs are missing; expected dev/certs/stellar.local.pem and dev/certs/stellar.local-key.pem (generate with mkcert; see dev/README.md)")
 }
 
 // composeDown runs 'docker compose down' with the given config.
@@ -117,8 +117,9 @@ func (s *Service) composeDown(ctx context.Context) error {
 
 	args := []string{"compose", "-p", s.cfg.DockerProject}
 	args = append(args, "--env-file", s.cfg.EnvFilePath)
-	args = append(args, "-f", "docker-compose.yml")
-	args = append(args, "-f", "docker-compose-https-frontend.yml")
+	for _, file := range s.files {
+		args = append(args, "-f", file)
+	}
 	args = append(args, "down")
 	args = append(args, "--remove-orphans")
 
