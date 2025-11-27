@@ -134,8 +134,6 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				}
 
 				var capturedTx string
-				entriesCopy := make([]string, len(entriesBase64))
-				copy(entriesCopy, entriesBase64)
 				rpcMock.
 					On("SimulateTransaction", mock.Anything, mock.MatchedBy(func(req protocol.SimulateTransactionRequest) bool {
 						capturedTx = req.Transaction
@@ -143,7 +141,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 					})).
 					Return(&stellar.SimulationResult{
 						Response: protocol.SimulateTransactionResponse{
-							Results: []protocol.SimulateHostFunctionResult{{AuthXDR: &entriesCopy}},
+							Results: []protocol.SimulateHostFunctionResult{{AuthXDR: &entriesBase64}},
 						},
 					}, (*stellar.SimulationError)(nil)).
 					Once()

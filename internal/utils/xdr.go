@@ -28,6 +28,8 @@ func NewSymbolStringEntry(key, value string) xdr.ScMapEntry {
 }
 
 // ExtractArgsMap converts a single-map SCVec argument list into a Go map.
+// The function expects args to contain exactly one ScVal of type ScvMap, where all keys are symbols
+// and all values are strings. String values are trimmed of leading/trailing whitespace.
 func ExtractArgsMap(args xdr.ScVec) (map[string]string, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("authorization entry must contain a single argument map")
@@ -38,7 +40,10 @@ func ExtractArgsMap(args xdr.ScVec) (map[string]string, error) {
 	}
 	result := make(map[string]string, len(*argMap))
 	for _, entry := range *argMap {
-		symbol := entry.Key.MustSym()
+		symbol, ok := entry.Key.GetSym()
+		if !ok {
+			return nil, fmt.Errorf("authorization argument key must be a symbol")
+		}
 		strVal, ok := entry.Val.GetStr()
 		if !ok {
 			return nil, fmt.Errorf("authorization argument %s must be a string", symbol)

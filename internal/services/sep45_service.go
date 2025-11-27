@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/stellar/go/clients/stellartoml"
@@ -153,7 +154,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	}
 
 	if !s.isValidHomeDomain(homeDomain) {
-		return nil, fmt.Errorf("invalid home_domain must match %s", s.getBaseDomain())
+		return nil, fmt.Errorf("home_domain must match %s", s.getBaseDomain())
 	}
 
 	clientDomain := ""
@@ -275,6 +276,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 
 type webAuthVerifyArgs struct {
 	raw                 map[string]string // Useful for comparing arguments
+	xdr                 xdr.ScVec         // Original XDR arguments
 	clientAccount       string
 	clientContractID    xdr.ContractId
 	homeDomain          string
@@ -282,7 +284,68 @@ type webAuthVerifyArgs struct {
 	clientDomainAccount string
 }
 
+// authEntryTracker tracks which required authorization entries have been found during validation.
+type authEntryTracker struct {
+	serverVerified    bool
+	clientFound       bool
+	clientDomainFound bool
+}
+
+// validate ensures all required authorization entries are present.
+func (t *authEntryTracker) validate(requireClientDomain bool) error {
+	if !t.serverVerified {
+		return fmt.Errorf("missing signed server authorization entry")
+	}
+	if !t.clientFound {
+		return fmt.Errorf("missing client account authorization entry")
+	}
+	if requireClientDomain && !t.clientDomainFound {
+		return fmt.Errorf("missing client domain authorization entry")
+	}
+	return nil
+}
+
+// processEntry validates and classifies an authorization entry, updating the tracker state.
+func (t *authEntryTracker) processEntry(entry xdr.SorobanAuthorizationEntry, parsedArgs *webAuthVerifyArgs, svc *sep45Service) error {
+	addr := entry.Credentials.Address.Address
+	switch addr.Type {
+	case xdr.ScAddressTypeScAddressTypeAccount:
+		if addr.AccountId == nil {
+			return fmt.Errorf("authorization entry missing account id")
+		}
+		// If the account matches the server signing key, we can verify the signature now
+		accountAddress := addr.AccountId.Address()
+		if accountAddress == svc.signingKP.Address() {
+			if err := svc.verifyServerAuthEntry(entry); err != nil {
+				return err
+			}
+			t.serverVerified = true
+		} else if parsedArgs != nil && parsedArgs.clientDomainAccount != "" && accountAddress == parsedArgs.clientDomainAccount {
+			t.clientDomainFound = true
+		} else {
+			return fmt.Errorf("unexpected account authorization entry: %s", accountAddress)
+		}
+	case xdr.ScAddressTypeScAddressTypeContract:
+		if addr.ContractId == nil {
+			return fmt.Errorf("authorization entry missing contract id")
+		}
+		if parsedArgs != nil && *addr.ContractId == parsedArgs.clientContractID {
+			t.clientFound = true
+		} else {
+			return fmt.Errorf("unexpected contract authorization entry")
+		}
+	default:
+		return fmt.Errorf("unsupported authorization address type: %d", addr.Type)
+	}
+	return nil
+}
+
 func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45ValidationRequest) (*SEP45ValidationResponse, error) {
+	webAuthDomain := strings.TrimSpace(s.getWebAuthDomain(ctx))
+	if webAuthDomain == "" {
+		return nil, fmt.Errorf("unable to determine web_auth_domain")
+	}
+
 	encodedEntries := strings.TrimSpace(req.AuthorizationEntries)
 	if encodedEntries == "" {
 		return nil, fmt.Errorf("authorization_entries is required")
@@ -301,17 +364,9 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 		return nil, fmt.Errorf("authorization entries cannot be empty")
 	}
 
-	webAuthDomain := strings.TrimSpace(s.getWebAuthDomain(ctx))
-	if webAuthDomain == "" {
-		return nil, fmt.Errorf("unable to determine web_auth_domain")
-	}
-
 	var (
-		argsXDR             xdr.ScVec
-		parsedArgs          *webAuthVerifyArgs
-		serverEntryVerified bool
-		clientEntryFound    bool
-		clientDomainFound   bool
+		parsedArgs *webAuthVerifyArgs
+		tracker    authEntryTracker
 	)
 
 	for _, entry := range entries {
@@ -321,62 +376,23 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 		}
 
 		// Extract the invocation arguments and make sure they are valid and consistent across entries
-		argsMap, err := utils.ExtractArgsMap(contractFn.Args)
-		if err != nil {
-			return nil, fmt.Errorf("extracting authorization arguments: %w", err)
-		}
-		if parsedArgs == nil {
-			argsXDR = contractFn.Args
-			parsedArgs, err = s.buildChallengeArgs(argsMap, webAuthDomain)
-			if err != nil {
-				return nil, err
-			}
-		} else if err := compareArgs(argsMap, parsedArgs.raw); err != nil {
-			return nil, err
+		if parsedArgs, err = s.validateArguments(contractFn.Args, parsedArgs, webAuthDomain); err != nil {
+			return nil, fmt.Errorf("validating invocation arguments: %w", err)
 		}
 
 		// Check that we have the expected authorization entries
-		addr := entry.Credentials.Address.Address
-		switch addr.Type {
-		case xdr.ScAddressTypeScAddressTypeAccount:
-			if addr.AccountId == nil {
-				return nil, fmt.Errorf("authorization entry missing account id")
-			}
-			// If the account matches the server signing key, we can verify the signature now
-			accountAddress := addr.AccountId.Address()
-			if accountAddress == s.signingKP.Address() {
-				if err := s.verifyServerAuthEntry(entry); err != nil {
-					return nil, err
-				}
-				serverEntryVerified = true
-			} else if parsedArgs != nil && parsedArgs.clientDomainAccount != "" && accountAddress == parsedArgs.clientDomainAccount {
-				clientDomainFound = true
-			}
-		case xdr.ScAddressTypeScAddressTypeContract:
-			if addr.ContractId == nil {
-				return nil, fmt.Errorf("authorization entry missing contract id")
-			}
-			if parsedArgs != nil && *addr.ContractId == parsedArgs.clientContractID {
-				clientEntryFound = true
-			}
-		default:
-			return nil, fmt.Errorf("unsupported authorization address type: %d", addr.Type)
+		if err := tracker.processEntry(entry, parsedArgs, s); err != nil {
+			return nil, err
 		}
 	}
 
 	if parsedArgs == nil {
 		return nil, fmt.Errorf("missing authorization arguments")
 	}
-	if !serverEntryVerified {
-		return nil, fmt.Errorf("missing signed server authorization entry")
+	if err := tracker.validate(parsedArgs.clientDomainAccount != ""); err != nil {
+		return nil, err
 	}
-	if !clientEntryFound {
-		return nil, fmt.Errorf("missing client account authorization entry")
-	}
-	if parsedArgs.clientDomainAccount != "" && !clientDomainFound {
-		return nil, fmt.Errorf("missing client domain authorization entry")
-	}
-	if len(argsXDR) == 0 {
+	if len(parsedArgs.xdr) == 0 {
 		return nil, fmt.Errorf("unable to rebuild invocation arguments")
 	}
 
@@ -389,7 +405,7 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 				ContractId: &contractID,
 			},
 			FunctionName: "web_auth_verify",
-			Args:         argsXDR,
+			Args:         parsedArgs.xdr,
 		},
 	}
 
@@ -422,6 +438,8 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 		return nil, fmt.Errorf("encoding transaction: %w", err)
 	}
 
+	// Simulate the transaction to validate the authorization entries and ensure the contract invocation is valid.
+	// We don't care about the result here, just that it succeeds.
 	if _, simErr := s.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{Transaction: txB64}); simErr != nil {
 		return nil, fmt.Errorf("simulating transaction: %w", simErr)
 	}
@@ -517,6 +535,22 @@ func (s *sep45Service) ensureWebAuthInvocation(entry xdr.SorobanAuthorizationEnt
 	return contractFn, nil
 }
 
+func (s *sep45Service) validateArguments(args xdr.ScVec, parsedArgs *webAuthVerifyArgs, webAuthDomain string) (*webAuthVerifyArgs, error) {
+	argsMap, err := utils.ExtractArgsMap(args)
+	if err != nil {
+		return nil, fmt.Errorf("extracting authorization arguments: %w", err)
+	}
+	if parsedArgs == nil {
+		parsedArgs, err = s.buildChallengeArgs(argsMap, args, webAuthDomain)
+		if err != nil {
+			return nil, err
+		}
+	} else if err := compareArgs(argsMap, parsedArgs.raw); err != nil {
+		return nil, err
+	}
+	return parsedArgs, nil
+}
+
 func compareArgs(current, expected map[string]string) error {
 	if len(current) != len(expected) {
 		return fmt.Errorf("authorization entry arguments mismatch")
@@ -529,7 +563,7 @@ func compareArgs(current, expected map[string]string) error {
 	return nil
 }
 
-func (s *sep45Service) buildChallengeArgs(args map[string]string, webAuthDomain string) (*webAuthVerifyArgs, error) {
+func (s *sep45Service) buildChallengeArgs(args map[string]string, argsXDR xdr.ScVec, webAuthDomain string) (*webAuthVerifyArgs, error) {
 	clientAccount := strings.TrimSpace(args["account"])
 	if clientAccount == "" {
 		return nil, fmt.Errorf("account argument is required")
@@ -546,7 +580,7 @@ func (s *sep45Service) buildChallengeArgs(args map[string]string, webAuthDomain 
 		return nil, fmt.Errorf("home_domain is required")
 	}
 	if !s.isValidHomeDomain(homeDomain) {
-		return nil, fmt.Errorf("invalid home_domain must match %s", s.getBaseDomain())
+		return nil, fmt.Errorf("home_domain must match %s", s.getBaseDomain())
 	}
 
 	challengeWebAuthDomain := strings.TrimSpace(args["web_auth_domain"])
@@ -590,6 +624,7 @@ func (s *sep45Service) buildChallengeArgs(args map[string]string, webAuthDomain 
 
 	return &webAuthVerifyArgs{
 		raw:                 args,
+		xdr:                 argsXDR,
 		clientAccount:       clientAccount,
 		clientContractID:    contractID,
 		homeDomain:          homeDomain,
@@ -626,6 +661,7 @@ func (s *sep45Service) verifyServerAuthEntry(entry xdr.SorobanAuthorizationEntry
 
 	// We could also verify that the signature expiration ledger is not
 	// expired yet so we can return early but this is also checked during the transaction simulation
+	// so we can skip it here to keep the logic simpler.
 	if err := s.signingKP.Verify(payload[:], signature); err != nil {
 		return fmt.Errorf("server authorization entry signature invalid: %w", err)
 	}
@@ -656,13 +692,13 @@ func extractSignature(sigVal *xdr.ScVal) ([]byte, []byte, error) {
 			if !ok {
 				return nil, nil, fmt.Errorf("signature public key must be bytes")
 			}
-			publicKey = append([]byte(nil), bytesVal...)
+			publicKey = slices.Clone(bytesVal)
 		case "signature":
 			bytesVal, ok := entry.Val.GetBytes()
 			if !ok {
 				return nil, nil, fmt.Errorf("signature bytes missing")
 			}
-			signature = append([]byte(nil), bytesVal...)
+			signature = slices.Clone(bytesVal)
 		}
 	}
 	if len(publicKey) == 0 {
