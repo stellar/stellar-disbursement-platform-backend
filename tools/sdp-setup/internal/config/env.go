@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,6 +22,8 @@ const (
 	DefaultAdminKey  = "api_key_1234567890"
 	DefaultAdminURL  = "http://localhost:8003"
 	DefaultWorkDir   = "dev"
+	DefaultHTTPSPort = "3443"
+	DefaultHTTPPort  = "3000"
 )
 
 // Config represents the environment configuration for SDP
@@ -36,6 +39,11 @@ type Config struct {
 	DistributionSeed   string // Distribution account secret seed
 	SetupName          string // Optional setup name for multi-config support
 	SingleTenantMode   bool   // Whether to use single-tenant mode
+
+	// Frontend HTTPS settings
+	UseHTTPS         bool
+	FrontendProtocol string // http or https
+	FrontendPort     string // exposed port for the UI (3000/3443)
 
 	// Following config doesn't get written to env file
 	WorkDir       string
@@ -125,6 +133,7 @@ type ConfigOpts struct {
 	Network          utils.NetworkType
 	SingleTenantMode bool
 	Accounts         accounts.Info
+	EnableHTTPS      bool
 }
 
 // NewConfig creates a new Config
@@ -134,6 +143,9 @@ func NewConfig(opts ConfigOpts) Config {
 	cfg.SingleTenantMode = opts.SingleTenantMode
 	cfg.EnvFilePath = opts.EnvPath
 	cfg.DockerProject = ComposeProjectName(opts.SetupName)
+	if opts.EnableHTTPS {
+		cfg.EnableHTTPS()
+	}
 	return cfg
 }
 
@@ -163,6 +175,11 @@ func Load(path string) (Config, error) {
 		AdminKey:      DefaultAdminKey,
 		AdminURL:      DefaultAdminURL,
 		WorkDir:       DefaultWorkDir,
+
+		// Frontend defaults
+		UseHTTPS:         false,
+		FrontendProtocol: "http",
+		FrontendPort:     DefaultHTTPPort,
 	}
 
 	// Parse SINGLE_TENANT_MODE
@@ -171,6 +188,29 @@ func Load(path string) (Config, error) {
 		if err != nil {
 			return Config{}, fmt.Errorf("parsing SINGLE_TENANT_MODE: %w", err)
 		}
+	}
+
+	// Parse USE_HTTPS (optional)
+	if useHTTPS := strings.TrimSpace(envMap["USE_HTTPS"]); useHTTPS != "" {
+		if cfg.UseHTTPS, err = strconv.ParseBool(useHTTPS); err != nil {
+			return Config{}, fmt.Errorf("parsing USE_HTTPS: %w", err)
+		}
+	}
+
+	// Parse SDP_UI_BASE_URL (optional)
+	if base := strings.TrimSpace(envMap["SDP_UI_BASE_URL"]); base != "" {
+		if u, parseErr := url.Parse(base); parseErr == nil && u.Scheme != "" {
+			cfg.FrontendProtocol = u.Scheme
+			if port := u.Port(); port != "" {
+				cfg.FrontendPort = port
+			}
+		}
+	}
+
+	if cfg.UseHTTPS {
+		cfg.EnableHTTPS()
+	} else {
+		cfg.DisableHTTPS()
 	}
 
 	return cfg, nil
@@ -201,6 +241,9 @@ func Write(cfg Config, path string) error {
 		"DISTRIBUTION_SEED":                          cfg.DistributionSeed,
 		"CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE":      cfg.DistributionSeed,
 		"DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE": cfg.DistributionSeed,
+		"USE_HTTPS":                                  strconv.FormatBool(cfg.UseHTTPS),
+		"SDP_UI_BASE_URL":                            cfg.FrontendBaseURL("localhost"),
+		"BASE_URL":                                   "http://localhost:8000",
 	}
 
 	if cfg.NetworkType == "pubnet" {
@@ -228,6 +271,10 @@ func fromAccounts(networkType utils.NetworkType, acc accounts.Info) Config {
 		AdminKey:  DefaultAdminKey,
 		AdminURL:  DefaultAdminURL,
 		WorkDir:   DefaultWorkDir,
+
+		UseHTTPS:         false,
+		FrontendProtocol: "http",
+		FrontendPort:     DefaultHTTPPort,
 	}
 
 	switch networkType {
@@ -258,4 +305,33 @@ func ComposeProjectName(setupName string) string {
 		return DefaultProject
 	}
 	return fmt.Sprintf("%s-%s", DefaultProject, setupName)
+}
+
+// EnableHTTPS toggles HTTPS related defaults on the config.
+func (cfg *Config) EnableHTTPS() {
+	cfg.UseHTTPS = true
+	cfg.FrontendProtocol = "https"
+	if cfg.FrontendPort == "" || cfg.FrontendPort == DefaultHTTPPort {
+		cfg.FrontendPort = DefaultHTTPSPort
+	}
+}
+
+// DisableHTTPS forces HTTP defaults on the config.
+func (cfg *Config) DisableHTTPS() {
+	cfg.UseHTTPS = false
+	cfg.FrontendProtocol = "http"
+	cfg.FrontendPort = DefaultHTTPPort
+}
+
+// FrontendBaseURL builds a UI base URL for the provided host (e.g., localhost or bluecorp.stellar.local)
+func (cfg Config) FrontendBaseURL(host string) string {
+	protocol := cfg.FrontendProtocol
+	if protocol == "" {
+		protocol = "http"
+	}
+	port := cfg.FrontendPort
+	if port == "" {
+		port = DefaultHTTPPort
+	}
+	return fmt.Sprintf("%s://%s:%s", protocol, host, port)
 }

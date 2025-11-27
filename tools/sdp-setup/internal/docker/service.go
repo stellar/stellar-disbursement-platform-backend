@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -19,20 +20,33 @@ var ErrUserDeclined = errors.New("user declined to proceed")
 type Service struct {
 	cfg      config.Config
 	executor CommandExecutor
+	files    []string
 }
 
 // NewService creates a new Docker service.
 func NewService(cfg config.Config) (*Service, error) {
+	if cfg.WorkDir != "" {
+		if abs, err := filepath.Abs(cfg.WorkDir); err == nil {
+			cfg.WorkDir = abs
+		}
+	}
 	if cfg.EnvFilePath != "" {
 		if abs, err := filepath.Abs(cfg.EnvFilePath); err == nil {
 			cfg.EnvFilePath = abs
 		}
 	}
+
+	files := []string{"docker-compose.yml"}
+	if cfg.UseHTTPS {
+		files = append(files, "docker-compose-https-frontend.yml")
+	}
+
 	return &Service{
 		cfg: cfg,
 		executor: &DefaultExecutor{
 			cfg: cfg,
 		},
+		files: files,
 	}, nil
 }
 
@@ -65,6 +79,12 @@ func (s *Service) StartDockerStack(ctx context.Context) error {
 		return err
 	}
 
+	if s.cfg.UseHTTPS {
+		if err := s.prepareHTTPS(); err != nil {
+			return err
+		}
+	}
+
 	if err := s.composeDown(ctx); err != nil {
 		return err
 	}
@@ -75,13 +95,33 @@ func (s *Service) StartDockerStack(ctx context.Context) error {
 	return nil
 }
 
+// prepareHTTPS validates that HTTPS certs already exist.
+func (s *Service) prepareHTTPS() error {
+	certsDir := filepath.Join(s.cfg.WorkDir, "certs")
+	certPath := filepath.Join(certsDir, "stellar.local.pem")
+	keyPath := filepath.Join(certsDir, "stellar.local-key.pem")
+
+	if _, err := os.Stat(certPath); err == nil {
+		if _, err := os.Stat(keyPath); err == nil {
+			fmt.Println("Using TLS certs from dev/certs (HTTPS enabled)")
+			return nil
+		}
+	}
+
+	return fmt.Errorf("HTTPS selected but TLS certs are missing; expected dev/certs/stellar.local.pem and dev/certs/stellar.local-key.pem (generate with mkcert; see dev/README.md)")
+}
+
 // composeDown runs 'docker compose down' with the given config.
 func (s *Service) composeDown(ctx context.Context) error {
 	fmt.Println("====> docker compose down")
 
 	args := []string{"compose", "-p", s.cfg.DockerProject}
 	args = append(args, "--env-file", s.cfg.EnvFilePath)
+	for _, file := range s.files {
+		args = append(args, "-f", file)
+	}
 	args = append(args, "down")
+	args = append(args, "--remove-orphans")
 
 	if err := s.executor.Execute(ctx, "docker", args...); err != nil {
 		return fmt.Errorf("running docker compose down: %w", err)
@@ -95,6 +135,9 @@ func (s *Service) composeUp(ctx context.Context) error {
 
 	args := []string{"compose", "-p", s.cfg.DockerProject}
 	args = append(args, "--env-file", s.cfg.EnvFilePath)
+	for _, file := range s.files {
+		args = append(args, "-f", file)
+	}
 	args = append(args, "up", "-d")
 
 	if err := s.executor.Execute(ctx, "docker", args...); err != nil {
