@@ -1,12 +1,14 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/stellar/go/clients/stellartoml"
@@ -152,7 +154,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	}
 
 	if !s.isValidHomeDomain(homeDomain) {
-		return nil, fmt.Errorf("invalid home_domain must match %s", s.getBaseDomain())
+		return nil, fmt.Errorf("home_domain must match %s", s.getBaseDomain())
 	}
 
 	clientDomain := ""
@@ -272,8 +274,177 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	}, nil
 }
 
+type webAuthVerifyArgs struct {
+	raw                 map[string]string // Useful for comparing arguments
+	xdr                 xdr.ScVec         // Original XDR arguments
+	clientAccount       string
+	clientContractID    xdr.ContractId
+	homeDomain          string
+	clientDomain        string
+	clientDomainAccount string
+}
+
+// authEntryTracker tracks which required authorization entries have been found during validation.
+type authEntryTracker struct {
+	serverVerified    bool
+	clientFound       bool
+	clientDomainFound bool
+}
+
+// validate ensures all required authorization entries are present.
+func (t *authEntryTracker) validate(requireClientDomain bool) error {
+	if !t.serverVerified {
+		return fmt.Errorf("missing signed server authorization entry")
+	}
+	if !t.clientFound {
+		return fmt.Errorf("missing client account authorization entry")
+	}
+	if requireClientDomain && !t.clientDomainFound {
+		return fmt.Errorf("missing client domain authorization entry")
+	}
+	return nil
+}
+
+// processEntry validates and classifies an authorization entry, updating the tracker state.
+func (t *authEntryTracker) processEntry(entry xdr.SorobanAuthorizationEntry, parsedArgs *webAuthVerifyArgs, svc *sep45Service) error {
+	addr := entry.Credentials.Address.Address
+	switch addr.Type {
+	case xdr.ScAddressTypeScAddressTypeAccount:
+		if addr.AccountId == nil {
+			return fmt.Errorf("authorization entry missing account id")
+		}
+		// If the account matches the server signing key, we can verify the signature now
+		accountAddress := addr.AccountId.Address()
+		if accountAddress == svc.signingKP.Address() {
+			if err := svc.verifyServerAuthEntry(entry); err != nil {
+				return err
+			}
+			t.serverVerified = true
+		} else if parsedArgs != nil && parsedArgs.clientDomainAccount != "" && accountAddress == parsedArgs.clientDomainAccount {
+			t.clientDomainFound = true
+		} else {
+			return fmt.Errorf("unexpected account authorization entry: %s", accountAddress)
+		}
+	case xdr.ScAddressTypeScAddressTypeContract:
+		if addr.ContractId == nil {
+			return fmt.Errorf("authorization entry missing contract id")
+		}
+		if parsedArgs != nil && *addr.ContractId == parsedArgs.clientContractID {
+			t.clientFound = true
+		} else {
+			return fmt.Errorf("unexpected contract authorization entry")
+		}
+	default:
+		return fmt.Errorf("unsupported authorization address type: %d", addr.Type)
+	}
+	return nil
+}
+
 func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45ValidationRequest) (*SEP45ValidationResponse, error) {
-	return nil, fmt.Errorf("challenge validation is not implemented")
+	webAuthDomain := strings.TrimSpace(s.getWebAuthDomain(ctx))
+	if webAuthDomain == "" {
+		return nil, fmt.Errorf("unable to determine web_auth_domain")
+	}
+
+	encodedEntries := strings.TrimSpace(req.AuthorizationEntries)
+	if encodedEntries == "" {
+		return nil, fmt.Errorf("authorization_entries is required")
+	}
+
+	rawEntries, err := base64.StdEncoding.DecodeString(encodedEntries)
+	if err != nil {
+		return nil, fmt.Errorf("decoding authorization entries: %w", err)
+	}
+
+	var entries xdr.SorobanAuthorizationEntries
+	if err := entries.UnmarshalBinary(rawEntries); err != nil {
+		return nil, fmt.Errorf("unmarshalling authorization entries: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("authorization entries cannot be empty")
+	}
+
+	var (
+		parsedArgs *webAuthVerifyArgs
+		tracker    authEntryTracker
+	)
+
+	for _, entry := range entries {
+		contractFn, err := s.ensureWebAuthInvocation(entry)
+		if err != nil {
+			return nil, err
+		}
+
+		// Extract the invocation arguments and make sure they are valid and consistent across entries
+		if parsedArgs, err = s.validateArguments(contractFn.Args, parsedArgs, webAuthDomain); err != nil {
+			return nil, fmt.Errorf("validating invocation arguments: %w", err)
+		}
+
+		// Check that we have the expected authorization entries
+		if err := tracker.processEntry(entry, parsedArgs, s); err != nil {
+			return nil, err
+		}
+	}
+
+	if parsedArgs == nil {
+		return nil, fmt.Errorf("missing authorization arguments")
+	}
+	if err := tracker.validate(parsedArgs.clientDomainAccount != ""); err != nil {
+		return nil, err
+	}
+	if len(parsedArgs.xdr) == 0 {
+		return nil, fmt.Errorf("unable to rebuild invocation arguments")
+	}
+
+	contractID := s.contractID
+	hostFunction := xdr.HostFunction{
+		Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
+		InvokeContract: &xdr.InvokeContractArgs{
+			ContractAddress: xdr.ScAddress{
+				Type:       xdr.ScAddressTypeScAddressTypeContract,
+				ContractId: &contractID,
+			},
+			FunctionName: "web_auth_verify",
+			Args:         parsedArgs.xdr,
+		},
+	}
+
+	authEntries := make([]xdr.SorobanAuthorizationEntry, len(entries))
+	copy(authEntries, entries)
+
+	txParams := txnbuild.TransactionParams{
+		SourceAccount: &txnbuild.SimpleAccount{
+			AccountID: keypair.MustRandom().Address(),
+			Sequence:  0,
+		},
+		BaseFee: int64(txnbuild.MinBaseFee),
+		Preconditions: txnbuild.Preconditions{
+			TimeBounds: txnbuild.NewTimeout(300),
+		},
+		Operations: []txnbuild.Operation{&txnbuild.InvokeHostFunction{
+			SourceAccount: s.signingKP.Address(),
+			HostFunction:  hostFunction,
+			Auth:          authEntries,
+		}},
+	}
+
+	tx, err := txnbuild.NewTransaction(txParams)
+	if err != nil {
+		return nil, fmt.Errorf("building transaction: %w", err)
+	}
+
+	txB64, err := tx.Base64()
+	if err != nil {
+		return nil, fmt.Errorf("encoding transaction: %w", err)
+	}
+
+	// Simulate the transaction to validate the authorization entries and ensure the contract invocation is valid.
+	// We don't care about the result here, just that it succeeds.
+	if _, simErr := s.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{Transaction: txB64}); simErr != nil {
+		return nil, fmt.Errorf("simulating transaction: %w", simErr)
+	}
+
+	return nil, fmt.Errorf("sep45 jwt generation not implemented")
 }
 
 func (s *sep45Service) signServerAuthEntry(ctx context.Context, result *stellar.SimulationResult) (xdr.SorobanAuthorizationEntries, error) {
@@ -338,6 +509,205 @@ func generateNonce() (string, error) {
 		return "", fmt.Errorf("generating nonce: %w", err)
 	}
 	return fmt.Sprintf("%d", binary.BigEndian.Uint32(buf[:])), nil
+}
+
+func (s *sep45Service) ensureWebAuthInvocation(entry xdr.SorobanAuthorizationEntry) (*xdr.InvokeContractArgs, error) {
+	if entry.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress || entry.Credentials.Address == nil {
+		return nil, fmt.Errorf("authorization entry missing address credentials")
+	}
+	if len(entry.RootInvocation.SubInvocations) > 0 {
+		return nil, fmt.Errorf("authorization entries cannot contain sub-invocations")
+	}
+	if entry.RootInvocation.Function.Type != xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn || entry.RootInvocation.Function.ContractFn == nil {
+		return nil, fmt.Errorf("authorization entry must invoke contract function")
+	}
+
+	contractFn := entry.RootInvocation.Function.ContractFn
+	if contractFn.ContractAddress.Type != xdr.ScAddressTypeScAddressTypeContract || contractFn.ContractAddress.ContractId == nil {
+		return nil, fmt.Errorf("authorization entry missing contract address")
+	}
+	if *contractFn.ContractAddress.ContractId != s.contractID {
+		return nil, fmt.Errorf("authorization entry targets unexpected contract")
+	}
+	if contractFn.FunctionName != "web_auth_verify" {
+		return nil, fmt.Errorf("authorization entry must call web_auth_verify")
+	}
+	return contractFn, nil
+}
+
+func (s *sep45Service) validateArguments(args xdr.ScVec, parsedArgs *webAuthVerifyArgs, webAuthDomain string) (*webAuthVerifyArgs, error) {
+	argsMap, err := utils.ExtractArgsMap(args)
+	if err != nil {
+		return nil, fmt.Errorf("extracting authorization arguments: %w", err)
+	}
+	if parsedArgs == nil {
+		parsedArgs, err = s.buildChallengeArgs(argsMap, args, webAuthDomain)
+		if err != nil {
+			return nil, err
+		}
+	} else if err := compareArgs(argsMap, parsedArgs.raw); err != nil {
+		return nil, err
+	}
+	return parsedArgs, nil
+}
+
+func compareArgs(current, expected map[string]string) error {
+	if len(current) != len(expected) {
+		return fmt.Errorf("authorization entry arguments mismatch")
+	}
+	for k, v := range expected {
+		if current[k] != v {
+			return fmt.Errorf("authorization entry arguments mismatch")
+		}
+	}
+	return nil
+}
+
+func (s *sep45Service) buildChallengeArgs(args map[string]string, argsXDR xdr.ScVec, webAuthDomain string) (*webAuthVerifyArgs, error) {
+	clientAccount := strings.TrimSpace(args["account"])
+	if clientAccount == "" {
+		return nil, fmt.Errorf("account argument is required")
+	}
+	rawContractID, err := strkey.Decode(strkey.VersionByteContract, clientAccount)
+	if err != nil {
+		return nil, fmt.Errorf("account must be a valid contract address: %w", err)
+	}
+	var contractID xdr.ContractId
+	copy(contractID[:], rawContractID)
+
+	homeDomain := strings.TrimSpace(args["home_domain"])
+	if homeDomain == "" {
+		return nil, fmt.Errorf("home_domain is required")
+	}
+	if !s.isValidHomeDomain(homeDomain) {
+		return nil, fmt.Errorf("home_domain must match %s", s.getBaseDomain())
+	}
+
+	challengeWebAuthDomain := strings.TrimSpace(args["web_auth_domain"])
+	if challengeWebAuthDomain == "" {
+		return nil, fmt.Errorf("web_auth_domain is required")
+	}
+	if !strings.EqualFold(challengeWebAuthDomain, webAuthDomain) {
+		return nil, fmt.Errorf("web_auth_domain must equal %s", webAuthDomain)
+	}
+
+	webAuthDomainAccount := strings.TrimSpace(args["web_auth_domain_account"])
+	if webAuthDomainAccount == "" {
+		return nil, fmt.Errorf("web_auth_domain_account is required")
+	}
+	if !strkey.IsValidEd25519PublicKey(webAuthDomainAccount) {
+		return nil, fmt.Errorf("web_auth_domain_account must be a valid Stellar account")
+	}
+	if webAuthDomainAccount != s.signingKP.Address() {
+		return nil, fmt.Errorf("web_auth_domain_account must match server signing key")
+	}
+
+	clientDomain := strings.TrimSpace(args["client_domain"])
+	clientDomainAccount := strings.TrimSpace(args["client_domain_account"])
+	if clientDomainAccount != "" && clientDomain == "" {
+		return nil, fmt.Errorf("client_domain is required when client_domain_account is provided")
+	}
+	if clientDomain != "" {
+		if clientDomainAccount == "" {
+			return nil, fmt.Errorf("client_domain_account is required when client_domain is provided")
+		}
+		if !strkey.IsValidEd25519PublicKey(clientDomainAccount) {
+			return nil, fmt.Errorf("client_domain_account must be a valid Stellar account")
+		}
+	} else if s.clientAttributionRequired {
+		return nil, fmt.Errorf("client_domain is required")
+	}
+
+	if strings.TrimSpace(args["nonce"]) == "" {
+		return nil, fmt.Errorf("nonce is required")
+	}
+
+	return &webAuthVerifyArgs{
+		raw:                 args,
+		xdr:                 argsXDR,
+		clientAccount:       clientAccount,
+		clientContractID:    contractID,
+		homeDomain:          homeDomain,
+		clientDomain:        clientDomain,
+		clientDomainAccount: clientDomainAccount,
+	}, nil
+}
+
+func (s *sep45Service) verifyServerAuthEntry(entry xdr.SorobanAuthorizationEntry) error {
+	if entry.Credentials.Address == nil {
+		return fmt.Errorf("server authorization entry missing address credentials")
+	}
+	sigVal := entry.Credentials.Address.Signature
+	if sigVal.Type != xdr.ScValTypeScvVec {
+		return fmt.Errorf("server authorization entry missing signature")
+	}
+	expiration := uint32(entry.Credentials.Address.SignatureExpirationLedger)
+	if expiration == 0 {
+		return fmt.Errorf("server authorization entry missing expiration ledger")
+	}
+
+	publicKey, signature, err := extractSignature(&sigVal)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(publicKey, s.signingPKBytes) {
+		return fmt.Errorf("server authorization entry signed by unexpected key")
+	}
+
+	payload, err := utils.BuildAuthorizationPayload(entry, s.networkPassphrase)
+	if err != nil {
+		return fmt.Errorf("building authorization payload: %w", err)
+	}
+
+	// We could also verify that the signature expiration ledger is not
+	// expired yet so we can return early but this is also checked during the transaction simulation
+	// so we can skip it here to keep the logic simpler.
+	if err := s.signingKP.Verify(payload[:], signature); err != nil {
+		return fmt.Errorf("server authorization entry signature invalid: %w", err)
+	}
+	return nil
+}
+
+func extractSignature(sigVal *xdr.ScVal) ([]byte, []byte, error) {
+	vec, ok := sigVal.GetVec()
+	if !ok || vec == nil || len(*vec) == 0 {
+		return nil, nil, fmt.Errorf("signature must be a vector")
+	}
+	sigMapVal := (*vec)[0]
+	entries, ok := sigMapVal.GetMap()
+	if !ok || entries == nil {
+		return nil, nil, fmt.Errorf("signature must be a map")
+	}
+
+	var publicKey []byte
+	var signature []byte
+	for _, entry := range *entries {
+		key, ok := entry.Key.GetSym()
+		if !ok {
+			continue
+		}
+		switch string(key) {
+		case "public_key":
+			bytesVal, ok := entry.Val.GetBytes()
+			if !ok {
+				return nil, nil, fmt.Errorf("signature public key must be bytes")
+			}
+			publicKey = slices.Clone(bytesVal)
+		case "signature":
+			bytesVal, ok := entry.Val.GetBytes()
+			if !ok {
+				return nil, nil, fmt.Errorf("signature bytes missing")
+			}
+			signature = slices.Clone(bytesVal)
+		}
+	}
+	if len(publicKey) == 0 {
+		return nil, nil, fmt.Errorf("signature missing public key")
+	}
+	if len(signature) == 0 {
+		return nil, nil, fmt.Errorf("signature missing value")
+	}
+	return publicKey, signature, nil
 }
 
 // TODO(philip): Below methods are shared with sep10_service.go so they can be moved to a common utility package later.

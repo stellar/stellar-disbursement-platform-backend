@@ -135,6 +135,53 @@ func Test_SignAuthEntry(t *testing.T) {
 	}
 }
 
+func Test_ExtractArgsMap(t *testing.T) {
+	mapVal := func(entries xdr.ScMap) xdr.ScVal {
+		val, err := xdr.NewScVal(xdr.ScValTypeScvMap, &entries)
+		require.NoError(t, err)
+		return val
+	}
+
+	t.Run("success", func(t *testing.T) {
+		entries := xdr.ScMap{
+			NewSymbolStringEntry("account", " CABC"),
+			NewSymbolStringEntry("home_domain", "example.com "),
+		}
+		args := xdr.ScVec{mapVal(entries)}
+		result, err := ExtractArgsMap(args)
+		require.NoError(t, err)
+		require.Equal(t, map[string]string{
+			"account":     "CABC",
+			"home_domain": "example.com",
+		}, result)
+	})
+
+	t.Run("requires single map argument", func(t *testing.T) {
+		_, err := ExtractArgsMap(xdr.ScVec{})
+		require.ErrorContains(t, err, "single argument map")
+	})
+
+	t.Run("argument must be map", func(t *testing.T) {
+		str := xdr.ScString("value")
+		val := xdr.ScVal{Type: xdr.ScValTypeScvString, Str: &str}
+		_, err := ExtractArgsMap(xdr.ScVec{val})
+		require.ErrorContains(t, err, "arguments must be a map")
+	})
+
+	t.Run("entries must be strings", func(t *testing.T) {
+		bytesVal := xdr.ScBytes{0x1}
+		entries := xdr.ScMap{
+			{
+				Key: xdr.ScVal{Type: xdr.ScValTypeScvSymbol, Sym: func() *xdr.ScSymbol { sym := xdr.ScSymbol("account"); return &sym }()},
+				Val: xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &bytesVal},
+			},
+		}
+		args := xdr.ScVec{mapVal(entries)}
+		_, err := ExtractArgsMap(args)
+		require.ErrorContains(t, err, "must be a string")
+	})
+}
+
 func newTestAuthEntry(t *testing.T, account string) xdr.SorobanAuthorizationEntry {
 	t.Helper()
 

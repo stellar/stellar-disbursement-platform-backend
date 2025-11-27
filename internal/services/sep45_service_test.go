@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"testing"
 
 	"github.com/stellar/go/clients/stellartoml"
@@ -120,11 +121,17 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 
 				serverAccountID := xdr.MustAddress(serverKP.Address())
 				clientDomainAccountID := xdr.MustAddress(clientDomainKP.Address())
-				authEntries := marshalAuthorizationEntries(t, []xdr.SorobanAuthorizationEntry{
+				entries := []xdr.SorobanAuthorizationEntry{
 					makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: &serverAccountID}, argEntries),
 					makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: &clientContractID}, argEntries),
 					makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: &clientDomainAccountID}, argEntries),
-				})
+				}
+				entriesBase64 := make([]string, len(entries))
+				for i, entry := range entries {
+					bytes, err := entry.MarshalBinary()
+					require.NoError(t, err)
+					entriesBase64[i] = base64.StdEncoding.EncodeToString(bytes)
+				}
 
 				var capturedTx string
 				rpcMock.
@@ -134,7 +141,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 					})).
 					Return(&stellar.SimulationResult{
 						Response: protocol.SimulateTransactionResponse{
-							Results: []protocol.SimulateHostFunctionResult{{AuthXDR: &authEntries}},
+							Results: []protocol.SimulateHostFunctionResult{{AuthXDR: &entriesBase64}},
 						},
 					}, (*stellar.SimulationError)(nil)).
 					Once()
@@ -375,15 +382,469 @@ func extractInvokeArgs(t *testing.T, txB64 string) map[string]string {
 	return result
 }
 
-func marshalAuthorizationEntries(t *testing.T, entries []xdr.SorobanAuthorizationEntry) []string {
-	t.Helper()
-	encoded := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		bytes, err := entry.MarshalBinary()
-		require.NoError(t, err)
-		encoded = append(encoded, base64.StdEncoding.EncodeToString(bytes))
+func Test_SEP45Service_ValidateChallenge(t *testing.T) {
+	ctx := context.Background()
+	serverKP := keypair.MustRandom()
+	clientDomainKP := keypair.MustRandom()
+	rpcMock := stellarMocks.NewMockRPCClient(t)
+
+	argEntries := xdr.ScMap{
+		utils.NewSymbolStringEntry("account", testClientContractAddress),
+		utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+		utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+		utils.NewSymbolStringEntry("home_domain", "example.com"),
+		utils.NewSymbolStringEntry("nonce", "nonce"),
+		utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+		utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
 	}
-	return encoded
+	entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+	entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+	encodedEntries := encodeAuthorizationEntries(t, entries)
+
+	rpcMock.
+		On("SimulateTransaction", mock.Anything, mock.Anything).
+		Return(&stellar.SimulationResult{Response: protocol.SimulateTransactionResponse{}}, (*stellar.SimulationError)(nil)).
+		Once()
+
+	svcOpts := SEP45ServiceOptions{
+		RPCClient:               rpcMock,
+		TOMLClient:              stellartoml.DefaultClient,
+		NetworkPassphrase:       network.TestNetworkPassphrase,
+		WebAuthVerifyContractID: testWebAuthVerifyContractID,
+		ServerSigningKeypair:    serverKP,
+		BaseURL:                 "https://example.com",
+	}
+	svc, err := NewSEP45Service(svcOpts)
+	require.NoError(t, err)
+
+	resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encodedEntries})
+	require.ErrorContains(t, err, "sep45 jwt generation not implemented")
+	require.Nil(t, resp)
+
+	rpcMock.AssertExpectations(t)
+}
+
+func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
+	ctx := context.Background()
+
+	newService := func(t *testing.T, rpcClient stellar.RPCClient, serverKP *keypair.Full, clientAttr bool) SEP45Service {
+		t.Helper()
+		svc, err := NewSEP45Service(SEP45ServiceOptions{
+			RPCClient:                 rpcClient,
+			TOMLClient:                stellartoml.DefaultClient,
+			NetworkPassphrase:         network.TestNetworkPassphrase,
+			WebAuthVerifyContractID:   testWebAuthVerifyContractID,
+			ServerSigningKeypair:      serverKP,
+			BaseURL:                   "https://example.com",
+			ClientAttributionRequired: clientAttr,
+		})
+		require.NoError(t, err)
+		return svc
+	}
+
+	t.Run("missing authorization entries", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+		svc := newService(t, rpcMock, serverKP, false)
+
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "authorization_entries is required")
+		require.Nil(t, resp)
+	})
+
+	t.Run("invalid authorization entries encoding", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+		svc := newService(t, rpcMock, serverKP, false)
+
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: "not-base64"})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "decoding authorization entries")
+		require.Nil(t, resp)
+	})
+
+	t.Run("missing server authorization entry", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries = entries[1:]
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing signed server authorization entry")
+		require.Nil(t, resp)
+	})
+
+	t.Run("missing client authorization entry", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		entries = xdr.SorobanAuthorizationEntries{entries[0], entries[2]}
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing client account authorization entry")
+		require.Nil(t, resp)
+		rpcMock.AssertExpectations(t)
+	})
+
+	t.Run("missing client domain authorization entry", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, false, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing client domain authorization entry")
+		require.Nil(t, resp)
+		rpcMock.AssertExpectations(t)
+	})
+
+	t.Run("authorization entry wrong contract id", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		invalidContract := testClientContractID
+		entries[0].RootInvocation.Function.ContractFn.ContractAddress.ContractId = &invalidContract
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "authorization entry targets unexpected contract")
+		require.Nil(t, resp)
+	})
+
+	t.Run("authorization entry wrong function name", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		entries[0].RootInvocation.Function.ContractFn.FunctionName = "other_fn"
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "authorization entry must call web_auth_verify")
+		require.Nil(t, resp)
+	})
+
+	t.Run("authorization entry contains sub-invocations", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		subInvocation := xdr.SorobanAuthorizedInvocation{
+			Function: xdr.SorobanAuthorizedFunction{
+				Type: xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn,
+				ContractFn: &xdr.InvokeContractArgs{
+					ContractAddress: xdr.ScAddress{
+						Type:       xdr.ScAddressTypeScAddressTypeContract,
+						ContractId: &testWebAuthVerifyContract,
+					},
+					FunctionName: "web_auth_verify",
+					Args:         entries[0].RootInvocation.Function.ContractFn.Args,
+				},
+			},
+		}
+		entries[0].RootInvocation.SubInvocations = []xdr.SorobanAuthorizedInvocation{subInvocation}
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "authorization entries cannot contain sub-invocations")
+		require.Nil(t, resp)
+	})
+
+	t.Run("authorization entry args mismatch", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+
+		modifiedArgs := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "other-nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		mapVal, err := xdr.NewScVal(xdr.ScValTypeScvMap, &modifiedArgs)
+		require.NoError(t, err)
+		entries[1].RootInvocation.Function.ContractFn.Args = xdr.ScVec{mapVal}
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "authorization entry arguments mismatch")
+		require.Nil(t, resp)
+	})
+
+	t.Run("nonce argument required", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nonce is required")
+		require.Nil(t, resp)
+	})
+
+	t.Run("web auth domain account mismatch", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", keypair.MustRandom().Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "web_auth_domain_account must match server signing key")
+		require.Nil(t, resp)
+	})
+
+	t.Run("client domain requires account when provided", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client_domain_account is required when client_domain is provided")
+		require.Nil(t, resp)
+	})
+
+	t.Run("client domain account requires client domain", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain_account", keypair.MustRandom().Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, false, serverKP, nil)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client_domain is required when client_domain_account is provided")
+		require.Nil(t, resp)
+	})
+
+	t.Run("web auth domain mismatch", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "other.example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "web_auth_domain")
+		require.Nil(t, resp)
+	})
+
+	t.Run("client domain required when attribution enforced", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, false, serverKP, nil)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		svc := newService(t, rpcMock, serverKP, true)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "client_domain is required")
+		require.Nil(t, resp)
+	})
+
+	t.Run("simulation failure", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		rpcMock.
+			On("SimulateTransaction", mock.Anything, mock.Anything).
+			Return((*stellar.SimulationResult)(nil), stellar.NewSimulationError(errors.New("boom"), nil)).
+			Once()
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "simulating transaction")
+		require.Nil(t, resp)
+		rpcMock.AssertExpectations(t)
+	})
 }
 
 func makeAuthorizationEntry(t *testing.T, contractID xdr.ContractId, address xdr.ScAddress, argEntries xdr.ScMap) xdr.SorobanAuthorizationEntry {
@@ -417,6 +878,35 @@ func makeAuthorizationEntry(t *testing.T, contractID xdr.ContractId, address xdr
 			},
 		},
 	}
+}
+
+func buildAuthorizationEntries(t *testing.T, argEntries xdr.ScMap, includeClientDomain bool, serverKP, clientDomainKP *keypair.Full) xdr.SorobanAuthorizationEntries {
+	t.Helper()
+	serverAccountID := xdr.MustAddress(serverKP.Address())
+	entries := xdr.SorobanAuthorizationEntries{
+		makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: &serverAccountID}, argEntries),
+		makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: &testClientContractID}, argEntries),
+	}
+	if includeClientDomain {
+		require.NotNil(t, clientDomainKP)
+		clientDomainAccountID := xdr.MustAddress(clientDomainKP.Address())
+		entries = append(entries, makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: &clientDomainAccountID}, argEntries))
+	}
+	return entries
+}
+
+func signAuthorizationEntry(t *testing.T, entry xdr.SorobanAuthorizationEntry, signingKP *keypair.Full) xdr.SorobanAuthorizationEntry {
+	t.Helper()
+	signed, err := utils.SignAuthEntry(entry, 1000, signingKP, network.TestNetworkPassphrase)
+	require.NoError(t, err)
+	return signed
+}
+
+func encodeAuthorizationEntries(t *testing.T, entries xdr.SorobanAuthorizationEntries) string {
+	t.Helper()
+	raw, err := entries.MarshalBinary()
+	require.NoError(t, err)
+	return base64.StdEncoding.EncodeToString(raw)
 }
 
 func decodeContractID(contract string) xdr.ContractId {
