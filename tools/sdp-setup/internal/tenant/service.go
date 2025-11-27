@@ -265,6 +265,7 @@ func (s *Service) createTenant(ctx context.Context, tenantName string) error {
 
 // buildTenantPayload creates the JSON payload for tenant creation
 func (s *Service) buildTenantPayload(tenantName string) ([]byte, error) {
+	uiBaseURL := s.cfg.FrontendBaseURL(s.frontendHost(tenantName))
 	payload := struct {
 		Name                    string `json:"name"`
 		OrganizationName        string `json:"organization_name"`
@@ -278,7 +279,7 @@ func (s *Service) buildTenantPayload(tenantName string) ([]byte, error) {
 		Name:                    tenantName,
 		OrganizationName:        tenantName,
 		BaseURL:                 fmt.Sprintf("http://%s.stellar.local:8000", tenantName),
-		SDPUIBaseURL:            fmt.Sprintf("http://%s.stellar.local:3000", tenantName),
+		SDPUIBaseURL:            uiBaseURL,
 		OwnerEmail:              fmt.Sprintf("init_owner@%s.local", tenantName),
 		OwnerFirstName:          "jane",
 		OwnerLastName:           "doe",
@@ -286,6 +287,14 @@ func (s *Service) buildTenantPayload(tenantName string) ([]byte, error) {
 	}
 
 	return json.Marshal(payload)
+}
+
+// frontendHost resolves the UI host for a tenant, keeping localhost in single-tenant setups.
+func (s *Service) frontendHost(tenantName string) string {
+	if s.cfg.SingleTenantMode && tenantName == "default" {
+		return "localhost"
+	}
+	return fmt.Sprintf("%s.stellar.local", tenantName)
 }
 
 // buildAuthenticatedRequest creates an authenticated HTTP request
@@ -368,11 +377,12 @@ func (s *Service) printLoginHints() {
 
 	if s.cfg.SingleTenantMode {
 		fmt.Println("Single tenant mode - Login URL:")
-		fmt.Printf("🔗Default tenant: http://localhost:3000\n  username: owner@default.local  password: Password123!\n")
+		fmt.Printf("🔗Default tenant: %s\n  username: owner@default.local  password: Password123!\n", s.cfg.FrontendBaseURL("localhost"))
 	} else {
 		fmt.Println("Multi-tenant mode - Login URLs for each tenant:")
 		for _, t := range TestnetTenants {
-			fmt.Printf("🔗Tenant %s: http://%s.stellar.local:3000\n  username: owner@%s.local  password: Password123!\n", t, t, t)
+			host := fmt.Sprintf("%s.stellar.local", t)
+			fmt.Printf("🔗Tenant %s: %s\n  username: owner@%s.local  password: Password123!\n", t, s.cfg.FrontendBaseURL(host), t)
 		}
 	}
 }

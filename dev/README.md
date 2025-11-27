@@ -9,6 +9,7 @@
     - [Pre-requisites](#pre-requisites)
     - [Clone the repository:](#clone-the-repository)
     - [Update local DNS](#update-local-dns)
+    - [Set up local HTTPS (optional)](#set-up-local-https-optional)
     - [Automated Stellar Account Creation and .env Configuration](#automated-stellar-account-creation-and-env-configuration)
     - [Start/Stop Local Environment](#startstop-local-environment)
     - [Login to the SDP and send a Disbursement](#login-to-the-sdp-and-send-a-disbursement)
@@ -61,6 +62,23 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 127.0.0.1       redcorp.stellar.local
 127.0.0.1       pinkcorp.stellar.local
 ```
+
+### Set up local HTTPS (optional)
+
+HTTPS is required for working with WebAuthn/passkeys. If you want the wizard to launch the dashboard over HTTPS (`https://<tenant>.stellar.local:3443`):
+
+1. Install [mkcert](https://web.dev/articles/how-to-use-local-https):
+   ```sh
+   brew install mkcert
+   mkcert -install
+   ```
+2. Generate local TLS certs (run from the repo root once):
+   ```sh
+   mkdir -p dev/certs
+   mkcert -key-file dev/certs/stellar.local-key.pem -cert-file dev/certs/stellar.local.pem \
+     "*.stellar.local" localhost 127.0.0.1 ::1
+   ```
+3. When the setup wizard asks, choose HTTPS.
 
 ### Automated Stellar Account Creation and .env Configuration
 

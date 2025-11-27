@@ -24,6 +24,7 @@ const (
 	PhaseEnvResolution
 	PhaseNetworkSelection
 	PhaseTenantModeSelection
+	PhaseHTTPSSelection
 	PhaseAccountSetup
 	PhaseConfigGeneration
 	PhaseLaunch
@@ -91,25 +92,29 @@ func handleNewConfigurationSetup(ctx context.Context) error {
 		singleTenantMode = selectTenantMode()
 	}
 
-	// Phase 5: Distribution and SEP10 Account Setup
+	// Phase 5: HTTPS Selection
+	useHTTPS := selectHTTPSMode()
+
+	// Phase 6: Distribution and SEP10 Account Setup
 	accounts := setupDistributionAndSEP10Accounts(network)
 
-	// Phase 6: Configuration Generation
+	// Phase 7: Configuration Generation
 	cfg := config.NewConfig(config.ConfigOpts{
 		EnvPath:          envPath,
 		SetupName:        setupName,
 		Network:          network,
 		SingleTenantMode: singleTenantMode,
+		EnableHTTPS:      useHTTPS,
 		Accounts:         accounts,
 	})
 	if err = config.Write(cfg, envPath); err != nil {
 		return &SetupError{PhaseConfigGeneration, "failed to generate configuration", err}
 	}
 
-	// Phase 7: Success Message
+	// Phase 8: Success Message
 	printSuccess(cfg)
 
-	// Phase 8: Launch
+	// Phase 9: Launch
 	if err = handleLaunch(ctx, setupName, cfg); err != nil {
 		return &SetupError{PhaseLaunch, "failed to launch", err}
 	}
@@ -247,6 +252,27 @@ func selectTenantMode() bool {
 	}
 
 	return isSingleTenant
+}
+
+// selectHTTPSMode asks whether to enable HTTPS for the frontend (requires mkcert)
+func selectHTTPSMode() bool {
+	fmt.Println()
+	fmt.Println("Frontend protocol:")
+	fmt.Println("• HTTP")
+	fmt.Println("• HTTPS (requires TLS certs; see dev/README.md)")
+
+	choice := ui.Select("Choose frontend protocol", []string{"HTTP (default)", "HTTPS"})
+	useHTTPS := strings.HasPrefix(choice, "HTTPS")
+	if useHTTPS {
+		fmt.Println("✅ HTTPS mode selected")
+		fmt.Println("   The dashboard will run over https on port 3443")
+	} else {
+		fmt.Println("✅ HTTP mode selected")
+		fmt.Println("   The dashboard will run over http on port 3000")
+	}
+	fmt.Println()
+
+	return useHTTPS
 }
 
 // printSuccess displays the success message with configuration details

@@ -27,6 +27,9 @@ stellar-disbursement-platform-backend
 .idea
 .cursor
 
+# Local HTTPS certificates
+dev/certs/
+
 # Rust & Soroban
 target/
 test_snapshots/
