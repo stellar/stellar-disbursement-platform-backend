@@ -138,7 +138,7 @@ func (s *Service) composeUp(ctx context.Context) error {
 	for _, file := range s.files {
 		args = append(args, "-f", file)
 	}
-	args = append(args, "up", "-d")
+	args = append(args, "up", "-d", "--build")
 
 	if err := s.executor.Execute(ctx, "docker", args...); err != nil {
 		return fmt.Errorf("running docker compose up: %w", err)
