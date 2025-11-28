@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/protocols/horizon/base"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )

@@ -3,7 +3,7 @@ package transactionsubmission
 import (
 	"context"
 
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )

@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -124,6 +124,12 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
 	)
 
+	// DB pool tuning options (tss)
+	configOpts = append(
+		configOpts,
+		cmdUtils.DBPoolConfigOptions(&globalOptions.DBPool)...,
+	)
+
 	// rpc options
 	rpcOptions := stellar.RPCOptions{}
 	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&rpcOptions)...)
@@ -158,7 +164,14 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			tssOpts.MonitorService = tssMonitorSvc
 
 			// Initializing the TSSDBConnectionPool
-			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: &tssMonitorSvc}
+			dbcpOptions := di.DBConnectionPoolOptions{
+				DatabaseURL:            globalOptions.DatabaseURL,
+				MonitorService:         &tssMonitorSvc,
+				MaxOpenConns:           globalOptions.DBPool.DBMaxOpenConns,
+				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
+				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
+				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+			}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)

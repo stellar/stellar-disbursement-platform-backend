@@ -5,8 +5,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/log"
 )
 
 type globalOptionsType struct {

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stellar/go/strkey"
+	"github.com/stellar/go-stellar-sdk/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -189,8 +189,8 @@ func (v *DirectPaymentValidator) validateReceiverReference(receiver *DirectPayme
 
 	if hasWallet {
 		walletAddr := strings.TrimSpace(*receiver.WalletAddress)
-		v.Check(strkey.IsValidEd25519PublicKey(walletAddr),
-			"receiver.wallet_address", "invalid stellar account ID format")
+		v.Check(strkey.IsValidEd25519PublicKey(walletAddr) || strkey.IsValidContractAddress(walletAddr),
+			"receiver.wallet_address", "invalid stellar address format")
 		*receiver.WalletAddress = walletAddr
 	}
 
@@ -212,8 +212,8 @@ func (v *DirectPaymentValidator) validateWalletReference(wallet *DirectPaymentWa
 
 	if hasAddress {
 		address := strings.TrimSpace(*wallet.Address)
-		v.Check(strkey.IsValidEd25519PublicKey(address),
-			"wallet.address", "invalid stellar account ID format")
+		v.Check(strkey.IsValidEd25519PublicKey(address) || strkey.IsValidContractAddress(address),
+			"wallet.address", "invalid stellar address format")
 		*wallet.Address = address
 	}
 

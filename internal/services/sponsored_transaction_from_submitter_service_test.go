@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -183,7 +184,7 @@ func Test_SponsoredTransactionFromSubmitterService_SyncBatchTransactions(t *test
 			Payment: txSubStore.Payment{
 				AssetCode:   "USDC",
 				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100,
+				Amount:      decimal.NewFromInt(100),
 				Destination: "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU",
 			},
 			TenantID: testCtx.tenantID,

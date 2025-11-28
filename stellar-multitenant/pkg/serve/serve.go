@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	supporthttp "github.com/stellar/go/support/http"
-	"github.com/stellar/go/support/log"
+	supporthttp "github.com/stellar/go-stellar-sdk/support/http"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"

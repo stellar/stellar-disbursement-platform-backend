@@ -1,0 +1,112 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: ${DATABASE_NAME:-sdp_mtn}
+      PGDATA: /data/postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-db:/data/postgres
+  sdp-api:
+    image: stellar/sdp-v2:development
+    build:
+      context: ../
+      dockerfile: Dockerfile.development
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+      - "${METRICS_PORT:-8002}:${METRICS_PORT:-8002}"
+      - "${ADMIN_PORT:-8003}:${ADMIN_PORT:-8003}"
+      - "2345:2345"
+    environment:
+      BASE_URL: ${BASE_URL:-http://localhost:8000}
+      SDP_UI_BASE_URL: ${SDP_UI_BASE_URL:-http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres@db:5432/${DATABASE_NAME:-sdp_mtn}?sslmode=disable}
+      ENVIRONMENT: ${ENVIRONMENT:-localhost}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PORT: "${PORT:-8000}"
+      METRICS_PORT: "${METRICS_PORT:-8002}"
+      METRICS_TYPE: ${METRICS_TYPE:-PROMETHEUS}
+      EMAIL_SENDER_TYPE: ${EMAIL_SENDER_TYPE:-DRY_RUN}
+      SMS_SENDER_TYPE: ${SMS_SENDER_TYPE:-DRY_RUN}
+      HORIZON_URL: "${HORIZON_URL:-https://horizon-testnet.stellar.org}"
+      RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
+      RPC_REQUEST_AUTH_HEADER_KEY: ${RPC_REQUEST_AUTH_HEADER_KEY:-}
+      RPC_REQUEST_AUTH_HEADER_VALUE: ${RPC_REQUEST_AUTH_HEADER_VALUE:-}
+      NETWORK_PASSPHRASE: "${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
+      SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
+      SEP10_CLIENT_ATTRIBUTION_REQUIRED: ${SEP10_CLIENT_ATTRIBUTION_REQUIRED:-true}
+      DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
+      DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
+      RECAPTCHA_SITE_KEY: ${RECAPTCHA_SITE_KEY:-6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI}
+      DISABLE_MFA: "${DISABLE_MFA:-true}"
+      DISABLE_RECAPTCHA: "${DISABLE_RECAPTCHA:-true}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-*}"
+
+      # multi-tenant
+      ADMIN_PORT: "${ADMIN_PORT:-8003}"
+      INSTANCE_NAME: "${INSTANCE_NAME:-SDP on Docker}"
+      TENANT_XLM_BOOTSTRAP_AMOUNT: ${TENANT_XLM_BOOTSTRAP_AMOUNT:-5}
+      SINGLE_TENANT_MODE: ${SINGLE_TENANT_MODE:-false}
+
+      # scheduler options
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "${SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS:-10}"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "${SCHEDULER_PAYMENT_JOB_SECONDS:-10}"
+
+      # SEP-45 configuration
+      ENABLE_SEP45: ${ENABLE_SEP45:-false}
+      SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID:-}
+
+      # Embedded wallet configuration
+      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-false}
+      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-}
+
+      # multi-tenant secrets:
+      ADMIN_ACCOUNT: ${ADMIN_ACCOUNT:-SDP-admin}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-api_key_1234567890}
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE}
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE}
+
+      # secrets:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-MY_AWS_ACCESS_KEY_ID}
+      AWS_REGION: ${AWS_REGION:-MY_AWS_REGION}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-MY_AWS_SECRET_ACCESS_KEY}
+      AWS_SES_SENDER_ID: ${AWS_SES_SENDER_ID:-MY_AWS_SES_SENDER_ID}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-MY_TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-MY_TWILIO_AUTH_TOKEN}
+      TWILIO_SERVICE_SID: ${TWILIO_SERVICE_SID:-MY_TWILIO_SERVICE_SID}
+      TWILIO_SENDGRID_API_KEY: ${TWILIO_SENDGRID_API_KEY:-MY_TWILIO_SENDGRID_API_KEY}
+      TWILIO_SENDGRID_SENDER_ADDRESS: ${TWILIO_SENDGRID_SENDER_ADDRESS:-MY_TWILIO_SENDGRID_SENDER_ADDRESS}
+      EC256_PRIVATE_KEY:  ${EC256_PRIVATE_KEY:------BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----}
+      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
+      SEP24_JWT_SECRET: ${SEP24_JWT_SECRET:-jwt_secret_1234567890}
+      RECAPTCHA_SITE_SECRET_KEY: ${RECAPTCHA_SITE_SECRET_KEY:-6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe}
+    entrypoint: ""
+    command:
+      - sh
+      - -c
+      - |
+        sleep 5
+        ./stellar-disbursement-platform db admin migrate up
+        ./stellar-disbursement-platform db tss migrate up
+        ./stellar-disbursement-platform db auth migrate up --all
+        ./stellar-disbursement-platform db sdp migrate up --all
+        ./stellar-disbursement-platform db setup-for-network --all
+        echo "starting dlv stellar-disbursement-platform"
+        /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
+
+  demo-wallet:
+    build:
+      context: .
+      dockerfile: Dockerfile-demo-wallet
+    ports:
+      - "4000:80"
+    volumes:
+      - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
+
+volumes:
+  postgres-db:
+    name: ${COMPOSE_PROJECT_NAME:-sdp}_postgres-db-${NETWORK_TYPE:-testnet}
+    driver: local

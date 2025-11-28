@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/support/http/httpdecode"
-	"github.com/stellar/go/support/render/httpjson"
-	"github.com/stellar/go/xdr"
+	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"

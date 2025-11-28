@@ -10,7 +10,8 @@ import (
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/keypair"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -40,7 +41,7 @@ type TransactionFixture struct {
 	AssetCode             string
 	AssetIssuer           string
 	DestinationAddress    string
-	Amount                float64
+	Amount                decimal.Decimal
 	PublicKey             string
 	WasmHash              string
 	SponsoredAccount      string

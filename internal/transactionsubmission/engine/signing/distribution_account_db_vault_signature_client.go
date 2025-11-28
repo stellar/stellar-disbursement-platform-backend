@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"

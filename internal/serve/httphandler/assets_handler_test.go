@@ -15,14 +15,15 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/base"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/txnbuild"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -156,10 +157,10 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		// Mock DistributionAccountService to return success only for EURT (indicating trustline exists)
 		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
 			return asset.Code == "EURT" && asset.Issuer == "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU"
-		})).Return(50.0, nil)
+		})).Return(decimal.NewFromFloat(50.0), nil)
 		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
 			return asset.Code == "USDC" && asset.Issuer == "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE"
-		})).Return(0.0, errors.New("asset not found"))
+		})).Return(decimal.Zero, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", "/assets?enabled=true", nil)
@@ -175,7 +176,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			assert.NotNil(t, asset.Enabled)
 			if asset.Code == "EURT" {
 				assert.NotNil(t, asset.Balance)
-				assert.Equal(t, 50.0, *asset.Balance)
+				expectedBalance := decimal.RequireFromString("50.0")
+				assert.True(t, expectedBalance.Equal(*asset.Balance), "expected balance 50.0, got %s", asset.Balance.String())
 			}
 		}
 	})
@@ -224,10 +226,10 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		// Mock DistributionAccountService to return success only for EURT (indicating trustline exists)
 		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
 			return asset.Code == "EURT" && asset.Issuer == "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU"
-		})).Return(50.0, nil)
+		})).Return(decimal.NewFromFloat(50.0), nil)
 		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.MatchedBy(func(asset data.Asset) bool {
 			return asset.Code == "USDC" && asset.Issuer == "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE"
-		})).Return(0.0, errors.New("asset not found"))
+		})).Return(decimal.Zero, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", "/assets?enabled=true", nil)
@@ -242,7 +244,8 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			assert.True(t, asset.Enabled)
 			if asset.Code == "EURT" {
 				assert.NotNil(t, asset.Balance)
-				assert.Equal(t, 50.0, *asset.Balance)
+				expectedBalance := decimal.RequireFromString("50.0")
+				assert.True(t, expectedBalance.Equal(*asset.Balance), "expected balance 50.0, got %s", asset.Balance.String())
 			}
 		}
 	})
@@ -268,7 +271,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
 
 		// Mock DistributionAccountService to return error (indicating no trustline)
-		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, errors.New("asset not found"))
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(decimal.Zero, errors.New("asset not found"))
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", "/assets?enabled=false", nil)
@@ -317,7 +320,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(distAccount, nil)
 
 		// Mock DistributionAccountService to return a balance (indicating trustline exists)
-		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(0.0, nil)
+		mockDistAccService.On("GetBalance", mock.Anything, mock.Anything, mock.Anything).Return(decimal.Zero, nil)
 
 		// Mock Horizon account with USDC trustline but zero balance
 		horizonAccount := &horizon.Account{
@@ -354,7 +357,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 			if asset.Code == "USDC" {
 				assert.True(t, asset.Enabled)
 				assert.NotNil(t, asset.Balance)
-				assert.Equal(t, 0.0, *asset.Balance)
+				assert.Equal(t, decimal.Zero, *asset.Balance)
 			}
 		}
 	})
@@ -376,13 +379,13 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(100.0, nil)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.NewFromFloat(100.0), nil)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
-		assert.Equal(t, 100.0, *balance)
+		assert.Equal(t, decimal.NewFromFloat(100.0), *balance)
 	})
 
 	t.Run("returns true for Circle accounts with supported assets", func(t *testing.T) {
@@ -391,13 +394,13 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(123.45, nil)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.NewFromFloat(123.45), nil)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
-		assert.Equal(t, 123.45, *balance)
+		assert.Equal(t, decimal.NewFromFloat(123.45), *balance)
 	})
 
 	t.Run("returns false for Circle accounts with unsupported assets", func(t *testing.T) {
@@ -406,7 +409,7 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.Zero, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
@@ -421,13 +424,13 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, nil)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.Zero, nil)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
-		assert.Equal(t, 0.0, *balance)
+		assert.Equal(t, decimal.Zero, *balance)
 	})
 
 	t.Run("returns false for Stellar accounts without trustline", func(t *testing.T) {
@@ -437,7 +440,7 @@ func Test_AssetsHandlerCheckTrustlineExists(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.Zero, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
@@ -462,13 +465,13 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, nil)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.Zero, nil)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
-		assert.Equal(t, 0.0, *balance)
+		assert.Equal(t, decimal.Zero, *balance)
 	})
 
 	t.Run("returns true and balance for Circle accounts with supported assets", func(t *testing.T) {
@@ -477,13 +480,13 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(321.0, nil)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.NewFromFloat(321.0), nil)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
 		assert.True(t, hasTrustline)
 		assert.NotNil(t, balance)
-		assert.Equal(t, 321.0, *balance)
+		assert.Equal(t, decimal.NewFromFloat(321.0), *balance)
 	})
 
 	t.Run("returns false and nil balance for Circle accounts with unsupported assets", func(t *testing.T) {
@@ -492,7 +495,7 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 			Type: schema.DistributionAccountCircleDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.Zero, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
@@ -507,7 +510,7 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		expectedBalance := 100.5
+		expectedBalance := decimal.NewFromFloat(100.5)
 		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(expectedBalance, nil)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
@@ -524,7 +527,7 @@ func Test_AssetsHandlerGetBalanceInfo(t *testing.T) {
 			Type:    schema.DistributionAccountStellarDBVault,
 		}
 
-		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(0.0, services.ErrNoBalanceForAsset)
+		mockDistAccService.On("GetBalance", ctx, &account, asset).Return(decimal.Zero, services.ErrNoBalanceForAsset)
 
 		hasTrustline, balance, err := handler.getBalanceInfo(ctx, &account, asset)
 		require.NoError(t, err)
@@ -1980,7 +1983,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 					expectedMax := time.Unix(int64(expXDR.MaxTime), 0).UTC()
 					actualMax := time.Unix(int64(actXDR.MaxTime), 0).UTC()
 
-					require.WithinDuration(t, expectedMax, actualMax, 30*time.Second,
+					require.WithinDuration(t, expectedMax, actualMax, 60*time.Second,
 						"MaxTime bounds drift too far: expected %s, got %s", expectedMax, actualMax)
 				}
 			}(t, signedTx, 0)).

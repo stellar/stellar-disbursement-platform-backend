@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 )
 
 var (

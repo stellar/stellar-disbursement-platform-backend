@@ -5,8 +5,8 @@ import (
 	"go/types"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -180,7 +180,7 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 		},
 		{
 			Name:           "sep10-signing-public-key",
-			Usage:          "Anchor platform SEP10 signing public key",
+			Usage:          "SEP10 signing public key",
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionStellarPublicKey,
 			ConfigKey:      &integrationTestsOpts.Sep10SigningPublicKey,
@@ -198,14 +198,6 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Usage:     "File path of the integration test disbursement file.",
 			OptType:   types.String,
 			ConfigKey: &integrationTestsOpts.DisbursementCSVFilePath,
-			Required:  true,
-		},
-		{
-			Name: "anchor-platform-base-sep-url",
-			Usage: "The Base URL of the sep server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file.",
-			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.AnchorPlatformBaseSepURL,
 			Required:  true,
 		},
 		{

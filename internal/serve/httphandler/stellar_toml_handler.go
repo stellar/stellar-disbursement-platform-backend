@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
@@ -18,13 +19,13 @@ import (
 )
 
 type StellarTomlHandler struct {
-	AnchorPlatformBaseSepURL    string
+	Models                      *data.Models
 	DistributionAccountResolver signing.DistributionAccountResolver
 	NetworkPassphrase           string
-	Models                      *data.Models
 	Sep10SigningPublicKey       string
 	Sep45ContractID             string
 	InstanceName                string
+	BaseURL                     string
 }
 
 const (
@@ -48,9 +49,28 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.Address, s.Sep10SigningPublicKey)
 	}
 
-	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
-	webAuthForContractsEndpoint := s.AnchorPlatformBaseSepURL + "/sep45/auth"
-	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
+	var (
+		webAuthEndpoint             string
+		transferServerSep0024       string
+		webAuthForContractsEndpoint string
+	)
+
+	parsedBaseURL, err := url.Parse(s.BaseURL)
+	if err != nil {
+		log.Ctx(ctx).Warnf("Invalid environment BaseURL %s: %v", s.BaseURL, err)
+		parsedBaseURL = &url.URL{Scheme: "https"}
+	}
+
+	t, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		webAuthEndpoint = fmt.Sprintf("%s://%s/sep10/auth", parsedBaseURL.Scheme, req.Host)
+		transferServerSep0024 = fmt.Sprintf("%s://%s/sep24", parsedBaseURL.Scheme, req.Host)
+		webAuthForContractsEndpoint = fmt.Sprintf("%s://%s/sep45/auth", parsedBaseURL.Scheme, req.Host)
+	} else {
+		webAuthEndpoint = *t.BaseURL + "/sep10/auth"
+		transferServerSep0024 = *t.BaseURL + "/sep24"
+		webAuthForContractsEndpoint = *t.BaseURL + "/sep45/auth"
+	}
 
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf(`
@@ -64,9 +84,9 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 
 	if s.Sep45ContractID != "" {
 		builder.WriteString(fmt.Sprintf(`
-		WEB_AUTH_CONTRACT_ID=%q
-		WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
-		`, s.Sep45ContractID, webAuthForContractsEndpoint))
+WEB_AUTH_CONTRACT_ID=%q
+WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
+`, s.Sep45ContractID, webAuthForContractsEndpoint))
 	}
 
 	return builder.String()

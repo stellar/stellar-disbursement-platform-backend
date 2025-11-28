@@ -11,18 +11,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
-	"github.com/stellar/go/network"
-	supporthttp "github.com/stellar/go/support/http"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/network"
+	supporthttp "github.com/stellar/go-stellar-sdk/support/http"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
@@ -53,60 +53,61 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 }
 
 type ServeOptions struct {
-	Environment                     string
-	GitCommit                       string
-	Port                            int
-	Version                         string
-	InstanceName                    string
-	MonitorService                  monitor.MonitorServiceInterface
-	MtnDBConnectionPool             db.DBConnectionPool
-	AdminDBConnectionPool           db.DBConnectionPool
-	TSSDBConnectionPool             db.DBConnectionPool
-	EC256PrivateKey                 string
-	Models                          *data.Models
-	CorsAllowedOrigins              []string
-	authManager                     auth.AuthManager
-	EmailMessengerClient            message.MessengerClient
-	MessageDispatcher               message.MessageDispatcherInterface
-	SEP24JWTSecret                  string
-	sep24JWTManager                 *anchorplatform.JWTManager
-	BaseURL                         string
-	ResetTokenExpirationHours       int
-	NetworkPassphrase               string
-	NetworkType                     utils.NetworkType
-	SubmitterEngine                 engine.SubmitterEngine
-	Sep10SigningPublicKey           string
-	Sep10SigningPrivateKey          string
-	EnableEmbeddedWallets           bool
-	EmbeddedWalletsWasmHash         string
-	EnableSep45                     bool
-	Sep45ContractID                 string
-	RPCConfig                       stellar.RPCOptions
-	AnchorPlatformBaseSepURL        string
-	AnchorPlatformBasePlatformURL   string
-	AnchorPlatformOutgoingJWTSecret string
-	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
-	CrashTrackerClient              crashtracker.CrashTrackerClient
-	ReCAPTCHASiteKey                string
-	ReCAPTCHASiteSecretKey          string
-	CAPTCHAType                     validators.CAPTCHAType
-	ReCAPTCHAV3MinScore             float64
-	DisableMFA                      bool
-	DisableReCAPTCHA                bool
-	PasswordValidator               *authUtils.PasswordValidator
-	tenantManager                   tenant.ManagerInterface
-	DistributionAccountService      services.DistributionAccountServiceInterface
-	DistAccEncryptionPassphrase     string
-	MaxInvitationResendAttempts     int
-	SingleTenantMode                bool
-	CircleService                   circle.ServiceInterface
-	CircleAPIType                   circle.APIType
-	BridgeService                   bridge.ServiceInterface
-	EmbeddedWalletService           services.EmbeddedWalletServiceInterface
-	WebAuthnSessionCacheMaxEntries  int
-	WebAuthnSessionTTLSeconds       int
-	WebAuthnService                 wallet.WebAuthnServiceInterface
-	walletJWTManager                wallet.WalletJWTManager
+	Environment                    string
+	GitCommit                      string
+	Port                           int
+	Version                        string
+	InstanceName                   string
+	MonitorService                 monitor.MonitorServiceInterface
+	MtnDBConnectionPool            db.DBConnectionPool
+	AdminDBConnectionPool          db.DBConnectionPool
+	TSSDBConnectionPool            db.DBConnectionPool
+	EC256PrivateKey                string
+	Models                         *data.Models
+	CorsAllowedOrigins             []string
+	authManager                    auth.AuthManager
+	EmailMessengerClient           message.MessengerClient
+	MessageDispatcher              message.MessageDispatcherInterface
+	SEP24JWTSecret                 string
+	sep24JWTManager                *sepauth.JWTManager
+	BaseURL                        string
+	ResetTokenExpirationHours      int
+	NetworkPassphrase              string
+	NetworkType                    utils.NetworkType
+	SubmitterEngine                engine.SubmitterEngine
+	Sep10SigningPublicKey          string
+	Sep10SigningPrivateKey         string
+	Sep10ClientAttributionRequired bool
+	Sep10Service                   services.SEP10Service
+	EnableEmbeddedWallets          bool
+	EmbeddedWalletsWasmHash        string
+	EnableSep45                    bool
+	Sep45ContractID                string
+	RPCConfig                      stellar.RPCOptions
+	CrashTrackerClient             crashtracker.CrashTrackerClient
+	ReCAPTCHASiteKey               string
+	ReCAPTCHASiteSecretKey         string
+	CAPTCHAType                    validators.CAPTCHAType
+	ReCAPTCHAV3MinScore            float64
+	DisableMFA                     bool
+	DisableReCAPTCHA               bool
+	PasswordValidator              *authUtils.PasswordValidator
+
+	tenantManager               tenant.ManagerInterface
+	DistributionAccountService  services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase string
+
+	MaxInvitationResendAttempts int
+	SingleTenantMode            bool
+	CircleService               circle.ServiceInterface
+	CircleAPIType               circle.APIType
+	BridgeService               bridge.ServiceInterface
+
+	EmbeddedWalletService          services.EmbeddedWalletServiceInterface
+	WebAuthnSessionCacheMaxEntries int
+	WebAuthnSessionTTLSeconds      int
+	WebAuthnService                wallet.WebAuthnServiceInterface
+	walletJWTManager               wallet.WalletJWTManager
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -145,8 +146,8 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating wallet JWT manager: %w", err)
 	}
 
-	// Setup Anchor Platform SEP24 JWT manager
-	sep24JWTManager, err := anchorplatform.NewJWTManager(opts.SEP24JWTSecret, 15000)
+	// Setup SEP24 JWT manager
+	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, 300000)
 	if err != nil {
 		return fmt.Errorf("error creating SEP-24 JWT manager: %w", err)
 	}
@@ -156,6 +157,24 @@ func (opts *ServeOptions) SetupDependencies() error {
 	if err != nil {
 		return fmt.Errorf("error initializing password validator: %w", err)
 	}
+
+	// Determine allow retry based on network passphrase
+	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
+
+	sep10Service, err := services.NewSEP10Service(
+		sep24JWTManager,
+		opts.NetworkPassphrase,
+		opts.Sep10SigningPrivateKey,
+		opts.BaseURL,
+		allowHTTPRetry,
+		opts.SubmitterEngine.HorizonClient,
+		opts.Sep10ClientAttributionRequired,
+	)
+	if err != nil {
+		return fmt.Errorf("initializing SEP 10 Service: %w", err)
+	}
+
+	opts.Sep10Service = sep10Service
 
 	return nil
 }
@@ -725,7 +744,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}
 	})
 
-	// SEP-24 and miscellaneous endpoints that are tenant-unaware
+	// SEP-1, SEP-10, SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
 			ReleaseID:        o.GitCommit,
@@ -734,24 +753,48 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			DBConnectionPool: o.AdminDBConnectionPool,
 		}.ServeHTTP)
 
-		// START SEP-24 endpoints
+		// SEP 1 TOML file endpoint
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
-			AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			NetworkPassphrase:           o.NetworkPassphrase,
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
 			Sep45ContractID:             o.Sep45ContractID,
 			InstanceName:                o.InstanceName,
+			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
 
-		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		// SEP-10 endpoints
+		r.Route("/sep10", func(r chi.Router) {
+			sep10Handler := httphandler.SEP10Handler{
+				SEP10Service: o.Sep10Service,
+			}
+
+			r.Get("/auth", sep10Handler.GetChallenge)
+			r.Post("/auth", sep10Handler.PostChallenge)
+		})
+		// SEP-24 endpoints
+		r.Route("/sep24", func(r chi.Router) {
+			sep24Handler := httphandler.SEP24Handler{
+				Models:             o.Models,
+				SEP24JWTManager:    o.sep24JWTManager,
+				InteractiveBaseURL: o.BaseURL,
+			}
+			r.Get("/info", sep24Handler.GetInfo)
+			// Protect transaction lookup with SEP-10 auth to ensure only authorized clients can access details
+			r.With(sepauth.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
+
+			// For initiating interactive deposit, allow either the new middleware (preferred) or legacy header path inside handler
+			r.With(sepauth.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
+		})
+
+		sep24QueryTokenAuthenticationMiddleware := sepauth.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/wallet-registration/*", httphandler.SEP24InteractiveDepositHandler{
 			App:      sep24frontend.App,
 			BasePath: "app/dist",
 		}.ServeApp)
 
-		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
+		sep24HeaderTokenAuthenticationMiddleware := sepauth.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Route("/sep24-interactive-deposit", func(r chi.Router) {
 			r.Get("/info", httphandler.ReceiverRegistrationHandler{
 				Models:              o.Models,
@@ -767,7 +810,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 			}.ServeHTTP)
 			r.Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
 				Models:                      o.Models,
 				ReCAPTCHAValidator:          reCAPTCHAValidator,
 				ReCAPTCHADisabled:           o.DisableReCAPTCHA,

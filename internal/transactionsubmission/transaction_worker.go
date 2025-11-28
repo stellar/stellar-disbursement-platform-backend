@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -173,7 +173,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 // Errors marked as definitive error, that won't be resolved with retries:
 //
 //	Horizon: 400 with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
-//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer, entry_archived]
 //	RPC: Contract errors, auth failures
 //
 // Errors that are marked for retry without pause/jitter but are reported to CrashTracker:

@@ -5,7 +5,7 @@ package transactionsubmission
 import (
 	context "context"
 
-	txnbuild "github.com/stellar/go/txnbuild"
+	txnbuild "github.com/stellar/go-stellar-sdk/txnbuild"
 	store "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	mock "github.com/stretchr/testify/mock"
 )

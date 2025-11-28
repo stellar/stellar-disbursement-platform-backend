@@ -22,7 +22,7 @@ services:
       - "8000:8000"
       - "8003:8003"
     environment:
-      BASE_URL: http://localhost:8000
+      BASE_URL: http://stellar.local:8000
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable
       ENVIRONMENT: localhost
       LOG_LEVEL: TRACE
@@ -36,13 +36,13 @@ services:
       RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
       SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID}
-      ANCHOR_PLATFORM_BASE_SEP_URL: http://anchor-platform:8080
-      ANCHOR_PLATFORM_BASE_PLATFORM_URL: http://anchor-platform:8085
+      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
+      SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false"
 
       # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
@@ -80,10 +80,8 @@ services:
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
       EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
-      SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       SEP24_JWT_SECRET: jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
-      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
@@ -137,115 +135,6 @@ services:
         ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts
         ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
-
-  db-anchor-platform:
-    container_name: e2e-anchor-platform-postgres-db
-    image: postgres:14-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: e2e-postgres
-      PGPORT: 5433
-    ports:
-      - "5433:5433"
-    volumes:
-      - e2e-postgres-ap-db:/data/postgres
-
-  anchor-platform:
-    container_name: e2e-anchor-platform
-    image: stellar/anchor-platform:3.2.0-beta.1
-    command: --sep-server --platform-server --platform linux/amd64
-    ports:
-      - "8080:8080" # sep-server
-      - "8085:8085" # platform-server
-      - "8082:8082" # metrics
-    depends_on:
-      - db-anchor-platform
-    environment:
-      HOST_URL: http://localhost:8080
-      SEP_SERVER_PORT: 8080
-      CALLBACK_API_BASE_URL: http://sdp-api:8000
-      CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
-      PLATFORM_SERVER_AUTH_TYPE: JWT
-      APP_LOGGING_LEVEL: INFO
-      DATA_TYPE: postgres
-      DATA_SERVER: db-anchor-platform:5433
-      DATA_DATABASE: e2e-postgres
-      DATA_FLYWAY_ENABLED: "true"
-      DATA_DDL_AUTO: update
-      METRICS_ENABLED: "false"  # Metrics would be available at port 8082
-      METRICS_EXTRAS_ENABLED: "false"
-      SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local:8000" # Comma separated list of home domains
-      SEP10_HOME_DOMAIN: ""
-      SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
-      # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
-      # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
-      JAVA_TOOL_OPTIONS: "${SEP45_CONTRACT_ID:+-Dsep45.enabled=true}" # Enable/disable SEP-45 based on SEP45_CONTRACT_ID
-      SEP45_WEB_AUTH_DOMAIN: ${SEP45_CONTRACT_ID:+localhost:8080}
-      SEP45_WEB_AUTH_CONTRACT_ID: ${SEP45_CONTRACT_ID}
-      SEP45_HOME_DOMAINS: ${SEP45_CONTRACT_ID:+localhost:8000, *.stellar.local:8000} # Comma separated list of home domains
-      SEP24_ENABLED: "true"
-      SEP24_INTERACTIVE_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
-      SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
-      SEP24_MORE_INFO_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
-      STELLAR_NETWORK_NETWORK: ${NETWORK_NETWORK:-TESTNET}
-      STELLAR_NETWORK_NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
-      STELLAR_NETWORK_HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
-      STELLAR_NETWORK_RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
-      SEP1_ENABLED: "true"
-      SEP1_TOML_TYPE: url
-      SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
-      ASSETS_TYPE: json
-      ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
-        {
-          "items": [
-            {
-              "id": "stellar:USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "sep24": {
-                "enabled": true,
-                "deposit": {
-                  "enabled": true,
-                  "min_amount": 1,
-                  "max_amount": 10000,
-                  "methods": ["none"]
-                },
-                "withdraw": {
-                  "enabled": false
-                }
-              }
-            },
-            {
-              "id": "stellar:native",
-              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
-              "significant_decimals": 7,
-              "sep24": {
-                "enabled": true,
-                "deposit": {
-                  "enabled": true,
-                  "min_amount": 1,
-                  "max_amount": 10000,
-                  "methods": ["none"]
-                },
-                "withdraw": {
-                  "enabled": false
-                }
-              }
-            }
-          ]
-        }
-
-      # secrets:
-      SECRET_DATA_USERNAME: postgres
-      SECRET_DATA_PASSWORD: postgres
-      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
-      SECRET_SEP10_JWT_SECRET: jwt_secret_cQBnfcDSfvrphw8JBMcg1KfHRvvk3425
-      SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
-      SECRET_SEP45_JWT_SECRET: jwt_secret_cQBnfcDSfvrphw8JBMcg1KfHRvvk3425
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4
-      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_IyLxs6PW41Znaysr8ft8Wx326QJepCrQ
 
 volumes:
   e2e-postgres-db:

@@ -31,7 +31,7 @@ type ServerAPIIntegrationTestsInterface interface {
 	CreateDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PostDisbursementRequest) (*data.Disbursement, error)
 	ProcessDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string) error
 	StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
-	ReceiverRegistration(ctx context.Context, authSEP24Token *AnchorPlatformAuthSEP24Token, body *data.ReceiverRegistrationRequest) error
+	ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error
 	ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error
 }
 
@@ -46,6 +46,10 @@ type ServerAPIIntegrationTests struct {
 }
 
 type ServerAPIAuthToken struct {
+	Token string `json:"token"`
+}
+
+type SEP24AuthToken struct {
 	Token string `json:"token"`
 }
 
@@ -233,7 +237,7 @@ func (sa *ServerAPIIntegrationTests) StartDisbursement(ctx context.Context, auth
 }
 
 // ReceiverRegistration completes the receiver registration using SDP server API and the anchor platform.
-func (sa *ServerAPIIntegrationTests) ReceiverRegistration(ctx context.Context, authSEP24Token *AnchorPlatformAuthSEP24Token, body *data.ReceiverRegistrationRequest) error {
+func (sa *ServerAPIIntegrationTests) ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error {
 	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, registrationURL, "verification")
 	if err != nil {
 		return fmt.Errorf("error creating url: %w", err)

@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 )
 
 func Test_serveReactApp(t *testing.T) {
 	ctx := context.Background()
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: "test.com",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -42,7 +42,7 @@ func Test_serveReactApp(t *testing.T) {
 		{
 			name:       "🟢successfully serves index.html",
 			requestURL: "/wallet-registration/start?token=test-token",
-			ctx:        context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims),
+			ctx:        context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims),
 			setupFS: func() fs.FS {
 				return fstest.MapFS{
 					"index.html": &fstest.MapFile{
@@ -58,7 +58,7 @@ func Test_serveReactApp(t *testing.T) {
 		{
 			name:       "🔴returns error when index.html not found",
 			requestURL: "/wallet-registration/start?token=test-token",
-			ctx:        context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims),
+			ctx:        context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims),
 			setupFS: func() fs.FS {
 				return fstest.MapFS{
 					"other.html": &fstest.MapFile{
@@ -74,7 +74,7 @@ func Test_serveReactApp(t *testing.T) {
 		{
 			name:                "🔴returns 401 unauthorized if the token is not in the url",
 			requestURL:          "/wallet-registration/start",
-			ctx:                 context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims),
+			ctx:                 context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims),
 			setupFS:             func() fs.FS { return fstest.MapFS{} },
 			expectedStatus:      http.StatusUnauthorized,
 			expectedBody:        "Not authorized.",
@@ -92,7 +92,7 @@ func Test_serveReactApp(t *testing.T) {
 		{
 			name:                "🔴returns 401 unauthorized if the token is in the request context but it's not valid",
 			requestURL:          "/wallet-registration/start?token=test-token",
-			ctx:                 context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, &anchorplatform.SEP24JWTClaims{}),
+			ctx:                 context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, &sepauth.SEP24JWTClaims{}),
 			setupFS:             func() fs.FS { return fstest.MapFS{} },
 			expectedStatus:      http.StatusUnauthorized,
 			expectedBody:        "Not authorized.",
@@ -123,7 +123,7 @@ func Test_serveReactApp(t *testing.T) {
 }
 
 func Test_SEP24InteractiveDepositHandler_ServeApp(t *testing.T) {
-	validClaims := &anchorplatform.SEP24JWTClaims{
+	validClaims := &sepauth.SEP24JWTClaims{
 		ClientDomainClaim: "test.com",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
@@ -132,7 +132,7 @@ func Test_SEP24InteractiveDepositHandler_ServeApp(t *testing.T) {
 		},
 	}
 	ctx := context.Background()
-	ctxWithClaims := context.WithValue(ctx, anchorplatform.SEP24ClaimsContextKey, validClaims)
+	ctxWithClaims := context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, validClaims)
 
 	mockFS := createMockFS(t, map[string]string{
 		"app/dist/index.html":     "<html><body>SPA content</body></html>",

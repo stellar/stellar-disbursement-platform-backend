@@ -6,7 +6,7 @@ import (
 
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"

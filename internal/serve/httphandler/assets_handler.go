@@ -9,13 +9,14 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/amount"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/httpjson"
-	"github.com/stellar/go/txnbuild"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/amount"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -46,8 +47,8 @@ type AssetRequest struct {
 
 type AssetWithEnabledInfo struct {
 	data.Asset
-	Enabled bool     `json:"enabled"`
-	Balance *float64 `json:"balance,omitempty"`
+	Enabled bool             `json:"enabled"`
+	Balance *decimal.Decimal `json:"balance,omitempty"`
 }
 
 // GetAssets returns a list of assets.
@@ -111,7 +112,7 @@ func (c AssetsHandler) getBalanceInfo(
 	ctx context.Context,
 	account *schema.TransactionAccount,
 	asset data.Asset,
-) (bool, *float64, error) {
+) (bool, *decimal.Decimal, error) {
 	balance, err := c.DistributionAccountService.GetBalance(ctx, account, asset)
 	if err != nil {
 		if errors.Is(err, services.ErrNoBalanceForAsset) {

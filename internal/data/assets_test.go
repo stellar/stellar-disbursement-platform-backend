@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

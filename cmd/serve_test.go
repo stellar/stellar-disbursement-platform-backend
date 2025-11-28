@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -18,7 +18,6 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
@@ -27,7 +26,6 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
@@ -65,10 +63,9 @@ func (m *mockServer) StartAdminServe(opts serveadmin.ServeOptions, httpServer se
 func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context,
 	serveOpts serve.ServeOptions,
 	schedulerOptions scheduler.SchedulerOptions,
-	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
 	tssDBConnectinPool db.DBConnectionPool,
 ) ([]scheduler.SchedulerJobRegisterOption, error) {
-	args := m.Called(ctx, serveOpts, schedulerOptions, apAPIService, tssDBConnectinPool)
+	args := m.Called(ctx, serveOpts, schedulerOptions, tssDBConnectinPool)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -143,46 +140,43 @@ func Test_serve(t *testing.T) {
 	di.SetInstance(di.CircleServiceInstanceName, mCircleService)
 
 	serveOpts := serve.ServeOptions{
-		Environment:                     "test",
-		GitCommit:                       "1234567890abcdef",
-		Port:                            8000,
-		Version:                         "x.y.z",
-		InstanceName:                    "SDP Testnet",
-		MonitorService:                  mMonitorService,
-		AdminDBConnectionPool:           dbConnectionPool,
-		MtnDBConnectionPool:             dbConnectionPool,
-		TSSDBConnectionPool:             dbConnectionPool,
-		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
-		CorsAllowedOrigins:              []string{"*"},
-		SEP24JWTSecret:                  "jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4",
-		BaseURL:                         "https://sdp-backend.stellar.org",
-		ResetTokenExpirationHours:       24,
-		NetworkPassphrase:               network.TestNetworkPassphrase,
-		NetworkType:                     utils.TestnetNetworkType,
-		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-		Sep10SigningPrivateKey:          "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
-		Sep45ContractID:                 "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
-		RPCConfig:                       stellar.RPCOptions{RPCUrl: "https://soroban-testnet.stellar.org"},
-		AnchorPlatformBaseSepURL:        "localhost:8080",
-		AnchorPlatformBasePlatformURL:   "localhost:8085",
-		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
-		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
-		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
-		CAPTCHAType:                     validators.GoogleReCAPTCHAV2,
-		ReCAPTCHAV3MinScore:             0.5,
-		DisableMFA:                      false,
-		DisableReCAPTCHA:                false,
-		SubmitterEngine:                 submitterEngine,
-		DistributionAccountService:      mDistAccService,
-		MaxInvitationResendAttempts:     3,
-		DistAccEncryptionPassphrase:     distributionAccPrivKey,
-		CircleService:                   mCircleService,
-		CircleAPIType:                   circle.APITypeTransfers,
-		WebAuthnSessionCacheMaxEntries:  1024,
-		WebAuthnSessionTTLSeconds:       300,
+		Environment:                    "test",
+		GitCommit:                      "1234567890abcdef",
+		Port:                           8000,
+		Version:                        "x.y.z",
+		InstanceName:                   "SDP Testnet",
+		MonitorService:                 mMonitorService,
+		AdminDBConnectionPool:          dbConnectionPool,
+		MtnDBConnectionPool:            dbConnectionPool,
+		TSSDBConnectionPool:            dbConnectionPool,
+		EC256PrivateKey:                "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
+		CorsAllowedOrigins:             []string{"*"},
+		SEP24JWTSecret:                 "jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4",
+		BaseURL:                        "https://sdp-backend.stellar.org",
+		ResetTokenExpirationHours:      24,
+		NetworkPassphrase:              network.TestNetworkPassphrase,
+		NetworkType:                    utils.TestnetNetworkType,
+		Sep10SigningPublicKey:          "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+		Sep10SigningPrivateKey:         "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
+		Sep45ContractID:                "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+		RPCConfig:                      stellar.RPCOptions{RPCUrl: "https://soroban-testnet.stellar.org"},
+		Sep10ClientAttributionRequired: true,
+		ReCAPTCHASiteKey:               "reCAPTCHASiteKey",
+		ReCAPTCHASiteSecretKey:         "reCAPTCHASiteSecretKey",
+		CAPTCHAType:                    validators.GoogleReCAPTCHAV2,
+		ReCAPTCHAV3MinScore:            0.5,
+		DisableMFA:                     false,
+		DisableReCAPTCHA:               false,
+
+		SubmitterEngine:                submitterEngine,
+		DistributionAccountService:     mDistAccService,
+		MaxInvitationResendAttempts:    3,
+		DistAccEncryptionPassphrase:    distributionAccPrivKey,
+		CircleService:                  mCircleService,
+		CircleAPIType:                  circle.APITypeTransfers,
+		WebAuthnSessionCacheMaxEntries: 1024,
+		WebAuthnSessionTTLSeconds:      300,
 	}
-	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
-	require.NoError(t, err)
 
 	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
 		Environment:      serveOpts.Environment,
@@ -249,7 +243,7 @@ func Test_serve(t *testing.T) {
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartAdminServe", serveTenantOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
-		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, schedulerOpts, serveOpts.AnchorPlatformAPIService, mock.Anything).
+		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, schedulerOpts, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
 	mServer.wg.Add(2)
@@ -277,9 +271,6 @@ func Test_serve(t *testing.T) {
 	t.Setenv("SEP10_SIGNING_PRIVATE_KEY", serveOpts.Sep10SigningPrivateKey)
 	t.Setenv("SEP45_CONTRACT_ID", serveOpts.Sep45ContractID)
 	t.Setenv("RPC_URL", serveOpts.RPCConfig.RPCUrl)
-	t.Setenv("ANCHOR_PLATFORM_BASE_SEP_URL", serveOpts.AnchorPlatformBaseSepURL)
-	t.Setenv("ANCHOR_PLATFORM_BASE_PLATFORM_URL", serveOpts.AnchorPlatformBasePlatformURL)
-	t.Setenv("ANCHOR_PLATFORM_OUTGOING_JWT_SECRET", serveOpts.AnchorPlatformOutgoingJWTSecret)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA")
 	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))

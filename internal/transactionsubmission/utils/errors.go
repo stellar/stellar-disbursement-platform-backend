@@ -7,10 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -341,6 +341,7 @@ func (e *HorizonErrorWrapper) ShouldMarkAsError() bool {
 		"op_line_full",
 		"op_not_authorized",
 		"op_no_issuer",
+		"entry_archived",
 	}
 	for _, opResult := range e.ResultCodes.OperationCodes {
 		if slices.Contains(failedOpCodes, opResult) {

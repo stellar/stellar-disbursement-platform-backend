@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -232,6 +232,10 @@ func (s *ChannelAccountsService) EnsureChannelAccountsCount(ctx context.Context,
 	}
 
 	log.Ctx(ctx).Infof("⚙️ Desired Accounts Count: %d", numAccountsToEnsure)
+
+	if numAccountsToEnsure < MinNumberOfChannelAccounts {
+		return fmt.Errorf("count entered %d is less than the minimum channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, MinNumberOfChannelAccounts)
+	}
 
 	if numAccountsToEnsure > MaxNumberOfChannelAccounts {
 		return fmt.Errorf("count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, MaxNumberOfChannelAccounts)
