@@ -7,7 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"github.com/stellar/go/strkey"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -186,7 +187,7 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 			Payment: txSubStore.Payment{
 				AssetCode:   "USDC",
 				AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				Amount:      100,
+				Amount:      decimal.NewFromInt(100),
 				Destination: "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU",
 			},
 			TenantID: testCtx.tenantID,

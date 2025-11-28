@@ -36,7 +36,6 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
-	github.com/stellar/go v0.0.0-20240924182550-69667b25baf4
 	github.com/stellar/go-stellar-sdk v0.0.0-20251125023429-4c8c6f69a699
 	github.com/stellar/stellar-rpc v0.9.6-0.20250130160539-be7702aa01ba
 	github.com/stretchr/testify v1.11.1
@@ -95,6 +94,7 @@ require (
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/stellar/go v0.0.0-20240924182550-69667b25baf4 // indirect
 	github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/shopspring/decimal"
 )
 
 func SQLNullString(s string) sql.NullString {
@@ -14,10 +15,10 @@ func SQLNullString(s string) sql.NullString {
 	}
 }
 
-func SQLNullFloat64(f float64) sql.NullFloat64 {
-	return sql.NullFloat64{
-		Float64: f,
-		Valid:   f != 0,
+func SQLNullNumeric(d decimal.Decimal) sql.NullString {
+	return sql.NullString{
+		String: d.String(),
+		Valid:  d.Sign() != 0,
 	}
 }
 

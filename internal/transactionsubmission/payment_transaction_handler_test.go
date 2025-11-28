@@ -3,16 +3,15 @@ package transactionsubmission
 import (
 	"context"
 	"database/sql"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -262,7 +261,7 @@ func Test_PaymentHandler_BuildInnerTransaction(t *testing.T) {
 				}
 
 				var operation txnbuild.Operation
-				amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+				amount := txJob.Transaction.Amount.StringFixed(6)
 				if strkey.IsValidEd25519PublicKey(tc.destinationAddress) {
 					operation = &txnbuild.Payment{
 						SourceAccount: distributionKP.Address(),

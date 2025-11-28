@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/google/uuid"
@@ -1637,7 +1636,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
 					SourceAccount: distributionKP.Address(),
-					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32),
+					Amount:        txJob.Transaction.Amount.StringFixed(6),
 					Destination:   txJob.Transaction.Destination,
 					Asset:         &txnbuild.CreditAsset{Code: txJob.Transaction.AssetCode, Issuer: txJob.Transaction.AssetIssuer},
 				},

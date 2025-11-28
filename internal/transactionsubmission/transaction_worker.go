@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon"
-	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 
@@ -466,69 +465,6 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 
 	return feeBumpTx, nil
-}
-
-func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string, asset txnbuild.Asset) (*txnbuild.Transaction, error) {
-	var operation txnbuild.Operation
-	var txMemo txnbuild.Memo
-	amount := txJob.Transaction.Amount.StringFixed(6)
-
-	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
-		memo, err := txJob.Transaction.BuildMemo()
-		if err != nil {
-			return nil, fmt.Errorf("building memo: %w", err)
-		}
-		txMemo = memo
-
-		operation = &txnbuild.Payment{
-			SourceAccount: distributionAccount,
-			Amount:        amount,
-			Destination:   txJob.Transaction.Destination,
-			Asset:         asset,
-		}
-	} else if strkey.IsValidContractAddress(txJob.Transaction.Destination) {
-		if txJob.Transaction.Memo != "" {
-			return nil, fmt.Errorf("memo is not supported for contract destination (%s)", txJob.Transaction.Destination)
-		}
-		params := txnbuild.PaymentToContractParams{
-			NetworkPassphrase: tw.engine.SignatureService.NetworkPassphrase(),
-			Destination:       txJob.Transaction.Destination,
-			Amount:            amount,
-			Asset:             asset,
-			SourceAccount:     distributionAccount,
-		}
-		op, err := txnbuild.NewPaymentToContract(params)
-		if err != nil {
-			return nil, fmt.Errorf("building payment to contract operation: %w", err)
-		}
-		operation = &op
-	} else {
-		return nil, fmt.Errorf("invalid destination account (%s)", txJob.Transaction.Destination)
-	}
-
-	paymentTx, err := txnbuild.NewTransaction(
-		txnbuild.TransactionParams{
-			SourceAccount: &txnbuild.SimpleAccount{
-				AccountID: txJob.ChannelAccount.PublicKey,
-				Sequence:  channelAccountSequenceNum,
-			},
-			Operations: []txnbuild.Operation{
-				operation,
-			},
-			Memo:    txMemo,
-			BaseFee: int64(tw.engine.MaxBaseFee),
-			Preconditions: txnbuild.Preconditions{
-				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
-				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)}, // currently, 8-10 ledgers in the future
-			},
-			IncrementSequenceNum: true,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("building payment transaction: %w", err)
-	}
-
-	return paymentTx, nil
 }
 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {

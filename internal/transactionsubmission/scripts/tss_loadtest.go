@@ -10,9 +10,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/log"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
@@ -195,7 +196,7 @@ func createPaymentTransactions(ctx context.Context, txModel *store.TransactionMo
 			Payment: store.Payment{
 				AssetCode:   assetCode,
 				AssetIssuer: assetIssuer,
-				Amount:      0.1,
+				Amount:      decimal.NewFromFloat(0.1),
 				Destination: destination,
 			},
 			TenantID: tenantID,

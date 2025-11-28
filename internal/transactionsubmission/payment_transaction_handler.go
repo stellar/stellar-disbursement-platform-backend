@@ -3,11 +3,10 @@ package transactionsubmission
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -58,7 +57,7 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 
 	var operation txnbuild.Operation
 	var txMemo txnbuild.Memo
-	amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+	amount := txJob.Transaction.Amount.StringFixed(6)
 
 	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
 		memo, err := txJob.Transaction.BuildMemo()

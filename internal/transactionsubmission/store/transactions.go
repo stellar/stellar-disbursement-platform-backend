@@ -173,7 +173,7 @@ func (p *Payment) validate() error {
 			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", p.AssetIssuer)
 		}
 	}
-	if tx.Amount.LessThanOrEqual(decimal.Zero) {
+	if p.Amount.LessThanOrEqual(decimal.Zero) {
 		return fmt.Errorf("amount must be positive")
 	}
 	if !strkey.IsValidEd25519PublicKey(p.Destination) && !strkey.IsValidContractAddress(p.Destination) {
@@ -284,7 +284,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 			transaction.ExternalID,
 			sdpUtils.SQLNullString(transaction.AssetCode),
 			sdpUtils.SQLNullString(transaction.AssetIssuer),
-			sdpUtils.SQLNullFloat64(transaction.Amount),
+			sdpUtils.SQLNullNumeric(transaction.Amount),
 			sdpUtils.SQLNullString(transaction.Destination),
 			sdpUtils.SQLNullString(transaction.PublicKey),
 			sdpUtils.SQLNullString(transaction.WasmHash),
