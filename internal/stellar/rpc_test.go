@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stellar/stellar-rpc/protocol"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
