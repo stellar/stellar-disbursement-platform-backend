@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type RetryInvitationMessageResponse struct {
@@ -138,8 +139,8 @@ func (h ReceiverWalletsHandler) validateAndUpdateStatus(ctx context.Context, rec
 }
 
 type PatchReceiverWalletRequest struct {
-	StellarAddress string `json:"stellar_address"`
-	StellarMemo    string `json:"stellar_memo,omitempty"`
+	StellarAddress string  `json:"stellar_address"`
+	StellarMemo    *string `json:"stellar_memo,omitempty"`
 }
 
 // PatchReceiverWallet updates a receiver wallet's Stellar address and memo for user-managed wallets
@@ -167,14 +168,15 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 	}
 
 	// Validate required fields in the request body
-	if strings.TrimSpace(patchRequest.StellarAddress) == "" {
+	patchRequest.StellarAddress = strings.TrimSpace(patchRequest.StellarAddress)
+	if patchRequest.StellarAddress == "" {
 		httperror.BadRequest("stellar_address is required", nil, nil).Render(rw)
 		return
 	}
 
-	// Validate that stellar_address is a valid Stellar public key
-	if !strkey.IsValidEd25519PublicKey(patchRequest.StellarAddress) {
-		httperror.BadRequest("stellar_address must be a valid Stellar public key", nil, nil).Render(rw)
+	// Validate that stellar_address is a valid Stellar address
+	if !strkey.IsValidEd25519PublicKey(patchRequest.StellarAddress) && !strkey.IsValidContractAddress(patchRequest.StellarAddress) {
+		httperror.BadRequest("stellar_address must be a valid Stellar account or contract address", nil, nil).Render(rw)
 		return
 	}
 
@@ -198,20 +200,44 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 			StellarAddress: patchRequest.StellarAddress,
 		}
 
-		memo := strings.TrimSpace(patchRequest.StellarMemo)
-		memoType, memoErr := validators.ValidateWalletAddressMemo(patchRequest.StellarAddress, memo)
-		if memoErr != nil {
-			return nil, fmt.Errorf("validating memo %s: %w", patchRequest.StellarMemo, memoErr)
+		// 3. Validate memo if provided
+		if patchRequest.StellarMemo != nil {
+			trimmed := strings.TrimSpace(*patchRequest.StellarMemo)
+			*patchRequest.StellarMemo = trimmed
 		}
-		walletUpdate.StellarMemo = &memo
-		walletUpdate.StellarMemoType = &memoType
+		memoProvided := patchRequest.StellarMemo != nil
+		if strkey.IsValidContractAddress(patchRequest.StellarAddress) {
+			// An empty memo must be explicitly provided to clear existing memos if replacing with a contract address
+			if (currentReceiverWallet.StellarMemo != "" || currentReceiverWallet.StellarMemoType != "") && !memoProvided {
+				return nil, httperror.BadRequest("Clear memo before assigning a contract address", nil, nil)
+			}
 
-		// 3: Update the receiver wallet
+			// Reject any non-empty memo for contract addresses
+			if memoProvided && *patchRequest.StellarMemo != "" {
+				return nil, httperror.BadRequest("Memos are not supported for contract addresses", nil, nil)
+			}
+
+			if memoProvided {
+				walletUpdate.StellarMemo = utils.StringPtr("")
+				walletUpdate.StellarMemoType = utils.Ptr(schema.MemoType(""))
+			}
+		} else if memoProvided {
+			// Validate the memo for non-contract addresses
+			memoType, memoErr := validators.ValidateWalletAddressMemo(patchRequest.StellarAddress, *patchRequest.StellarMemo)
+			if memoErr != nil {
+				return nil, fmt.Errorf("validating memo %s: %w", *patchRequest.StellarMemo, memoErr)
+			}
+
+			walletUpdate.StellarMemo = patchRequest.StellarMemo
+			walletUpdate.StellarMemoType = &memoType
+		}
+
+		// 4: Update the receiver wallet
 		if txErr = h.Models.ReceiverWallet.Update(ctx, receiverWalletID, walletUpdate, dbTx); txErr != nil {
 			return nil, fmt.Errorf("updating receiver wallet %s: %w", receiverWalletID, txErr)
 		}
 
-		// 4: Retrieve the updated receiver wallet
+		// 5: Retrieve the updated receiver wallet
 		updatedWallet, txErr := h.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
 		if txErr != nil {
 			return nil, fmt.Errorf("getting updated receiver wallet %s: %w", receiverWalletID, txErr)

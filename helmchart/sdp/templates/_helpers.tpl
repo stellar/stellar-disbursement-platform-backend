@@ -138,57 +138,6 @@ TSS Metrics port
 {{- .Values.tss.route.metricsPort | default "9002" }}
 {{- end }}
 
-
-{{/*
-Anchor Platform domain
-*/}}
-{{- define "sdp.ap.domain" -}}
-{{- .Values.anchorPlatform.route.domain | default (printf "localhost:%s" (include "sdp.ap.sepPort" .)) }}
-{{- end }}
-
-{{/*
-Anchor Platform schema
-*/}}
-{{- define "sdp.ap.schema" -}}
-{{- .Values.anchorPlatform.route.schema | default "https" }}
-{{- end }}
-
-{{/*
-Anchor Platform SEP/public port
-*/}}
-{{- define "sdp.ap.sepPort" -}}
-{{- .Values.anchorPlatform.route.sepPort | default "8080" }}
-{{- end }}
-
-{{/*
-Anchor Platform internal communication port
-*/}}
-{{- define "sdp.ap.platformPort" -}}
-{{- .Values.anchorPlatform.route.platformPort | default "8085" }}
-{{- end }}
-
-{{/*
-Anchor Platform metrics port
-*/}}
-{{- define "sdp.ap.metricsPort" -}}
-{{- 8082 }}
-{{- end }}
-
-{{/*
-AP SEP full service address
-*/}}
-{{- define "sdp.ap.sepServiceAddress" -}}
-http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.sepPort" . }}
-{{- end -}}
-
-{{/*
-AP Platform full service address
-*/}}
-{{- define "sdp.ap.platformServiceAddress" -}}
-http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.platformPort" . }}
-{{- end -}}
-
-
 {{/*
 Dashboard domain
 */}}
@@ -303,13 +252,6 @@ SDP base URL with schema and domain
 */}}
 {{- define "sdp.baseURL" -}}
 {{- printf "%s://%s" (include "sdp.schema" .) (include "sdp.domain" .) -}}
-{{- end -}}
-
-{{/*
-AP SEP base URL with schema and domain
-*/}}
-{{- define "sdp.ap.baseURL" -}}
-{{- printf "%s://%s" (include "sdp.ap.schema" .) (include "sdp.ap.domain" .) -}}
 {{- end -}}
 
 {{/*

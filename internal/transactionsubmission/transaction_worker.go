@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -173,7 +174,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 // Errors marked as definitive error, that won't be resolved with retries:
 //
 //	Horizon: 400 with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
-//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer, entry_archived]
 //	RPC: Contract errors, auth failures
 //
 // Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
@@ -465,6 +466,69 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 
 	return feeBumpTx, nil
+}
+
+func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string, asset txnbuild.Asset) (*txnbuild.Transaction, error) {
+	var operation txnbuild.Operation
+	var txMemo txnbuild.Memo
+	amount := txJob.Transaction.Amount.StringFixed(6)
+
+	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
+		memo, err := txJob.Transaction.BuildMemo()
+		if err != nil {
+			return nil, fmt.Errorf("building memo: %w", err)
+		}
+		txMemo = memo
+
+		operation = &txnbuild.Payment{
+			SourceAccount: distributionAccount,
+			Amount:        amount,
+			Destination:   txJob.Transaction.Destination,
+			Asset:         asset,
+		}
+	} else if strkey.IsValidContractAddress(txJob.Transaction.Destination) {
+		if txJob.Transaction.Memo != "" {
+			return nil, fmt.Errorf("memo is not supported for contract destination (%s)", txJob.Transaction.Destination)
+		}
+		params := txnbuild.PaymentToContractParams{
+			NetworkPassphrase: tw.engine.SignatureService.NetworkPassphrase(),
+			Destination:       txJob.Transaction.Destination,
+			Amount:            amount,
+			Asset:             asset,
+			SourceAccount:     distributionAccount,
+		}
+		op, err := txnbuild.NewPaymentToContract(params)
+		if err != nil {
+			return nil, fmt.Errorf("building payment to contract operation: %w", err)
+		}
+		operation = &op
+	} else {
+		return nil, fmt.Errorf("invalid destination account (%s)", txJob.Transaction.Destination)
+	}
+
+	paymentTx, err := txnbuild.NewTransaction(
+		txnbuild.TransactionParams{
+			SourceAccount: &txnbuild.SimpleAccount{
+				AccountID: txJob.ChannelAccount.PublicKey,
+				Sequence:  channelAccountSequenceNum,
+			},
+			Operations: []txnbuild.Operation{
+				operation,
+			},
+			Memo:    txMemo,
+			BaseFee: int64(tw.engine.MaxBaseFee),
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
+				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)}, // currently, 8-10 ledgers in the future
+			},
+			IncrementSequenceNum: true,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("building payment transaction: %w", err)
+	}
+
+	return paymentTx, nil
 }
 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {

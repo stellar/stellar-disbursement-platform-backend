@@ -5,8 +5,8 @@ import (
 
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"

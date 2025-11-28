@@ -5,13 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -90,7 +91,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			},
 		}, nil).Once()
 
-		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(1000), nil)
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(decimal.NewFromFloat(1000.0), nil)
 
 		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
@@ -221,7 +222,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			},
 		}, nil).Once()
 
-		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(100), nil)
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(decimal.NewFromFloat(100.0), nil)
 
 		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
@@ -400,7 +401,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			},
 		}, nil).Once()
 
-		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountEnv, *asset).Return(float64(50000), nil)
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountEnv, *asset).Return(decimal.NewFromFloat(50000.0), nil)
 
 		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
@@ -536,7 +537,7 @@ func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
 	mockDistService := &mocks.MockDistributionAccountService{}
 	horizonClientMock := &horizonclient.MockClient{}
 
-	mockDistService.On("GetBalance", mock.Anything, &circleDistAccount, *asset).Return(float64(1000), nil)
+	mockDistService.On("GetBalance", mock.Anything, &circleDistAccount, *asset).Return(decimal.NewFromFloat(1000.0), nil)
 
 	service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 		HorizonClient: horizonClientMock,
@@ -586,7 +587,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 		name           string
 		payments       []payment
 		targetAsset    *data.Asset
-		expectedAmount float64
+		expectedAmount decimal.Decimal
 	}{
 		{
 			name: "sum for all in-progress statuses",
@@ -600,7 +601,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset1, "600.00", data.CanceledPaymentStatus}, // ignored
 			},
 			targetAsset:    asset1,
-			expectedAmount: 600.00,
+			expectedAmount: mustDecimalFromString("600.00"),
 		},
 		{
 			name: "other assets ignored",
@@ -609,13 +610,13 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset2, "999.99", data.PendingPaymentStatus},
 			},
 			targetAsset:    asset1,
-			expectedAmount: 50.00,
+			expectedAmount: mustDecimalFromString("50.00"),
 		},
 		{
 			name:           "zero sum for no in-progress payments",
 			payments:       []payment{},
 			targetAsset:    asset1,
-			expectedAmount: 0.0,
+			expectedAmount: decimal.Zero,
 		},
 		{
 			name: "zero-amount payment is included",
@@ -624,7 +625,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset1, "10.00", data.PausedPaymentStatus},
 			},
 			targetAsset:    asset1,
-			expectedAmount: 10.00,
+			expectedAmount: mustDecimalFromString("10.00"),
 		},
 		{
 			name: "multiple assets and mixed statuses",
@@ -636,13 +637,13 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset2, "500.00", data.DraftPaymentStatus},
 			},
 			targetAsset:    asset1,
-			expectedAmount: 500.00,
+			expectedAmount: mustDecimalFromString("500.00"),
 		},
 		{
 			name:           "empty payments table",
 			payments:       nil,
 			targetAsset:    asset1,
-			expectedAmount: 0.0,
+			expectedAmount: decimal.Zero,
 		},
 	}
 
@@ -663,7 +664,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 			total, err := service.calculatePendingAmountForAsset(ctx, tx, *tc.targetAsset)
 			require.NoError(t, err)
 
-			assert.Equal(t, tc.expectedAmount, total)
+			assert.True(t, tc.expectedAmount.Equal(total), "expected %s, got %s", tc.expectedAmount.String(), total.String())
 		})
 	}
 }
@@ -697,7 +698,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 	service := NewDirectPaymentService(models, nil, engine.SubmitterEngine{})
 
 	mockDistService := &mocks.MockDistributionAccountService{}
-	mockDistService.On("GetBalance", mock.Anything, distributionAccount, *asset).Return(100.0, nil)
+	mockDistService.On("GetBalance", mock.Anything, distributionAccount, *asset).Return(decimal.NewFromFloat(100.0), nil)
 	service.DistributionAccountService = mockDistService
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
@@ -734,6 +735,14 @@ func unwrapTransactionError(err error) error {
 		return txErr.Unwrap()
 	}
 	return err
+}
+
+func mustDecimalFromString(s string) decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func createPayment(
@@ -795,7 +804,7 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 	mockDistAccountService := &mocks.MockDistributionAccountService{}
 	mockDistAccountService.On("GetBalance", mock.Anything, distAccount, mock.MatchedBy(func(a data.Asset) bool {
 		return a.ID == asset.ID
-	})).Return(1000.0, nil).Once()
+	})).Return(decimal.NewFromFloat(1000.0), nil).Once()
 
 	mockHorizonClient := &horizonclient.MockClient{}
 	mockAccountReq := horizonclient.AccountRequest{AccountID: distAccount.Address}
@@ -904,4 +913,180 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 
 	mockDistAccountService.AssertExpectations(t)
 	mockHorizonClient.AssertExpectations(t)
+}
+
+func Test_TrustlineNotFoundError_Error(t *testing.T) {
+	err := TrustlineNotFoundError{
+		Asset: data.Asset{
+			Code:   "USDC",
+			Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		},
+		DistributionAccount: "GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS",
+	}
+
+	expectedMsg := "distribution account GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS does not have a trustline for asset USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_AccountNotFoundError_Error(t *testing.T) {
+	err := AccountNotFoundError{
+		Address: "GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS",
+	}
+
+	expectedMsg := "distribution account GDSPHTXJIMA762ZXHPPR5QR3ZA6CT7M3QQHYAFUDIBB5AJL2DM5F4OKS not found on the Stellar network"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_CircleAccountNotActivatedError_Error(t *testing.T) {
+	testCases := []struct {
+		name        string
+		accountType string
+		status      string
+		expected    string
+	}{
+		{
+			name:        "Circle wallet pending",
+			accountType: "CIRCLE",
+			status:      string(schema.AccountStatusPendingUserActivation),
+			expected:    "Circle distribution account is in PENDING_USER_ACTIVATION state, please complete the CIRCLE activation process",
+		},
+		{
+			name:        "Circle account inactive",
+			accountType: "CIRCLE",
+			status:      "INACTIVE",
+			expected:    "Circle distribution account is in INACTIVE state, please complete the CIRCLE activation process",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := CircleAccountNotActivatedError{
+				AccountType: tc.accountType,
+				Status:      tc.status,
+			}
+			assert.Equal(t, tc.expected, err.Error())
+		})
+	}
+}
+
+func Test_CircleAssetNotSupportedError_Error(t *testing.T) {
+	err := CircleAssetNotSupportedError{
+		Asset: data.Asset{
+			Code:   "EUROC",
+			Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		},
+	}
+
+	expectedMsg := "asset EUROC is not supported by Circle for this distribution account"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_WalletNotEnabledError_Error(t *testing.T) {
+	err := WalletNotEnabledError{
+		WalletName: "Vibrant Assist",
+	}
+
+	expectedMsg := "wallet 'Vibrant Assist' is not enabled for payments"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_ReceiverWalletNotFoundError_Error(t *testing.T) {
+	err := ReceiverWalletNotFoundError{
+		ReceiverID: "receiver-123",
+		WalletID:   "wallet-456",
+	}
+
+	expectedMsg := "no receiver wallet: receiver=receiver-123 wallet=wallet-456"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_ReceiverWalletNotReadyForPaymentError_Error(t *testing.T) {
+	testCases := []struct {
+		name   string
+		status data.ReceiversWalletStatus
+	}{
+		{
+			name:   "Draft status",
+			status: data.DraftReceiversWalletStatus,
+		},
+		{
+			name:   "Ready status",
+			status: data.ReadyReceiversWalletStatus,
+		},
+		{
+			name:   "Flagged status",
+			status: data.FlaggedReceiversWalletStatus,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ReceiverWalletNotReadyForPaymentError{
+				CurrentStatus: tc.status,
+			}
+			expectedMsg := "receiver wallet is not ready for payment, current status is " + string(tc.status)
+			assert.Equal(t, expectedMsg, err.Error())
+		})
+	}
+}
+
+func Test_AssetNotSupportedByWalletError_Error(t *testing.T) {
+	err := AssetNotSupportedByWalletError{
+		AssetCode:  "EUROC",
+		WalletName: "Vibrant Assist",
+	}
+
+	expectedMsg := "asset 'EUROC' is not supported by wallet 'Vibrant Assist'"
+	assert.Equal(t, expectedMsg, err.Error())
+}
+
+func Test_InsufficientBalanceForDirectPaymentError_Error(t *testing.T) {
+	testCases := []struct {
+		name               string
+		requestedAmount    decimal.Decimal
+		availableBalance   decimal.Decimal
+		totalPendingAmount decimal.Decimal
+		assetCode          string
+		expectedError      string
+	}{
+		{
+			name:               "Simple insufficient balance",
+			requestedAmount:    mustDecimalFromString("100.00"),
+			availableBalance:   mustDecimalFromString("50.00"),
+			totalPendingAmount: mustDecimalFromString("0.00"),
+			assetCode:          "USDC",
+			expectedError:      "insufficient balance for direct payment: requested 100.000000 USDC, but only 50.000000 available (0.000000 in pending payments). Need 50.000000 more USDC",
+		},
+		{
+			name:               "Insufficient with pending payments",
+			requestedAmount:    mustDecimalFromString("100.00"),
+			availableBalance:   mustDecimalFromString("120.00"),
+			totalPendingAmount: mustDecimalFromString("30.00"),
+			assetCode:          "USDC",
+			expectedError:      "insufficient balance for direct payment: requested 100.000000 USDC, but only 120.000000 available (30.000000 in pending payments). Need 10.000000 more USDC",
+		},
+		{
+			name:               "Large amount with pending",
+			requestedAmount:    mustDecimalFromString("1000.50"),
+			availableBalance:   mustDecimalFromString("500.25"),
+			totalPendingAmount: mustDecimalFromString("200.75"),
+			assetCode:          "XLM",
+			expectedError:      "insufficient balance for direct payment: requested 1000.500000 XLM, but only 500.250000 available (200.750000 in pending payments). Need 701.000000 more XLM",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := InsufficientBalanceForDirectPaymentError{
+				Asset: data.Asset{
+					Code:   tc.assetCode,
+					Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				},
+				RequestedAmount:    tc.requestedAmount,
+				AvailableBalance:   tc.availableBalance,
+				TotalPendingAmount: tc.totalPendingAmount,
+			}
+			assert.Equal(t, tc.expectedError, err.Error())
+		})
+	}
 }

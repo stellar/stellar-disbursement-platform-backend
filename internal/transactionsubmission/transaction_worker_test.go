@@ -10,14 +10,15 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -118,7 +119,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 		Status:             store.TransactionStatusProcessing,
-		Amount:             1,
+		Amount:             decimal.NewFromInt(1),
 		TenantID:           tenantID,
 	})
 	chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 1)[0]
@@ -807,6 +808,12 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 		{
 			name:            "400 (op_no_issuer) - Bad Request",
 			resultCodes:     map[string]interface{}{"operations": []string{"op_no_issuer"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		// - 400: with entry_archived error code
+		{
+			name:            "400 (entry_archived) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"entry_archived"}},
 			crashTrackerMsg: crashTrackerMessage,
 		},
 	}

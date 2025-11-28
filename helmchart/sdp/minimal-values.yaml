@@ -27,19 +27,6 @@ sdp:
   image:
     tag: "edge"
 
-# =========================== START Anchor ========================
-anchorPlatform:
-  route:
-    schema: "http"
-    domain: "ap.local"
-  ## Disable the TLS for the Anchor Platform ingress
-  ingress:
-    tls: []
-  ## Generate secrets for the Anchor Platform
-  kubeSecrets:
-    secretName: sdp-ap
-    create: true
-
 # =========================== START TSS ===========================
 tss:
   ## Generate secrets for the TSS

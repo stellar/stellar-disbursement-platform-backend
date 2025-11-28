@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -1968,7 +1969,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Once()
 
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
-			Return(10000.0, nil).Once()
+			Return(decimal.NewFromFloat(10000.0), nil).Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
@@ -1995,7 +1996,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Once()
 
 		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
-			Return(10000.0, nil).Once()
+			Return(decimal.NewFromFloat(10000.0), nil).Once()
 
 		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 			Name:          "ready disbursement #3",

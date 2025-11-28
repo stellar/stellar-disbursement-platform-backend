@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/txnbuild"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -126,7 +127,6 @@ func Test_Transaction_IsLocked(t *testing.T) {
 			wantResult:              true,
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tx := &Transaction{LockedUntilLedgerNumber: tc.lockedUntilLedgerNumber}
@@ -159,7 +159,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 			Payment: Payment{
 				AssetCode:   "USDC",
 				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-				Amount:      1,
+				Amount:      decimal.NewFromInt(1),
 				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 			},
 			TenantID: "tenant-id-1",
@@ -175,7 +175,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 		assert.Equal(t, TransactionTypePayment, refreshedTx.TransactionType)
 		assert.Equal(t, "USDC", refreshedTx.AssetCode)
 		assert.Equal(t, "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", refreshedTx.AssetIssuer)
-		assert.Equal(t, float64(1), refreshedTx.Amount)
+		assert.True(t, decimal.NewFromInt(1).Equal(refreshedTx.Amount))
 		assert.Equal(t, "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y", refreshedTx.Destination)
 		assert.Equal(t, TransactionStatusPending, refreshedTx.Status)
 		assert.Equal(t, "tenant-id-1", refreshedTx.TenantID)
@@ -271,7 +271,7 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 				AssetCode:   "USDC",
 				AssetIssuer: keypair.MustRandom().Address(),
 				// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
-				Amount:      0.0000001,
+				Amount:      decimal.NewFromFloat(0.0000001),
 				Destination: keypair.MustRandom().Address(),
 			},
 			TenantID: uuid.NewString(),
@@ -283,7 +283,7 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 				AssetCode:   "USDC",
 				AssetIssuer: keypair.MustRandom().Address(),
 				// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
-				Amount:      922337203685.4775807,
+				Amount:      decimal.RequireFromString("922337203685.4775807"),
 				Destination: keypair.MustRandom().Address(),
 			},
 			TenantID: uuid.NewString(),
@@ -400,7 +400,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 		DestinationAddress: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		Status:             TransactionStatusPending,
-		Amount:             1.23,
+		Amount:             decimal.NewFromFloat(1.23),
 		TenantID:           uuid.NewString(),
 	})
 
@@ -431,7 +431,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 				AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 				DestinationAddress: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				Status:             tc.transactionStatus,
-				Amount:             1.23,
+				Amount:             decimal.NewFromFloat(1.23),
 				TenantID:           uuid.NewString(),
 			})
 			if (tc.transactionStatus != TransactionStatusSuccess) && (tc.transactionStatus != TransactionStatusError) {
@@ -518,7 +518,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 		Status:             TransactionStatusPending,
-		Amount:             1.23,
+		Amount:             decimal.NewFromFloat(1.23),
 		TenantID:           uuid.NewString(),
 	})
 
@@ -549,7 +549,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 				Status:             tc.transactionStatus,
-				Amount:             1.23,
+				Amount:             decimal.NewFromFloat(1.23),
 				TenantID:           uuid.NewString(),
 			})
 			assert.Empty(t, tx.StatusMessage)
@@ -654,7 +654,6 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 			distributionAccount: "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU",
 		},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// create a new transaction
@@ -664,7 +663,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 				Payment: Payment{
 					AssetCode:   "USDC",
 					AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-					Amount:      1,
+					Amount:      decimal.NewFromInt(1),
 					Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 				},
 				TenantID: uuid.NewString(),
@@ -782,7 +781,7 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 				Payment: Payment{
 					AssetCode:   "USDC",
 					AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-					Amount:      1,
+					Amount:      decimal.NewFromInt(1),
 					Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 				},
 				TenantID: uuid.NewString(),
@@ -899,7 +898,7 @@ func Test_Transaction_validate_payment(t *testing.T) {
 				Payment: Payment{
 					AssetCode:   "USDC",
 					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-					Amount:      100.0,
+					Amount:      decimal.NewFromFloat(100.0),
 					Destination: "invalid-destination",
 				},
 				TenantID: "tenant-id",
@@ -914,7 +913,7 @@ func Test_Transaction_validate_payment(t *testing.T) {
 				Payment: Payment{
 					AssetCode:   "USDC",
 					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-					Amount:      100.0,
+					Amount:      decimal.NewFromFloat(100.0),
 					Destination: "GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG",
 				},
 				TenantID: "",
@@ -922,7 +921,6 @@ func Test_Transaction_validate_payment(t *testing.T) {
 			wantErrContains: `tenant ID is required`,
 		},
 	}
-
 	validAddresses := []string{
 		"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		"CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
@@ -940,7 +938,7 @@ func Test_Transaction_validate_payment(t *testing.T) {
 				TransactionType: TransactionTypePayment,
 				Payment: Payment{
 					AssetCode:   "XLM",
-					Amount:      100.0,
+					Amount:      decimal.NewFromFloat(100.0),
 					Destination: address,
 				},
 				TenantID: "tenant-id",
@@ -959,7 +957,7 @@ func Test_Transaction_validate_payment(t *testing.T) {
 				Payment: Payment{
 					AssetCode:   "USDC",
 					AssetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-					Amount:      100.0,
+					Amount:      decimal.NewFromFloat(100.0),
 					Destination: address,
 				},
 				TenantID: "tenant-id",
@@ -1219,7 +1217,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 					Status:             tc.transactionStatus,
-					Amount:             1.2,
+					Amount:             decimal.NewFromFloat(1.2),
 					TenantID:           tenantID,
 				})
 			}
@@ -1279,7 +1277,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate_WithTransactionTypes(t *
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 		Status:             TransactionStatusSuccess,
-		Amount:             1.2,
+		Amount:             decimal.NewFromFloat(1.2),
 		TenantID:           tenantID,
 	})
 
@@ -1400,7 +1398,7 @@ func Test_TransactionModel_GetTransactionPendingUpdateByID(t *testing.T) {
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 					Status:             tc.transactionStatus,
-					Amount:             1.2,
+					Amount:             decimal.NewFromFloat(1.2),
 					TenantID:           uuid.NewString(),
 				})
 				defer DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
@@ -1488,7 +1486,7 @@ func Test_TransactionModel_UpdateSyncedTransactions(t *testing.T) {
 					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 					Status:             tc.transactionStatus,
-					Amount:             1.2,
+					Amount:             decimal.NewFromFloat(1.2),
 					TenantID:           uuid.NewString(),
 				})
 				for _, tx := range transactions {
@@ -1616,7 +1614,7 @@ func Test_TransactionModel_Lock(t *testing.T) {
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 				Status:             tc.initialStatus,
-				Amount:             1,
+				Amount:             decimal.NewFromInt(1),
 				TenantID:           uuid.NewString(),
 			})
 			q := `UPDATE submitter_transactions SET locked_at = $1, locked_until_ledger_number = $2, synced_at = $3, status = $4 WHERE id = $5`
@@ -1707,7 +1705,7 @@ func Test_TransactionModel_Unlock(t *testing.T) {
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 				Status:             tc.initialStatus,
-				Amount:             1,
+				Amount:             decimal.NewFromInt(1),
 				TenantID:           uuid.NewString(),
 			})
 			q := `UPDATE submitter_transactions SET locked_at = $1, locked_until_ledger_number = $2, synced_at = $3, status = $4 WHERE id = $5`
@@ -1787,7 +1785,7 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 				Status:             tc.status,
-				Amount:             1,
+				Amount:             decimal.NewFromInt(1),
 				TenantID:           uuid.NewString(),
 			})
 			q := `UPDATE submitter_transactions SET status = $1, synced_at = $2, locked_at = NOW(), locked_until_ledger_number=$3 WHERE id = $4`

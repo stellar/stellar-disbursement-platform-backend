@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"

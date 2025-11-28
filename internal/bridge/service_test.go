@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -265,7 +266,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		mockDistAccountService := mocks.NewMockDistributionAccountService(t)
 		mockDistAccountService.
 			On("GetBalance", mock.Anything, mock.Anything, assets.USDCAssetTestnet).
-			Return(0.0, errors.New("no trustline found")).
+			Return(decimal.Zero, errors.New("no trustline found")).
 			Once()
 		svc.distributionAccountService = mockDistAccountService
 
@@ -299,7 +300,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 
 		mockDistAccountService.
 			On("GetBalance", mock.Anything, &testDistAccount, assets.USDCAssetPubnet).
-			Return(50.0, nil).
+			Return(decimal.NewFromFloat(50.0), nil).
 			Once()
 
 		kycResponse := &KYCLinkInfo{
@@ -774,7 +775,7 @@ func Test_Service_validateUSDCTrustline(t *testing.T) {
 
 		mockDistAccountService.
 			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetTestnet).
-			Return(0.0, errors.New("trustline not found")).
+			Return(decimal.Zero, errors.New("trustline not found")).
 			Once()
 
 		svc := &Service{
@@ -802,7 +803,7 @@ func Test_Service_validateUSDCTrustline(t *testing.T) {
 
 		mockDistAccountService.
 			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetPubnet).
-			Return(0.0, errors.New("no trustline exists")).
+			Return(decimal.Zero, errors.New("no trustline exists")).
 			Once()
 
 		svc := &Service{
@@ -830,7 +831,7 @@ func Test_Service_validateUSDCTrustline(t *testing.T) {
 
 		mockDistAccountService.
 			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetTestnet).
-			Return(0.0, nil).
+			Return(decimal.Zero, nil).
 			Once()
 
 		svc := &Service{
@@ -857,7 +858,7 @@ func Test_Service_validateUSDCTrustline(t *testing.T) {
 
 		mockDistAccountService.
 			On("GetBalance", ctx, &testDistAccount, assets.USDCAssetPubnet).
-			Return(250.5, nil).
+			Return(decimal.NewFromFloat(250.5), nil).
 			Once()
 
 		svc := &Service{
@@ -888,7 +889,7 @@ func createService(t *testing.T, mockClient *MockClient, models *data.Models) *S
 	mockDistAccountService := mocks.NewMockDistributionAccountService(t)
 	mockDistAccountService.
 		On("GetBalance", mock.Anything, mock.Anything, assets.USDCAssetTestnet).
-		Return(100.0, nil).
+		Return(decimal.NewFromFloat(100.0), nil).
 		Maybe()
 
 	return &Service{

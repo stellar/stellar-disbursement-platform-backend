@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 )
 
 const DefaultNamespace = "sdp"
