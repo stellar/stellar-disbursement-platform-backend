@@ -4,27 +4,38 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/stellar/go-stellar-sdk/clients/stellartoml"
 	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-rpc/protocol"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 // The number of ledgers after which the server-signed authorization entry expires.
 const signatureExpirationLedgers = 10
+
+var (
+	ErrSEP45Validation = errors.New("sep45 validation error")
+	ErrSEP45Internal   = errors.New("sep45 internal error")
+)
 
 //go:generate mockery --name=SEP45Service --case=underscore --structname=MockSEP45Service --filename=sep45_service_mock.go --inpackage
 type SEP45Service interface {
@@ -37,6 +48,7 @@ type SEP45Service interface {
 type sep45Service struct {
 	rpcClient                 stellar.RPCClient
 	tomlClient                stellartoml.ClientInterface
+	jwtManager                *sepauth.JWTManager
 	networkPassphrase         string
 	contractID                xdr.ContractId
 	signingKP                 *keypair.Full
@@ -44,6 +56,7 @@ type sep45Service struct {
 	clientAttributionRequired bool
 	allowHTTPRetry            bool
 	baseURL                   string
+	jwtExpiration             time.Duration
 }
 
 type SEP45ChallengeRequest struct {
@@ -74,6 +87,13 @@ type SEP45ValidationRequest struct {
 	AuthorizationEntries string `json:"authorization_entries" form:"authorization_entries"`
 }
 
+func (r SEP45ValidationRequest) Validate() error {
+	if strings.TrimSpace(r.AuthorizationEntries) == "" {
+		return fmt.Errorf("authorization_entries is required")
+	}
+	return nil
+}
+
 type SEP45ValidationResponse struct {
 	Token string `json:"token"`
 }
@@ -81,17 +101,22 @@ type SEP45ValidationResponse struct {
 type SEP45ServiceOptions struct {
 	RPCClient                 stellar.RPCClient
 	TOMLClient                stellartoml.ClientInterface
+	JWTManager                *sepauth.JWTManager
 	NetworkPassphrase         string
 	WebAuthVerifyContractID   string
 	ServerSigningKeypair      *keypair.Full
 	BaseURL                   string
 	ClientAttributionRequired bool
 	AllowHTTPRetry            bool
+	JWTExpiration             time.Duration
 }
 
 func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 	if opts.RPCClient == nil {
 		return nil, fmt.Errorf("rpc client cannot be nil")
+	}
+	if opts.JWTManager == nil {
+		return nil, fmt.Errorf("jwt manager cannot be nil")
 	}
 	if strings.TrimSpace(opts.NetworkPassphrase) == "" {
 		return nil, fmt.Errorf("network passphrase cannot be empty")
@@ -127,6 +152,7 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 	return &sep45Service{
 		rpcClient:                 opts.RPCClient,
 		tomlClient:                tomlClient,
+		jwtManager:                opts.JWTManager,
 		networkPassphrase:         opts.NetworkPassphrase,
 		contractID:                contractID,
 		signingKP:                 signingKP,
@@ -134,27 +160,28 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 		clientAttributionRequired: opts.ClientAttributionRequired,
 		allowHTTPRetry:            opts.AllowHTTPRetry,
 		baseURL:                   opts.BaseURL,
+		jwtExpiration:             2 * time.Hour,
 	}, nil
 }
 
 func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRequest) (*SEP45ChallengeResponse, error) {
 	if err := req.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 	}
 
 	webAuthDomain := s.getWebAuthDomain(ctx)
 	if strings.TrimSpace(webAuthDomain) == "" {
-		return nil, fmt.Errorf("unable to determine web_auth_domain")
+		return nil, fmt.Errorf("%w: unable to determine web_auth_domain", ErrSEP45Internal)
 	}
 
 	account := strings.TrimSpace(req.Account)
 	homeDomain := strings.TrimSpace(req.HomeDomain)
 	if homeDomain == "" {
-		return nil, fmt.Errorf("home_domain is required")
+		return nil, fmt.Errorf("%w: home_domain is required", ErrSEP45Validation)
 	}
 
 	if !s.isValidHomeDomain(homeDomain) {
-		return nil, fmt.Errorf("home_domain must match %s", s.getBaseDomain())
+		return nil, fmt.Errorf("%w: home_domain must match %s", ErrSEP45Validation, s.getBaseDomain())
 	}
 
 	clientDomain := ""
@@ -162,14 +189,14 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 		clientDomain = strings.TrimSpace(*req.ClientDomain)
 	}
 	if s.clientAttributionRequired && clientDomain == "" {
-		return nil, fmt.Errorf("client_domain is required")
+		return nil, fmt.Errorf("%w: client_domain is required", ErrSEP45Validation)
 	}
 
 	var clientDomainAccount string
 	if clientDomain != "" {
 		key, err := s.fetchSigningKeyFromClientDomain(clientDomain)
 		if err != nil {
-			return nil, fmt.Errorf("fetching signing key for client_domain %s: %w", clientDomain, err)
+			return nil, fmt.Errorf("%w: fetching signing key for client_domain %s: %w", ErrSEP45Internal, clientDomain, err)
 		}
 		clientDomainAccount = key
 	}
@@ -178,7 +205,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	// This is also the case with the SEP-10 implementation, so we should address them together.
 	nonce, err := generateNonce()
 	if err != nil {
-		return nil, fmt.Errorf("generating nonce: %w", err)
+		return nil, fmt.Errorf("%w: generating nonce: %w", ErrSEP45Internal, err)
 	}
 
 	// Build the invocation arguments for the web_auth_verify contract function, ensuring
@@ -202,7 +229,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	scMap := xdr.ScMap(fields)
 	arg, err := xdr.NewScVal(xdr.ScValTypeScvMap, &scMap)
 	if err != nil {
-		return nil, fmt.Errorf("building invocation arguments: %w", err)
+		return nil, fmt.Errorf("%w: building invocation arguments: %w", ErrSEP45Internal, err)
 	}
 	args := xdr.ScVec{arg}
 
@@ -343,25 +370,25 @@ func (t *authEntryTracker) processEntry(entry xdr.SorobanAuthorizationEntry, par
 func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45ValidationRequest) (*SEP45ValidationResponse, error) {
 	webAuthDomain := strings.TrimSpace(s.getWebAuthDomain(ctx))
 	if webAuthDomain == "" {
-		return nil, fmt.Errorf("unable to determine web_auth_domain")
+		return nil, fmt.Errorf("%w: unable to determine web_auth_domain", ErrSEP45Internal)
 	}
 
 	encodedEntries := strings.TrimSpace(req.AuthorizationEntries)
 	if encodedEntries == "" {
-		return nil, fmt.Errorf("authorization_entries is required")
+		return nil, fmt.Errorf("%w: authorization_entries is required", ErrSEP45Validation)
 	}
 
 	rawEntries, err := base64.StdEncoding.DecodeString(encodedEntries)
 	if err != nil {
-		return nil, fmt.Errorf("decoding authorization entries: %w", err)
+		return nil, fmt.Errorf("%w: decoding authorization entries: %w", ErrSEP45Validation, err)
 	}
 
 	var entries xdr.SorobanAuthorizationEntries
 	if err := entries.UnmarshalBinary(rawEntries); err != nil {
-		return nil, fmt.Errorf("unmarshalling authorization entries: %w", err)
+		return nil, fmt.Errorf("%w: unmarshalling authorization entries: %w", ErrSEP45Validation, err)
 	}
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("authorization entries cannot be empty")
+		return nil, fmt.Errorf("%w: authorization entries cannot be empty", ErrSEP45Validation)
 	}
 
 	var (
@@ -372,28 +399,28 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 	for _, entry := range entries {
 		contractFn, err := s.ensureWebAuthInvocation(entry)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 		}
 
 		// Extract the invocation arguments and make sure they are valid and consistent across entries
 		if parsedArgs, err = s.validateArguments(contractFn.Args, parsedArgs, webAuthDomain); err != nil {
-			return nil, fmt.Errorf("validating invocation arguments: %w", err)
+			return nil, fmt.Errorf("%w: validating invocation arguments: %w", ErrSEP45Validation, err)
 		}
 
 		// Check that we have the expected authorization entries
 		if err := tracker.processEntry(entry, parsedArgs, s); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 		}
 	}
 
 	if parsedArgs == nil {
-		return nil, fmt.Errorf("missing authorization arguments")
+		return nil, fmt.Errorf("%w: missing authorization arguments", ErrSEP45Validation)
 	}
 	if err := tracker.validate(parsedArgs.clientDomainAccount != ""); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 	}
 	if len(parsedArgs.xdr) == 0 {
-		return nil, fmt.Errorf("unable to rebuild invocation arguments")
+		return nil, fmt.Errorf("%w: unable to rebuild invocation arguments", ErrSEP45Internal)
 	}
 
 	contractID := s.contractID
@@ -430,21 +457,66 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 
 	tx, err := txnbuild.NewTransaction(txParams)
 	if err != nil {
-		return nil, fmt.Errorf("building transaction: %w", err)
+		return nil, fmt.Errorf("%w: building transaction: %w", ErrSEP45Internal, err)
 	}
 
 	txB64, err := tx.Base64()
 	if err != nil {
-		return nil, fmt.Errorf("encoding transaction: %w", err)
+		return nil, fmt.Errorf("%w: encoding transaction: %w", ErrSEP45Internal, err)
 	}
 
 	// Simulate the transaction to validate the authorization entries and ensure the contract invocation is valid.
 	// We don't care about the result here, just that it succeeds.
 	if _, simErr := s.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{Transaction: txB64}); simErr != nil {
-		return nil, fmt.Errorf("simulating transaction: %w", simErr)
+		return nil, fmt.Errorf("%w: simulating transaction: %w", ErrSEP45Internal, simErr)
 	}
 
-	return nil, fmt.Errorf("sep45 jwt generation not implemented")
+	jti, err := s.deriveJTI(entries)
+	if err != nil {
+		return nil, fmt.Errorf("%w: deriving JTI: %w", ErrSEP45Internal, err)
+	}
+
+	protocolScheme := "http"
+	if parsedURL, parseErr := url.Parse(s.baseURL); parseErr == nil && parsedURL.Scheme != "" {
+		protocolScheme = parsedURL.Scheme
+	}
+
+	iat := time.Now().UTC()
+	exp := iat.Add(s.jwtExpiration)
+
+	issuer := fmt.Sprintf("%s://%s/sep45/auth", protocolScheme, parsedArgs.homeDomain)
+
+	token, err := s.jwtManager.GenerateSEP45Token(
+		issuer,
+		parsedArgs.clientAccount,
+		jti,
+		parsedArgs.clientDomain,
+		parsedArgs.homeDomain,
+		iat,
+		exp,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: generating SEP45 JWT: %w", ErrSEP45Internal, err)
+	}
+
+	return &SEP45ValidationResponse{Token: token}, nil
+}
+
+func (s *sep45Service) deriveJTI(entries xdr.SorobanAuthorizationEntries) (string, error) {
+	if len(entries) == 0 {
+		return "", fmt.Errorf("authorization entries cannot be empty")
+	}
+
+	invocationBytes, err := entries[0].RootInvocation.MarshalBinary()
+	if err != nil {
+		return "", fmt.Errorf("marshalling root invocation: %w", err)
+	}
+
+	networkID := network.ID(s.networkPassphrase)
+	buffer := append(networkID[:], invocationBytes...)
+	hash := sha256.Sum256(buffer)
+
+	return hex.EncodeToString(hash[:]), nil
 }
 
 func (s *sep45Service) signServerAuthEntry(ctx context.Context, result *stellar.SimulationResult) (xdr.SorobanAuthorizationEntries, error) {

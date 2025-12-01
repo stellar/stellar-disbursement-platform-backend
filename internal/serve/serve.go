@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/network"
 	supporthttp "github.com/stellar/go-stellar-sdk/support/http"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -20,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
@@ -79,6 +81,7 @@ type ServeOptions struct {
 	Sep10SigningPrivateKey         string
 	Sep10ClientAttributionRequired bool
 	Sep10Service                   services.SEP10Service
+	Sep45Service                   services.SEP45Service
 	EnableEmbeddedWallets          bool
 	EmbeddedWalletsWasmHash        string
 	EnableSep45                    bool
@@ -175,6 +178,35 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	opts.Sep10Service = sep10Service
+
+	if opts.EnableSep45 {
+		rpcClient, rpcErr := dependencyinjection.NewRPCClient(context.Background(), opts.RPCConfig)
+		if rpcErr != nil {
+			return fmt.Errorf("initializing RPC client: %w", rpcErr)
+		}
+
+		signingKP, kpErr := keypair.ParseFull(opts.Sep10SigningPrivateKey)
+		if kpErr != nil {
+			return fmt.Errorf("parsing SEP-45 signing key: %w", kpErr)
+		}
+
+		sep45Service, sep45Err := services.NewSEP45Service(services.SEP45ServiceOptions{
+			RPCClient:                 rpcClient,
+			TOMLClient:                nil,
+			JWTManager:                sep24JWTManager,
+			NetworkPassphrase:         opts.NetworkPassphrase,
+			WebAuthVerifyContractID:   opts.Sep45ContractID,
+			ServerSigningKeypair:      signingKP,
+			BaseURL:                   opts.BaseURL,
+			ClientAttributionRequired: opts.Sep10ClientAttributionRequired,
+			AllowHTTPRetry:            allowHTTPRetry,
+		})
+		if sep45Err != nil {
+			return fmt.Errorf("initializing SEP 45 Service: %w", sep45Err)
+		}
+
+		opts.Sep45Service = sep45Service
+	}
 
 	return nil
 }
@@ -773,6 +805,18 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/auth", sep10Handler.GetChallenge)
 			r.Post("/auth", sep10Handler.PostChallenge)
 		})
+
+		// SEP-45 endpoints
+		if o.EnableSep45 && o.Sep45Service != nil {
+			r.Route("/sep45", func(r chi.Router) {
+				sep45Handler := httphandler.SEP45Handler{
+					SEP45Service: o.Sep45Service,
+				}
+
+				r.Get("/auth", sep45Handler.GetChallenge)
+				r.Post("/auth", sep45Handler.PostChallenge)
+			})
+		}
 		// SEP-24 endpoints
 		r.Route("/sep24", func(r chi.Router) {
 			sep24Handler := httphandler.SEP24Handler{

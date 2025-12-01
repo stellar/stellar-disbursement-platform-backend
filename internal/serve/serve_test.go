@@ -60,6 +60,7 @@ Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG
 -----END PRIVATE KEY-----`
 	distAccPublicKey = "GBQQ7ATXREG5PXUTZ6UXR6LQRWVKVRTXLJKMN6UJCN6TGTFY7FKFUCBC"
+	sep45ContractID  = "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"
 )
 
 func Test_Serve(t *testing.T) {
@@ -561,6 +562,8 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		EnableEmbeddedWallets:     true,
 		EmbeddedWalletsWasmHash:   "abc123",
 		EmbeddedWalletService:     mEmbeddedWalletService,
+		EnableSep45:               true,
+		Sep45ContractID:           sep45ContractID,
 		RPCConfig:                 stellar.RPCOptions{RPCUrl: "http://localhost:8000"},
 	}
 	err = serveOptions.SetupDependencies()
@@ -589,6 +592,8 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/sep24/info"},
 		{http.MethodGet, "/sep10/auth"},
 		{http.MethodPost, "/sep10/auth"},
+		{http.MethodGet, "/sep45/auth"},
+		{http.MethodPost, "/sep45/auth"},
 		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
 		{http.MethodPost, "/mfa"},
