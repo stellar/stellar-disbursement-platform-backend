@@ -358,7 +358,7 @@ func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Contex
 	}
 
 	for receiverID := range receiversByIDMap {
-		receiverWalletID, exists := receiverIDToReceiverWalletIDMap[receiverID]
+		_, exists := receiverIDToReceiverWalletIDMap[receiverID]
 		if !exists {
 			receiverWalletInsert := ReceiverWalletInsert{
 				ReceiverID: receiverID,
@@ -378,12 +378,7 @@ func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Contex
 			}
 			receiverIDToReceiverWalletIDMap[receiverID] = rwID
 		} else {
-			_, retryErr := di.receiverWalletModel.RetryInvitationMessage(ctx, dbTx, receiverWalletID)
-			if retryErr != nil {
-				if !errors.Is(retryErr, ErrRecordNotFound) {
-					return nil, fmt.Errorf("retrying invitation: %w", retryErr)
-				}
-			}
+			// Do not resend invitation if the receiver wallet already exists
 		}
 	}
 
