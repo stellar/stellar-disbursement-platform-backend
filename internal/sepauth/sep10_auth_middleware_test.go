@@ -145,7 +145,7 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		{
 			name:               "expired token",
 			authHeader:         "Bearer " + createExpiredToken(),
-			expectedStatusCode: http.StatusBadRequest,
+			expectedStatusCode: http.StatusUnauthorized,
 			expectClaimsInCtx:  false,
 			expectedError:      "Expired token",
 		},
@@ -173,7 +173,7 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware(t *testing.T) {
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				claimsFromContext = GetSEP10Claims(r.Context())
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("success")) //nolint:errcheck
+				w.Write([]byte("success")) //nolint:err check
 			})
 
 			handler := middleware(nextHandler)
