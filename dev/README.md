@@ -149,6 +149,14 @@ go run main.go serve \
   --database-url "postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable"
 ```
 
+You can also run the TSS by using the `tss` command instead of `serve`.
+
+```sh 
+go run main.go tss \
+  --env-file ./dev/.env.https-testnet \
+  --database-url "postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable"
+```
+
 **Important Notes:**
 - Use `--env-file` to specify which configuration to load (e.g., `./dev/.env.https-testnet`)
 - Override `--database-url` to use `localhost:5432` instead of `db:5432` (Docker hostname)

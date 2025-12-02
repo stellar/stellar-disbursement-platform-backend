@@ -261,6 +261,8 @@ func Write(cfg Config, path string) error {
 
 	if exampleMap, err := godotenv.Read(examplePath); err == nil {
 		finalMap = exampleMap
+	} else {
+		fmt.Printf("Note: Could not load %s, generating minimal config\n", examplePath)
 	}
 
 	// 3. Override with our configuration values
