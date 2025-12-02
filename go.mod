@@ -36,8 +36,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
-	github.com/stellar/go-stellar-sdk v0.0.0-20251125023429-4c8c6f69a699
-	github.com/stellar/stellar-rpc v0.9.6-0.20250130160539-be7702aa01ba
+	github.com/stellar/go-stellar-sdk v0.0.0-20251125210943-4134368d57d8
 	github.com/stretchr/testify v1.11.1
 	github.com/twilio/twilio-go v1.28.7
 	github.com/veraison/go-cose v1.3.0
@@ -88,13 +87,13 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/segmentio/go-loggly v0.5.1-0.20171222203950-eb91657e62b2 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stellar/go v0.0.0-20240924182550-69667b25baf4 // indirect
 	github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect

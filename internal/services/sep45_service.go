@@ -13,10 +13,10 @@ import (
 
 	"github.com/stellar/go-stellar-sdk/clients/stellartoml"
 	"github.com/stellar/go-stellar-sdk/keypair"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stellar/go-stellar-sdk/xdr"
-	"github.com/stellar/stellar-rpc/protocol"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
