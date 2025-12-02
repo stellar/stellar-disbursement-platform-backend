@@ -108,20 +108,60 @@ DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVW
 
 ### Start Local Environment
 
+There are three ways to run the SDP:
+
+#### Option 1: Using the Setup Wizard (Recommended)
+
 Start all services and provision sample tenants using the setup wizard:
 ```sh
 make setup
 ```
 
 The setup wizard will:
-1. Create or select an `.env` configuration
+1. Create or select an `.env` configuration under the `dev/` directory
 2. Generate Stellar accounts if needed (with testnet funding)
 3. Optionally launch the Docker environment immediately
-4. Initialize tenants and test users
+4. Optionally initialize tenants and test users
 
 For existing configurations, you can launch directly by selecting from available `.env` files in the `dev/` directory.
 
-Volumes and data isolation
+#### Option 2: Using Docker Compose Directly
+
+If you already have a configured `.env` file, you can start the services directly:
+
+```sh
+cd dev
+docker compose up -d
+```
+
+To stop the services:
+```sh
+docker compose down
+```
+
+#### Option 3: Running Locally with Go (Development)
+
+For local development outside Docker, run from the repo root:
+
+```sh
+go run main.go serve \
+  --env-file ./dev/.env.https-testnet \
+  --database-url "postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable"
+```
+
+**Important Notes:**
+- Use `--env-file` to specify which configuration to load (e.g., `./dev/.env.https-testnet`)
+- Override `--database-url` to use `localhost:5432` instead of `db:5432` (Docker hostname)
+- Ensure PostgreSQL is running locally and accessible on port 5432
+
+You can also use the `ENV_FILE` and `DATABASE_URL` environment variables instead of the flags:
+```sh
+ENV_FILE=./dev/.env.https-testnet \
+DATABASE_URL="postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable" \
+  go run main.go serve
+```
+
+**Volumes and Data Isolation**
 
 - The Postgres volumes are network-scoped using the pattern `${COMPOSE_PROJECT_NAME}_postgres-db-${NETWORK_TYPE}` and `${COMPOSE_PROJECT_NAME}_postgres-ap-db-${NETWORK_TYPE}`. Compose reads `NETWORK_TYPE` from `dev/.env`.
 - Compose project name is automatically derived from the setup name (e.g., `sdp-testnet`, `sdp-mainnet1`).
