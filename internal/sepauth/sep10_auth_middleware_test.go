@@ -173,7 +173,8 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware(t *testing.T) {
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				claimsFromContext = GetSEP10Claims(r.Context())
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("success")) //nolint:err check
+				_, err := w.Write([]byte("success"))
+				require.NoError(t, err)
 			})
 
 			handler := middleware(nextHandler)
@@ -256,7 +257,8 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware_Integration(t *testing.T) {
 		handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims := GetSEP10Claims(r.Context())
 			if claims != nil {
-				w.Write([]byte(claims.Subject)) //nolint:errcheck
+				_, err := w.Write([]byte(claims.Subject))
+				require.NoError(t, err)
 			}
 		}))
 
