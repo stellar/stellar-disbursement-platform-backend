@@ -9,8 +9,9 @@
     - [Pre-requisites](#pre-requisites)
     - [Clone the repository:](#clone-the-repository)
     - [Update local DNS](#update-local-dns)
+    - [Set up local HTTPS (optional)](#set-up-local-https-optional)
     - [Automated Stellar Account Creation and .env Configuration](#automated-stellar-account-creation-and-env-configuration)
-    - [Install Multi-tenant SDP Locally](#install-multi-tenant-sdp-locally)
+    - [Start/Stop Local Environment](#startstop-local-environment)
     - [Login to the SDP and send a Disbursement](#login-to-the-sdp-and-send-a-disbursement)
     - [Receive Payment to Digital Wallet (Deposit Flow)](#receive-payment-to-digital-wallet-deposit-flow)
   - [Additional Development Environment Details](#additional-development-environment-details)
@@ -37,9 +38,8 @@ Follow these instructions to get started with the Stellar Disbursement Platform 
 
 - **Docker:** Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
 - **Git:** You will need Git to clone the repository. You can download it from [here](https://git-scm.com/downloads).
-- **Go:** If you want to use the `make_env.sh` script to create Stellar accounts and a `.env` file, you will need to have Go installed on your system. You can download it from [here](https://golang.org/dl/).
-- **jq:** If you want to use the `main.sh` script to bring up the local environment, you will need to have `jq` installed. You can install it using Homebrew:
-
+- **Go:** Required to run the setup wizard that generates your `.env`. Install from [golang.org/dl](https://golang.org/dl/).
+- **jq:** Useful for some optional scripts and diagnostics. You can install it using Homebrew:
 ```sh
 brew install jq
 ```
@@ -63,23 +63,32 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 127.0.0.1       pinkcorp.stellar.local
 ```
 
+### Set up local HTTPS (optional)
+
+HTTPS is required for working with WebAuthn/passkeys. If you want the wizard to launch the dashboard over HTTPS (`https://<tenant>.stellar.local:3443`):
+
+1. Install [mkcert](https://web.dev/articles/how-to-use-local-https):
+   ```sh
+   brew install mkcert
+   mkcert -install
+   ```
+2. Generate local TLS certs (run from the repo root once):
+   ```sh
+   mkdir -p dev/certs
+   mkcert -key-file dev/certs/stellar.local-key.pem -cert-file dev/certs/stellar.local.pem \
+     "*.stellar.local" localhost 127.0.0.1 ::1
+   ```
+3. When the setup wizard asks, choose HTTPS.
+
 ### Automated Stellar Account Creation and .env Configuration
 
-To automatically create Stellar accounts for SEP10 authentication and a distribution wallet, and to set up the necessary configuration values in a .env file, follow these steps:
-
-1. Navigate to the dev directory:
+Use the unified setup wizard to generate accounts and a ready-to-use `.env`:
 
 ```sh
-cd dev
+make setup
 ```
 
-2. Run the make_env.sh script:
-
-```sh
-scripts/make_env.sh
-```
-
-The script will generate new keypairs with a USDC funded distribution account and create the .env file with the following configuration values. Example:
+The wizard generates new keypairs and funds the distribution account with XLM on testnet (USDC auto-funding may be skipped depending on SDK compatibility), then writes `dev/.env` with values like:
 
 ```bash
 # Generate a new keypair for SEP-10 signing
@@ -97,22 +106,68 @@ CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVWDQUTH
 DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVWDQUTHLRNIKMAUIT46M6
 ```
 
-### Install Multi-tenant SDP Locally
+### Start Local Environment
 
-To spin up all necessary Docker containers and provision sample tenants.
-
+Start all services and provision sample tenants using the setup wizard:
 ```sh
-cd dev
-./main.sh
+make setup
 ```
+
+The setup wizard will:
+1. Create or select an `.env` configuration
+2. Generate Stellar accounts if needed (with testnet funding)
+3. Optionally launch the Docker environment immediately
+4. Initialize tenants and test users
+
+For existing configurations, you can launch directly by selecting from available `.env` files in the `dev/` directory.
+
+Volumes and data isolation
+
+- The Postgres volumes are network-scoped using the pattern `${COMPOSE_PROJECT_NAME}_postgres-db-${NETWORK_TYPE}` and `${COMPOSE_PROJECT_NAME}_postgres-ap-db-${NETWORK_TYPE}`. Compose reads `NETWORK_TYPE` from `dev/.env`.
+- Compose project name is automatically derived from the setup name (e.g., `sdp-testnet`, `sdp-mainnet1`).
+- To fully reset data, manually remove Docker volumes or recreate the environment through the setup wizard.
+
+## Mainnet Deployment
+
+⚠️ **IMPORTANT**: Mainnet deployment is for production use with real funds. Exercise extreme caution.
+
+### Mainnet Configuration
+
+The setup wizard automatically handles mainnet configuration when you select "pubnet (mainnet)":
+
+1. **Automatic Configuration**: The wizard sets all mainnet-specific environment variables:
+   - `NETWORK_TYPE=mainnet`
+   - `NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015`
+   - `HORIZON_URL=https://horizon.stellar.org`
+   - `DATABASE_NAME=sdp_mainnet` (separate database for isolation)
+   - `DISABLE_MFA=false` (MFA enforced for mainnet)
+
+2. **Account Requirements**:
+   - **Distribution Account**: Must be funded with sufficient XLM for creating channel accounts, distribution accounts for different tenants, and transaction fees
+   - **SEP10 Signing Account**: Used for authentication only, no funding required
+   - **Assets**: Must use mainnet asset issuers (not testnet issuers)
+
+### Mainnet Startup
+
+Use the setup wizard to create and launch a mainnet configuration:
+```sh
+make setup
+```
+
+1. Select "Create new configuration" or choose an existing mainnet `.env` file
+2. Choose "pubnet (mainnet)" when prompted for network selection
+3. The wizard will automatically configure all mainnet-specific settings
+4. Choose to launch the environment when prompted
+5. The system will detect mainnet configuration and enforce security settings automatically
+
+> Note: The legacy `dev/scripts/make_env.sh` has been removed. Use the setup wizard instead (`make setup`).
 
 ### Login to the SDP and send a Disbursement
 
 > [!NOTE]  
-> In the following section, we will assume you're using the `bluecorp` tenant that was provisioned when you ran `main.sh`.
+> In the following section, we will assume you're using the `bluecorp` tenant that was provisioned when you started the stack.
 
-The main.sh setup script will print Login information for each tenant.
-
+The startup prints Login information for each tenant.  
 ```
 🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉
 Login URLs for each tenant:
@@ -224,47 +279,25 @@ You need to create and configure two Stellar accounts to use the SDP. You can ei
 
 1. Create and fund a Distribution account that will be used for sending funds to receivers. Follow the instructions [here](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account).
 2. Create a SEP-10 account for authentication. It can be created the same way as the distribution account but it doesn't need to be funded.
-3. Create a `.env` file in the `dev` directory by copying the [env.example](./.env.example) file:
+3. Create a `.env` file in the `dev` directory by copying the [env.example](.backup/.env.example) file:
    ```sh
    cp .env.example .env
    ```
 4. Update the `.env` file with the public and private keys of the two accounts created in the previous steps.
 
-**Option 2: Use make_env.sh script to create accounts and .env file**
+**Option 2: Use the setup wizard to create accounts and `.env` automatically**
 
-You can use the make_env.sh script to automatically create a stellar accounts for SEP-10 authentication and a funded (XLM and USDC) Stellar distribution account. To run the make_env.sh script:
+From the repo root, run the wizard:
 
-1. Use [make_env.sh](./scripts/make_env.sh) script to create stellar accounts and .env file automatically:
-   1. Navigate to the `dev` directory from the terminal:
-   ```sh
-   cd dev
-   ```
-   2. Run the `make_env.sh` in the `scripts` folder.
-   ```sh
-   scripts/make_env.sh
-   ```
-   You should see output as follows:
-   ```
-   ❯ scripts/make_env.sh
-   ====> 👀 Checking if .env environment file exists in <REPO_ROOT>/stellar-disbursement-platform-backend/dev
-   .env file does not exist. Creating
-   Generating SEP-10 signing keys...
-   Generating distribution keys with funding...
-   .env file created successfully
-   ====> ✅ Finished .env setup
-   ```
+```sh
+make setup
+```
+
+This will generate SEP-10 and distribution keys, fund the distribution with XLM + USDC on testnet, and write `dev/.env`.
 
 ### Building the SDP Docker Containers
 
-A main.sh wrapper script has been included to help you bring up a local environment. The script stops and removes existing Docker containers, optionally deletes persistent volumes, and then uses Docker Compose to bring up new containers for the Stellar Disbursement Platform (SDP). This includes the SDP, PostgreSQL database and a local demo wallet instance. It then initializes tenants if they don't exist and adds test users, setting up the local environment for the SEP-24 deposit flow.
-
-1. Execute the following command to create all the necessary Docker containers needed to run SDP as well as provision sample tenants:
-
-```sh
-./main.sh
-```
-
-This will spin up the following services:
+The setup wizard launches the local environment (Docker Compose), initializes tenants, and adds test users. It spins up the following services:
 
 - `sdp_v2_database`: The main SDP and TSS database.
 - `sdp-api`: SDP service running on port `8000`.
@@ -274,16 +307,16 @@ This will spin up the following services:
 
 ### Remote Debugging
 
-To help collaborators debug remotely against the Docker containers, the environment started with `main.sh` also launches a development version of the Dockerfile (`Dockerfile-development`). This builds and runs a debug Docker container for the SDP. A sample [launch.json](./sample/launch.json) is provided.
+To help collaborators debug remotely against the Docker containers, the environment started with the setup wizard also launches a development version of the Dockerfile (`Dockerfile-development`). This builds and runs a debug Docker container for the SDP. A sample [launch.json](./sample/launch.json) is provided.
 
 Follow these steps to debug remotely using VS Code or IntelliJ GoLang:
 
 #### Ensure Docker Containers are Running:
 
-Make sure the Docker containers are up and running by executing the `main.sh` script:
+Make sure the Docker containers are up and running using the setup wizard:
 
 ```sh
-./main.sh
+make setup
 ```
 
 #### Using VS Code:
@@ -354,10 +387,9 @@ Making payments requires transaction fees that are paid in XLM from the distribu
 - You could also check the balance using [demo wallet](https://demo-wallet.stellar.org/account?secretKey=YOUR_SECRET_KEY)
 - If the balance is indeed low, here are some of the options to add additional XLM to the distribution account:
 
--- from the `dev` directory run the [create_and_fund.go](./scripts/create_and_fund.go) script and specify an existing account using the `--secret` option to specify the account secret key and the --fundxlm` option to add additional xlm via friendbot. Note: you will need to install golang. example:
-
+-- From the repo root, use the funding tool to add XLM/USDC to an existing account:
 ```sh
-./go run scripts/create_and_fund.go --secret SECRET_KEY --fundxlm
+   go run tools/sdp-create-and-fund/main.go --secret SECRET_KEY --fundxlm
 ```
 
 -- Create a new funded account via Demo Wallet website and send funds to the Distribution account.

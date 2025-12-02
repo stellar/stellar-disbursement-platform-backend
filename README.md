@@ -49,7 +49,13 @@ stellar-disbursement-platform --help
 
 ### Docker Compose 
 
-To quickly test the SDP using preconfigured values, see the [Quick Start Guide](./dev/README.md).
+To quickly test the SDP using preconfigured values, use the startup wizard.
+
+```sh
+make setup
+```
+
+For more information about launching and configuring the SDP, see the [Quick Start Guide](./dev/README.md).
 
 ### Helm 
 

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Add Launch Wizard through `make setup` command to simplify initial setup and mainnet configuration for docker compose [#875](https://github.com/stellar/stellar-disbursement-platform-backend/pull/875)
+- Add HTTPS mode to setup wizard [#957](https://github.com/stellar/stellar-disbursement-platform-backend/pull/957)
 - Support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
     - Add SEP10 /auth endpoints 
     - Add SEP24 /info endpoints
@@ -18,11 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Default Max Open Connections per pool changed from 30 to 20 to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
+- Make docker compose environment variables configurable via `.env` file and add documentation [#953](https://github.com/stellar/stellar-disbursement-platform-backend/pull/953)
+- Update Stellar Go SDK dependency from `github.com/stellar/go` to `github.com/stellar/go-stellar-sdk` [#956](https://github.com/stellar/stellar-disbursement-platform-backend/pull/956)
 
 ### Fixed
 
 - Fix HTML validation to allow apostrophes in invitation messages while maintaining security against XSS attacks [#930](https://github.com/stellar/stellar-disbursement-platform-backend/pull/930)
-
+- Refactor to replace float64 with shopspring decimal [#936](https://github.com/stellar/stellar-disbursement-platform-backend/pull/936)
+- `channel-accounts ensure` command should have a minimum of 1 [#939](https://github.com/stellar/stellar-disbursement-platform-backend/pull/939)
 
 ## [5.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/5.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.1.0...5.0.0))
 

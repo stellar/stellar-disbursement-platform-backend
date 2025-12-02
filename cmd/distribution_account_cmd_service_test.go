@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/txnbuild"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -210,8 +211,8 @@ func setupAccountCreationMocks(
 		Return([]schema.TransactionAccount{newAccount}, nil).
 		Once()
 
-	balances := map[data.Asset]float64{
-		assetUSDC: 10.0,
+	balances := map[data.Asset]decimal.Decimal{
+		assetUSDC: decimal.NewFromFloat(10.0),
 	}
 
 	distAccServiceMock.
@@ -270,8 +271,8 @@ func Test_distributionAccountService_createNewStellarAccountFromAccount(t *testi
 	}
 
 	setupBasicBalances := func(distAccServiceMock *mocks.MockDistributionAccountService) {
-		balances := map[data.Asset]float64{
-			assetUSDC: 10.0,
+		balances := map[data.Asset]decimal.Decimal{
+			assetUSDC: decimal.NewFromFloat(10.0),
 		}
 		distAccServiceMock.
 			On("GetBalances", mock.Anything, &oldAccount).
@@ -289,10 +290,10 @@ func Test_distributionAccountService_createNewStellarAccountFromAccount(t *testi
 			Issuer: "",
 		}
 
-		balances := map[data.Asset]float64{
-			assetUSDC:   10.0,
-			assetEURO:   15.0,
-			nativeAsset: 20.0,
+		balances := map[data.Asset]decimal.Decimal{
+			assetUSDC:   decimal.NewFromFloat(10.0),
+			assetEURO:   decimal.NewFromFloat(15.0),
+			nativeAsset: decimal.NewFromFloat(20.0),
 		}
 		distAccServiceMock.
 			On("GetBalances", mock.Anything, &oldAccount).

@@ -5,10 +5,10 @@ import (
 	"go/types"
 	"strings"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"

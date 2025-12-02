@@ -5,13 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -90,7 +91,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			},
 		}, nil).Once()
 
-		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(1000), nil)
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(decimal.NewFromFloat(1000.0), nil)
 
 		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
@@ -221,7 +222,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			},
 		}, nil).Once()
 
-		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(float64(100), nil)
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountDBVault, *asset).Return(decimal.NewFromFloat(100.0), nil)
 
 		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
@@ -400,7 +401,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 			},
 		}, nil).Once()
 
-		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountEnv, *asset).Return(float64(50000), nil)
+		mockDistService.On("GetBalance", mock.Anything, &stellarDistAccountEnv, *asset).Return(decimal.NewFromFloat(50000.0), nil)
 
 		service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 			HorizonClient: horizonClientMock,
@@ -536,7 +537,7 @@ func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
 	mockDistService := &mocks.MockDistributionAccountService{}
 	horizonClientMock := &horizonclient.MockClient{}
 
-	mockDistService.On("GetBalance", mock.Anything, &circleDistAccount, *asset).Return(float64(1000), nil)
+	mockDistService.On("GetBalance", mock.Anything, &circleDistAccount, *asset).Return(decimal.NewFromFloat(1000.0), nil)
 
 	service := NewDirectPaymentService(models, mockDistService, engine.SubmitterEngine{
 		HorizonClient: horizonClientMock,
@@ -586,7 +587,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 		name           string
 		payments       []payment
 		targetAsset    *data.Asset
-		expectedAmount float64
+		expectedAmount decimal.Decimal
 	}{
 		{
 			name: "sum for all in-progress statuses",
@@ -600,7 +601,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset1, "600.00", data.CanceledPaymentStatus}, // ignored
 			},
 			targetAsset:    asset1,
-			expectedAmount: 600.00,
+			expectedAmount: mustDecimalFromString("600.00"),
 		},
 		{
 			name: "other assets ignored",
@@ -609,13 +610,13 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset2, "999.99", data.PendingPaymentStatus},
 			},
 			targetAsset:    asset1,
-			expectedAmount: 50.00,
+			expectedAmount: mustDecimalFromString("50.00"),
 		},
 		{
 			name:           "zero sum for no in-progress payments",
 			payments:       []payment{},
 			targetAsset:    asset1,
-			expectedAmount: 0.0,
+			expectedAmount: decimal.Zero,
 		},
 		{
 			name: "zero-amount payment is included",
@@ -624,7 +625,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset1, "10.00", data.PausedPaymentStatus},
 			},
 			targetAsset:    asset1,
-			expectedAmount: 10.00,
+			expectedAmount: mustDecimalFromString("10.00"),
 		},
 		{
 			name: "multiple assets and mixed statuses",
@@ -636,13 +637,13 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 				{asset2, "500.00", data.DraftPaymentStatus},
 			},
 			targetAsset:    asset1,
-			expectedAmount: 500.00,
+			expectedAmount: mustDecimalFromString("500.00"),
 		},
 		{
 			name:           "empty payments table",
 			payments:       nil,
 			targetAsset:    asset1,
-			expectedAmount: 0.0,
+			expectedAmount: decimal.Zero,
 		},
 	}
 
@@ -663,7 +664,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 			total, err := service.calculatePendingAmountForAsset(ctx, tx, *tc.targetAsset)
 			require.NoError(t, err)
 
-			assert.Equal(t, tc.expectedAmount, total)
+			assert.True(t, tc.expectedAmount.Equal(total), "expected %s, got %s", tc.expectedAmount.String(), total.String())
 		})
 	}
 }
@@ -697,7 +698,7 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 	service := NewDirectPaymentService(models, nil, engine.SubmitterEngine{})
 
 	mockDistService := &mocks.MockDistributionAccountService{}
-	mockDistService.On("GetBalance", mock.Anything, distributionAccount, *asset).Return(100.0, nil)
+	mockDistService.On("GetBalance", mock.Anything, distributionAccount, *asset).Return(decimal.NewFromFloat(100.0), nil)
 	service.DistributionAccountService = mockDistService
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
@@ -734,6 +735,14 @@ func unwrapTransactionError(err error) error {
 		return txErr.Unwrap()
 	}
 	return err
+}
+
+func mustDecimalFromString(s string) decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func createPayment(
@@ -795,7 +804,7 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 	mockDistAccountService := &mocks.MockDistributionAccountService{}
 	mockDistAccountService.On("GetBalance", mock.Anything, distAccount, mock.MatchedBy(func(a data.Asset) bool {
 		return a.ID == asset.ID
-	})).Return(1000.0, nil).Once()
+	})).Return(decimal.NewFromFloat(1000.0), nil).Once()
 
 	mockHorizonClient := &horizonclient.MockClient{}
 	mockAccountReq := horizonclient.AccountRequest{AccountID: distAccount.Address}
@@ -1034,33 +1043,33 @@ func Test_AssetNotSupportedByWalletError_Error(t *testing.T) {
 func Test_InsufficientBalanceForDirectPaymentError_Error(t *testing.T) {
 	testCases := []struct {
 		name               string
-		requestedAmount    float64
-		availableBalance   float64
-		totalPendingAmount float64
+		requestedAmount    decimal.Decimal
+		availableBalance   decimal.Decimal
+		totalPendingAmount decimal.Decimal
 		assetCode          string
 		expectedError      string
 	}{
 		{
 			name:               "Simple insufficient balance",
-			requestedAmount:    100.0,
-			availableBalance:   50.0,
-			totalPendingAmount: 0.0,
+			requestedAmount:    mustDecimalFromString("100.00"),
+			availableBalance:   mustDecimalFromString("50.00"),
+			totalPendingAmount: mustDecimalFromString("0.00"),
 			assetCode:          "USDC",
 			expectedError:      "insufficient balance for direct payment: requested 100.000000 USDC, but only 50.000000 available (0.000000 in pending payments). Need 50.000000 more USDC",
 		},
 		{
 			name:               "Insufficient with pending payments",
-			requestedAmount:    100.0,
-			availableBalance:   120.0,
-			totalPendingAmount: 30.0,
+			requestedAmount:    mustDecimalFromString("100.00"),
+			availableBalance:   mustDecimalFromString("120.00"),
+			totalPendingAmount: mustDecimalFromString("30.00"),
 			assetCode:          "USDC",
 			expectedError:      "insufficient balance for direct payment: requested 100.000000 USDC, but only 120.000000 available (30.000000 in pending payments). Need 10.000000 more USDC",
 		},
 		{
 			name:               "Large amount with pending",
-			requestedAmount:    1000.50,
-			availableBalance:   500.25,
-			totalPendingAmount: 200.75,
+			requestedAmount:    mustDecimalFromString("1000.50"),
+			availableBalance:   mustDecimalFromString("500.25"),
+			totalPendingAmount: mustDecimalFromString("200.75"),
 			assetCode:          "XLM",
 			expectedError:      "insufficient balance for direct payment: requested 1000.500000 XLM, but only 500.250000 available (200.750000 in pending payments). Need 701.000000 more XLM",
 		},

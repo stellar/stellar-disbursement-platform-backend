@@ -5,15 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -499,7 +498,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 func (tw *TransactionWorker) buildInnerTxn(txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string, asset txnbuild.Asset) (*txnbuild.Transaction, error) {
 	var operation txnbuild.Operation
 	var txMemo txnbuild.Memo
-	amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+	amount := txJob.Transaction.Amount.StringFixed(6)
 
 	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
 		memo, err := txJob.Transaction.BuildMemo()

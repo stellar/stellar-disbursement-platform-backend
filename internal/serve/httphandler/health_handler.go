@@ -5,7 +5,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 
-	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 )
 
 // Status indicates whether the service is health or not.

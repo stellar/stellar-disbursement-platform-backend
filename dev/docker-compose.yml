@@ -1,11 +1,9 @@
-version: '3'
+version: '3.8'
 services:
   db:
     extends:
       file: docker-compose-sdp.yml
       service: db
-    volumes:
-      - postgres-db:/data/postgres
   sdp-api:
     extends:
       file: docker-compose-sdp.yml
@@ -33,6 +31,5 @@ services:
       service: demo-wallet
 volumes:
   postgres-db:
-    driver: local
-  postgres-ap-db:
+    name: ${COMPOSE_PROJECT_NAME}_postgres-db
     driver: local

@@ -11,9 +11,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
-	"github.com/stellar/go/network"
-	supporthttp "github.com/stellar/go/support/http"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/network"
+	supporthttp "github.com/stellar/go-stellar-sdk/support/http"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
