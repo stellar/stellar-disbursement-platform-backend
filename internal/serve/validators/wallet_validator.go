@@ -288,7 +288,7 @@ func (wv *WalletValidator) inferAssetType(asset AssetReference) AssetReference {
 	// Inference logic for backward compatibility
 	result := asset
 
-	if (asset.Code == assets.XLMAssetCode || asset.Code == "NATIVE") && asset.Issuer == "" {
+	if (asset.Code == assets.XLMAssetCode || asset.Code == assets.XLMAssetCodeAlias) && asset.Issuer == "" {
 		result.Type = string(AssetReferenceTypeNative)
 		result.Code = ""
 		return result

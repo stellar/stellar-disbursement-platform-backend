@@ -46,7 +46,7 @@ func (a Asset) IsNative() bool {
 		(a.Code == "XLM" || a.Code == "NATIVE")
 }
 
-// Equals returns true if the asset is the same as the other asset. Case-insensitive.
+// Equals returns true if the asset is the same as the other asset.
 func (a Asset) Equals(other Asset) bool {
 	if a.IsNative() && other.IsNative() {
 		return true
