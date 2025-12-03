@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Default Max Open Connections per pool changed from 30 to 20 to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
 - Make docker compose environment variables configurable via `.env` file and add documentation [#953](https://github.com/stellar/stellar-disbursement-platform-backend/pull/953)
 - Update Stellar Go SDK dependency from `github.com/stellar/go` to `github.com/stellar/go-stellar-sdk` [#956](https://github.com/stellar/stellar-disbursement-platform-backend/pull/956)
+- Remove case insensitivity from asset code comparisons [#967](https://github.com/stellar/stellar-disbursement-platform-backend/pull/967)
 
 ### Fixed
 
