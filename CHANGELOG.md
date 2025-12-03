@@ -4,18 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [6.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/5.0.0...6.0.0))
+
+### 🚨Potential Breaking Changes
+
+- Remove case insensitivity from asset code comparisons [#967](https://github.com/stellar/stellar-disbursement-platform-backend/pull/967)
+- Decommission Anchor Platform and add support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
+    - Add SEP10 /auth endpoints
+    - Add SEP24 /info endpoints
+    - Add SEP24 interactive deposit endpoint
+    - Remove Anchor Platform integration from the SDP and deprecate related env variables.
 
 ### Added
 
 - Add Launch Wizard through `make setup` command to simplify initial setup and mainnet configuration for docker compose [#875](https://github.com/stellar/stellar-disbursement-platform-backend/pull/875)
     - Add `--env-file` command line argument to support multiple environment file contexts [#963](https://github.com/stellar/stellar-disbursement-platform-backend/pull/963) 
 - Add HTTPS mode to setup wizard [#957](https://github.com/stellar/stellar-disbursement-platform-backend/pull/957)
-- Support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
-    - Add SEP10 /auth endpoints 
-    - Add SEP24 /info endpoints
-    - Add SEP24 interactive deposit endpoint
-    - Remove Anchor Platform integration from the SDP and deprecate related env variables. 
 - Add configurable database connection pool settings to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
 
 ### Changed
@@ -23,7 +27,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Default Max Open Connections per pool changed from 30 to 20 to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
 - Make docker compose environment variables configurable via `.env` file and add documentation [#953](https://github.com/stellar/stellar-disbursement-platform-backend/pull/953)
 - Update Stellar Go SDK dependency from `github.com/stellar/go` to `github.com/stellar/go-stellar-sdk` [#956](https://github.com/stellar/stellar-disbursement-platform-backend/pull/956)
-- Remove case insensitivity from asset code comparisons [#967](https://github.com/stellar/stellar-disbursement-platform-backend/pull/967)
 
 ### Fixed
 
