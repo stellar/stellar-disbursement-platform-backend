@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security and Dependencies
 
+- Upgrade React to 19.2.1 in SEP-24 frontend to address CVE-2025-66478 and CVE-2025-55182 [#968](https://github.com/stellar/stellar-disbursement-platform-backend/pull/968)
 - Bump the minor-and-patch group with 5 updates [#961](https://github.com/stellar/stellar-disbursement-platform-backend/pull/961)
 - Bump the minor-and-patch group across 1 directory with 12 updates [#955](https://github.com/stellar/stellar-disbursement-platform-backend/pull/955)
 - Bump actions/checkout from 5 to 6 in the all-actions group [#954](https://github.com/stellar/stellar-disbursement-platform-backend/pull/954)
