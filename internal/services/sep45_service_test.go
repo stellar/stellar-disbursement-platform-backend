@@ -854,7 +854,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		require.Nil(t, resp)
 	})
 
-	t.Run("simulation failure", func(t *testing.T) {
+	t.Run("simulation failure treated as internal for rpc errors", func(t *testing.T) {
 		serverKP := keypair.MustRandom()
 		clientDomainKP := keypair.MustRandom()
 		rpcMock := stellarMocks.NewMockRPCClient(t)
@@ -881,6 +881,42 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "simulating transaction")
+		assert.True(t, errors.Is(err, ErrSEP45Internal))
+		require.Nil(t, resp)
+		rpcMock.AssertExpectations(t)
+	})
+
+	t.Run("simulation failure treated as validation for contract errors", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		clientDomainKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+
+		argEntries := xdr.ScMap{
+			utils.NewSymbolStringEntry("account", testClientContractAddress),
+			utils.NewSymbolStringEntry("client_domain", "wallet.example.com"),
+			utils.NewSymbolStringEntry("client_domain_account", clientDomainKP.Address()),
+			utils.NewSymbolStringEntry("home_domain", "example.com"),
+			utils.NewSymbolStringEntry("nonce", "nonce"),
+			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
+			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+		}
+		entries := buildAuthorizationEntries(t, argEntries, true, serverKP, clientDomainKP)
+		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
+		encoded := encodeAuthorizationEntries(t, entries)
+
+		rpcMock.
+			On("SimulateTransaction", mock.Anything, mock.Anything).
+			Return((*stellar.SimulationResult)(nil), stellar.NewSimulationError(
+				errors.New("contract execution failed"),
+				&protocol.SimulateTransactionResponse{Error: "contract execution failed: trap"},
+			)).
+			Once()
+
+		svc := newService(t, rpcMock, serverKP, false)
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "simulating transaction")
+		assert.True(t, errors.Is(err, ErrSEP45Validation))
 		require.Nil(t, resp)
 		rpcMock.AssertExpectations(t)
 	})

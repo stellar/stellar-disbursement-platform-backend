@@ -32,6 +32,9 @@ import (
 // The number of ledgers after which the server-signed authorization entry expires.
 const signatureExpirationLedgers = 10
 
+// The default expiration duration for SEP-45 JWTs.
+const defaultSEP45JWTExpiration = 2 * time.Hour
+
 var (
 	ErrSEP45Validation = errors.New("sep45 validation error")
 	ErrSEP45Internal   = errors.New("sep45 internal error")
@@ -108,7 +111,6 @@ type SEP45ServiceOptions struct {
 	BaseURL                   string
 	ClientAttributionRequired bool
 	AllowHTTPRetry            bool
-	JWTExpiration             time.Duration
 }
 
 func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
@@ -160,7 +162,7 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 		clientAttributionRequired: opts.ClientAttributionRequired,
 		allowHTTPRetry:            opts.AllowHTTPRetry,
 		baseURL:                   opts.BaseURL,
-		jwtExpiration:             2 * time.Hour,
+		jwtExpiration:             defaultSEP45JWTExpiration,
 	}, nil
 }
 
@@ -282,7 +284,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 		Transaction: base64EncodedTx,
 	})
 	if simErr != nil {
-		return nil, fmt.Errorf("simulating transaction: %w", simErr)
+		return nil, s.wrapSimErr(simErr)
 	}
 
 	authEntries, err := s.signServerAuthEntry(ctx, simResult)
@@ -468,7 +470,7 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 	// Simulate the transaction to validate the authorization entries and ensure the contract invocation is valid.
 	// We don't care about the result here, just that it succeeds.
 	if _, simErr := s.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{Transaction: txB64}); simErr != nil {
-		return nil, fmt.Errorf("%w: simulating transaction: %w", ErrSEP45Internal, simErr)
+		return nil, s.wrapSimErr(simErr)
 	}
 
 	jti, err := s.deriveJTI(entries)
@@ -780,6 +782,21 @@ func extractSignature(sigVal *xdr.ScVal) ([]byte, []byte, error) {
 		return nil, nil, fmt.Errorf("signature missing value")
 	}
 	return publicKey, signature, nil
+}
+
+func (s *sep45Service) wrapSimErr(simErr *stellar.SimulationError) error {
+	if simErr == nil {
+		return nil
+	}
+
+	switch simErr.Type {
+	case stellar.SimulationErrorTypeAuth,
+		stellar.SimulationErrorTypeContractExecution,
+		stellar.SimulationErrorTypeTransactionInvalid:
+		return fmt.Errorf("%w: simulating transaction: %w", ErrSEP45Validation, simErr)
+	default:
+		return fmt.Errorf("%w: simulating transaction: %w", ErrSEP45Internal, simErr)
+	}
 }
 
 // TODO(philip): Below methods are shared with sep10_service.go so they can be moved to a common utility package later.
