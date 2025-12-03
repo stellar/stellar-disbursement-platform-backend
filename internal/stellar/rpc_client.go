@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/stellar/stellar-rpc/client"
-	"github.com/stellar/stellar-rpc/protocol"
+	client "github.com/stellar/go-stellar-sdk/clients/rpcclient"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
 )
 
 type RPCClientWrapper struct {

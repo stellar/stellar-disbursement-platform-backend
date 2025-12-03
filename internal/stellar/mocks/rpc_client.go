@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	protocol "github.com/stellar/stellar-rpc/protocol"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
 	mock "github.com/stretchr/testify/mock"
 
 	stellar "github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
