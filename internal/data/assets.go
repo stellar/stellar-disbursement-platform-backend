@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -44,7 +43,7 @@ func AssetColumnNames(tableReference, resultAlias string, includeDates bool) str
 // IsNative returns true if the asset is the native asset (XLM).
 func (a Asset) IsNative() bool {
 	return strings.TrimSpace(a.Issuer) == "" &&
-		slices.Contains([]string{"XLM", "NATIVE"}, strings.ToUpper(a.Code))
+		(a.Code == "XLM" || a.Code == "NATIVE")
 }
 
 // Equals returns true if the asset is the same as the other asset. Case-insensitive.
@@ -52,7 +51,7 @@ func (a Asset) Equals(other Asset) bool {
 	if a.IsNative() && other.IsNative() {
 		return true
 	}
-	return strings.EqualFold(a.Code, other.Code) && strings.EqualFold(a.Issuer, other.Issuer)
+	return a.Code == other.Code && strings.EqualFold(a.Issuer, other.Issuer)
 }
 
 func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
@@ -60,7 +59,7 @@ func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
 		return true
 	}
 
-	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
+	return a.Code == horizonAsset.Code && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
 }
 
 func (a Asset) ToBasicAsset() txnbuild.Asset {

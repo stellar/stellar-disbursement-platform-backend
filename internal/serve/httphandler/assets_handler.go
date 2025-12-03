@@ -23,13 +23,16 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-const stellarNativeAssetCode = "XLM"
+func isNativeAssetCode(code string) bool {
+	return code == assets.XLMAssetCode || code == assets.XLMAssetCodeAlias
+}
 
 var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 
@@ -144,12 +147,12 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assetCode := strings.TrimSpace(strings.ToUpper(assetRequest.Code))
+	assetCode := strings.TrimSpace(assetRequest.Code)
 	assetIssuer := strings.TrimSpace(assetRequest.Issuer)
 
 	v := validators.NewValidator()
 	v.Check(assetCode != "", "code", "code is required")
-	if assetCode != stellarNativeAssetCode {
+	if !isNativeAssetCode(assetCode) {
 		v.Check(strkey.IsValidEd25519PublicKey(assetIssuer), "issuer", "issuer is invalid")
 	}
 
@@ -267,7 +270,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 
 	changeTrustOperations := make([]*txnbuild.ChangeTrust, 0)
 	// remove asset
-	if assetToRemoveTrustline != nil && strings.ToUpper(assetToRemoveTrustline.Code) != stellarNativeAssetCode {
+	if assetToRemoveTrustline != nil && !isNativeAssetCode(assetToRemoveTrustline.Code) {
 		for _, balance := range acc.Balances {
 			if balance.Asset.Code == assetToRemoveTrustline.Code && balance.Asset.Issuer == assetToRemoveTrustline.Issuer {
 				assetToRemoveTrustlineBalance, parseBalErr := amount.ParseInt64(balance.Balance)
@@ -305,7 +308,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 	}
 
 	// add asset
-	if assetToAddTrustline != nil && strings.ToUpper(assetToAddTrustline.Code) != stellarNativeAssetCode {
+	if assetToAddTrustline != nil && !isNativeAssetCode(assetToAddTrustline.Code) {
 		var assetToAddTrustlineFound bool
 		for _, balance := range acc.Balances {
 			if balance.Asset.Code == assetToAddTrustline.Code && balance.Asset.Issuer == assetToAddTrustline.Issuer {
