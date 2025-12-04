@@ -191,14 +191,14 @@ func (opts *ServeOptions) SetupDependencies() error {
 		}
 
 		sep45Service, sep45Err := services.NewSEP45Service(services.SEP45ServiceOptions{
-			RPCClient:                 rpcClient,
-			TOMLClient:                nil,
-			JWTManager:                sep24JWTManager,
-			NetworkPassphrase:         opts.NetworkPassphrase,
-			WebAuthVerifyContractID:   opts.Sep45ContractID,
-			ServerSigningKeypair:      signingKP,
-			BaseURL:                   opts.BaseURL,
-			AllowHTTPRetry:            allowHTTPRetry,
+			RPCClient:               rpcClient,
+			TOMLClient:              nil,
+			JWTManager:              sep24JWTManager,
+			NetworkPassphrase:       opts.NetworkPassphrase,
+			WebAuthVerifyContractID: opts.Sep45ContractID,
+			ServerSigningKeypair:    signingKP,
+			BaseURL:                 opts.BaseURL,
+			AllowHTTPRetry:          allowHTTPRetry,
 		})
 		if sep45Err != nil {
 			return fmt.Errorf("initializing SEP 45 Service: %w", sep45Err)

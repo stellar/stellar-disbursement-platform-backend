@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -290,7 +291,7 @@ func (h PasskeyHandler) IsVerificationPending(ctx context.Context, embeddedWalle
 
 	receiverWallet, err := h.EmbeddedWalletService.GetReceiverWalletByID(ctx, embeddedWallet.ReceiverWalletID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("getting receiver wallet by ID: %w", err)
 	}
 
 	return receiverWallet.Status == data.ReadyReceiversWalletStatus, nil
