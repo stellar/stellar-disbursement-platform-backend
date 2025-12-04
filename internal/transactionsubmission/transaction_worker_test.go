@@ -6,20 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/problem"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/problem"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -29,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
@@ -117,7 +117,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 		Status:             store.TransactionStatusProcessing,
-		Amount:             1,
+		Amount:             decimal.NewFromInt(1),
 		TenantID:           tenantID,
 	})
 	chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 1)[0]
@@ -1575,7 +1575,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 
 				// Check that the transaction was built correctly:
 				var wantAsset txnbuild.Asset = txnbuild.NativeAsset{}
-				if strings.ToUpper(txJob.Transaction.AssetCode) != "XLM" {
+				if txJob.Transaction.AssetCode != assets.XLMAssetCode && txJob.Transaction.AssetCode != assets.XLMAssetCodeAlias {
 					wantAsset = txnbuild.CreditAsset{
 						Code:   txJob.Transaction.AssetCode,
 						Issuer: txJob.Transaction.AssetIssuer,
@@ -1583,7 +1583,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 				}
 
 				var operation txnbuild.Operation
-				amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+				amount := txJob.Transaction.Amount.StringFixed(6)
 				if strkey.IsValidEd25519PublicKey(tc.destinationAddress) {
 					operation = &txnbuild.Payment{
 						SourceAccount: distributionKP.Address(),

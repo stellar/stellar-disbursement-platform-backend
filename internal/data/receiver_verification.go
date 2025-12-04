@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"

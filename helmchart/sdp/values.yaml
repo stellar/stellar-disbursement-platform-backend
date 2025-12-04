@@ -83,7 +83,7 @@ global:
   distributionPublicKey: #required
   distributionPrivateKey: #required
 
-  ## @param global.sep10PublicKey Anchor platform SEP10 signing public key.
+  ## @param global.sep10PublicKey SEP10 signing public key.
   ## @param global.sep10PrivateKey The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.
   sep10PublicKey: #required
   sep10PrivateKey: #required
@@ -135,7 +135,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "5.0.0"
+    tag: "6.0.0"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -166,7 +166,7 @@ sdp:
   ## @param sdp.configMap.annotations Annotations to be added to the ConfigMap.
   ## @extra sdp.configMap.data Used to inject non-sensitive environment variables into the SDP deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @extra sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts. Required if global.distributionPublicKey not set.
-  ## @extra sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key. Required if global.sep10PublicKey not set.
+  ## @extra sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY SEP10 signing public key. Required if global.sep10PublicKey not set.
   ## @extra sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
   ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
   ## @param sdp.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
@@ -183,6 +183,10 @@ sdp:
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
   ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
   ## @param sdp.configMap.data.CIRCLE_API_TYPE The type of Circle API to be used. Options: "TRANSFERS", "PAYOUTS". Default: "TRANSFERS".
+  ## @param sdp.configMap.data.DB_MAX_OPEN_CONNS Maximum open connections per pool to the database.
+  ## @param sdp.configMap.data.DB_MAX_IDLE_CONNS Maximum idle connections retained in the pool.
+  ## @param sdp.configMap.data.DB_CONN_MAX_IDLE_TIME_SECONDS Close idle connections after N seconds.
+  ## @param sdp.configMap.data.DB_CONN_MAX_LIFETIME_SECONDS Recycle connections after N seconds.
   ## @extra sdp.configMap.data.ENABLE_BRIDGE_INTEGRATION Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.
   ## @extra sdp.configMap.data.BRIDGE_BASE_URL The base URL of the bridge API. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
   configMap:
@@ -221,6 +225,12 @@ sdp:
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
       CIRCLE_API_TYPE: "TRANSFERS"
 
+      ## Database connection pool tuning (SDP/Core)
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "2"
+      DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
+      DB_CONN_MAX_LIFETIME_SECONDS: "300"
+
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
   ## @param sdp.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
@@ -242,8 +252,7 @@ sdp:
   ## @extra sdp.kubeSecrets.data.TWILIO_SENDGRID_SENDER_ADDRESS Email address used to send emails via Twilio SendGrid.
   ## @extra sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   ## @extra sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token. This EC key needs to be at least as strong as prime256v1 (P-256).
-  ## @extra sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
-  ## @extra sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token. Must be the same as Anchor Platform's SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET.
+  ## @extra sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret used to sign SEP-24 JWT tokens for wallet registration and interactive deposit authentication.
   ## @extra sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
   ## @extra sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs. Required if global.sep10PrivateKey not set.
   ## @extra sdp.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts. This is needed for the init container.
@@ -288,7 +297,6 @@ sdp:
 
       ## Security configuration
 #      EC256_PRIVATE_KEY: #required
-#      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
 #      SEP24_JWT_SECRET: #required
 #      RECAPTCHA_SITE_SECRET_KEY:  #required when using ReCaptcha
 
@@ -324,134 +332,12 @@ sdp:
       secretName: backend-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
       # NOTE: the hosts to be used here will be the same ones as in the sdp.route section.
 
-      # =========================== START anchorPlatform ===========================
-      ## @section Anchor Platform
-      ## @descriptionStart
-      ## Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
-      ##  the recipient's registration process through the SEP-24 deposit flow.
-      ## @descriptionEnd
-anchorPlatform:
-
-  ## @extra anchorPlatform.route Configuration related to the routing of the Anchor Platform service.
-  ## @param anchorPlatform.route.schema Protocol scheme used for the service. Can be "http" or "https".
-  ## @param anchorPlatform.route.domain Public domain/address of the Anchor Platform service. If using localhost, consider including the port as part of the domain.
-  ## @param anchorPlatform.route.sepPort The port of the sep server of the anchor platform. This is the public API that is meant to be reached by a client application, such as the stellar.toml file."
-  ## @param anchorPlatform.route.platformPort The port of the platform server of the anchor platform. This is the private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint.",
-  route:
-    schema: "https"
-    domain: #required
-    sepPort: "8080"
-    platformPort: "8085"
-
-  ## @extra anchorPlatform.image Configuration related to the Docker image used by the Anchor Platform service.
-  ## @param anchorPlatform.image.repository Docker image repository for the Anchor Platform service.
-  ## @param anchorPlatform.image.pullPolicy Image pull policy for the Anchor Platform service.
-  ## @param anchorPlatform.image.tag Docker image tag for the Anchor Platform service.
-  image:
-    repository: stellar/anchor-platform
-    pullPolicy: IfNotPresent
-    tag: "2.6.2"
-
-  ## @extra anchorPlatform.deployment Configuration related to the deployment of the Anchor Platform.
-  ## @param anchorPlatform.deployment.annotations Annotations to be added to the deployment.
-  ## @param anchorPlatform.deployment.podAnnotations Annotations specific to the pods.
-  ## @param anchorPlatform.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
-  ## @param anchorPlatform.deployment.podSecurityContext Security settings for the pods.
-  ## @param anchorPlatform.deployment.securityContext Security settings for the container within the pod.
-  ## @param anchorPlatform.deployment.resources Resource limits and requests for the Anchor Platform service pods. If not specified, falls back to global.resources.
-  ## @param anchorPlatform.deployment.nodeSelector Node selector to determine which nodes should run the pods.
-  ## @param anchorPlatform.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
-  ## @param anchorPlatform.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
-  ## @param anchorPlatform.deployment.priorityClassName Name of the priority class to be used by the Anchor Platform deployment. If not specified, no priority class will be used.
-  ## @param anchorPlatform.deployment.topologySpreadConstraints Pod topology spread constraints for the Anchor Platform service, overrides global setting if defined.
-  deployment:
-    annotations: {}
-    podAnnotations: {}
-    strategy: {}
-    podSecurityContext: {}
-    securityContext: {}
-    resources: {}
-    nodeSelector: {}
-    tolerations: []
-    affinity: {}
-    priorityClassName: ""
-    topologySpreadConstraints: []
-
-  ## @extra anchorPlatform.configMap Configuration for the ConfigMap used by the anchorPlatform service.
-  ## @param anchorPlatform.configMap.annotations Annotations to be added to the ConfigMap.
-  ## @extra anchorPlatform.configMap.data Used to inject non-sensitive environment variables into the Anchor Platform deployment; for the latest variables, consult Anchor Platform's public documentation.
-  ## @param anchorPlatform.configMap.data.APP_LOGGING_LEVEL Specifies the logging level for the application (e.g. "INFO", "DEBUG", "ERROR").
-  ## @extra anchorPlatform.configMap.data.DATA_DATABASE Specifies the database connection details for the platform. Will be auto-populated in the development helm chart when `ephemeralDatabase` is enabled.
-  ## @extra anchorPlatform.configMap.data.DATA_SERVER Specifies the server connection details for the platform. Will be auto-populated in the development helm chart when `ephemeralDatabase` is enabled.
-  ## @extra anchorPlatform.configMap.data.DATA_FLYWAY_ENABLED Determines if Flyway, the database migration tool, is enabled.
-  ## @extra anchorPlatform.configMap.data.ASSETS_VALUE [string] Specifies the details and configuration of assets supported by the anchor platform. This includes SEP-24 enabled assets, schema type, code, issuer details, distribution account, precision details, and deposit and withdrawal configurations. Currently, it needs to be *manually* kept up to date with the SDP state.
-  ## @param anchorPlatform.configMap.data.DATA_DDL_AUTO Specifies the strategy Hibernate should use for the database schema initialization. The standard Hibernate property values are `none`, `validate`, `update`, `create-drop`.
-  ## @param anchorPlatform.configMap.data.METRICS_ENABLED Determines if metrics collection is enabled for the platform. If enabled, metrics would be available at port 8082.
-  ## @param anchorPlatform.configMap.data.METRICS_EXTRAS_ENABLED Determines if additional metrics (beyond the standard set) are enabled for collection.
-  ## @param anchorPlatform.configMap.data.SEP10_CLIENT_ATTRIBUTION_REQUIRED When set to `true`, only SEP-10 requests from known clients listed in `SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST` will be accepted.
-  ## @param anchorPlatform.configMap.data.SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST The comma-separated list of client domains allowed to make SEP-10 requests.
-  configMap:
-    annotations:
-    data:
-      APP_LOGGING_LEVEL: INFO
-      DATA_DDL_AUTO: update
-      METRICS_ENABLED: "false" # Metrics would be available at port 8082
-      METRICS_EXTRAS_ENABLED: "false"
-      SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false" # RECOMMENDED value is `true`
-      SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "" # RECOMMENDED value is a comma-separated list of client domains allowed to make SEP-10 requests.
-
-  ## @extra anchorPlatform.kubeSecrets secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
-  ## @param anchorPlatform.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
-  ## @param anchorPlatform.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
-  ## @param anchorPlatform.kubeSecrets.annotations Annotations to be added to the secret.
-  ## @param anchorPlatform.kubeSecrets.data The sensitive data to be stored in the secret.
-  ## @extra anchorPlatform.kubeSecrets.data.SECRET_DATA_PASSWORD Database password for the anchor platform.
-  ## @extra anchorPlatform.kubeSecrets.data.SECRET_DATA_USERNAME Database username for the anchor platform.
-  ## @extra anchorPlatform.kubeSecrets.data.SECRET_PLATFORM_API_AUTH_SECRET The secret used for authenticating API requests between the SDP and the Anchor Platform.
-  ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP10_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-10 JWT tokens. These tokens are used for various authentication and transaction-related purposes.
-  ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP10_SIGNING_SEED The seed for the SEP-10 signing process. It's essential for ensuring the security and authenticity of SEP-10 transactions. Required if global.sep10PrivateKey not set.
-  ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 interactive URLs. These URLs typically initiate user-interactive processes like deposits and withdrawals. Must be the same as SDP's SEP24_JWT_SECRET.
-  ## @extra anchorPlatform.kubeSecrets.data.SECRET_SEP24_MORE_INFO_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 'More Info' URLs. These URLs provide users with additional details or steps related to their transactions.
-  kubeSecrets:
-    secretName: "anchor-platform-secret-name"
-    create: false
-    annotations:
-    data: {}
-#      SECRET_DATA_PASSWORD: #required
-#      SECRET_DATA_USERNAME: #required
-#      SECRET_PLATFORM_API_AUTH_SECRET: #required for mySdpToAnchorPlatformSecret
-#      SECRET_SEP10_JWT_SECRET: #required
-#      SECRET_SEP10_SIGNING_SEED: #required
-#      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: #required
-#      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: #required
-
-
-      ## @extra anchorPlatform.ingress Configuration for the ingress controller for the Anchor Platform.
-      ## @param anchorPlatform.ingress.enabled If true, an ingress controller will be created for the Anchor Platform.
-      ## @param anchorPlatform.ingress.className Name of the IngressClass to be used for the ingress controller.
-      ## @skip anchorPlatform.ingress.annotations
-      ## @param anchorPlatform.ingress.tls[0].hosts List of hosts covered by the TLS certificate.
-      ## @param anchorPlatform.ingress.tls[0].secretName The name of the Kubernetes TLS secret. You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
-  ingress:
-    enabled: true
-    className: "nginx"
-    annotations:
-      nginx.ingress.kubernetes.io/custom-response-headers: "X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
-      nginx.ingress.kubernetes.io/limit-rpm: "120"
-      nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
-    tls:
-    - hosts:
-      - '{{ include "sdp.ap.domain" . }}'
-      secretName: backend-tls-cert-name
-      # NOTE: the hosts to be used here will be the same ones as in the anchorPlatform.route section.
-
-
-      # =========================== START tss ===========================
-      ## @section Transaction Submission Service
-      ## @descriptionStart
-      ## Configuration parameters for the Transaction Submission Service. This is the service that submits all payment transactions to the Stellar network.
-      ##  This service is designed to maximize payment throughput, handle queuing, and graceful resubmission/error handling
-      ## @descriptionEnd
+# =========================== START tss ===========================
+## @section Transaction Submission Service
+## @descriptionStart
+## Configuration parameters for the Transaction Submission Service. This is the service that submits all payment transactions to the Stellar network.
+##  This service is designed to maximize payment throughput, handle queuing, and graceful resubmission/error handling
+## @descriptionEnd
 tss:
 
   ## @param tss.enabled If true, the tss will be deployed.
@@ -502,6 +388,10 @@ tss:
   ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
   ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
   ## @param tss.configMap.data.QUEUE_POLLING_INTERVAL Specifies the interval (in seconds) at which the TSS should poll the queue.
+  ## @param tss.configMap.data.DB_MAX_OPEN_CONNS Maximum open connections per pool to the database.
+  ## @param tss.configMap.data.DB_MAX_IDLE_CONNS Maximum idle connections retained in the pool.
+  ## @param tss.configMap.data.DB_CONN_MAX_IDLE_TIME_SECONDS Close idle connections after N seconds.
+  ## @param tss.configMap.data.DB_CONN_MAX_LIFETIME_SECONDS Recycle connections after N seconds.
   configMap:
     annotations:
     data:
@@ -522,6 +412,12 @@ tss:
 
       ## Background tasks configuration
       QUEUE_POLLING_INTERVAL: "6"
+
+      ## Database connection pool tuning (tss)
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "2"
+      DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
+      DB_CONN_MAX_LIFETIME_SECONDS: "300"
 
   ## @extra tss.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param tss.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
@@ -574,7 +470,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:5.0.0
+    fullName: stellar/stellar-disbursement-platform-frontend:6.0.0
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.

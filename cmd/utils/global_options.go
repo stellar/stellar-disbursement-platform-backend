@@ -13,9 +13,11 @@ type GlobalOptionsType struct {
 	Version           string
 	GitCommit         string
 	DatabaseURL       string
+	DBPool            DBPoolOptions
 	BaseURL           string
 	SDPUIBaseURL      string
 	NetworkPassphrase string
+	EnvFile           string
 }
 
 // PopulateCrashTrackerOptions populates the CrastTrackerOptions from the global options.

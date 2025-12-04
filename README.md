@@ -49,7 +49,13 @@ stellar-disbursement-platform --help
 
 ### Docker Compose 
 
-To quickly test the SDP using preconfigured values, see the [Quick Start Guide](./dev/README.md).
+To quickly test the SDP using preconfigured values, use the startup wizard.
+
+```sh
+make setup
+```
+
+For more information about launching and configuring the SDP, see the [Quick Start Guide](./dev/README.md).
 
 ### Helm 
 
@@ -125,9 +131,73 @@ To enhance security, disbursement responsibilities should be distributed among m
 
 ![high_level_architecture](./docs/images/multi-tenant-architecture.png)
 
-The [SDP Dashboard][sdp-dashboard] and [Anchor Platform] components are separate projects that must be installed and configured alongside the services included in this project.
+The [SDP Dashboard][sdp-dashboard] components are separate projects that must be installed and configured alongside the services included in this project.
 
 In a future iteration of this project, the Transaction Submission Service (TSS) will also be moved to its own repository to be used as an independent service. At that point, this project will include the services contained in the Core module shown in the diagram above.
+
+### SEP10 and SEP24 Implementation
+
+The SDP now includes native implementations of Stellar Enhancement Proposals SEP10 and SEP24, providing wallet authentication and interactive deposit flows without requiring external Anchor Platform integration.
+
+#### SEP10 Authentication
+
+SEP10 provides a secure way for wallets to authenticate with the SDP using Stellar transactions. The implementation includes:
+
+- **Challenge Generation**: Creates cryptographically secure challenge transactions
+- **Transaction Validation**: Validates signed challenge transactions from wallets
+- **JWT Token Generation**: Issues JWT tokens for authenticated sessions
+- **Multi-tenant Support**: Handles authentication across different tenant domains
+- **Client Domain Verification**: Validates client domain signatures for enhanced security
+
+**Endpoints:**
+- `GET /auth` - Generate authentication challenge
+- `POST /auth` - Validate challenge and receive JWT token
+
+#### SEP24 Interactive Deposit Flow
+
+SEP24 enables interactive deposit flows for wallet registration and payment processing:
+
+- **Interactive Registration**: Guides users through wallet registration process
+- **OTP Verification**: Handles one-time password verification for recipients
+- **Transaction Status Tracking**: Monitors deposit transaction status
+- **Multi-language Support**: Supports multiple languages for the registration UI
+- **JWT-based Security**: Uses JWT tokens for secure transaction handling
+
+**Endpoints:**
+- `GET /sep24/info` - Get supported assets and capabilities
+- `POST /sep24/transactions/deposit/interactive` - Initiate interactive deposit
+- `GET /sep24/transactions` - Get transaction status
+- `/wallet-registration/start` - Interactive registration UI
+
+#### Configuration
+
+The SEP10/SEP24 implementation can be configured using the following environment variables:
+
+```bash
+# SEP10 Configuration
+SEP10_SIGNING_PUBLIC_KEY=G...  # Public key for SEP10 signing
+SEP10_SIGNING_PRIVATE_KEY=S... # Private key for SEP10 signing
+
+# SEP24 Configuration  
+SEP24_JWT_SECRET=jwt_secret_... # JWT secret for SEP24 tokens
+```
+
+The SDP serves its own SEP10/SEP24 endpoints and the `stellar.toml` file points to these native endpoints instead of external Anchor Platform URLs.
+
+#### Environment Variables
+
+The following environment variables are required for SEP10/SEP24 functionality:
+
+**Required Variables:**
+- `SEP10_SIGNING_PUBLIC_KEY` - Public key for SEP10 challenge signing
+- `SEP10_SIGNING_PRIVATE_KEY` - Private key for SEP10 challenge signing  
+- `SEP24_JWT_SECRET` - JWT secret for SEP24 token signing
+
+**Optional Variables:**
+- `BASE_URL` - Base URL for generating SEP endpoint URLs in stellar.toml
+
+**Development Setup:**
+The `make_env.sh` script automatically generates SEP10 signing keys and creates the necessary `.env` file with proper configuration for development environments.
 
 ### Core
 
@@ -209,9 +279,15 @@ TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID=HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 The Wallet Registration UI is also hosted by the Core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recipients registered Stellar account.
 
-#### Core + Anchor Platform Integration
+#### SEP10/SEP24 Endpoints
 
-For a full understanding on how the Core and Anchor Platform components interact, as well as the best security and configuration practices, please refer to the [Anchor Platform Integration Points](https://docs.stellar.org/stellar-disbursement-platform/anchor-platform-integration-points) section of the Stellar Docs.
+The Core service now includes native implementations of SEP10 and SEP24 protocols:
+
+- **SEP10 Authentication**: Provides secure wallet authentication using Stellar transactions
+- **SEP24 Interactive Deposits**: Handles interactive deposit flows for wallet registration
+- **Stellar.toml Generation**: Dynamically generates stellar.toml files with appropriate SEP endpoints
+- **Multi-tenant Support**: Supports SEP10/SEP24 across different tenant domains
+- **JWT Token Management**: Handles authentication tokens for secure API access
 
 ### Transaction Submission Service
 
@@ -316,6 +392,23 @@ The following environment variables can be used to configure the intervals of th
 >Prior to version 3.7.0, background jobs were configured using ENABLE_SCHEDULER=true and EVENT_BROKER_TYPE=NONE.
 >This configuration has been deprecated in favor of using EVENT_BROKER_TYPE=SCHEDULER.
 
+### Database connection pool
+
+Tune the per-tenant PostgreSQL connection pool with env vars (defaults shown):
+
+```sh
+# Maximum open connections per pool (default: 20)
+DB_MAX_OPEN_CONNS=20
+# Maximum idle connections retained (default: 2)
+DB_MAX_IDLE_CONNS=2
+# Close idle connections after N seconds (default: 10 seconds)
+DB_CONN_MAX_IDLE_TIME_SECONDS=10
+# Recycle connections after N seconds (default: 300 = 5 minutes)
+DB_CONN_MAX_LIFETIME_SECONDS=300
+```
+
+These settings help prevent idle connection buildup across multi-tenant scheduler cycles, especially on constrained databases.
+
 ## Wallets
 
 Please check the [Making Your Wallet SDP-Ready](https://docs.stellar.org/stellar-disbursement-platform/making-your-wallet-sdp-ready) section of the Stellar Docs for more information on how to integrate your wallet with the SDP.
@@ -382,4 +475,3 @@ stateDiagram-v2
 ```
 
 [sdp-dashboard]: https://github.com/stellar/stellar-disbursement-platform-frontend
-[Anchor Platform]: https://github.com/stellar/java-stellar-anchor-sdk

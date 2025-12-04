@@ -9,12 +9,11 @@ import (
 	"image"
 	"image/color"
 	"math/big"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/keypair"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -28,7 +27,7 @@ const (
 func CreateAssetFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code, issuer string) *Asset {
 	issuerAddress := issuer
 
-	if issuerAddress == "" && strings.ToUpper(code) != "XLM" {
+	if issuerAddress == "" && code != "XLM" && code != "NATIVE" {
 		issuer, err := utils.RandomString(56)
 		require.NoError(t, err)
 		issuerAddress = issuer
@@ -411,7 +410,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
 				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history,
-otp, otp_confirmed_with, otp_confirmed_at, otp_created_at,anchor_platform_transaction_id, invitation_sent_at)
+otp, otp_confirmed_with, otp_confirmed_at, otp_created_at,sep24_transaction_id, invitation_sent_at)
 			VALUES
 				($1, $2, $3, $4, $5, $6, ARRAY[create_receiver_wallet_status_history(now(), $6, '')], 
 $7, $8, $9, $10 ,$11, $12)

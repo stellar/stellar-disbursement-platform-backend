@@ -11,8 +11,10 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-# Environment file
+# Environment files
 .env
+.env.*
+!.env.example
 
 # subproject used for testing:
 v1_compatibility/stellar-relief-backoffice-backend
@@ -24,6 +26,9 @@ stellar-disbursement-platform-backend
 .vscode
 .idea
 .cursor
+
+# Local HTTPS certificates
+dev/certs/
 
 # Rust & Soroban
 target/

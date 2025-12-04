@@ -18,7 +18,7 @@ func Test_openDBConnectionPool(t *testing.T) {
 	defer dbt.Close()
 
 	t.Run("handle options without metrics", func(t *testing.T) {
-		dbConnectionPool, err := openDBConnectionPool(ctx, dbt.DSN, nil)
+		dbConnectionPool, err := openDBConnectionPool(ctx, dbt.DSN, DBConnectionPoolOptions{})
 		require.NoError(t, err)
 		defer dbConnectionPool.Close()
 
@@ -29,7 +29,7 @@ func Test_openDBConnectionPool(t *testing.T) {
 		mMonitorService := monitorMocks.NewMockMonitorService(t)
 		// Expect 8 RegisterFunctionMetric calls for database connection pool metrics
 		mMonitorService.On("RegisterFunctionMetric", mock.Anything, mock.Anything).Times(8)
-		dbConnectionPool, err := openDBConnectionPool(ctx, dbt.DSN, mMonitorService)
+		dbConnectionPool, err := openDBConnectionPool(ctx, dbt.DSN, DBConnectionPoolOptions{MonitorService: mMonitorService})
 		require.NoError(t, err)
 		defer dbConnectionPool.Close()
 

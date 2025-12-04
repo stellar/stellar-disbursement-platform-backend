@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -196,7 +196,13 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 }
 
 func initDBPools(ctx context.Context, dbURL string) (admin, mtn, tss dbpkg.DBConnectionPool, err error) {
-	opts := di.DBConnectionPoolOptions{DatabaseURL: dbURL}
+	opts := di.DBConnectionPoolOptions{
+		DatabaseURL:            dbURL,
+		MaxOpenConns:           globalOptions.DBPool.DBMaxOpenConns,
+		MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
+		ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
+		ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+	}
 	if admin, err = di.NewAdminDBConnectionPool(ctx, opts); err != nil {
 		return
 	}

@@ -9,26 +9,30 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/amount"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/httpjson"
-	"github.com/stellar/go/txnbuild"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/amount"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-const stellarNativeAssetCode = "XLM"
+func isNativeAssetCode(code string) bool {
+	return code == assets.XLMAssetCode || code == assets.XLMAssetCodeAlias
+}
 
 var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 
@@ -46,8 +50,8 @@ type AssetRequest struct {
 
 type AssetWithEnabledInfo struct {
 	data.Asset
-	Enabled bool     `json:"enabled"`
-	Balance *float64 `json:"balance,omitempty"`
+	Enabled bool             `json:"enabled"`
+	Balance *decimal.Decimal `json:"balance,omitempty"`
 }
 
 // GetAssets returns a list of assets.
@@ -111,7 +115,7 @@ func (c AssetsHandler) getBalanceInfo(
 	ctx context.Context,
 	account *schema.TransactionAccount,
 	asset data.Asset,
-) (bool, *float64, error) {
+) (bool, *decimal.Decimal, error) {
 	balance, err := c.DistributionAccountService.GetBalance(ctx, account, asset)
 	if err != nil {
 		if errors.Is(err, services.ErrNoBalanceForAsset) {
@@ -143,12 +147,12 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assetCode := strings.TrimSpace(strings.ToUpper(assetRequest.Code))
+	assetCode := strings.TrimSpace(assetRequest.Code)
 	assetIssuer := strings.TrimSpace(assetRequest.Issuer)
 
 	v := validators.NewValidator()
 	v.Check(assetCode != "", "code", "code is required")
-	if assetCode != stellarNativeAssetCode {
+	if !isNativeAssetCode(assetCode) {
 		v.Check(strkey.IsValidEd25519PublicKey(assetIssuer), "issuer", "issuer is invalid")
 	}
 
@@ -266,7 +270,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 
 	changeTrustOperations := make([]*txnbuild.ChangeTrust, 0)
 	// remove asset
-	if assetToRemoveTrustline != nil && strings.ToUpper(assetToRemoveTrustline.Code) != stellarNativeAssetCode {
+	if assetToRemoveTrustline != nil && !isNativeAssetCode(assetToRemoveTrustline.Code) {
 		for _, balance := range acc.Balances {
 			if balance.Asset.Code == assetToRemoveTrustline.Code && balance.Asset.Issuer == assetToRemoveTrustline.Issuer {
 				assetToRemoveTrustlineBalance, parseBalErr := amount.ParseInt64(balance.Balance)
@@ -304,7 +308,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 	}
 
 	// add asset
-	if assetToAddTrustline != nil && strings.ToUpper(assetToAddTrustline.Code) != stellarNativeAssetCode {
+	if assetToAddTrustline != nil && !isNativeAssetCode(assetToAddTrustline.Code) {
 		var assetToAddTrustlineFound bool
 		for _, balance := range acc.Balances {
 			if balance.Asset.Code == assetToAddTrustline.Code && balance.Asset.Issuer == assetToAddTrustline.Issuer {

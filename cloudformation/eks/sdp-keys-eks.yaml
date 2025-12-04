@@ -27,7 +27,7 @@ Parameters:
     Type: String
     Default: ""
     NoEcho: true
-    Description: "Environment variable: Anchor Platform SECRET_SEP10_SIGNING_SEED"
+    Description: "Environment variable: Platform SECRET_SEP10_SIGNING_SEED"
 
   Sep10SigningPublicKey:
     Type: String
@@ -101,18 +101,7 @@ Parameters:
     Default: "jwt_secret_1234567890"
     Description: "Environment variable: SEP24_JWT_SECRET"
 
-  SecretPlatformApiAuthSecret:
-    Type: String
-    NoEcho: true
-    Default: "jwt_secret_1234567890"
-    Description: "Environment varible SECRET_PLATFORM_API_AUTH_SECRET"
   
-  AnchorPlatformOutgoingJwtSecret:
-    Type: String
-    NoEcho: true
-    Default: "jwt_secret_1234567890"
-    Description: "Environment variable: ANCHOR_PLATFORM_OUTGOING_JWT_SECRET"
-
   AdminApiKey:
     Type: String
     NoEcho: true
@@ -428,19 +417,6 @@ Resources:
       Description: "SEP24 JWT secret"
       SecretString: !Ref Sep24JwtSecret
 
-  SecretPlatformApiAuthSecretSm:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/SECRET_PLATFORM_API_AUTH_SECRET
-      SecretString: !Ref AnchorPlatformOutgoingJwtSecret
-
-  AnchorPlatformOutgoingJwtSm:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
-      Description: "Anchor platform outgoing JWT secret"
-      SecretString: !Ref SecretPlatformApiAuthSecret
-
   AdminApiKeySm:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -555,18 +531,6 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-sep24-jwt-sm-arn
     Description: "ARN for SEP24_JWT_SECRET secret"
-
-  SecretPlatformApiAuthSecretArn:
-    Value: !Ref SecretPlatformApiAuthSecret
-    Export:
-      Name: !Sub ${AWS::StackName}-secret-platform-api-auth-secret-sm-arn
-    Description: "ARN for SECRET_PLATFORM_API_AUTH_SECRET "
-
-  AnchorPlatformOutgoingJwtSmArn:
-    Value: !Ref AnchorPlatformOutgoingJwtSm
-    Export:
-      Name: !Sub ${AWS::StackName}-anchor-platform-outgoing-jwt-sm-arn
-    Description: "ARN for ANCHOR_PLATFORM_OUTGOING_JWT_SECRET secret"
 
   AdminApiKeySmArn:
     Value: !Ref AdminApiKeySm

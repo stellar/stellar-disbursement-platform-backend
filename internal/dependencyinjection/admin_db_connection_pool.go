@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
@@ -30,7 +30,7 @@ func NewAdminDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions)
 		return nil, fmt.Errorf("getting Admin database DSN: %w", err)
 	}
 
-	dbConnectionPool, err := openDBConnectionPool(ctx, adminDSN, opts.MonitorService)
+	dbConnectionPool, err := openDBConnectionPool(ctx, adminDSN, opts)
 	if err != nil {
 		return nil, fmt.Errorf("opening Admin DB connection pool: %w", err)
 	}

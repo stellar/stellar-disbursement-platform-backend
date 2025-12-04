@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lib/pq"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -851,74 +850,6 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 		assert.Equal(t, ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
 		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
 	})
-
-	t.Run("resets the anchor_platform_synced_at for the receiver wallets", func(t *testing.T) {
-		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-
-		recv := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
-		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, recv.ID, wallet.ID, ReadyReceiversWalletStatus)
-
-		q := "UPDATE receiver_wallets SET anchor_platform_transaction_synced_at = NOW() WHERE id = $1"
-		_, err := dbConnectionPool.ExecContext(ctx, q, rw.ID)
-		require.NoError(t, err)
-
-		q = "SELECT anchor_platform_transaction_synced_at FROM receiver_wallets WHERE id = $1"
-		var syncedAt pq.NullTime
-		err = dbConnectionPool.GetContext(ctx, &syncedAt, q, rw.ID)
-		require.NoError(t, err)
-		assert.True(t, syncedAt.Valid)
-		assert.False(t, syncedAt.Time.IsZero())
-
-		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-1",
-			StellarOperationID:   "operation-id-1",
-			Status:               FailedPaymentStatus,
-			Disbursement:         disbursement,
-			ReceiverWallet:       rw,
-			Asset:                *asset,
-		})
-
-		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
-			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-2",
-			StellarOperationID:   "operation-id-2",
-			Status:               FailedPaymentStatus,
-			Disbursement:         disbursement,
-			ReceiverWallet:       rw,
-			Asset:                *asset,
-		})
-
-		err = models.Payment.RetryFailedPayments(ctx, dbConnectionPool, "user@test.com", payment1.ID, payment2.ID)
-		require.NoError(t, err)
-
-		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
-		require.NoError(t, err)
-
-		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
-		require.NoError(t, err)
-
-		// Payment 1
-		assert.Equal(t, ReadyPaymentStatus, payment1DB.Status)
-		assert.Empty(t, payment1DB.StellarTransactionID)
-		assert.NotEqual(t, payment1.StatusHistory, payment1DB.StatusHistory)
-		assert.Len(t, payment1DB.StatusHistory, 2)
-		assert.Equal(t, ReadyPaymentStatus, payment1DB.StatusHistory[1].Status)
-		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-1", payment1DB.StatusHistory[1].StatusMessage)
-
-		// Payment 2
-		assert.Equal(t, ReadyPaymentStatus, payment2DB.Status)
-		assert.Empty(t, payment2DB.StellarTransactionID)
-		assert.NotEqual(t, payment2.StatusHistory, payment2DB.StatusHistory)
-		assert.Len(t, payment2DB.StatusHistory, 2)
-		assert.Equal(t, ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
-		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
-
-		err = dbConnectionPool.GetContext(ctx, &syncedAt, q, rw.ID)
-		require.NoError(t, err)
-		assert.False(t, syncedAt.Valid)
-		assert.True(t, syncedAt.Time.IsZero())
-	})
 }
 
 func Test_PaymentModelCancelPayment(t *testing.T) {
@@ -1521,11 +1452,11 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 
 		assert.Equal(t, paymentReceiver1.ID, payments[0].ID)
 		assert.Equal(t, paymentReceiver1.Status, payments[0].Status)
-		assert.Equal(t, receiverWallet1.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet1.SEP24TransactionID, payments[0].ReceiverWallet.SEP24TransactionID)
 
 		assert.Equal(t, paymentReceiver2.ID, payments[1].ID)
 		assert.Equal(t, paymentReceiver2.Status, payments[1].Status)
-		assert.Equal(t, receiverWallet2.AnchorPlatformTransactionID, payments[1].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet2.SEP24TransactionID, payments[1].ReceiverWallet.SEP24TransactionID)
 	})
 
 	t.Run("gets more than one payment when a receiver has payments in the Success or Failed statuses for the same wallet provider", func(t *testing.T) {
@@ -1577,11 +1508,11 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 
 		assert.Equal(t, payment1.ID, payments[0].ID)
 		assert.Equal(t, payment1.Status, payments[0].Status)
-		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet.SEP24TransactionID, payments[0].ReceiverWallet.SEP24TransactionID)
 
 		assert.Equal(t, payment2.ID, payments[1].ID)
 		assert.Equal(t, payment2.Status, payments[1].Status)
-		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[1].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet.SEP24TransactionID, payments[1].ReceiverWallet.SEP24TransactionID)
 	})
 
 	t.Run("gets more than one payment when a receiver has payments for more than one wallet provider", func(t *testing.T) {
@@ -1645,15 +1576,15 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 
 		assert.Equal(t, payment1.ID, payments[0].ID)
 		assert.Equal(t, payment1.Status, payments[0].Status)
-		assert.Equal(t, receiverWallet1.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet1.SEP24TransactionID, payments[0].ReceiverWallet.SEP24TransactionID)
 
 		assert.Equal(t, payment2.ID, payments[1].ID)
 		assert.Equal(t, payment2.Status, payments[1].Status)
-		assert.Equal(t, receiverWallet1.AnchorPlatformTransactionID, payments[1].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet1.SEP24TransactionID, payments[1].ReceiverWallet.SEP24TransactionID)
 
 		assert.Equal(t, payment3.ID, payments[2].ID)
 		assert.Equal(t, payment3.Status, payments[2].Status)
-		assert.Equal(t, receiverWallet2.AnchorPlatformTransactionID, payments[2].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet2.SEP24TransactionID, payments[2].ReceiverWallet.SEP24TransactionID)
 	})
 
 	t.Run("doesn't return error when receiver wallet has the stellar_memo and stellar_memo_type null", func(t *testing.T) {
@@ -1692,7 +1623,7 @@ func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing
 
 		assert.Equal(t, payment.ID, payments[0].ID)
 		assert.Equal(t, payment.Status, payments[0].Status)
-		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+		assert.Equal(t, receiverWallet.SEP24TransactionID, payments[0].ReceiverWallet.SEP24TransactionID)
 	})
 }
 

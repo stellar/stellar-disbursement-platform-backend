@@ -6,12 +6,11 @@ import (
 	"go/types"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/bridge"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -39,7 +38,6 @@ type ServerServiceInterface interface {
 	GetSchedulerJobRegistrars(ctx context.Context,
 		serveOpts serve.ServeOptions,
 		schedulerOptions scheduler.SchedulerOptions,
-		apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
 		tssDBConnectionPool db.DBConnectionPool) ([]scheduler.SchedulerJobRegisterOption, error)
 }
 
@@ -73,7 +71,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	ctx context.Context,
 	serveOpts serve.ServeOptions,
 	schedulerOptions scheduler.SchedulerOptions,
-	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
 	tssDBConnectionPool db.DBConnectionPool,
 ) ([]scheduler.SchedulerJobRegisterOption, error) {
 	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
@@ -82,7 +79,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	}
 
 	sj := []scheduler.SchedulerJobRegisterOption{
-		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
 			Models:              models,
@@ -114,7 +110,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 		}),
 		scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
-		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 		scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
 			Models:                      models,
 			MessageDispatcher:           serveOpts.MessageDispatcher,
@@ -165,7 +160,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:      "sep24-jwt-secret",
-			Usage:     `The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token`,
+			Usage:     `The JWT secret that's used to sign the SEP-24 JWT token`,
 			OptType:   types.String,
 			ConfigKey: &serveOpts.SEP24JWTSecret,
 			Required:  true,
@@ -187,27 +182,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
-			Name: "anchor-platform-base-platform-url",
-			Usage: "The Base URL of the platform server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint.",
-			OptType:   types.String,
-			ConfigKey: &serveOpts.AnchorPlatformBasePlatformURL,
-			Required:  true,
-		},
-		{
-			Name: "anchor-platform-base-sep-url",
-			Usage: "The Base URL of the sep server of the anchor platform. This is the base URL where the Anchor Platform " +
-				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file.",
-			OptType:   types.String,
-			ConfigKey: &serveOpts.AnchorPlatformBaseSepURL,
-			Required:  true,
-		},
-		{
-			Name:      "anchor-platform-outgoing-jwt-secret",
-			Usage:     "The JWT secret used to create a JWT token used to send requests to the anchor platform.",
-			OptType:   types.String,
-			ConfigKey: &serveOpts.AnchorPlatformOutgoingJWTSecret,
-			Required:  true,
+			Name:        "sep10-client-attribution-required",
+			Usage:       "If true, SEP-10 authentication requires client_domain to be provided and validated. If false, client_domain is optional.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.Sep10ClientAttributionRequired,
+			FlagDefault: true,
+			Required:    false,
 		},
 		{
 			Name:        "reset-token-expiration-hours",
@@ -397,6 +377,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		cmdUtils.SchedulerConfigOptions(&schedulerOpts)...,
 	)
 
+	// DB pool tuning options (serve)
+	configOpts = append(
+		configOpts,
+		cmdUtils.DBPoolConfigOptions(&globalOptions.DBPool)...,
+	)
+
 	// bridge integration options
 	bridgeIntegrationOpts := cmdUtils.BridgeIntegrationOptions{}
 	configOpts = append(
@@ -456,7 +442,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ctx := cmd.Context()
 
 			// Setup the Admin DB connection pool
-			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: monitorService}
+			dbcpOptions := di.DBConnectionPoolOptions{
+				DatabaseURL:            globalOptions.DatabaseURL,
+				MonitorService:         monitorService,
+				MaxOpenConns:           globalOptions.DBPool.DBMaxOpenConns,
+				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
+				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
+				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+			}
 			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
@@ -512,13 +505,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating message dispatcher: %s", err.Error())
 			}
-
-			// Setup the AP Auth enforcer
-			apAPIService, err := di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
-			}
-			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Setup Distribution Account Resolver
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
@@ -597,7 +583,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 
 			log.Ctx(ctx).Info("Starting Scheduler Service...")
-			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
+			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, tssDBConnectionPool)
 			if innerErr != nil {
 				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
 			}

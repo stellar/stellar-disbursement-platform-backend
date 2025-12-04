@@ -3,8 +3,9 @@ package dependencyinjection
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -32,7 +33,23 @@ func NewMtnDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (
 
 	log.Ctx(ctx).Info("⚙️ Setting up Multi-tenant DBConnectionPool")
 	tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
-	tr := tenant.NewMultiTenantDataSourceRouter(tm).WithMonitoring(opts.MonitorService)
+
+	// Build pool config for tenant pools
+	cfg := db.DefaultDBPoolConfig
+	if opts.MaxOpenConns > 0 {
+		cfg.MaxOpenConns = opts.MaxOpenConns
+	}
+	if opts.MaxIdleConns >= 0 {
+		cfg.MaxIdleConns = opts.MaxIdleConns
+	}
+	if opts.ConnMaxIdleTimeSeconds > 0 {
+		cfg.ConnMaxIdleTime = time.Duration(opts.ConnMaxIdleTimeSeconds) * time.Second
+	}
+	if opts.ConnMaxLifetimeSeconds > 0 {
+		cfg.ConnMaxLifetime = time.Duration(opts.ConnMaxLifetimeSeconds) * time.Second
+	}
+
+	tr := tenant.NewMultiTenantDataSourceRouter(tm).WithMonitoring(opts.MonitorService).WithPoolConfig(cfg)
 	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
 	if err != nil {
 		return nil, fmt.Errorf("opening Mtn DB connection pool: %w", err)

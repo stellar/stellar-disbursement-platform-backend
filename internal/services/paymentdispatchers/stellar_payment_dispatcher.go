@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/stellar/go/support/log"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -73,7 +74,7 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			ExternalID:  payment.ID,
 			AssetCode:   payment.Asset.Code,
 			AssetIssuer: payment.Asset.Issuer,
-			Amount:      amount,
+			Amount:      decimal.NewFromFloat(amount),
 			Destination: payment.ReceiverWallet.StellarAddress,
 			Memo:        memo.Value,
 			MemoType:    memo.Type,

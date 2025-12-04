@@ -18,11 +18,11 @@ jobs:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml
     secrets: inherit # pass all secrets
 
-  anchor_platform_integration_check:
-    uses: ./.github/workflows/anchor_platform_integration_check.yml # execute the callable anchor_platform_integration_check.yml
+  internal_sep_validation:
+    uses: ./.github/workflows/internal_sep_validation.yml
     needs:
       - tests
-    secrets: inherit # pass all secrets
+    secrets: inherit
 
   e2e_integration_test:
     uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
@@ -36,8 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - tests
-      - anchor_platform_integration_check
       - e2e_integration_test
+      - internal_sep_validation 
     steps:
       - name: Check if tag is not empty
         run: |
@@ -55,7 +55,7 @@ jobs:
             echo "TAGS=stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3.6.0
@@ -78,10 +78,10 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - tests
-      - anchor_platform_integration_check
+      - internal_sep_validation
       - e2e_integration_test
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Login to DockerHub
         uses: docker/login-action@v3.6.0

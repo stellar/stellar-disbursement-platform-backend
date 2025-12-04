@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 
-	"github.com/stellar/go/support/log"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -52,20 +52,23 @@ type InsufficientBalanceError struct {
 	DistributionAddress string
 	DisbursementID      string
 	DisbursementAsset   data.Asset
-	AvailableBalance    float64
-	DisbursementAmount  float64
-	TotalPendingAmount  float64
+	AvailableBalance    decimal.Decimal
+	DisbursementAmount  decimal.Decimal
+	TotalPendingAmount  decimal.Decimal
 }
 
 func (e InsufficientBalanceError) Error() string {
+	requiredAmount := e.DisbursementAmount.Add(e.TotalPendingAmount)
+	shortfall := requiredAmount.Sub(e.AvailableBalance)
+
 	return fmt.Sprintf(
-		"the disbursement %s failed due to an account balance (%.2f) that was insufficient to fulfill new amount (%.2f) along with the pending amount (%.2f). To complete this action, your distribution account (%s) needs to be recharged with at least %.2f %s",
+		"the disbursement %s failed due to an account balance (%s) that was insufficient to fulfill new amount (%s) along with the pending amount (%s). To complete this action, your distribution account (%s) needs to be recharged with at least %s %s",
 		e.DisbursementID,
-		e.AvailableBalance,
-		e.DisbursementAmount,
-		e.TotalPendingAmount,
+		e.AvailableBalance.StringFixed(2),
+		e.DisbursementAmount.StringFixed(2),
+		e.TotalPendingAmount.StringFixed(2),
 		e.DistributionAddress,
-		(e.DisbursementAmount+e.TotalPendingAmount)-e.AvailableBalance,
+		shortfall.StringFixed(2),
 		e.DisbursementAsset.Code,
 	)
 }
@@ -271,10 +274,10 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 			err)
 	}
 
-	disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
+	disbursementAmount, err := decimal.NewFromString(disbursement.TotalAmount)
 	if err != nil {
 		return fmt.Errorf(
-			"cannot convert total amount %s for disbursement id %s into float: %w",
+			"cannot convert total amount %s for disbursement id %s to decimal: %w",
 			disbursement.TotalAmount,
 			disbursement.ID,
 			err,
@@ -282,19 +285,19 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 	}
 
 	if disbursement.AmountDisbursed != "" {
-		amountDisbursed, parseErr := strconv.ParseFloat(disbursement.AmountDisbursed, 64)
+		amountDisbursed, parseErr := decimal.NewFromString(disbursement.AmountDisbursed)
 		if parseErr != nil {
 			return fmt.Errorf(
-				"cannot convert amount disbursed %s for disbursement id %s into float: %w",
+				"cannot convert amount disbursed %s for disbursement id %s to decimal: %w",
 				disbursement.AmountDisbursed,
 				disbursement.ID,
 				parseErr,
 			)
 		}
-		disbursementAmount -= amountDisbursed
+		disbursementAmount = disbursementAmount.Sub(amountDisbursed)
 	}
 
-	totalPendingAmount := 0.0
+	totalPendingAmount := decimal.Zero
 	incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 		Filters: map[data.FilterKey]interface{}{
 			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
@@ -314,19 +317,20 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 			continue
 		}
 
-		paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
+		paymentAmount, parsePaymentAmountErr := decimal.NewFromString(ip.Amount)
 		if parsePaymentAmountErr != nil {
 			return fmt.Errorf(
-				"cannot convert amount %s for paymment id %s into float: %w",
+				"cannot convert amount %s for payment id %s to decimal: %w",
 				ip.Amount,
 				ip.ID,
 				parsePaymentAmountErr,
 			)
 		}
-		totalPendingAmount += paymentAmount
+		totalPendingAmount = totalPendingAmount.Add(paymentAmount)
 	}
 
-	if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
+	requiredAmount := disbursementAmount.Add(totalPendingAmount)
+	if availableBalance.LessThan(requiredAmount) {
 		err = InsufficientBalanceError{
 			DisbursementAsset:   *disbursement.Asset,
 			DistributionAddress: distributionAccount.ID(),
@@ -338,7 +342,7 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 		log.Ctx(ctx).Error(err)
 		return err
 	}
-	return err
+	return nil
 }
 
 // PauseDisbursement pauses a disbursement and all its payments.
