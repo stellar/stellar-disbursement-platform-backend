@@ -131,7 +131,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	// Set OTPConfirmedWith field
 	otpConfirmedWith := "user@example.com"
 	err = receiverWalletModel.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
-		StellarAddress:   validClaims.SEP10StellarAccount(),
+		StellarAddress:   validClaims.Account(),
 		OTPConfirmedWith: otpConfirmedWith,
 		OTPConfirmedAt:   time.Now(),
 	}, dbConnectionPool)
