@@ -60,7 +60,7 @@ func WebAuthHeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.
 			}
 
 			var (
-				depositClaims *WebAuthClaims
+				webAuthClaims *WebAuthClaims
 				sep45Claims   *Sep45JWTClaims
 				sep10Claims   *Sep10JWTClaims
 			)
@@ -74,14 +74,14 @@ func WebAuthHeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.
 
 			switch {
 			case sep45Claims != nil && strkey.IsValidContractAddress(sep45Claims.Subject):
-				depositClaims = &WebAuthClaims{
+				webAuthClaims = &WebAuthClaims{
 					Subject:      sep45Claims.Subject,
 					ClientDomain: sep45Claims.ClientDomain,
 					HomeDomain:   sep45Claims.HomeDomain,
 					TokenType:    WebAuthTokenTypeSEP45,
 				}
 			case sep10Claims != nil:
-				depositClaims = &WebAuthClaims{
+				webAuthClaims = &WebAuthClaims{
 					Subject:      sep10Claims.Subject,
 					ClientDomain: sep10Claims.ClientDomain,
 					HomeDomain:   sep10Claims.HomeDomain,
@@ -92,7 +92,7 @@ func WebAuthHeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.
 				return
 			}
 
-			ctx = context.WithValue(ctx, WebAuthClaimsContextKey, depositClaims)
+			ctx = context.WithValue(ctx, WebAuthClaimsContextKey, webAuthClaims)
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)

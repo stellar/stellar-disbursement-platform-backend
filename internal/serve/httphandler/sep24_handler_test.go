@@ -581,10 +581,10 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 	})
 }
 
-func setupRequestWithWebAuthClaims(method, url string, body io.Reader, sep24Claims *sepauth.WebAuthClaims) *http.Request {
+func setupRequestWithWebAuthClaims(method, url string, body io.Reader, webAuthClaims *sepauth.WebAuthClaims) *http.Request {
 	ctx := context.Background()
-	if sep24Claims != nil {
-		ctx = context.WithValue(ctx, sepauth.WebAuthClaimsContextKey, sep24Claims)
+	if webAuthClaims != nil {
+		ctx = context.WithValue(ctx, sepauth.WebAuthClaimsContextKey, webAuthClaims)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
