@@ -400,3 +400,40 @@ func Test_EmbeddedWalletModel_GetPendingForSubmission(t *testing.T) {
 	assert.Contains(t, ids, pending1.Token)
 	assert.Contains(t, ids, pending2.Token)
 }
+
+func Test_EmbeddedWalletModel_GetReceiverWalletByContractAddress(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	embeddedWalletModel := EmbeddedWalletModel{dbConnectionPool: dbConnectionPool}
+
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "token", "https://example.com", "wallet.example.com", "embedded://")
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	embedded := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token-2", "hash", contractAddress, "cred-id", "pub", PendingWalletStatus)
+	update := EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}
+	require.NoError(t, embeddedWalletModel.Update(ctx, dbConnectionPool, embedded.Token, update))
+
+	t.Run("success", func(t *testing.T) {
+		wallet, err := embeddedWalletModel.GetReceiverWallet(ctx, dbConnectionPool, contractAddress)
+		require.NoError(t, err)
+		require.NotNil(t, wallet)
+		assert.Equal(t, receiverWallet.ID, wallet.ID)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		wallet, err := embeddedWalletModel.GetReceiverWallet(ctx, dbConnectionPool, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrRecordNotFound)
+		assert.Nil(t, wallet)
+	})
+}

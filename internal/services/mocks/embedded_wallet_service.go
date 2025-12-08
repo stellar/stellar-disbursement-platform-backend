@@ -91,21 +91,21 @@ func (_m *MockEmbeddedWalletService) GetWalletByCredentialID(ctx context.Context
 	return r0, r1
 }
 
-// GetReceiverWalletByID provides a mock function with given fields: ctx, receiverWalletID
-func (_m *MockEmbeddedWalletService) GetReceiverWalletByID(ctx context.Context, receiverWalletID string) (*data.ReceiverWallet, error) {
-	ret := _m.Called(ctx, receiverWalletID)
+// GetReceiverWalletByContractAddress provides a mock function with given fields: ctx, contractAddress
+func (_m *MockEmbeddedWalletService) GetReceiverWalletByContractAddress(ctx context.Context, contractAddress string) (*data.ReceiverWallet, error) {
+	ret := _m.Called(ctx, contractAddress)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetReceiverWalletByID")
+		panic("no return value specified for GetReceiverWalletByContractAddress")
 	}
 
 	var r0 *data.ReceiverWallet
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, string) (*data.ReceiverWallet, error)); ok {
-		return rf(ctx, receiverWalletID)
+		return rf(ctx, contractAddress)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string) *data.ReceiverWallet); ok {
-		r0 = rf(ctx, receiverWalletID)
+		r0 = rf(ctx, contractAddress)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*data.ReceiverWallet)
@@ -113,7 +113,7 @@ func (_m *MockEmbeddedWalletService) GetReceiverWalletByID(ctx context.Context, 
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, receiverWalletID)
+		r1 = rf(ctx, contractAddress)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -140,6 +140,34 @@ func (_m *MockEmbeddedWalletService) GetPendingDisbursementAsset(ctx context.Con
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*data.Asset)
 		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, contractAddress)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// IsVerificationPending provides a mock function with given fields: ctx, contractAddress
+func (_m *MockEmbeddedWalletService) IsVerificationPending(ctx context.Context, contractAddress string) (bool, error) {
+	ret := _m.Called(ctx, contractAddress)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsVerificationPending")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (bool, error)); ok {
+		return rf(ctx, contractAddress)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) bool); ok {
+		r0 = rf(ctx, contractAddress)
+	} else {
+		r0 = ret.Get(0).(bool)
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {

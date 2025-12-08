@@ -129,7 +129,7 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 
 // GetPendingDisbursementAsset returns the asset associated with the pending disbursement for the
 // embedded wallet identified by the provided contract address. Pending disbursements are
-// determined by payments in an active (ready or pending) state for disbursement payments.
+// determined by payments in progress (ready, pending or paused) for disbursement payments.
 func (ew *EmbeddedWalletModel) GetPendingDisbursementAsset(ctx context.Context, sqlExec db.SQLExecuter, contractAddress string) (*Asset, error) {
 	if strings.TrimSpace(contractAddress) == "" {
 		return nil, ErrMissingInput
@@ -159,6 +159,31 @@ func (ew *EmbeddedWalletModel) GetPendingDisbursementAsset(ctx context.Context, 
 	}
 
 	return &asset, nil
+}
+
+// GetReceiverWallet fetches the receiver wallet linked to the embedded wallet contract address.
+func (ew *EmbeddedWalletModel) GetReceiverWallet(ctx context.Context, sqlExec db.SQLExecuter, contractAddress string) (*ReceiverWallet, error) {
+	if strings.TrimSpace(contractAddress) == "" {
+		return nil, ErrMissingInput
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM receiver_wallets rw
+		JOIN embedded_wallets ew ON ew.receiver_wallet_id = rw.id
+		WHERE ew.contract_address = $1
+		LIMIT 1
+	`, ReceiverWalletColumnNames("rw", ""))
+
+	var wallet ReceiverWallet
+	if err := sqlExec.GetContext(ctx, &wallet, query, contractAddress); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying receiver wallet by contract address: %w", err)
+	}
+
+	return &wallet, nil
 }
 
 type EmbeddedWalletInsert struct {
