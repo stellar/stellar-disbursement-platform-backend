@@ -344,9 +344,9 @@ func Test_formatContentVariables(t *testing.T) {
 			messageType: MessageTypeReceiverOTP,
 			vars: map[TemplateVariable]string{
 				TemplateVarReceiverOTP: "123456",
-				TemplateVarOrgName:     "MyOrg",
+				TemplateVarOrgName:     "MyOrg", // extra variable is allowed but ignored
 			},
-			wantResult: `{"1":"123456","2":"MyOrg"}`,
+			wantResult: `{"1":"123456"}`,
 		},
 		{
 			name:        "unsupported message type",
@@ -362,17 +362,17 @@ func Test_formatContentVariables(t *testing.T) {
 			vars: map[TemplateVariable]string{
 				TemplateVarOrgName: "Test Organization",
 			},
-			wantErr: "expected 2 template variables for message type receiver_invitation, got 1",
+			wantErr: "missing required template variable registration_link for message type receiver_invitation",
 		},
 		{
-			name:        "too many variables for receiver OTP",
+			name:        "extra variables are allowed for receiver OTP",
 			messageType: MessageTypeReceiverOTP,
 			vars: map[TemplateVariable]string{
 				TemplateVarReceiverOTP: "123456",
 				TemplateVarOrgName:     "MyOrg",
 				TemplateVarFirstName:   "Extra",
 			},
-			wantErr: "expected 2 template variables for message type receiver_otp, got 3",
+			wantResult: `{"1":"123456"}`, // extra variables are ignored
 		},
 		{
 			name:        "incorrect variable for receiver invitation",
@@ -381,7 +381,7 @@ func Test_formatContentVariables(t *testing.T) {
 				TemplateVarOrgName:   "Test Organization",
 				TemplateVarFirstName: "Wrong Variable",
 			},
-			wantErr: "missing template variable registration_link for message type receiver_invitation",
+			wantErr: "missing required template variable registration_link for message type receiver_invitation",
 		},
 		{
 			name:        "incorrect variable for receiver OTP",
@@ -390,13 +390,13 @@ func Test_formatContentVariables(t *testing.T) {
 				TemplateVarFirstName: "Wrong Variable",
 				TemplateVarOrgName:   "MyOrg",
 			},
-			wantErr: "missing template variable receiver_otp for message type receiver_otp",
+			wantErr: "missing required template variable receiver_otp for message type receiver_otp",
 		},
 		{
 			name:        "empty variables map for receiver invitation",
 			messageType: MessageTypeReceiverInvitation,
 			vars:        map[TemplateVariable]string{},
-			wantErr:     "expected 2 template variables for message type receiver_invitation, got 0",
+			wantErr:     "missing required template variable",
 		},
 	}
 

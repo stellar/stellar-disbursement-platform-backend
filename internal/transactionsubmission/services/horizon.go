@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -410,7 +409,7 @@ func getAccountDetails(client horizonclient.ClientInterface, accountID string) (
 	return &account, nil
 }
 
-// getAssetID returns asset identifier formatted as CODE:issuer.
+// getAssetID returns asset identifier formatted as code:issuer.
 func getAssetID(code, issuer string) string {
-	return fmt.Sprintf("%s:%s", strings.ToUpper(code), issuer)
+	return fmt.Sprintf("%s:%s", code, issuer)
 }
