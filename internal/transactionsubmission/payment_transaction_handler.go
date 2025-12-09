@@ -3,12 +3,12 @@ package transactionsubmission
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -45,7 +45,7 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 		return nil, fmt.Errorf("asset code cannot be empty")
 	}
 	var asset txnbuild.Asset = txnbuild.NativeAsset{}
-	if strings.ToUpper(txJob.Transaction.AssetCode) != "XLM" {
+	if txJob.Transaction.AssetCode != assets.XLMAssetCode && txJob.Transaction.AssetCode != assets.XLMAssetCodeAlias {
 		if !strkey.IsValidEd25519PublicKey(txJob.Transaction.AssetIssuer) {
 			return nil, fmt.Errorf("invalid asset issuer: %v", txJob.Transaction.AssetIssuer)
 		}
