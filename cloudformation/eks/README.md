@@ -41,7 +41,7 @@ This guide walks through deploying the Stellar Disbursement Platform (SDP) infra
   - Creates EKS cluster and node group
   - Sets up IAM roles and security groups
   - Configures IRSA (IAM Roles for Service Accounts)
-  - Sets up permissions for pods to access secrets stored in AWS Secrets Manager 
+  - Sets up permissions for pods to access secrets stored in AWS Secrets Manager
 
 After the CloudFormation stacks are deployed, additional Kubernetes resources are installed via Helm charts to complete the setup. The SDP expects secrets to be available as Kubernetes secrets, but how those secrets are synchronized (whether through ExternalSecrets, direct creation, or other means) is left to the deployer's preference.
 
@@ -82,7 +82,7 @@ aws cloudformation create-stack \
 ```
 
 ## 3. Keys Stack Deployment
-For testnet, you can auto-generate Stellar secrets using the following command: 
+For testnet, you can auto-generate Stellar secrets using the following command:
 
 ```bash
 aws cloudformation create-stack \
@@ -107,7 +107,7 @@ aws cloudformation create-stack \
     ParameterKey=ChannelAccountEncryptionPassphrase,ParameterValue=your-channel-encryption-passphrase \
     ParameterKey=DistributionAccountEncryptionPassphrase,ParameterValue=your-distribution-encryption-passphrase
 ```
-for a description of these parameters, please see: [Configuring the SDP](https://developers.stellar.org/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp)
+for a description of these parameters, please see: [Configuring the SDP](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp)
 
 ## 4. EKS Cluster Deployment
 Deploy the EKS cluster:
@@ -374,7 +374,7 @@ aws cloudformation delete-stack --stack-name ${STACK_NAME_PREFIX}-network --regi
 ## Additional Information
 
 ### Stellar Disbursement Platform Domain Structure
-The SDP platform uses two base-level domains for multi-tenant frontend and backend access. For example, lets say your hosted public domain is `api.example.org`. Then, you could configure a subdomain called `api.example.org` as the base-level domain for api access and `dashboard.example.org` as the front-end dashboard base-level domain.   If you then added a tenant (eg `ridedash`) to the SDP, the api and dashboard URLs for them would be `ridedash.api.example.org` and `ridedash.dashboard.example.org` respectively.  you can see this example in the helm-example-values file.   
+The SDP platform uses two base-level domains for multi-tenant frontend and backend access. For example, lets say your hosted public domain is `api.example.org`. Then, you could configure a subdomain called `api.example.org` as the base-level domain for api access and `dashboard.example.org` as the front-end dashboard base-level domain.   If you then added a tenant (eg `ridedash`) to the SDP, the api and dashboard URLs for them would be `ridedash.api.example.org` and `ridedash.dashboard.example.org` respectively.  you can see this example in the helm-example-values file.
 
 ## Example Helm Values configuration
 The following illustrates the example configuration for backend (api) and frontend (dashboard) base domains for the public domain `example.org`. Note, these domains must have a wild-card certificate.
@@ -392,7 +392,7 @@ dashboard:
 
 The following illustrates the kubernetes configurations that result from the above helm values.
 ```bash
-kubectl -n sdp get ingress              
+kubectl -n sdp get ingress
 NAME            CLASS            HOSTS                                           ADDRESS                                                                         PORTS     AGE
 sdp             ingress-public   api.example.org,*.api.example.org               a3ca0226bd4494ffb808a64476ddfc4f-66bf685869e3cc2e.elb.us-west-2.amazonaws.com   80, 443   9s
 sdp-ap          ingress-public   ap-api.example.org                              a3ca0226bd4494ffb808a64476ddfc4f-66bf685869e3cc2e.elb.us-west-2.amazonaws.com   80, 443   9s
