@@ -2,9 +2,11 @@ package sepauth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/go-stellar-sdk/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -48,8 +50,13 @@ func WebAuthHeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.
 			ctx := req.Context()
 
 			authHeader := req.Header.Get("Authorization")
+			if authHeader == "" {
+				httperror.Unauthorized("Missing authorization header", nil, nil).Render(rw)
+				return
+			}
+
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(rw)
+				httperror.BadRequest("Invalid authorization header", nil, nil).Render(rw)
 				return
 			}
 
@@ -67,9 +74,22 @@ func WebAuthHeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.
 
 			if claims, err := jwtManager.ParseSEP45TokenClaims(token); err == nil {
 				sep45Claims = claims
+			} else {
+				var validationErr *jwt.ValidationError
+				if errors.As(err, &validationErr) && validationErr.Is(jwt.ErrTokenExpired) {
+					httperror.Unauthorized("Expired token", nil, nil).Render(rw)
+					return
+				}
 			}
+
 			if claims, err := jwtManager.ParseSEP10TokenClaims(token); err == nil {
 				sep10Claims = claims
+			} else {
+				var validationErr *jwt.ValidationError
+				if errors.As(err, &validationErr) && validationErr.Is(jwt.ErrTokenExpired) {
+					httperror.Unauthorized("Expired token", nil, nil).Render(rw)
+					return
+				}
 			}
 
 			switch {
