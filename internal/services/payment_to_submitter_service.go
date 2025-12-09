@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -167,7 +168,10 @@ func validatePaymentReadyForSending(p *data.Payment) error {
 		return fmt.Errorf("payment asset code is empty for payment %s", p.ID)
 	}
 	// 3. payment.asset.Issuer is used as transaction.AssetIssuer
-	if strings.TrimSpace(p.Asset.Issuer) == "" && strings.TrimSpace(strings.ToUpper(p.Asset.Code)) != "XLM" {
+	codeTrimmed := strings.TrimSpace(p.Asset.Code)
+	if strings.TrimSpace(p.Asset.Issuer) == "" &&
+		codeTrimmed != assets.XLMAssetCode &&
+		codeTrimmed != assets.XLMAssetCodeAlias {
 		return fmt.Errorf("payment asset issuer is empty for payment %s", p.ID)
 	}
 	// 4. payment.Amount is used as transaction.Amount

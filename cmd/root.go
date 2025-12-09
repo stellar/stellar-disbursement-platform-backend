@@ -66,6 +66,14 @@ func rootCmd() *cobra.Command {
 			FlagDefault: "http://localhost:3000",
 			Required:    true,
 		},
+		// env-file flag is already handled in main.go, but it needs to be also defined here because Cobra doesn't allow unknown flags.
+		{
+			Name:      "env-file",
+			Usage:     "Path to environment file to load (e.g., \"dev/.env.https-testnet\"). Supports absolute and relative paths. Defaults to \".env\" if not specified.",
+			OptType:   types.String,
+			ConfigKey: &globalOptions.EnvFile,
+			Required:  false,
+		},
 		cmdUtils.NetworkPassphrase(&globalOptions.NetworkPassphrase),
 	}
 

@@ -218,7 +218,8 @@ func Load(path string) (Config, error) {
 
 // Write writes the environment configuration to a file using godotenv
 func Write(cfg Config, path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	envConfigDir := filepath.Dir(path)
+	if err := os.MkdirAll(envConfigDir, 0o755); err != nil {
 		return fmt.Errorf("creating directory for %s: %w", path, err)
 	}
 
@@ -227,7 +228,8 @@ func Write(cfg Config, path string) error {
 		singleTenantModeStr = "false"
 	}
 
-	envMap := map[string]string{
+	// 1. Start with the configuration values we want to set
+	configMap := map[string]string{
 		"NETWORK_TYPE":                               cfg.NetworkType,
 		"NETWORK_PASSPHRASE":                         cfg.NetworkPassphrase,
 		"HORIZON_URL":                                cfg.HorizonURL,
@@ -244,14 +246,31 @@ func Write(cfg Config, path string) error {
 		"USE_HTTPS":                                  strconv.FormatBool(cfg.UseHTTPS),
 		"SDP_UI_BASE_URL":                            cfg.FrontendBaseURL("localhost"),
 		"BASE_URL":                                   "http://localhost:8000",
+		"DATABASE_URL":                               fmt.Sprintf("postgres://postgres@db:5432/%s?sslmode=disable", cfg.DatabaseName),
 	}
 
 	if cfg.NetworkType == "pubnet" {
-		envMap["TENANT_XLM_BOOTSTRAP_AMOUNT"] = "1"
-		envMap["NUM_CHANNEL_ACCOUNTS"] = "1"
+		configMap["TENANT_XLM_BOOTSTRAP_AMOUNT"] = "1"
+		configMap["NUM_CHANNEL_ACCOUNTS"] = "1"
 	}
 
-	if err := godotenv.Write(envMap, path); err != nil {
+	// 2. Load .env.example to use as a base
+	examplePath := filepath.Join(envConfigDir, ".env.example")
+
+	finalMap := make(map[string]string)
+
+	if exampleMap, err := godotenv.Read(examplePath); err == nil {
+		finalMap = exampleMap
+	} else {
+		fmt.Printf("Note: Could not load %s, generating minimal config\n", examplePath)
+	}
+
+	// 3. Override with our configuration values
+	for k, v := range configMap {
+		finalMap[k] = v
+	}
+
+	if err := godotenv.Write(finalMap, path); err != nil {
 		return fmt.Errorf("writing env file %s: %w", path, err)
 	}
 

@@ -11,8 +11,15 @@
     - [Update local DNS](#update-local-dns)
     - [Set up local HTTPS (optional)](#set-up-local-https-optional)
     - [Automated Stellar Account Creation and .env Configuration](#automated-stellar-account-creation-and-env-configuration)
-    - [Start/Stop Local Environment](#startstop-local-environment)
+    - [Start Local Environment](#start-local-environment)
+      - [Option 1: Using the Setup Wizard (Recommended)](#option-1-using-the-setup-wizard-recommended)
+      - [Option 2: Using Docker Compose Directly](#option-2-using-docker-compose-directly)
+      - [Option 3: Running Locally with Go (Development)](#option-3-running-locally-with-go-development)
+  - [Mainnet Deployment](#mainnet-deployment)
+    - [Mainnet Configuration](#mainnet-configuration)
+    - [Mainnet Startup](#mainnet-startup)
     - [Login to the SDP and send a Disbursement](#login-to-the-sdp-and-send-a-disbursement)
+    - [SEP10/SEP24 Endpoints](#sep10sep24-endpoints)
     - [Receive Payment to Digital Wallet (Deposit Flow)](#receive-payment-to-digital-wallet-deposit-flow)
   - [Additional Development Environment Details](#additional-development-environment-details)
     - [Stellar Accounts and .env File](#stellar-accounts-and-env-file)
@@ -25,8 +32,8 @@
       - [Start Prometheus and Grafana containers](#start-prometheus-and-grafana-containers)
       - [Load the SDP Grafana Dashboard](#load-the-sdp-grafana-dashboard)
   - [Troubleshooting](#troubleshooting)
-    - [Sample Tenant Management Postman collection](#sample-tenant-management-postman-collection)
-    - [Distribution account out of funds](#distribution-account-out-of-funds)
+      - [Sample Tenant Management Postman collection](#sample-tenant-management-postman-collection)
+      - [Distribution account out of funds](#distribution-account-out-of-funds)
 
 ## Introduction
 
@@ -108,20 +115,68 @@ DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVW
 
 ### Start Local Environment
 
+There are three ways to run the SDP:
+
+#### Option 1: Using the Setup Wizard (Recommended)
+
 Start all services and provision sample tenants using the setup wizard:
 ```sh
 make setup
 ```
 
 The setup wizard will:
-1. Create or select an `.env` configuration
+1. Create or select an `.env` configuration under the `dev/` directory
 2. Generate Stellar accounts if needed (with testnet funding)
 3. Optionally launch the Docker environment immediately
-4. Initialize tenants and test users
+4. Optionally initialize tenants and test users
 
 For existing configurations, you can launch directly by selecting from available `.env` files in the `dev/` directory.
 
-Volumes and data isolation
+#### Option 2: Using Docker Compose Directly
+
+If you already have a configured `.env` file, you can start the services directly:
+
+```sh
+cd dev
+docker compose up -d
+```
+
+To stop the services:
+```sh
+docker compose down
+```
+
+#### Option 3: Running Locally with Go (Development)
+
+For local development outside Docker, run from the repo root:
+
+```sh
+go run main.go serve \
+  --env-file ./dev/.env.https-testnet \
+  --database-url "postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable"
+```
+
+You can also run the TSS by using the `tss` command instead of `serve`.
+
+```sh
+go run main.go tss \
+  --env-file ./dev/.env.https-testnet \
+  --database-url "postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable"
+```
+
+**Important Notes:**
+- Use `--env-file` to specify which configuration to load (e.g., `./dev/.env.https-testnet`)
+- Override `--database-url` to use `localhost:5432` instead of `db:5432` (Docker hostname)
+- Ensure PostgreSQL is running locally and accessible on port 5432
+
+You can also use the `ENV_FILE` and `DATABASE_URL` environment variables instead of the flags:
+```sh
+ENV_FILE=./dev/.env.https-testnet \
+DATABASE_URL="postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable" \
+  go run main.go serve
+```
+
+**Volumes and Data Isolation**
 
 - The Postgres volumes are network-scoped using the pattern `${COMPOSE_PROJECT_NAME}_postgres-db-${NETWORK_TYPE}` and `${COMPOSE_PROJECT_NAME}_postgres-ap-db-${NETWORK_TYPE}`. Compose reads `NETWORK_TYPE` from `dev/.env`.
 - Compose project name is automatically derived from the setup name (e.g., `sdp-testnet`, `sdp-mainnet1`).
@@ -164,10 +219,10 @@ make setup
 
 ### Login to the SDP and send a Disbursement
 
-> [!NOTE]  
+> [!NOTE]
 > In the following section, we will assume you're using the `bluecorp` tenant that was provisioned when you started the stack.
 
-The startup prints Login information for each tenant.  
+The startup prints Login information for each tenant.
 ```
 🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉
 Login URLs for each tenant:
@@ -227,7 +282,7 @@ The SDP now provides native SEP10 and SEP24 endpoints for wallet integration:
 - `POST /auth` - Validate challenge and receive JWT token
 
 **SEP24 Interactive Deposit Endpoints:**
-- `GET /sep24/info` - Get supported assets and capabilities  
+- `GET /sep24/info` - Get supported assets and capabilities
 - `POST /sep24/transactions/deposit/interactive` - Initiate interactive deposit
 - `GET /sep24/transactions` - Get transaction status
 
@@ -250,11 +305,11 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
    <img src="images/demo_wallet1.png" alt="Demo Wallet" width="40%">
 
 6. In the `Select action` dropdown, select `SEP-24 Deposit` and then click the `Start` button.
-   
+
    <img src="images/sep24_deposit1.png" alt="SEP-24 Deposit" width="40%">
 
 7.  In the new window, enter the phone number `+13163955627` from the disbursement CSV payment.
-    
+
     <img src="images/sep24_deposit2.png" alt="Enter Phone Number" width="40%">
 
 8. To verify the payment, enter the passcode and date of birth. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
@@ -277,7 +332,7 @@ You need to create and configure two Stellar accounts to use the SDP. You can ei
 
 **Option 1: Manually Create and Configure Accounts**
 
-1. Create and fund a Distribution account that will be used for sending funds to receivers. Follow the instructions [here](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account).
+1. Create and fund a Distribution account that will be used for sending funds to receivers. Follow the instructions [here](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account).
 2. Create a SEP-10 account for authentication. It can be created the same way as the distribution account but it doesn't need to be funded.
 3. Create a `.env` file in the `dev` directory by copying the [env.example](.backup/.env.example) file:
    ```sh

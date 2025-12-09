@@ -1359,10 +1359,10 @@ func Test_WalletDeepLink_isNativeAsset(t *testing.T) {
 			wantResult:  true,
 		},
 		{
-			name:        "🟢 xLm without issuer should be native asset (case insensitive)",
-			assetCode:   "XLM",
+			name:        "🔴 xLm without issuer should NOT be native asset (case sensitive)",
+			assetCode:   "xLm",
 			assetIssuer: "",
-			wantResult:  true,
+			wantResult:  false,
 		},
 		{
 			name:        "🔴 XLM with issuer should NOT be native asset",
@@ -1371,16 +1371,16 @@ func Test_WalletDeepLink_isNativeAsset(t *testing.T) {
 			wantResult:  false,
 		},
 		{
-			name:        "🟢 native without issuer should be native asset",
-			assetCode:   "native",
+			name:        "🟢 NATIVE without issuer should be native asset",
+			assetCode:   "NATIVE",
 			assetIssuer: "",
 			wantResult:  true,
 		},
 		{
-			name:        "🟢 NaTiVe without issuer should be native asset (case insensitive)",
+			name:        "🔴 NaTiVe without issuer should NOT be native asset (case sensitive)",
 			assetCode:   "NaTiVe",
 			assetIssuer: "",
-			wantResult:  true,
+			wantResult:  false,
 		},
 		{
 			name:        "🔴 native with issuer should NOT be native asset",
@@ -1432,7 +1432,7 @@ func Test_WalletDeepLink_assetName(t *testing.T) {
 			name:        "'native' native asset",
 			assetCode:   "native",
 			assetIssuer: "",
-			wantResult:  "native",
+			wantResult:  "native-",
 		},
 		{
 			name:        "'native' with an issuer",

@@ -112,21 +112,21 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware(t *testing.T) {
 			authHeader:         "",
 			expectedStatusCode: http.StatusUnauthorized,
 			expectClaimsInCtx:  false,
-			expectedError:      "Missing or invalid authorization header",
+			expectedError:      "Missing authorization header",
 		},
 		{
 			name:               "invalid authorization header format (no Bearer prefix)",
 			authHeader:         "InvalidToken123",
-			expectedStatusCode: http.StatusUnauthorized,
+			expectedStatusCode: http.StatusBadRequest,
 			expectClaimsInCtx:  false,
-			expectedError:      "Missing or invalid authorization header",
+			expectedError:      "Invalid authorization header",
 		},
 		{
 			name:               "invalid authorization header format (lowercase bearer)",
 			authHeader:         "bearer " + createValidToken(),
-			expectedStatusCode: http.StatusUnauthorized,
+			expectedStatusCode: http.StatusBadRequest,
 			expectClaimsInCtx:  false,
-			expectedError:      "Missing or invalid authorization header",
+			expectedError:      "Invalid authorization header",
 		},
 		{
 			name:               "empty token after Bearer",
@@ -147,7 +147,7 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware(t *testing.T) {
 			authHeader:         "Bearer " + createExpiredToken(),
 			expectedStatusCode: http.StatusUnauthorized,
 			expectClaimsInCtx:  false,
-			expectedError:      "Invalid token",
+			expectedError:      "Expired token",
 		},
 		{
 			name:               "token with wrong secret",
@@ -173,7 +173,8 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware(t *testing.T) {
 			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				claimsFromContext = GetSEP10Claims(r.Context())
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("success")) //nolint:errcheck
+				_, err := w.Write([]byte("success"))
+				require.NoError(t, err)
 			})
 
 			handler := middleware(nextHandler)
@@ -256,7 +257,8 @@ func Test_SEP10HeaderTokenAuthenticateMiddleware_Integration(t *testing.T) {
 		handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims := GetSEP10Claims(r.Context())
 			if claims != nil {
-				w.Write([]byte(claims.Subject)) //nolint:errcheck
+				_, err := w.Write([]byte(claims.Subject))
+				require.NoError(t, err)
 			}
 		}))
 
