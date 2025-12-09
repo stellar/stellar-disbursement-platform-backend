@@ -208,6 +208,90 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 			},
 		},
 		{
+			name: "valid challenge request without client domain",
+			build: func(t *testing.T) (context.Context, SEP45ServiceOptions, SEP45ChallengeRequest, func(*testing.T, *SEP45ChallengeResponse)) {
+				t.Helper()
+				serverKP := keypair.MustRandom()
+				rpcMock := stellarMocks.NewMockRPCClient(t)
+
+				ctx := context.Background()
+				clientContractAddress := testClientContractAddress
+				homeDomain := "home.example.com"
+				baseHost := "home.example.com"
+
+				argEntries := xdr.ScMap{
+					utils.NewSymbolStringEntry("account", clientContractAddress),
+					utils.NewSymbolStringEntry("home_domain", homeDomain),
+					utils.NewSymbolStringEntry("nonce", "nonce-value"),
+					utils.NewSymbolStringEntry("web_auth_domain", baseHost),
+					utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+				}
+
+				serverAccountID := xdr.MustAddress(serverKP.Address())
+				entries := []xdr.SorobanAuthorizationEntry{
+					makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: &serverAccountID}, argEntries),
+					makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: &testClientContractID}, argEntries),
+				}
+				entriesBase64 := make([]string, len(entries))
+				for i, entry := range entries {
+					bytes, err := entry.MarshalBinary()
+					require.NoError(t, err)
+					entriesBase64[i] = base64.StdEncoding.EncodeToString(bytes)
+				}
+
+				var capturedTx string
+				rpcMock.
+					On("SimulateTransaction", mock.Anything, mock.MatchedBy(func(req protocol.SimulateTransactionRequest) bool {
+						capturedTx = req.Transaction
+						return true
+					})).
+					Return(&stellar.SimulationResult{
+						Response: protocol.SimulateTransactionResponse{
+							Results: []protocol.SimulateHostFunctionResult{{AuthXDR: &entriesBase64}},
+						},
+					}, (*stellar.SimulationError)(nil)).
+					Once()
+				rpcMock.
+					On("GetLatestLedgerSequence", mock.Anything).
+					Return(uint32(100), nil).
+					Once()
+
+				assertFn := func(t *testing.T, resp *SEP45ChallengeResponse) {
+					require.Equal(t, network.TestNetworkPassphrase, resp.NetworkPassphrase)
+					rawEntries, err := base64.StdEncoding.DecodeString(resp.AuthorizationEntries)
+					require.NoError(t, err)
+
+					var signedEntries xdr.SorobanAuthorizationEntries
+					require.NoError(t, signedEntries.UnmarshalBinary(rawEntries))
+					require.Len(t, signedEntries, 2)
+
+					argsMap := extractInvokeArgs(t, capturedTx)
+					assert.Equal(t, clientContractAddress, argsMap["account"])
+					_, hasClientDomain := argsMap["client_domain"]
+					assert.False(t, hasClientDomain)
+					_, hasClientDomainAccount := argsMap["client_domain_account"]
+					assert.False(t, hasClientDomainAccount)
+					assert.Equal(t, homeDomain, argsMap["home_domain"])
+					assert.Equal(t, baseHost, argsMap["web_auth_domain"])
+					assert.Equal(t, serverKP.Address(), argsMap["web_auth_domain_account"])
+				}
+
+				return ctx, SEP45ServiceOptions{
+						RPCClient:               rpcMock,
+						TOMLClient:              nil,
+						JWTManager:              newTestJWTManager(t),
+						NetworkPassphrase:       network.TestNetworkPassphrase,
+						WebAuthVerifyContractID: testWebAuthVerifyContractID,
+						ServerSigningKeypair:    serverKP,
+						BaseURL:                 "https://" + baseHost,
+						AllowHTTPRetry:          true,
+					}, SEP45ChallengeRequest{
+						Account:    clientContractAddress,
+						HomeDomain: homeDomain,
+					}, assertFn
+			},
+		},
+		{
 			name:        "invalid account",
 			expectError: true,
 			errContains: "account",

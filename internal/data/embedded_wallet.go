@@ -127,6 +127,65 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 	return &wallet, nil
 }
 
+// GetPendingDisbursementAsset returns the asset associated with the pending disbursement for the
+// embedded wallet identified by the provided contract address. Pending disbursements are
+// determined by payments in progress (ready, pending or paused) for disbursement payments.
+func (ew *EmbeddedWalletModel) GetPendingDisbursementAsset(ctx context.Context, sqlExec db.SQLExecuter, contractAddress string) (*Asset, error) {
+	if strings.TrimSpace(contractAddress) == "" {
+		return nil, ErrMissingInput
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s
+		FROM embedded_wallets ew
+		JOIN receiver_wallets rw ON rw.id = ew.receiver_wallet_id
+		JOIN payments p ON p.receiver_wallet_id = rw.id
+		JOIN disbursements d ON d.id = p.disbursement_id
+		JOIN assets a ON a.id = d.asset_id
+		WHERE ew.contract_address = $1
+			AND p.type = $2
+			AND p.status = ANY($3)
+		ORDER BY p.updated_at DESC
+		LIMIT 1
+	`, AssetColumnNames("a", "", false))
+
+	var asset Asset
+	if err := sqlExec.GetContext(ctx, &asset, query, contractAddress, PaymentTypeDisbursement, pq.Array(PaymentInProgressStatuses())); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying pending disbursement asset for contract %s: %w", contractAddress, err)
+	}
+
+	return &asset, nil
+}
+
+// GetReceiverWallet fetches the receiver wallet linked to the embedded wallet contract address.
+func (ew *EmbeddedWalletModel) GetReceiverWallet(ctx context.Context, sqlExec db.SQLExecuter, contractAddress string) (*ReceiverWallet, error) {
+	if strings.TrimSpace(contractAddress) == "" {
+		return nil, ErrMissingInput
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM receiver_wallets rw
+		JOIN embedded_wallets ew ON ew.receiver_wallet_id = rw.id
+		WHERE ew.contract_address = $1
+		LIMIT 1
+	`, ReceiverWalletColumnNames("rw", ""))
+
+	var wallet ReceiverWallet
+	if err := sqlExec.GetContext(ctx, &wallet, query, contractAddress); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying receiver wallet by contract address: %w", err)
+	}
+
+	return &wallet, nil
+}
+
 type EmbeddedWalletInsert struct {
 	Token                string               `db:"token"`
 	WasmHash             string               `db:"wasm_hash"`
