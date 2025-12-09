@@ -1939,7 +1939,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 		mocks.Handler.GetPreconditionsFn = nil
 
 		txParams := txParamsWithoutPreconditions
-		txParams.Preconditions = defaultPreconditions
+		txParams.Preconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
 		tx, err := txnbuild.NewTransaction(txParams)
 		require.NoError(t, err)
 

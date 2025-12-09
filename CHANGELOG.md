@@ -4,17 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [6.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.0...6.0.1))
+
+### Fixed
+
+- Fix Twilio error 21656 when sending WhatsApp OTP messages by updating template to single variable format as required by Twilio/Meta's updated authentication template requirements [#974](https://github.com/stellar/stellar-disbursement-platform-backend/pull/974)
+
+### Security and Dependencies
+
+- Bump the all-docker group with 2 updates [#976](https://github.com/stellar/stellar-disbursement-platform-backend/pull/976)
+  - golang from 1.25.4-alpine to 1.25.5-alpine
+  - alpine from 3.22 to 3.23
+- Bump the minor-and-patch group with 7 updates [#977](https://github.com/stellar/stellar-disbursement-platform-backend/pull/977)
+
+## [6.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/5.0.0...6.0.0))
+
+### 🚨Potential Breaking Changes
+
+- Remove case insensitivity from asset code comparisons [#967](https://github.com/stellar/stellar-disbursement-platform-backend/pull/967)
+- Decommission Anchor Platform and add support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
+    - Add SEP10 /auth endpoints
+    - Add SEP24 /info endpoints
+    - Add SEP24 interactive deposit endpoint
+    - Remove Anchor Platform integration from the SDP and deprecate related env variables.
 
 ### Added
 
 - Add Launch Wizard through `make setup` command to simplify initial setup and mainnet configuration for docker compose [#875](https://github.com/stellar/stellar-disbursement-platform-backend/pull/875)
+    - Add `--env-file` command line argument to support multiple environment file contexts [#963](https://github.com/stellar/stellar-disbursement-platform-backend/pull/963) 
 - Add HTTPS mode to setup wizard [#957](https://github.com/stellar/stellar-disbursement-platform-backend/pull/957)
-- Support for SEP-10 and SEP-24 endpoints in the SDP [#834](https://github.com/stellar/stellar-disbursement-platform-backend/pull/834)
-    - Add SEP10 /auth endpoints 
-    - Add SEP24 /info endpoints
-    - Add SEP24 interactive deposit endpoint
-    - Remove Anchor Platform integration from the SDP and deprecate related env variables. 
 - Add configurable database connection pool settings to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
 
 ### Changed
@@ -25,9 +43,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- Fix HTML validation to allow apostrophes in invitation messages while maintaining security against XSS attacks [#930](https://github.com/stellar/stellar-disbursement-platform-backend/pull/930)
+- Fix HTML validation to allow apostrophes in invitation messages while maintaining security against XSS attacks [#931](https://github.com/stellar/stellar-disbursement-platform-backend/pull/931)
 - Refactor to replace float64 with shopspring decimal [#936](https://github.com/stellar/stellar-disbursement-platform-backend/pull/936)
 - `channel-accounts ensure` command should have a minimum of 1 [#939](https://github.com/stellar/stellar-disbursement-platform-backend/pull/939)
+
+### Security and Dependencies
+
+- Upgrade React to 19.2.1 in SEP-24 frontend to address CVE-2025-66478 and CVE-2025-55182 [#968](https://github.com/stellar/stellar-disbursement-platform-backend/pull/968)
+- Bump the minor-and-patch group with 5 updates [#961](https://github.com/stellar/stellar-disbursement-platform-backend/pull/961)
+- Bump the minor-and-patch group across 1 directory with 12 updates [#955](https://github.com/stellar/stellar-disbursement-platform-backend/pull/955)
+- Bump actions/checkout from 5 to 6 in the all-actions group [#954](https://github.com/stellar/stellar-disbursement-platform-backend/pull/954)
+- Bump js-yaml from 4.1.0 to 4.1.1 in the npm_and_yarn group [#947](https://github.com/stellar/stellar-disbursement-platform-backend/pull/947)
+- Bump golang from 1.25.3-alpine to 1.25.4-alpine in the all-docker group [#940](https://github.com/stellar/stellar-disbursement-platform-backend/pull/940)
+- Bump the minor-and-patch group with 7 updates [#933](https://github.com/stellar/stellar-disbursement-platform-backend/pull/933)
 
 ## [5.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/5.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/4.1.0...5.0.0))
 

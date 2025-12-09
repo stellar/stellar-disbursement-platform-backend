@@ -95,7 +95,7 @@ Your release is named {{ .Release.Name }} and deployed to namespace {{ .Release.
 6. Create your first tenant:
    If you don't have a tenant yet, you'll need to create one to start using the SDP.
    Tenant provisioning is documented at:
-   https://developers.stellar.org/platforms/stellar-disbursement-platform/admin-guide/tenant-provisioning
+   https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/tenant-provisioning
 
    To calculate the auth header for the admin API, run:
 

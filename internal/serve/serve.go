@@ -191,15 +191,14 @@ func (opts *ServeOptions) SetupDependencies() error {
 		}
 
 		sep45Service, sep45Err := services.NewSEP45Service(services.SEP45ServiceOptions{
-			RPCClient:                 rpcClient,
-			TOMLClient:                nil,
-			JWTManager:                sep24JWTManager,
-			NetworkPassphrase:         opts.NetworkPassphrase,
-			WebAuthVerifyContractID:   opts.Sep45ContractID,
-			ServerSigningKeypair:      signingKP,
-			BaseURL:                   opts.BaseURL,
-			ClientAttributionRequired: opts.Sep10ClientAttributionRequired,
-			AllowHTTPRetry:            allowHTTPRetry,
+			RPCClient:               rpcClient,
+			TOMLClient:              nil,
+			JWTManager:              sep24JWTManager,
+			NetworkPassphrase:       opts.NetworkPassphrase,
+			WebAuthVerifyContractID: opts.Sep45ContractID,
+			ServerSigningKeypair:    signingKP,
+			BaseURL:                 opts.BaseURL,
+			AllowHTTPRetry:          allowHTTPRetry,
 		})
 		if sep45Err != nil {
 			return fmt.Errorf("initializing SEP 45 Service: %w", sep45Err)
@@ -724,6 +723,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				walletCreationHandler := httphandler.WalletCreationHandler{
 					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
+				embeddedWalletProfileHandler := httphandler.EmbeddedWalletProfileHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+				}
 				sponsoredTransactionHandler := httphandler.SponsoredTransactionHandler{
 					EmbeddedWalletService: o.EmbeddedWalletService,
 				}
@@ -737,6 +739,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					// Wallet creation routes
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
+
+					// Wallet profile routes
+					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Get("/profile", embeddedWalletProfileHandler.GetProfile)
 
 					// Sponsored transactions routes
 					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Route("/sponsored-transactions", func(r chi.Router) {

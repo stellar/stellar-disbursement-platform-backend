@@ -270,7 +270,7 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 			Payment: Payment{
 				AssetCode:   "USDC",
 				AssetIssuer: keypair.MustRandom().Address(),
-				// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+				// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/learn/fundamentals/stellar-data-structures/assets#amount-precision):
 				Amount:      decimal.NewFromFloat(0.0000001),
 				Destination: keypair.MustRandom().Address(),
 			},
@@ -282,7 +282,7 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 			Payment: Payment{
 				AssetCode:   "USDC",
 				AssetIssuer: keypair.MustRandom().Address(),
-				// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+				// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/learn/fundamentals/stellar-data-structures/assets#amount-precision):
 				Amount:      decimal.RequireFromString("922337203685.4775807"),
 				Destination: keypair.MustRandom().Address(),
 			},

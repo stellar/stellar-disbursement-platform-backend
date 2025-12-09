@@ -192,19 +192,102 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				}
 
 				return ctx, SEP45ServiceOptions{
-						RPCClient:                 rpcMock,
-						TOMLClient:                tomlMock,
-						JWTManager:                newTestJWTManager(t),
-						NetworkPassphrase:         network.TestNetworkPassphrase,
-						WebAuthVerifyContractID:   testWebAuthVerifyContractID,
-						ServerSigningKeypair:      serverKP,
-						BaseURL:                   "https://" + baseHost,
-						AllowHTTPRetry:            true,
-						ClientAttributionRequired: true,
+						RPCClient:               rpcMock,
+						TOMLClient:              tomlMock,
+						JWTManager:              newTestJWTManager(t),
+						NetworkPassphrase:       network.TestNetworkPassphrase,
+						WebAuthVerifyContractID: testWebAuthVerifyContractID,
+						ServerSigningKeypair:    serverKP,
+						BaseURL:                 "https://" + baseHost,
+						AllowHTTPRetry:          true,
 					}, SEP45ChallengeRequest{
 						Account:      clientContractAddress,
 						HomeDomain:   homeDomain,
 						ClientDomain: &clientDomainCopy,
+					}, assertFn
+			},
+		},
+		{
+			name: "valid challenge request without client domain",
+			build: func(t *testing.T) (context.Context, SEP45ServiceOptions, SEP45ChallengeRequest, func(*testing.T, *SEP45ChallengeResponse)) {
+				t.Helper()
+				serverKP := keypair.MustRandom()
+				rpcMock := stellarMocks.NewMockRPCClient(t)
+
+				ctx := context.Background()
+				clientContractAddress := testClientContractAddress
+				homeDomain := "home.example.com"
+				baseHost := "home.example.com"
+
+				argEntries := xdr.ScMap{
+					utils.NewSymbolStringEntry("account", clientContractAddress),
+					utils.NewSymbolStringEntry("home_domain", homeDomain),
+					utils.NewSymbolStringEntry("nonce", "nonce-value"),
+					utils.NewSymbolStringEntry("web_auth_domain", baseHost),
+					utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
+				}
+
+				serverAccountID := xdr.MustAddress(serverKP.Address())
+				entries := []xdr.SorobanAuthorizationEntry{
+					makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: &serverAccountID}, argEntries),
+					makeAuthorizationEntry(t, testWebAuthVerifyContract, xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: &testClientContractID}, argEntries),
+				}
+				entriesBase64 := make([]string, len(entries))
+				for i, entry := range entries {
+					bytes, err := entry.MarshalBinary()
+					require.NoError(t, err)
+					entriesBase64[i] = base64.StdEncoding.EncodeToString(bytes)
+				}
+
+				var capturedTx string
+				rpcMock.
+					On("SimulateTransaction", mock.Anything, mock.MatchedBy(func(req protocol.SimulateTransactionRequest) bool {
+						capturedTx = req.Transaction
+						return true
+					})).
+					Return(&stellar.SimulationResult{
+						Response: protocol.SimulateTransactionResponse{
+							Results: []protocol.SimulateHostFunctionResult{{AuthXDR: &entriesBase64}},
+						},
+					}, (*stellar.SimulationError)(nil)).
+					Once()
+				rpcMock.
+					On("GetLatestLedgerSequence", mock.Anything).
+					Return(uint32(100), nil).
+					Once()
+
+				assertFn := func(t *testing.T, resp *SEP45ChallengeResponse) {
+					require.Equal(t, network.TestNetworkPassphrase, resp.NetworkPassphrase)
+					rawEntries, err := base64.StdEncoding.DecodeString(resp.AuthorizationEntries)
+					require.NoError(t, err)
+
+					var signedEntries xdr.SorobanAuthorizationEntries
+					require.NoError(t, signedEntries.UnmarshalBinary(rawEntries))
+					require.Len(t, signedEntries, 2)
+
+					argsMap := extractInvokeArgs(t, capturedTx)
+					assert.Equal(t, clientContractAddress, argsMap["account"])
+					_, hasClientDomain := argsMap["client_domain"]
+					assert.False(t, hasClientDomain)
+					_, hasClientDomainAccount := argsMap["client_domain_account"]
+					assert.False(t, hasClientDomainAccount)
+					assert.Equal(t, homeDomain, argsMap["home_domain"])
+					assert.Equal(t, baseHost, argsMap["web_auth_domain"])
+					assert.Equal(t, serverKP.Address(), argsMap["web_auth_domain_account"])
+				}
+
+				return ctx, SEP45ServiceOptions{
+						RPCClient:               rpcMock,
+						TOMLClient:              nil,
+						JWTManager:              newTestJWTManager(t),
+						NetworkPassphrase:       network.TestNetworkPassphrase,
+						WebAuthVerifyContractID: testWebAuthVerifyContractID,
+						ServerSigningKeypair:    serverKP,
+						BaseURL:                 "https://" + baseHost,
+						AllowHTTPRetry:          true,
+					}, SEP45ChallengeRequest{
+						Account:    clientContractAddress,
+						HomeDomain: homeDomain,
 					}, assertFn
 			},
 		},
@@ -281,29 +364,6 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 			},
 		},
 		{
-			name:        "requires client domain when attribution enforced",
-			expectError: true,
-			errContains: "client_domain",
-			build: func(t *testing.T) (context.Context, SEP45ServiceOptions, SEP45ChallengeRequest, func(*testing.T, *SEP45ChallengeResponse)) {
-				t.Helper()
-				serverKP := keypair.MustRandom()
-				ctx := context.Background()
-				opts := SEP45ServiceOptions{
-					RPCClient:                 stellarMocks.NewMockRPCClient(t),
-					TOMLClient:                stellartoml.DefaultClient,
-					JWTManager:                newTestJWTManager(t),
-					NetworkPassphrase:         network.TestNetworkPassphrase,
-					WebAuthVerifyContractID:   testWebAuthVerifyContractID,
-					ServerSigningKeypair:      serverKP,
-					BaseURL:                   "https://home.example.com",
-					AllowHTTPRetry:            true,
-					ClientAttributionRequired: true,
-				}
-				req := SEP45ChallengeRequest{Account: testClientContractAddress, HomeDomain: "home.example.com"}
-				return ctx, opts, req, nil
-			},
-		},
-		{
 			name:        "errors when client domain signing key missing",
 			expectError: true,
 			errContains: "SIGNING_KEY",
@@ -324,15 +384,14 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				clientDomainCopy := clientDomain
 
 				opts := SEP45ServiceOptions{
-					RPCClient:                 rpcMock,
-					TOMLClient:                tomlMock,
-					JWTManager:                newTestJWTManager(t),
-					NetworkPassphrase:         network.TestNetworkPassphrase,
-					WebAuthVerifyContractID:   testWebAuthVerifyContractID,
-					ServerSigningKeypair:      serverKP,
-					BaseURL:                   "https://home.example.com",
-					AllowHTTPRetry:            true,
-					ClientAttributionRequired: true,
+					RPCClient:               rpcMock,
+					TOMLClient:              tomlMock,
+					JWTManager:              newTestJWTManager(t),
+					NetworkPassphrase:       network.TestNetworkPassphrase,
+					WebAuthVerifyContractID: testWebAuthVerifyContractID,
+					ServerSigningKeypair:    serverKP,
+					BaseURL:                 "https://home.example.com",
+					AllowHTTPRetry:          true,
 				}
 				req := SEP45ChallengeRequest{
 					Account:      testClientContractAddress,
@@ -456,17 +515,16 @@ func Test_SEP45Service_ValidateChallenge(t *testing.T) {
 func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 	ctx := context.Background()
 
-	newService := func(t *testing.T, rpcClient stellar.RPCClient, serverKP *keypair.Full, clientAttr bool) SEP45Service {
+	newService := func(t *testing.T, rpcClient stellar.RPCClient, serverKP *keypair.Full) SEP45Service {
 		t.Helper()
 		svc, err := NewSEP45Service(SEP45ServiceOptions{
-			RPCClient:                 rpcClient,
-			TOMLClient:                stellartoml.DefaultClient,
-			JWTManager:                newTestJWTManager(t),
-			NetworkPassphrase:         network.TestNetworkPassphrase,
-			WebAuthVerifyContractID:   testWebAuthVerifyContractID,
-			ServerSigningKeypair:      serverKP,
-			BaseURL:                   "https://example.com",
-			ClientAttributionRequired: clientAttr,
+			RPCClient:               rpcClient,
+			TOMLClient:              stellartoml.DefaultClient,
+			JWTManager:              newTestJWTManager(t),
+			NetworkPassphrase:       network.TestNetworkPassphrase,
+			WebAuthVerifyContractID: testWebAuthVerifyContractID,
+			ServerSigningKeypair:    serverKP,
+			BaseURL:                 "https://example.com",
 		})
 		require.NoError(t, err)
 		return svc
@@ -475,7 +533,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 	t.Run("missing authorization entries", func(t *testing.T) {
 		serverKP := keypair.MustRandom()
 		rpcMock := stellarMocks.NewMockRPCClient(t)
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{})
 		require.Error(t, err)
@@ -487,7 +545,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 	t.Run("invalid authorization entries encoding", func(t *testing.T) {
 		serverKP := keypair.MustRandom()
 		rpcMock := stellarMocks.NewMockRPCClient(t)
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: "not-base64"})
 		require.Error(t, err)
@@ -514,7 +572,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries = entries[1:]
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
@@ -541,7 +599,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries = xdr.SorobanAuthorizationEntries{entries[0], entries[2]}
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
@@ -568,7 +626,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
@@ -597,7 +655,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0].RootInvocation.Function.ContractFn.ContractAddress.ContractId = &invalidContract
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
@@ -624,7 +682,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0].RootInvocation.Function.ContractFn.FunctionName = "other_fn"
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
@@ -664,7 +722,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0].RootInvocation.SubInvocations = []xdr.SorobanAuthorizedInvocation{subInvocation}
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
@@ -703,7 +761,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[1].RootInvocation.Function.ContractFn.Args = xdr.ScVec{mapVal}
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
@@ -728,7 +786,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "nonce is required")
@@ -753,7 +811,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "web_auth_domain_account must match server signing key")
@@ -777,7 +835,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "client_domain_account is required when client_domain is provided")
@@ -800,7 +858,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "client_domain is required when client_domain_account is provided")
@@ -825,32 +883,10 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
 		encoded := encodeAuthorizationEntries(t, entries)
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "web_auth_domain")
-		require.Nil(t, resp)
-	})
-
-	t.Run("client domain required when attribution enforced", func(t *testing.T) {
-		serverKP := keypair.MustRandom()
-		rpcMock := stellarMocks.NewMockRPCClient(t)
-
-		argEntries := xdr.ScMap{
-			utils.NewSymbolStringEntry("account", testClientContractAddress),
-			utils.NewSymbolStringEntry("home_domain", "example.com"),
-			utils.NewSymbolStringEntry("nonce", "nonce"),
-			utils.NewSymbolStringEntry("web_auth_domain", "example.com"),
-			utils.NewSymbolStringEntry("web_auth_domain_account", serverKP.Address()),
-		}
-		entries := buildAuthorizationEntries(t, argEntries, false, serverKP, nil)
-		entries[0] = signAuthorizationEntry(t, entries[0], serverKP)
-		encoded := encodeAuthorizationEntries(t, entries)
-
-		svc := newService(t, rpcMock, serverKP, true)
-		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "client_domain is required")
 		require.Nil(t, resp)
 	})
 
@@ -877,7 +913,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 			Return((*stellar.SimulationResult)(nil), stellar.NewSimulationError(errors.New("boom"), nil)).
 			Once()
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "simulating transaction")
@@ -912,7 +948,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 			)).
 			Once()
 
-		svc := newService(t, rpcMock, serverKP, false)
+		svc := newService(t, rpcMock, serverKP)
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "simulating transaction")

@@ -3,7 +3,6 @@ package transactionsubmission
 import (
 	"context"
 	"database/sql"
-	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
@@ -253,7 +253,7 @@ func Test_PaymentHandler_BuildInnerTransaction(t *testing.T) {
 
 				// Check that the transaction was built correctly:
 				var wantAsset txnbuild.Asset = txnbuild.NativeAsset{}
-				if strings.ToUpper(txJob.Transaction.AssetCode) != "XLM" {
+				if txJob.Transaction.AssetCode != assets.XLMAssetCode && txJob.Transaction.AssetCode != assets.XLMAssetCodeAlias {
 					wantAsset = txnbuild.CreditAsset{
 						Code:   txJob.Transaction.AssetCode,
 						Issuer: txJob.Transaction.AssetIssuer,

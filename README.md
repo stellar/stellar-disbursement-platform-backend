@@ -2,7 +2,7 @@
 
 [![Swagger Documentation](https://img.shields.io/badge/docs-swagger-blue?logo=swagger)](https://petstore.swagger.io/?url=https://raw.githubusercontent.com/stellar/stellar-docs/refs/heads/main/openapi/stellar-disbursement-platform/bundled.yaml)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/stellar/stellar-disbursement-platform-backend)
-[![Stellar Docs](https://img.shields.io/badge/docs-stellar.org-blue?logo=stellar)](https://developers.stellar.org/platforms/stellar-disbursement-platform)
+[![Stellar Docs](https://img.shields.io/badge/docs-stellar.org-blue?logo=stellar)](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform)
 [![CI](https://img.shields.io/github/check-runs/stellar/stellar-disbursement-platform-backend/develop?logo=github&label=CI)](https://github.com/stellar/stellar-disbursement-platform-backend/actions/workflows/docker_image_public_release.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/stellar/stellar-disbursement-platform-backend)](https://goreportcard.com/report/github.com/stellar/stellar-disbursement-platform-backend)
 [![GitHub](https://img.shields.io/github/license/stellar/stellar-disbursement-platform-backend)](https://github.com/stellar/stellar-disbursement-platform-backend/blob/main/LICENSE)
@@ -25,8 +25,8 @@
   - [State Transitions](#state-transitions)
 
 > [!NOTE]
-> If you are using version 1.x.x, we highly recommend upgrading to version 2.x.x to benefit from the latest features, routine fixes, and security patches. 
-> For detailed instructions on how to upgrade, please refer to [the upgrade guide](https://developers.stellar.org/network/stellar-disbursement-platform/admin-guide/single-tenant-to-multi-tenant-migration).
+> If you are using version 1.x.x, we highly recommend upgrading to version 2.x.x to benefit from the latest features, routine fixes, and security patches.
+> For detailed instructions on how to upgrade, please refer to [the upgrade guide](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/single-tenant-to-multi-tenant-migration).
 
 ## Introduction
 
@@ -47,7 +47,7 @@ stellar-disbursement-platform --help
 
 ## Quick Start
 
-### Docker Compose 
+### Docker Compose
 
 To quickly test the SDP using preconfigured values, use the startup wizard.
 
@@ -57,7 +57,7 @@ make setup
 
 For more information about launching and configuring the SDP, see the [Quick Start Guide](./dev/README.md).
 
-### Helm 
+### Helm
 
 To deploy the SDP using Helm, see the [Helm Chart](./helmchart/sdp/README.md).
 
@@ -178,7 +178,7 @@ The SEP10/SEP24 implementation can be configured using the following environment
 SEP10_SIGNING_PUBLIC_KEY=G...  # Public key for SEP10 signing
 SEP10_SIGNING_PRIVATE_KEY=S... # Private key for SEP10 signing
 
-# SEP24 Configuration  
+# SEP24 Configuration
 SEP24_JWT_SECRET=jwt_secret_... # JWT secret for SEP24 tokens
 ```
 
@@ -190,7 +190,7 @@ The following environment variables are required for SEP10/SEP24 functionality:
 
 **Required Variables:**
 - `SEP10_SIGNING_PUBLIC_KEY` - Public key for SEP10 challenge signing
-- `SEP10_SIGNING_PRIVATE_KEY` - Private key for SEP10 challenge signing  
+- `SEP10_SIGNING_PRIVATE_KEY` - Private key for SEP10 challenge signing
 - `SEP24_JWT_SECRET` - JWT secret for SEP24 token signing
 
 **Optional Variables:**
@@ -207,9 +207,9 @@ The SDP Core service include several components started using a single command.
 stellar-disbursement-platform serve --help
 ```
 
-#### Admin API 
+#### Admin API
 
-The Admin API is the component responsible for managing tenants of the SDP. It runs by default on port 8003 and is used to provision new tenants and manage existing tenants. 
+The Admin API is the component responsible for managing tenants of the SDP. It runs by default on port 8003 and is used to provision new tenants and manage existing tenants.
 
 #### Dashboard API
 
@@ -273,7 +273,7 @@ TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID=HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 - WhatsApp requires pre-approved message templates for all business-initiated conversations
 - Template variables are automatically populated by the SDP based on the message type
 - All templates must be approved by WhatsApp before they can be used in production
-- For detailed setup instructions, refer to the [Twilio WhatsApp API documentation](https://www.twilio.com/docs/whatsapp/api) 
+- For detailed setup instructions, refer to the [Twilio WhatsApp API documentation](https://www.twilio.com/docs/whatsapp/api)
 
 #### Wallet Registration UI
 
@@ -308,7 +308,7 @@ In future iterations of the project, the Transaction Submission Service will pro
 
 To manage the migrations of the database, use the `db` subcommand.
 
-#### 
+####
 
 ```sh
 stellar-disbursement-platform db --help
@@ -322,7 +322,7 @@ stellar-disbursement-platform db --help
 stellar-disbursement-platform db admin migrate up
 ```
 
-The tables below are used to manage tenants and their configurations. 
+The tables below are used to manage tenants and their configurations.
 
 ![admin schema](./docs/images/admin_db_schema.png)
 
@@ -371,8 +371,8 @@ The SDP uses Background jobs to handle asynchronous tasks.
 
 **1. Jobs**
 
-> [!NOTE]  
-> Certain jobs are not listed here because they cannot be configured and are necessary to the functioning of the SDP. 
+> [!NOTE]
+> Certain jobs are not listed here because they cannot be configured and are necessary to the functioning of the SDP.
 
 * `send_receiver_wallets_invitation_job`: This job is used to send disbursement invites to recipients. Its interval is configured through the `SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS` environment variable.
 * `payment_to_submitter_job`: This job is used to submit payments from Core to the TSS. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.

@@ -49,17 +49,16 @@ type SEP45Service interface {
 }
 
 type sep45Service struct {
-	rpcClient                 stellar.RPCClient
-	tomlClient                stellartoml.ClientInterface
-	jwtManager                *sepauth.JWTManager
-	networkPassphrase         string
-	contractID                xdr.ContractId
-	signingKP                 *keypair.Full
-	signingPKBytes            []byte
-	clientAttributionRequired bool
-	allowHTTPRetry            bool
-	baseURL                   string
-	jwtExpiration             time.Duration
+	rpcClient         stellar.RPCClient
+	tomlClient        stellartoml.ClientInterface
+	jwtManager        *sepauth.JWTManager
+	networkPassphrase string
+	contractID        xdr.ContractId
+	signingKP         *keypair.Full
+	signingPKBytes    []byte
+	allowHTTPRetry    bool
+	baseURL           string
+	jwtExpiration     time.Duration
 }
 
 type SEP45ChallengeRequest struct {
@@ -102,15 +101,14 @@ type SEP45ValidationResponse struct {
 }
 
 type SEP45ServiceOptions struct {
-	RPCClient                 stellar.RPCClient
-	TOMLClient                stellartoml.ClientInterface
-	JWTManager                *sepauth.JWTManager
-	NetworkPassphrase         string
-	WebAuthVerifyContractID   string
-	ServerSigningKeypair      *keypair.Full
-	BaseURL                   string
-	ClientAttributionRequired bool
-	AllowHTTPRetry            bool
+	RPCClient               stellar.RPCClient
+	TOMLClient              stellartoml.ClientInterface
+	JWTManager              *sepauth.JWTManager
+	NetworkPassphrase       string
+	WebAuthVerifyContractID string
+	ServerSigningKeypair    *keypair.Full
+	BaseURL                 string
+	AllowHTTPRetry          bool
 }
 
 func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
@@ -152,17 +150,16 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 	}
 
 	return &sep45Service{
-		rpcClient:                 opts.RPCClient,
-		tomlClient:                tomlClient,
-		jwtManager:                opts.JWTManager,
-		networkPassphrase:         opts.NetworkPassphrase,
-		contractID:                contractID,
-		signingKP:                 signingKP,
-		signingPKBytes:            signingPKBytes,
-		clientAttributionRequired: opts.ClientAttributionRequired,
-		allowHTTPRetry:            opts.AllowHTTPRetry,
-		baseURL:                   opts.BaseURL,
-		jwtExpiration:             defaultSEP45JWTExpiration,
+		rpcClient:         opts.RPCClient,
+		tomlClient:        tomlClient,
+		jwtManager:        opts.JWTManager,
+		networkPassphrase: opts.NetworkPassphrase,
+		contractID:        contractID,
+		signingKP:         signingKP,
+		signingPKBytes:    signingPKBytes,
+		allowHTTPRetry:    opts.AllowHTTPRetry,
+		baseURL:           opts.BaseURL,
+		jwtExpiration:     defaultSEP45JWTExpiration,
 	}, nil
 }
 
@@ -189,9 +186,6 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	clientDomain := ""
 	if req.ClientDomain != nil {
 		clientDomain = strings.TrimSpace(*req.ClientDomain)
-	}
-	if s.clientAttributionRequired && clientDomain == "" {
-		return nil, fmt.Errorf("%w: client_domain is required", ErrSEP45Validation)
 	}
 
 	var clientDomainAccount string
@@ -259,8 +253,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 			TimeBounds: txnbuild.NewTimeout(300),
 		},
 		Operations: []txnbuild.Operation{&txnbuild.InvokeHostFunction{
-			SourceAccount: s.signingKP.Address(),
-			HostFunction:  hostFunction,
+			HostFunction: hostFunction,
 		}},
 	}
 
@@ -688,8 +681,6 @@ func (s *sep45Service) buildChallengeArgs(args map[string]string, argsXDR xdr.Sc
 		if !strkey.IsValidEd25519PublicKey(clientDomainAccount) {
 			return nil, fmt.Errorf("client_domain_account must be a valid Stellar account")
 		}
-	} else if s.clientAttributionRequired {
-		return nil, fmt.Errorf("client_domain is required")
 	}
 
 	if strings.TrimSpace(args["nonce"]) == "" {
