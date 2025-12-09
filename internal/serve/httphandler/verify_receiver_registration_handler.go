@@ -238,10 +238,10 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	rw.OTPConfirmedAt = &now
 	rw.OTPConfirmedWith = contactInfo
 	rw.Status = data.RegisteredReceiversWalletStatus
-	rw.StellarAddress = sep24Claims.SEP10StellarAccount()
-	rw.StellarMemo = sep24Claims.SEP10StellarMemo()
+	rw.StellarAddress = sep24Claims.Account()
+	rw.StellarMemo = sep24Claims.Memo()
 	rw.StellarMemoType = ""
-	if sep24Claims.SEP10StellarMemo() != "" {
+	if sep24Claims.Memo() != "" {
 		rw.StellarMemoType = schema.MemoTypeID
 	}
 	err = v.Models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{
