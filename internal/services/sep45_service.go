@@ -253,8 +253,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 			TimeBounds: txnbuild.NewTimeout(300),
 		},
 		Operations: []txnbuild.Operation{&txnbuild.InvokeHostFunction{
-			SourceAccount: s.signingKP.Address(),
-			HostFunction:  hostFunction,
+			HostFunction: hostFunction,
 		}},
 	}
 
