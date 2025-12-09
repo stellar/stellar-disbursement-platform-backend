@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [6.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.0...6.0.1))
+
+### Fixed
+
+- Fix Twilio error 21656 when sending WhatsApp OTP messages by updating template to single variable format as required by Twilio/Meta's updated authentication template requirements [#974](https://github.com/stellar/stellar-disbursement-platform-backend/pull/974)
+
+### Security and Dependencies
+
+- Bump the all-docker group with 2 updates [#976](https://github.com/stellar/stellar-disbursement-platform-backend/pull/976)
+  - golang from 1.25.4-alpine to 1.25.5-alpine
+  - alpine from 3.22 to 3.23
+- Bump the minor-and-patch group with 7 updates [#977](https://github.com/stellar/stellar-disbursement-platform-backend/pull/977)
+
 ## [6.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/5.0.0...6.0.0))
 
 ### 🚨Potential Breaking Changes
