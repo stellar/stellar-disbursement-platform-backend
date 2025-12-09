@@ -3,7 +3,7 @@
 # To push:
 #    make docker-push
 
-FROM golang:1.25.4-alpine AS build
+FROM golang:1.25.5-alpine AS build
 ARG GIT_COMMIT
 
 ENV CGO_ENABLED=0 GOOS=linux
@@ -14,7 +14,7 @@ COPY . ./
 RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 
 
-FROM alpine:3.22
+FROM alpine:3.23
 
 RUN apk add --no-cache ca-certificates
 # ADD migrations/ /app/migrations/
