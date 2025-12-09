@@ -294,7 +294,7 @@ func Test_EmbeddedWalletService_GetPendingDisbursementAsset(t *testing.T) {
 	})
 }
 
-func Test_EmbeddedWalletService_GetReceiverWalletByContractAddress(t *testing.T) {
+func Test_EmbeddedWalletService_getReceiverWalletByContractAddress(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -321,17 +321,79 @@ func Test_EmbeddedWalletService_GetReceiverWalletByContractAddress(t *testing.T)
 	require.NoError(t, sdpModels.EmbeddedWallets.Update(ctx, dbConnectionPool, embedded.Token, data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
 
 	t.Run("success", func(t *testing.T) {
-		wallet, err := service.GetReceiverWalletByContractAddress(ctx, contractAddress)
+		wallet, err := service.getReceiverWalletByContractAddress(ctx, contractAddress)
 		require.NoError(t, err)
 		require.NotNil(t, wallet)
 		assert.Equal(t, receiverWallet.ID, wallet.ID)
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		wallet, err := service.GetReceiverWalletByContractAddress(ctx, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
+		wallet, err := service.getReceiverWalletByContractAddress(ctx, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidReceiverWalletID)
 		assert.Nil(t, wallet)
+	})
+}
+
+func Test_EmbeddedWalletService_IsVerificationPending(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	require.NoError(t, err)
+
+	cleanupFixtures := func(t *testing.T) {
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+	}
+	cleanupFixtures(t)
+
+	setupReceiverWallet := func(t *testing.T, status data.ReceiversWalletStatus, contractAddress string) {
+		cleanupFixtures(t)
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet-"+string(status), "https://example.com", "wallet.example.com", "embedded://")
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, status)
+		embedded := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token-"+string(status), testWasmHash, contractAddress, "cred-"+string(status), "pub-"+string(status), data.PendingWalletStatus)
+		require.NoError(t, sdpModels.EmbeddedWallets.Update(ctx, dbConnectionPool, embedded.Token, data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+	}
+
+	t.Run("returns false when contract address empty", func(t *testing.T) {
+		isPending, err := service.IsVerificationPending(ctx, "   ")
+		require.NoError(t, err)
+		assert.False(t, isPending)
+	})
+
+	t.Run("returns error when receiver wallet missing", func(t *testing.T) {
+		_, err := service.IsVerificationPending(ctx, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrInvalidReceiverWalletID)
+	})
+
+	t.Run("returns true when receiver wallet ready", func(t *testing.T) {
+		setupReceiverWallet(t, data.ReadyReceiversWalletStatus, "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX")
+
+		isPending, err := service.IsVerificationPending(ctx, "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX")
+		require.NoError(t, err)
+		assert.True(t, isPending)
+	})
+
+	t.Run("returns false when receiver wallet registered", func(t *testing.T) {
+		setupReceiverWallet(t, data.RegisteredReceiversWalletStatus, "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R5")
+
+		isPending, err := service.IsVerificationPending(ctx, "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R5")
+		require.NoError(t, err)
+		assert.False(t, isPending)
 	})
 }
 

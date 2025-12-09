@@ -37,8 +37,6 @@ type EmbeddedWalletServiceInterface interface {
 	CreateWallet(ctx context.Context, token, publicKey, credentialID string) error
 	// GetWalletByCredentialID retrieves an embedded wallet by credential ID
 	GetWalletByCredentialID(ctx context.Context, credentialID string) (*data.EmbeddedWallet, error)
-	// GetReceiverWalletByContractAddress retrieves a receiver wallet using the wallet contract address
-	GetReceiverWalletByContractAddress(ctx context.Context, contractAddress string) (*data.ReceiverWallet, error)
 	// GetPendingDisbursementAsset fetches the asset tied to a pending disbursement for the provided contract address
 	GetPendingDisbursementAsset(ctx context.Context, contractAddress string) (*data.Asset, error)
 	// IsVerificationPending returns true when the receiver wallet requires verification
@@ -161,7 +159,7 @@ func (e *EmbeddedWalletService) GetWalletByCredentialID(ctx context.Context, cre
 	})
 }
 
-func (e *EmbeddedWalletService) GetReceiverWalletByContractAddress(ctx context.Context, contractAddress string) (*data.ReceiverWallet, error) {
+func (e *EmbeddedWalletService) getReceiverWalletByContractAddress(ctx context.Context, contractAddress string) (*data.ReceiverWallet, error) {
 	contractAddress = strings.TrimSpace(contractAddress)
 	if contractAddress == "" {
 		return nil, ErrMissingContractAddress
@@ -202,7 +200,7 @@ func (e *EmbeddedWalletService) IsVerificationPending(ctx context.Context, contr
 		return false, nil
 	}
 
-	receiverWallet, err := e.GetReceiverWalletByContractAddress(ctx, contractAddress)
+	receiverWallet, err := e.getReceiverWalletByContractAddress(ctx, contractAddress)
 	if err != nil {
 		return false, err
 	}
