@@ -725,6 +725,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				}
 				embeddedWalletProfileHandler := httphandler.EmbeddedWalletProfileHandler{
 					EmbeddedWalletService: o.EmbeddedWalletService,
+					Models:                o.Models,
 				}
 				sponsoredTransactionHandler := httphandler.SponsoredTransactionHandler{
 					EmbeddedWalletService: o.EmbeddedWalletService,
@@ -741,7 +742,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
 
 					// Wallet profile routes
-					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Get("/profile", embeddedWalletProfileHandler.GetProfile)
+					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Route("/profile", func(r chi.Router) {
+						r.Get("/", embeddedWalletProfileHandler.GetProfile)
+						r.Get("/assets", embeddedWalletProfileHandler.GetAssets)
+					})
 
 					// Sponsored transactions routes
 					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Route("/sponsored-transactions", func(r chi.Router) {
