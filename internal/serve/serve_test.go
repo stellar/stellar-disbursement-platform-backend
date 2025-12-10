@@ -703,6 +703,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// RPC endpoints
 		{http.MethodPost, "/rpc/wallet"},
 		{http.MethodPost, "/rpc/user"},
+		// Embedded wallets
+		{http.MethodGet, "/embedded-wallets/profile"},
+		{http.MethodGet, "/embedded-wallets/profile-assets"},
+		{http.MethodPost, "/embedded-wallets/sponsored-transactions"},
+		{http.MethodGet, "/embedded-wallets/sponsored-transactions/123"},
 	}
 
 	// Expect 401 as a response:
