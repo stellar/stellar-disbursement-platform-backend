@@ -741,16 +741,17 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Post("/", walletCreationHandler.CreateWallet)
 					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
 
-					// Wallet profile routes
-					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Route("/profile", func(r chi.Router) {
-						r.Get("/", embeddedWalletProfileHandler.GetProfile)
-						r.Get("/assets", embeddedWalletProfileHandler.GetAssets)
-					})
+					// Authenticated wallet routes
+					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Group(func(r chi.Router) {
+						// Profile routes
+						r.Get("/profile", embeddedWalletProfileHandler.GetProfile)
+						r.Get("/profile-assets", embeddedWalletProfileHandler.GetAssets)
 
-					// Sponsored transactions routes
-					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Route("/sponsored-transactions", func(r chi.Router) {
-						r.Post("/", sponsoredTransactionHandler.CreateSponsoredTransaction)
-						r.Get("/{id}", sponsoredTransactionHandler.GetSponsoredTransaction)
+						// Sponsored transactions
+						r.Route("/sponsored-transactions", func(r chi.Router) {
+							r.Post("/", sponsoredTransactionHandler.CreateSponsoredTransaction)
+							r.Get("/{id}", sponsoredTransactionHandler.GetSponsoredTransaction)
+						})
 					})
 
 					// Passkey registration + authentication routes

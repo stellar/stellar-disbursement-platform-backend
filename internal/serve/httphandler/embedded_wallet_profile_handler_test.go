@@ -113,7 +113,7 @@ func Test_EmbeddedWalletProfileHandler_GetAssets(t *testing.T) {
 
 		handler := EmbeddedWalletProfileHandler{Models: models}
 
-		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile/assets", nil)
+		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile-assets", nil)
 		resp := httptest.NewRecorder()
 
 		handler.GetAssets(resp, req)
@@ -139,7 +139,7 @@ func Test_EmbeddedWalletProfileHandler_GetAssets(t *testing.T) {
 
 		handler := EmbeddedWalletProfileHandler{Models: models}
 
-		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile/assets", nil)
+		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile-assets", nil)
 		resp := httptest.NewRecorder()
 
 		handler.GetAssets(resp, req)
@@ -181,7 +181,7 @@ func Test_EmbeddedWalletProfileHandler_GetAssets(t *testing.T) {
 
 		handler := EmbeddedWalletProfileHandler{Models: models}
 
-		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile/assets", nil)
+		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile-assets", nil)
 		resp := httptest.NewRecorder()
 
 		handler.GetAssets(resp, req)
