@@ -41,6 +41,8 @@ type EmbeddedWalletServiceInterface interface {
 	GetPendingDisbursementAsset(ctx context.Context, contractAddress string) (*data.Asset, error)
 	// IsVerificationPending returns true when the receiver wallet requires verification
 	IsVerificationPending(ctx context.Context, contractAddress string) (bool, error)
+	// GetReceiverContact retrieves the receiver contact info for an embedded wallet contract address
+	GetReceiverContact(ctx context.Context, contractAddress string) (*data.Receiver, error)
 	// SponsorTransaction sponsors a transaction on behalf of the embedded wallet
 	SponsorTransaction(ctx context.Context, account, operationXDR string) (string, error)
 	// GetTransactionStatus retrieves a sponsored transaction by ID
@@ -206,6 +208,28 @@ func (e *EmbeddedWalletService) IsVerificationPending(ctx context.Context, contr
 	}
 
 	return receiverWallet.Status == data.ReadyReceiversWalletStatus, nil
+}
+
+func (e *EmbeddedWalletService) GetReceiverContact(ctx context.Context, contractAddress string) (*data.Receiver, error) {
+	contractAddress = strings.TrimSpace(contractAddress)
+	if contractAddress == "" {
+		return nil, nil
+	}
+
+	receiverWallet, err := e.getReceiverWalletByContractAddress(ctx, contractAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	receiver, err := e.sdpModels.Receiver.Get(ctx, e.sdpModels.DBConnectionPool, receiverWallet.Receiver.ID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return nil, ErrInvalidReceiverWalletID
+		}
+		return nil, fmt.Errorf("getting receiver %s: %w", receiverWallet.Receiver.ID, err)
+	}
+
+	return receiver, nil
 }
 
 func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account, operationXDR string) (string, error) {
