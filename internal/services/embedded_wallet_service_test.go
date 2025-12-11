@@ -397,6 +397,56 @@ func Test_EmbeddedWalletService_IsVerificationPending(t *testing.T) {
 	})
 }
 
+func Test_EmbeddedWalletService_GetReceiverContact(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	require.NoError(t, err)
+
+	data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "contact-wallet", "https://example.com", "wallet.example.com", "embedded://")
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{Email: "test@example.com", PhoneNumber: "+123456"})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	contractAddress := "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R9"
+	embedded := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token-contact", testWasmHash, contractAddress, "cred-contact", "pub-contact", data.PendingWalletStatus)
+	require.NoError(t, sdpModels.EmbeddedWallets.Update(ctx, dbConnectionPool, embedded.Token, data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+
+	t.Run("success", func(t *testing.T) {
+		contact, err := service.GetReceiverContact(ctx, contractAddress)
+		require.NoError(t, err)
+		require.NotNil(t, contact)
+		assert.Equal(t, receiver.Email, contact.Email)
+		assert.Equal(t, receiver.PhoneNumber, contact.PhoneNumber)
+	})
+
+	t.Run("returns nil when contract address empty", func(t *testing.T) {
+		contact, err := service.GetReceiverContact(ctx, "")
+		require.NoError(t, err)
+		assert.Nil(t, contact)
+	})
+
+	t.Run("returns error when receiver wallet missing", func(t *testing.T) {
+		contact, err := service.GetReceiverContact(ctx, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
+		require.Error(t, err)
+		assert.Nil(t, contact)
+		assert.ErrorIs(t, err, ErrInvalidReceiverWalletID)
+	})
+}
+
 func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

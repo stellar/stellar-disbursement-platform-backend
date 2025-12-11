@@ -746,6 +746,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 						// Profile routes
 						r.Get("/profile", embeddedWalletProfileHandler.GetProfile)
 						r.Get("/profile-assets", embeddedWalletProfileHandler.GetAssets)
+						r.Get("/profile-receiver", embeddedWalletProfileHandler.GetReceiver)
 
 						// Sponsored transactions
 						r.Route("/sponsored-transactions", func(r chi.Router) {

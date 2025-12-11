@@ -93,6 +93,98 @@ func Test_EmbeddedWalletProfileHandler_GetProfile(t *testing.T) {
 	})
 }
 
+func Test_EmbeddedWalletProfileHandler_GetReceiver(t *testing.T) {
+	contractAddress := "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R4"
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		testCases := []struct {
+			name     string
+			receiver *data.Receiver
+			expected EmbeddedWalletReceiverContact
+		}{
+			{
+				name:     "email contact",
+				receiver: &data.Receiver{Email: "test@example.com"},
+				expected: EmbeddedWalletReceiverContact{Type: data.ReceiverContactTypeEmail, Value: "test@example.com"},
+			},
+			{
+				name:     "phone contact",
+				receiver: &data.Receiver{PhoneNumber: "+123456789"},
+				expected: EmbeddedWalletReceiverContact{Type: data.ReceiverContactTypeSMS, Value: "+123456789"},
+			},
+		}
+
+		for _, tc := range testCases {
+			ttc := tc
+			t.Run(ttc.name, func(t *testing.T) {
+				t.Parallel()
+
+				mockSvc := mocks.NewMockEmbeddedWalletService(t)
+				handler := EmbeddedWalletProfileHandler{EmbeddedWalletService: mockSvc}
+
+				mockSvc.On("GetReceiverContact", mock.Anything, contractAddress).
+					Return(ttc.receiver, nil).Once()
+
+				req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile-receiver", nil)
+				ctx := sdpcontext.SetWalletContractAddressInContext(req.Context(), contractAddress)
+				req = req.WithContext(ctx)
+				resp := httptest.NewRecorder()
+
+				handler.GetReceiver(resp, req)
+
+				require.Equal(t, http.StatusOK, resp.Code)
+
+				var body EmbeddedWalletReceiverContactResponse
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				require.NotNil(t, body.ReceiverContact)
+				assert.Equal(t, ttc.expected.Type, body.ReceiverContact.Type)
+				assert.Equal(t, ttc.expected.Value, body.ReceiverContact.Value)
+			})
+		}
+	})
+
+	t.Run("unauthorized when receiver contact missing", func(t *testing.T) {
+		t.Parallel()
+
+		mockSvc := mocks.NewMockEmbeddedWalletService(t)
+		handler := EmbeddedWalletProfileHandler{EmbeddedWalletService: mockSvc}
+
+		mockSvc.On("GetReceiverContact", mock.Anything, contractAddress).
+			Return((*data.Receiver)(nil), services.ErrInvalidReceiverWalletID).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile-receiver", nil)
+		ctx := sdpcontext.SetWalletContractAddressInContext(req.Context(), contractAddress)
+		req = req.WithContext(ctx)
+		resp := httptest.NewRecorder()
+
+		handler.GetReceiver(resp, req)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.Code)
+	})
+
+	t.Run("internal error when receiver contact lookup fails", func(t *testing.T) {
+		t.Parallel()
+
+		mockSvc := mocks.NewMockEmbeddedWalletService(t)
+		handler := EmbeddedWalletProfileHandler{EmbeddedWalletService: mockSvc}
+
+		unexpectedErr := errors.New("contact boom")
+		mockSvc.On("GetReceiverContact", mock.Anything, contractAddress).
+			Return((*data.Receiver)(nil), unexpectedErr).Once()
+
+		req := httptest.NewRequest(http.MethodGet, "/embedded-wallets/profile-receiver", nil)
+		ctx := sdpcontext.SetWalletContractAddressInContext(req.Context(), contractAddress)
+		req = req.WithContext(ctx)
+		resp := httptest.NewRecorder()
+
+		handler.GetReceiver(resp, req)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	})
+}
+
 func Test_EmbeddedWalletProfileHandler_GetAssets(t *testing.T) {
 	t.Run("retrieve supported assets successfully", func(t *testing.T) {
 		dbt := dbtest.Open(t)

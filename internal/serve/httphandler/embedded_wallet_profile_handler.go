@@ -27,6 +27,15 @@ type EmbeddedWalletAssetsResponse struct {
 	Assets []SupportedAsset `json:"assets"`
 }
 
+type EmbeddedWalletReceiverContact struct {
+	Type  data.ReceiverContactType `json:"type"`
+	Value string                   `json:"value"`
+}
+
+type EmbeddedWalletReceiverContactResponse struct {
+	ReceiverContact *EmbeddedWalletReceiverContact `json:"receiver_contact,omitempty"`
+}
+
 type SupportedAsset struct {
 	Code   string `json:"code"`
 	Issuer string `json:"issuer"`
@@ -92,5 +101,44 @@ func (h EmbeddedWalletProfileHandler) GetAssets(rw http.ResponseWriter, req *htt
 	resp := EmbeddedWalletAssetsResponse{
 		Assets: supportedAssets,
 	}
+	httpjson.Render(rw, resp, httpjson.JSON)
+}
+
+func (h EmbeddedWalletProfileHandler) GetReceiver(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	contractAddress, err := sdpcontext.GetWalletContractAddressFromContext(ctx)
+	if err != nil {
+		httperror.Unauthorized("", err, nil).Render(rw)
+		return
+	}
+
+	receiver, err := h.EmbeddedWalletService.GetReceiverContact(ctx, contractAddress)
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidContractAddress) || errors.Is(err, services.ErrInvalidReceiverWalletID) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+		} else {
+			httperror.InternalError(ctx, "Failed to retrieve receiver contact info", err, nil).Render(rw)
+		}
+		return
+	}
+
+	var contact *EmbeddedWalletReceiverContact
+	if receiver != nil {
+		switch {
+		case receiver.Email != "":
+			contact = &EmbeddedWalletReceiverContact{
+				Type:  data.ReceiverContactTypeEmail,
+				Value: receiver.Email,
+			}
+		case receiver.PhoneNumber != "":
+			contact = &EmbeddedWalletReceiverContact{
+				Type:  data.ReceiverContactTypeSMS,
+				Value: receiver.PhoneNumber,
+			}
+		}
+	}
+
+	resp := EmbeddedWalletReceiverContactResponse{ReceiverContact: contact}
 	httpjson.Render(rw, resp, httpjson.JSON)
 }
