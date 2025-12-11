@@ -293,7 +293,7 @@ Before deploying the Stellar Disbursement Platform helm chart you need to config
 
 ### Add Stellar Repository
 ```bash
-helm repo add stellar https://helm.stellar.org
+helm repo add stellar https://helm.stellar.org/charts
 ```
 
 
