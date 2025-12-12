@@ -63,6 +63,7 @@ func (s *Service) initializeSingleTenantEnvironment(ctx context.Context) error {
 
 	args := []string{
 		"run", "..", "--log-level", "ERROR", "tenants", "ensure-default",
+		"--sdp-ui-base-url", s.cfg.FrontendBaseURL("localhost"),
 		"--database-url", dbURL,
 		"--default-tenant-owner-email", "default@default.local",
 		"--default-tenant-owner-first-name", "Default",
