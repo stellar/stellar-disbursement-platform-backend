@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Security and Dependencies
+
+- Upgrade React to 19.2.3 and @stellar/design-system to 3.2.7 in SEP-24 frontend to address CVE-2025-55184 denial of service and source code exposure vulnerability in React Server Components [#988](https://github.com/stellar/stellar-disbursement-platform-backend/pull/988)
+
 ## [6.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.0...6.0.1))
 
 ### Fixed
