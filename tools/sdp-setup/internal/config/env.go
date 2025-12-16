@@ -229,6 +229,13 @@ func Write(cfg Config, path string) error {
 	}
 
 	// 1. Start with the configuration values we want to set
+	apiHost := "localhost"
+	uiHost := "localhost"
+	if !cfg.SingleTenantMode {
+		apiHost = "stellar.local"
+		uiHost = "stellar.local"
+	}
+
 	configMap := map[string]string{
 		"NETWORK_TYPE":                               cfg.NetworkType,
 		"NETWORK_PASSPHRASE":                         cfg.NetworkPassphrase,
@@ -244,8 +251,8 @@ func Write(cfg Config, path string) error {
 		"CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE":      cfg.DistributionSeed,
 		"DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE": cfg.DistributionSeed,
 		"USE_HTTPS":                                  strconv.FormatBool(cfg.UseHTTPS),
-		"SDP_UI_BASE_URL":                            cfg.FrontendBaseURL("localhost"),
-		"BASE_URL":                                   "http://localhost:8000",
+		"SDP_UI_BASE_URL":                            cfg.FrontendBaseURL(uiHost),
+		"BASE_URL":                                   fmt.Sprintf("http://%s:8000", apiHost),
 		"DATABASE_URL":                               fmt.Sprintf("postgres://postgres@db:5432/%s?sslmode=disable", cfg.DatabaseName),
 	}
 
