@@ -745,7 +745,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Group(func(r chi.Router) {
 						// Profile routes
 						r.Get("/profile", embeddedWalletProfileHandler.GetProfile)
-						r.Get("/profile-assets", embeddedWalletProfileHandler.GetAssets)
 
 						// Sponsored transactions
 						r.Route("/sponsored-transactions", func(r chi.Router) {

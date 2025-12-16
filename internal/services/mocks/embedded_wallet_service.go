@@ -149,6 +149,36 @@ func (_m *MockEmbeddedWalletService) IsVerificationPending(ctx context.Context, 
 	return r0, r1
 }
 
+// GetReceiverContact provides a mock function with given fields: ctx, contractAddress
+func (_m *MockEmbeddedWalletService) GetReceiverContact(ctx context.Context, contractAddress string) (*data.Receiver, error) {
+	ret := _m.Called(ctx, contractAddress)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetReceiverContact")
+	}
+
+	var r0 *data.Receiver
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*data.Receiver, error)); ok {
+		return rf(ctx, contractAddress)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *data.Receiver); ok {
+		r0 = rf(ctx, contractAddress)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*data.Receiver)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, contractAddress)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetTransactionStatus provides a mock function with given fields: ctx, transactionID
 func (_m *MockEmbeddedWalletService) GetTransactionStatus(ctx context.Context, transactionID string) (*data.SponsoredTransaction, error) {
 	ret := _m.Called(ctx, transactionID)
