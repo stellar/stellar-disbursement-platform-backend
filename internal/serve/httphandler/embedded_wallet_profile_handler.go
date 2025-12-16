@@ -61,14 +61,28 @@ func (h EmbeddedWalletProfileHandler) GetProfile(rw http.ResponseWriter, req *ht
 	}
 
 	isPending, err := h.EmbeddedWalletService.IsVerificationPending(ctx, contractAddress)
-	if renderWalletServiceError(ctx, rw, err, "Failed to evaluate verification requirement") {
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrMissingContractAddress):
+			httperror.Unauthorized("", err, nil).Render(rw)
+		case errors.Is(err, data.ErrRecordNotFound):
+			httperror.NotFound("receiver wallet not found", err, nil).Render(rw)
+		default:
+			httperror.InternalError(ctx, "Failed to evaluate verification requirement", err, nil).Render(rw)
+		}
 		return
 	}
 
 	var pendingAsset *data.Asset
 	if isPending {
 		pendingAsset, err = h.EmbeddedWalletService.GetPendingDisbursementAsset(ctx, contractAddress)
-		if renderWalletServiceError(ctx, rw, err, "Failed to retrieve pending disbursement asset") {
+		if err != nil {
+			switch {
+			case errors.Is(err, services.ErrMissingContractAddress):
+				httperror.Unauthorized("", err, nil).Render(rw)
+			default:
+				httperror.InternalError(ctx, "Failed to retrieve pending disbursement asset", err, nil).Render(rw)
+			}
 			return
 		}
 	}
@@ -88,7 +102,15 @@ func (h EmbeddedWalletProfileHandler) GetProfile(rw http.ResponseWriter, req *ht
 		}
 
 		receiverContact, err := h.getReceiverContact(ctx, contractAddress)
-		if renderWalletServiceError(ctx, rw, err, "Failed to retrieve receiver contact info") {
+		if err != nil {
+			switch {
+			case errors.Is(err, services.ErrMissingContractAddress):
+				httperror.Unauthorized("", err, nil).Render(rw)
+			case errors.Is(err, data.ErrRecordNotFound):
+				httperror.NotFound("receiver not found", err, nil).Render(rw)
+			default:
+				httperror.InternalError(ctx, "Failed to retrieve receiver contact info", err, nil).Render(rw)
+			}
 			return
 		}
 
@@ -141,19 +163,4 @@ func (h EmbeddedWalletProfileHandler) getReceiverContact(ctx context.Context, co
 	default:
 		return nil, fmt.Errorf("receiver contact type not supported")
 	}
-}
-
-// renderWalletServiceError centralizes how service errors map to HTTP responses.
-func renderWalletServiceError(ctx context.Context, rw http.ResponseWriter, err error, internalErrMsg string) bool {
-	if err == nil {
-		return false
-	}
-
-	switch {
-	case errors.Is(err, services.ErrMissingContractAddress), errors.Is(err, data.ErrRecordNotFound):
-		httperror.Unauthorized("", err, nil).Render(rw)
-	default:
-		httperror.InternalError(ctx, internalErrMsg, err, nil).Render(rw)
-	}
-	return true
 }
