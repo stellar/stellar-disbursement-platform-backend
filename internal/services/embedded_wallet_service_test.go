@@ -287,10 +287,11 @@ func Test_EmbeddedWalletService_GetPendingDisbursementAsset(t *testing.T) {
 		assert.Nil(t, assetResult)
 	})
 
-	t.Run("returns nil when contract address empty", func(t *testing.T) {
+	t.Run("returns error when contract address empty", func(t *testing.T) {
 		assetResult, lookupErr := service.GetPendingDisbursementAsset(ctx, "")
-		require.NoError(t, lookupErr)
+		require.Error(t, lookupErr)
 		assert.Nil(t, assetResult)
+		assert.ErrorIs(t, lookupErr, ErrMissingContractAddress)
 	})
 }
 
@@ -330,7 +331,7 @@ func Test_EmbeddedWalletService_getReceiverWalletByContractAddress(t *testing.T)
 	t.Run("not found", func(t *testing.T) {
 		wallet, err := service.getReceiverWalletByContractAddress(ctx, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrInvalidReceiverWalletID)
+		assert.ErrorIs(t, err, data.ErrRecordNotFound)
 		assert.Nil(t, wallet)
 	})
 }
@@ -368,16 +369,17 @@ func Test_EmbeddedWalletService_IsVerificationPending(t *testing.T) {
 		require.NoError(t, sdpModels.EmbeddedWallets.Update(ctx, dbConnectionPool, embedded.Token, data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
 	}
 
-	t.Run("returns false when contract address empty", func(t *testing.T) {
+	t.Run("returns error when contract address empty", func(t *testing.T) {
 		isPending, err := service.IsVerificationPending(ctx, "   ")
-		require.NoError(t, err)
+		require.Error(t, err)
 		assert.False(t, isPending)
+		assert.ErrorIs(t, err, ErrMissingContractAddress)
 	})
 
 	t.Run("returns error when receiver wallet missing", func(t *testing.T) {
 		_, err := service.IsVerificationPending(ctx, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrInvalidReceiverWalletID)
+		assert.ErrorIs(t, err, data.ErrRecordNotFound)
 	})
 
 	t.Run("returns true when receiver wallet ready", func(t *testing.T) {
@@ -433,17 +435,18 @@ func Test_EmbeddedWalletService_GetReceiverContact(t *testing.T) {
 		assert.Equal(t, receiver.PhoneNumber, contact.PhoneNumber)
 	})
 
-	t.Run("returns nil when contract address empty", func(t *testing.T) {
+	t.Run("returns error when contract address empty", func(t *testing.T) {
 		contact, err := service.GetReceiverContact(ctx, "")
-		require.NoError(t, err)
+		require.Error(t, err)
 		assert.Nil(t, contact)
+		assert.ErrorIs(t, err, ErrMissingContractAddress)
 	})
 
 	t.Run("returns error when receiver wallet missing", func(t *testing.T) {
 		contact, err := service.GetReceiverContact(ctx, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
 		require.Error(t, err)
 		assert.Nil(t, contact)
-		assert.ErrorIs(t, err, ErrInvalidReceiverWalletID)
+		assert.ErrorIs(t, err, data.ErrRecordNotFound)
 	})
 }
 

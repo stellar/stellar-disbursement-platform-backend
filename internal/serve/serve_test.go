@@ -705,8 +705,6 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/rpc/user"},
 		// Embedded wallets
 		{http.MethodGet, "/embedded-wallets/profile"},
-		{http.MethodGet, "/embedded-wallets/profile-assets"},
-		{http.MethodGet, "/embedded-wallets/profile-receiver"},
 		{http.MethodPost, "/embedded-wallets/sponsored-transactions"},
 		{http.MethodGet, "/embedded-wallets/sponsored-transactions/123"},
 	}

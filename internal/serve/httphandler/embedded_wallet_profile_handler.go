@@ -1,9 +1,11 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
@@ -19,21 +21,23 @@ type EmbeddedWalletProfileHandler struct {
 }
 
 type EmbeddedWalletProfileResponse struct {
-	IsVerificationPending bool        `json:"is_verification_pending"`
-	PendingAsset          *data.Asset `json:"pending_asset,omitempty"`
+	Verification EmbeddedWalletVerificationDetails `json:"verification"`
+	Wallet       *EmbeddedWalletDetails            `json:"wallet,omitempty"`
 }
 
-type EmbeddedWalletAssetsResponse struct {
-	Assets []SupportedAsset `json:"assets"`
+type EmbeddedWalletVerificationDetails struct {
+	IsPending    bool        `json:"is_pending"`
+	PendingAsset *data.Asset `json:"pending_asset,omitempty"`
+}
+
+type EmbeddedWalletDetails struct {
+	SupportedAssets []SupportedAsset               `json:"supported_assets"`
+	ReceiverContact *EmbeddedWalletReceiverContact `json:"receiver_contact"`
 }
 
 type EmbeddedWalletReceiverContact struct {
 	Type  data.ReceiverContactType `json:"type"`
 	Value string                   `json:"value"`
-}
-
-type EmbeddedWalletReceiverContactResponse struct {
-	ReceiverContact *EmbeddedWalletReceiverContact `json:"receiver_contact,omitempty"`
 }
 
 type SupportedAsset struct {
@@ -50,44 +54,66 @@ func (h EmbeddedWalletProfileHandler) GetProfile(rw http.ResponseWriter, req *ht
 		return
 	}
 
+	contractAddress = strings.TrimSpace(contractAddress)
+	if contractAddress == "" {
+		httperror.Unauthorized("", services.ErrMissingContractAddress, nil).Render(rw)
+		return
+	}
+
 	isPending, err := h.EmbeddedWalletService.IsVerificationPending(ctx, contractAddress)
-	if err != nil {
-		if errors.Is(err, services.ErrInvalidContractAddress) {
-			httperror.Unauthorized("", err, nil).Render(rw)
-		} else {
-			httperror.InternalError(ctx, "Failed to evaluate verification requirement", err, nil).Render(rw)
+	if renderWalletServiceError(ctx, rw, err, "Failed to evaluate verification requirement") {
+		return
+	}
+
+	var pendingAsset *data.Asset
+	if isPending {
+		pendingAsset, err = h.EmbeddedWalletService.GetPendingDisbursementAsset(ctx, contractAddress)
+		if renderWalletServiceError(ctx, rw, err, "Failed to retrieve pending disbursement asset") {
+			return
 		}
-		return
 	}
 
-	asset, err := h.EmbeddedWalletService.GetPendingDisbursementAsset(ctx, contractAddress)
-	if err != nil {
-		httperror.InternalError(ctx, "Failed to retrieve pending disbursement asset", err, nil).Render(rw)
-		return
+	resp := EmbeddedWalletProfileResponse{
+		Verification: EmbeddedWalletVerificationDetails{
+			IsPending:    isPending,
+			PendingAsset: pendingAsset,
+		},
 	}
 
-	resp := EmbeddedWalletProfileResponse{IsVerificationPending: isPending, PendingAsset: asset}
+	if !isPending {
+		supportedAssets, err := h.getSupportedAssets(ctx)
+		if err != nil {
+			httperror.InternalError(ctx, "Failed to retrieve supported assets", err, nil).Render(rw)
+			return
+		}
+
+		receiverContact, err := h.getReceiverContact(ctx, contractAddress)
+		if renderWalletServiceError(ctx, rw, err, "Failed to retrieve receiver contact info") {
+			return
+		}
+
+		resp.Wallet = &EmbeddedWalletDetails{
+			SupportedAssets: supportedAssets,
+			ReceiverContact: receiverContact,
+		}
+	}
+
 	httpjson.Render(rw, resp, httpjson.JSON)
 }
 
-func (h EmbeddedWalletProfileHandler) GetAssets(rw http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-
+func (h EmbeddedWalletProfileHandler) getSupportedAssets(ctx context.Context) ([]SupportedAsset, error) {
 	wallets, err := h.Models.Wallets.FindWallets(ctx, data.Filter{Key: data.FilterEmbedded, Value: true})
 	if err != nil {
-		httperror.InternalError(ctx, "Failed to retrieve supported assets", err, nil).Render(rw)
-		return
+		return nil, fmt.Errorf("finding wallets: %w", err)
 	}
 
 	if len(wallets) != 1 {
-		httperror.InternalError(ctx, "Failed to retrieve supported assets", fmt.Errorf("expected exactly one embedded wallet, found %d", len(wallets)), nil).Render(rw)
-		return
+		return nil, fmt.Errorf("expected exactly one embedded wallet, found %d", len(wallets))
 	}
 
 	assets, err := h.Models.Wallets.GetAssets(ctx, wallets[0].ID)
 	if err != nil {
-		httperror.InternalError(ctx, "Failed to retrieve supported assets", err, nil).Render(rw)
-		return
+		return nil, fmt.Errorf("getting wallet supported assets: %w", err)
 	}
 
 	supportedAssets := make([]SupportedAsset, 0, len(assets))
@@ -98,47 +124,36 @@ func (h EmbeddedWalletProfileHandler) GetAssets(rw http.ResponseWriter, req *htt
 		})
 	}
 
-	resp := EmbeddedWalletAssetsResponse{
-		Assets: supportedAssets,
-	}
-	httpjson.Render(rw, resp, httpjson.JSON)
+	return supportedAssets, nil
 }
 
-func (h EmbeddedWalletProfileHandler) GetReceiver(rw http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-
-	contractAddress, err := sdpcontext.GetWalletContractAddressFromContext(ctx)
-	if err != nil {
-		httperror.Unauthorized("", err, nil).Render(rw)
-		return
-	}
-
+func (h EmbeddedWalletProfileHandler) getReceiverContact(ctx context.Context, contractAddress string) (*EmbeddedWalletReceiverContact, error) {
 	receiver, err := h.EmbeddedWalletService.GetReceiverContact(ctx, contractAddress)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidContractAddress) || errors.Is(err, services.ErrInvalidReceiverWalletID) {
-			httperror.Unauthorized("", err, nil).Render(rw)
-		} else {
-			httperror.InternalError(ctx, "Failed to retrieve receiver contact info", err, nil).Render(rw)
-		}
-		return
+		return nil, fmt.Errorf("getting receiver contact: %w", err)
 	}
 
-	var contact *EmbeddedWalletReceiverContact
-	if receiver != nil {
-		switch {
-		case receiver.Email != "":
-			contact = &EmbeddedWalletReceiverContact{
-				Type:  data.ReceiverContactTypeEmail,
-				Value: receiver.Email,
-			}
-		case receiver.PhoneNumber != "":
-			contact = &EmbeddedWalletReceiverContact{
-				Type:  data.ReceiverContactTypeSMS,
-				Value: receiver.PhoneNumber,
-			}
-		}
+	switch {
+	case receiver.Email != "":
+		return &EmbeddedWalletReceiverContact{Type: data.ReceiverContactTypeEmail, Value: receiver.Email}, nil
+	case receiver.PhoneNumber != "":
+		return &EmbeddedWalletReceiverContact{Type: data.ReceiverContactTypeSMS, Value: receiver.PhoneNumber}, nil
+	default:
+		return nil, fmt.Errorf("receiver contact type not supported")
+	}
+}
+
+// renderWalletServiceError centralizes how service errors map to HTTP responses.
+func renderWalletServiceError(ctx context.Context, rw http.ResponseWriter, err error, internalErrMsg string) bool {
+	if err == nil {
+		return false
 	}
 
-	resp := EmbeddedWalletReceiverContactResponse{ReceiverContact: contact}
-	httpjson.Render(rw, resp, httpjson.JSON)
+	switch {
+	case errors.Is(err, services.ErrMissingContractAddress), errors.Is(err, data.ErrRecordNotFound):
+		httperror.Unauthorized("", err, nil).Render(rw)
+	default:
+		httperror.InternalError(ctx, internalErrMsg, err, nil).Render(rw)
+	}
+	return true
 }

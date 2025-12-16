@@ -21,8 +21,6 @@ var (
 	ErrInvalidCredentialID       = fmt.Errorf("credential ID does not exist")
 	ErrCredentialIDAlreadyExists = fmt.Errorf("credential ID already exists")
 	ErrMissingContractAddress    = fmt.Errorf("contract address is required")
-	ErrInvalidContractAddress    = fmt.Errorf("contract address does not exist")
-	ErrInvalidReceiverWalletID   = fmt.Errorf("receiver wallet does not exist")
 
 	// Sponsored transaction errors
 	ErrMissingAccount      = fmt.Errorf("account is required")
@@ -170,9 +168,6 @@ func (e *EmbeddedWalletService) getReceiverWalletByContractAddress(ctx context.C
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.ReceiverWallet, error) {
 		receiverWallet, err := e.sdpModels.EmbeddedWallets.GetReceiverWallet(ctx, dbTx, contractAddress)
 		if err != nil {
-			if errors.Is(err, data.ErrRecordNotFound) {
-				return nil, ErrInvalidReceiverWalletID
-			}
 			return nil, fmt.Errorf("getting receiver wallet by contract address %s: %w", contractAddress, err)
 		}
 		return receiverWallet, nil
@@ -180,8 +175,9 @@ func (e *EmbeddedWalletService) getReceiverWalletByContractAddress(ctx context.C
 }
 
 func (e *EmbeddedWalletService) GetPendingDisbursementAsset(ctx context.Context, contractAddress string) (*data.Asset, error) {
-	if strings.TrimSpace(contractAddress) == "" {
-		return nil, nil
+	contractAddress = strings.TrimSpace(contractAddress)
+	if contractAddress == "" {
+		return nil, ErrMissingContractAddress
 	}
 
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.Asset, error) {
@@ -199,7 +195,7 @@ func (e *EmbeddedWalletService) GetPendingDisbursementAsset(ctx context.Context,
 func (e *EmbeddedWalletService) IsVerificationPending(ctx context.Context, contractAddress string) (bool, error) {
 	contractAddress = strings.TrimSpace(contractAddress)
 	if contractAddress == "" {
-		return false, nil
+		return false, ErrMissingContractAddress
 	}
 
 	receiverWallet, err := e.getReceiverWalletByContractAddress(ctx, contractAddress)
@@ -213,7 +209,7 @@ func (e *EmbeddedWalletService) IsVerificationPending(ctx context.Context, contr
 func (e *EmbeddedWalletService) GetReceiverContact(ctx context.Context, contractAddress string) (*data.Receiver, error) {
 	contractAddress = strings.TrimSpace(contractAddress)
 	if contractAddress == "" {
-		return nil, nil
+		return nil, ErrMissingContractAddress
 	}
 
 	receiverWallet, err := e.getReceiverWalletByContractAddress(ctx, contractAddress)
@@ -223,9 +219,6 @@ func (e *EmbeddedWalletService) GetReceiverContact(ctx context.Context, contract
 
 	receiver, err := e.sdpModels.Receiver.Get(ctx, e.sdpModels.DBConnectionPool, receiverWallet.Receiver.ID)
 	if err != nil {
-		if errors.Is(err, data.ErrRecordNotFound) {
-			return nil, ErrInvalidReceiverWalletID
-		}
 		return nil, fmt.Errorf("getting receiver %s: %w", receiverWallet.Receiver.ID, err)
 	}
 
