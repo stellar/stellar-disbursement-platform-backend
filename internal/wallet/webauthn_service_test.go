@@ -122,8 +122,10 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 		assert.Equal(t, "localhost", creation.Response.RelyingParty.ID)
 		assert.Equal(t, RPDisplayName, creation.Response.RelyingParty.Name)
 		assert.Equal(t, protocol.URLEncodedBase64(wallet.Token), creation.Response.User.ID)
-		assert.Equal(t, wallet.Token, creation.Response.User.Name)
-		assert.Equal(t, "SDP Wallet User", creation.Response.User.DisplayName)
+		expectedDisplayName, err := buildPasskeyDisplayName(ctx, wallet.CreatedAt)
+		require.NoError(t, err)
+		assert.Equal(t, expectedDisplayName, creation.Response.User.Name)
+		assert.Equal(t, expectedDisplayName, creation.Response.User.DisplayName)
 
 		assert.Equal(t, protocol.ResidentKeyRequirementPreferred, creation.Response.AuthenticatorSelection.ResidentKey)
 		assert.Equal(t, protocol.Platform, creation.Response.AuthenticatorSelection.AuthenticatorAttachment)
