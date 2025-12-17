@@ -124,12 +124,11 @@ func buildPasskeyDisplayName(ctx context.Context, createdAt *time.Time) (string,
 		return "", fmt.Errorf("getting tenant from context: %w", err)
 	}
 
-	date := time.Now().UTC()
-	if createdAt != nil {
-		date = createdAt.UTC()
+	if createdAt == nil {
+		return "", fmt.Errorf("wallet creation time is nil")
 	}
 
-	return fmt.Sprintf("%s Wallet - %s", tenant.Name, date.Format("2006-01-02 15:04 UTC")), nil
+	return fmt.Sprintf("%s Wallet - %s", tenant.Name, createdAt.UTC().Format("2006-01-02 15:04 UTC")), nil
 }
 
 type newUser struct {
@@ -180,7 +179,7 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 
 	displayName, err := buildPasskeyDisplayName(ctx, embeddedWallet.CreatedAt)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("building passkey display name: %w", err)
 	}
 
 	user := &newUser{
@@ -244,7 +243,7 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 
 	displayName, err := buildPasskeyDisplayName(ctx, embeddedWallet.CreatedAt)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("building passkey display name: %w", err)
 	}
 
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(request.Body)
@@ -384,7 +383,7 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 
 		displayName, displayErr := buildPasskeyDisplayName(ctx, embeddedWallet.CreatedAt)
 		if displayErr != nil {
-			return nil, displayErr
+			return nil, fmt.Errorf("building passkey display name: %w", displayErr)
 		}
 
 		return &existingUser{
