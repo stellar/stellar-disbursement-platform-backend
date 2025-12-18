@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/go-webauthn/webauthn/protocol"
@@ -116,8 +117,23 @@ func extractRPIDFromOrigin(origin string) (string, error) {
 	return hostname, nil
 }
 
+// buildPasskeyDisplayName constructs a display name for the passkey based on the tenant and the creation time.
+func buildPasskeyDisplayName(ctx context.Context, createdAt *time.Time) (string, error) {
+	tenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting tenant from context: %w", err)
+	}
+
+	if createdAt == nil {
+		return "", fmt.Errorf("wallet creation time is nil")
+	}
+
+	return fmt.Sprintf("%s Wallet - %s", tenant.Name, createdAt.UTC().Format("2006-01-02 15:04 UTC")), nil
+}
+
 type newUser struct {
-	token string
+	token       string
+	displayName string
 }
 
 func (u *newUser) WebAuthnID() []byte {
@@ -125,11 +141,11 @@ func (u *newUser) WebAuthnID() []byte {
 }
 
 func (u *newUser) WebAuthnName() string {
-	return u.token
+	return u.displayName
 }
 
 func (u *newUser) WebAuthnDisplayName() string {
-	return "SDP Wallet User"
+	return u.displayName
 }
 
 func (u *newUser) WebAuthnCredentials() []webauthn.Credential {
@@ -161,8 +177,14 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 		return nil, fmt.Errorf("creating WebAuthn instance: %w", err)
 	}
 
+	displayName, err := buildPasskeyDisplayName(ctx, embeddedWallet.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("building passkey display name: %w", err)
+	}
+
 	user := &newUser{
-		token: token,
+		token:       token,
+		displayName: displayName,
 	}
 
 	opts := []webauthn.RegistrationOption{
@@ -219,6 +241,11 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 		return nil, fmt.Errorf("creating WebAuthn instance: %w", err)
 	}
 
+	displayName, err := buildPasskeyDisplayName(ctx, embeddedWallet.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("building passkey display name: %w", err)
+	}
+
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("parsing credential creation response: %w", err)
@@ -230,7 +257,8 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 	}
 
 	user := &newUser{
-		token: token,
+		token:       token,
+		displayName: displayName,
 	}
 
 	// CreateCredential verifies and stores the new credential:
@@ -251,6 +279,7 @@ type existingUser struct {
 	credentialID string
 	publicKey    string
 	wallet       *data.EmbeddedWallet
+	displayName  string
 }
 
 func (u *existingUser) WebAuthnID() []byte {
@@ -258,11 +287,11 @@ func (u *existingUser) WebAuthnID() []byte {
 }
 
 func (u *existingUser) WebAuthnName() string {
-	return u.wallet.Token
+	return u.displayName
 }
 
 func (u *existingUser) WebAuthnDisplayName() string {
-	return "SDP Wallet User"
+	return u.displayName
 }
 
 func (u *existingUser) WebAuthnCredentials() []webauthn.Credential {
@@ -352,10 +381,16 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 			return nil, ErrWalletNotReady
 		}
 
+		displayName, displayErr := buildPasskeyDisplayName(ctx, embeddedWallet.CreatedAt)
+		if displayErr != nil {
+			return nil, fmt.Errorf("building passkey display name: %w", displayErr)
+		}
+
 		return &existingUser{
 			credentialID: embeddedWallet.CredentialID,
 			publicKey:    embeddedWallet.PublicKey,
 			wallet:       embeddedWallet,
+			displayName:  displayName,
 		}, nil
 	}
 

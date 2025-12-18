@@ -27,6 +27,59 @@ func newTestSessionCache(t *testing.T) SessionCacheInterface {
 	return cache
 }
 
+func TestBuildPasskeyDisplayName(t *testing.T) {
+	sdpUIBaseURL := "http://localhost:3000"
+	testTenant := schema.Tenant{ID: "tenant-id", Name: "Test Tenant", SDPUIBaseURL: &sdpUIBaseURL}
+	ctxWithTenant := sdpcontext.SetTenantInContext(context.Background(), &testTenant)
+	createdAt := time.Date(2025, 12, 17, 18, 5, 30, 0, time.UTC)
+
+	tests := []struct {
+		name           string
+		ctx            context.Context
+		createdAt      *time.Time
+		expectedName   string
+		expectedErr    error
+		expectedErrMsg string
+	}{
+		{
+			name:         "returns display name with tenant and timestamp",
+			ctx:          ctxWithTenant,
+			createdAt:    &createdAt,
+			expectedName: "Test Tenant Wallet - 2025-12-17 18:05 UTC",
+		},
+		{
+			name:        "returns error when tenant is missing from context",
+			ctx:         context.Background(),
+			createdAt:   &createdAt,
+			expectedErr: sdpcontext.ErrTenantNotFoundInContext,
+		},
+		{
+			name:           "returns error when createdAt is nil",
+			ctx:            ctxWithTenant,
+			expectedErrMsg: "wallet creation time is nil",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			displayName, err := buildPasskeyDisplayName(tt.ctx, tt.createdAt)
+			if tt.expectedErr != nil {
+				assert.Empty(t, displayName)
+				assert.ErrorIs(t, err, tt.expectedErr)
+				return
+			}
+			if tt.expectedErrMsg != "" {
+				assert.Empty(t, displayName)
+				assert.EqualError(t, err, tt.expectedErrMsg)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedName, displayName)
+		})
+	}
+}
+
 func Test_NewWebAuthnService(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -122,8 +175,10 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 		assert.Equal(t, "localhost", creation.Response.RelyingParty.ID)
 		assert.Equal(t, RPDisplayName, creation.Response.RelyingParty.Name)
 		assert.Equal(t, protocol.URLEncodedBase64(wallet.Token), creation.Response.User.ID)
-		assert.Equal(t, wallet.Token, creation.Response.User.Name)
-		assert.Equal(t, "SDP Wallet User", creation.Response.User.DisplayName)
+		expectedDisplayName, err := buildPasskeyDisplayName(ctx, wallet.CreatedAt)
+		require.NoError(t, err)
+		assert.Equal(t, expectedDisplayName, creation.Response.User.Name)
+		assert.Equal(t, expectedDisplayName, creation.Response.User.DisplayName)
 
 		assert.Equal(t, protocol.ResidentKeyRequirementPreferred, creation.Response.AuthenticatorSelection.ResidentKey)
 		assert.Equal(t, protocol.Platform, creation.Response.AuthenticatorSelection.AuthenticatorAttachment)
