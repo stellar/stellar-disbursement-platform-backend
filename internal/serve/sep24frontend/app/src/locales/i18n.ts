@@ -5,6 +5,7 @@ import locale_en from "@/locales/en/global.json";
 import locale_ua from "@/locales/ua/global.json";
 import locale_es from "@/locales/es/global.json";
 import locale_ru from "@/locales/ru/global.json";
+import locale_ht from "@/locales/ht/global.json";
 
 i18next.use(initReactI18next).init({
   debug: true,
@@ -21,5 +22,8 @@ i18next.use(initReactI18next).init({
     ru: {
       translation: locale_ru,
     },
+    ht: {
+      translation: locale_ht,
+    }
   },
 });
