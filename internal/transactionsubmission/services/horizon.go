@@ -7,14 +7,13 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/avast/retry-go/v4"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -409,7 +408,7 @@ func getAccountDetails(client horizonclient.ClientInterface, accountID string) (
 	return &account, nil
 }
 
-// getAssetID returns asset identifier formatted as CODE:issuer.
+// getAssetID returns asset identifier formatted as code:issuer.
 func getAssetID(code, issuer string) string {
-	return fmt.Sprintf("%s:%s", strings.ToUpper(code), issuer)
+	return fmt.Sprintf("%s:%s", code, issuer)
 }

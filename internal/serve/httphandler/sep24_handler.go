@@ -11,8 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
@@ -123,9 +124,42 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only one of the following parameters should be present:
+	//   - r.URL.Query().Get("external_transaction_id")
+	//   - r.URL.Query().Get("stellar_transaction_id")
+	//   - r.URL.Query().Get("id")
+	// If more than one is present, return a 400 error
+	if r.URL.Query().Get("external_transaction_id") != "" && r.URL.Query().Get("stellar_transaction_id") != "" && r.URL.Query().Get("id") != "" {
+		httperror.BadRequest("Only one of the following parameters should be present: external_transaction_id, stellar_transaction_id, or id", nil, nil).Render(w)
+		return
+	}
+
+	if r.URL.Query().Get("external_transaction_id") != "" {
+		// Implement this when there is a use case for it.
+		httperror.NotFound("Get a transaction by the external transaction ID not supported", nil, nil).Render(w)
+		return
+	}
+
+	if r.URL.Query().Get("stellar_transaction_id") != "" {
+		// Implement this when there is a use case for it.
+		httperror.NotFound("Get a transaction by the stellar transaction ID is not supported", nil, nil).Render(w)
+		return
+	}
+
 	transactionID := r.URL.Query().Get("id")
 	if transactionID == "" {
 		httperror.BadRequest("id parameter is required", nil, nil).Render(w)
+		return
+	}
+
+	// Check if the transaction ID was created as a SEP-24 transaction in the database
+	_, err := h.Models.SEP24Transactions.GetByID(ctx, transactionID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("Transaction not found", nil, nil).Render(w)
+			return
+		}
+		httperror.InternalError(ctx, "Failed to get transaction", err, nil).Render(w)
 		return
 	}
 
@@ -140,6 +174,8 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
+			// The sep10Claims.Subject is the Stellar address. It is either the account of the deposit request or the account of the SEP-10 challenge.
+			transaction["to"] = sep10Claims.Subject
 
 			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusIncomplete)
 			if moreInfoErr != nil {
@@ -251,6 +287,10 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		account = req["account"]
 		lang = req["lang"]
 	} else {
+		if parseErr := r.ParseForm(); parseErr != nil {
+			httperror.BadRequest("Invalid form data", parseErr, nil).Render(w)
+			return
+		}
 		assetCode = r.FormValue("asset_code")
 		account = r.FormValue("account")
 		lang = r.FormValue("lang")
@@ -273,6 +313,19 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	}
 
 	txnID := uuid.New().String()
+
+	// Check if the account is a valid Stellar address
+	if !strkey.IsValidEd25519PublicKey(account) {
+		httperror.BadRequest("Invalid account", nil, nil).Render(w)
+		return
+	}
+
+	// Check if assetCode is defined in the assets table
+	exists, err := h.Models.Assets.ExistsByCodeOrID(ctx, assetCode)
+	if !exists || err != nil {
+		httperror.BadRequest("Asset not found", err, nil).Render(w)
+		return
+	}
 
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24Token(
 		account,
@@ -301,6 +354,17 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		"type": "interactive_customer_info_needed",
 		"url":  interactiveURL,
 		"id":   txnID,
+	}
+
+	// Save the transaction ID to the database
+	_, err = h.Models.SEP24Transactions.Insert(ctx, txnID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordAlreadyExists) {
+			httperror.BadRequest("Transaction ID collision detected. Please try again.", err, nil).Render(w)
+			return
+		}
+		httperror.InternalError(ctx, "Failed to save transaction", err, nil).Render(w)
+		return
 	}
 
 	log.Ctx(ctx).Infof("SEP-24 deposit initiated - ID: %s, Account: %s, Asset: %s, ClientDomain: %s",

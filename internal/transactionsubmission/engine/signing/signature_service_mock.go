@@ -1,7 +1,7 @@
 package signing
 
 import (
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"

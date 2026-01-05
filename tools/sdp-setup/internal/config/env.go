@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,6 +22,8 @@ const (
 	DefaultAdminKey  = "api_key_1234567890"
 	DefaultAdminURL  = "http://localhost:8003"
 	DefaultWorkDir   = "dev"
+	DefaultHTTPSPort = "3443"
+	DefaultHTTPPort  = "3000"
 )
 
 // Config represents the environment configuration for SDP
@@ -36,6 +39,11 @@ type Config struct {
 	DistributionSeed   string // Distribution account secret seed
 	SetupName          string // Optional setup name for multi-config support
 	SingleTenantMode   bool   // Whether to use single-tenant mode
+
+	// Frontend HTTPS settings
+	UseHTTPS         bool
+	FrontendProtocol string // http or https
+	FrontendPort     string // exposed port for the UI (3000/3443)
 
 	// Following config doesn't get written to env file
 	WorkDir       string
@@ -109,6 +117,10 @@ func ListConfigs(devDir string) ([]ConfigRef, error) {
 		}
 		if strings.HasPrefix(name, ".env.") {
 			suffix := strings.TrimPrefix(name, ".env.")
+			// skip the example file.
+			if suffix == "example" {
+				continue
+			}
 			out = append(out, ConfigRef{Name: suffix, Path: filepath.Join(devDir, name)})
 		}
 	}
@@ -121,6 +133,7 @@ type ConfigOpts struct {
 	Network          utils.NetworkType
 	SingleTenantMode bool
 	Accounts         accounts.Info
+	EnableHTTPS      bool
 }
 
 // NewConfig creates a new Config
@@ -130,6 +143,9 @@ func NewConfig(opts ConfigOpts) Config {
 	cfg.SingleTenantMode = opts.SingleTenantMode
 	cfg.EnvFilePath = opts.EnvPath
 	cfg.DockerProject = ComposeProjectName(opts.SetupName)
+	if opts.EnableHTTPS {
+		cfg.EnableHTTPS()
+	}
 	return cfg
 }
 
@@ -159,6 +175,11 @@ func Load(path string) (Config, error) {
 		AdminKey:      DefaultAdminKey,
 		AdminURL:      DefaultAdminURL,
 		WorkDir:       DefaultWorkDir,
+
+		// Frontend defaults
+		UseHTTPS:         false,
+		FrontendProtocol: "http",
+		FrontendPort:     DefaultHTTPPort,
 	}
 
 	// Parse SINGLE_TENANT_MODE
@@ -169,12 +190,36 @@ func Load(path string) (Config, error) {
 		}
 	}
 
+	// Parse USE_HTTPS (optional)
+	if useHTTPS := strings.TrimSpace(envMap["USE_HTTPS"]); useHTTPS != "" {
+		if cfg.UseHTTPS, err = strconv.ParseBool(useHTTPS); err != nil {
+			return Config{}, fmt.Errorf("parsing USE_HTTPS: %w", err)
+		}
+	}
+
+	// Parse SDP_UI_BASE_URL (optional)
+	if base := strings.TrimSpace(envMap["SDP_UI_BASE_URL"]); base != "" {
+		if u, parseErr := url.Parse(base); parseErr == nil && u.Scheme != "" {
+			cfg.FrontendProtocol = u.Scheme
+			if port := u.Port(); port != "" {
+				cfg.FrontendPort = port
+			}
+		}
+	}
+
+	if cfg.UseHTTPS {
+		cfg.EnableHTTPS()
+	} else {
+		cfg.DisableHTTPS()
+	}
+
 	return cfg, nil
 }
 
 // Write writes the environment configuration to a file using godotenv
 func Write(cfg Config, path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	envConfigDir := filepath.Dir(path)
+	if err := os.MkdirAll(envConfigDir, 0o755); err != nil {
 		return fmt.Errorf("creating directory for %s: %w", path, err)
 	}
 
@@ -183,7 +228,8 @@ func Write(cfg Config, path string) error {
 		singleTenantModeStr = "false"
 	}
 
-	envMap := map[string]string{
+	// 1. Start with the configuration values we want to set
+	configMap := map[string]string{
 		"NETWORK_TYPE":                               cfg.NetworkType,
 		"NETWORK_PASSPHRASE":                         cfg.NetworkPassphrase,
 		"HORIZON_URL":                                cfg.HorizonURL,
@@ -197,14 +243,34 @@ func Write(cfg Config, path string) error {
 		"DISTRIBUTION_SEED":                          cfg.DistributionSeed,
 		"CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE":      cfg.DistributionSeed,
 		"DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE": cfg.DistributionSeed,
+		"USE_HTTPS":                                  strconv.FormatBool(cfg.UseHTTPS),
+		"SDP_UI_BASE_URL":                            cfg.FrontendBaseURL("localhost"),
+		"BASE_URL":                                   "http://localhost:8000",
+		"DATABASE_URL":                               fmt.Sprintf("postgres://postgres@db:5432/%s?sslmode=disable", cfg.DatabaseName),
 	}
 
 	if cfg.NetworkType == "pubnet" {
-		envMap["TENANT_XLM_BOOTSTRAP_AMOUNT"] = "1"
-		envMap["NUM_CHANNEL_ACCOUNTS"] = "1"
+		configMap["TENANT_XLM_BOOTSTRAP_AMOUNT"] = "1"
+		configMap["NUM_CHANNEL_ACCOUNTS"] = "1"
 	}
 
-	if err := godotenv.Write(envMap, path); err != nil {
+	// 2. Load .env.example to use as a base
+	examplePath := filepath.Join(envConfigDir, ".env.example")
+
+	finalMap := make(map[string]string)
+
+	if exampleMap, err := godotenv.Read(examplePath); err == nil {
+		finalMap = exampleMap
+	} else {
+		fmt.Printf("Note: Could not load %s, generating minimal config\n", examplePath)
+	}
+
+	// 3. Override with our configuration values
+	for k, v := range configMap {
+		finalMap[k] = v
+	}
+
+	if err := godotenv.Write(finalMap, path); err != nil {
 		return fmt.Errorf("writing env file %s: %w", path, err)
 	}
 
@@ -224,6 +290,10 @@ func fromAccounts(networkType utils.NetworkType, acc accounts.Info) Config {
 		AdminKey:  DefaultAdminKey,
 		AdminURL:  DefaultAdminURL,
 		WorkDir:   DefaultWorkDir,
+
+		UseHTTPS:         false,
+		FrontendProtocol: "http",
+		FrontendPort:     DefaultHTTPPort,
 	}
 
 	switch networkType {
@@ -254,4 +324,33 @@ func ComposeProjectName(setupName string) string {
 		return DefaultProject
 	}
 	return fmt.Sprintf("%s-%s", DefaultProject, setupName)
+}
+
+// EnableHTTPS toggles HTTPS related defaults on the config.
+func (cfg *Config) EnableHTTPS() {
+	cfg.UseHTTPS = true
+	cfg.FrontendProtocol = "https"
+	if cfg.FrontendPort == "" || cfg.FrontendPort == DefaultHTTPPort {
+		cfg.FrontendPort = DefaultHTTPSPort
+	}
+}
+
+// DisableHTTPS forces HTTP defaults on the config.
+func (cfg *Config) DisableHTTPS() {
+	cfg.UseHTTPS = false
+	cfg.FrontendProtocol = "http"
+	cfg.FrontendPort = DefaultHTTPPort
+}
+
+// FrontendBaseURL builds a UI base URL for the provided host (e.g., localhost or bluecorp.stellar.local)
+func (cfg Config) FrontendBaseURL(host string) string {
+	protocol := cfg.FrontendProtocol
+	if protocol == "" {
+		protocol = "http"
+	}
+	port := cfg.FrontendPort
+	if port == "" {
+		port = DefaultHTTPPort
+	}
+	return fmt.Sprintf("%s://%s:%s", protocol, host, port)
 }

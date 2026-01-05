@@ -6,18 +6,18 @@ import (
 	"html/template"
 	"net/url"
 	"path"
-	"slices"
 	"strings"
 	"time"
 
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -329,7 +329,7 @@ type WalletDeepLink struct {
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
 	return wdl.AssetIssuer == "" &&
-		slices.Contains([]string{"XLM", "NATIVE"}, strings.ToUpper(wdl.AssetCode))
+		(wdl.AssetCode == assets.XLMAssetCode || wdl.AssetCode == assets.XLMAssetCodeAlias)
 }
 
 func (wdl WalletDeepLink) assetName() string {

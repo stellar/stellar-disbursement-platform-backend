@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stretchr/testify/mock"
 
 	httpclient "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"

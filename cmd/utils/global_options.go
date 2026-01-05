@@ -17,6 +17,7 @@ type GlobalOptionsType struct {
 	BaseURL           string
 	SDPUIBaseURL      string
 	NetworkPassphrase string
+	EnvFile           string
 }
 
 // PopulateCrashTrackerOptions populates the CrastTrackerOptions from the global options.
