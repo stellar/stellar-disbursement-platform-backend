@@ -31,7 +31,6 @@ type Models struct {
 	BridgeIntegration           *BridgeIntegrationModel
 	URLShortener                *URLShortenerModel
 	APIKeys                     *APIKeyModel
-	SEP24Transactions           *SEP24TransactionModel
 	DBConnectionPool            db.DBConnectionPool
 }
 
@@ -57,7 +56,6 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		BridgeIntegration:           &BridgeIntegrationModel{dbConnectionPool: dbConnectionPool},
 		APIKeys:                     &APIKeyModel{dbConnectionPool: dbConnectionPool},
 		URLShortener:                NewURLShortenerModel(dbConnectionPool),
-		SEP24Transactions:           &SEP24TransactionModel{dbConnectionPool: dbConnectionPool},
 		DBConnectionPool:            dbConnectionPool,
 	}, nil
 }
