@@ -480,7 +480,6 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"receivers",
 		"receivers_audit",
 		"sdp_migrations",
-		"sep24_transactions",
 		"short_urls",
 		"wallets",
 		"wallets_assets",
