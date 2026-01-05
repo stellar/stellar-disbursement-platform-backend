@@ -118,7 +118,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	}
 
 	signers := append(stellarAccounts, hostAccount)
-	err = submitBatchTransactions(ctx, rootAccount, submiterEngine, sponsoredCreateAccountOps, signers, "channel account creation")
+	err = submitTransactionBatchOperations(ctx, rootAccount, submiterEngine, sponsoredCreateAccountOps, signers, "channel account creation")
 	if err != nil {
 		return newAccountAddresses, fmt.Errorf("submitting batch transaction for channel account creation: %w", err)
 	}
@@ -127,7 +127,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	return newAccountAddresses, nil
 }
 
-func submitBatchTransactions(ctx context.Context, rootAccount horizon.Account, submiterEngine engine.SubmitterEngine, operations []txnbuild.Operation, signers []schema.TransactionAccount, operationDescription string) error {
+func submitTransactionBatchOperations(ctx context.Context, rootAccount horizon.Account, submiterEngine engine.SubmitterEngine, operations []txnbuild.Operation, signers []schema.TransactionAccount, operationDescription string) error {
 	ledgerBounds, err := submiterEngine.LedgerNumberTracker.GetLedgerBounds()
 	if err != nil {
 		return fmt.Errorf("failed to get ledger bounds: %w", err)
@@ -213,7 +213,7 @@ func DeleteChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	// merging into the distribution account.
 	// Sign with all channel accounts and the host account
 	signers := append(chAccsToDelete, hostAccount)
-	err = submitBatchTransactions(ctx, rootAccount, submiterEngine, deleteAccountOps, signers, "channel account deletion")
+	err = submitTransactionBatchOperations(ctx, rootAccount, submiterEngine, deleteAccountOps, signers, "channel account deletion")
 	if err != nil {
 		return fmt.Errorf("submitting batch transaction for channel account deletion: %w", err)
 	}
