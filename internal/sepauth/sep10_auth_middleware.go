@@ -29,7 +29,6 @@ func SEP10HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager) func(http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
-
 			authHeader := req.Header.Get("Authorization")
 			if authHeader == "" {
 				httperror.Unauthorized("Missing authorization header", nil, nil).Render(rw)

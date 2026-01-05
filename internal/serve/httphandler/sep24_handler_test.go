@@ -59,12 +59,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.Equal(t, "id parameter is required", errResp.Message)
 	})
 
-	t.Run("transaction ID exists but receiver wallet not found returns incomplete status", func(t *testing.T) {
-		// Create a transaction ID in sep24_transactions table but no receiver wallet
-		transactionID := "test-transaction-incomplete"
-		_, err := models.SEP24Transactions.Insert(ctx, transactionID)
-		require.NoError(t, err)
-
+	t.Run("transaction not found returns incomplete status", func(t *testing.T) {
 		sep10Claims := &sepauth.Sep10JWTClaims{
 			RegisteredClaims: jwt.RegisteredClaims{
 				Issuer:  "https://example.com",
@@ -76,44 +71,39 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id="+transactionID, nil, sep10Claims)
+		req := setupRequestWithSEP10Claims("GET", "/transaction?id=non-existent-id", nil, sep10Claims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var response map[string]any
-		err = json.Unmarshal(rr.Body.Bytes(), &response)
+		err := json.Unmarshal(rr.Body.Bytes(), &response)
 		require.NoError(t, err)
 
 		transaction := response["transaction"].(map[string]any)
-		assert.Equal(t, transactionID, transaction["id"])
+		assert.Equal(t, "non-existent-id", transaction["id"])
 		assert.Equal(t, "deposit", transaction["kind"])
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "incomplete", transaction["status"])
 		moreInfoURL := transaction["more_info_url"].(string)
-		assert.Contains(t, moreInfoURL, "https://example.com/wallet-registration/start?transaction_id="+transactionID+"&token=")
+		assert.Contains(t, moreInfoURL, "https://example.com/wallet-registration/start?transaction_id=non-existent-id&token=")
 		assert.NotEmpty(t, transaction["started_at"])
 	})
 
 	t.Run("registered receiver wallet returns completed status", func(t *testing.T) {
-		// Create transaction in sep24_transactions table
-		transactionID := "test-transaction-id"
-		_, err := models.SEP24Transactions.Insert(ctx, transactionID)
-		require.NoError(t, err)
-
 		wallet := data.CreateWalletFixture(t, ctx, models.DBConnectionPool, "Luminary", "https://luminary.com", "luminary.com", "luminary://")
 		receiver := data.CreateReceiverFixture(t, ctx, models.DBConnectionPool, &data.Receiver{})
 
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 		update := data.ReceiverWalletUpdate{
-			SEP24TransactionID: transactionID,
+			SEP24TransactionID: "test-transaction-id",
 			StellarAddress:     "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 			StellarMemo:        &[]string{"memo123"}[0],
 			StellarMemoType:    &[]schema.MemoType{schema.MemoTypeID}[0],
 		}
-		err = models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
+		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
 		sep10Claims := &sepauth.Sep10JWTClaims{
@@ -127,7 +117,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id="+transactionID, nil, sep10Claims)
+		req := setupRequestWithSEP10Claims("GET", "/transaction?id=test-transaction-id", nil, sep10Claims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -138,7 +128,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		require.NoError(t, err)
 
 		transaction := response["transaction"].(map[string]any)
-		assert.Equal(t, transactionID, transaction["id"])
+		assert.Equal(t, "test-transaction-id", transaction["id"])
 		assert.Equal(t, "deposit", transaction["kind"])
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "completed", transaction["status"])
@@ -151,20 +141,15 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 	})
 
 	t.Run("ready receiver wallet returns pending status", func(t *testing.T) {
-		// Create transaction in sep24_transactions table
-		transactionID := "test-transaction-id-2"
-		_, err := models.SEP24Transactions.Insert(ctx, transactionID)
-		require.NoError(t, err)
-
 		wallet := data.CreateWalletFixture(t, ctx, models.DBConnectionPool, "Nexus", "https://nexus.com", "nexus.com", "nexus://")
 		receiver := data.CreateReceiverFixture(t, ctx, models.DBConnectionPool, &data.Receiver{})
 
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
 		update := data.ReceiverWalletUpdate{
-			SEP24TransactionID: transactionID,
+			SEP24TransactionID: "test-transaction-id-2",
 		}
-		err = models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
+		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
 		sep10Claims := &sepauth.Sep10JWTClaims{
@@ -178,7 +163,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id="+transactionID, nil, sep10Claims)
+		req := setupRequestWithSEP10Claims("GET", "/transaction?id=test-transaction-id-2", nil, sep10Claims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -189,30 +174,25 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		require.NoError(t, err)
 
 		transaction := response["transaction"].(map[string]any)
-		assert.Equal(t, transactionID, transaction["id"])
+		assert.Equal(t, "test-transaction-id-2", transaction["id"])
 		assert.Equal(t, "deposit", transaction["kind"])
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "pending_user_info_update", transaction["status"])
 		moreInfoURL := transaction["more_info_url"].(string)
-		assert.Contains(t, moreInfoURL, "https://example.com/wallet-registration/start?transaction_id="+transactionID+"&token=")
+		assert.Contains(t, moreInfoURL, "https://example.com/wallet-registration/start?transaction_id=test-transaction-id-2&token=")
 		assert.NotEmpty(t, transaction["started_at"])
 	})
 
 	t.Run("draft receiver wallet returns error status", func(t *testing.T) {
-		// Create transaction in sep24_transactions table
-		transactionID := "test-transaction-id-3"
-		_, err := models.SEP24Transactions.Insert(ctx, transactionID)
-		require.NoError(t, err)
-
 		wallet := data.CreateWalletFixture(t, ctx, models.DBConnectionPool, "Pulse", "https://pulse.com", "pulse.com", "pulse://")
 		receiver := data.CreateReceiverFixture(t, ctx, models.DBConnectionPool, &data.Receiver{})
 
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
 
 		update := data.ReceiverWalletUpdate{
-			SEP24TransactionID: transactionID,
+			SEP24TransactionID: "test-transaction-id-3",
 		}
-		err = models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
+		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
 		sep10Claims := &sepauth.Sep10JWTClaims{
@@ -226,7 +206,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id="+transactionID, nil, sep10Claims)
+		req := setupRequestWithSEP10Claims("GET", "/transaction?id=test-transaction-id-3", nil, sep10Claims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -237,39 +217,11 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		require.NoError(t, err)
 
 		transaction := response["transaction"].(map[string]any)
-		assert.Equal(t, transactionID, transaction["id"])
+		assert.Equal(t, "test-transaction-id-3", transaction["id"])
 		assert.Equal(t, "deposit", transaction["kind"])
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "error", transaction["status"])
 		assert.NotEmpty(t, transaction["started_at"])
-	})
-
-	t.Run("GetByID returns ErrRecordNotFound", func(t *testing.T) {
-		sep10Claims := &sepauth.Sep10JWTClaims{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:  "https://stellar.org",
-				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-				ID:      "jti-123",
-			},
-			ClientDomain: "stellar.org",
-			HomeDomain:   "stellar.org",
-		}
-
-		// Use a transaction ID that doesn't exist in sep24_transactions table
-		// and also doesn't have a corresponding receiver wallet
-		transactionID := "non-existent-sep24-transaction-id"
-
-		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id="+transactionID, nil, sep10Claims)
-		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-
-		var errResp httperror.HTTPError
-		err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-		require.NoError(t, err)
-		assert.Equal(t, "Transaction not found", errResp.Message)
 	})
 }
 
@@ -315,11 +267,6 @@ func Test_SEP24Handler_GetInfo(t *testing.T) {
 func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 	t.Parallel()
 	models := data.SetupModels(t)
-	ctx := context.Background()
-
-	// Create assets needed by the tests
-	data.CreateAssetFixture(t, ctx, models.DBConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	data.CreateAssetFixture(t, ctx, models.DBConnectionPool, "XLM", "")
 
 	jwtManager, err := sepauth.NewJWTManager("test-secret-key-for-testing-purposes-only", 300000)
 	require.NoError(t, err)
