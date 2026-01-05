@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/twilio/twilio-go"
 	twilioApi "github.com/twilio/twilio-go/rest/api/v2010"
 
@@ -83,7 +83,6 @@ var messageTemplateConfig = map[MessageType]templateMapping{
 	MessageTypeReceiverOTP: {
 		requiredVars: map[TemplateVariable]string{
 			TemplateVarReceiverOTP: "1",
-			TemplateVarOrgName:     "2",
 		},
 	},
 }
@@ -95,10 +94,11 @@ func formatContentVariables(messageType MessageType, vars map[TemplateVariable]s
 		return "", fmt.Errorf("unsupported message type %s for WhatsApp template variables", messageType)
 	}
 
-	// Validate all required variables are present
-	if len(vars) != len(config.requiredVars) {
-		return "", fmt.Errorf("expected %d template variables for message type %s, got %d",
-			len(config.requiredVars), messageType, len(vars))
+	// Validate all required variables are present (extra variables are allowed and ignored)
+	for templateVar := range config.requiredVars {
+		if _, ok := vars[templateVar]; !ok {
+			return "", fmt.Errorf("missing required template variable %s for message type %s", templateVar, messageType)
+		}
 	}
 
 	// Build content variables map with position mapping

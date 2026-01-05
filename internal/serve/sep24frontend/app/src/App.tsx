@@ -159,6 +159,7 @@ const App: FC = () => {
             <option value="ua">Українська</option>
             <option value="es">Español</option>
             <option value="ru">Русский</option>
+            <option value="ht">Kreyòl Ayisyen</option>
           </Select>
         </Box>
 

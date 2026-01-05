@@ -4,8 +4,8 @@ import (
 	"go/types"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
@@ -65,6 +65,14 @@ func rootCmd() *cobra.Command {
 			ConfigKey:   &globalOptions.SDPUIBaseURL,
 			FlagDefault: "http://localhost:3000",
 			Required:    true,
+		},
+		// env-file flag is already handled in main.go, but it needs to be also defined here because Cobra doesn't allow unknown flags.
+		{
+			Name:      "env-file",
+			Usage:     "Path to environment file to load (e.g., \"dev/.env.https-testnet\"). Supports absolute and relative paths. Defaults to \".env\" if not specified.",
+			OptType:   types.String,
+			ConfigKey: &globalOptions.EnvFile,
+			Required:  false,
 		},
 		cmdUtils.NetworkPassphrase(&globalOptions.NetworkPassphrase),
 	}

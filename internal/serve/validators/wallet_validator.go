@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -288,7 +288,7 @@ func (wv *WalletValidator) inferAssetType(asset AssetReference) AssetReference {
 	// Inference logic for backward compatibility
 	result := asset
 
-	if strings.ToUpper(asset.Code) == assets.XLMAssetCode && asset.Issuer == "" {
+	if (asset.Code == assets.XLMAssetCode || asset.Code == assets.XLMAssetCodeAlias) && asset.Issuer == "" {
 		result.Type = string(AssetReferenceTypeNative)
 		result.Code = ""
 		return result

@@ -11,7 +11,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
-	"github.com/stellar/go/keypair"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"

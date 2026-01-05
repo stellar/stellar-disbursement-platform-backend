@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -112,10 +112,11 @@ func Test_Asset_Equals(t *testing.T) {
 	}{
 		{Asset{Code: "XLM"}, Asset{Code: "XLM"}, true},
 		{Asset{Code: "NATIVE"}, Asset{Code: "XLM"}, true},
-		{Asset{Code: "XLM"}, Asset{Code: "xlm"}, true},
+		{Asset{Code: "NATIVE"}, Asset{Code: "native"}, false},
+		{Asset{Code: "XLM"}, Asset{Code: "xlm"}, false},
 		{Asset{Code: "XLM"}, Asset{Code: "ABC"}, false},
-		{Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
-		{Asset{Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
+		{Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, false},
+		{Asset{Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, true},
 		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer2", Code: "ABC"}, false},
 		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer1", Code: "XYZ"}, false},
 	}
@@ -138,16 +139,16 @@ func Test_Asset_EqualsHorizonAsset(t *testing.T) {
 		expectedResult bool
 	}{
 		{
-			name:           "🟢 native assets",
+			name:           "🟢 XLM alias is equal to native type",
 			localAsset:     Asset{Code: "XLM"},
 			horizonAsset:   base.Asset{Type: "native"},
 			expectedResult: true,
 		},
 		{
-			name:           "🟢 native asset 2",
-			localAsset:     Asset{Code: "NATIVE"},
+			name:           "🔴 xlm alias is not equal to native type",
+			localAsset:     Asset{Code: "xlm"},
 			horizonAsset:   base.Asset{Type: "native"},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			name:           "🟢 issued assets are equal",
@@ -156,31 +157,43 @@ func Test_Asset_EqualsHorizonAsset(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name:           "🟢 issued assets are equal2",
-			localAsset:     Asset{Code: "usdc", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
-			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USdc", Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			name:           "🟢 issued assets with different case in issuer are equal",
+			localAsset:     Asset{Code: "USDC", Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			expectedResult: true,
 		},
 		{
-			name:           "🔴 native asset != issued asset",
-			localAsset:     Asset{Code: "XLM"},
-			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "NATIVE", Issuer: "issuer"},
+			name:           "🔴 issued assets with different case in code are not equal",
+			localAsset:     Asset{Code: "usdc", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USdc", Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			expectedResult: false,
 		},
 		{
-			name:           "🔴 issued asset != native asset",
+			name:           "🟢 NATIVE asset alias is equal to native type",
+			localAsset:     Asset{Code: "NATIVE"},
+			horizonAsset:   base.Asset{Type: "native"},
+			expectedResult: true,
+		},
+		{
+			name:           "🔴 native asset alias is not equal to native type",
+			localAsset:     Asset{Code: "native"},
+			horizonAsset:   base.Asset{Type: "native"},
+			expectedResult: false,
+		},
+		{
+			name:           "🔴 issued asset is not equal to native asset",
 			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			horizonAsset:   base.Asset{Type: "native"},
 			expectedResult: false,
 		},
 		{
-			name:           "🔴 issued asset != issued asset",
+			name:           "🔴 issued asset is not equal to issued asset with different code",
 			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "EUROC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			expectedResult: false,
 		},
 		{
-			name:           "🔴 issued asset != issued asset 2",
+			name:           "🔴 issued asset is not equal to issued asset with different issuer",
 			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: "another-issuer"},
 			expectedResult: false,

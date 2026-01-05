@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 

@@ -635,8 +635,7 @@ func TestWalletValidator_inferAssetType(t *testing.T) {
 				Issuer: "",
 			},
 			expected: AssetReference{
-				Type:   "native",
-				Code:   "",
+				Code:   "xlm",
 				Issuer: "",
 			},
 		},
@@ -693,8 +692,7 @@ func TestWalletValidator_inferAssetType(t *testing.T) {
 				Code: "XLm",
 			},
 			expected: AssetReference{
-				Type: "native",
-				Code: "",
+				Code: "XLm",
 			},
 		},
 	}

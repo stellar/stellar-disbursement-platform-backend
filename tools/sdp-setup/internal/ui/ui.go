@@ -2,7 +2,9 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/manifoldco/promptui"
 )
@@ -12,6 +14,8 @@ type ConfirmationOption string
 const (
 	ConfirmationDefaultNo  ConfirmationOption = "N"
 	ConfirmationDefaultYes ConfirmationOption = "y"
+
+	SIGINT = 130 // Standard exit code for SIGINT
 )
 
 // Confirm prompts the user for a yes/no confirmation with default as No
@@ -35,6 +39,10 @@ func ConfirmWithDefault(label string, option ConfirmationOption) bool {
 
 	res, err := prompt.Run()
 	if err != nil {
+		if errors.Is(err, promptui.ErrInterrupt) {
+			fmt.Println("\nSetup cancelled.")
+			os.Exit(SIGINT)
+		}
 		return false
 	}
 
@@ -59,6 +67,10 @@ func Select(label string, items []string) string {
 
 	_, result, err := sel.Run()
 	if err != nil {
+		if errors.Is(err, promptui.ErrInterrupt) {
+			fmt.Println("\nSetup cancelled.")
+			os.Exit(SIGINT)
+		}
 		return ""
 	}
 
@@ -76,6 +88,10 @@ func Input(label string, validate func(string) error) string {
 	for {
 		res, err := prompt.Run()
 		if err != nil {
+			if errors.Is(err, promptui.ErrInterrupt) {
+				fmt.Println("\nSetup cancelled.")
+				os.Exit(SIGINT)
+			}
 			return ""
 		}
 
