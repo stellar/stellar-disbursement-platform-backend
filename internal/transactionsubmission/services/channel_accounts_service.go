@@ -233,10 +233,6 @@ func (s *ChannelAccountsService) EnsureChannelAccountsCount(ctx context.Context,
 
 	log.Ctx(ctx).Infof("⚙️ Desired Accounts Count: %d", numAccountsToEnsure)
 
-	if numAccountsToEnsure < MinNumberOfChannelAccounts {
-		return fmt.Errorf("count entered %d is less than the minimum channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, MinNumberOfChannelAccounts)
-	}
-
 	if numAccountsToEnsure > MaxNumberOfChannelAccounts {
 		return fmt.Errorf("count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, MaxNumberOfChannelAccounts)
 	}

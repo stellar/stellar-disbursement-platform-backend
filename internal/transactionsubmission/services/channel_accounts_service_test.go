@@ -1032,59 +1032,6 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_ChannelAccounts_EnsureChannelAccountsCount_MinLimit_Failure(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	mHorizonClient := &horizonclient.MockClient{}
-	defer mHorizonClient.AssertExpectations(t)
-	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _ := signing.NewMockSignatureService(t)
-
-	cas := ChannelAccountsService{
-		chAccStore:          mChannelAccountStore,
-		TSSDBConnectionPool: dbConnectionPool,
-		SubmitterEngine: engine.SubmitterEngine{
-			HorizonClient:       mHorizonClient,
-			LedgerNumberTracker: mLedgerNumberTracker,
-			MaxBaseFee:          100,
-			SignatureService:    sigService,
-		},
-	}
-
-	testCases := []struct {
-		name                string
-		numAccountsToEnsure int
-	}{
-		{
-			name:                "zero accounts",
-			numAccountsToEnsure: 0,
-		},
-		{
-			name:                "negative one account",
-			numAccountsToEnsure: -1,
-		},
-		{
-			name:                "negative one thousand accounts",
-			numAccountsToEnsure: -1000,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err = cas.EnsureChannelAccountsCount(ctx, tc.numAccountsToEnsure)
-			require.Error(t, err)
-			require.EqualError(t, err, fmt.Sprintf("count entered %d is less than the minimum channel accounts count limit %d in EnsureChannelAccountsCount", tc.numAccountsToEnsure, MinNumberOfChannelAccounts))
-		})
-	}
-}
-
 func Test_ChannelAccounts_ViewChannelAccounts_Success(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()

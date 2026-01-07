@@ -33,7 +33,8 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/stellar/go-stellar-sdk v0.0.0-20251125023429-4c8c6f69a699
+	github.com/stellar/go v0.0.0-20251210100531-aab2ea4aca88
+	github.com/stellar/go-stellar-sdk v0.1.0
 	github.com/stretchr/testify v1.11.1
 	github.com/twilio/twilio-go v1.29.0
 	golang.org/x/crypto v0.46.0
@@ -58,7 +59,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dgryski/go-farm v0.0.0-20240924180020-3414d57e47da // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
@@ -78,7 +78,6 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/segmentio/go-loggly v0.5.1-0.20171222203950-eb91657e62b2 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
