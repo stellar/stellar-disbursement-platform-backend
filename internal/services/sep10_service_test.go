@@ -38,6 +38,13 @@ func newTestKeypairs() *testKeypairs {
 	}
 }
 
+func newSEP10NonceStore(t *testing.T) NonceStore {
+	t.Helper()
+	store, err := NewInMemoryNonceStore(5*time.Minute, 10)
+	require.NoError(t, err)
+	return store
+}
+
 func createMockHorizonClient(accountID string, thresholds horizon.AccountThresholds, signers []horizon.Signer) *horizonclient.MockClient {
 	mockClient := &horizonclient.MockClient{}
 	account := horizon.Account{
@@ -79,6 +86,7 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
 		}),
 		true,
+		newSEP10NonceStore(t),
 	)
 	if err != nil {
 		return nil, err
@@ -457,6 +465,22 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		assert.NotEmpty(t, validationResp.Token)
 	})
 
+	t.Run("nonce replay", func(t *testing.T) {
+		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		signedTxBase64 := createSignedChallenge(t, service, kps, "stellar.local:8000", "chaos.cadia.com")
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		validationResp, err := service.ValidateChallenge(context.Background(), validationReq)
+		require.NoError(t, err)
+		assert.NotNil(t, validationResp)
+
+		validationResp, err = service.ValidateChallenge(context.Background(), validationReq)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nonce is invalid or expired")
+		assert.Nil(t, validationResp)
+	})
+
 	t.Run("invalid transaction", func(t *testing.T) {
 		req := ValidationRequest{Transaction: "invalid-transaction"}
 		_, err := service.ValidateChallenge(context.Background(), req)
@@ -638,6 +662,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
+			newSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 
@@ -698,6 +723,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
+			newSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 
@@ -822,6 +848,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
+			newSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 
