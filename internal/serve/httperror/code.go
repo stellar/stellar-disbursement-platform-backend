@@ -9,6 +9,8 @@ const (
 	Code400_4 = "400_4" // Max OTP attempts exceeded.
 	Code400_5 = "400_5" // OTP expired.
 	Code400_6 = "400_6" // OTP does not match.
+	Code400_7 = "400_7" // Wallet address does not exist on the Stellar network.
+	Code400_8 = "400_8" // Wallet does not have a trustline for the required asset.
 	Code401_0 = "401_0" // Not authorized.
 	Code500_0 = "500_0" // An internal error occurred while processing this request.
 	Code500_1 = "500_1" // Cannot get organization.

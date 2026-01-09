@@ -700,6 +700,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				NetworkPassphrase:           o.NetworkPassphrase,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				HorizonClient:               o.SubmitterEngine.HorizonClient,
 			}.VerifyReceiverRegistration)
 		})
 

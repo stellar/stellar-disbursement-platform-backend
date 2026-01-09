@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
@@ -42,6 +43,25 @@ func (e *VerificationAttemptsExceededError) Error() string {
 	return e.cause.Error()
 }
 
+// WalletAccountNotFoundError indicates that the wallet address doesn't exist on the Stellar network.
+type WalletAccountNotFoundError struct {
+	Address string
+}
+
+func (e *WalletAccountNotFoundError) Error() string {
+	return fmt.Sprintf("wallet address %s does not exist on the Stellar network", e.Address)
+}
+
+// WalletTrustlineNotFoundError indicates that the wallet doesn't have a trustline for a required asset.
+type WalletTrustlineNotFoundError struct {
+	Address string
+	Asset   data.Asset
+}
+
+func (e *WalletTrustlineNotFoundError) Error() string {
+	return fmt.Sprintf("wallet address %s does not have a trustline for asset %s:%s. Please add a trustline for this asset in your wallet before registering", e.Address, e.Asset.Code, e.Asset.Issuer)
+}
+
 const (
 	OTPExpirationTimeMinutes    = 5
 	OTPMaxAttempts              = 5
@@ -61,6 +81,7 @@ type VerifyReceiverRegistrationHandler struct {
 	NetworkPassphrase           string
 	CrashTrackerClient          crashtracker.CrashTrackerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
+	HorizonClient               horizonclient.ClientInterface
 }
 
 // validate validates the request [header, body, body.reCAPTCHA_token], and returns the decoded payload, or an http error.
@@ -233,6 +254,12 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 		}
 	}
 
+	// STEP 4.5: Validate wallet account and trustlines before marking as registered
+	walletAddress := sep24Claims.SEP10StellarAccount()
+	if err := v.validateReceiverWallet(ctx, walletAddress, rw); err != nil {
+		return receiverWallet, false, err
+	}
+
 	// STEP 5: update receiver wallet status to "REGISTERED"
 	now := time.Now()
 	rw.OTPConfirmedAt = &now
@@ -258,6 +285,127 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	}
 
 	return *rw, false, nil
+}
+
+// validateWalletAccount checks if the wallet address exists on the Stellar network.
+func (v VerifyReceiverRegistrationHandler) validateWalletAccount(ctx context.Context, walletAddress string) error {
+	if v.HorizonClient == nil {
+		// If HorizonClient is not available, skip validation (for backwards compatibility)
+		log.Ctx(ctx).Warn("HorizonClient not available, skipping wallet account validation")
+		return nil
+	}
+
+	_, err := v.HorizonClient.AccountDetail(horizonclient.AccountRequest{
+		AccountID: walletAddress,
+	})
+	if err != nil {
+		var horizonErr *horizonclient.Error
+		if errors.As(err, &horizonErr) {
+			if horizonErr.Response.StatusCode == 404 {
+				return &WalletAccountNotFoundError{Address: walletAddress}
+			}
+		}
+		// For other Horizon errors, log but don't fail registration
+		// The payment will fail later if there's a real issue
+		log.Ctx(ctx).Warnf("error checking wallet account %s: %v", walletAddress, err)
+		return nil
+	}
+
+	return nil
+}
+
+// validateWalletTrustlines checks if the wallet has trustlines for all required assets.
+func (v VerifyReceiverRegistrationHandler) validateWalletTrustlines(ctx context.Context, walletAddress string, assets []data.Asset) error {
+	if v.HorizonClient == nil {
+		// If HorizonClient is not available, skip validation (for backwards compatibility)
+		log.Ctx(ctx).Warn("HorizonClient not available, skipping wallet trustline validation")
+		return nil
+	}
+
+	if len(assets) == 0 {
+		// No assets to validate
+		return nil
+	}
+
+	acc, err := v.HorizonClient.AccountDetail(horizonclient.AccountRequest{
+		AccountID: walletAddress,
+	})
+	if err != nil {
+		var horizonErr *horizonclient.Error
+		if errors.As(err, &horizonErr) {
+			if horizonErr.Response.StatusCode == 404 {
+				return &WalletAccountNotFoundError{Address: walletAddress}
+			}
+		}
+		// For other Horizon errors, log but don't fail registration
+		log.Ctx(ctx).Warnf("error checking wallet account %s for trustlines: %v", walletAddress, err)
+		return nil
+	}
+
+	// Build a map of existing trustlines for quick lookup
+	trustlines := make(map[string]bool)
+	for _, balance := range acc.Balances {
+		if balance.Asset.Type == validators.AssetTypeNative {
+			continue
+		}
+		key := fmt.Sprintf("%s:%s", balance.Asset.Code, balance.Asset.Issuer)
+		trustlines[key] = true
+	}
+
+	// Check each required asset
+	for _, asset := range assets {
+		if asset.IsNative() {
+			// Native asset (XLM) doesn't need a trustline
+			continue
+		}
+
+		key := fmt.Sprintf("%s:%s", asset.Code, asset.Issuer)
+		if !trustlines[key] {
+			return &WalletTrustlineNotFoundError{
+				Address: walletAddress,
+				Asset:   asset,
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateReceiverWallet validates the receiver's wallet address and trustlines before registration.
+func (v VerifyReceiverRegistrationHandler) validateReceiverWallet(ctx context.Context, walletAddress string, receiverWallet *data.ReceiverWallet) error {
+	// STEP 1: Validate wallet account exists
+	if err := v.validateWalletAccount(ctx, walletAddress); err != nil {
+		return err
+	}
+
+	// STEP 2: Get assets associated with this receiver wallet from pending payments
+	// GetAssetsPerReceiverWallet expects a slice of *ReceiverWallet
+	receiverWalletsAssets, err := v.Models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallet)
+	if err != nil {
+		// If we can't get assets, log but don't fail registration
+		// The payment will fail later if there's a real issue
+		log.Ctx(ctx).Warnf("error getting assets for receiver wallet %s: %v", receiverWallet.ID, err)
+		return nil
+	}
+
+	// Extract unique assets
+	assetMap := make(map[string]data.Asset)
+	for _, rwa := range receiverWalletsAssets {
+		key := fmt.Sprintf("%s:%s", rwa.Asset.Code, rwa.Asset.Issuer)
+		assetMap[key] = rwa.Asset
+	}
+
+	assets := make([]data.Asset, 0, len(assetMap))
+	for _, asset := range assetMap {
+		assets = append(assets, asset)
+	}
+
+	// STEP 3: Validate trustlines for all required assets
+	if err := v.validateWalletTrustlines(ctx, walletAddress, assets); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // processTransactionID patches the receiver wallet with the SEP-24 transaction ID.
@@ -315,7 +463,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 		receiver := receivers[0]
 
-		// STEP 3: process OTP
+		// STEP 3: process OTP (includes wallet validation before marking as registered)
 		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
 		if err != nil {
 			return fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, err)
@@ -343,6 +491,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		// to the user
 		var verficationAttemptsExceededErr *VerificationAttemptsExceededError
 
+		var walletAccountNotFoundErr *WalletAccountNotFoundError
+		var walletTrustlineNotFoundErr *WalletTrustlineNotFoundError
+
 		switch {
 		case errors.Is(err, ErrOTPMaxAttemptsExceeded):
 			httperror.BadRequest("Maximum OTP verification attempts exceeded. Please request a new OTP.", err, nil).
@@ -357,6 +508,18 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		case errors.Is(err, ErrOTPDoesNotMatch):
 			httperror.BadRequest("Invalid OTP. Please check and try again.", err, nil).
 				WithErrorCode(httperror.Code400_6).
+				Render(w)
+			return
+		case errors.As(err, &walletAccountNotFoundErr):
+			log.Ctx(ctx).Error(walletAccountNotFoundErr)
+			httperror.BadRequest("Your wallet address does not exist on the Stellar network. Please ensure you're using a valid Stellar wallet address.", err, nil).
+				WithErrorCode(httperror.Code400_7).
+				Render(w)
+			return
+		case errors.As(err, &walletTrustlineNotFoundErr):
+			log.Ctx(ctx).Error(walletTrustlineNotFoundErr)
+			httperror.BadRequest(walletTrustlineNotFoundErr.Error(), err, nil).
+				WithErrorCode(httperror.Code400_8).
 				Render(w)
 			return
 		case errors.As(err, &infoNotFoundErr):
