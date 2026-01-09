@@ -1571,6 +1571,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	ctx = sdpcontext.SetTokenInContext(ctx, token)
 	userID := "valid-user-id"
+	ctx = sdpcontext.SetUserIDInContext(ctx, userID)
 	user := &auth.User{
 		ID:    userID,
 		Email: "email@email.com",
@@ -1647,7 +1648,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("cannot get distribution account", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1673,7 +1674,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1705,7 +1706,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		})
 
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1752,8 +1753,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Email: "approver@mail.org",
 		}
 
+		// Create a context with the approver's userID for this test
+		approverCtx := sdpcontext.SetUserIDInContext(ctx, approverUser.ID)
+
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, approverUser.ID).
 			Return(approverUser, nil).
 			Once()
 
@@ -1768,7 +1772,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+		req, err := http.NewRequestWithContext(approverCtx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1780,7 +1784,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement started - then paused", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Twice()
 
@@ -1845,7 +1849,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement can't be paused", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1864,7 +1868,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement status can't be changed", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1883,7 +1887,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1904,6 +1908,122 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		require.Equal(t, http.StatusNotFound, rr.Code)
 		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotFound.Error())
+	})
+
+	t.Run("works with JWT authentication (token and user ID in context)", func(t *testing.T) {
+		// Simulate JWT authentication: both token and user ID in context
+		jwtToken := "jwt-token-123"
+		// Reuse the tenant from the main context instead of creating a new one
+		existingTenant, err := sdpcontext.GetTenantFromContext(ctx)
+		require.NoError(t, err)
+		jwtCtx := sdpcontext.SetTenantInContext(context.Background(), existingTenant)
+		jwtCtx = sdpcontext.SetTokenInContext(jwtCtx, jwtToken)
+		jwtCtx = sdpcontext.SetUserIDInContext(jwtCtx, userID)
+		// Note: JWT auth sets both token and user ID, but handler uses GetUserByID
+
+		// Mock GetUserByID (handler uses this for both JWT and API key auth)
+		authManagerMock.
+			On("GetUserByID", mock.Anything, userID).
+			Return(user, nil).
+			Once()
+
+		mockDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(distAcc, nil).
+			Once()
+
+		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
+			Return(decimal.NewFromFloat(10000.0), nil).Once()
+
+		readyDisbursement := data.CreateDisbursementFixture(t, jwtCtx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+			Name:          "ready disbursement with JWT",
+			Status:        data.ReadyDisbursementStatus,
+			StatusHistory: readyStatusHistory,
+		})
+		wallet := data.CreateDefaultWalletFixture(t, jwtCtx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, jwtCtx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, jwtCtx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		data.CreatePaymentFixture(t, jwtCtx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   readyDisbursement,
+			Asset:          *asset,
+			Amount:         "300",
+			Status:         data.DraftPaymentStatus,
+		})
+
+		err = json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(jwtCtx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Contains(t, rr.Body.String(), "Disbursement started")
+
+		// Verify disbursement status was updated
+		disbursement, err := handler.Models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
+		require.NoError(t, err)
+		require.Equal(t, data.StartedDisbursementStatus, disbursement.Status)
+	})
+
+	t.Run("works with API key authentication (no token in context)", func(t *testing.T) {
+		// Simulate API key authentication: user ID in context but no token
+		// Reuse the tenant from the main context instead of creating a new one
+		existingTenant, err := sdpcontext.GetTenantFromContext(ctx)
+		require.NoError(t, err)
+		apiKeyCtx := sdpcontext.SetTenantInContext(context.Background(), existingTenant)
+		apiKeyCtx = sdpcontext.SetUserIDInContext(apiKeyCtx, userID)
+		// Note: NOT setting token in context, simulating API key auth
+
+		// Mock GetUserByID instead of GetUser
+		authManagerMock.
+			On("GetUserByID", mock.Anything, userID).
+			Return(user, nil).
+			Once()
+
+		mockDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(distAcc, nil).
+			Once()
+
+		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
+			Return(decimal.NewFromFloat(10000.0), nil).Once()
+
+		readyDisbursement := data.CreateDisbursementFixture(t, apiKeyCtx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+			Name:          "ready disbursement with API key",
+			Status:        data.ReadyDisbursementStatus,
+			StatusHistory: readyStatusHistory,
+		})
+		wallet := data.CreateDefaultWalletFixture(t, apiKeyCtx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, apiKeyCtx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, apiKeyCtx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		data.CreatePaymentFixture(t, apiKeyCtx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   readyDisbursement,
+			Asset:          *asset,
+			Amount:         "300",
+			Status:         data.DraftPaymentStatus,
+		})
+
+		err = json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(apiKeyCtx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Contains(t, rr.Body.String(), "Disbursement started")
+
+		// Verify disbursement status was updated
+		disbursement, err := handler.Models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
+		require.NoError(t, err)
+		require.Equal(t, data.StartedDisbursementStatus, disbursement.Status)
 	})
 
 	authManagerMock.AssertExpectations(t)
