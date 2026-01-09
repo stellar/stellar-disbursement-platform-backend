@@ -15,7 +15,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -1403,4 +1406,778 @@ func Test_verifyReceiverWalletOTP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_VerifyReceiverRegistrationHandler_validateWalletAccount(t *testing.T) {
+	ctx := context.Background()
+	walletAddress := "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
+
+	testCases := []struct {
+		name          string
+		horizonClient horizonclient.ClientInterface
+		wantErr       error
+	}{
+		{
+			name:          "returns nil when HorizonClient is nil (backwards compatibility)",
+			horizonClient: nil,
+			wantErr:       nil,
+		},
+		{
+			name: "returns WalletAccountNotFoundError when account doesn't exist (404)",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{}, &horizonclient.Error{
+					Response: &http.Response{
+						StatusCode: 404,
+					},
+				}).Once()
+				return mockClient
+			}(),
+			wantErr: &WalletAccountNotFoundError{Address: walletAddress},
+		},
+		{
+			name: "returns nil when account exists",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{
+					AccountID: walletAddress,
+				}, nil).Once()
+				return mockClient
+			}(),
+			wantErr: nil,
+		},
+		{
+			name: "returns nil and logs warning for other Horizon errors",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{}, errors.New("network error")).Once()
+				return mockClient
+			}(),
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &VerifyReceiverRegistrationHandler{
+				HorizonClient: tc.horizonClient,
+			}
+
+			err := handler.validateWalletAccount(ctx, walletAddress)
+
+			if tc.wantErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.IsType(t, tc.wantErr, err)
+				if walletErr, ok := err.(*WalletAccountNotFoundError); ok {
+					assert.Equal(t, walletAddress, walletErr.Address)
+				}
+			}
+
+			if mockClient, ok := tc.horizonClient.(*horizonclient.MockClient); ok {
+				mockClient.AssertExpectations(t)
+			}
+		})
+	}
+}
+
+func Test_VerifyReceiverRegistrationHandler_validateWalletTrustlines(t *testing.T) {
+	ctx := context.Background()
+	walletAddress := "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
+	usdcAsset := data.Asset{
+		Code:   "USDC",
+		Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+	}
+	eurAsset := data.Asset{
+		Code:   "EURT",
+		Issuer: "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU",
+	}
+	nativeAsset := data.Asset{
+		Code:   "XLM",
+		Issuer: "",
+	}
+
+	testCases := []struct {
+		name          string
+		horizonClient horizonclient.ClientInterface
+		assets        []data.Asset
+		wantErr       error
+	}{
+		{
+			name:          "returns nil when HorizonClient is nil (backwards compatibility)",
+			horizonClient: nil,
+			assets:        []data.Asset{usdcAsset},
+			wantErr:       nil,
+		},
+		{
+			name: "returns WalletAccountNotFoundError when account doesn't exist",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{}, &horizonclient.Error{
+					Response: &http.Response{
+						StatusCode: 404,
+					},
+				}).Once()
+				return mockClient
+			}(),
+			assets:  []data.Asset{usdcAsset},
+			wantErr: &WalletAccountNotFoundError{Address: walletAddress},
+		},
+		{
+			name: "returns WalletTrustlineNotFoundError when trustline is missing",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{
+					AccountID: walletAddress,
+					Balances: []horizon.Balance{
+						{
+							Asset: base.Asset{
+								Type: "native",
+							},
+							Balance: "100.0000000",
+						},
+					},
+				}, nil).Once()
+				return mockClient
+			}(),
+			assets: []data.Asset{usdcAsset},
+			wantErr: &WalletTrustlineNotFoundError{
+				Address: walletAddress,
+				Asset:   usdcAsset,
+			},
+		},
+		{
+			name: "returns nil when all trustlines exist",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{
+					AccountID: walletAddress,
+					Balances: []horizon.Balance{
+						{
+							Asset: base.Asset{
+								Type: "native",
+							},
+							Balance: "100.0000000",
+						},
+						{
+							Asset: base.Asset{
+								Type:   "credit_alphanum4",
+								Code:   "USDC",
+								Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+							},
+							Balance: "50.0000000",
+						},
+						{
+							Asset: base.Asset{
+								Type:   "credit_alphanum4",
+								Code:   "EURT",
+								Issuer: "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU",
+							},
+							Balance: "25.0000000",
+						},
+					},
+				}, nil).Once()
+				return mockClient
+			}(),
+			assets:  []data.Asset{usdcAsset, eurAsset},
+			wantErr: nil,
+		},
+		{
+			name: "skips native asset validation",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{
+					AccountID: walletAddress,
+					Balances: []horizon.Balance{
+						{
+							Asset: base.Asset{
+								Type: "native",
+							},
+							Balance: "100.0000000",
+						},
+					},
+				}, nil).Once()
+				return mockClient
+			}(),
+			assets:  []data.Asset{nativeAsset},
+			wantErr: nil,
+		},
+		{
+			name: "returns nil when assets list is empty",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{
+					AccountID: walletAddress,
+				}, nil).Once()
+				return mockClient
+			}(),
+			assets:  []data.Asset{},
+			wantErr: nil,
+		},
+		{
+			name: "returns nil and logs warning for other Horizon errors",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{}, errors.New("network error")).Once()
+				return mockClient
+			}(),
+			assets:  []data.Asset{usdcAsset},
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := &VerifyReceiverRegistrationHandler{
+				HorizonClient: tc.horizonClient,
+			}
+
+			err := handler.validateWalletTrustlines(ctx, walletAddress, tc.assets)
+
+			if tc.wantErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.IsType(t, tc.wantErr, err)
+				if trustlineErr, ok := err.(*WalletTrustlineNotFoundError); ok {
+					assert.Equal(t, walletAddress, trustlineErr.Address)
+					assert.Equal(t, tc.assets[0].Code, trustlineErr.Asset.Code)
+					assert.Equal(t, tc.assets[0].Issuer, trustlineErr.Asset.Issuer)
+				}
+			}
+
+			if mockClient, ok := tc.horizonClient.(*horizonclient.MockClient); ok {
+				mockClient.AssertExpectations(t)
+			}
+		})
+	}
+}
+
+func Test_VerifyReceiverRegistrationHandler_validateReceiverWallet(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	walletAddress := "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
+	usdcAsset := data.Asset{
+		Code:   "USDC",
+		Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+	}
+
+	testCases := []struct {
+		name          string
+		horizonClient horizonclient.ClientInterface
+		setupDB       func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, models *data.Models) *data.ReceiverWallet
+		wantErr       error
+	}{
+		{
+			name:          "returns nil when HorizonClient is nil (backwards compatibility)",
+			horizonClient: nil,
+			setupDB: func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, models *data.Models) *data.ReceiverWallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
+				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+				return receiverWallet
+			},
+			wantErr: nil,
+		},
+		{
+			name: "returns WalletAccountNotFoundError when account doesn't exist",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{}, &horizonclient.Error{
+					Response: &http.Response{
+						StatusCode: 404,
+					},
+				}).Once()
+				return mockClient
+			}(),
+			setupDB: func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, models *data.Models) *data.ReceiverWallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
+				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+				return receiverWallet
+			},
+			wantErr: &WalletAccountNotFoundError{Address: walletAddress},
+		},
+		{
+			name: "returns WalletTrustlineNotFoundError when trustline is missing",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{
+					AccountID: walletAddress,
+					Balances: []horizon.Balance{
+						{
+							Asset: base.Asset{
+								Type: "native",
+							},
+							Balance: "100.0000000",
+						},
+					},
+				}, nil).Once()
+				return mockClient
+			}(),
+			setupDB: func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, models *data.Models) *data.ReceiverWallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
+				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+				asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, usdcAsset.Code, usdcAsset.Issuer)
+				disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+					Wallet: wallet,
+					Asset:  asset,
+					Status: data.StartedDisbursementStatus,
+				})
+				data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+					Amount:         "100",
+					Status:         data.ReadyPaymentStatus,
+					Disbursement:   disbursement,
+					Asset:          *asset,
+					ReceiverWallet: receiverWallet,
+				})
+				return receiverWallet
+			},
+			wantErr: &WalletTrustlineNotFoundError{
+				Address: walletAddress,
+				Asset:   usdcAsset,
+			},
+		},
+		{
+			name: "returns nil when validation passes",
+			horizonClient: func() horizonclient.ClientInterface {
+				mockClient := &horizonclient.MockClient{}
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(horizon.Account{
+					AccountID: walletAddress,
+					Balances: []horizon.Balance{
+						{
+							Asset: base.Asset{
+								Type: "native",
+							},
+							Balance: "100.0000000",
+						},
+						{
+							Asset: base.Asset{
+								Type:   "credit_alphanum4",
+								Code:   "USDC",
+								Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+							},
+							Balance: "50.0000000",
+						},
+					},
+				}, nil).Once()
+				return mockClient
+			}(),
+			setupDB: func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, models *data.Models) *data.ReceiverWallet {
+				wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
+				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+				asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, usdcAsset.Code, usdcAsset.Issuer)
+				disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+					Wallet: wallet,
+					Asset:  asset,
+					Status: data.StartedDisbursementStatus,
+				})
+				data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+					Amount:         "100",
+					Status:         data.ReadyPaymentStatus,
+					Disbursement:   disbursement,
+					Asset:          *asset,
+					ReceiverWallet: receiverWallet,
+				})
+				return receiverWallet
+			},
+			wantErr: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(func() {
+				data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+			})
+
+			receiverWallet := tc.setupDB(t, ctx, dbConnectionPool, models)
+
+			handler := &VerifyReceiverRegistrationHandler{
+				Models:        models,
+				HorizonClient: tc.horizonClient,
+			}
+
+			err := handler.validateReceiverWallet(ctx, walletAddress, receiverWallet)
+
+			if tc.wantErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.IsType(t, tc.wantErr, err)
+			}
+
+			if mockClient, ok := tc.horizonClient.(*horizonclient.MockClient); ok {
+				mockClient.AssertExpectations(t)
+			}
+		})
+	}
+}
+
+func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletValidation(t *testing.T) {
+	ctx := context.Background()
+	models := data.SetupModels(t)
+	dbConnectionPool := models.DBConnectionPool
+
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	walletAddress := "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
+	validClaims := &sepauth.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   walletAddress,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+
+	phoneNumber := "+380445555555"
+	receiverRegistrationRequest := data.ReceiverRegistrationRequest{
+		PhoneNumber:       phoneNumber,
+		OTP:               "123456",
+		VerificationValue: "1990-01-01",
+		VerificationField: "date_of_birth",
+		ReCAPTCHAToken:    "token",
+	}
+	reqBody, err := json.Marshal(receiverRegistrationRequest)
+	require.NoError(t, err)
+
+	usdcAsset := data.Asset{
+		Code:   "USDC",
+		Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+	}
+
+	r := chi.NewRouter()
+
+	t.Run("returns error when wallet account doesn't exist", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		})
+
+		// Setup database
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, phoneNumber, wallet.SEP10ClientDomain, "123456")
+		require.NoError(t, err)
+
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, usdcAsset.Code, usdcAsset.Issuer)
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.StartedDisbursementStatus,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+		})
+
+		// Mock Horizon client
+		horizonClientMock := &horizonclient.MockClient{}
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: walletAddress,
+		}).Return(horizon.Account{}, &horizonclient.Error{
+			Response: &http.Response{
+				StatusCode: 404,
+			},
+		}).Once()
+
+		// Mocks
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+
+		// Create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:                      models,
+			ReCAPTCHAValidator:          reCAPTCHAValidator,
+			HorizonClient:               horizonClientMock,
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			DistributionAccountResolver: distAccountResolverMock,
+		}
+
+		// Setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// Validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := `{"error": "Your wallet address does not exist on the Stellar network. Please ensure you're using a valid Stellar wallet address.", "error_code": "400_7"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// Verify wallet was not registered
+		var status string
+		err = dbConnectionPool.GetContext(ctx, &status, "SELECT status FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.ReadyReceiversWalletStatus, status)
+
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("returns error when wallet doesn't have required trustline", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		})
+
+		// Setup database
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, phoneNumber, wallet.SEP10ClientDomain, "123456")
+		require.NoError(t, err)
+
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, usdcAsset.Code, usdcAsset.Issuer)
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.StartedDisbursementStatus,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+		})
+
+		// Mock Horizon client - account exists but no USDC trustline
+		horizonClientMock := &horizonclient.MockClient{}
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: walletAddress,
+		}).Return(horizon.Account{
+			AccountID: walletAddress,
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+			},
+		}, nil).Once()
+
+		// Mocks
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+
+		// Create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:                      models,
+			ReCAPTCHAValidator:          reCAPTCHAValidator,
+			HorizonClient:               horizonClientMock,
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			DistributionAccountResolver: distAccountResolverMock,
+		}
+
+		// Setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// Validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		expectedError := fmt.Sprintf("wallet address %s does not have a trustline for asset %s:%s. Please add a trustline for this asset in your wallet before registering", walletAddress, usdcAsset.Code, usdcAsset.Issuer)
+		wantBody := fmt.Sprintf(`{"error": %q, "error_code": "400_8"}`, expectedError)
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// Verify wallet was not registered
+		var status string
+		err = dbConnectionPool.GetContext(ctx, &status, "SELECT status FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.ReadyReceiversWalletStatus, status)
+
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("successfully registers when wallet validation passes", func(t *testing.T) {
+		t.Cleanup(func() {
+			data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+			data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		})
+
+		// Setup database
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, phoneNumber, wallet.SEP10ClientDomain, "123456")
+		require.NoError(t, err)
+
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, usdcAsset.Code, usdcAsset.Issuer)
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet: wallet,
+			Asset:  asset,
+			Status: data.StartedDisbursementStatus,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+		})
+
+		// Mock Horizon client - account exists with USDC trustline
+		horizonClientMock := &horizonclient.MockClient{}
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: walletAddress,
+		}).Return(horizon.Account{
+			AccountID: walletAddress,
+			Balances: []horizon.Balance{
+				{
+					Asset: base.Asset{
+						Type: "native",
+					},
+					Balance: "100.0000000",
+				},
+				{
+					Asset: base.Asset{
+						Type:   "credit_alphanum4",
+						Code:   "USDC",
+						Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+					},
+					Balance: "50.0000000",
+				},
+			},
+		}, nil).Once()
+
+		// Mocks
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		mockCrashTracker := &crashtracker.MockCrashTrackerClient{}
+		defer mockCrashTracker.AssertExpectations(t)
+
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Maybe()
+
+		// Create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:                      models,
+			ReCAPTCHAValidator:          reCAPTCHAValidator,
+			HorizonClient:               horizonClientMock,
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			CrashTrackerClient:          mockCrashTracker,
+			DistributionAccountResolver: distAccountResolverMock,
+		}
+
+		// Setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// Validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		wantBody := `{"message": "ok"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// Verify wallet was registered
+		var status string
+		err = dbConnectionPool.GetContext(ctx, &status, "SELECT status FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, data.RegisteredReceiversWalletStatus, status)
+
+		horizonClientMock.AssertExpectations(t)
+	})
 }
