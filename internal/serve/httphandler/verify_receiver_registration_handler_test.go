@@ -1476,7 +1476,8 @@ func Test_VerifyReceiverRegistrationHandler_validateWalletAccount(t *testing.T) 
 			} else {
 				assert.Error(t, err)
 				assert.IsType(t, tc.wantErr, err)
-				if walletErr, ok := err.(*WalletAccountNotFoundError); ok {
+				var walletErr *WalletAccountNotFoundError
+				if errors.As(err, &walletErr) {
 					assert.Equal(t, walletAddress, walletErr.Address)
 				}
 			}
@@ -1658,7 +1659,8 @@ func Test_VerifyReceiverRegistrationHandler_validateWalletTrustlines(t *testing.
 			} else {
 				assert.Error(t, err)
 				assert.IsType(t, tc.wantErr, err)
-				if trustlineErr, ok := err.(*WalletTrustlineNotFoundError); ok {
+				var trustlineErr *WalletTrustlineNotFoundError
+				if errors.As(err, &trustlineErr) {
 					assert.Equal(t, walletAddress, trustlineErr.Address)
 					assert.Equal(t, tc.assets[0].Code, trustlineErr.Asset.Code)
 					assert.Equal(t, tc.assets[0].Issuer, trustlineErr.Asset.Issuer)
