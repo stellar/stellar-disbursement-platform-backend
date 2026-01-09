@@ -1621,12 +1621,8 @@ func Test_VerifyReceiverRegistrationHandler_validateWalletTrustlines(t *testing.
 		{
 			name: "returns nil when assets list is empty",
 			horizonClient: func() horizonclient.ClientInterface {
+				// No mock expectation needed - function returns early when assets list is empty
 				mockClient := &horizonclient.MockClient{}
-				mockClient.On("AccountDetail", horizonclient.AccountRequest{
-					AccountID: walletAddress,
-				}).Return(horizon.Account{
-					AccountID: walletAddress,
-				}, nil).Once()
 				return mockClient
 			}(),
 			assets:  []data.Asset{},
@@ -1733,9 +1729,7 @@ func Test_VerifyReceiverRegistrationHandler_validateReceiverWallet(t *testing.T)
 			name: "returns WalletTrustlineNotFoundError when trustline is missing",
 			horizonClient: func() horizonclient.ClientInterface {
 				mockClient := &horizonclient.MockClient{}
-				mockClient.On("AccountDetail", horizonclient.AccountRequest{
-					AccountID: walletAddress,
-				}).Return(horizon.Account{
+				accountWithoutTrustline := horizon.Account{
 					AccountID: walletAddress,
 					Balances: []horizon.Balance{
 						{
@@ -1745,7 +1739,15 @@ func Test_VerifyReceiverRegistrationHandler_validateReceiverWallet(t *testing.T)
 							Balance: "100.0000000",
 						},
 					},
-				}, nil).Once()
+				}
+				// First call from validateWalletAccount
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(accountWithoutTrustline, nil).Once()
+				// Second call from validateWalletTrustlines
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(accountWithoutTrustline, nil).Once()
 				return mockClient
 			}(),
 			setupDB: func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, models *data.Models) *data.ReceiverWallet {
@@ -1776,9 +1778,7 @@ func Test_VerifyReceiverRegistrationHandler_validateReceiverWallet(t *testing.T)
 			name: "returns nil when validation passes",
 			horizonClient: func() horizonclient.ClientInterface {
 				mockClient := &horizonclient.MockClient{}
-				mockClient.On("AccountDetail", horizonclient.AccountRequest{
-					AccountID: walletAddress,
-				}).Return(horizon.Account{
+				accountWithTrustline := horizon.Account{
 					AccountID: walletAddress,
 					Balances: []horizon.Balance{
 						{
@@ -1796,7 +1796,15 @@ func Test_VerifyReceiverRegistrationHandler_validateReceiverWallet(t *testing.T)
 							Balance: "50.0000000",
 						},
 					},
-				}, nil).Once()
+				}
+				// First call from validateWalletAccount
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(accountWithTrustline, nil).Once()
+				// Second call from validateWalletTrustlines
+				mockClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: walletAddress,
+				}).Return(accountWithTrustline, nil).Once()
 				return mockClient
 			}(),
 			setupDB: func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, models *data.Models) *data.ReceiverWallet {
@@ -1973,7 +1981,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletVal
 		var status string
 		err = dbConnectionPool.GetContext(ctx, &status, "SELECT status FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
 		require.NoError(t, err)
-		assert.Equal(t, data.ReadyReceiversWalletStatus, status)
+		assert.Equal(t, string(data.ReadyReceiversWalletStatus), status)
 
 		horizonClientMock.AssertExpectations(t)
 	})
@@ -2014,10 +2022,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletVal
 		})
 
 		// Mock Horizon client - account exists but no USDC trustline
-		horizonClientMock := &horizonclient.MockClient{}
-		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
-			AccountID: walletAddress,
-		}).Return(horizon.Account{
+		accountWithoutTrustline := horizon.Account{
 			AccountID: walletAddress,
 			Balances: []horizon.Balance{
 				{
@@ -2027,7 +2032,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletVal
 					Balance: "100.0000000",
 				},
 			},
-		}, nil).Once()
+		}
+		horizonClientMock := &horizonclient.MockClient{}
+		// First call from validateWalletAccount
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: walletAddress,
+		}).Return(accountWithoutTrustline, nil).Once()
+		// Second call from validateWalletTrustlines
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: walletAddress,
+		}).Return(accountWithoutTrustline, nil).Once()
 
 		// Mocks
 		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
@@ -2068,7 +2082,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletVal
 		var status string
 		err = dbConnectionPool.GetContext(ctx, &status, "SELECT status FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
 		require.NoError(t, err)
-		assert.Equal(t, data.ReadyReceiversWalletStatus, status)
+		assert.Equal(t, string(data.ReadyReceiversWalletStatus), status)
 
 		horizonClientMock.AssertExpectations(t)
 	})
@@ -2109,10 +2123,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletVal
 		})
 
 		// Mock Horizon client - account exists with USDC trustline
-		horizonClientMock := &horizonclient.MockClient{}
-		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
-			AccountID: walletAddress,
-		}).Return(horizon.Account{
+		accountWithTrustline := horizon.Account{
 			AccountID: walletAddress,
 			Balances: []horizon.Balance{
 				{
@@ -2130,7 +2141,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletVal
 					Balance: "50.0000000",
 				},
 			},
-		}, nil).Once()
+		}
+		horizonClientMock := &horizonclient.MockClient{}
+		// First call from validateWalletAccount
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: walletAddress,
+		}).Return(accountWithTrustline, nil).Once()
+		// Second call from validateWalletTrustlines
+		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: walletAddress,
+		}).Return(accountWithTrustline, nil).Once()
 
 		// Mocks
 		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
@@ -2178,7 +2198,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_WalletVal
 		var status string
 		err = dbConnectionPool.GetContext(ctx, &status, "SELECT status FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
 		require.NoError(t, err)
-		assert.Equal(t, data.RegisteredReceiversWalletStatus, status)
+		assert.Equal(t, string(data.RegisteredReceiversWalletStatus), status)
 
 		horizonClientMock.AssertExpectations(t)
 	})
