@@ -33,7 +33,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/stellar/go-stellar-sdk v0.0.0-20251125023429-4c8c6f69a699
+	github.com/stellar/go-stellar-sdk v0.1.0
 	github.com/stretchr/testify v1.11.1
 	github.com/twilio/twilio-go v1.29.0
 	golang.org/x/crypto v0.46.0
