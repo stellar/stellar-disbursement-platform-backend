@@ -1,58 +1,74 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
-const DefaultNonceCacheMaxEntries = 1000
+//go:generate mockery --name=NonceStoreInterface --case=underscore --structname=MockNonceStore --filename=nonce_store.go
 
-// NonceStore defines the interface for nonce storage.
-type NonceStore interface {
-	Store(nonce string) error
-	Consume(nonce string) (bool, error)
+// NonceStoreInterface defines the interface for nonce storage.
+type NonceStoreInterface interface {
+	Store(ctx context.Context, nonce string) error
+	Consume(ctx context.Context, nonce string) (bool, error)
 }
 
-var _ NonceStore = (*InMemoryNonceStore)(nil)
+var _ NonceStoreInterface = (*nonceStore)(nil)
 
-// InMemoryNonceStore provides in-memory storage for nonces.
-type InMemoryNonceStore struct {
-	cache *expirable.LRU[string, struct{}]
+type nonceStore struct {
+	model *data.SEPNonceModel
+	ttl   time.Duration
 }
 
-// NewInMemoryNonceStore creates a new InMemoryNonceStore.
-func NewInMemoryNonceStore(defaultExpiration time.Duration, maxEntries int) (*InMemoryNonceStore, error) {
-	if maxEntries <= 0 {
-		return nil, fmt.Errorf("maxEntries must be greater than zero")
+// NewNonceStore creates a new NonceStore.
+func NewNonceStore(dbConnectionPool db.DBConnectionPool, ttl time.Duration) (NonceStoreInterface, error) {
+	if dbConnectionPool == nil {
+		return nil, fmt.Errorf("dbConnectionPool cannot be nil")
 	}
-	if defaultExpiration <= 0 {
-		return nil, fmt.Errorf("defaultExpiration must be greater than zero")
+	if ttl <= 0 {
+		return nil, fmt.Errorf("ttl must be greater than zero")
 	}
 
-	return &InMemoryNonceStore{
-		cache: expirable.NewLRU[string, struct{}](maxEntries, nil, defaultExpiration),
-	}, nil
+	store := &nonceStore{
+		model: data.NewSEPNonceModel(dbConnectionPool),
+		ttl:   ttl,
+	}
+
+	return store, nil
 }
 
-// Store saves a nonce in the cache.
-func (s *InMemoryNonceStore) Store(nonce string) error {
+// Store saves a nonce in the database with an expiration time.
+func (s *nonceStore) Store(ctx context.Context, nonce string) error {
 	if nonce == "" {
 		return fmt.Errorf("nonce cannot be empty")
 	}
-	s.cache.Add(nonce, struct{}{})
+	expiresAt := time.Now().UTC().Add(s.ttl)
+	if err := s.model.Store(ctx, nonce, expiresAt); err != nil {
+		return fmt.Errorf("storing nonce: %w", err)
+	}
 	return nil
 }
 
 // Consume validates and deletes a nonce in a single operation.
-func (s *InMemoryNonceStore) Consume(nonce string) (bool, error) {
+func (s *nonceStore) Consume(ctx context.Context, nonce string) (bool, error) {
 	if nonce == "" {
 		return false, fmt.Errorf("nonce cannot be empty")
 	}
-	if _, ok := s.cache.Get(nonce); !ok {
+
+	expiresAt, ok, err := s.model.Consume(ctx, nonce)
+	if err != nil {
+		return false, fmt.Errorf("consuming nonce: %w", err)
+	}
+	if !ok {
 		return false, nil
 	}
-	s.cache.Remove(nonce)
+
+	if time.Now().UTC().After(expiresAt) {
+		return false, nil
+	}
 	return true, nil
 }

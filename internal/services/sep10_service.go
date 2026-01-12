@@ -48,7 +48,7 @@ type sep10Service struct {
 	AuthTimeout               time.Duration
 	AllowHTTPRetry            bool
 	ClientAttributionRequired bool
-	nonceStore                NonceStore
+	nonceStore                NonceStoreInterface
 }
 
 type ChallengeRequest struct {
@@ -117,7 +117,7 @@ func NewSEP10Service(
 	allowHTTPRetry bool,
 	horizonClient horizonclient.ClientInterface,
 	clientAttributionRequired bool,
-	nonceStore NonceStore,
+	nonceStore NonceStoreInterface,
 ) (SEP10Service, error) {
 	kp, err := keypair.ParseFull(sep10SigningPrivateKey)
 	if err != nil {
@@ -188,7 +188,7 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		}
 	}
 
-	tx, err := s.buildChallengeTx(req.Account, webAuthDomain, req.HomeDomain, req.ClientDomain, clientSigningKey, memoParam)
+	tx, err := s.buildChallengeTx(ctx, req.Account, webAuthDomain, req.HomeDomain, req.ClientDomain, clientSigningKey, memoParam)
 	if err != nil {
 		return nil, fmt.Errorf("building challenge transaction %w", err)
 	}
@@ -234,7 +234,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 			}
 
 			// Check and consume nonce
-			validNonce, consumeErr := s.nonceStore.Consume(result.Nonce)
+			validNonce, consumeErr := s.nonceStore.Consume(ctx, result.Nonce)
 			if consumeErr != nil {
 				return nil, fmt.Errorf("consuming nonce: %w", consumeErr)
 			}
@@ -258,7 +258,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 	}
 
 	// Check and consume nonce
-	validNonce, err := s.nonceStore.Consume(result.Nonce)
+	validNonce, err := s.nonceStore.Consume(ctx, result.Nonce)
 	if err != nil {
 		return nil, fmt.Errorf("consuming nonce: %w", err)
 	}
@@ -635,7 +635,7 @@ func (s *sep10Service) isValidHomeDomain(homeDomain string) bool {
 	return strings.HasSuffix(homeDomainLower, "."+baseDomainLower)
 }
 
-func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDomain, clientDomain string, clientDomainAccountID string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
+func (s *sep10Service) buildChallengeTx(ctx context.Context, clientAccountID, webAuthDomain, homeDomain, clientDomain string, clientDomainAccountID string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
 	if s.AuthTimeout < time.Second {
 		return nil, fmt.Errorf("provided timebound must be at least 1s (300s is recommended)")
 	}
@@ -659,7 +659,7 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 		}
 	}
 
-	if err := s.nonceStore.Store(randomNonceToString); err != nil {
+	if err := s.nonceStore.Store(ctx, randomNonceToString); err != nil {
 		return nil, fmt.Errorf("storing nonce: %w", err)
 	}
 

@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stellar/go-stellar-sdk/clients/stellartoml"
 	"github.com/stellar/go-stellar-sdk/keypair"
@@ -18,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
+	servicesmocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	stellarMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -41,10 +41,11 @@ func newTestJWTManager(t *testing.T) *sepauth.JWTManager {
 	return mgr
 }
 
-func newTestSEP45NonceStore(t *testing.T) NonceStore {
+func createMockSEP45NonceStore(t *testing.T) *servicesmocks.MockNonceStore {
 	t.Helper()
-	store, err := NewInMemoryNonceStore(5*time.Minute, 10)
-	require.NoError(t, err)
+	store := servicesmocks.NewMockNonceStore(t)
+	store.On("Store", mock.Anything, mock.Anything).Return(nil).Maybe()
+	store.On("Consume", mock.Anything, mock.Anything).Return(true, nil).Maybe()
 	return store
 }
 
@@ -208,7 +209,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 						ServerSigningKeypair:    serverKP,
 						BaseURL:                 "https://" + baseHost,
 						AllowHTTPRetry:          true,
-						NonceStore:              newTestSEP45NonceStore(t),
+						NonceStore:              createMockSEP45NonceStore(t),
 					}, SEP45ChallengeRequest{
 						Account:      clientContractAddress,
 						HomeDomain:   homeDomain,
@@ -294,7 +295,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 						ServerSigningKeypair:    serverKP,
 						BaseURL:                 "https://" + baseHost,
 						AllowHTTPRetry:          true,
-						NonceStore:              newTestSEP45NonceStore(t),
+						NonceStore:              createMockSEP45NonceStore(t),
 					}, SEP45ChallengeRequest{
 						Account:    clientContractAddress,
 						HomeDomain: homeDomain,
@@ -318,7 +319,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 					ServerSigningKeypair:    serverKP,
 					BaseURL:                 "https://home.example.com",
 					AllowHTTPRetry:          true,
-					NonceStore:              newTestSEP45NonceStore(t),
+					NonceStore:              createMockSEP45NonceStore(t),
 				}
 				req := SEP45ChallengeRequest{Account: "invalid-account", HomeDomain: "home.example.com"}
 				return ctx, opts, req, nil
@@ -343,7 +344,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 					ServerSigningKeypair:    serverKP,
 					BaseURL:                 "https://allowed.example.com",
 					AllowHTTPRetry:          true,
-					NonceStore:              newTestSEP45NonceStore(t),
+					NonceStore:              createMockSEP45NonceStore(t),
 				}
 				req := SEP45ChallengeRequest{
 					Account:      testClientContractAddress,
@@ -370,7 +371,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 					ServerSigningKeypair:    serverKP,
 					BaseURL:                 "https://home.example.com",
 					AllowHTTPRetry:          true,
-					NonceStore:              newTestSEP45NonceStore(t),
+					NonceStore:              createMockSEP45NonceStore(t),
 				}
 				req := SEP45ChallengeRequest{Account: testClientContractAddress}
 				return ctx, opts, req, nil
@@ -405,7 +406,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 					ServerSigningKeypair:    serverKP,
 					BaseURL:                 "https://home.example.com",
 					AllowHTTPRetry:          true,
-					NonceStore:              newTestSEP45NonceStore(t),
+					NonceStore:              createMockSEP45NonceStore(t),
 				}
 				req := SEP45ChallengeRequest{
 					Account:      testClientContractAddress,
@@ -496,7 +497,9 @@ func Test_SEP45Service_ValidateChallenge(t *testing.T) {
 		Once()
 
 	jwtManager := newTestJWTManager(t)
-	nonceStore := newTestSEP45NonceStore(t)
+	nonceStore := servicesmocks.NewMockNonceStore(t)
+	nonceStore.On("Store", mock.Anything, "nonce").Return(nil).Once()
+	nonceStore.On("Consume", mock.Anything, "nonce").Return(true, nil).Once()
 
 	svcOpts := SEP45ServiceOptions{
 		RPCClient:               rpcMock,
@@ -510,7 +513,7 @@ func Test_SEP45Service_ValidateChallenge(t *testing.T) {
 	}
 	svc, err := NewSEP45Service(svcOpts)
 	require.NoError(t, err)
-	require.NoError(t, nonceStore.Store("nonce"))
+	require.NoError(t, nonceStore.Store(ctx, "nonce"))
 
 	resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encodedEntries})
 	require.NoError(t, err)
@@ -553,7 +556,10 @@ func Test_SEP45Service_ValidateChallengeNonceReplay(t *testing.T) {
 		Return(&stellar.SimulationResult{Response: protocol.SimulateTransactionResponse{}}, (*stellar.SimulationError)(nil)).
 		Once()
 
-	nonceStore := newTestSEP45NonceStore(t)
+	nonceStore := servicesmocks.NewMockNonceStore(t)
+	nonceStore.On("Store", mock.Anything, "nonce").Return(nil).Once()
+	nonceStore.On("Consume", mock.Anything, "nonce").Return(true, nil).Once()
+	nonceStore.On("Consume", mock.Anything, "nonce").Return(false, nil).Once()
 	svc, err := NewSEP45Service(SEP45ServiceOptions{
 		RPCClient:               rpcMock,
 		TOMLClient:              stellartoml.DefaultClient,
@@ -566,7 +572,7 @@ func Test_SEP45Service_ValidateChallengeNonceReplay(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, nonceStore.Store("nonce"))
+	require.NoError(t, nonceStore.Store(ctx, "nonce"))
 	resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encodedEntries})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -583,9 +589,9 @@ func Test_SEP45Service_ValidateChallengeNonceReplay(t *testing.T) {
 func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 	ctx := context.Background()
 
-	newService := func(t *testing.T, rpcClient stellar.RPCClient, serverKP *keypair.Full) (SEP45Service, NonceStore) {
+	newService := func(t *testing.T, rpcClient stellar.RPCClient, serverKP *keypair.Full) (SEP45Service, NonceStoreInterface) {
 		t.Helper()
-		nonceStore := newTestSEP45NonceStore(t)
+		nonceStore := createMockSEP45NonceStore(t)
 		svc, err := NewSEP45Service(SEP45ServiceOptions{
 			RPCClient:               rpcClient,
 			TOMLClient:              stellartoml.DefaultClient,
@@ -984,7 +990,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 			Once()
 
 		svc, nonceStore := newService(t, rpcMock, serverKP)
-		require.NoError(t, nonceStore.Store("nonce"))
+		require.NoError(t, nonceStore.Store(ctx, "nonce"))
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "simulating transaction")
@@ -1020,7 +1026,7 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 			Once()
 
 		svc, nonceStore := newService(t, rpcMock, serverKP)
-		require.NoError(t, nonceStore.Store("nonce"))
+		require.NoError(t, nonceStore.Store(ctx, "nonce"))
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: encoded})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "simulating transaction")

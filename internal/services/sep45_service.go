@@ -66,7 +66,7 @@ type sep45Service struct {
 	allowHTTPRetry    bool
 	baseURL           string
 	jwtExpiration     time.Duration
-	nonceStore        NonceStore
+	nonceStore        NonceStoreInterface
 }
 
 type SEP45ChallengeRequest struct {
@@ -117,7 +117,7 @@ type SEP45ServiceOptions struct {
 	ServerSigningKeypair    *keypair.Full
 	BaseURL                 string
 	AllowHTTPRetry          bool
-	NonceStore              NonceStore
+	NonceStore              NonceStoreInterface
 }
 
 func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
@@ -214,7 +214,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	if err != nil {
 		return nil, fmt.Errorf("%w: generating nonce: %w", ErrSEP45Internal, err)
 	}
-	if err := s.nonceStore.Store(nonce); err != nil {
+	if err := s.nonceStore.Store(ctx, nonce); err != nil {
 		return nil, fmt.Errorf("%w: storing nonce: %w", ErrSEP45Internal, err)
 	}
 
@@ -428,7 +428,7 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 	if err := tracker.validate(parsedArgs.clientDomainAccount != ""); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 	}
-	validNonce, err := s.nonceStore.Consume(parsedArgs.raw["nonce"])
+	validNonce, err := s.nonceStore.Consume(ctx, parsedArgs.raw["nonce"])
 	if err != nil {
 		return nil, fmt.Errorf("%w: consuming nonce: %w", ErrSEP45Internal, err)
 	}

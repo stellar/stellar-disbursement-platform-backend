@@ -194,6 +194,13 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 	}
 }
 
+func WithSEPNonceCleanupJobOption(models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSEPNonceCleanupJob(models)
+		s.addJob(j)
+	}
+}
+
 func WithCirclePaymentToSubmitterJobOption(options jobs.CirclePaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewCirclePaymentToSubmitterJob(options)

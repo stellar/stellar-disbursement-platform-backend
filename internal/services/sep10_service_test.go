@@ -22,6 +22,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
+	servicesmocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 )
 
 type testKeypairs struct {
@@ -38,10 +39,11 @@ func newTestKeypairs() *testKeypairs {
 	}
 }
 
-func newSEP10NonceStore(t *testing.T) NonceStore {
+func createMockSEP10NonceStore(t *testing.T) NonceStoreInterface {
 	t.Helper()
-	store, err := NewInMemoryNonceStore(5*time.Minute, 10)
-	require.NoError(t, err)
+	store := servicesmocks.NewMockNonceStore(t)
+	store.On("Store", mock.Anything, mock.Anything).Return(nil).Maybe()
+	store.On("Consume", mock.Anything, mock.Anything).Return(true, nil).Maybe()
 	return store
 }
 
@@ -86,7 +88,7 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
 		}),
 		true,
-		newSEP10NonceStore(t),
+		createMockSEP10NonceStore(t),
 	)
 	if err != nil {
 		return nil, err
@@ -466,6 +468,14 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 	})
 
 	t.Run("nonce replay", func(t *testing.T) {
+		nonceStore := servicesmocks.NewMockNonceStore(t)
+		nonceStore.On("Store", mock.Anything, mock.Anything).Return(nil).Maybe()
+		nonceStore.On("Consume", mock.Anything, mock.Anything).Return(true, nil).Once()
+		nonceStore.On("Consume", mock.Anything, mock.Anything).Return(false, nil).Once()
+
+		service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
+		require.NoError(t, err)
+		service.nonceStore = nonceStore
 		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
 
 		signedTxBase64 := createSignedChallenge(t, service, kps, "stellar.local:8000", "chaos.cadia.com")
@@ -662,7 +672,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
-			newSEP10NonceStore(t),
+			createMockSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 
@@ -723,7 +733,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
-			newSEP10NonceStore(t),
+			createMockSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 
@@ -848,7 +858,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
-			newSEP10NonceStore(t),
+			createMockSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 

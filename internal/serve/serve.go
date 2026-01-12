@@ -164,11 +164,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 	// Determine allow retry based on network passphrase
 	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
 
-	sep10NonceStore, err := services.NewInMemoryNonceStore(services.DefaultSEP10NonceExpiration, services.DefaultNonceCacheMaxEntries)
+	sep10NonceStore, err := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP10NonceExpiration)
 	if err != nil {
 		return fmt.Errorf("initializing SEP 10 nonce store: %w", err)
 	}
-
 	sep10Service, err := services.NewSEP10Service(
 		sep24JWTManager,
 		opts.NetworkPassphrase,
@@ -186,11 +185,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.Sep10Service = sep10Service
 
 	if opts.EnableSep45 {
-		sep45NonceStore, err := services.NewInMemoryNonceStore(services.DefaultSEP45NonceExpiration, services.DefaultNonceCacheMaxEntries)
+		sep45NonceStore, err := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
 		if err != nil {
 			return fmt.Errorf("initializing SEP 45 nonce store: %w", err)
 		}
-
 		rpcClient, rpcErr := dependencyinjection.NewRPCClient(context.Background(), opts.RPCConfig)
 		if rpcErr != nil {
 			return fmt.Errorf("initializing RPC client: %w", rpcErr)
