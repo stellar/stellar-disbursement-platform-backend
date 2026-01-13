@@ -827,50 +827,139 @@ func Test_WalletModelGetAssets(t *testing.T) {
 	})
 }
 
-func Test_WalletModelSoftDelete(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
+func Test_WalletModelHasPendingReceiverWallets(t *testing.T) {
+	models := SetupModels(t)
 	ctx := context.Background()
 
-	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
+	walletModel := models.Wallets
+
+	t.Run("returns false when wallet has no receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+
+		hasPending, err := walletModel.HasPendingReceiverWallets(ctx, wallet.ID)
+		require.NoError(t, err)
+		assert.False(t, hasPending)
+	})
+
+	t.Run("returns true when wallet has DRAFT receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+
+		hasPending, err := walletModel.HasPendingReceiverWallets(ctx, wallet.ID)
+		require.NoError(t, err)
+		assert.True(t, hasPending)
+	})
+
+	t.Run("returns true when wallet has READY receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		hasPending, err := walletModel.HasPendingReceiverWallets(ctx, wallet.ID)
+		require.NoError(t, err)
+		assert.True(t, hasPending)
+	})
+
+	t.Run("returns false when wallet only has REGISTERED receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		hasPending, err := walletModel.HasPendingReceiverWallets(ctx, wallet.ID)
+		require.NoError(t, err)
+		assert.False(t, hasPending)
+	})
+
+	t.Run("returns false when wallet only has FLAGGED receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, FlaggedReceiversWalletStatus)
+
+		hasPending, err := walletModel.HasPendingReceiverWallets(ctx, wallet.ID)
+		require.NoError(t, err)
+		assert.False(t, hasPending)
+	})
+}
+
+func Test_WalletModelSoftDelete(t *testing.T) {
+	models := SetupModels(t)
+	ctx := context.Background()
+
+	walletModel := models.Wallets
 
 	t.Run("soft deletes a wallet successfully", func(t *testing.T) {
-		wallet := &ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
 
 		assert.Nil(t, wallet.DeletedAt)
 
-		wallet, err = walletModel.SoftDelete(ctx, wallet.ID)
+		deletedWallet, err := walletModel.SoftDelete(ctx, wallet.ID)
 		require.NoError(t, err)
 
-		assert.NotNil(t, wallet.DeletedAt)
+		assert.NotNil(t, deletedWallet.DeletedAt)
 	})
 
 	t.Run("doesn't delete an already deleted wallet", func(t *testing.T) {
-		wallet := &ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
 
 		assert.Nil(t, wallet.DeletedAt)
 
-		wallet, err = walletModel.SoftDelete(ctx, wallet.ID)
+		deletedWallet, err := walletModel.SoftDelete(ctx, wallet.ID)
 		require.NoError(t, err)
 
-		assert.NotNil(t, wallet.DeletedAt)
+		assert.NotNil(t, deletedWallet.DeletedAt)
 
-		wallet, err = walletModel.SoftDelete(ctx, wallet.ID)
-		assert.EqualError(t, err, ErrRecordNotFound.Error())
-		assert.Nil(t, wallet)
+		deletedWallet, err = walletModel.SoftDelete(ctx, wallet.ID)
+		assert.ErrorIs(t, err, ErrRecordNotFound)
+		assert.Nil(t, deletedWallet)
 	})
 
 	t.Run("returns error when wallet doesn't exists", func(t *testing.T) {
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		DeleteAllFixtures(t, ctx, models.DBConnectionPool)
 
 		wallet, err := walletModel.SoftDelete(ctx, "unknown")
-		assert.EqualError(t, err, ErrRecordNotFound.Error())
+		assert.ErrorIs(t, err, ErrRecordNotFound)
 		assert.Nil(t, wallet)
+	})
+
+	t.Run("returns error when wallet has DRAFT receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+
+		deletedWallet, err := walletModel.SoftDelete(ctx, wallet.ID)
+		assert.ErrorIs(t, err, ErrWalletInUse)
+		assert.Nil(t, deletedWallet)
+	})
+
+	t.Run("returns error when wallet has READY receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		deletedWallet, err := walletModel.SoftDelete(ctx, wallet.ID)
+		assert.ErrorIs(t, err, ErrWalletInUse)
+		assert.Nil(t, deletedWallet)
+	})
+
+	t.Run("allows deletion when wallet only has REGISTERED receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		deletedWallet, err := walletModel.SoftDelete(ctx, wallet.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, deletedWallet.DeletedAt)
+	})
+
+	t.Run("allows deletion when wallet only has FLAGGED receiver_wallets", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, models.DBConnectionPool)[0]
+		receiver := CreateReceiverFixture(t, ctx, models.DBConnectionPool, nil)
+		CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, FlaggedReceiversWalletStatus)
+
+		deletedWallet, err := walletModel.SoftDelete(ctx, wallet.ID)
+		require.NoError(t, err)
+		assert.NotNil(t, deletedWallet.DeletedAt)
 	})
 }
 

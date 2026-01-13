@@ -906,6 +906,67 @@ func Test_WalletsHandlerDeleteWallet(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "Resource not found."}`, string(respBody))
 	})
+
+	t.Run("returns BadRequest when wallet has pending receiver_wallets (DRAFT)", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Pending Wallet", "https://pendingwallet.com", "pendingwallet.com", "pendingwallet://")
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "wallet has pending registrations and cannot be deleted"}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest when wallet has pending receiver_wallets (READY)", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Ready Wallet", "https://readywallet.com", "readywallet.com", "readywallet://")
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "wallet has pending registrations and cannot be deleted"}`, string(respBody))
+	})
+
+	t.Run("deletes wallet when it has only REGISTERED receiver_wallets", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Registered Wallet", "https://registeredwallet.com", "registeredwallet.com", "registeredwallet://")
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	})
 }
 
 func Test_WalletsHandlerPatchWallet_Extended(t *testing.T) {

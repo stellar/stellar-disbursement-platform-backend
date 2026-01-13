@@ -19,6 +19,7 @@ var (
 	ErrWalletHomepageAlreadyExists       = errors.New("a wallet with this homepage already exists")
 	ErrWalletDeepLinkSchemaAlreadyExists = errors.New("a wallet with this deep link schema already exists")
 	ErrInvalidAssetID                    = errors.New("invalid asset ID")
+	ErrWalletInUse                       = errors.New("wallet has pending registrations and cannot be deleted")
 )
 
 type Wallet struct {
@@ -313,15 +314,42 @@ func (wm *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset,
 	return assets, nil
 }
 
+// HasPendingReceiverWallets checks if a wallet has any receiver_wallets in DRAFT or READY status.
+func (wm *WalletModel) HasPendingReceiverWallets(ctx context.Context, walletID string) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM receiver_wallets
+			WHERE wallet_id = $1
+			AND status IN ('DRAFT', 'READY')
+		)
+	`
+
+	var exists bool
+	err := wm.dbConnectionPool.GetContext(ctx, &exists, query, walletID)
+	if err != nil {
+		return false, fmt.Errorf("checking pending receiver wallets for wallet %s: %w", walletID, err)
+	}
+
+	return exists, nil
+}
+
+// SoftDelete marks a wallet as deleted if it has no pending receiver_wallets in DRAFT or READY status.
 func (wm *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
 	const query = `
-		UPDATE
-			wallets
-		SET
-			deleted_at = NOW()
-		WHERE
-			id = $1
+		WITH pending_check AS (
+			SELECT EXISTS (
+				SELECT 1
+				FROM receiver_wallets
+				WHERE wallet_id = $1
+				AND status IN ('DRAFT', 'READY')
+			) AS has_pending
+		)
+		UPDATE wallets
+		SET deleted_at = NOW()
+		WHERE id = $1
 			AND deleted_at IS NULL
+			AND NOT (SELECT has_pending FROM pending_check)
 		RETURNING *
 	`
 
@@ -329,6 +357,14 @@ func (wm *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet
 	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Check if wallet exists but has pending receiver_wallets, or if it simply doesn't exist
+			hasPending, checkErr := wm.HasPendingReceiverWallets(ctx, walletID)
+			if checkErr != nil {
+				return nil, fmt.Errorf("checking wallet usage after failed delete: %w", checkErr)
+			}
+			if hasPending {
+				return nil, ErrWalletInUse
+			}
 			return nil, ErrRecordNotFound
 		}
 		return nil, fmt.Errorf("soft deleting wallet ID %s: %w", walletID, err)

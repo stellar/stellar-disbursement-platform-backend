@@ -189,6 +189,10 @@ func (h WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request) 
 			httperror.NotFound("", err, nil).Render(rw)
 			return
 		}
+		if errors.Is(err, data.ErrWalletInUse) {
+			httperror.BadRequest("wallet has pending registrations and cannot be deleted", err, nil).Render(rw)
+			return
+		}
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
