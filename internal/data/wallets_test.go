@@ -389,6 +389,123 @@ func Test_WalletModelFindWallets(t *testing.T) {
 
 		assert.GreaterOrEqual(t, len(actual), len(wallets))
 	})
+
+	t.Run("excludes deleted wallets by default", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Soft delete wallet0
+		_, err := walletModel.SoftDelete(ctx, wallets[0].ID)
+		require.NoError(t, err)
+
+		// Should return only non-deleted wallets
+		actual, err := walletModel.FindWallets(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 2)
+		for _, wallet := range actual {
+			assert.NotEqual(t, wallets[0].ID, wallet.ID)
+		}
+	})
+
+	t.Run("includes deleted wallets when include_deleted=true", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Soft delete wallet0
+		_, err := walletModel.SoftDelete(ctx, wallets[0].ID)
+		require.NoError(t, err)
+
+		// Should return all wallets including deleted
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterIncludeDeleted, true))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 3)
+		walletIDs := []string{actual[0].ID, actual[1].ID, actual[2].ID}
+		assert.Contains(t, walletIDs, wallets[0].ID)
+		assert.Contains(t, walletIDs, wallets[1].ID)
+		assert.Contains(t, walletIDs, wallets[2].ID)
+	})
+
+	t.Run("excludes deleted wallets when include_deleted=false", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Soft delete wallet1
+		_, err := walletModel.SoftDelete(ctx, wallets[1].ID)
+		require.NoError(t, err)
+
+		// Explicitly exclude deleted wallets
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterIncludeDeleted, false))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 2)
+		for _, wallet := range actual {
+			assert.NotEqual(t, wallets[1].ID, wallet.ID)
+		}
+	})
+
+	t.Run("combines deleted filter with other filters", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Soft delete wallet0
+		_, err := walletModel.SoftDelete(ctx, wallets[0].ID)
+		require.NoError(t, err)
+
+		// Disable wallet2
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[2].ID)
+
+		// Should return only enabled and non-deleted wallets
+		actual, err := walletModel.FindWallets(ctx, NewFilter(FilterEnabledWallets, true))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 1)
+		assert.Equal(t, wallets[1].ID, actual[0].ID)
+	})
+
+	t.Run("combines include_deleted with enabled filter", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Soft delete wallet0
+		_, err := walletModel.SoftDelete(ctx, wallets[0].ID)
+		require.NoError(t, err)
+
+		// Disable wallet1
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[1].ID)
+
+		// Should return only enabled wallets including deleted ones
+		actual, err := walletModel.FindWallets(ctx,
+			NewFilter(FilterIncludeDeleted, true),
+			NewFilter(FilterEnabledWallets, true))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 2) // wallet0 (deleted, enabled) and wallet2 (not deleted, enabled)
+		walletIDs := []string{actual[0].ID, actual[1].ID}
+		assert.Contains(t, walletIDs, wallets[0].ID)
+		assert.Contains(t, walletIDs, wallets[2].ID)
+	})
+
+	t.Run("combines include_deleted with supported_assets filter", func(t *testing.T) {
+		t.Cleanup(func() { DeleteAllWalletFixtures(t, ctx, dbConnectionPool) })
+		wallets := createTestWallets()
+
+		// Soft delete wallet0 (which supports USDC and XLM)
+		_, err := walletModel.SoftDelete(ctx, wallets[0].ID)
+		require.NoError(t, err)
+
+		// Search for USDC wallets including deleted
+		actual, err := walletModel.FindWallets(ctx,
+			NewFilter(FilterIncludeDeleted, true),
+			NewFilter(FilterSupportedAssets, []string{"USDC"}))
+		require.NoError(t, err)
+
+		assert.Len(t, actual, 2) // wallet0 (deleted) and wallet1 (not deleted) both support USDC
+		walletIDs := []string{actual[0].ID, actual[1].ID}
+		assert.Contains(t, walletIDs, wallets[0].ID)
+		assert.Contains(t, walletIDs, wallets[1].ID)
+	})
 }
 
 func Test_WalletModelInsert(t *testing.T) {

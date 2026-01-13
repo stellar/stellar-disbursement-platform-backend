@@ -46,8 +46,9 @@ func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 func (h WalletsHandler) parseFilters(ctx context.Context, r *http.Request) ([]data.Filter, error) {
 	filters := []data.Filter{}
 	boolFilterParams := map[string]data.FilterKey{
-		"enabled":      data.FilterEnabledWallets,
-		"user_managed": data.FilterUserManaged,
+		"enabled":         data.FilterEnabledWallets,
+		"user_managed":    data.FilterUserManaged,
+		"include_deleted": data.FilterIncludeDeleted,
 	}
 
 	for param, filterType := range boolFilterParams {

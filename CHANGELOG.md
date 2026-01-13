@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Add Haitian Creole translations for the SEP-24 interactive deposit flow. [#994](https://github.com/stellar/stellar-disbursement-platform-backend/pull/994)
 
+### Changed
+
+- Update `GET /wallets` endpoint to exclude soft-deleted wallets by default. Add optional `include_deleted` query parameter to include deleted wallets when set to `true`. [#1005](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1005)
+
 ### Security and Dependencies
 
 - Upgrade React to 19.2.3 and @stellar/design-system to 3.2.7 in SEP-24 frontend to address CVE-2025-55184 denial of service and source code exposure vulnerability in React Server Components [#988](https://github.com/stellar/stellar-disbursement-platform-backend/pull/988)
