@@ -190,11 +190,15 @@ func GetWalletAssetsFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExe
 
 // DeleteAllWalletFixtures deletes all wallets in the database
 func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	query := "DELETE FROM wallets_assets"
+	query := "DELETE FROM receiver_wallets"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 
-	query = "DELETE FROM wallets"
+	query = "DELETE FROM wallets_assets"
+	_, err = sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+
+	query = "DELETE FROM wallets CASCADE"
 	_, err = sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
