@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
-- Update `GET /wallets` endpoint to exclude soft-deleted wallets by default. Add optional `include_deleted` query parameter to include deleted wallets when set to `true`. [#1003](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1003)
+- Update `GET /wallets` endpoint to exclude soft-deleted wallets by default. Add optional `include_deleted` query parameter to include deleted wallets when set to `true`. [#1005](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1005)
 
 ### Security and Dependencies
 
