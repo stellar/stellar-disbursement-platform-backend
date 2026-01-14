@@ -550,11 +550,11 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 		SET status = $1,
 			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2)),
 			stellar_transaction_id = COALESCE($3, stellar_transaction_id),
-			sender_address = COALESCE(NULLIF($5, ''), sender_address)
-		WHERE id = $4
+			sender_address = COALESCE(NULLIF($4, ''), sender_address)
+		WHERE id = $5
 	`
 
-	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, payment.ID, update.SenderAddress)
+	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, update.SenderAddress, payment.ID)
 	if err != nil {
 		return fmt.Errorf("error updating payment with id %s: %w", payment.ID, err)
 	}

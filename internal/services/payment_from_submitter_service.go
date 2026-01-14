@@ -118,7 +118,6 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 		StellarTransactionID: transaction.StellarTransactionHash.String,
 	}
 	// Update the sender address if available
-	// Update the sender address if available
 	if transaction.DistributionAccount.Valid {
 		paymentUpdate.SenderAddress = transaction.DistributionAccount.String
 	}
