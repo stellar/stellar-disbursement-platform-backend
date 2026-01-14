@@ -23,8 +23,8 @@ import (
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stellar/go-stellar-sdk/xdr"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/seputil"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -181,7 +181,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 		return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 	}
 
-	webAuthDomain := s.getWebAuthDomain(ctx)
+	webAuthDomain := seputil.GetWebAuthDomain(ctx, s.baseURL)
 	if strings.TrimSpace(webAuthDomain) == "" {
 		return nil, fmt.Errorf("%w: unable to determine web_auth_domain", ErrSEP45Internal)
 	}
@@ -192,8 +192,8 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 		return nil, fmt.Errorf("%w: home_domain is required", ErrSEP45Validation)
 	}
 
-	if !s.isValidHomeDomain(homeDomain) {
-		return nil, fmt.Errorf("%w: home_domain must match %s", ErrSEP45Validation, s.getBaseDomain())
+	if !seputil.IsValidHomeDomain(s.baseURL, homeDomain) {
+		return nil, fmt.Errorf("%w: home_domain must match %s", ErrSEP45Validation, seputil.GetBaseDomain(s.baseURL))
 	}
 
 	clientDomain := ""
@@ -377,7 +377,7 @@ func (t *authEntryTracker) processEntry(entry xdr.SorobanAuthorizationEntry, par
 }
 
 func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45ValidationRequest) (*SEP45ValidationResponse, error) {
-	webAuthDomain := strings.TrimSpace(s.getWebAuthDomain(ctx))
+	webAuthDomain := strings.TrimSpace(seputil.GetWebAuthDomain(ctx, s.baseURL))
 	if webAuthDomain == "" {
 		return nil, fmt.Errorf("%w: unable to determine web_auth_domain", ErrSEP45Internal)
 	}
@@ -667,8 +667,8 @@ func (s *sep45Service) buildChallengeArgs(args map[string]string, argsXDR xdr.Sc
 	if homeDomain == "" {
 		return nil, fmt.Errorf("home_domain is required")
 	}
-	if !s.isValidHomeDomain(homeDomain) {
-		return nil, fmt.Errorf("home_domain must match %s", s.getBaseDomain())
+	if !seputil.IsValidHomeDomain(s.baseURL, homeDomain) {
+		return nil, fmt.Errorf("home_domain must match %s", seputil.GetBaseDomain(s.baseURL))
 	}
 
 	challengeWebAuthDomain := strings.TrimSpace(args["web_auth_domain"])
@@ -809,41 +809,4 @@ func (s *sep45Service) wrapSimErr(simErr *stellar.SimulationError) error {
 	default:
 		return fmt.Errorf("%w: simulating transaction: %w", ErrSEP45Internal, simErr)
 	}
-}
-
-// TODO(philip): Below methods are shared with sep10_service.go so they can be moved to a common utility package later.
-
-func (s *sep45Service) getWebAuthDomain(ctx context.Context) string {
-	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
-	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
-		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
-		if parseErr == nil {
-			return parsedURL.Host
-		}
-	}
-	return s.getBaseDomain()
-}
-
-func (s *sep45Service) getBaseDomain() string {
-	parsed, err := url.Parse(s.baseURL)
-	if err != nil {
-		return ""
-	}
-	return parsed.Host
-}
-
-func (s *sep45Service) isValidHomeDomain(homeDomain string) bool {
-	baseDomain := s.getBaseDomain()
-	if baseDomain == "" || homeDomain == "" {
-		return false
-	}
-
-	baseDomainLower := strings.ToLower(baseDomain)
-	homeDomainLower := strings.ToLower(homeDomain)
-
-	if homeDomainLower == baseDomainLower {
-		return true
-	}
-
-	return strings.HasSuffix(homeDomainLower, "."+baseDomainLower)
 }

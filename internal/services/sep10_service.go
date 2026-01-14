@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/seputil"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -140,7 +141,7 @@ func NewSEP10Service(
 }
 
 func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error) {
-	webAuthDomain := s.getWebAuthDomain(ctx)
+	webAuthDomain := seputil.GetWebAuthDomain(ctx, s.BaseURL)
 
 	req.ClientDomain = strings.TrimSpace(req.ClientDomain)
 	req.HomeDomain = strings.TrimSpace(req.HomeDomain)
@@ -151,14 +152,14 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 	}
 
 	if req.HomeDomain == "" {
-		req.HomeDomain = s.getBaseDomain()
+		req.HomeDomain = seputil.GetBaseDomain(s.BaseURL)
 		if req.HomeDomain == "" {
 			return nil, fmt.Errorf("home_domain is required")
 		}
 	}
 
-	if !s.isValidHomeDomain(req.HomeDomain) {
-		return nil, fmt.Errorf("invalid home_domain must match %s", s.getBaseDomain())
+	if !seputil.IsValidHomeDomain(s.BaseURL, req.HomeDomain) {
+		return nil, fmt.Errorf("invalid home_domain must match %s", seputil.GetBaseDomain(s.BaseURL))
 	}
 
 	if _, err := xdr.AddressToAccountId(req.Account); err != nil {
@@ -206,7 +207,7 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error) {
 	allowedHomeDomains := s.getAllowedHomeDomains(ctx)
-	webAuthDomain := s.getWebAuthDomain(ctx)
+	webAuthDomain := seputil.GetWebAuthDomain(ctx, s.BaseURL)
 
 	result, err := s.validateChallengeCustom(
 		req.Transaction,
@@ -581,7 +582,7 @@ func (s *sep10Service) generateToken(
 }
 
 func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) []string {
-	baseDomain := s.getBaseDomain()
+	baseDomain := seputil.GetBaseDomain(s.BaseURL)
 	if baseDomain == "" {
 		return []string{}
 	}
@@ -597,42 +598,6 @@ func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) []string {
 	}
 
 	return allowedDomains
-}
-
-func (s *sep10Service) getWebAuthDomain(ctx context.Context) string {
-	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
-	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
-		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
-		if parseErr == nil {
-			return parsedURL.Host
-		}
-	}
-
-	return s.getBaseDomain()
-}
-
-func (s *sep10Service) getBaseDomain() string {
-	parsedURL, err := url.Parse(s.BaseURL)
-	if err != nil {
-		return ""
-	}
-	return parsedURL.Host
-}
-
-func (s *sep10Service) isValidHomeDomain(homeDomain string) bool {
-	baseDomain := s.getBaseDomain()
-	if baseDomain == "" || homeDomain == "" {
-		return false
-	}
-
-	baseDomainLower := strings.ToLower(baseDomain)
-	homeDomainLower := strings.ToLower(homeDomain)
-
-	if homeDomainLower == baseDomainLower {
-		return true
-	}
-
-	return strings.HasSuffix(homeDomainLower, "."+baseDomainLower)
 }
 
 func (s *sep10Service) buildChallengeTx(ctx context.Context, clientAccountID, webAuthDomain, homeDomain, clientDomain string, clientDomainAccountID string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
