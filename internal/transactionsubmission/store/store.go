@@ -35,7 +35,7 @@ type TransactionStore interface {
 	UpdateStatusToSuccess(ctx context.Context, tx Transaction) (updatedTx *Transaction, err error)
 	UpdateStatusToError(ctx context.Context, tx Transaction, message string) (updatedTx *Transaction, err error)
 	UpdateStellarTransactionXDRReceived(ctx context.Context, txID string, xdrReceived string) (*Transaction, error)
-	UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash, txXDRSent string) (*Transaction, error)
+	UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash, txXDRSent, distributionAccount string) (*Transaction, error)
 	Lock(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, currentLedger, nextLedgerLock int32) (*Transaction, error)
 	Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*Transaction, error)
 	// Queue management:

@@ -295,7 +295,7 @@ func (t *TransactionModel) UpdateStatusToError(ctx context.Context, tx Transacti
 	return &updatedTx, nil
 }
 
-func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash, txXDRSent string) (*Transaction, error) {
+func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash, txXDRSent, distributionAccount string) (*Transaction, error) {
 	if len(txHash) != 64 {
 		return nil, fmt.Errorf("invalid transaction hash %q", txHash)
 	}
@@ -313,6 +313,7 @@ func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Co
 			stellar_transaction_hash = $1::text,
 			xdr_sent = $2,
 			sent_at = NOW(),
+			distribution_account = $4,
 			status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), status, 'Updating Stellar Transaction Hash', $1::text, $2, xdr_received)),
 			attempts_count = attempts_count + 1
 		WHERE 
@@ -320,7 +321,7 @@ func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Co
 		RETURNING
 			` + TransactionColumnNames("", "")
 	var tx Transaction
-	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, txID)
+	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, txID, distributionAccount)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
