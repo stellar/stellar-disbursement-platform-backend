@@ -243,6 +243,130 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 				assert.Contains(t, httpErr.Extras["validation_error"], "asset 'NONEXISTENT' not found")
 			},
 		},
+		{
+			name: "excludes deleted wallets by default",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				// Soft delete first wallet
+				_, err := models.Wallets.SoftDelete(ctx, wallets[0].ID)
+				require.NoError(t, err)
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				// Should return only 1 wallet (second one), not the deleted one
+				assert.Len(t, resultWallets, 1)
+				assert.NotEqual(t, setup.wallets[0].ID, resultWallets[0].ID)
+				assert.Equal(t, setup.wallets[1].ID, resultWallets[0].ID)
+			},
+		},
+		{
+			name: "includes deleted wallets when include_deleted=true",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				// Soft delete first wallet
+				_, err := models.Wallets.SoftDelete(ctx, wallets[0].ID)
+				require.NoError(t, err)
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "include_deleted=true",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				// Should return all wallets including deleted
+				assert.Len(t, resultWallets, 2)
+			},
+		},
+		{
+			name: "excludes deleted wallets when include_deleted=false",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				// Soft delete second wallet
+				_, err := models.Wallets.SoftDelete(ctx, wallets[1].ID)
+				require.NoError(t, err)
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "include_deleted=false",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				// Should return only 1 wallet
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, setup.wallets[0].ID, resultWallets[0].ID)
+			},
+		},
+		{
+			name: "combines include_deleted with enabled filter",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbPool)
+				// Soft delete first wallet
+				_, err := models.Wallets.SoftDelete(ctx, wallets[0].ID)
+				require.NoError(t, err)
+				// Disable second wallet
+				data.EnableOrDisableWalletFixtures(t, ctx, dbPool, false, wallets[1].ID)
+				return &testWalletSetup{wallets: wallets}
+			},
+			queryParams:    "include_deleted=true&enabled=true",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				// Should return only enabled wallets (including deleted one)
+				assert.Len(t, resultWallets, 1)
+				assert.Equal(t, setup.wallets[0].ID, resultWallets[0].ID)
+				assert.True(t, resultWallets[0].Enabled)
+			},
+		},
+		{
+			name: "combines deleted filter with asset filtering",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				setup := createWalletAssetsTestSetup(t, ctx, dbPool)
+				// Soft delete wallet1 which has USDC and XLM
+				_, err := models.Wallets.SoftDelete(ctx, setup.wallet1.ID)
+				require.NoError(t, err)
+				return setup
+			},
+			queryParams:    "supported_assets=USDC&include_deleted=true",
+			expectedStatus: http.StatusOK,
+			validateResult: func(t *testing.T, setup *testWalletSetup, respBody []byte) {
+				var resultWallets []data.Wallet
+				err := json.Unmarshal(respBody, &resultWallets)
+				require.NoError(t, err)
+				// Should return both wallet1 (deleted) and wallet2 (not deleted) that support USDC
+				assert.Len(t, resultWallets, 2)
+				walletIDs := []string{resultWallets[0].ID, resultWallets[1].ID}
+				assert.Contains(t, walletIDs, setup.wallet1.ID)
+				assert.Contains(t, walletIDs, setup.wallet2.ID)
+			},
+		},
+		{
+			name: "returns bad request for invalid include_deleted parameter",
+			setupFn: func(t *testing.T) *testWalletSetup {
+				data.DeleteAllFixtures(t, ctx, dbPool)
+				return &testWalletSetup{}
+			},
+			queryParams:    "include_deleted=invalid",
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: `{
+				"error": "Error parsing request filters",
+				"extras": {
+					"validation_error": "invalid 'include_deleted' parameter value"
+				}
+			}`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -781,6 +905,67 @@ func Test_WalletsHandlerDeleteWallet(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "Resource not found."}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest when wallet has pending receiver_wallets (DRAFT)", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Pending Wallet", "https://pendingwallet.com", "pendingwallet.com", "pendingwallet://")
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "wallet has pending registrations and cannot be deleted"}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest when wallet has pending receiver_wallets (READY)", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Ready Wallet", "https://readywallet.com", "readywallet.com", "readywallet://")
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "wallet has pending registrations and cannot be deleted"}`, string(respBody))
+	})
+
+	t.Run("deletes wallet when it has only REGISTERED receiver_wallets", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Registered Wallet", "https://registeredwallet.com", "registeredwallet.com", "registeredwallet://")
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, nil)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	})
 }
 
