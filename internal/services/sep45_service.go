@@ -29,11 +29,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-// The number of ledgers after which the server-signed authorization entry expires.
-const signatureExpirationLedgers = 10
+const (
+	// The number of ledgers after which the server-signed authorization entry expires.
+	signatureExpirationLedgers = 10
+	// The ledger close time in seconds.
+	defaultLedgerCloseTime = 5 * time.Second
+)
 
 // The default expiration duration for SEP-45 JWTs.
 const defaultSEP45JWTExpiration = 2 * time.Hour
+
+// DefaultSEP45NonceExpiration is the default expiration duration for SEP-45 nonces.
+const DefaultSEP45NonceExpiration = time.Duration(signatureExpirationLedgers) * defaultLedgerCloseTime
 
 var (
 	ErrSEP45Validation = errors.New("sep45 validation error")
@@ -59,6 +66,7 @@ type sep45Service struct {
 	allowHTTPRetry    bool
 	baseURL           string
 	jwtExpiration     time.Duration
+	nonceStore        NonceStoreInterface
 }
 
 type SEP45ChallengeRequest struct {
@@ -109,6 +117,7 @@ type SEP45ServiceOptions struct {
 	ServerSigningKeypair    *keypair.Full
 	BaseURL                 string
 	AllowHTTPRetry          bool
+	NonceStore              NonceStoreInterface
 }
 
 func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
@@ -129,6 +138,9 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 	}
 	if strings.TrimSpace(opts.BaseURL) == "" {
 		return nil, fmt.Errorf("base URL cannot be empty")
+	}
+	if opts.NonceStore == nil {
+		return nil, fmt.Errorf("nonce store cannot be nil")
 	}
 
 	signingKP := opts.ServerSigningKeypair
@@ -160,6 +172,7 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 		allowHTTPRetry:    opts.AllowHTTPRetry,
 		baseURL:           opts.BaseURL,
 		jwtExpiration:     defaultSEP45JWTExpiration,
+		nonceStore:        opts.NonceStore,
 	}, nil
 }
 
@@ -197,11 +210,12 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 		clientDomainAccount = key
 	}
 
-	// TODO(philip): We generate a random nonce right now and don't store it anywhere.
-	// This is also the case with the SEP-10 implementation, so we should address them together.
 	nonce, err := generateNonce()
 	if err != nil {
 		return nil, fmt.Errorf("%w: generating nonce: %w", ErrSEP45Internal, err)
+	}
+	if err := s.nonceStore.Store(ctx, nonce); err != nil {
+		return nil, fmt.Errorf("%w: storing nonce: %w", ErrSEP45Internal, err)
 	}
 
 	// Build the invocation arguments for the web_auth_verify contract function, ensuring
@@ -413,6 +427,13 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 	}
 	if err := tracker.validate(parsedArgs.clientDomainAccount != ""); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
+	}
+	validNonce, err := s.nonceStore.Consume(ctx, parsedArgs.raw["nonce"])
+	if err != nil {
+		return nil, fmt.Errorf("%w: consuming nonce: %w", ErrSEP45Internal, err)
+	}
+	if !validNonce {
+		return nil, fmt.Errorf("%w: nonce is invalid or expired", ErrSEP45Validation)
 	}
 	if len(parsedArgs.xdr) == 0 {
 		return nil, fmt.Errorf("%w: unable to rebuild invocation arguments", ErrSEP45Internal)

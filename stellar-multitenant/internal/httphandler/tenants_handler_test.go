@@ -396,6 +396,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"wallets",
 			"wallets_assets",
 			"receiver_registration_attempts",
+			"sep_nonces",
 			"api_keys",
 			"api_keys_audit",
 		}

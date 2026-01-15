@@ -81,6 +81,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 
 	sj := []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
+		scheduler.WithSEPNonceCleanupJobOption(models),
 		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
 			Models:              models,
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
