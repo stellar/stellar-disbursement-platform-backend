@@ -421,9 +421,9 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
 	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
 	if err != nil {
-		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
+		return nil, err
 	} else if !distributionAccount.IsStellar() {
-		return nil, fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)}
 	}
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
@@ -503,26 +503,15 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 // handlePreparationError processes errors during transaction preparation and determines if they need special handling.
 // Returns ErrTransactionHandled if the error was handled, otherwise returns the original error.
 func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *TxJob, err error) error {
-	// Check if it's a Horizon error
-	var hErr *utils.HorizonErrorWrapper
-	if errors.As(err, &hErr) && hErr.IsHorizonError() {
-		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, hErr)
-		if handlerErr != nil {
-			return fmt.Errorf("handling horizon error: %w", handlerErr)
-		}
-		return ErrTransactionHandled
+	var txErr utils.TransactionError
+	if !errors.As(err, &txErr) {
+		txErr = &utils.NonRetryablePreparationError{Err: err}
 	}
 
-	// Check if it's an RPC error
-	var rpcErr *utils.RPCErrorWrapper
-	if errors.As(err, &rpcErr) && rpcErr.IsRPCError() {
-		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, rpcErr)
-		if handlerErr != nil {
-			return fmt.Errorf("handling rpc error: %w", handlerErr)
-		}
-		return ErrTransactionHandled
+	handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, txErr)
+	if handlerErr != nil {
+		return fmt.Errorf("handling preparation error: %w", handlerErr)
 	}
 
-	// For other errors, return as-is without special handling
-	return err
+	return ErrTransactionHandled
 }

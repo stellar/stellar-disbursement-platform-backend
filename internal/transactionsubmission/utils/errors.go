@@ -25,6 +25,36 @@ type TransactionError interface {
 	GetErrorType() string
 }
 
+// NonRetryablePreparationError represents validation/preparation failures that should not be retried.
+// These occur before any Horizon/RPC submission and must mark the transaction as ERROR.
+type NonRetryablePreparationError struct {
+	Err error
+}
+
+func (e *NonRetryablePreparationError) Error() string {
+	return fmt.Sprintf("preparation error: %v", e.Err)
+}
+
+func (e *NonRetryablePreparationError) Unwrap() error {
+	return e.Err
+}
+
+func (e *NonRetryablePreparationError) IsRetryable() bool {
+	return false
+}
+
+func (e *NonRetryablePreparationError) ShouldMarkAsError() bool {
+	return true
+}
+
+func (e *NonRetryablePreparationError) ShouldReportToCrashTracker() bool {
+	return true
+}
+
+func (e *NonRetryablePreparationError) GetErrorType() string {
+	return "PREPARATION"
+}
+
 // HorizonSpecificError represents errors that come from Horizon transaction submission
 type HorizonSpecificError interface {
 	TransactionError

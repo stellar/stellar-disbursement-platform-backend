@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -42,12 +43,12 @@ func NewPaymentTransactionHandler(
 
 func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string) (*txnbuild.Transaction, error) {
 	if txJob.Transaction.AssetCode == "" {
-		return nil, fmt.Errorf("asset code cannot be empty")
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("asset code cannot be empty")}
 	}
 	var asset txnbuild.Asset = txnbuild.NativeAsset{}
 	if txJob.Transaction.AssetCode != assets.XLMAssetCode && txJob.Transaction.AssetCode != assets.XLMAssetCodeAlias {
 		if !strkey.IsValidEd25519PublicKey(txJob.Transaction.AssetIssuer) {
-			return nil, fmt.Errorf("invalid asset issuer: %v", txJob.Transaction.AssetIssuer)
+			return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("invalid asset issuer: %v", txJob.Transaction.AssetIssuer)}
 		}
 		asset = txnbuild.CreditAsset{
 			Code:   txJob.Transaction.AssetCode,
@@ -62,7 +63,7 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
 		memo, err := txJob.Transaction.BuildMemo()
 		if err != nil {
-			return nil, fmt.Errorf("building memo: %w", err)
+			return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("building memo: %w", err)}
 		}
 		txMemo = memo
 
@@ -74,7 +75,7 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 		}
 	} else if strkey.IsValidContractAddress(txJob.Transaction.Destination) {
 		if txJob.Transaction.Memo != "" {
-			return nil, fmt.Errorf("memo is not supported for contract destination (%s)", txJob.Transaction.Destination)
+			return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("memo is not supported for contract destination (%s)", txJob.Transaction.Destination)}
 		}
 		params := txnbuild.PaymentToContractParams{
 			NetworkPassphrase: h.engine.SignatureService.NetworkPassphrase(),
@@ -85,11 +86,11 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 		}
 		op, err := txnbuild.NewPaymentToContract(params)
 		if err != nil {
-			return nil, fmt.Errorf("building payment to contract operation: %w", err)
+			return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("building payment to contract operation: %w", err)}
 		}
 		operation = &op
 	} else {
-		return nil, fmt.Errorf("invalid destination account (%s)", txJob.Transaction.Destination)
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("invalid destination account (%s)", txJob.Transaction.Destination)}
 	}
 
 	paymentTx, err := txnbuild.NewTransaction(

@@ -56,32 +56,32 @@ func NewSponsoredTransactionHandler(
 
 func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context, txJob *TxJob, channelAccountSequenceNum int64, distributionAccount string) (*txnbuild.Transaction, error) {
 	if txJob.Transaction.Sponsored.SponsoredAccount == "" {
-		return nil, fmt.Errorf("sponsored account cannot be empty")
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("sponsored account cannot be empty")}
 	}
 	if txJob.Transaction.Sponsored.SponsoredOperationXDR == "" {
-		return nil, fmt.Errorf("sponsored operation XDR cannot be empty")
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("sponsored operation XDR cannot be empty")}
 	}
 
 	if !strkey.IsValidContractAddress(txJob.Transaction.Sponsored.SponsoredAccount) {
-		return nil, fmt.Errorf("sponsored account is not a valid contract address")
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("sponsored account is not a valid contract address")}
 	}
 
 	xdrBytes, err := base64.StdEncoding.DecodeString(txJob.Transaction.Sponsored.SponsoredOperationXDR)
 	if err != nil {
-		return nil, fmt.Errorf("sponsored operation XDR is not valid base64: %w", err)
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("sponsored operation XDR is not valid base64: %w", err)}
 	}
 
 	var operation xdr.InvokeHostFunctionOp
 	err = xdr.SafeUnmarshal(xdrBytes, &operation)
 	if err != nil {
-		return nil, fmt.Errorf("sponsored operation XDR is not valid: %w", err)
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("sponsored operation XDR is not valid: %w", err)}
 	}
 
 	if operation.HostFunction.Type != xdr.HostFunctionTypeHostFunctionTypeInvokeContract {
-		return nil, fmt.Errorf("unsupported host function type: %v", operation.HostFunction.Type)
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("unsupported host function type: %v", operation.HostFunction.Type)}
 	}
 	if operation.HostFunction.InvokeContract == nil {
-		return nil, fmt.Errorf("invoke contract operation is missing contract details")
+		return nil, &utils.NonRetryablePreparationError{Err: fmt.Errorf("invoke contract operation is missing contract details")}
 	}
 
 	if len(operation.Auth) != 0 {

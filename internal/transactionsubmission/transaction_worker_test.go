@@ -1783,23 +1783,39 @@ func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) 
 		originalErr := fmt.Errorf("some non-horizon error")
 		handler.On("BuildInnerTransaction",
 			ctx, &txJob, int64(accountSequence), distAccount.Address).
-			Return(nil, originalErr)
+			Return(nil, originalErr).Once()
+		handler.On("MonitorTransactionProcessingFailed", ctx, &txJob, mock.Anything, false, mock.Anything).
+			Return().Once()
+		handler.On("RequiresRebuildOnRetry").Return(false).Maybe()
+
+		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.NonRetryablePreparationError")).Return().Once()
+
+		mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+		mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.NonRetryablePreparationError"), "preparation transaction error - cannot be retried").Once()
+
+		mockChAccModel := storeMocks.NewMockChannelAccountStore(t)
+		mockChAccModel.On("Unlock", ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey).Return(&txJob.ChannelAccount, nil).Once()
 
 		transactionWorker := &TransactionWorker{
-			engine:     submitterEngine,
-			txModel:    store.NewTransactionModel(dbConnectionPool),
-			chAccModel: store.NewChannelAccountModel(dbConnectionPool),
-			txHandler:  handler,
+			dbConnectionPool:    dbConnectionPool,
+			engine:              submitterEngine,
+			txModel:             store.NewTransactionModel(dbConnectionPool),
+			chAccModel:          mockChAccModel,
+			txHandler:           handler,
+			crashTrackerClient:  mockCrashTrackerClient,
+			txProcessingLimiter: mockTxProcessingLimiter,
 		}
 
 		gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
 		require.Error(t, err)
 		require.Nil(t, gotFeeBumpTx)
 
-		assert.Contains(t, err.Error(), "some non-horizon error")
+		assert.Equal(t, ErrTransactionHandled, err)
 
-		var hErr *utils.HorizonErrorWrapper
-		assert.False(t, errors.As(err, &hErr))
+		refreshedTx, getErr := transactionWorker.txModel.Get(ctx, txJob.Transaction.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, store.TransactionStatusError, refreshedTx.Status)
 
 		handler.AssertExpectations(t)
 	})
@@ -2297,13 +2313,41 @@ func Test_TransactionWorker_handlePreparationError_NonRPCErrors(t *testing.T) {
 			tw := getTransactionWorkerInstance(t, dbConnectionPool, NewMockTransactionHandler(t))
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
 
+			// Mock processing limiter
+			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.AnythingOfType("*utils.NonRetryablePreparationError")).Return().Once()
+			tw.txProcessingLimiter = mockTxProcessingLimiter
+
+			// Mock monitor
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
+			mMonitorClient.On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).Return(nil).Once()
+			tw.monitorSvc = tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+
+			// Mock transaction handler expectations
+			transactionHandler := NewMockTransactionHandler(t)
+			transactionHandler.On("RequiresRebuildOnRetry").Return(false).Maybe()
+			transactionHandler.On("MonitorTransactionProcessingFailed", ctx, &txJob, mock.Anything, false, mock.Anything).
+				Run(func(args mock.Arguments) {
+					mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+				}).Return().Maybe()
+			tw.txHandler = transactionHandler
+
+			// Mock crash tracker
+			mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+			mockCrashTrackerClient.On("LogAndReportErrors", ctx, mock.AnythingOfType("*utils.NonRetryablePreparationError"), "preparation transaction error - cannot be retried").Once()
+			tw.crashTrackerClient = mockCrashTrackerClient
+
 			err := tw.handlePreparationError(ctx, &txJob, tc.error)
 
-			assert.Equal(t, tc.error, err)
+			assert.Equal(t, ErrTransactionHandled, err)
 
 			refreshedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
 			require.NoError(t, err)
-			assert.Equal(t, store.TransactionStatusProcessing, refreshedTx.Status)
+			assert.Equal(t, store.TransactionStatusError, refreshedTx.Status)
 		})
 	}
 }
