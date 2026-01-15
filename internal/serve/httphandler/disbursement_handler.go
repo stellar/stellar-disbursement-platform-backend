@@ -486,17 +486,9 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	disbursementID := chi.URLParam(r, "id")
 
-	// Get user ID from context (works for both API key and JWT authentication)
-	userID, err := sdpcontext.GetUserIDFromContext(ctx)
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
-		httperror.Unauthorized("Cannot get user ID from context", err, nil).Render(w)
-		return
-	}
-
-	// Get user by ID instead of by token to support both API key and JWT authentication
-	user, err := d.AuthManager.GetUserByID(ctx, userID)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user from user ID", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(w)
 		return
 	}
 
