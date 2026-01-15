@@ -10,7 +10,7 @@ import (
 
 const (
 	sepNonceCleanupJobName     = "sep_nonce_cleanup_job"
-	sepNonceCleanupJobInterval = time.Minute
+	sepNonceCleanupJobInterval = time.Minute * 30
 )
 
 type sepNonceCleanupJob struct {
