@@ -510,7 +510,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 			assert.Len(t, originalTx.StatusHistory, 1)
 			initialStatusHistory := originalTx.StatusHistory[0]
 
-			updatedTx, err := txModel.UpdateStellarTransactionHashAndXDRSent(ctx, tx.ID, tc.txHash, tc.xdrSent)
+			updatedTx, err := txModel.UpdateStellarTransactionHashAndXDRSent(ctx, tx.ID, tc.txHash, tc.xdrSent, "GDISTACCOUNT")
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -518,6 +518,8 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 			} else {
 				// check if object has been updated correctly
 				require.NoError(t, err)
+				assert.True(t, updatedTx.DistributionAccount.Valid)
+				assert.Equal(t, "GDISTACCOUNT", updatedTx.DistributionAccount.String)
 				assert.True(t, updatedTx.XDRSent.Valid)
 				assert.Equal(t, envelopeXDR, updatedTx.XDRSent.String)
 				assert.True(t, updatedTx.StellarTransactionHash.Valid)
@@ -546,6 +548,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 				originalTx.UpdatedAt = refreshedTx.UpdatedAt
 				originalTx.StatusHistory = wantStatusHistory
 				originalTx.AttemptsCount += 1
+				originalTx.DistributionAccount = refreshedTx.DistributionAccount
 				assert.Equal(t, refreshedTx, originalTx)
 			}
 		})

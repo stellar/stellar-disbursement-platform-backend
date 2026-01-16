@@ -94,6 +94,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		Asset:             *asset,
 		ReceiverWallet:    receiverWallet,
 		ExternalPaymentID: "mockID",
+		SenderAddress:     "GDOSPKDCGMYZTPHXPFAZSSVIHNKBPEGQXQVEWEJ4JXMKYZNXEVCFGMC2",
 	})
 	t.Run("successfully returns payment details for given ID", func(t *testing.T) {
 		// test
@@ -169,7 +170,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			},
 			"created_at": "` + payment.CreatedAt.Format(time.RFC3339Nano) + `",
 			"updated_at": "` + payment.UpdatedAt.Format(time.RFC3339Nano) + `",
-			"external_payment_id": "` + payment.ExternalPaymentID + `"
+			"external_payment_id": "` + payment.ExternalPaymentID + `",
+			"sender_address": "` + payment.SenderAddress + `"
 		}`
 
 		assert.JSONEq(t, wantJSON, rr.Body.String())

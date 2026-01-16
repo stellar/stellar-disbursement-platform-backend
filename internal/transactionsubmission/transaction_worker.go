@@ -419,7 +419,10 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 		return nil, fmt.Errorf("getting envelopeXDR for job %v: %w", txJob, err)
 	}
 
-	updatedTx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR)
+	// The distribution account is the fee account in the fee bump transaction
+	distributionAccountAddr := feeBumpTx.FeeAccount()
+
+	updatedTx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR, distributionAccountAddr)
 	if err != nil {
 		return nil, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
 	}
