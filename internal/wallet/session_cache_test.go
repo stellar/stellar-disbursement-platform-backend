@@ -1,121 +1,114 @@
 package wallet
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
-func Test_NewInMemorySessionCache(t *testing.T) {
-	cache, err := NewInMemorySessionCache(5*time.Minute, 128)
-	require.NoError(t, err)
-	require.NotNil(t, cache)
-}
+func Test_SessionCache_Store_Get(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
 
-func Test_InMemorySessionCache_Store(t *testing.T) {
-	cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	cache, err := NewSessionCache(dbConnectionPool, 5*time.Minute)
 	require.NoError(t, err)
 
+	ctx := context.Background()
 	session := webauthn.SessionData{
 		Challenge: "test-challenge",
 		UserID:    []byte("user-123"),
 	}
 
-	err = cache.Store("test-key", SessionTypeRegistration, session)
+	err = cache.Store(ctx, session.Challenge, SessionTypeRegistration, session)
 	require.NoError(t, err)
 
-	retrieved, err := cache.Get("test-key", SessionTypeRegistration)
+	retrieved, err := cache.Get(ctx, session.Challenge, SessionTypeRegistration)
 	require.NoError(t, err)
 	assert.Equal(t, session.Challenge, retrieved.Challenge)
 	assert.Equal(t, session.UserID, retrieved.UserID)
 }
 
-func Test_InMemorySessionCache_Get(t *testing.T) {
-	t.Run("returns ErrSessionNotFound if key does not exist", func(t *testing.T) {
-		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
-		require.NoError(t, err)
+func Test_SessionCache_Get_TypeMismatch(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
 
-		_, err = cache.Get("non-existent-key", SessionTypeRegistration)
-		assert.ErrorIs(t, err, ErrSessionNotFound)
-	})
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
 
-	t.Run("returns ErrSessionTypeMismatch if session type does not match", func(t *testing.T) {
-		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
-		require.NoError(t, err)
+	cache, err := NewSessionCache(dbConnectionPool, 5*time.Minute)
+	require.NoError(t, err)
 
-		session := webauthn.SessionData{
-			Challenge: "test-challenge",
-		}
-		err = cache.Store("test-key", SessionTypeRegistration, session)
-		require.NoError(t, err)
+	ctx := context.Background()
+	session := webauthn.SessionData{Challenge: "test-challenge"}
+	require.NoError(t, cache.Store(ctx, session.Challenge, SessionTypeRegistration, session))
 
-		_, err = cache.Get("test-key", SessionTypeAuthentication)
-		assert.ErrorIs(t, err, ErrSessionTypeMismatch)
-	})
-
-	t.Run("returns ErrSessionNotFound if session is expired", func(t *testing.T) {
-		cache, err := NewInMemorySessionCache(1*time.Millisecond, 128)
-		require.NoError(t, err)
-
-		session := webauthn.SessionData{
-			Challenge: "test-challenge",
-		}
-		err = cache.Store("test-key", SessionTypeRegistration, session)
-		require.NoError(t, err)
-
-		time.Sleep(3 * time.Millisecond)
-
-		_, err = cache.Get("test-key", SessionTypeRegistration)
-		assert.ErrorIs(t, err, ErrSessionNotFound)
-	})
-
-	t.Run("successfully retrieves a valid session", func(t *testing.T) {
-		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
-		require.NoError(t, err)
-
-		session := webauthn.SessionData{
-			Challenge: "test-challenge-2",
-			UserID:    []byte("user-456"),
-		}
-		err = cache.Store("test-key-2", SessionTypeAuthentication, session)
-		require.NoError(t, err)
-
-		retrieved, err := cache.Get("test-key-2", SessionTypeAuthentication)
-		require.NoError(t, err)
-		assert.Equal(t, session.Challenge, retrieved.Challenge)
-		assert.Equal(t, session.UserID, retrieved.UserID)
-	})
+	_, err = cache.Get(ctx, session.Challenge, SessionTypeAuthentication)
+	assert.ErrorIs(t, err, ErrSessionTypeMismatch)
 }
 
-func Test_InMemorySessionCache_Delete(t *testing.T) {
-	t.Run("successfully deletes a session", func(t *testing.T) {
-		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
-		require.NoError(t, err)
+func Test_SessionCache_Get_Expired(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
 
-		session := webauthn.SessionData{
-			Challenge: "test-challenge",
-		}
-		err = cache.Store("test-key", SessionTypeRegistration, session)
-		require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
 
-		_, err = cache.Get("test-key", SessionTypeRegistration)
-		require.NoError(t, err)
+	cache, err := NewSessionCache(dbConnectionPool, 5*time.Minute)
+	require.NoError(t, err)
 
-		cache.Delete("test-key")
+	ctx := context.Background()
+	challenge := "expired-challenge"
+	session := webauthn.SessionData{Challenge: challenge}
+	sessionBytes, err := json.Marshal(session)
+	require.NoError(t, err)
 
-		_, err = cache.Get("test-key", SessionTypeRegistration)
-		assert.ErrorIs(t, err, ErrSessionNotFound)
-	})
+	expiredAt := time.Now().UTC().Add(-1 * time.Minute)
+	model := data.NewPasskeySessionModel(dbConnectionPool)
+	require.NoError(t, model.Store(ctx, challenge, string(SessionTypeRegistration), sessionBytes, expiredAt))
 
-	t.Run("does not error when deleting non-existent key", func(t *testing.T) {
-		cache, err := NewInMemorySessionCache(5*time.Minute, 128)
-		require.NoError(t, err)
+	_, err = cache.Get(ctx, challenge, SessionTypeRegistration)
+	assert.ErrorIs(t, err, ErrSessionNotFound)
 
-		assert.NotPanics(t, func() {
-			cache.Delete("non-existent-key")
-		})
-	})
+	var count int
+	err = dbConnectionPool.GetContext(ctx, &count, "SELECT COUNT(1) FROM passkey_sessions WHERE challenge = $1", challenge)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func Test_SessionCache_Delete(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	cache, err := NewSessionCache(dbConnectionPool, 5*time.Minute)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	session := webauthn.SessionData{Challenge: "delete-challenge"}
+	require.NoError(t, cache.Store(ctx, session.Challenge, SessionTypeRegistration, session))
+
+	cache.Delete(ctx, session.Challenge)
+
+	var count int
+	err = dbConnectionPool.GetContext(ctx, &count, "SELECT COUNT(1) FROM passkey_sessions WHERE challenge = $1", session.Challenge)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
 }

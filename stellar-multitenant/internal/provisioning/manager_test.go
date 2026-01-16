@@ -473,6 +473,7 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"embedded_wallets",
 		"messages",
 		"organizations",
+		"passkey_sessions",
 		"payments",
 		"receiver_verifications",
 		"receiver_verifications_audit",

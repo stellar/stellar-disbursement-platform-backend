@@ -82,6 +82,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	sj := []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 		scheduler.WithSEPNonceCleanupJobOption(models),
+		scheduler.WithPasskeySessionCleanupJobOption(models),
 		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
 			Models:              models,
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
@@ -227,14 +228,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:   types.String,
 			ConfigKey: &serveOpts.EmbeddedWalletsWasmHash,
 			Required:  false,
-		},
-		{
-			Name:        "webauthn-session-cache-max-entries",
-			Usage:       "Maximum number of WebAuthn sessions stored for passkey flows",
-			OptType:     types.Int,
-			ConfigKey:   &serveOpts.WebAuthnSessionCacheMaxEntries,
-			FlagDefault: 1024,
-			Required:    false,
 		},
 		{
 			Name:        "webauthn-session-ttl-seconds",
@@ -676,9 +669,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				}
 
 				serveOpts.WebAuthnService, err = di.NewWebAuthnService(context.Background(), di.WebAuthnServiceOptions{
-					MTNDBConnectionPool:    serveOpts.MtnDBConnectionPool,
-					SessionTTL:             time.Duration(serveOpts.WebAuthnSessionTTLSeconds) * time.Second,
-					SessionCacheMaxEntries: serveOpts.WebAuthnSessionCacheMaxEntries,
+					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
+					SessionTTL:          time.Duration(serveOpts.WebAuthnSessionTTLSeconds) * time.Second,
 				})
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating WebAuthn service: %v", err)

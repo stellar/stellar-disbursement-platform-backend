@@ -21,8 +21,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-func newTestSessionCache(t *testing.T) SessionCacheInterface {
-	cache, err := NewInMemorySessionCache(5*time.Minute, 128)
+func newTestSessionCache(t *testing.T, dbConnectionPool db.DBConnectionPool) SessionCacheInterface {
+	t.Helper()
+	cache, err := NewSessionCache(dbConnectionPool, 5*time.Minute)
 	require.NoError(t, err)
 	return cache
 }
@@ -91,7 +92,7 @@ func Test_NewWebAuthnService(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	sessionCache := newTestSessionCache(t)
+	sessionCache := newTestSessionCache(t, dbConnectionPool)
 
 	t.Run("return an error if models is nil", func(t *testing.T) {
 		service, err := NewWebAuthnService(nil, sessionCache)
@@ -132,7 +133,7 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 	t.Run("returns ErrInvalidToken if token does not exist", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		sessionCache := newTestSessionCache(t)
+		sessionCache := newTestSessionCache(t, dbConnectionPool)
 		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
@@ -146,7 +147,7 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 	t.Run("returns ErrWalletAlreadyExists if wallet status is not pending", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		sessionCache := newTestSessionCache(t)
+		sessionCache := newTestSessionCache(t, dbConnectionPool)
 		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
@@ -160,7 +161,7 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 	t.Run("🎉 successfully starts passkey registration and stores session", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		sessionCache := newTestSessionCache(t)
+		sessionCache := newTestSessionCache(t, dbConnectionPool)
 		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
@@ -184,7 +185,7 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 		assert.Equal(t, protocol.Platform, creation.Response.AuthenticatorSelection.AuthenticatorAttachment)
 		assert.Equal(t, protocol.VerificationRequired, creation.Response.AuthenticatorSelection.UserVerification)
 
-		_, err = sessionCache.Get(creation.Response.Challenge.String(), SessionTypeRegistration)
+		_, err = sessionCache.Get(ctx, creation.Response.Challenge.String(), SessionTypeRegistration)
 		require.NoError(t, err)
 	})
 }
@@ -206,7 +207,7 @@ func Test_WebAuthnService_FinishPasskeyRegistration(t *testing.T) {
 	t.Run("returns ErrInvalidToken if token does not exist", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		sessionCache := newTestSessionCache(t)
+		sessionCache := newTestSessionCache(t, dbConnectionPool)
 		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
@@ -221,7 +222,7 @@ func Test_WebAuthnService_FinishPasskeyRegistration(t *testing.T) {
 	t.Run("returns ErrWalletAlreadyExists if wallet status is not pending", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		sessionCache := newTestSessionCache(t)
+		sessionCache := newTestSessionCache(t, dbConnectionPool)
 		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
@@ -237,7 +238,7 @@ func Test_WebAuthnService_FinishPasskeyRegistration(t *testing.T) {
 	t.Run("returns error if WebAuthn verification fails", func(t *testing.T) {
 		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
-		sessionCache := newTestSessionCache(t)
+		sessionCache := newTestSessionCache(t, dbConnectionPool)
 		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
@@ -272,7 +273,7 @@ func Test_WebAuthnService_StartPasskeyAuthentication(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("🎉 successfully starts discoverable passkey authentication and stores session in cache", func(t *testing.T) {
-		sessionCache := newTestSessionCache(t)
+		sessionCache := newTestSessionCache(t, dbConnectionPool)
 		service, err := NewWebAuthnService(models, sessionCache)
 		require.NoError(t, err)
 
@@ -284,7 +285,7 @@ func Test_WebAuthnService_StartPasskeyAuthentication(t *testing.T) {
 		assert.NotEmpty(t, assertion.Response.Challenge)
 		assert.Equal(t, protocol.VerificationRequired, assertion.Response.UserVerification)
 
-		_, err = sessionCache.Get(assertion.Response.Challenge.String(), SessionTypeAuthentication)
+		_, err = sessionCache.Get(ctx, assertion.Response.Challenge.String(), SessionTypeAuthentication)
 		require.NoError(t, err)
 	})
 }
@@ -303,7 +304,7 @@ func Test_WebAuthnService_FinishPasskeyAuthentication(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	sessionCache := newTestSessionCache(t)
+	sessionCache := newTestSessionCache(t, dbConnectionPool)
 	service, err := NewWebAuthnService(models, sessionCache)
 	require.NoError(t, err)
 

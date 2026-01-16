@@ -106,11 +106,10 @@ type ServeOptions struct {
 	CircleAPIType               circle.APIType
 	BridgeService               bridge.ServiceInterface
 
-	EmbeddedWalletService          services.EmbeddedWalletServiceInterface
-	WebAuthnSessionCacheMaxEntries int
-	WebAuthnSessionTTLSeconds      int
-	WebAuthnService                wallet.WebAuthnServiceInterface
-	walletJWTManager               wallet.WalletJWTManager
+	EmbeddedWalletService     services.EmbeddedWalletServiceInterface
+	WebAuthnSessionTTLSeconds int
+	WebAuthnService           wallet.WebAuthnServiceInterface
+	walletJWTManager          wallet.WalletJWTManager
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

@@ -1,72 +1,106 @@
 package wallet
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/hashicorp/golang-lru/v2/expirable"
-)
+	"github.com/stellar/go-stellar-sdk/support/log"
 
-type storedSession struct {
-	Type    SessionType          `json:"type"`
-	Session webauthn.SessionData `json:"session"`
-}
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+)
 
 // SessionCacheInterface defines the interface for WebAuthn session storage.
 type SessionCacheInterface interface {
-	Store(key string, sessType SessionType, session webauthn.SessionData) error
-	Get(key string, expectedType SessionType) (webauthn.SessionData, error)
-	Delete(key string)
+	// Store saves a WebAuthn session by key and type.
+	Store(ctx context.Context, key string, sessType SessionType, session webauthn.SessionData) error
+	// Get retrieves a WebAuthn session by key and validates its type.
+	Get(ctx context.Context, key string, expectedType SessionType) (webauthn.SessionData, error)
+	// Delete removes a WebAuthn session by key.
+	Delete(ctx context.Context, key string)
 }
 
-var _ SessionCacheInterface = (*InMemorySessionCache)(nil)
+var _ SessionCacheInterface = (*sessionCache)(nil)
 
-// InMemorySessionCache provides in-memory storage for WebAuthn sessions.
-type InMemorySessionCache struct {
-	cache *expirable.LRU[string, storedSession]
+type sessionCache struct {
+	model *data.PasskeySessionModel
+	ttl   time.Duration
 }
 
-// NewInMemorySessionCache creates a new InMemorySessionCache.
-func NewInMemorySessionCache(defaultExpiration time.Duration, maxEntries int) (*InMemorySessionCache, error) {
-	if maxEntries <= 0 {
-		return nil, fmt.Errorf("maxEntries must be greater than zero")
+// NewSessionCache creates a new SessionCache backed by the passkey sessions table.
+func NewSessionCache(dbConnectionPool db.DBConnectionPool, ttl time.Duration) (SessionCacheInterface, error) {
+	if dbConnectionPool == nil {
+		return nil, fmt.Errorf("dbConnectionPool cannot be nil")
 	}
-	if defaultExpiration <= 0 {
-		return nil, fmt.Errorf("defaultExpiration must be greater than zero")
+	if ttl <= 0 {
+		return nil, fmt.Errorf("ttl must be greater than zero")
 	}
 
-	return &InMemorySessionCache{
-		cache: expirable.NewLRU[string, storedSession](maxEntries, nil, defaultExpiration),
-	}, nil
+	cache := &sessionCache{
+		model: data.NewPasskeySessionModel(dbConnectionPool),
+		ttl:   ttl,
+	}
+
+	return cache, nil
 }
 
-// Store saves a WebAuthn session in the cache.
-func (sc *InMemorySessionCache) Store(key string, sessType SessionType, session webauthn.SessionData) error {
-	stored := storedSession{
-		Type:    sessType,
-		Session: session,
+func (sc *sessionCache) Store(ctx context.Context, key string, sessType SessionType, session webauthn.SessionData) error {
+	if key == "" {
+		return fmt.Errorf("key cannot be empty")
 	}
 
-	sc.cache.Add(key, stored)
+	sessionBytes, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("marshaling session: %w", err)
+	}
+
+	expiresAt := time.Now().UTC().Add(sc.ttl)
+	if err := sc.model.Store(ctx, key, string(sessType), sessionBytes, expiresAt); err != nil {
+		return fmt.Errorf("storing session: %w", err)
+	}
+
 	return nil
 }
 
-// Get retrieves a WebAuthn session from the cache and checks its type.
-func (sc *InMemorySessionCache) Get(key string, expectedType SessionType) (webauthn.SessionData, error) {
-	stored, found := sc.cache.Get(key)
-	if !found {
+func (sc *sessionCache) Get(ctx context.Context, key string, expectedType SessionType) (webauthn.SessionData, error) {
+	if key == "" {
 		return webauthn.SessionData{}, ErrSessionNotFound
 	}
 
-	if stored.Type != expectedType {
+	session, err := sc.model.Get(ctx, key)
+	if err != nil {
+		return webauthn.SessionData{}, fmt.Errorf("retrieving session: %w", err)
+	}
+	if session == nil {
+		return webauthn.SessionData{}, ErrSessionNotFound
+	}
+	if !session.ExpiresAt.After(time.Now().UTC()) {
+		if delErr := sc.model.Delete(ctx, key); delErr != nil {
+			return webauthn.SessionData{}, fmt.Errorf("deleting expired session: %w", delErr)
+		}
+		return webauthn.SessionData{}, ErrSessionNotFound
+	}
+	if session.SessionType != string(expectedType) {
 		return webauthn.SessionData{}, ErrSessionTypeMismatch
 	}
 
-	return stored.Session, nil
+	var sessionData webauthn.SessionData
+	if err := json.Unmarshal(session.SessionData, &sessionData); err != nil {
+		return webauthn.SessionData{}, fmt.Errorf("unmarshaling session: %w", err)
+	}
+
+	return sessionData, nil
 }
 
-// Delete removes a WebAuthn session from the cache.
-func (sc *InMemorySessionCache) Delete(key string) {
-	sc.cache.Remove(key)
+func (sc *sessionCache) Delete(ctx context.Context, key string) {
+	if key == "" {
+		return
+	}
+
+	if err := sc.model.Delete(ctx, key); err != nil {
+		log.Ctx(ctx).Errorf("deleting passkey session %s: %v", key, err)
+	}
 }
