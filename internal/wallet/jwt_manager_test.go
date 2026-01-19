@@ -47,30 +47,32 @@ func Test_WalletJWTManager_GenerateToken(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	tenantID := "test-tenant-id"
 
 	t.Run("generates token correctly", func(t *testing.T) {
 		credentialID := "test-credential-id"
 		contractAddress := "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 		expiresAt := time.Now().Add(time.Hour)
 
-		token, err := jwtManager.GenerateToken(ctx, credentialID, contractAddress, expiresAt)
+		token, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, contractAddress, expiresAt)
 		require.NoError(t, err)
 		assert.NotEmpty(t, token)
 
-		gotCredentialID, gotContractAddress, err := jwtManager.ValidateToken(ctx, token)
+		gotCredentialID, gotContractAddress, gotTenantID, err := jwtManager.ValidateToken(ctx, token)
 		require.NoError(t, err)
 		assert.Equal(t, credentialID, gotCredentialID)
 		assert.Equal(t, contractAddress, gotContractAddress)
+		assert.Equal(t, tenantID, gotTenantID)
 	})
 
 	t.Run("generates different tokens for different contract addresses", func(t *testing.T) {
 		credentialID := "test-credential-id"
 		expiresAt := time.Now().Add(time.Hour)
 
-		token1, err := jwtManager.GenerateToken(ctx, credentialID, "contract1", expiresAt)
+		token1, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, "contract1", expiresAt)
 		require.NoError(t, err)
 
-		token2, err := jwtManager.GenerateToken(ctx, credentialID, "contract2", expiresAt)
+		token2, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, "contract2", expiresAt)
 		require.NoError(t, err)
 
 		assert.NotEqual(t, token1, token2)
@@ -81,15 +83,23 @@ func Test_WalletJWTManager_GenerateToken(t *testing.T) {
 		contractAddress := "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 		expiresAt := time.Now().Add(time.Hour)
 
-		token1, err := jwtManager.GenerateToken(ctx, credentialID, contractAddress, expiresAt)
+		token1, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, contractAddress, expiresAt)
 		require.NoError(t, err)
 
 		time.Sleep(time.Millisecond * 10)
 
-		token2, err := jwtManager.GenerateToken(ctx, credentialID, contractAddress, expiresAt)
+		token2, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, contractAddress, expiresAt)
 		require.NoError(t, err)
 
 		assert.NotEqual(t, token1, token2)
+	})
+
+	t.Run("returns error when tenant ID is empty", func(t *testing.T) {
+		credentialID := "test-credential-id"
+		expiresAt := time.Now().Add(time.Hour)
+
+		_, err := jwtManager.GenerateToken(ctx, "", credentialID, "", expiresAt)
+		assert.ErrorIs(t, err, ErrMissingTenantID)
 	})
 }
 
@@ -98,15 +108,17 @@ func Test_WalletJWTManager_ValidateToken(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+	tenantID := "test-tenant-id"
 
 	t.Run("returns error when token has invalid signature", func(t *testing.T) {
 		invalidSignatureToken := "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJDRExaRkMzU1lKWURaVDdLNjdWWjc1SFBKVklFVVZOSVhGNDdaRzJGQjJSTVFRVlUySEhHQ1lTQyIsImV4cCI6MTY3NTk2Mjk0NywiaWF0IjoxNjc1OTU5MzQ3fQ.invalid_signature_here"
 
-		credentialID, contractAddress, err := jwtManager.ValidateToken(ctx, invalidSignatureToken)
+		credentialID, contractAddress, tokenTenantID, err := jwtManager.ValidateToken(ctx, invalidSignatureToken)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidWalletToken)
 		assert.Empty(t, credentialID)
 		assert.Empty(t, contractAddress)
+		assert.Empty(t, tokenTenantID)
 	})
 
 	t.Run("returns error when token is expired", func(t *testing.T) {
@@ -114,35 +126,38 @@ func Test_WalletJWTManager_ValidateToken(t *testing.T) {
 		contractAddress := "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 		expiresAt := time.Now().Add(-time.Hour)
 
-		token, err := jwtManager.GenerateToken(ctx, credentialID, contractAddress, expiresAt)
+		token, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, contractAddress, expiresAt)
 		require.NoError(t, err)
 
-		gotCredentialID, gotContractAddress, err := jwtManager.ValidateToken(ctx, token)
+		gotCredentialID, gotContractAddress, gotTenantID, err := jwtManager.ValidateToken(ctx, token)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrExpiredWalletToken)
 		assert.Empty(t, gotCredentialID)
 		assert.Empty(t, gotContractAddress)
+		assert.Empty(t, gotTenantID)
 	})
 
 	t.Run("returns error when token has invalid segments", func(t *testing.T) {
-		credentialID, contractAddress, err := jwtManager.ValidateToken(ctx, "token")
+		credentialID, contractAddress, tokenTenantID, err := jwtManager.ValidateToken(ctx, "token")
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrInvalidWalletToken)
 		assert.Empty(t, credentialID)
 		assert.Empty(t, contractAddress)
+		assert.Empty(t, tokenTenantID)
 	})
 
 	t.Run("returns error when token has empty credential_id claim", func(t *testing.T) {
 		expiresAt := time.Now().Add(time.Hour)
 
-		token, err := jwtManager.GenerateToken(ctx, "", "", expiresAt)
+		token, err := jwtManager.GenerateToken(ctx, tenantID, "", "", expiresAt)
 		require.NoError(t, err)
 
-		credentialID, contractAddress, err := jwtManager.ValidateToken(ctx, token)
+		credentialID, contractAddress, tokenTenantID, err := jwtManager.ValidateToken(ctx, token)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrMissingSubClaim)
 		assert.Empty(t, credentialID)
 		assert.Empty(t, contractAddress)
+		assert.Empty(t, tokenTenantID)
 	})
 
 	t.Run("validates token successfully", func(t *testing.T) {
@@ -150,25 +165,27 @@ func Test_WalletJWTManager_ValidateToken(t *testing.T) {
 		contractAddress := "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 		expiresAt := time.Now().Add(time.Hour)
 
-		token, err := jwtManager.GenerateToken(ctx, credentialID, contractAddress, expiresAt)
+		token, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, contractAddress, expiresAt)
 		require.NoError(t, err)
 
-		gotCredentialID, gotContractAddress, err := jwtManager.ValidateToken(ctx, token)
+		gotCredentialID, gotContractAddress, gotTenantID, err := jwtManager.ValidateToken(ctx, token)
 		require.NoError(t, err)
 		assert.Equal(t, credentialID, gotCredentialID)
 		assert.Equal(t, contractAddress, gotContractAddress)
+		assert.Equal(t, tenantID, gotTenantID)
 	})
 
 	t.Run("validates token with empty contract_address successfully", func(t *testing.T) {
 		credentialID := "test-credential-id"
 		expiresAt := time.Now().Add(time.Hour)
 
-		token, err := jwtManager.GenerateToken(ctx, credentialID, "", expiresAt)
+		token, err := jwtManager.GenerateToken(ctx, tenantID, credentialID, "", expiresAt)
 		require.NoError(t, err)
 
-		gotCredentialID, gotContractAddress, err := jwtManager.ValidateToken(ctx, token)
+		gotCredentialID, gotContractAddress, gotTenantID, err := jwtManager.ValidateToken(ctx, token)
 		require.NoError(t, err)
 		assert.Equal(t, credentialID, gotCredentialID)
 		assert.Empty(t, gotContractAddress)
+		assert.Equal(t, tenantID, gotTenantID)
 	})
 }

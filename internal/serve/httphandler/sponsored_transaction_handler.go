@@ -72,6 +72,11 @@ func (h SponsoredTransactionHandler) CreateSponsoredTransaction(w http.ResponseW
 		httperror.Unauthorized("Wallet contract address not found in context", err, nil).Render(w)
 		return
 	}
+	account = strings.TrimSpace(account)
+	if account == "" {
+		httperror.Unauthorized("", services.ErrMissingAccount, nil).Render(w)
+		return
+	}
 
 	transactionID, err := h.EmbeddedWalletService.SponsorTransaction(ctx, account, reqBody.OperationXDR)
 	if err != nil {
@@ -89,6 +94,16 @@ func (h SponsoredTransactionHandler) CreateSponsoredTransaction(w http.ResponseW
 
 func (h SponsoredTransactionHandler) GetSponsoredTransaction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	account, err := sdpcontext.GetWalletContractAddressFromContext(ctx)
+	if err != nil {
+		httperror.Unauthorized("Wallet contract address not found in context", err, nil).Render(w)
+		return
+	}
+	account = strings.TrimSpace(account)
+	if account == "" {
+		httperror.Unauthorized("", services.ErrMissingAccount, nil).Render(w)
+		return
+	}
 	transactionID := strings.TrimSpace(chi.URLParam(r, "id"))
 
 	if transactionID == "" {
@@ -96,7 +111,7 @@ func (h SponsoredTransactionHandler) GetSponsoredTransaction(w http.ResponseWrit
 		return
 	}
 
-	transaction, err := h.EmbeddedWalletService.GetTransactionStatus(ctx, transactionID)
+	transaction, err := h.EmbeddedWalletService.GetTransactionStatus(ctx, account, transactionID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("Transaction not found", err, nil).Render(w)

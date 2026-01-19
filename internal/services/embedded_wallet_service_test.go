@@ -233,6 +233,120 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	})
 }
 
+func Test_EmbeddedWalletService_SponsorTransaction(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	require.NoError(t, err)
+
+	const contractAddress = "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	const operationXDR = "test-operation-xdr"
+
+	data.DeleteAllSponsoredTransactionsFixtures(t, ctx, dbConnectionPool)
+	data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+	errorCases := []struct {
+		name         string
+		account      string
+		operationXDR string
+		expectedErr  error
+	}{
+		{
+			name:         "returns error when account is empty",
+			account:      "",
+			operationXDR: operationXDR,
+			expectedErr:  ErrMissingAccount,
+		},
+		{
+			name:         "returns error when operation XDR is empty",
+			account:      contractAddress,
+			operationXDR: "",
+			expectedErr:  ErrMissingOperationXDR,
+		},
+	}
+
+	for _, tc := range errorCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := service.SponsorTransaction(ctx, tc.account, tc.operationXDR)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tc.expectedErr)
+		})
+	}
+
+	t.Run("successfully creates sponsored transaction for embedded wallet", func(t *testing.T) {
+		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", testWasmHash, contractAddress, "credential", "public-key", data.SuccessWalletStatus)
+
+		transactionID, err := service.SponsorTransaction(ctx, contractAddress, operationXDR)
+		require.NoError(t, err)
+		require.NotEmpty(t, transactionID)
+
+		transaction, err := sdpModels.SponsoredTransactions.GetByID(ctx, dbConnectionPool, transactionID)
+		require.NoError(t, err)
+		assert.Equal(t, contractAddress, transaction.Account)
+		assert.Equal(t, operationXDR, transaction.OperationXDR)
+	})
+}
+
+func Test_EmbeddedWalletService_GetTransactionStatus(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	sdpModels, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	require.NoError(t, err)
+
+	const contractAddress = "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	const otherAddress = "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R4"
+
+	data.DeleteAllSponsoredTransactionsFixtures(t, ctx, dbConnectionPool)
+
+	t.Run("returns error when account is empty", func(t *testing.T) {
+		_, err := service.GetTransactionStatus(ctx, "", "transaction-id")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMissingAccount)
+	})
+
+	t.Run("returns error when transaction ID is empty", func(t *testing.T) {
+		_, err := service.GetTransactionStatus(ctx, contractAddress, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "transaction ID is required")
+	})
+
+	t.Run("returns not found when transaction does not belong to account", func(t *testing.T) {
+		transaction := data.CreateSponsoredTransactionFixture(t, ctx, dbConnectionPool, contractAddress, "operation-xdr")
+
+		_, err := service.GetTransactionStatus(ctx, otherAddress, transaction.ID)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, data.ErrRecordNotFound)
+	})
+
+	t.Run("returns sponsored transaction when account matches", func(t *testing.T) {
+		transaction := data.CreateSponsoredTransactionFixture(t, ctx, dbConnectionPool, contractAddress, "operation-xdr")
+
+		found, err := service.GetTransactionStatus(ctx, contractAddress, transaction.ID)
+		require.NoError(t, err)
+		require.NotNil(t, found)
+		assert.Equal(t, transaction.ID, found.ID)
+		assert.Equal(t, contractAddress, found.Account)
+	})
+}
+
 func Test_EmbeddedWalletService_GetPendingDisbursementAsset(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

@@ -14,15 +14,17 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	walletMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/wallet/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_WalletAuthMiddleware_SuccessfulAuthentication(t *testing.T) {
 	credentialID := "test-credential-id"
 	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	tenantID := "test-tenant-id"
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "valid-token").
-		Return(credentialID, contractAddress, nil).
+		Return(credentialID, contractAddress, tenantID, nil).
 		Once()
 
 	var capturedContractAddress string
@@ -38,6 +40,7 @@ func Test_WalletAuthMiddleware_SuccessfulAuthentication(t *testing.T) {
 	r.Get("/test", h)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req = req.WithContext(sdpcontext.SetTenantInContext(req.Context(), &schema.Tenant{ID: tenantID}))
 	req.Header.Set("Authorization", "Bearer valid-token")
 	w := httptest.NewRecorder()
 
@@ -122,7 +125,7 @@ func Test_WalletAuthMiddleware_InvalidToken(t *testing.T) {
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "invalid-token").
-		Return("", "", wallet.ErrInvalidWalletToken).
+		Return("", "", "", wallet.ErrInvalidWalletToken).
 		Once()
 
 	r := chi.NewRouter()
@@ -132,6 +135,7 @@ func Test_WalletAuthMiddleware_InvalidToken(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req = req.WithContext(sdpcontext.SetTenantInContext(req.Context(), &schema.Tenant{ID: "tenant-id"}))
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	w := httptest.NewRecorder()
 
@@ -144,7 +148,7 @@ func Test_WalletAuthMiddleware_ExpiredToken(t *testing.T) {
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "expired-token").
-		Return("", "", wallet.ErrExpiredWalletToken).
+		Return("", "", "", wallet.ErrExpiredWalletToken).
 		Once()
 
 	r := chi.NewRouter()
@@ -154,6 +158,7 @@ func Test_WalletAuthMiddleware_ExpiredToken(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req = req.WithContext(sdpcontext.SetTenantInContext(req.Context(), &schema.Tenant{ID: "tenant-id"}))
 	req.Header.Set("Authorization", "Bearer expired-token")
 	w := httptest.NewRecorder()
 
@@ -166,7 +171,7 @@ func Test_WalletAuthMiddleware_UnexpectedValidationError(t *testing.T) {
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "error-token").
-		Return("", "", errors.New("unexpected database error")).
+		Return("", "", "", errors.New("unexpected database error")).
 		Once()
 
 	r := chi.NewRouter()
@@ -176,6 +181,7 @@ func Test_WalletAuthMiddleware_UnexpectedValidationError(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req = req.WithContext(sdpcontext.SetTenantInContext(req.Context(), &schema.Tenant{ID: "tenant-id"}))
 	req.Header.Set("Authorization", "Bearer error-token")
 	w := httptest.NewRecorder()
 
@@ -189,7 +195,7 @@ func Test_WalletAuthMiddleware_EmptyContractAddress(t *testing.T) {
 	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "token-without-contract").
-		Return(credentialID, "", nil).
+		Return(credentialID, "", "tenant-id", nil).
 		Once()
 
 	r := chi.NewRouter()
@@ -199,6 +205,7 @@ func Test_WalletAuthMiddleware_EmptyContractAddress(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req = req.WithContext(sdpcontext.SetTenantInContext(req.Context(), &schema.Tenant{ID: "tenant-id"}))
 	req.Header.Set("Authorization", "Bearer token-without-contract")
 	w := httptest.NewRecorder()
 

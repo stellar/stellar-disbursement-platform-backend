@@ -19,10 +19,12 @@ import (
 	"github.com/veraison/go-cose"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	walletMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/wallet/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func generateCOSEPublicKey(t *testing.T) []byte {
@@ -238,7 +240,8 @@ func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	ctx := context.Background()
+	tenantID := "test-tenant-id"
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	mockCredential := &webauthn.Credential{
 		ID:        []byte("test-credential-id"),
@@ -252,7 +255,7 @@ func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 
 	expectedCredentialID := base64.RawURLEncoding.EncodeToString(mockCredential.ID)
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, expectedCredentialID, "", mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, tenantID, expectedCredentialID, "", mock.AnythingOfType("time.Time")).
 		Return("jwt-token", nil).
 		Once()
 
@@ -434,7 +437,8 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	ctx := context.Background()
+	tenantID := "test-tenant-id"
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	mockEmbeddedWallet := &data.EmbeddedWallet{
 		Token:           "wallet-token",
@@ -449,7 +453,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication(t *testing.T) {
 		Once()
 
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, tenantID, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
 		Return("jwt-token", nil).
 		Once()
 
@@ -544,7 +548,8 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_JWTGenerationError(t *testi
 	}
 
 	rr := httptest.NewRecorder()
-	ctx := context.Background()
+	tenantID := "test-tenant-id"
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	mockEmbeddedWallet := &data.EmbeddedWallet{
 		Token:           "wallet-token",
@@ -559,7 +564,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_JWTGenerationError(t *testi
 		Once()
 
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, tenantID, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
 		Return("", errors.New("JWT signing error")).
 		Once()
 
@@ -581,7 +586,8 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_TokenExpiration(t *testing.
 	}
 
 	rr := httptest.NewRecorder()
-	ctx := context.Background()
+	tenantID := "test-tenant-id"
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	mockEmbeddedWallet := &data.EmbeddedWallet{
 		Token:           "wallet-token",
@@ -597,9 +603,9 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_TokenExpiration(t *testing.
 
 	var capturedExpiresAt time.Time
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, tenantID, mockEmbeddedWallet.CredentialID, mockEmbeddedWallet.ContractAddress, mock.AnythingOfType("time.Time")).
 		Run(func(args mock.Arguments) {
-			capturedExpiresAt = args.Get(3).(time.Time)
+			capturedExpiresAt = args.Get(4).(time.Time)
 		}).
 		Return("jwt-token", nil).
 		Once()
@@ -670,21 +676,22 @@ func Test_PasskeyHandler_RefreshToken(t *testing.T) {
 		Token: "valid-token",
 	})
 	require.NoError(t, err)
-	ctx := context.Background()
+	tenantID := "test-tenant-id"
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
 	credentialID := "test-credential-id"
 
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "valid-token").
-		Return(credentialID, contractAddress, nil).
+		Return(credentialID, contractAddress, tenantID, nil).
 		Once()
 
 	var capturedExpiresAt time.Time
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, tenantID, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
 		Run(func(args mock.Arguments) {
-			capturedExpiresAt = args.Get(3).(time.Time)
+			capturedExpiresAt = args.Get(4).(time.Time)
 		}).
 		Return("refreshed-token", nil).
 		Once()
@@ -703,6 +710,37 @@ func Test_PasskeyHandler_RefreshToken(t *testing.T) {
 
 	expectedExpiry := time.Now().Add(WalletTokenExpiration)
 	assert.WithinDuration(t, expectedExpiry, capturedExpiresAt, 5*time.Second)
+}
+
+func Test_PasskeyHandler_RefreshToken_TenantMismatch(t *testing.T) {
+	mockWebAuthnService := walletMocks.NewMockWebAuthnService(t)
+	mockEmbeddedWalletService := servicesMocks.NewMockEmbeddedWalletService(t)
+	mockJWTManager := walletMocks.NewMockWalletJWTManager(t)
+	handler := PasskeyHandler{
+		WebAuthnService:       mockWebAuthnService,
+		WalletJWTManager:      mockJWTManager,
+		EmbeddedWalletService: mockEmbeddedWalletService,
+	}
+
+	rr := httptest.NewRecorder()
+	requestBody, err := json.Marshal(RefreshTokenRequest{
+		Token: "valid-token",
+	})
+	require.NoError(t, err)
+
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: "request-tenant"})
+
+	mockJWTManager.
+		On("ValidateToken", mock.Anything, "valid-token").
+		Return("credential-id", "contract-address", "token-tenant", nil).
+		Once()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	http.HandlerFunc(handler.RefreshToken).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Result().StatusCode)
 }
 
 func Test_PasskeyHandler_RefreshToken_InvalidRequestBody(t *testing.T) {
@@ -773,6 +811,11 @@ func Test_PasskeyHandler_RefreshToken_ValidateTokenErrors(t *testing.T) {
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
+			name:               "missing tenant claim",
+			validationError:    wallet.ErrMissingTenantClaim,
+			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
 			name:               "unexpected error",
 			validationError:    errors.New("database error"),
 			expectedStatusCode: http.StatusInternalServerError,
@@ -795,11 +838,12 @@ func Test_PasskeyHandler_RefreshToken_ValidateTokenErrors(t *testing.T) {
 				Token: "test-token",
 			})
 			require.NoError(t, err)
-			ctx := context.Background()
+			tenantID := "test-tenant-id"
+			ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 			mockJWTManager.
 				On("ValidateToken", mock.Anything, "test-token").
-				Return("", "", tc.validationError).
+				Return("", "", "", tc.validationError).
 				Once()
 
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/refresh", strings.NewReader(string(requestBody)))
@@ -841,18 +885,19 @@ func Test_PasskeyHandler_RefreshToken_GenerateTokenErrors(t *testing.T) {
 				Token: "test-token",
 			})
 			require.NoError(t, err)
-			ctx := context.Background()
+			tenantID := "test-tenant-id"
+			ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 			contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
 			credentialID := "test-credential-id"
 
 			mockJWTManager.
 				On("ValidateToken", mock.Anything, "test-token").
-				Return(credentialID, contractAddress, nil).
+				Return(credentialID, contractAddress, tenantID, nil).
 				Once()
 
 			mockJWTManager.
-				On("GenerateToken", mock.Anything, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
+				On("GenerateToken", mock.Anything, tenantID, credentialID, contractAddress, mock.AnythingOfType("time.Time")).
 				Return("", tc.generateError).
 				Once()
 
@@ -881,7 +926,8 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 		Token: "valid-token",
 	})
 	require.NoError(t, err)
-	ctx := context.Background()
+	tenantID := "test-tenant-id"
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 	credentialID := "test-credential-id"
 	oldContractAddress := ""
@@ -889,7 +935,7 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 
 	mockJWTManager.
 		On("ValidateToken", mock.Anything, "valid-token").
-		Return(credentialID, oldContractAddress, nil).
+		Return(credentialID, oldContractAddress, tenantID, nil).
 		Once()
 
 	mockEmbeddedWalletService.
@@ -901,7 +947,7 @@ func Test_PasskeyHandler_RefreshToken_UpdatesContractAddress(t *testing.T) {
 		Once()
 
 	mockJWTManager.
-		On("GenerateToken", mock.Anything, credentialID, newContractAddress, mock.AnythingOfType("time.Time")).
+		On("GenerateToken", mock.Anything, tenantID, credentialID, newContractAddress, mock.AnythingOfType("time.Time")).
 		Return("refreshed-token-with-address", nil).
 		Once()
 
@@ -952,13 +998,14 @@ func Test_PasskeyHandler_RefreshToken_WalletLookupError(t *testing.T) {
 				Token: "valid-token",
 			})
 			require.NoError(t, err)
-			ctx := context.Background()
+			tenantID := "test-tenant-id"
+			ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: tenantID})
 
 			credentialID := "test-credential-id"
 
 			mockJWTManager.
 				On("ValidateToken", mock.Anything, "valid-token").
-				Return(credentialID, "", nil).
+				Return(credentialID, "", tenantID, nil).
 				Once()
 
 			mockEmbeddedWalletService.

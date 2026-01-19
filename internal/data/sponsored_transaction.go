@@ -142,6 +142,34 @@ func (m *SponsoredTransactionModel) GetByID(ctx context.Context, sqlExec db.SQLE
 	return &transaction, nil
 }
 
+func (m *SponsoredTransactionModel) GetByIDAndAccount(ctx context.Context, sqlExec db.SQLExecuter, id, account string) (*SponsoredTransaction, error) {
+	account = strings.TrimSpace(account)
+	if id == "" {
+		return nil, fmt.Errorf("transaction ID is required")
+	}
+	if account == "" {
+		return nil, fmt.Errorf("account is required")
+	}
+
+	query := `
+		SELECT ` + SponsoredTransactionColumnNames("", "") + `
+		FROM sponsored_transactions
+		WHERE id = $1
+			AND account = $2
+	`
+
+	var transaction SponsoredTransaction
+	err := sqlExec.GetContext(ctx, &transaction, query, id, account)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("getting sponsored transaction by ID %s: %w", id, err)
+	}
+
+	return &transaction, nil
+}
+
 type SponsoredTransactionUpdate struct {
 	Status          SponsoredTransactionStatus `db:"status"`
 	TransactionHash string                     `db:"transaction_hash"`

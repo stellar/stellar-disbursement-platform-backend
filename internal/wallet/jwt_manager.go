@@ -14,18 +14,21 @@ var (
 	ErrInvalidWalletToken = errors.New("invalid wallet token")
 	ErrExpiredWalletToken = errors.New("expired wallet token")
 	ErrMissingSubClaim    = errors.New("missing sub claim in wallet token")
+	ErrMissingTenantClaim = errors.New("missing tenant claim in wallet token")
+	ErrMissingTenantID    = errors.New("tenant ID is required")
 )
 
 // WalletJWTManager defines the interface for wallet JWT token operations.
 //
 //go:generate mockery --name=WalletJWTManager --case=underscore --structname=MockWalletJWTManager --filename=jwt_manager.go
 type WalletJWTManager interface {
-	GenerateToken(ctx context.Context, credentialID, contractAddress string, expiresAt time.Time) (string, error)
-	ValidateToken(ctx context.Context, tokenString string) (credentialID, contractAddress string, err error)
+	GenerateToken(ctx context.Context, tenantID, credentialID, contractAddress string, expiresAt time.Time) (string, error)
+	ValidateToken(ctx context.Context, tokenString string) (credentialID, contractAddress, tenantID string, err error)
 }
 
 type walletClaims struct {
 	ContractAddress string `json:"contract_address,omitempty"`
+	TenantID        string `json:"tenant_id,omitempty"`
 	jwtgo.RegisteredClaims
 }
 
@@ -47,9 +50,14 @@ func NewWalletJWTManager(privateKeyPEM string) (WalletJWTManager, error) {
 
 var _ WalletJWTManager = (*defaultWalletJWTManager)(nil)
 
-func (m *defaultWalletJWTManager) GenerateToken(ctx context.Context, credentialID, contractAddress string, expiresAt time.Time) (string, error) {
+func (m *defaultWalletJWTManager) GenerateToken(ctx context.Context, tenantID, credentialID, contractAddress string, expiresAt time.Time) (string, error) {
+	if tenantID == "" {
+		return "", ErrMissingTenantID
+	}
+
 	claims := &walletClaims{
 		ContractAddress: contractAddress,
+		TenantID:        tenantID,
 		RegisteredClaims: jwtgo.RegisteredClaims{
 			Subject:   credentialID,
 			ExpiresAt: jwtgo.NewNumericDate(expiresAt),
@@ -67,7 +75,7 @@ func (m *defaultWalletJWTManager) GenerateToken(ctx context.Context, credentialI
 	return tokenString, nil
 }
 
-func (m *defaultWalletJWTManager) ValidateToken(ctx context.Context, tokenString string) (credentialID, contractAddress string, err error) {
+func (m *defaultWalletJWTManager) ValidateToken(ctx context.Context, tokenString string) (credentialID, contractAddress, tenantID string, err error) {
 	claims := &walletClaims{}
 
 	token, err := jwtgo.ParseWithClaims(tokenString, claims, func(t *jwtgo.Token) (interface{}, error) {
@@ -79,26 +87,29 @@ func (m *defaultWalletJWTManager) ValidateToken(ctx context.Context, tokenString
 	})
 	if err != nil {
 		if errors.Is(err, jwtgo.ErrTokenExpired) {
-			return "", "", ErrExpiredWalletToken
+			return "", "", "", ErrExpiredWalletToken
 		}
 
 		var vErr *jwtgo.ValidationError
 		if errors.As(err, &vErr) {
 			if vErr.Errors&jwtgo.ValidationErrorExpired != 0 {
-				return "", "", ErrExpiredWalletToken
+				return "", "", "", ErrExpiredWalletToken
 			}
 		}
 
-		return "", "", fmt.Errorf("%w: %s", ErrInvalidWalletToken, err.Error())
+		return "", "", "", fmt.Errorf("%w: %s", ErrInvalidWalletToken, err.Error())
 	}
 
 	if !token.Valid {
-		return "", "", ErrInvalidWalletToken
+		return "", "", "", ErrInvalidWalletToken
 	}
 
 	if claims.Subject == "" {
-		return "", "", ErrMissingSubClaim
+		return "", "", "", ErrMissingSubClaim
+	}
+	if claims.TenantID == "" {
+		return "", "", "", ErrMissingTenantClaim
 	}
 
-	return claims.Subject, claims.ContractAddress, nil
+	return claims.Subject, claims.ContractAddress, claims.TenantID, nil
 }
