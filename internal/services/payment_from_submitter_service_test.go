@@ -157,6 +157,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 			require.NoError(t, txErr)
 			require.Len(t, txs, 1)
 			require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
+			assert.Equal(t, "GDOSPKDCGMYZTPHXPFAZSSVIHNKBPEGQXQVEWEJ4JXMKYZNXEVCFGMC2", payment.SenderAddress)
 		}
 
 		// check that failed payment is updated
@@ -170,6 +171,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		require.Len(t, payment.StatusHistory, 3)
 		require.Equal(t, payment.StatusHistory[2].Status, data.FailedPaymentStatus)
 		require.Equal(t, payment.StatusHistory[2].StatusMessage, "test-error")
+		assert.Equal(t, "GDOSPKDCGMYZTPHXPFAZSSVIHNKBPEGQXQVEWEJ4JXMKYZNXEVCFGMC2", payment.SenderAddress)
 
 		payment, paymentErr = testCtx.sdpModel.Payment.Get(ctx, payment5.ID, dbConnectionPool)
 		require.NoError(t, paymentErr)
@@ -361,9 +363,11 @@ func prepareTxsForSync(t *testing.T, testCtx *testContext, transactions []*txSub
 
 	var err error
 
+	const testDistributionAccount = "GDOSPKDCGMYZTPHXPFAZSSVIHNKBPEGQXQVEWEJ4JXMKYZNXEVCFGMC2"
+
 	for _, tx := range transactions {
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2 WHERE id = $3`
-		_, err = testCtx.tssModel.DBConnectionPool.ExecContext(testCtx.ctx, q, "test-hash-"+tx.ID, txSubStore.TransactionStatusProcessing, tx.ID)
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account = $3 WHERE id = $4`
+		_, err = testCtx.tssModel.DBConnectionPool.ExecContext(testCtx.ctx, q, "test-hash-"+tx.ID, txSubStore.TransactionStatusProcessing, testDistributionAccount, tx.ID)
 		require.NoError(t, err)
 
 		tx, err = testCtx.tssModel.Get(testCtx.ctx, tx.ID)
