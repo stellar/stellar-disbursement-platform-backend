@@ -192,11 +192,15 @@ func GetWalletAssetsFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExe
 
 // DeleteAllWalletFixtures deletes all wallets in the database
 func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	query := "DELETE FROM wallets_assets"
+	query := "DELETE FROM receiver_wallets"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 
-	query = "DELETE FROM wallets"
+	query = "DELETE FROM wallets_assets"
+	_, err = sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+
+	query = "DELETE FROM wallets CASCADE"
 	_, err = sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
@@ -525,9 +529,9 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 	const query = `
 		INSERT INTO payments
 			(receiver_id, disbursement_id, receiver_wallet_id, asset_id, amount, status, status_history,
-			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type)
+			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type, sender_address)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING
 			id
 	`
@@ -546,6 +550,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.UpdatedAt,
 		p.ExternalPaymentID,
 		p.Type,
+		p.SenderAddress,
 	)
 	require.NoError(t, err)
 

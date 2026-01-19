@@ -1,0 +1,73 @@
+{
+  "selectVerification": {
+    "title": "Chwazi Metòd Envitasyon Peman",
+    "message": "Kijan ou te resevwa envitasyon ou pou reklame lajan an?",
+    "warning": "ATANSYON: ou dwe itilize kontak ki te resevwa envitasyon an pou reklame peman sa a.",
+    "phoneErrorMessage": "Nimewo telefòn ou antre a pa valab",
+    "emailErrorMessage": "Imèl ou antre a pa valab",
+    "missingAuthToken": "Jeton otantifikasyon an manke. Tanpri asire w URL ou a kòrèk."
+  },
+  "enterPasscode": {
+    "title": "Verifye Enfòmasyon",
+    "message": "Si enfòmasyon kontak ou yo matche ak yon peman ki an atant, w ap resevwa yon kòd verifikasyon yon sèl fwa. Antre li anba a pou kontinye.",
+    "messageNoOtp": "Si ou pa resevwa OTP a, gen anpil chans ou te itilize yon nimewo telefòn oswa yon imèl ki pa anrejistre ak òganizasyon ou an. Tanpri verifye enfòmasyon kontak ou yo.",
+    "warning": "Pa pataje OTP ou oswa done verifikasyon ou ak pèsonn. Moun ki mande enfòmasyon sa yo ka ap eseye jwenn aksè nan kont ou.",
+    "passcode": "Kòd Verifikasyon Yon Sèl Fwa (OTP)",
+    "verDateOfBirth": "Dat Nesans",
+    "verYearMonth": "Dat Nesans (Ane & Mwa sèlman)",
+    "verNationalIdNumber": "Nimewo Idantite Nasyonal",
+    "verPin": "PIN",
+    "resendOtpSuccessTitle": "Nouvo OTP voye",
+    "resendOtpSuccessMessage": "Ou pral resevwa yon nouvo kòd verifikasyon yon sèl fwa."
+  },
+  "success": {
+    "title": "Enfòmasyon ou yo verifye avèk siksè!",
+    "message": "Kont ou te verifye avèk enfòmasyon kontak sa yo: {{contactInfo}}.",
+    "goToHomeMessage": "Klike sou bouton anba a pou retounen sou paj dakèy la epi resevwa debousman ou."
+  },
+  "alreadyRegistered": {
+    "title": "Ou deja anrejistre!",
+    "message": "Kont ou te deja verifye avèk enfòmasyon kontak sa yo: {{contactInfo}}.",
+    "goToHomeMessage": "Klike sou bouton anba a pou retounen sou paj dakèy la epi resevwa debousman ou."
+  },
+  "footer": {
+    "privacyMessage": "Done ou yo trete pa {{orgName}} an akò ak <Link href=\"\">Politik Konfidansyalite</Link> yo"
+  },
+  "generic": {
+    "phoneNumber": "Nimewo Telefòn",
+    "email": "Imèl",
+    "continue": "Kontinye",
+    "error": "Erè",
+    "goBack": "Retounen",
+    "goToHome": "Tounen sou Dakèy",
+    "resendOtp": "Voye OTP ankò",
+    "errorMessage": "Gen yon erè ki rive, tanpri eseye ankò pita.",
+    "errorReCaptchaRequired": "reCAPTCHA obligatwa"
+  },
+  "errorCodes": {
+    "400_0": "Kontni demann lan pa valab.",
+    "400_1": "Jeton reCAPTCHA a pa valab.",
+    "400_2": "Enfòmasyon ou bay yo pa jwenn.",
+    "400_3": "Kantite tantativ pou konfime valè verifikasyon an depase limit maksimòm lan.",
+    "400_4": "Ou rive nan kantite maksimòm tantativ OTP yo. Tanpri mande yon nouvo OTP.",
+    "400_5": "OTP a ekspire. Tanpri mande yon nouvo OTP.",
+    "400_6": "OTP a pa valab.",
+    "401_0": "Pa otorize.",
+    "500_0": "Yon erè entèn rive pandan pwosesis demann sa a.",
+    "500_1": "Pa ka jwenn òganizasyon an.",
+    "500_2": "Pa ka jwenn tenant lan nan kontèks la.",
+    "500_3": "Pa ka jwenn URL logo a.",
+    "500_4": "Pa ka anrejistre bous reseptè a.",
+    "500_5": "Pa ka valide jeton reCAPTCHA a.",
+    "500_6": "Enfòmasyon kontak inatandi.",
+    "500_7": "Pa ka jenere OTP pou bous reseptè a.",
+    "500_8": "Pa ka mete OTP ajou pou bous reseptè a.",
+    "500_9": "Echèk nan voye mesaj OTP a.",
+    "EXTRA_1": "OTP: Fòma OTP pa valab. Li dwe gen 6 chif.",
+    "EXTRA_2": "Verifikasyon: Fòma dat nesans la pa valab. Fòma kòrèk: 1990-01-30.",
+    "EXTRA_3": "Verifikasyon: Fòma ane/mwa a pa valab. Fòma kòrèk: 1990-12.",
+    "EXTRA_4": "Verifikasyon: Dat la pa ka nan lavni.",
+    "EXTRA_5": "Verifikasyon: Longè PIN lan pa valab. Li pa ka gen mwens pase 4 oswa plis pase 8 karaktè.",
+    "EXTRA_6": "Verifikasyon: Nimewo idantite nasyonal pa valab. Li pa ka gen plis pase 50 karaktè."
+  }
+}

@@ -120,6 +120,10 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 		StatusMessage:        transaction.StatusMessage.String,
 		StellarTransactionID: transaction.StellarTransactionHash.String,
 	}
+	// Update the sender address if available
+	if transaction.DistributionAccount.Valid {
+		paymentUpdate.SenderAddress = transaction.DistributionAccount.String
+	}
 	err = s.sdpModels.Payment.Update(ctx, sdpDBTx, &payment, paymentUpdate)
 	if err != nil {
 		return fmt.Errorf("updating payment ID %s for transaction ID %s: %w", payment.ID, transaction.ID, err)
