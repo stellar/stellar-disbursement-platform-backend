@@ -31,7 +31,7 @@ func (m *PasskeySessionModel) Store(ctx context.Context, challenge string, sessi
 		ON CONFLICT (challenge) DO NOTHING
 	`
 
-	result, err := m.dbConnectionPool.ExecContext(ctx, q, challenge, sessionType, string(sessionData), expiresAt)
+	result, err := m.dbConnectionPool.ExecContext(ctx, q, challenge, sessionType, sessionData, expiresAt)
 	if err != nil {
 		return fmt.Errorf("storing passkey session: %w", err)
 	}
