@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- Add Haitian Creole translations for the SEP-24 interactive deposit flow. [#994](https://github.com/stellar/stellar-disbursement-platform-backend/pull/994)
+- Return `sender_address` in `GET /payments` and `GET /payments/:id` endpoints to identify the distribution account used for each payment. [#1009](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1009)
+
+### Changed
+
+- Update `GET /wallets` endpoint to exclude soft-deleted wallets by default. Add optional `include_deleted` query parameter to include deleted wallets when set to `true`. [#1005](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1005)
+- Update `DELETE /wallets/:id` endpoint to check if a wallet has pending registrations before deletion. Returns a user-friendly error if the wallet has receiver_wallets in 'DRAFT' or 'READY' status. [#1007](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1007)
+
+### Security and Dependencies
+
+- Upgrade React to 19.2.3 and @stellar/design-system to 3.2.7 in SEP-24 frontend to address CVE-2025-55184 denial of service and source code exposure vulnerability in React Server Components [#988](https://github.com/stellar/stellar-disbursement-platform-backend/pull/988)
+
 ## [6.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.0...6.0.1))
 
 ### Fixed
@@ -38,6 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Default Max Open Connections per pool changed from 30 to 20 to prevent idle connection buildup in multi-tenant deployments [#932](https://github.com/stellar/stellar-disbursement-platform-backend/pull/932)
+- `channel-accounts ensure` command now uses batch account deletion to improve efficiency. [#938](https://github.com/stellar/stellar-disbursement-platform-backend/pull/938)
 - Make docker compose environment variables configurable via `.env` file and add documentation [#953](https://github.com/stellar/stellar-disbursement-platform-backend/pull/953)
 - Update Stellar Go SDK dependency from `github.com/stellar/go` to `github.com/stellar/go-stellar-sdk` [#956](https://github.com/stellar/stellar-disbursement-platform-backend/pull/956)
 
@@ -205,7 +222,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add Circle Payouts API to the e2e integration test. [#586](https://github.com/stellar/stellar-disbursement-platform-backend/pull/586)
 - A React app for the SEP-24 interactive deposit flow. This app is served by the backend and is accessible at `/wallet-registration/start`. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
 - A new endpoint `GET /sep24-interactive-deposit/info` to kick off the SEP-24 interactive deposit flow. [#560](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/560)
-- Ukranian, Russian and Spanish translations for the SEP-24 interactive deposit flow. [#621](https://github.com/stellar/stellar-disbursement-platform-frontend/pull/621)
+- Ukranian, Russian and Spanish translations for the SEP-24 interactive deposit flow. [#621](https://github.com/stellar/stellar-disbursement-platform-backend/pull/621)
 - Add GH Workflow to automatically set the pull request assignee. [#591](https://github.com/stellar/stellar-disbursement-platform-backend/pull/591)
 - Added `priorityClassName` and `topologySpreadConstraints` properties to helm charts. [#601](https://github.com/stellar/stellar-disbursement-platform-backend/pull/601)
 - Added `nodeSelector`, `tolerations` and `affinity` global defaults to helm charts. [#607](https://github.com/stellar/stellar-disbursement-platform-backend/pull/607)

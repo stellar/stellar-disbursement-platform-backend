@@ -393,9 +393,6 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 		return nil, err
 	}
 
-	innerTx := feeBumpTx.InnerTransaction()
-	distributionAccount := innerTx.Operations()[0].GetSourceAccount()
-
 	// Important: We need to save tx hash before submitting a transaction.
 	// If the script/server crashes after transaction is submitted but before the response
 	// is processed, we can easily determine whether tx was sent or not later using tx hash.
@@ -409,7 +406,10 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 		return nil, fmt.Errorf("getting envelopeXDR for job %v: %w", txJob, err)
 	}
 
-	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR, distributionAccount)
+	// The distribution account is the fee account in the fee bump transaction
+	distributionAccountAddr := feeBumpTx.FeeAccount()
+
+	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR, distributionAccountAddr)
 	if err != nil {
 		return nil, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
 	}

@@ -695,6 +695,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 			} else {
 				// check if object has been updated correctly
 				require.NoError(t, err)
+				assert.True(t, updatedTx.DistributionAccount.Valid)
 				assert.True(t, updatedTx.XDRSent.Valid)
 				assert.Equal(t, envelopeXDR, updatedTx.XDRSent.String)
 				assert.True(t, updatedTx.StellarTransactionHash.Valid)
@@ -726,6 +727,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 				originalTx.UpdatedAt = refreshedTx.UpdatedAt
 				originalTx.StatusHistory = wantStatusHistory
 				originalTx.AttemptsCount += 1
+				originalTx.DistributionAccount = refreshedTx.DistributionAccount
 				assert.Equal(t, refreshedTx, originalTx)
 			}
 		})

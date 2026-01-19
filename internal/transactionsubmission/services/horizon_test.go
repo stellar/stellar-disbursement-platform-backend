@@ -91,7 +91,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "returns error when fails to retrieve ledger bounds",
 			numOfChanAccToCreate: 2,
-			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, _ *sdpUtils.PrivateKeyEncrypterMock) {
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *sdpUtils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
@@ -100,9 +100,13 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 					}, nil).
 					Once()
 				mLedgerNumberTracker.
+					On("GetLedgerNumber").Return(currLedgerNumber, nil).Times(3).
 					On("GetLedgerBounds").
 					Return(nil, fmt.Errorf("unexpected error")).
 					Once()
+				privateKeyEncrypterMock.
+					On("Encrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return("encryptedkey", nil).Twice().
+					On("Decrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return(keypair.MustRandom().Seed(), nil).Maybe()
 			},
 			wantErrContains: "failed to get ledger bounds: unexpected error",
 		},
@@ -117,8 +121,8 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 						Sequence:  1,
 					}, nil).
 					Once()
+				// GetLedgerBounds is not called when encryption fails during BatchInsert
 				mLedgerNumberTracker.
-					On("GetLedgerBounds").Return(ledgerBounds, nil).Once().
 					On("GetLedgerNumber").Return(currLedgerNumber, nil).Once()
 				privateKeyEncrypterMock.
 					On("Encrypt", mock.AnythingOfType("string"), chAccEncrypterPass).
@@ -158,7 +162,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 					On("Encrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return("encryptedkey", nil).Twice().
 					On("Decrypt", mock.AnythingOfType("string"), chAccEncrypterPass).Return(keypair.MustRandom().Seed(), nil).Twice()
 			},
-			wantErrContains: "creating sponsored channel accounts: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout, Detail=Foo bar detail",
+			wantErrContains: "submitting batch transaction for channel account creation: submitting transaction for channel account creation",
 		},
 		{
 			name:                 "🎉 successfully creates channel accounts on-chain (ENCRYPTED)",
@@ -258,7 +262,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	}
 }
 
-func Test_DeleteChannelAccountOnChain(t *testing.T) {
+func Test_DeleteChannelAccountsOnChain(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -278,12 +282,24 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 	chAccAddress := keypair.MustRandom().Address()
 	chTxAcc := schema.NewDefaultChannelAccount(chAccAddress)
 
+	// Create additional channel account addresses for multi-account test
+	chAccAddress2 := keypair.MustRandom().Address()
+	chAccAddress3 := keypair.MustRandom().Address()
+
 	testCases := []struct {
-		name                 string
-		prepareMocksFn       func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter)
-		chAccAddressToDelete string
-		wantErrContains      string
+		name                   string
+		prepareMocksFn         func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter)
+		chAccAddressesToDelete []string
+		wantErrContains        string
 	}{
+		{
+			name: "returns error when empty addresses provided",
+			prepareMocksFn: func(_ *horizonclient.MockClient, _ *preconditionsMocks.MockLedgerNumberTracker, _ *sigMocks.MockSignerRouter) {
+				// No mocks needed for this case
+			},
+			chAccAddressesToDelete: []string{},
+			wantErrContains:        "at least one channel account address must be provided",
+		},
 		{
 			name: "returns error when HorizonClient fails getting AccountDetails",
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, _ *preconditionsMocks.MockLedgerNumberTracker, _ *sigMocks.MockSignerRouter) {
@@ -292,7 +308,8 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 					Return(horizon.Account{}, horizonclient.Error{Problem: problem.NotFound}).
 					Once()
 			},
-			wantErrContains: `retrieving host account from distribution seed: horizon error: "Resource Missing" - check horizon.Error.Problem for more information`,
+			chAccAddressesToDelete: []string{chAccAddress},
+			wantErrContains:        "failed to retrieve host account",
 		},
 		{
 			name: "returns error when GetLedgerBounds fails",
@@ -306,11 +323,12 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 					Return(nil, fmt.Errorf("unexpected error")).
 					Once()
 			},
-			wantErrContains: "failed to get ledger bounds: unexpected error",
+			chAccAddressesToDelete: []string{chAccAddress},
+			wantErrContains:        "failed to get ledger bounds: unexpected error",
 		},
 		{
-			name:                 "returns error when channel account doesnt exist",
-			chAccAddressToDelete: chAccAddress,
+			name:                   "returns error when channel account doesnt exist",
+			chAccAddressesToDelete: []string{chAccAddress},
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
@@ -331,8 +349,8 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			wantErrContains: "signing remove account transaction for account",
 		},
 		{
-			name:                 "returns error when fails submitting transaction to horizon",
-			chAccAddressToDelete: chAccAddress,
+			name:                   "returns error when fails submitting transaction to horizon",
+			chAccAddressesToDelete: []string{chAccAddress},
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
@@ -359,14 +377,11 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 					}).
 					Once()
 			},
-			wantErrContains: fmt.Sprintf(
-				`submitting remove account transaction to the network for account %s: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout`,
-				chAccAddress,
-			),
+			wantErrContains: "submitting batch transaction for channel account deletion: submitting transaction for channel account deletion",
 		},
 		{
-			name:                 "🎉 Successfully deletes channel account on chain and database",
-			chAccAddressToDelete: chAccAddress,
+			name:                   "🎉 Successfully deletes channel account on chain",
+			chAccAddressesToDelete: []string{chAccAddress},
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
@@ -386,7 +401,46 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, nil).
 					Once()
-				sigRouter.On("Delete", ctx, chTxAcc).Return(nil).Once()
+			},
+		},
+		{
+			name:                   "🎉 Successfully deletes multiple channel accounts on chain and verifies transaction and signer interactions",
+			chAccAddressesToDelete: []string{chAccAddress, chAccAddress2, chAccAddress3},
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, sigRouter *sigMocks.MockSignerRouter) {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
+					Return(horizon.Account{
+						AccountID: hostAccount.Address,
+						Sequence:  1,
+					}, nil).
+					Once()
+				mLedgerNumberTracker.
+					On("GetLedgerBounds").
+					Return(ledgerBounds, nil).
+					Once()
+				// Create channel account objects for verification
+				chTxAcc1 := schema.NewDefaultChannelAccount(chAccAddress)
+				chTxAcc2 := schema.NewDefaultChannelAccount(chAccAddress2)
+				chTxAcc3 := schema.NewDefaultChannelAccount(chAccAddress3)
+				// Verify SignStellarTransaction is called with transaction containing operations for all accounts
+				// and signed by all channel accounts + host account
+				sigRouter.
+					On("SignStellarTransaction", ctx, mock.MatchedBy(func(tx *txnbuild.Transaction) bool {
+						// Verify transaction has 3 operations per channel account (Payment, RevokeSponsorship, AccountMerge)
+						// 3 accounts * 3 operations = 9 operations
+						return len(tx.Operations()) == 9
+					}), chTxAcc1, chTxAcc2, chTxAcc3, hostAccount).
+					Return(func(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...schema.TransactionAccount) (*txnbuild.Transaction, error) {
+						// Return the same transaction that was passed in to preserve operations
+						return stellarTx, nil
+					}).
+					Once()
+				horizonClientMock.On("SubmitTransactionWithOptions", mock.MatchedBy(func(tx *txnbuild.Transaction) bool {
+					// Verify submitted transaction has correct number of operations
+					return len(tx.Operations()) == 9
+				}), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, nil).
+					Once()
 			},
 		},
 	}
@@ -400,9 +454,12 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			horizonClientMock := &horizonclient.MockClient{}
 			privateKeyEncrypterMock := &sdpUtils.PrivateKeyEncrypterMock{}
 			sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
-			mDistAccResolver.
-				On("HostDistributionAccount").
-				Return(hostAccount)
+			// Only set up HostDistributionAccount mock if addresses are not empty
+			if len(tc.chAccAddressesToDelete) > 0 {
+				mDistAccResolver.
+					On("HostDistributionAccount").
+					Return(hostAccount)
+			}
 			if tc.prepareMocksFn != nil {
 				tc.prepareMocksFn(horizonClientMock, mLedgerNumberTracker, sigRouter)
 			}
@@ -414,7 +471,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 				LedgerNumberTracker: mLedgerNumberTracker,
 			}
 
-			err = DeleteChannelAccountOnChain(ctx, submitterEngine, tc.chAccAddressToDelete)
+			err = DeleteChannelAccountsOnChain(ctx, submitterEngine, tc.chAccAddressesToDelete)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)

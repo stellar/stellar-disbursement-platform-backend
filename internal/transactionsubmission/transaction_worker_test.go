@@ -1667,6 +1667,9 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, gotFeeBumpTx)
 
+	// The distribution account is extracted from the fee bump transaction's FeeAccount
+	assert.Equal(t, distributionKP.Address(), gotFeeBumpTx.FeeAccount())
+
 	chAccount := schema.NewDefaultChannelAccount(txJob.ChannelAccount.PublicKey)
 	wantInnerTx, err := sigService.SignerRouter.SignStellarTransaction(ctx, innerTx, chAccount, distAccount)
 	require.NoError(t, err)
