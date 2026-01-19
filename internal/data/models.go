@@ -34,6 +34,7 @@ type Models struct {
 	URLShortener                *URLShortenerModel
 	APIKeys                     *APIKeyModel
 	SEPNonces                   *SEPNonceModel
+	PasskeySessions             *PasskeySessionModel
 	DBConnectionPool            db.DBConnectionPool
 }
 
@@ -62,6 +63,7 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		APIKeys:                     &APIKeyModel{dbConnectionPool: dbConnectionPool},
 		URLShortener:                NewURLShortenerModel(dbConnectionPool),
 		SEPNonces:                   NewSEPNonceModel(dbConnectionPool),
+		PasskeySessions:             NewPasskeySessionModel(dbConnectionPool),
 		DBConnectionPool:            dbConnectionPool,
 	}, nil
 }

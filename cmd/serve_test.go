@@ -168,14 +168,13 @@ func Test_serve(t *testing.T) {
 		DisableMFA:                     false,
 		DisableReCAPTCHA:               false,
 
-		SubmitterEngine:                submitterEngine,
-		DistributionAccountService:     mDistAccService,
-		MaxInvitationResendAttempts:    3,
-		DistAccEncryptionPassphrase:    distributionAccPrivKey,
-		CircleService:                  mCircleService,
-		CircleAPIType:                  circle.APITypeTransfers,
-		WebAuthnSessionCacheMaxEntries: 1024,
-		WebAuthnSessionTTLSeconds:      300,
+		SubmitterEngine:             submitterEngine,
+		DistributionAccountService:  mDistAccService,
+		MaxInvitationResendAttempts: 3,
+		DistAccEncryptionPassphrase: distributionAccPrivKey,
+		CircleService:               mCircleService,
+		CircleAPIType:               circle.APITypeTransfers,
+		WebAuthnSessionTTLSeconds:   300,
 	}
 
 	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
@@ -279,7 +278,6 @@ func Test_serve(t *testing.T) {
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
 	t.Setenv("WEBAUTHN_SESSION_TTL_SECONDS", fmt.Sprintf("%d", serveOpts.WebAuthnSessionTTLSeconds))
-	t.Setenv("WEBAUTHN_SESSION_CACHE_MAX_ENTRIES", fmt.Sprintf("%d", serveOpts.WebAuthnSessionCacheMaxEntries))
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")

@@ -201,6 +201,13 @@ func WithSEPNonceCleanupJobOption(models *data.Models) SchedulerJobRegisterOptio
 	}
 }
 
+func WithPasskeySessionCleanupJobOption(models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPasskeySessionCleanupJob(models)
+		s.addJob(j)
+	}
+}
+
 func WithCirclePaymentToSubmitterJobOption(options jobs.CirclePaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewCirclePaymentToSubmitterJob(options)

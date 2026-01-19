@@ -211,7 +211,7 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 		return nil, fmt.Errorf("beginning WebAuthn registration: %w", err)
 	}
 
-	if err := w.sessionCache.Store(session.Challenge, SessionTypeRegistration, *session); err != nil {
+	if err := w.sessionCache.Store(ctx, session.Challenge, SessionTypeRegistration, *session); err != nil {
 		return nil, fmt.Errorf("storing session: %w", err)
 	}
 
@@ -251,7 +251,7 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 		return nil, fmt.Errorf("parsing credential creation response: %w", err)
 	}
 
-	session, err := w.sessionCache.Get(parsedResponse.Response.CollectedClientData.Challenge, SessionTypeRegistration)
+	session, err := w.sessionCache.Get(ctx, parsedResponse.Response.CollectedClientData.Challenge, SessionTypeRegistration)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving session: %w", err)
 	}
@@ -270,7 +270,7 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 		return nil, fmt.Errorf("creating credential: %w", err)
 	}
 
-	w.sessionCache.Delete(parsedResponse.Response.CollectedClientData.Challenge)
+	w.sessionCache.Delete(ctx, parsedResponse.Response.CollectedClientData.Challenge)
 
 	return credential, nil
 }
@@ -346,7 +346,7 @@ func (w *WebAuthnService) StartPasskeyAuthentication(ctx context.Context) (*prot
 		return nil, fmt.Errorf("beginning WebAuthn discoverable login: %w", err)
 	}
 
-	if err := w.sessionCache.Store(session.Challenge, SessionTypeAuthentication, *session); err != nil {
+	if err := w.sessionCache.Store(ctx, session.Challenge, SessionTypeAuthentication, *session); err != nil {
 		return nil, fmt.Errorf("storing session: %w", err)
 	}
 
@@ -365,7 +365,7 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 		return nil, fmt.Errorf("parsing credential request response: %w", err)
 	}
 
-	session, err := w.sessionCache.Get(parsedResponse.Response.CollectedClientData.Challenge, SessionTypeAuthentication)
+	session, err := w.sessionCache.Get(ctx, parsedResponse.Response.CollectedClientData.Challenge, SessionTypeAuthentication)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving session: %w", err)
 	}
@@ -408,7 +408,7 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 		return nil, fmt.Errorf("unexpected user type: got %T, want *existingUser", user)
 	}
 
-	w.sessionCache.Delete(parsedResponse.Response.CollectedClientData.Challenge)
+	w.sessionCache.Delete(ctx, parsedResponse.Response.CollectedClientData.Challenge)
 
 	return existingUserObj.wallet, nil
 }

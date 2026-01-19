@@ -15,9 +15,8 @@ import (
 const WebAuthnServiceInstanceName = "webauthn_service_instance"
 
 type WebAuthnServiceOptions struct {
-	MTNDBConnectionPool    db.DBConnectionPool
-	SessionTTL             time.Duration
-	SessionCacheMaxEntries int
+	MTNDBConnectionPool db.DBConnectionPool
+	SessionTTL          time.Duration
 }
 
 // NewWebAuthnService creates a new WebAuthn service instance, or retrieves an instance that was previously created.
@@ -40,9 +39,6 @@ func NewWebAuthnService(ctx context.Context, opts WebAuthnServiceOptions) (walle
 	if opts.SessionTTL <= 0 {
 		return nil, fmt.Errorf("SessionTTL must be greater than zero")
 	}
-	if opts.SessionCacheMaxEntries <= 0 {
-		return nil, fmt.Errorf("SessionCacheMaxEntries must be greater than zero")
-	}
 
 	// Create SDP models from MTN DB connection pool
 	sdpModels, err := data.NewModels(opts.MTNDBConnectionPool)
@@ -50,7 +46,7 @@ func NewWebAuthnService(ctx context.Context, opts WebAuthnServiceOptions) (walle
 		return nil, fmt.Errorf("creating SDP models: %w", err)
 	}
 
-	sessionCache, err := wallet.NewInMemorySessionCache(opts.SessionTTL, opts.SessionCacheMaxEntries)
+	sessionCache, err := wallet.NewSessionCache(opts.MTNDBConnectionPool, opts.SessionTTL)
 	if err != nil {
 		return nil, fmt.Errorf("creating WebAuthn session cache: %w", err)
 	}
