@@ -43,8 +43,8 @@ type EmbeddedWalletServiceInterface interface {
 	GetReceiverContact(ctx context.Context, contractAddress string) (*data.Receiver, error)
 	// SponsorTransaction sponsors a transaction on behalf of the embedded wallet
 	SponsorTransaction(ctx context.Context, account, operationXDR string) (string, error)
-	// GetTransactionStatus retrieves a sponsored transaction by ID
-	GetTransactionStatus(ctx context.Context, transactionID string) (*data.SponsoredTransaction, error)
+	// GetTransactionStatus retrieves a sponsored transaction by ID for the provided account
+	GetTransactionStatus(ctx context.Context, account, transactionID string) (*data.SponsoredTransaction, error)
 }
 
 var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
@@ -226,6 +226,7 @@ func (e *EmbeddedWalletService) GetReceiverContact(ctx context.Context, contract
 }
 
 func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account, operationXDR string) (string, error) {
+	account = strings.TrimSpace(account)
 	if account == "" {
 		return "", ErrMissingAccount
 	}
@@ -249,13 +250,17 @@ func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account,
 	})
 }
 
-func (e *EmbeddedWalletService) GetTransactionStatus(ctx context.Context, transactionID string) (*data.SponsoredTransaction, error) {
+func (e *EmbeddedWalletService) GetTransactionStatus(ctx context.Context, account, transactionID string) (*data.SponsoredTransaction, error) {
+	account = strings.TrimSpace(account)
+	if account == "" {
+		return nil, ErrMissingAccount
+	}
 	if transactionID == "" {
 		return nil, fmt.Errorf("transaction ID is required")
 	}
 
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(sdpTx db.DBTransaction) (*data.SponsoredTransaction, error) {
-		sponsoredTx, err := e.sdpModels.SponsoredTransactions.GetByID(ctx, sdpTx, transactionID)
+		sponsoredTx, err := e.sdpModels.SponsoredTransactions.GetByIDAndAccount(ctx, sdpTx, transactionID, account)
 		if err != nil {
 			return nil, fmt.Errorf("getting sponsored transaction by ID %s: %w", transactionID, err)
 		}

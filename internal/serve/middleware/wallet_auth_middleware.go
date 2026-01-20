@@ -29,13 +29,19 @@ func WalletAuthMiddleware(walletJWTManager wallet.WalletJWTManager) func(http.Ha
 			}
 
 			ctx := req.Context()
+			currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
+			if err != nil {
+				httperror.Unauthorized("", err, nil).Render(rw)
+				return
+			}
 			token := authHeaderParts[1]
 
-			credentialID, contractAddress, err := walletJWTManager.ValidateToken(ctx, token)
+			credentialID, contractAddress, tokenTenantID, err := walletJWTManager.ValidateToken(ctx, token)
 			if err != nil {
 				if !errors.Is(err, wallet.ErrInvalidWalletToken) &&
 					!errors.Is(err, wallet.ErrExpiredWalletToken) &&
-					!errors.Is(err, wallet.ErrMissingSubClaim) {
+					!errors.Is(err, wallet.ErrMissingSubClaim) &&
+					!errors.Is(err, wallet.ErrMissingTenantClaim) {
 					err = fmt.Errorf("error validating wallet token: %w", err)
 					log.Ctx(ctx).Error(err)
 				}
@@ -47,10 +53,17 @@ func WalletAuthMiddleware(walletJWTManager wallet.WalletJWTManager) func(http.Ha
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
+			if tokenTenantID != currentTenant.ID {
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
+			}
 
 			ctx = sdpcontext.SetWalletContractAddressInContext(ctx, contractAddress)
 			ctx = sdpcontext.SetTokenInContext(ctx, token)
-			ctx = log.Set(ctx, log.Ctx(ctx).WithField("wallet_contract_address", contractAddress).WithField("credential_id", credentialID))
+			ctx = log.Set(ctx, log.Ctx(ctx).
+				WithField("wallet_contract_address", contractAddress).
+				WithField("credential_id", credentialID).
+				WithField("tenant_id", tokenTenantID))
 
 			req = req.WithContext(ctx)
 

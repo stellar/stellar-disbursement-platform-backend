@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -96,17 +97,18 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 
 	credential, err := h.WebAuthnService.FinishPasskeyRegistration(ctx, token, req)
 	if err != nil {
-		if errors.Is(err, wallet.ErrInvalidToken) {
+		switch {
+		case errors.Is(err, wallet.ErrInvalidToken):
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)
-		} else if errors.Is(err, wallet.ErrWalletAlreadyExists) {
+		case errors.Is(err, wallet.ErrWalletAlreadyExists):
 			httperror.Conflict("Wallet already exists", err, nil).Render(rw)
-		} else if errors.Is(err, wallet.ErrSessionNotFound) {
+		case errors.Is(err, wallet.ErrSessionNotFound):
 			httperror.BadRequest("Session not found or expired", err, nil).Render(rw)
-		} else if errors.Is(err, wallet.ErrSessionTypeMismatch) {
+		case errors.Is(err, wallet.ErrSessionTypeMismatch):
 			httperror.BadRequest("Invalid session type", err, nil).Render(rw)
-		} else if errors.Is(err, protocol.ErrChallengeMismatch) || errors.Is(err, protocol.ErrVerification) {
+		case errors.Is(err, protocol.ErrChallengeMismatch), errors.Is(err, protocol.ErrVerification):
 			httperror.BadRequest("Registration verification failed", err, nil).Render(rw)
-		} else {
+		default:
 			httperror.InternalError(ctx, "Failed to finish passkey registration", err, nil).Render(rw)
 		}
 		return
@@ -119,8 +121,13 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 	}
 
 	credentialID := base64.RawURLEncoding.EncodeToString(credential.ID)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		httperror.BadRequest("Tenant not found in context", err, nil).Render(rw)
+		return
+	}
 	expiresAt := time.Now().Add(WalletTokenExpiration)
-	jwtToken, err := h.WalletJWTManager.GenerateToken(ctx, credentialID, "", expiresAt)
+	jwtToken, err := h.WalletJWTManager.GenerateToken(ctx, currentTenant.ID, credentialID, "", expiresAt)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to generate token", err, nil).Render(rw)
 		return
@@ -167,7 +174,12 @@ func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req 
 	}
 
 	expiresAt := time.Now().Add(WalletTokenExpiration)
-	token, err := h.WalletJWTManager.GenerateToken(ctx, embeddedWallet.CredentialID, embeddedWallet.ContractAddress, expiresAt)
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		httperror.BadRequest("Tenant not found in context", err, nil).Render(rw)
+		return
+	}
+	token, err := h.WalletJWTManager.GenerateToken(ctx, currentTenant.ID, embeddedWallet.CredentialID, embeddedWallet.ContractAddress, expiresAt)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to generate authentication token", err, nil).Render(rw)
 		return
@@ -215,7 +227,7 @@ func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	credentialID, contractAddress, err := h.WalletJWTManager.ValidateToken(ctx, reqBody.Token)
+	credentialID, contractAddress, tokenTenantID, err := h.WalletJWTManager.ValidateToken(ctx, reqBody.Token)
 	if err != nil {
 		if errors.Is(err, wallet.ErrExpiredWalletToken) {
 			httperror.Unauthorized("Token has expired", err, nil).Render(rw)
@@ -223,9 +235,21 @@ func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) 
 			httperror.Unauthorized("Invalid token", err, nil).Render(rw)
 		} else if errors.Is(err, wallet.ErrMissingSubClaim) {
 			httperror.Unauthorized("Invalid token claims", err, nil).Render(rw)
+		} else if errors.Is(err, wallet.ErrMissingTenantClaim) {
+			httperror.Unauthorized("Invalid token claims", err, nil).Render(rw)
 		} else {
 			httperror.InternalError(ctx, "Failed to validate token", err, nil).Render(rw)
 		}
+		return
+	}
+
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		httperror.BadRequest("Tenant not found in context", err, nil).Render(rw)
+		return
+	}
+	if tokenTenantID != currentTenant.ID {
+		httperror.Unauthorized("Invalid token claims", nil, nil).Render(rw)
 		return
 	}
 
@@ -244,7 +268,7 @@ func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	expiresAt := time.Now().Add(WalletTokenExpiration)
-	refreshedToken, err := h.WalletJWTManager.GenerateToken(ctx, credentialID, contractAddress, expiresAt)
+	refreshedToken, err := h.WalletJWTManager.GenerateToken(ctx, tokenTenantID, credentialID, contractAddress, expiresAt)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to generate token", err, nil).Render(rw)
 		return
