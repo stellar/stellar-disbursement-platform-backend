@@ -22,10 +22,14 @@ var TestnetWallets = []data.Wallet{
 		UserManaged: true,
 	},
 	{
-		Name:           "SDP Embedded Wallet",
+		Name:           "Embedded Wallet",
 		DeepLinkSchema: "SELF",
 		Homepage:       "https://stellar.org",
-		Assets:         assets.AllAssetsTestnet,
-		Embedded:       true,
+		Assets: []data.Asset{
+			assets.XLMAsset,
+			assets.USDCAssetTestnet,
+			assets.EURCAssetTestnet,
+		},
+		Embedded: true,
 	},
 }

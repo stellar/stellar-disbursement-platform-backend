@@ -25,7 +25,7 @@ type WalletCreationFromSubmitterServiceInterface interface {
 }
 
 // WalletCreationFromSubmitterService is a service that monitors TSS wallet creation transactions that were complete and sync their completion
-// state with the SDP embedded wallets.
+// state with the embedded wallets.
 type WalletCreationFromSubmitterService struct {
 	sdpModels         *data.Models
 	tssModel          *store.TransactionModel
