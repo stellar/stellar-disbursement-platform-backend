@@ -738,6 +738,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				}
 				sponsoredTransactionHandler := httphandler.SponsoredTransactionHandler{
 					EmbeddedWalletService: o.EmbeddedWalletService,
+					Models:                o.Models,
+					NetworkPassphrase:     o.NetworkPassphrase,
 				}
 				passkeyHandler := &httphandler.PasskeyHandler{
 					WebAuthnService:       o.WebAuthnService,
