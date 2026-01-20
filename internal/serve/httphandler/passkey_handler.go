@@ -97,17 +97,18 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 
 	credential, err := h.WebAuthnService.FinishPasskeyRegistration(ctx, token, req)
 	if err != nil {
-		if errors.Is(err, wallet.ErrInvalidToken) {
+		switch {
+		case errors.Is(err, wallet.ErrInvalidToken):
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)
-		} else if errors.Is(err, wallet.ErrWalletAlreadyExists) {
+		case errors.Is(err, wallet.ErrWalletAlreadyExists):
 			httperror.Conflict("Wallet already exists", err, nil).Render(rw)
-		} else if errors.Is(err, wallet.ErrSessionNotFound) {
+		case errors.Is(err, wallet.ErrSessionNotFound):
 			httperror.BadRequest("Session not found or expired", err, nil).Render(rw)
-		} else if errors.Is(err, wallet.ErrSessionTypeMismatch) {
+		case errors.Is(err, wallet.ErrSessionTypeMismatch):
 			httperror.BadRequest("Invalid session type", err, nil).Render(rw)
-		} else if errors.Is(err, protocol.ErrChallengeMismatch) || errors.Is(err, protocol.ErrVerification) {
+		case errors.Is(err, protocol.ErrChallengeMismatch), errors.Is(err, protocol.ErrVerification):
 			httperror.BadRequest("Registration verification failed", err, nil).Render(rw)
-		} else {
+		default:
 			httperror.InternalError(ctx, "Failed to finish passkey registration", err, nil).Render(rw)
 		}
 		return
