@@ -1,11 +1,14 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 	"github.com/stellar/go-stellar-sdk/xdr"
@@ -19,6 +22,8 @@ import (
 
 type SponsoredTransactionHandler struct {
 	EmbeddedWalletService services.EmbeddedWalletServiceInterface
+	Models                *data.Models
+	NetworkPassphrase     string
 }
 
 type CreateSponsoredTransactionRequest struct {
@@ -78,6 +83,22 @@ func (h SponsoredTransactionHandler) CreateSponsoredTransaction(w http.ResponseW
 		return
 	}
 
+	contractAddress, err := getInvokeContractAddress(reqBody.OperationXDR)
+	if err != nil {
+		httperror.BadRequest("operation_xdr must target a valid contract address", err, nil).Render(w)
+		return
+	}
+
+	allowed, err := h.isContractAllowed(ctx, contractAddress)
+	if err != nil {
+		httperror.InternalError(ctx, "Failed to validate contract address", err, nil).Render(w)
+		return
+	}
+	if !allowed {
+		httperror.BadRequest("operation_xdr contract address is not supported for this tenant", nil, nil).Render(w)
+		return
+	}
+
 	transactionID, err := h.EmbeddedWalletService.SponsorTransaction(ctx, account, reqBody.OperationXDR)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to create sponsored transaction", err, nil).Render(w)
@@ -127,4 +148,98 @@ func (h SponsoredTransactionHandler) GetSponsoredTransaction(w http.ResponseWrit
 	}
 
 	httpjson.Render(w, resp, httpjson.JSON)
+}
+
+// getInvokeContractAddress extracts the contract address from an InvokeHostFunctionOp XDR payload.
+func getInvokeContractAddress(operationXDR string) (string, error) {
+	var invoke xdr.InvokeHostFunctionOp
+	if err := xdr.SafeUnmarshalBase64(operationXDR, &invoke); err != nil {
+		return "", fmt.Errorf("decoding operation XDR: %w", err)
+	}
+
+	if invoke.HostFunction.Type != xdr.HostFunctionTypeHostFunctionTypeInvokeContract {
+		return "", fmt.Errorf("operation is not an invoke contract host function")
+	}
+	if invoke.HostFunction.InvokeContract == nil {
+		return "", fmt.Errorf("invoke contract details are missing")
+	}
+
+	contractAddress := invoke.HostFunction.InvokeContract.ContractAddress
+	if contractAddress.Type != xdr.ScAddressTypeScAddressTypeContract || contractAddress.ContractId == nil {
+		return "", fmt.Errorf("invoke contract address is not a contract address")
+	}
+
+	contractID := *contractAddress.ContractId
+	encoded, err := strkey.Encode(strkey.VersionByteContract, contractID[:])
+	if err != nil {
+		return "", fmt.Errorf("encoding contract address: %w", err)
+	}
+
+	return encoded, nil
+}
+
+// isContractAllowed checks if the contract address is allowed. Only SACs enabled for the wallet are allowed.
+func (h SponsoredTransactionHandler) isContractAllowed(ctx context.Context, contractAddress string) (bool, error) {
+	if strings.TrimSpace(contractAddress) == "" {
+		return false, fmt.Errorf("contract address is required")
+	}
+	if h.Models == nil {
+		return false, fmt.Errorf("models are required")
+	}
+	networkPassphrase := strings.TrimSpace(h.NetworkPassphrase)
+	if networkPassphrase == "" {
+		return false, fmt.Errorf("network passphrase is required")
+	}
+
+	assets, err := h.getEmbeddedWalletAssets(ctx)
+	if err != nil {
+		return false, fmt.Errorf("getting embedded wallet assets: %w", err)
+	}
+
+	for _, asset := range assets {
+		var xdrAsset xdr.Asset
+		if asset.IsNative() {
+			xdrAsset = xdr.MustNewNativeAsset()
+		} else {
+			var buildErr error
+			xdrAsset, buildErr = xdr.NewCreditAsset(asset.Code, asset.Issuer)
+			if buildErr != nil {
+				return false, fmt.Errorf("building asset %s:%s: %w", asset.Code, asset.Issuer, buildErr)
+			}
+		}
+
+		contractID, err := xdrAsset.ContractID(networkPassphrase)
+		if err != nil {
+			return false, fmt.Errorf("calculating contract ID for asset %s:%s: %w", asset.Code, asset.Issuer, err)
+		}
+		encoded, err := strkey.Encode(strkey.VersionByteContract, contractID[:])
+		if err != nil {
+			return false, fmt.Errorf("encoding contract ID for asset %s:%s: %w", asset.Code, asset.Issuer, err)
+		}
+
+		if encoded == contractAddress {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// getEmbeddedWalletAssets retrieves the assets associated with the embedded wallet.
+func (h SponsoredTransactionHandler) getEmbeddedWalletAssets(ctx context.Context) ([]data.Asset, error) {
+	wallets, err := h.Models.Wallets.FindWallets(ctx, data.Filter{Key: data.FilterEmbedded, Value: true})
+	if err != nil {
+		return nil, fmt.Errorf("finding embedded wallets: %w", err)
+	}
+
+	if len(wallets) != 1 {
+		return nil, fmt.Errorf("expected exactly one embedded wallet, found %d", len(wallets))
+	}
+
+	assets, err := h.Models.Wallets.GetAssets(ctx, wallets[0].ID)
+	if err != nil {
+		return nil, fmt.Errorf("getting embedded wallet assets: %w", err)
+	}
+
+	return assets, nil
 }
