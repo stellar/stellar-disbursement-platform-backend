@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/xdr"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
@@ -125,6 +126,12 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		models, err := data.NewModels(dbConnectionPool)
 		require.NoError(t, err)
 
+		embeddedWallet := data.CreateWalletFixture(t, context.Background(), dbConnectionPool, "embedded-wallet", "https://example.com", "embedded.example.com", "embedded://")
+		data.MakeWalletEmbedded(t, context.Background(), dbConnectionPool, embeddedWallet.ID)
+
+		walletAsset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool, "USDC", keypair.MustRandom().Address())
+		data.CreateWalletAssets(t, context.Background(), dbConnectionPool, embeddedWallet.ID, []string{walletAsset.ID})
+
 		walletService := mocks.NewMockEmbeddedWalletService(t)
 		handlerWithModels := SponsoredTransactionHandler{
 			EmbeddedWalletService: walletService,
@@ -159,6 +166,13 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		models, err := data.NewModels(dbConnectionPool)
 		require.NoError(t, err)
 
+		embeddedWallet := data.CreateWalletFixture(t, context.Background(), dbConnectionPool, "embedded-wallet", "https://example.com", "embedded.example.com", "embedded://")
+		data.MakeWalletEmbedded(t, context.Background(), dbConnectionPool, embeddedWallet.ID)
+
+		issuer := keypair.MustRandom().Address()
+		asset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool, "TEST", issuer)
+		data.CreateWalletAssets(t, context.Background(), dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
+
 		walletService := mocks.NewMockEmbeddedWalletService(t)
 		handlerWithModels := SponsoredTransactionHandler{
 			EmbeddedWalletService: walletService,
@@ -166,8 +180,6 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 			NetworkPassphrase:     network.TestNetworkPassphrase,
 		}
 
-		issuer := keypair.MustRandom().Address()
-		asset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool, "TEST", issuer)
 		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, *asset, network.TestNetworkPassphrase)
 
 		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{

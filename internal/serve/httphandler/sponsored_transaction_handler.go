@@ -191,9 +191,9 @@ func (h SponsoredTransactionHandler) isContractAllowed(ctx context.Context, cont
 		return false, fmt.Errorf("network passphrase is required")
 	}
 
-	assets, err := h.Models.Assets.GetAll(ctx)
+	assets, err := h.getEmbeddedWalletAssets(ctx)
 	if err != nil {
-		return false, fmt.Errorf("getting assets: %w", err)
+		return false, fmt.Errorf("getting embedded wallet assets: %w", err)
 	}
 
 	for _, asset := range assets {
@@ -223,4 +223,23 @@ func (h SponsoredTransactionHandler) isContractAllowed(ctx context.Context, cont
 	}
 
 	return false, nil
+}
+
+// getEmbeddedWalletAssets retrieves the assets associated with the embedded wallet.
+func (h SponsoredTransactionHandler) getEmbeddedWalletAssets(ctx context.Context) ([]data.Asset, error) {
+	wallets, err := h.Models.Wallets.FindWallets(ctx, data.Filter{Key: data.FilterEmbedded, Value: true})
+	if err != nil {
+		return nil, fmt.Errorf("finding embedded wallets: %w", err)
+	}
+
+	if len(wallets) != 1 {
+		return nil, fmt.Errorf("expected exactly one embedded wallet, found %d", len(wallets))
+	}
+
+	assets, err := h.Models.Wallets.GetAssets(ctx, wallets[0].ID)
+	if err != nil {
+		return nil, fmt.Errorf("getting embedded wallet assets: %w", err)
+	}
+
+	return assets, nil
 }
