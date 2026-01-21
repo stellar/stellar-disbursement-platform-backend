@@ -1,0 +1,187 @@
+name: CKL - Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      run-type:
+        description: 'Run option'
+        required: true
+        default: 'Deploy-to-DEMO'
+        type: choice
+        options:
+        - 'Deploy-to-DEMO'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml # execute the callable ci.yml
+    secrets: inherit # pass all secrets
+
+  internal_sep_validation:
+    uses: ./.github/workflows/internal_sep_validation.yml
+    needs:
+      - tests
+    secrets: inherit
+
+  e2e_integration_test:
+    uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
+    needs:
+      - tests
+    secrets: inherit # pass all secrets
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs:
+      - tests
+      - e2e_integration_test
+      - internal_sep_validation    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          tags: build:1.0.0
+          outputs: type=docker,dest=/tmp/docker_image.tar
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+          file: ./ckl/sdp-api/Dockerfile
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          retention-days: 1
+          name: docker_image
+          path: /tmp/docker_image.tar
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    if: needs.build.result == 'success'
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    env:
+      ECR_REPOSITORY: ckl-demos-prod-sdp-api
+      ECS_CLUSTER_NAME: ckl-demos-prod
+      ECS_SERVICE_NAME: ckl-demos-prod-sdp-api
+      ECS_CONTAINER_NAME: ckl-demos-prod-sdp-api
+      ECS_TASK_NAME: ckl-demos-prod-sdp-api
+      IMAGE_TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: echo "IMAGE=$(echo $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG )" >> $GITHUB_ENV
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker_image
+          path: /tmp
+
+      - name: Load, tag and push Docker image
+        run: |
+          docker load --input /tmp/docker_image.tar
+          docker tag build:1.0.0 ${{ env.IMAGE }}
+          docker image ls -a
+          docker push ${{ env.IMAGE }}
+
+      - name: Download ECS task definition
+        run: |
+          aws ecs describe-task-definition --task-definition $ECS_TASK_NAME --query taskDefinition > task-definition.json
+          cat task-definition.json
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          image: ${{ env.IMAGE }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_NAME }}
+          cluster: ${{ env.ECS_CLUSTER_NAME }}
+          wait-for-service-stability: true
+
+      - name: Notify Slack on Deploy Success
+        if: success() && vars.TERRAFORM_MESSAGE_SLACK == 'true'
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: |
+              `SDP API Deploy Success Report`
+              *📌 Repository:* <https://github.com/${{ github.repository }}|${{ github.repository }}>
+              *🔀 Branch:* ${{ github.ref_name }}
+              *📃 Commit:* ${{ github.sha }}
+              *👤 Author:* ${{ github.actor }}
+              *🔗 Commit Link:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>
+              ${{ github.event.pull_request.title != '' && format('*📢 PR:* {0} (<https://github.com/{1}/pull/{2}|Open PR>)', github.event.pull_request.title, github.repository, github.event.pull_request.number) || '' }}
+              *✅ Status:* Deploy to DEMO completed successfully. Image: ${{ env.IMAGE }}
+            attachments:
+              - color: "#36a64f"
+                text: "Deploy completed"
+
+  notify-on-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    if: failure()
+    needs: ["build", "deploy"]
+    steps:
+      - name: Notify Slack on Failure
+        if: ${{ vars.TERRAFORM_MESSAGE_SLACK == 'true' }}
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: ${{ vars.SLACK_CHANNEL_ID }}
+            text: |
+              `SDP API CD Failure Report`
+              *📌 Repository:* <https://github.com/${{ github.repository }}|${{ github.repository }}>
+              *🔀 Branch:* ${{ github.ref_name }}
+              *📃 Commit:* ${{ github.sha }}
+              *👤 Author:* ${{ github.actor }}
+              *🔗 Commit Link:* <https://github.com/${{ github.repository }}/commit/${{ github.sha }}|View Commit>
+              ${{ github.event.pull_request.title != '' && format('*📢 PR:* {0} (<https://github.com/{1}/pull/{2}|Open PR>)', github.event.pull_request.title, github.repository, github.event.pull_request.number) || '' }}
+              *⚠️ Status:* Deployment failed. Please review the workflow logs for details: <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}>
+            attachments:
+              - color: "#ff0000"
+                text: "Deployment failed"
