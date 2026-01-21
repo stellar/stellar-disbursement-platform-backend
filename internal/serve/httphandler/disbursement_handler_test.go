@@ -54,7 +54,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
 	wallet := wallets[0]
 
-	embeddedWalletFixture := data.CreateWalletFixture(t, ctx, dbConnectionPool, "SDP Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
+	embeddedWalletFixture := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
 	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWalletFixture.ID)
 	embeddedWallet := data.GetWalletFixture(t, ctx, dbConnectionPool, embeddedWalletFixture.Name)
 
