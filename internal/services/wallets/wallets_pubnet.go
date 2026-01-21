@@ -41,12 +41,8 @@ var PubnetWallets = []data.Wallet{
 		Name:           "Embedded Wallet",
 		DeepLinkSchema: "SELF",
 		Homepage:       "https://stellar.org",
-		Assets: []data.Asset{
-			assets.XLMAsset,
-			assets.USDCAssetPubnet,
-			assets.EURCAssetPubnet,
-		},
-		Embedded: true,
+		Assets:         assets.AllAssetsPubnet,
+		Embedded:       true,
 	},
 	{
 		Name:        "User Managed Wallet",
