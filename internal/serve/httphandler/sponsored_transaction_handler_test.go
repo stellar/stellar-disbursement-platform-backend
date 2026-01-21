@@ -12,14 +12,14 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go-stellar-sdk/keypair"
-	"github.com/stellar/go-stellar-sdk/network"
-	"github.com/stellar/go-stellar-sdk/strkey"
-	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
@@ -27,6 +27,8 @@ import (
 )
 
 func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
+	const contractAddress = "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53"
+
 	t.Run("returns unauthorized when wallet contract address is not in context", func(t *testing.T) {
 		walletService := mocks.NewMockEmbeddedWalletService(t)
 		handler := SponsoredTransactionHandler{
@@ -57,11 +59,11 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		ctx := context.Background()
-		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader("invalid-json"))
 		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -74,15 +76,11 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
-			OperationXDR: "",
-		})
-		require.NoError(t, err)
-		ctx := context.Background()
-		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(`{"operation_xdr": ""}`))
 		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -95,15 +93,11 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
-			OperationXDR: "invalid-base64-!!!",
-		})
-		require.NoError(t, err)
-		ctx := context.Background()
-		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(`{"operation_xdr": "invalid-base64-!!!"}`))
 		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
@@ -116,11 +110,9 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		requestBody := `{"operation_xdr": "aGVsbG8gd29ybGQ="}`
-		ctx := context.Background()
-		ctx = sdpcontext.SetWalletContractAddressInContext(ctx, "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53")
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(`{"operation_xdr": "aGVsbG8gd29ybGQ="}`))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
@@ -204,7 +196,9 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 }
 
 func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
-	t.Run("returns bad request when transaction ID is empty", func(t *testing.T) {
+	const contractAddress = "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53"
+
+	t.Run("returns unauthorized when wallet contract address is not in context", func(t *testing.T) {
 		walletService := mocks.NewMockEmbeddedWalletService(t)
 		handler := SponsoredTransactionHandler{
 			EmbeddedWalletService: walletService,
@@ -212,6 +206,28 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 		ctx := context.Background()
+		transactionID := "missing-contract-address"
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
+		require.NoError(t, err)
+
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("id", transactionID)
+		req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, rctx))
+
+		http.HandlerFunc(handler.GetSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Result().StatusCode)
+	})
+
+	t.Run("returns bad request when transaction ID is empty", func(t *testing.T) {
+		walletService := mocks.NewMockEmbeddedWalletService(t)
+		handler := SponsoredTransactionHandler{
+			EmbeddedWalletService: walletService,
+		}
+
+		rr := httptest.NewRecorder()
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/embedded-wallets/sponsored-transactions/", nil)
 		require.NoError(t, err)
@@ -232,10 +248,10 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		ctx := context.Background()
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 		transactionID := "non-existent-id"
 
-		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(nil, data.ErrRecordNotFound).Once()
+		walletService.On("GetTransactionStatus", mock.Anything, contractAddress, transactionID).Return(nil, data.ErrRecordNotFound).Once()
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
 		require.NoError(t, err)
@@ -256,10 +272,10 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		ctx := context.Background()
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 		transactionID := "test-transaction-id"
 
-		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(nil, errors.New("service error")).Once()
+		walletService.On("GetTransactionStatus", mock.Anything, contractAddress, transactionID).Return(nil, errors.New("service error")).Once()
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
 		require.NoError(t, err)
@@ -280,7 +296,7 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		ctx := context.Background()
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
 		transactionID := "test-transaction-id"
 		createdAt := time.Now()
 		updatedAt := time.Now()
@@ -294,7 +310,7 @@ func Test_SponsoredTransactionHandler_GetSponsoredTransaction(t *testing.T) {
 			UpdatedAt:       &updatedAt,
 		}
 
-		walletService.On("GetTransactionStatus", mock.Anything, transactionID).Return(mockTransaction, nil).Once()
+		walletService.On("GetTransactionStatus", mock.Anything, contractAddress, transactionID).Return(mockTransaction, nil).Once()
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("/embedded-wallets/sponsored-transactions/%s", transactionID), nil)
 		require.NoError(t, err)
