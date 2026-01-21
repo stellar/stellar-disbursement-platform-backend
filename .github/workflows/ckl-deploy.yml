@@ -25,12 +25,19 @@ jobs:
       - tests
     secrets: inherit
 
+  e2e_integration_test:
+    uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
+    needs:
+      - tests
+    secrets: inherit # pass all secrets
+
   build:
     name: Build
     runs-on: ubuntu-latest
     needs:
       - tests
       - internal_sep_validation
+      - e2e_integration_test
     steps:
       - name: Checkout
         uses: actions/checkout@v6
