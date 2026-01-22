@@ -19,7 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Update `GET /wallets` endpoint to exclude soft-deleted wallets by default. Add optional `include_deleted` query parameter to include deleted wallets when set to `true`. [#1005](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1005)
 - Update `DELETE /wallets/:id` endpoint to check if a wallet has pending registrations before deletion. Returns a user-friendly error if the wallet has receiver_wallets in 'DRAFT' or 'READY' status. [#1007](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1007)
-- Improve error handling for disbursement field `id` and `paymentId`.[#1018](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1018)
+- Improve error handling for disbursement field `id` and `paymentId`. [#1018](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1018)
+- Soft delete "Vibrant Assist" wallet provider. [#1021](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1021)
 
 ### Security and Dependencies
 
