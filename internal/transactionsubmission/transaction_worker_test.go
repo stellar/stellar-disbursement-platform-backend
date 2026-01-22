@@ -754,7 +754,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 			)
-			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GDISTACCOUNT")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -834,7 +834,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 		envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 	)
-	tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+	tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GDISTACCOUNT")
 	require.NoError(t, err)
 	txJob.Transaction = *tx
 	// declare horizon error
@@ -947,7 +947,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 			)
-			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GDISTACCOUNT")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -1227,7 +1227,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
-			tx, err := transactionWorker.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			tx, err := transactionWorker.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GDISTACCOUNT")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -1572,6 +1572,8 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, gotFeeBumpTx)
+				// The distribution account is extracted from the fee bump transaction's FeeAccount
+				assert.Equal(t, distributionKP.Address(), gotFeeBumpTx.FeeAccount())
 
 				// Check that the transaction was built correctly:
 				var wantAsset txnbuild.Asset = txnbuild.NativeAsset{}
