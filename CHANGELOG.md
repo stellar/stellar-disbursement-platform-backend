@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Fixed
+
+-  Fix PatchDisbursementStatus to support API key authentication. [#996](https://github.com/stellar/stellar-disbursement-platform-backend/pull/996)
+
 ### Added
 
 - Add Haitian Creole translations for the SEP-24 interactive deposit flow. [#994](https://github.com/stellar/stellar-disbursement-platform-backend/pull/994)
