@@ -401,6 +401,84 @@ func Test_EmbeddedWalletModel_GetPendingForSubmission(t *testing.T) {
 	assert.Contains(t, ids, pending2.Token)
 }
 
+func Test_EmbeddedWalletModel_GetPendingByReceiverWalletID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	embeddedWalletModel := EmbeddedWalletModel{dbConnectionPool: dbConnectionPool}
+
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "pending-rw-wallet", "https://example.com", "wallet.example.com", "embedded://")
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	t.Run("returns error for empty receiver wallet ID", func(t *testing.T) {
+		result, err := embeddedWalletModel.GetPendingByReceiverWalletID(ctx, dbConnectionPool, "")
+		assert.ErrorIs(t, err, ErrMissingInput)
+		assert.Nil(t, result)
+
+		result, err = embeddedWalletModel.GetPendingByReceiverWalletID(ctx, dbConnectionPool, "   ")
+		assert.ErrorIs(t, err, ErrMissingInput)
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns ErrRecordNotFound when no pending wallet exists", func(t *testing.T) {
+		result, err := embeddedWalletModel.GetPendingByReceiverWalletID(ctx, dbConnectionPool, "non-existent-receiver-wallet-id")
+		assert.ErrorIs(t, err, ErrRecordNotFound)
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns pending wallet when exists", func(t *testing.T) {
+		embedded := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "abcdef123456", "", "", "", PendingWalletStatus)
+		require.NoError(t, embeddedWalletModel.Update(ctx, dbConnectionPool, embedded.Token, EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+
+		result, err := embeddedWalletModel.GetPendingByReceiverWalletID(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, embedded.Token, result.Token)
+		assert.Equal(t, receiverWallet.ID, result.ReceiverWalletID)
+		assert.Equal(t, PendingWalletStatus, result.WalletStatus)
+	})
+
+	t.Run("ignores non-PENDING wallets", func(t *testing.T) {
+		DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		// Create a SUCCESS status wallet linked to the receiver wallet
+		successWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "abcdef123456", "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53", "cred-1", "pub-1", SuccessWalletStatus)
+		require.NoError(t, embeddedWalletModel.Update(ctx, dbConnectionPool, successWallet.Token, EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+
+		// Should not find any pending wallet
+		result, err := embeddedWalletModel.GetPendingByReceiverWalletID(ctx, dbConnectionPool, receiverWallet.ID)
+		assert.ErrorIs(t, err, ErrRecordNotFound)
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns most recent pending wallet when multiple exist", func(t *testing.T) {
+		DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		// Create first pending wallet
+		olderWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "older-token", "abcdef123456", "", "", "", PendingWalletStatus)
+		require.NoError(t, embeddedWalletModel.Update(ctx, dbConnectionPool, olderWallet.Token, EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+
+		// Create second pending wallet (more recent)
+		newerWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "newer-token", "abcdef123456", "", "", "", PendingWalletStatus)
+		require.NoError(t, embeddedWalletModel.Update(ctx, dbConnectionPool, newerWallet.Token, EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+
+		// Should return the most recent one
+		result, err := embeddedWalletModel.GetPendingByReceiverWalletID(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, newerWallet.Token, result.Token)
+	})
+}
+
 func Test_EmbeddedWalletModel_GetReceiverWallet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

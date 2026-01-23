@@ -498,6 +498,49 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 		assert.Len(t, verifications, 0)
 	})
 
+	t.Run("reuses pending embedded wallet on resend", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		recRW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverPhoneOnly.ID, walletEmbedded.ID, data.ReadyReceiversWalletStatus)
+		pendingToken := uuid.New().String()
+		pendingWallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, pendingToken, "abcdef123456", "", "", "", data.PendingWalletStatus)
+		require.NoError(t, models.EmbeddedWallets.Update(ctx, dbConnectionPool, pendingWallet.Token, data.EmbeddedWalletUpdate{ReceiverWalletID: recRW.ID}))
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursementEmbedded,
+			Asset:          *asset1,
+			ReceiverWallet: recRW,
+			Amount:         "1",
+		})
+
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, mock.MatchedBy(func(msg message.Message) bool {
+				return msg.ToPhoneNumber == receiverPhoneOnly.PhoneNumber &&
+					strings.Contains(msg.Body, "token="+pendingToken)
+			}), []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+			Return(message.MessengerTypeTwilioSMS, nil).
+			Once()
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		var embeddedCount int
+		err = dbConnectionPool.GetContext(ctx, &embeddedCount, `SELECT COUNT(*) FROM embedded_wallets WHERE receiver_wallet_id = $1`, recRW.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 1, embeddedCount)
+
+		reusedWallet, err := models.EmbeddedWallets.GetByToken(ctx, dbConnectionPool, pendingToken)
+		require.NoError(t, err)
+		assert.Equal(t, recRW.ID, reusedWallet.ReceiverWalletID)
+	})
+
 	t.Run("skips embedded wallet when embedded wallet service is nil", func(t *testing.T) {
 		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, nil, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
