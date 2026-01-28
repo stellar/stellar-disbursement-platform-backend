@@ -486,14 +486,9 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	disbursementID := chi.URLParam(r, "id")
 
-	token, err := sdpcontext.GetTokenFromContext(ctx)
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot get token from context", err, nil).Render(w)
-		return
-	}
-	user, err := d.AuthManager.GetUser(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user from token", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(w)
 		return
 	}
 
