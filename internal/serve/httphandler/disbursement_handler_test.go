@@ -1446,10 +1446,11 @@ func Test_validateCSVHeaders(t *testing.T) {
 			expectedErrorSubstring: "verification column is required",
 		},
 		{
-			name:             "phone contact tolerates missing verification when skipped",
-			headers:          []string{"phone"},
-			rct:              data.RegistrationContactTypePhone,
-			skipVerification: true,
+			name:                   "email contact disallows verification header when skipped",
+			headers:                []string{"email", "verification"},
+			rct:                    data.RegistrationContactTypeEmail,
+			skipVerification:       true,
+			expectedErrorSubstring: "verification column is not allowed",
 		},
 		{
 			name:             "phone and wallet contact does not require verification",
