@@ -695,11 +695,11 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 
 	rules := map[data.RegistrationContactType]headerRules{
 		data.RegistrationContactTypePhone: {
-			required:   []string{phoneHeader},
+			required:   []string{phoneHeader, verificationHeader},
 			disallowed: []string{emailHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmail: {
-			required:   []string{emailHeader},
+			required:   []string{emailHeader, verificationHeader},
 			disallowed: []string{phoneHeader, walletAddressHeader, walletAddressMemoHeader},
 		},
 		data.RegistrationContactTypeEmailAndWalletAddress: {
@@ -713,8 +713,17 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 	}
 
 	rule := rules[registrationContactType]
-	if !registrationContactType.IncludesWalletAddress && !skipVerification {
-		rule.required = append(rule.required, verificationHeader)
+	if skipVerification {
+		// filter out the verification header from required headers
+		filtered := rule.required[:0]
+		for _, header := range rule.required {
+			if header != verificationHeader {
+				filtered = append(filtered, header)
+			}
+		}
+		rule.required = filtered
+		// And add it to disallowed
+		rule.disallowed = append(rule.disallowed, verificationHeader)
 	}
 
 	// Validate headers according to the rules
