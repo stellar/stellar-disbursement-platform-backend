@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
@@ -159,6 +160,49 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		http.HandlerFunc(handlerWithModels.CreateSponsoredTransaction).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	})
+
+	t.Run("returns bad request when simulation fails", func(t *testing.T) {
+		dbConnectionPool := testutils.GetDBConnectionPool(t)
+		models, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		embeddedWallet := data.CreateWalletFixture(t, context.Background(), dbConnectionPool, "embedded-wallet", "https://example.com", "embedded.example.com", "embedded://")
+		data.MakeWalletEmbedded(t, context.Background(), dbConnectionPool, embeddedWallet.ID)
+
+		issuer := keypair.MustRandom().Address()
+		asset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool, "TEST", issuer)
+		data.CreateWalletAssets(t, context.Background(), dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
+
+		walletService := mocks.NewMockEmbeddedWalletService(t)
+		handlerWithModels := SponsoredTransactionHandler{
+			EmbeddedWalletService: walletService,
+			Models:                models,
+			NetworkPassphrase:     network.TestNetworkPassphrase,
+		}
+
+		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, *asset, network.TestNetworkPassphrase)
+
+		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
+			OperationXDR: operationXDR,
+		})
+		require.NoError(t, err)
+
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		walletService.
+			On("SponsorTransaction", mock.Anything, contractAddress, operationXDR).
+			Return("", &stellar.SimulationError{Type: stellar.SimulationErrorTypeContractExecution}).
+			Once()
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handlerWithModels.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "operation_xdr failed simulation")
 	})
 
 	t.Run("successfully creates sponsored transaction for supported contract address", func(t *testing.T) {

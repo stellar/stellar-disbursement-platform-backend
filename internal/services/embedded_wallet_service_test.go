@@ -6,13 +6,17 @@ import (
 	"strings"
 	"testing"
 
+	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
+	stellarMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -26,7 +30,7 @@ func Test_NewEmbeddedWalletService(t *testing.T) {
 	wasmHash := "e5da3b"
 
 	t.Run("return an error if sdpModels is nil", func(t *testing.T) {
-		service, err := NewEmbeddedWalletService(nil, wasmHash)
+		service, err := NewEmbeddedWalletService(nil, wasmHash, stellarMocks.NewMockRPCClient(t))
 		assert.Nil(t, service)
 		assert.EqualError(t, err, "sdpModels cannot be nil")
 	})
@@ -35,16 +39,25 @@ func Test_NewEmbeddedWalletService(t *testing.T) {
 		sdpModels, err := data.NewModels(dbConnectionPool)
 		require.NoError(t, err)
 
-		service, err := NewEmbeddedWalletService(sdpModels, "")
+		service, err := NewEmbeddedWalletService(sdpModels, "", stellarMocks.NewMockRPCClient(t))
 		assert.Nil(t, service)
 		assert.EqualError(t, err, "wasmHash cannot be empty")
+	})
+
+	t.Run("return an error if rpc client is nil", func(t *testing.T) {
+		sdpModels, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		service, err := NewEmbeddedWalletService(sdpModels, wasmHash, nil)
+		assert.Nil(t, service)
+		assert.EqualError(t, err, "rpcClient cannot be nil")
 	})
 
 	t.Run("🎉 successfully creates a new EmbeddedWalletService instance", func(t *testing.T) {
 		sdpModels, err := data.NewModels(dbConnectionPool)
 		require.NoError(t, err)
 
-		service, err := NewEmbeddedWalletService(sdpModels, wasmHash)
+		service, err := NewEmbeddedWalletService(sdpModels, wasmHash, stellarMocks.NewMockRPCClient(t))
 		require.NoError(t, err)
 		require.NotNil(t, service)
 
@@ -66,7 +79,7 @@ func Test_EmbeddedWalletService_CreateInvitationToken(t *testing.T) {
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	t.Run("successfully creates unique tokens", func(t *testing.T) {
@@ -110,7 +123,7 @@ func Test_EmbeddedWalletService_CreateWallet(t *testing.T) {
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	defaultPublicKey := "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23"
@@ -245,11 +258,13 @@ func Test_EmbeddedWalletService_SponsorTransaction(t *testing.T) {
 	sdpModels, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	rpcMock := stellarMocks.NewMockRPCClient(t)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, rpcMock)
 	require.NoError(t, err)
 
 	const contractAddress = "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
-	const operationXDR = "test-operation-xdr"
+	const distributionAccount = "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
+	const operationXDR = "AAAAAAAAAAHXkotywnA8z+r365/0701QSlWouXn8m0UOoshCtNHOYQAAAAh0cmFuc2ZlcgAAAAAAAAAA"
 
 	data.DeleteAllSponsoredTransactionsFixtures(t, ctx, dbConnectionPool)
 	data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
@@ -282,10 +297,44 @@ func Test_EmbeddedWalletService_SponsorTransaction(t *testing.T) {
 		})
 	}
 
+	t.Run("returns error when simulation fails", func(t *testing.T) {
+		rpcMock.
+			On("SimulateTransaction", mock.Anything, mock.MatchedBy(func(req protocol.SimulateTransactionRequest) bool {
+				return req.AuthMode == protocol.AuthModeEnforce
+			})).
+			Return((*stellar.SimulationResult)(nil), stellar.NewSimulationError(errors.New("boom"), nil)).
+			Once()
+
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, &schema.Tenant{
+			DistributionAccountAddress: func() *string {
+				address := distributionAccount
+				return &address
+			}(),
+		})
+
+		_, err := service.SponsorTransaction(ctxWithTenant, contractAddress, operationXDR)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "simulating sponsored transaction")
+	})
+
 	t.Run("successfully creates sponsored transaction for embedded wallet", func(t *testing.T) {
+		ctxWithTenant := sdpcontext.SetTenantInContext(ctx, &schema.Tenant{
+			DistributionAccountAddress: func() *string {
+				address := distributionAccount
+				return &address
+			}(),
+		})
+
+		rpcMock.
+			On("SimulateTransaction", mock.Anything, mock.MatchedBy(func(req protocol.SimulateTransactionRequest) bool {
+				return req.AuthMode == protocol.AuthModeEnforce
+			})).
+			Return(&stellar.SimulationResult{Response: protocol.SimulateTransactionResponse{}}, (*stellar.SimulationError)(nil)).
+			Once()
+
 		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", testWasmHash, contractAddress, "credential", "public-key", data.SuccessWalletStatus)
 
-		transactionID, err := service.SponsorTransaction(ctx, contractAddress, operationXDR)
+		transactionID, err := service.SponsorTransaction(ctxWithTenant, contractAddress, operationXDR)
 		require.NoError(t, err)
 		require.NotEmpty(t, transactionID)
 
@@ -308,7 +357,7 @@ func Test_EmbeddedWalletService_GetTransactionStatus(t *testing.T) {
 	sdpModels, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	const contractAddress = "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
@@ -359,7 +408,7 @@ func Test_EmbeddedWalletService_GetPendingDisbursementAsset(t *testing.T) {
 	sdpModels, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	contractAddress := "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R4"
@@ -422,7 +471,7 @@ func Test_EmbeddedWalletService_getReceiverWalletByContractAddress(t *testing.T)
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
@@ -463,7 +512,7 @@ func Test_EmbeddedWalletService_IsVerificationPending(t *testing.T) {
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	cleanupFixtures := func(t *testing.T) {
@@ -526,7 +575,7 @@ func Test_EmbeddedWalletService_GetReceiverContact(t *testing.T) {
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
@@ -579,7 +628,7 @@ func Test_EmbeddedWalletService_GetWalletByCredentialID(t *testing.T) {
 	require.NoError(t, err)
 	const testWasmHash = "e5da3b9950524b4276ccf2051e6cc8220bb581e869b892a6ff7812d7709c7a50"
 
-	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash)
+	service, err := NewEmbeddedWalletService(sdpModels, testWasmHash, stellarMocks.NewMockRPCClient(t))
 	require.NoError(t, err)
 
 	t.Run("successfully gets a wallet by credential ID", func(t *testing.T) {

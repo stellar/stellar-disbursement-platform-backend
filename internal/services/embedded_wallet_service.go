@@ -7,9 +7,15 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
+	"github.com/stellar/go-stellar-sdk/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 )
 
 var (
@@ -53,25 +59,31 @@ var _ EmbeddedWalletServiceInterface = (*EmbeddedWalletService)(nil)
 type EmbeddedWalletService struct {
 	sdpModels *data.Models
 	wasmHash  string
+	rpcClient stellar.RPCClient
 }
 
-func NewEmbeddedWalletService(sdpModels *data.Models, wasmHash string) (*EmbeddedWalletService, error) {
+func NewEmbeddedWalletService(sdpModels *data.Models, wasmHash string, rpcClient stellar.RPCClient) (*EmbeddedWalletService, error) {
 	if sdpModels == nil {
 		return nil, fmt.Errorf("sdpModels cannot be nil")
 	}
 	if wasmHash == "" {
 		return nil, fmt.Errorf("wasmHash cannot be empty")
 	}
+	if rpcClient == nil {
+		return nil, fmt.Errorf("rpcClient cannot be nil")
+	}
 
 	return &EmbeddedWalletService{
 		sdpModels: sdpModels,
 		wasmHash:  wasmHash,
+		rpcClient: rpcClient,
 	}, nil
 }
 
 type EmbeddedWalletServiceOptions struct {
 	MTNDBConnectionPool db.DBConnectionPool
 	WasmHash            string
+	RPCClient           stellar.RPCClient
 }
 
 func (e *EmbeddedWalletService) CreateInvitationToken(ctx context.Context) (string, error) {
@@ -234,6 +246,10 @@ func (e *EmbeddedWalletService) SponsorTransaction(ctx context.Context, account,
 		return "", ErrMissingOperationXDR
 	}
 
+	if err := e.simulateSponsoredTransaction(ctx, operationXDR); err != nil {
+		return "", fmt.Errorf("simulating sponsored transaction: %w", err)
+	}
+
 	return db.RunInTransactionWithResult(ctx, e.sdpModels.DBConnectionPool, nil, func(sdpTx db.DBTransaction) (string, error) {
 		insert := data.SponsoredTransactionInsert{
 			ID:           uuid.New().String(),
@@ -267,4 +283,75 @@ func (e *EmbeddedWalletService) GetTransactionStatus(ctx context.Context, accoun
 
 		return sponsoredTx, nil
 	})
+}
+
+func (e *EmbeddedWalletService) simulateSponsoredTransaction(ctx context.Context, operationXDR string) error {
+	if e.rpcClient == nil {
+		return fmt.Errorf("rpc client is required to simulate sponsored transactions")
+	}
+
+	tenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("getting tenant from context: %w", err)
+	}
+	if tenant.DistributionAccountAddress == nil {
+		return fmt.Errorf("distribution account address is missing for tenant")
+	}
+	distributionAccount := strings.TrimSpace(*tenant.DistributionAccountAddress)
+	if distributionAccount == "" {
+		return fmt.Errorf("distribution account address is missing for tenant")
+	}
+	if !strkey.IsValidEd25519PublicKey(distributionAccount) {
+		return fmt.Errorf("distribution account address is not a valid ed25519 public key")
+	}
+
+	var operation xdr.InvokeHostFunctionOp
+	err = xdr.SafeUnmarshalBase64(operationXDR, &operation)
+	if err != nil {
+		return fmt.Errorf("decoding operation XDR: %w", err)
+	}
+
+	if operation.HostFunction.Type != xdr.HostFunctionTypeHostFunctionTypeInvokeContract {
+		return fmt.Errorf("operation is not an invoke contract host function")
+	}
+	if operation.HostFunction.InvokeContract == nil {
+		return fmt.Errorf("invoke contract operation is missing contract details")
+	}
+
+	sponsoredOperation := &txnbuild.InvokeHostFunction{
+		SourceAccount: distributionAccount,
+		HostFunction:  operation.HostFunction,
+		Auth:          operation.Auth,
+	}
+
+	txParams := txnbuild.TransactionParams{
+		SourceAccount: &txnbuild.SimpleAccount{
+			AccountID: distributionAccount,
+			Sequence:  0,
+		},
+		Operations: []txnbuild.Operation{sponsoredOperation},
+		BaseFee:    txnbuild.MinBaseFee,
+		Preconditions: txnbuild.Preconditions{
+			TimeBounds: txnbuild.NewTimeout(300),
+		},
+	}
+
+	tx, err := txnbuild.NewTransaction(txParams)
+	if err != nil {
+		return fmt.Errorf("building simulation transaction: %w", err)
+	}
+
+	txEnvelope, err := tx.Base64()
+	if err != nil {
+		return fmt.Errorf("encoding simulation transaction: %w", err)
+	}
+
+	if _, simErr := e.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{
+		Transaction: txEnvelope,
+		AuthMode:    protocol.AuthModeEnforce,
+	}); simErr != nil {
+		return simErr
+	}
+
+	return nil
 }
