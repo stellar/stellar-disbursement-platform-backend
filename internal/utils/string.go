@@ -40,6 +40,14 @@ func TruncateString(str string, borderSizeToKeep int) string {
 	return str[:borderSizeToKeep] + "..." + str[len(str)-borderSizeToKeep:]
 }
 
+// TruncateToMaxLength returns s truncated to maxLen characters, with "..." appended if truncated.
+func TruncateToMaxLength(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
 // TrimAndLower trims and lowercases a string.
 func TrimAndLower(str string) string {
 	return strings.TrimSpace(strings.ToLower(str))
