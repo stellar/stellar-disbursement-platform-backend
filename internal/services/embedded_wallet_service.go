@@ -286,10 +286,6 @@ func (e *EmbeddedWalletService) GetTransactionStatus(ctx context.Context, accoun
 }
 
 func (e *EmbeddedWalletService) simulateSponsoredTransaction(ctx context.Context, operationXDR string) error {
-	if e.rpcClient == nil {
-		return fmt.Errorf("rpc client is required to simulate sponsored transactions")
-	}
-
 	tenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("getting tenant from context: %w", err)
