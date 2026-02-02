@@ -144,7 +144,7 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 			Code:   "TEST",
 			Issuer: keypair.MustRandom().Address(),
 		}
-		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, unsupportedAsset, network.TestNetworkPassphrase)
+		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, unsupportedAsset)
 
 		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
 			OperationXDR: operationXDR,
@@ -181,7 +181,7 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 			NetworkPassphrase:     network.TestNetworkPassphrase,
 		}
 
-		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, *asset, network.TestNetworkPassphrase)
+		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, *asset)
 
 		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
 			OperationXDR: operationXDR,
@@ -205,6 +205,49 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "operation_xdr failed simulation")
 	})
 
+	t.Run("returns internal error when simulation fails with retryable error", func(t *testing.T) {
+		dbConnectionPool := testutils.GetDBConnectionPool(t)
+		models, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		embeddedWallet := data.CreateWalletFixture(t, context.Background(), dbConnectionPool, "embedded-wallet", "https://example.com", "embedded.example.com", "embedded://")
+		data.MakeWalletEmbedded(t, context.Background(), dbConnectionPool, embeddedWallet.ID)
+
+		issuer := keypair.MustRandom().Address()
+		asset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool, "TEST", issuer)
+		data.CreateWalletAssets(t, context.Background(), dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
+
+		walletService := mocks.NewMockEmbeddedWalletService(t)
+		handlerWithModels := SponsoredTransactionHandler{
+			EmbeddedWalletService: walletService,
+			Models:                models,
+			NetworkPassphrase:     network.TestNetworkPassphrase,
+		}
+
+		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, *asset)
+
+		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
+			OperationXDR: operationXDR,
+		})
+		require.NoError(t, err)
+
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), contractAddress)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		walletService.
+			On("SponsorTransaction", mock.Anything, contractAddress, operationXDR).
+			Return("", &stellar.SimulationError{Type: stellar.SimulationErrorTypeNetwork}).
+			Once()
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handlerWithModels.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Failed to create sponsored transaction")
+	})
+
 	t.Run("successfully creates sponsored transaction for supported contract address", func(t *testing.T) {
 		dbConnectionPool := testutils.GetDBConnectionPool(t)
 		models, err := data.NewModels(dbConnectionPool)
@@ -224,7 +267,7 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 			NetworkPassphrase:     network.TestNetworkPassphrase,
 		}
 
-		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, *asset, network.TestNetworkPassphrase)
+		operationXDR, contractAddress := buildInvokeHostFunctionXDR(t, *asset)
 
 		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{
 			OperationXDR: operationXDR,
@@ -429,7 +472,7 @@ func Test_CreateSponsoredTransactionRequest_Validate(t *testing.T) {
 	})
 }
 
-func buildInvokeHostFunctionXDR(t *testing.T, asset data.Asset, networkPassphrase string) (string, string) {
+func buildInvokeHostFunctionXDR(t *testing.T, asset data.Asset) (string, string) {
 	t.Helper()
 
 	var xdrAsset xdr.Asset
@@ -441,7 +484,7 @@ func buildInvokeHostFunctionXDR(t *testing.T, asset data.Asset, networkPassphras
 		require.NoError(t, err)
 	}
 
-	contractID, err := xdrAsset.ContractID(networkPassphrase)
+	contractID, err := xdrAsset.ContractID(network.TestNetworkPassphrase)
 	require.NoError(t, err)
 	var contractIDHash xdr.ContractId
 	copy(contractIDHash[:], contractID[:])
