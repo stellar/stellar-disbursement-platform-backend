@@ -247,13 +247,18 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 		wdl.Route = "wallet"
 	}
 
-	pendingWallet, err := s.Models.EmbeddedWallets.GetPendingByReceiverWalletID(ctx, s.Models.DBConnectionPool, receiverWalletID)
+	reusableStatuses := []data.EmbeddedWalletStatus{
+		data.PendingWalletStatus,
+		data.ProcessingWalletStatus,
+		data.SuccessWalletStatus,
+	}
+	existingWallet, err := s.Models.EmbeddedWallets.GetByReceiverWalletIDAndStatuses(ctx, s.Models.DBConnectionPool, receiverWalletID, reusableStatuses)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
-		return fmt.Errorf("getting pending embedded wallet for receiver wallet %s: %w", receiverWalletID, err)
+		return fmt.Errorf("getting existing embedded wallet for receiver wallet %s: %w", receiverWalletID, err)
 	}
 
-	if pendingWallet != nil {
-		wdl.Token = pendingWallet.Token
+	if existingWallet != nil {
+		wdl.Token = existingWallet.Token
 	} else {
 		token, tokenErr := s.embeddedWalletService.CreateInvitationToken(ctx)
 		if tokenErr != nil {
