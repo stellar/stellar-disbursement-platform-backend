@@ -190,10 +190,10 @@ sdp:
   ## @extra sdp.configMap.data.ENABLE_BRIDGE_INTEGRATION Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.
   ## @extra sdp.configMap.data.BRIDGE_BASE_URL The base URL of the bridge API. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
   ## @param sdp.configMap.data.ENABLE_EMBEDDED_WALLETS Determines if embedded wallet features are enabled ("true" or "false").
-  ## @extra sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true".
+  ## @param sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true". Defaults to the official embedded wallets WASM hash.
   ## @param sdp.configMap.data.ENABLE_SEP45 Determines if SEP-45 web authentication features are enabled ("true" or "false").
-  ## @extra sdp.configMap.data.SEP45_CONTRACT_ID The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true".
-  ## @extra sdp.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".
+  ## @extra sdp.configMap.data.SEP45_CONTRACT_ID The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true". Defaults to the pubnet/testnet contract ID based on global.isPubnet.
+  ## @extra sdp.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true". Defaults to the public Soroban RPC URL on testnet only.
   ## @extra sdp.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_VALUE.
   configMap:
     annotations:
@@ -239,14 +239,14 @@ sdp:
 
       ## Embedded wallets configuration
       ENABLE_EMBEDDED_WALLETS: "false"
-#     EMBEDDED_WALLETS_WASM_HASH: #required when ENABLE_EMBEDDED_WALLETS is "true"
+      EMBEDDED_WALLETS_WASM_HASH: "9b784817dff1620a3e2b223fe1eb8dac56e18980dea9726f692847ccbbd3a853"
 
       ## SEP-45 configuration
       ENABLE_SEP45: "false"
-#     SEP45_CONTRACT_ID: #required when ENABLE_SEP45 is "true"
+#     SEP45_CONTRACT_ID: #required when ENABLE_SEP45 is "true" (defaults based on global.isPubnet)
 
       ## RPC configuration
-#     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true"
+#     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true" (defaults to public Soroban RPC on testnet)
 #     RPC_REQUEST_AUTH_HEADER_KEY: #optional
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
@@ -414,7 +414,7 @@ tss:
   ## @param tss.configMap.data.DB_MAX_IDLE_CONNS Maximum idle connections retained in the pool.
   ## @param tss.configMap.data.DB_CONN_MAX_IDLE_TIME_SECONDS Close idle connections after N seconds.
   ## @param tss.configMap.data.DB_CONN_MAX_LIFETIME_SECONDS Recycle connections after N seconds.
-  ## @extra tss.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true".
+  ## @extra tss.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true". Defaults to the public Soroban RPC URL on testnet only.
   ## @extra tss.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_VALUE.
   configMap:
     annotations:

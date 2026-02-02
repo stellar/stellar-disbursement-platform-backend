@@ -25,6 +25,9 @@ data:
   {{- if .Values.global.distributionPublicKey }}
   DISTRIBUTION_PUBLIC_KEY: {{ .Values.global.distributionPublicKey | quote }}
   {{- end }}
+  {{- if ne (include "isPubnet" .) "true" }}
+  RPC_URL: "https://soroban-testnet.stellar.org"
+  {{- end }}
   {{- /*
   {{- /*
 Values from the tss configmap section - These will override the global values

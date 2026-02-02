@@ -48,6 +48,14 @@ Values from the `global` section
   {{- end }}
   {{- end }}
   {{- end }}
+  {{- if eq (include "isPubnet" .) "true" }}
+  SEP45_CONTRACT_ID: "CALI6JC3MSNDGFRP7Z2OKUEPREHOJRRXKMJEWQDEFZPFGXALA45RAUTH"
+  {{- else }}
+  SEP45_CONTRACT_ID: "CDY4CS2VWHAZOMYVTKUFKGNZKIVFBCXUFNFQ5KSXOTAHKL5H5ZRTAUTH"
+  {{- end }}
+  {{- if ne (include "isPubnet" .) "true" }}
+  RPC_URL: "https://soroban-testnet.stellar.org"
+  {{- end }}
   {{- /*
 Values from the sdp configmap section - These will override the global values
   */}}
