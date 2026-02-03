@@ -31,7 +31,11 @@ func NewEmbeddedWalletService(ctx context.Context, opts services.EmbeddedWalletS
 		return nil, fmt.Errorf("creating SDP models: %w", err)
 	}
 
-	newInstance, err := services.NewEmbeddedWalletService(sdpModels, opts.WasmHash)
+	if opts.RPCClient == nil {
+		return nil, fmt.Errorf("rpc client cannot be nil")
+	}
+
+	newInstance, err := services.NewEmbeddedWalletService(sdpModels, opts.WasmHash, opts.RPCClient)
 	if err != nil {
 		return nil, fmt.Errorf("creating embedded wallet service: %w", err)
 	}
