@@ -15,6 +15,7 @@ Release `{{version}}`
 - [ ] Complete the checklist and merge the main PR: {{ main_pr_url }}
 - [ ] Complete the checklist and merge the dev PR: {{ dev_pr_url }}
 - [ ] 🚨 DO NOT RELEASE before holidays or weekends! Mondays and Tuesdays are preferred.
+- [ ] If contracts changed, attach the WASM(s) to the GitHub release draft
 
 ### Publishing the Release
 
