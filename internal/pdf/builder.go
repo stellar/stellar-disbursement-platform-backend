@@ -55,12 +55,12 @@ var summaryColWidths = []float64{52, 32, 32, 32, 32}
 var txColWidths = []float64{23, 29, 44, 28, 28, 28}
 
 // Text colors (RGB)
-var headerAndTotalsColor = []int{54, 65, 83}   // #364153 — header cells and totals row text
-var defaultCellColor      = []int{74, 85, 101}  // #4A5565 — default data cells
-var noteColor = []int{106, 114, 130} // light gray for notes, labels, secondary text
-var totalBalanceColor    = []int{20, 71, 230}  // #1447E6 — ending balance and total balance
-var summaryValueColor    = []int{16, 24, 40}   // #101828 — wallet address, summary row values, debits/credits amounts
-var sectionTitleColor    = []int{30, 41, 57}   // #1E2939 — section titles
+var headerAndTotalsColor = []int{54, 65, 83}   // #364153
+var defaultCellColor      = []int{74, 85, 101}  // #4A5565
+var noteColor = []int{106, 114, 130} // #6A7282
+var activeColor    = []int{20, 71, 230}  // #1447E6
+var summaryValueColor    = []int{16, 24, 40}   // #101828
+var sectionTitleColor    = []int{30, 41, 57}   // #1E2939
 
 // Border and background colors (RGB)
 var headerBorderColor = []int{209, 213, 220}   // #D1D5DC
@@ -112,7 +112,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	pdf.SetMargins(marginLR, marginTop, marginLR)
 	pdf.SetAutoPageBreak(true, marginBottom)
 	pdf.SetFooterFunc(func() {
-		// Position at top of footer area; add margin, then top border (same style as header separator).
+		// Position at top of footer area; add margin, then top border).
 		pdf.SetY(pageHeight - marginBottom)
 		pdf.Ln(footerMarginTop)
 		pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
@@ -140,14 +140,14 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 
 	assetCode := result.Summary.Asset.Code
 
-	// --- Account Summary ---
+	// --- ACCOUNT SUMMARY SECTION ---
 	pdf.SetFont("Inter", "B", sectionTitleSize)
 	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
 	pdf.CellFormat(0, 8, "Account Summary", "", 1, "L", false, 0, "")
 	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(1)
 
-	// Summary table header: Wallet Address left (no break), others right, SemiBold
+	// Summary table header
 	pdf.SetFont("Inter", "emi", tableHeaderSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
 	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
@@ -228,10 +228,10 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		case 3:
 			text = utils.FormatAmountTo2Decimals(result.Summary.EndingBalance) + " " + assetCode
 		}
-		// Set font weight to SemiBold and color to totalBalanceColor for ending balance cell
+		// Set font weight to SemiBold and color to activeColor for ending balance cell
 		if i == 3 {
 			pdf.SetFont("Inter", "emi", bodyFontSize)
-			pdf.SetTextColor(totalBalanceColor[0], totalBalanceColor[1], totalBalanceColor[2])
+			pdf.SetTextColor(activeColor[0], activeColor[1], activeColor[2])
 		}
 		pdf.SetXY(xPos+cellPaddingH, ySummaryData)
 		pdf.CellFormat(textW, summaryDataRowHeight, text, "", 0, "R", false, 0, "")
@@ -249,7 +249,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 
 	pdf.Ln(summarySectionBottomMargin)
 
-	// --- Transactions ---
+	// --- TRANSACTIONS SECTION ---
 	pdf.SetFont("Inter", "B", sectionTitleSize)
 	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
 	pdf.CellFormat(0, 8, "Transactions", "", 1, "L", false, 0, "")
@@ -341,7 +341,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	}
 	opID := utils.TruncateToMaxLength(tx.ID, 16)
 
-	// Recipient/Sender: line1 = "Wallet ID" + bullet + address (separate colors/weights), line2 = "Recipient" • name (or just name for credits, only if name exists)
+	// Counterparty: Recipient/sender wallet information
 	walletAddr := utils.TruncateString(tx.CounterpartyAddress, 5)
 	name := tx.CounterpartyName
 	hasName := name != ""
@@ -384,7 +384,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	}
 	balanceAmountStr := utils.FormatDecimal(runningBalance)
 
-	// Draw cells: fixed height, no MultiCell, default cell color #4A5565
+	// Draw cells
 	pdf.SetDrawColor(rowBorderColor[0], rowBorderColor[1], rowBorderColor[2])
 	pdf.SetLineWidth(0.26)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
@@ -397,6 +397,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.CellFormat(txColWidths[0], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	pdf.SetXY(xStart+cellPaddingH, yStart)
 	pdf.CellFormat(txColWidths[0]-2*cellPaddingH, txDataRowHeight, dateStr, "", 0, "L", false, 0, "")
+
 	// Transaction ID
 	pdf.SetFont("Inter", "", txSmallFontSize)
 	xID := xStart + txColWidths[0]
@@ -404,7 +405,8 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.CellFormat(txColWidths[1], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	pdf.SetXY(xID+cellPaddingH, yStart)
 	pdf.CellFormat(txColWidths[1]-2*cellPaddingH, txDataRowHeight, opID, "", 0, "L", false, 0, "")
-	// Counterparty: border then one or two lines with padding
+
+	// Counterparty
 	const counterpartyLineHeight = 4.0
 	const bulletChar = "•" // Bullet character
 	xCP := xStart + txColWidths[0] + txColWidths[1]
@@ -412,8 +414,6 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.SetXY(xCP, yStart)
 	pdf.CellFormat(txColWidths[2], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	xTextStart := xCP + cellPaddingH
-
-	// Calculate fixed widths for vertical alignment
 	pdf.SetFont("Inter", "", txSmallFontSize)
 	walletIDWidth := pdf.GetStringWidth(walletIDLabel)
 	recipientWidth := pdf.GetStringWidth("Recipient")
@@ -426,33 +426,33 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	fixedValueX := fixedBulletX + bulletWidth + counterpartyGap
 
 	if hasName {
-		// Two lines: Wallet ID • address, then Recipient • name or just name
 		counterpartyBlockHeight := 2 * counterpartyLineHeight
 		counterpartyY := yStart + (txDataRowHeight-counterpartyBlockHeight)/2
-		// First line: "Wallet ID" (color #6A7282) + gap + bullet (color #6A7282) + gap + address (color #101828, Medium weight)
+		// Label
 		pdf.SetFont("Inter", "", txSmallFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
 		pdf.SetXY(xTextStart, counterpartyY)
 		pdf.CellFormat(fixedLabelWidth, 4, walletIDLabel, "", 0, "L", false, 0, "")
-		// Bullet at fixed position
+		// Bullet
 		pdf.SetXY(fixedBulletX, counterpartyY)
 		pdf.CellFormat(bulletWidth, 4, bulletChar, "", 0, "L", false, 0, "")
-		// Wallet address (color #101828, Medium weight) at fixed position
+		// Wallet address
 		pdf.SetFont("Inter", "M", txSmallFontSize)
 		pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
 		pdf.SetXY(fixedValueX, counterpartyY)
 		pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, walletAddr, "", 0, "L", false, 0, "")
-		// Second line: Recipient • name or just name (all color #6A7282)
+		// Name
 		pdf.SetFont("Inter", "", txSmallFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
+
 		if line2Label != "" {
-			// Draw "Recipient" at fixed label width + gap + bullet at fixed position + gap + name at fixed value position
+			// Label
 			pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
 			pdf.CellFormat(fixedLabelWidth, 4, line2Label, "", 0, "L", false, 0, "")
-			// Bullet at fixed position
+			// Bullet
 			pdf.SetXY(fixedBulletX, counterpartyY+counterpartyLineHeight)
 			pdf.CellFormat(bulletWidth, 4, bulletChar, "", 0, "L", false, 0, "")
-			// Name at fixed value position
+			// Name
 			pdf.SetXY(fixedValueX, counterpartyY+counterpartyLineHeight)
 			pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, line2Value, "", 0, "L", false, 0, "")
 		} else {
@@ -461,22 +461,22 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 			pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, line2Value, "", 0, "L", false, 0, "")
 		}
 	} else {
-		// Single line: "Wallet ID" (color #6A7282) + gap + bullet (color #6A7282) + gap + address (color #101828, Medium weight, centered vertically)
+		// Label
 		counterpartyY := yStart + (txDataRowHeight-counterpartyLineHeight)/2
 		pdf.SetFont("Inter", "", txSmallFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
 		pdf.SetXY(xTextStart, counterpartyY)
 		pdf.CellFormat(fixedLabelWidth, counterpartyLineHeight, walletIDLabel, "", 0, "L", false, 0, "")
-		// Bullet at fixed position
+		// Bullet
 		pdf.SetXY(fixedBulletX, counterpartyY)
 		pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
-		// Wallet address (color #101828, Medium weight) at fixed position
+		// Wallet address
 		pdf.SetFont("Inter", "M", txSmallFontSize)
 		pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
 		pdf.SetXY(fixedValueX, counterpartyY)
 		pdf.CellFormat(cpW-(fixedValueX-xTextStart), counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, "")
 	}
-	// Debits (amount color #101828, horizontal padding applied in drawAmountWithCurrency)
+	// Debits
 	xDebits := xStart + txColWidths[0] + txColWidths[1] + txColWidths[2]
 	if debitsAmount != "" {
 		drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, debitsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingH)
@@ -484,7 +484,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		pdf.SetXY(xDebits, yStart)
 		pdf.CellFormat(txColWidths[3], txDataRowHeight, "", "B", 0, "R", false, 0, "")
 	}
-	// Credits (amount color #101828)
+	// Credits
 	xCredits := xDebits + txColWidths[3]
 	if creditsAmount != "" {
 		drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, creditsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingH)
@@ -515,7 +515,7 @@ func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode
 	pdf.SetFont("Inter", "emi", txCellFontSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
 	xRowStart := xStart
-	// First three cells: border then text with padding (first two empty, third "Totals:")
+	// First three cells
 	for i := 0; i < 3; i++ {
 		w := txColWidths[i]
 		pdf.SetXY(xStart, yStart)
@@ -534,7 +534,7 @@ func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode
 
 	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalDebits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingH)
 	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalCredits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingH)
-	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.Balance), assetCode, "T", true, amountCellOpts{forTotals: true, amountColor: totalBalanceColor}}, cellPaddingH)
+	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.Balance), assetCode, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}}, cellPaddingH)
 
 	pdf.SetXY(xRowStart, yStart+txDataRowHeight)
 	pdf.SetLineWidth(0.25)
@@ -543,7 +543,7 @@ func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode
 	pdf.SetFont("Inter", "", bodyFontSize)
 }
 
-// amountCellOpts configures drawAmountWithCurrency (forTotals = Bold/SemiBold, amountColor = e.g. totalBalanceColor).
+// amountCellOpts configures drawAmountWithCurrency
 type amountCellOpts struct {
 	forTotals   bool
 	amountColor []int
@@ -559,16 +559,16 @@ type amountCellArgs struct {
 	opts             amountCellOpts
 }
 
-// drawAmountWithCurrency draws a single cell with fixed height: border, then amount and currency with horizontal padding.
+// drawAmountWithCurrency draws a single cell with fixed height
 func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs, paddingH float64) {
 	x, y, w, h := a.x, a.y, a.w, a.h
 	opts := a.opts
-	// Draw cell border (empty content)
+	// Draw cell border
 	pdf.SetXY(x, y)
 	pdf.CellFormat(w, h, "", a.border, 0, "R", a.fill, 0, "")
 	textW := w - 2*paddingH
 	textX := x + paddingH
-	// Two lines (amount + currency): center vertically in cell. Line heights 5 + 4 = 9mm.
+	// Amount + currency
 	const amountCurrencyBlockHeight = 9.0
 	amountY := y + (h-amountCurrencyBlockHeight)/2
 	if opts.forTotals {
@@ -584,7 +584,7 @@ func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs, paddingH float64
 	if opts.amountColor != nil {
 		pdf.SetTextColor(0, 0, 0)
 	}
-	// Second line: currency
+	// Currency
 	pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
 	if opts.forTotals {
 		pdf.SetFont("Inter", "emi", txSmallFontSize)
@@ -651,7 +651,7 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 	pdf.SetTextColor(0, 0, 0)
 }
 
-// registerLogoImage registers logo bytes with the PDF and returns the image name and info, or empty/nil if registration fails.
+// registerLogoImage registers logo bytes with the PDF
 func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.ImageInfoType) {
 	_, format, err := image.Decode(bytes.NewReader(logoBytes))
 	if err != nil {
@@ -674,7 +674,7 @@ func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.Imag
 	return "orglogo", info
 }
 
-// drawHeaderSeparatorLine draws a horizontal line below the title section (header border color).
+// drawHeaderSeparatorLine draws a horizontal line below the title section
 func drawHeaderSeparatorLine(pdf *gofpdf.Fpdf) {
 	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
 	pdf.SetLineWidth(headerSeparatorLineWidth)
@@ -686,7 +686,7 @@ func drawHeaderSeparatorLine(pdf *gofpdf.Fpdf) {
 	pdf.SetDrawColor(0, 0, 0)
 }
 
-// drawTitleSection draws the title block: REPORT, Wallet Statement, Wallet Address: {truncated}.
+// drawTitleSection draws the title block
 func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
 	walletAddr := walletAccount
 	if strings.HasPrefix(walletAddr, "stellar:") {
@@ -710,7 +710,7 @@ func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
 	pdf.SetTextColor(0, 0, 0)
 }
 
-// breakHeaderWords inserts newlines between words so each word appears on its own line.
+// breakHeaderWords inserts newlines between words
 func breakHeaderWords(s string) string {
 	return strings.ReplaceAll(s, " ", "\n")
 }
