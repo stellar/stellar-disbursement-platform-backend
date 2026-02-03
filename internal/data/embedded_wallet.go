@@ -127,6 +127,38 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 	return &wallet, nil
 }
 
+func (ew *EmbeddedWalletModel) GetByReceiverWalletIDAndStatuses(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string, statuses []EmbeddedWalletStatus) (*EmbeddedWallet, error) {
+	if strings.TrimSpace(receiverWalletID) == "" {
+		return nil, ErrMissingInput
+	}
+
+	if len(statuses) == 0 {
+		return nil, fmt.Errorf("at least one status must be provided")
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s
+		FROM embedded_wallets ew
+		WHERE
+			ew.receiver_wallet_id = $1
+			AND ew.wallet_status = ANY($2)
+		ORDER BY ew.created_at DESC
+		LIMIT 1
+	`, EmbeddedWalletColumnNames("ew", ""))
+
+	var wallet EmbeddedWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, receiverWalletID, pq.Array(statuses))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying embedded wallet by receiver wallet ID and statuses: %w", err)
+	}
+
+	return &wallet, nil
+}
+
 // GetPendingDisbursementAsset returns the asset associated with the pending disbursement for the
 // embedded wallet identified by the provided contract address. Pending disbursements are
 // determined by payments in progress (ready, pending or paused) for disbursement payments.
