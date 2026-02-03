@@ -29,6 +29,9 @@ var interMediumFont []byte
 //go:embed assets/fonts/Inter_24pt-SemiBold.ttf
 var interSemiBoldFont []byte
 
+// useMockTransactions enables mock transaction data for PDF testing. Set to false for production.
+const useMockTransactions = true
+
 // Page dimensions and margins
 const (
 	mmPerPage    = 210.0
@@ -76,6 +79,7 @@ const (
 	headerLogoToOrgNameGap   = 3.0
 	headerLeftColLineHeight  = 6.0
 	headerRightColLineHeight = 5.0
+	logoOffsetX              = 1.0
 )
 
 // Title section spacing
@@ -119,7 +123,7 @@ var sectionTitleColor    = []int{30, 41, 57}   // #1E2939
 
 // Border and background colors (RGB)
 var headerBorderColor = []int{209, 213, 220}   // #D1D5DC
-var rowBorderColor = []int{229, 231, 232}     // #E5E7EB
+var defaultBorderColor = []int{229, 231, 232}     // #E5E7EB
 var totalsRowBgColor = []int{249, 250, 251}   // #F9FAFB
 
 
@@ -224,7 +228,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	}
 	walletAddr = utils.TruncateString(walletAddr, 5)
 
-	pdf.SetDrawColor(rowBorderColor[0], rowBorderColor[1], rowBorderColor[2])
+	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 	pdf.SetLineWidth(0.26)
 	xPos = xSummaryLeft
 	for _, w := range summaryColWidths {
@@ -288,7 +292,11 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		runningBalance = decimal.Zero
 	}
 
-	for _, tx := range result.Transactions {
+	transactions := result.Transactions
+	if useMockTransactions {
+		transactions = generateMockTransactions(20)
+	}
+	for _, tx := range transactions {
 		if pdf.GetY()+txDataRowHeight > pageBottom {
 			pdf.AddPage()
 			drawTxTableHeader(pdf)
@@ -313,7 +321,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 	pdf.SetFont("Inter", "emi", tableHeaderSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
-	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
+	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 	pdf.SetLineWidth(0.53)
 	yStart := pdf.GetY()
 	xPos := pdf.GetX()
@@ -408,7 +416,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	balanceAmountStr := utils.FormatDecimal(runningBalance)
 
 	// Draw cells
-	pdf.SetDrawColor(rowBorderColor[0], rowBorderColor[1], rowBorderColor[2])
+	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 	pdf.SetLineWidth(0.26)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 	xStart := pdf.GetX()
@@ -630,7 +638,7 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 
 	var yLeftBottom float64 = yStart
 
-	// Left column: logo (if available) then organization name, left-aligned
+	// Left column
 	if len(organizationLogo) > 0 {
 		imgName, imgInfo := registerLogoImage(pdf, organizationLogo)
 		if imgName != "" && imgInfo != nil {
@@ -640,7 +648,7 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 				imgW = imgW * (logoMaxHeight / imgH)
 				imgH = logoMaxHeight
 			}
-			pdf.ImageOptions(imgName, xLeft, yStart, imgW, imgH, false, gofpdf.ImageOptions{}, 0, "")
+			pdf.ImageOptions(imgName, xLeft+logoOffsetX, yStart, imgW, imgH, false, gofpdf.ImageOptions{}, 0, "")
 			yLeftBottom = yStart + imgH + headerLogoToOrgNameGap
 		}
 	}
@@ -648,11 +656,11 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 		pdf.SetFont("Inter", "B", organizationNameFontSize)
 		pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
 		pdf.SetXY(xLeft, yLeftBottom)
-		pdf.CellFormat(halfWidth, headerLeftColLineHeight, organizationName, "", 0, "L", false, 0, "")
+		pdf.CellFormat(halfWidth, headerLeftColLineHeight, strings.ToUpper(organizationName), "", 0, "L", false, 0, "")
 		yLeftBottom += headerLeftColLineHeight
 	}
 
-	// Right column: generated date, Statement Period label, date range, right-aligned
+	// Right column
 	pdf.SetFont("Inter", "", bodyFontSize)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 	genStr := fmt.Sprintf("Generated on %s", time.Now().UTC().Format("2006-01-02 15:04 UTC"))
@@ -736,4 +744,27 @@ func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
 // breakHeaderWords inserts newlines between words
 func breakHeaderWords(s string) string {
 	return strings.ReplaceAll(s, " ", "\n")
+}
+
+// generateMockTransactions returns count copies of a template transaction with slight variations (for testing).
+func generateMockTransactions(count int) []services.StatementTransaction {
+	baseTime, _ := time.Parse(time.RFC3339, "2026-01-29T15:00:10Z")
+	out := make([]services.StatementTransaction, 0, count)
+	for i := 0; i < count; i++ {
+		txType := "debit"
+		if i%2 == 1 {
+			txType = "credit"
+		}
+		createdAt := baseTime.Add(time.Duration(i) * time.Hour).UTC().Format(time.RFC3339)
+		out = append(out, services.StatementTransaction{
+			ID:                  "7cb4a68dc164ad69c6121086cf3aef0cec0d78634f60e1a1e23e4637b1f082e2",
+			CreatedAt:           createdAt,
+			Type:                txType,
+			Amount:              "0.1000000",
+			CounterpartyAddress: "GAHSWJ2ANIFE3ZEWM4EN7WKLC2F4OCLS2O4QQQJSADYHOXZDA3EZNJ2M",
+			CounterpartyName:     "owner@bluecorp.local",
+			WalletID:            "07815404-eb0d-4188-a362-38a90aae185c",
+		})
+	}
+	return out
 }
