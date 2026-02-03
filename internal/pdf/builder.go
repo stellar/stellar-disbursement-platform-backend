@@ -49,6 +49,7 @@ const (
 	txCellFontSize        = 8.7
 	txSmallFontSize       = 7.5
 	organizationNameFontSize = 9.2
+	dateRangeFontSize     = 10.0
 	titleFontSize         = 23.4
 )
 
@@ -667,9 +668,13 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 	pdf.SetXY(rightColX, yStart)
 	pdf.CellFormat(halfWidth, headerRightColLineHeight, genStr, "", 0, "R", false, 0, "")
 	pdf.SetXY(rightColX, yStart+headerRightColLineHeight)
+	pdf.SetFont("Inter", "emi", bodyFontSize)
+	pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
 	pdf.CellFormat(halfWidth, headerRightColLineHeight, "Statement Period:", "", 0, "R", false, 0, "")
 	periodStr := fmt.Sprintf("%s to %s", fromDate.Format("2006-01-02"), toDate.Format("2006-01-02"))
 	pdf.SetXY(rightColX, yStart+2*headerRightColLineHeight)
+	pdf.SetFont("Inter", "B", dateRangeFontSize)
+	pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
 	pdf.CellFormat(halfWidth, headerRightColLineHeight, periodStr, "", 0, "R", false, 0, "")
 	yRightBottom := yStart + 3*headerRightColLineHeight
 
@@ -723,7 +728,6 @@ func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
 	if strings.HasPrefix(walletAddr, "stellar:") {
 		walletAddr = walletAddr[8:]
 	}
-	walletAddr = utils.TruncateString(walletAddr, 5)
 
 	pdf.SetFont("Inter", "", bodyFontSize)
 	pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
