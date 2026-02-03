@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 )
 
 type SponsoredTransactionHandler struct {
@@ -101,6 +102,11 @@ func (h SponsoredTransactionHandler) CreateSponsoredTransaction(w http.ResponseW
 
 	transactionID, err := h.EmbeddedWalletService.SponsorTransaction(ctx, account, reqBody.OperationXDR)
 	if err != nil {
+		var simErr *stellar.SimulationError
+		if errors.As(err, &simErr) && !simErr.IsRetryable() {
+			httperror.BadRequest("operation_xdr failed simulation", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Failed to create sponsored transaction", err, nil).Render(w)
 		return
 	}

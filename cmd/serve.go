@@ -659,9 +659,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Setup Embedded Wallet Service (only if enabled)
 			if serveOpts.EnableEmbeddedWallets {
+				rpcClient, rpcErr := di.NewRPCClient(context.Background(), serveOpts.RPCConfig)
+				if rpcErr != nil {
+					log.Ctx(ctx).Fatalf("error creating RPC client: %v", rpcErr)
+				}
+
 				serveOpts.EmbeddedWalletService, err = di.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
 					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
 					WasmHash:            serveOpts.EmbeddedWalletsWasmHash,
+					RPCClient:           rpcClient,
 				})
 				log.Info("Embedded wallet features enabled")
 				if err != nil {
