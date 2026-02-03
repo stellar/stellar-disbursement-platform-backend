@@ -12,11 +12,16 @@ CREATE TABLE sponsored_transactions (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX sponsored_transactions_status_updated_at_idx
+    ON sponsored_transactions (status, updated_at);
+
 CREATE TRIGGER refresh_sponsored_transactions_updated_at BEFORE UPDATE ON sponsored_transactions FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 
 -- +migrate Down
 
 DROP TRIGGER refresh_sponsored_transactions_updated_at ON sponsored_transactions;
+
+DROP INDEX IF EXISTS sponsored_transactions_status_updated_at_idx;
 
 DROP TABLE sponsored_transactions;
 DROP TYPE sponsored_transaction_status;

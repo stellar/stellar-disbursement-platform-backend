@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -246,12 +247,25 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 		wdl.Route = "wallet"
 	}
 
-	token, err := s.embeddedWalletService.CreateInvitationToken(ctx)
-	if err != nil {
-		return fmt.Errorf("creating embedded wallet invitation token: %w", err)
+	reusableStatuses := []data.EmbeddedWalletStatus{
+		data.PendingWalletStatus,
+		data.ProcessingWalletStatus,
+		data.SuccessWalletStatus,
+	}
+	existingWallet, err := s.Models.EmbeddedWallets.GetByReceiverWalletIDAndStatuses(ctx, s.Models.DBConnectionPool, receiverWalletID, reusableStatuses)
+	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
+		return fmt.Errorf("getting existing embedded wallet for receiver wallet %s: %w", receiverWalletID, err)
 	}
 
-	wdl.Token = token
+	if existingWallet != nil {
+		wdl.Token = existingWallet.Token
+	} else {
+		token, tokenErr := s.embeddedWalletService.CreateInvitationToken(ctx)
+		if tokenErr != nil {
+			return fmt.Errorf("creating embedded wallet invitation token: %w", tokenErr)
+		}
+		wdl.Token = token
+	}
 
 	requiresVerification := verificationField != ""
 	update := data.EmbeddedWalletUpdate{
@@ -259,7 +273,7 @@ func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx contex
 		RequiresVerification: &requiresVerification,
 	}
 
-	if err := s.Models.EmbeddedWallets.Update(ctx, s.Models.DBConnectionPool, token, update); err != nil {
+	if err = s.Models.EmbeddedWallets.Update(ctx, s.Models.DBConnectionPool, wdl.Token, update); err != nil {
 		return fmt.Errorf("linking embedded wallet token to receiver wallet %s: %w", receiverWalletID, err)
 	}
 
