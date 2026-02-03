@@ -721,6 +721,9 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		require.NoError(t, err)
 		token = randomToken
 	}
+	if wasmHash == "" {
+		wasmHash = "6223a23026480644055230783215652de8695abc8a9dbb56a94972eb341a4663"
+	}
 
 	q := fmt.Sprintf(`
 		INSERT INTO embedded_wallets

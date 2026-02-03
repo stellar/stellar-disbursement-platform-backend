@@ -9,7 +9,7 @@ CREATE TYPE embedded_wallet_status AS ENUM(
 
 CREATE TABLE embedded_wallets (
     token VARCHAR(36) PRIMARY KEY,
-    wasm_hash VARCHAR(64),
+    wasm_hash VARCHAR(64) NOT NULL,
     contract_address VARCHAR(56),
     public_key VARCHAR(130),
     receiver_wallet_id VARCHAR(36) REFERENCES receiver_wallets (id),
@@ -19,7 +19,7 @@ CREATE TABLE embedded_wallets (
     wallet_status embedded_wallet_status NOT NULL DEFAULT 'PENDING'::embedded_wallet_status
 );
 
-CREATE INDEX embedded_wallets_contract_address_idx ON embedded_wallets (contract_address)
+CREATE UNIQUE INDEX embedded_wallets_contract_address_idx ON embedded_wallets (contract_address)
     WHERE contract_address IS NOT NULL;
 
 CREATE INDEX embedded_wallets_status_updated_at_idx ON embedded_wallets (wallet_status, updated_at);

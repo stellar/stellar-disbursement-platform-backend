@@ -2,10 +2,12 @@ package data
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -253,8 +255,21 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
 
+	randomContractAddress := func(t *testing.T) string {
+		t.Helper()
+
+		payload := make([]byte, 32)
+		_, err := rand.Read(payload)
+		require.NoError(t, err)
+
+		contractAddress, err := strkey.Encode(strkey.VersionByteContract, payload)
+		require.NoError(t, err)
+
+		return contractAddress
+	}
+
 	t.Run("returns error if update validation fails", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", "", "", PendingWalletStatus)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", randomContractAddress(t), "", "", PendingWalletStatus)
 		invalidUpdate := EmbeddedWalletUpdate{WasmHash: "invalid"}
 		err := embeddedWalletModel.Update(ctx, dbConnectionPool, createdWallet.Token, invalidUpdate)
 		require.Error(t, err)
@@ -270,7 +285,8 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	})
 
 	t.Run("successfully updates wallet status", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", "", "", PendingWalletStatus)
+		contractAddress := randomContractAddress(t)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", contractAddress, "", "", PendingWalletStatus)
 		update := EmbeddedWalletUpdate{WalletStatus: SuccessWalletStatus}
 
 		err := embeddedWalletModel.Update(ctx, dbConnectionPool, createdWallet.Token, update)
@@ -280,7 +296,7 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 		require.NoError(t, getErr)
 		assert.Equal(t, SuccessWalletStatus, updatedWallet.WalletStatus)
 		assert.Equal(t, "hash1", updatedWallet.WasmHash) // Ensure other fields are not changed
-		assert.Equal(t, "contract1", updatedWallet.ContractAddress)
+		assert.Equal(t, contractAddress, updatedWallet.ContractAddress)
 	})
 
 	t.Run("successfully updates wasm_hash and contract_address", func(t *testing.T) {
@@ -303,9 +319,10 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	})
 
 	t.Run("successfully updates all fields", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "old_hash", "old_contract", "", "", PendingWalletStatus)
+		contractAddress := randomContractAddress(t)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "old_hash", contractAddress, "", "", PendingWalletStatus)
 		newWasmHash := "ddeeff0011223344"
-		newContractAddress := "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53" // Placeholder
+		newContractAddress := randomContractAddress(t)
 		newCredentialID := "new-credential-id"
 		newPublicKey := "045666998adf1d157b9a3724f7c046b505e7f453026308f61681547ca315c6e120fd0b47ae80e8090197baf5be064b026365b0efae6a071f44841179a2937ca66e"
 		newStatus := SuccessWalletStatus
@@ -331,7 +348,8 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	})
 
 	t.Run("successfully toggles requires verification flag", func(t *testing.T) {
-		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash3", "contract3", "", "", PendingWalletStatus)
+		contractAddress := randomContractAddress(t)
+		createdWallet := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash3", contractAddress, "", "", PendingWalletStatus)
 		update := EmbeddedWalletUpdate{
 			RequiresVerification: utils.Ptr(true),
 		}
@@ -347,9 +365,11 @@ func Test_EmbeddedWalletModel_Update(t *testing.T) {
 	t.Run("returns error when updating to duplicate credential_id", func(t *testing.T) {
 		duplicateCredentialID := "duplicate-credential-id"
 
-		createdWallet1 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", "contract1", duplicateCredentialID, "", PendingWalletStatus)
+		contractAddress1 := randomContractAddress(t)
+		createdWallet1 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash1", contractAddress1, duplicateCredentialID, "", PendingWalletStatus)
 
-		createdWallet2 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash2", "contract2", "", "", PendingWalletStatus)
+		contractAddress2 := randomContractAddress(t)
+		createdWallet2 := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash2", contractAddress2, "", "", PendingWalletStatus)
 
 		update := EmbeddedWalletUpdate{CredentialID: duplicateCredentialID}
 		err := embeddedWalletModel.Update(ctx, dbConnectionPool, createdWallet2.Token, update)
