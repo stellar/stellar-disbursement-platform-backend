@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 )
 
@@ -22,8 +21,8 @@ func SQLNullNumeric(d decimal.Decimal) sql.NullString {
 	}
 }
 
-func SQLNullTime(t time.Time) pq.NullTime {
-	return pq.NullTime{
+func SQLNullTime(t time.Time) sql.NullTime {
+	return sql.NullTime{
 		Time:  t,
 		Valid: !t.IsZero(),
 	}

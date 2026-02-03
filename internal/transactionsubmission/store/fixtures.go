@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"math/big"
 	"testing"
 	"time"
@@ -66,12 +67,12 @@ func CreateTransactionFixture(
 		txFixture.DestinationAddress = keypair.MustRandom().Address()
 	}
 
-	completedAt := pq.NullTime{}
+	completedAt := sql.NullTime{}
 	if txFixture.Status == TransactionStatusSuccess || txFixture.Status == TransactionStatusError {
 		timeElapsed, err := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
 		require.NoError(t, err)
 		randomCompletedAt := time.Unix(timeElapsed.Int64(), 0)
-		completedAt = pq.NullTime{Time: randomCompletedAt, Valid: true}
+		completedAt = sql.NullTime{Time: randomCompletedAt, Valid: true}
 	}
 
 	query := `
