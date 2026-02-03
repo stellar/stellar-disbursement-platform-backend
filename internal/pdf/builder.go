@@ -29,19 +29,74 @@ var interMediumFont []byte
 //go:embed assets/fonts/Inter_24pt-SemiBold.ttf
 var interSemiBoldFont []byte
 
+// Page dimensions and margins
 const (
-	mmPerPage         = 210.0
-	pageHeight        = 297.0
-	marginLR          = 15.0
-	marginTop         = 15.0
-	marginBottom      = 25.0
-	headerFontSize    = 14.0
-	bodyFontSize      = 8.7
-	tableHeaderSize   = 8.7
-	sectionTitleSize  = 12.0
-	txCellFontSize    = 8.7
-	txSmallFontSize   = 7.5
-	walletIDLabel     = "Wallet ID"
+	mmPerPage    = 210.0
+	pageHeight   = 297.0
+	marginLR     = 15.0
+	marginTop    = 15.0
+	marginBottom = 25.0
+)
+
+// Font sizes
+const (
+	bodyFontSize          = 8.7
+	tableHeaderSize       = 8.7
+	sectionTitleSize      = 12.0
+	txCellFontSize        = 8.7
+	txSmallFontSize       = 7.5
+	organizationNameFontSize = 9.2
+	titleFontSize         = 23.4
+)
+
+// Table row heights
+const (
+	summaryHeaderRowHeight = 16.5
+	summaryHeaderLineHeight = 5.0
+	summaryDataRowHeight    = 14.5
+	txHeaderRowHeight       = 16.5
+	txDataRowHeight         = 14.5
+)
+
+// Table cell spacing
+const (
+	cellPaddingH    = 2.115
+	counterpartyGap = 1.5
+)
+
+// Section margins
+const (
+	summarySectionBottomMargin = 15.0
+)
+
+// Header section spacing
+const (
+	headerBottomMargin       = 5.0
+	headerSeparatorLineWidth = 0.26
+	headerLogoToOrgNameGap   = 3.0
+	headerLeftColLineHeight  = 6.0
+	headerRightColLineHeight = 5.0
+)
+
+// Title section spacing
+const (
+	titleSectionBottomMargin = 5.0
+	titleSectionLine1Height  = 6.0
+	titleSectionLine2Height  = 9.0
+	titleSectionLine3Height  = 6.0
+)
+
+// Footer section spacing
+const (
+	footerLineHeight          = 4.0
+	footerMarginTop           = 1.5
+	footerContentGap          = 3.5
+	footerDisclaimerToPageGap = 2.0
+)
+
+// Other constants
+const (
+	walletIDLabel             = "Wallet ID"
 	maxCounterpartyTextLength = 32
 )
 
@@ -67,38 +122,6 @@ var headerBorderColor = []int{209, 213, 220}   // #D1D5DC
 var rowBorderColor = []int{229, 231, 232}     // #E5E7EB
 var totalsRowBgColor = []int{249, 250, 251}   // #F9FAFB
 
-const summaryHeaderRowHeight = 16.5
-const summaryHeaderLineHeight = 5.0
-const summaryDataRowHeight   = 14.5
-const txHeaderRowHeight      = 16.5
-const txDataRowHeight        = 14.5
-
-const summarySectionBottomMargin = 15.0
-const cellPaddingH = 2.115
-const counterpartyGap = 1.5
-
-const organizationNameFontSize = 9.2
-const titleFontSize = 23.4
-const headerBottomMargin = 5.0
-const titleSectionBottomMargin = 5.0
-const headerSeparatorLineWidth = 0.26
-const footerFontSize = 8.0
-const footerLineHeight = 4.0
-const footerMarginTop = 1.5
-const footerContentGap = 3.5
-const footerDisclaimerToPageGap = 2.0
-
-// Header left column: gap between logo and organization name; line height for organization name.
-const headerLogoToOrgNameGap = 3.0
-const headerLeftColLineHeight = 6.0
-
-// Header right column: line height for generated date, statement period label, date range.
-const headerRightColLineHeight = 5.0
-
-// Title section: line heights for REPORT, Wallet Statement, Wallet Address.
-const titleSectionLine1Height = 6.0
-const titleSectionLine2Height = 9.0
-const titleSectionLine3Height = 6.0
 
 // BuildPDF generates a multi-page PDF from a StatementResult and returns the bytes.
 func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte) ([]byte, error) {
