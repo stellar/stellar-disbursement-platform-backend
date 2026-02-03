@@ -342,6 +342,7 @@ func (e *HorizonErrorWrapper) ShouldMarkAsError() bool {
 		"op_not_authorized",
 		"op_no_issuer",
 		"entry_archived",
+		"function_trapped",
 	}
 	for _, opResult := range e.ResultCodes.OperationCodes {
 		if slices.Contains(failedOpCodes, opResult) {
