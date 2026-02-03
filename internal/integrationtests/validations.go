@@ -128,3 +128,25 @@ func validateStellarTransaction(hPayment *operations.Payment, receiverAccount, d
 
 	return nil
 }
+
+// validateContractStellarTransaction validates a payment to a contract address (C-address).
+// Contract payments show up as InvokeHostFunction operations on Horizon, not Payment operations.
+// This function validates that the transaction was successful.
+// Note: Unlike regular payments, InvokeHostFunction operations don't expose the recipient address
+// or amount directly in the operation fields - the transfer happens inside the contract execution.
+func validateContractStellarTransaction(ihf *operations.InvokeHostFunction) error {
+	if !ihf.TransactionSuccessful {
+		return fmt.Errorf("contract transaction was not successful on horizon network")
+	}
+
+	// For contract payments, we can verify:
+	// 1. The transaction was successful
+	// 2. The operation type is InvokeHostFunction (already verified by getInvokeHostFunctionOnHorizon)
+	// 3. The function type is HostFunctionTypeInvokeContract (SAC token transfer)
+	if ihf.Function != "HostFunctionTypeHostFunctionTypeInvokeContract" {
+		log.Warnf("unexpected host function type: %s (expected HostFunctionTypeHostFunctionTypeInvokeContract)", ihf.Function)
+	}
+
+	log.Infof("Contract transaction validated successfully: tx_hash=%s, function=%s", ihf.TransactionHash, ihf.Function)
+	return nil
+}

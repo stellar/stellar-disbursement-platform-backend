@@ -71,6 +71,10 @@ services:
       ADMIN_SERVER_API_KEY: api_key_1234567890
       CIRCLE_USDC_WALLET_ID: ${CIRCLE_USDC_WALLET_ID}
 
+      # embedded wallet integration tests
+      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-false}
+      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-}
+
       # secrets:
       AWS_ACCESS_KEY_ID: MY_AWS_ACCESS_KEY_ID
       AWS_REGION: MY_AWS_REGION
@@ -123,6 +127,10 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
+      # Embedded wallet support - required for Soroban contract deployment
+      RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
+      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-false}
+      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-}
     depends_on:
       - db
       - sdp-api

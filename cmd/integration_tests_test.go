@@ -28,6 +28,10 @@ func (m *mockIntegrationTests) CreateTestData(ctx context.Context, opts integrat
 	return m.Called(ctx, opts).Error(0)
 }
 
+func (m *mockIntegrationTests) StartEmbeddedWalletIntegrationTests(ctx context.Context, opts integrationtests.IntegrationTestsOpts) error {
+	return m.Called(ctx, opts).Error(0)
+}
+
 func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 	serviceMock := &mockIntegrationTests{}
 	command := &IntegrationTestsCommand{Service: serviceMock}
@@ -141,6 +145,52 @@ func Test_IntegrationTestsCommand_CreateIntegrationTestsDataCommand(t *testing.T
 	t.Run("executes the create integration tests data command successfully", func(t *testing.T) {
 		serviceMock.
 			On("CreateTestData", context.Background(), *integrationTestsOpts).
+			Return(nil)
+
+		err := parentCmdMock.Execute()
+		require.NoError(t, err)
+	})
+
+	serviceMock.AssertExpectations(t)
+}
+
+func Test_IntegrationTestsCommand_StartEmbeddedWalletTestsCommand(t *testing.T) {
+	serviceMock := &mockIntegrationTests{}
+	command := &IntegrationTestsCommand{Service: serviceMock}
+
+	parentCmdMock := &cobra.Command{
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {},
+	}
+
+	integrationTestsOpts := &integrationtests.IntegrationTestsOpts{
+		EnableEmbeddedWallets:   true,
+		EmbeddedWalletsWasmHash: "0123456789abcdef",
+		RPCUrl:                  "https://rpc.test",
+	}
+
+	cmd := command.StartEmbeddedWalletTestsCommand(integrationTestsOpts)
+	parentCmdMock.AddCommand(cmd)
+
+	t.Setenv("ENABLE_EMBEDDED_WALLETS", "true")
+	t.Setenv("EMBEDDED_WALLETS_WASM_HASH", "0123456789abcdef")
+	t.Setenv("RPC_URL", "https://rpc.test")
+
+	parentCmdMock.SetArgs([]string{
+		"start-embedded-wallet",
+	})
+
+	t.Run("exit with status 1 when integration tests service fails", func(t *testing.T) {
+		utils.AssertFuncExitsWithFatal(t, func() {
+			serviceMock.
+				On("StartEmbeddedWalletIntegrationTests", context.Background(), *integrationTestsOpts).
+				Return(errors.New("unexpected error"))
+			_ = parentCmdMock.Execute()
+		}, "Error starting embedded wallet integration tests: unexpected error")
+	})
+
+	t.Run("executes the start embedded wallet integration tests command successfully", func(t *testing.T) {
+		serviceMock.
+			On("StartEmbeddedWalletIntegrationTests", context.Background(), *integrationTestsOpts).
 			Return(nil)
 
 		err := parentCmdMock.Execute()

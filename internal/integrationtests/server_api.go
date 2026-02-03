@@ -20,10 +20,11 @@ import (
 )
 
 const (
-	loginURL        = "login"
-	disbursementURL = "disbursements"
-	organizationURL = "organization"
-	registrationURL = "sep24-interactive-deposit"
+	loginURL           = "login"
+	disbursementURL    = "disbursements"
+	organizationURL    = "organization"
+	registrationURL    = "sep24-interactive-deposit"
+	embeddedWalletsURL = "embedded-wallets"
 )
 
 type ServerAPIIntegrationTestsInterface interface {
@@ -33,6 +34,9 @@ type ServerAPIIntegrationTestsInterface interface {
 	StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error
 	ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error
+	// Embedded wallet methods for contract account testing
+	RegisterEmbeddedWallet(ctx context.Context, req *RegisterEmbeddedWalletRequest) (*EmbeddedWalletResponse, error)
+	GetEmbeddedWallet(ctx context.Context, credentialID string) (*EmbeddedWalletResponse, error)
 }
 
 type ServerAPIIntegrationTests struct {
@@ -301,6 +305,93 @@ func (sa *ServerAPIIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	}
 
 	return nil
+}
+
+// RegisterEmbeddedWalletRequest is the request body for POST /embedded-wallets
+// Used to register a new embedded wallet with a token, P256 public key, and credential ID.
+type RegisterEmbeddedWalletRequest struct {
+	Token        string `json:"token"`
+	PublicKey    string `json:"public_key"`    // Hex-encoded uncompressed P256 public key (65 bytes, starts with 0x04)
+	CredentialID string `json:"credential_id"` // WebAuthn credential ID
+}
+
+// EmbeddedWalletResponse is the response from embedded wallet endpoints.
+// Contains the contract address (once deployed) and wallet status.
+type EmbeddedWalletResponse struct {
+	ContractAddress string                    `json:"contract_address,omitempty"`
+	Status          data.EmbeddedWalletStatus `json:"status"`
+}
+
+// RegisterEmbeddedWallet registers a new embedded wallet using POST /embedded-wallets.
+// This triggers async contract deployment on the Stellar network.
+func (sa *ServerAPIIntegrationTests) RegisterEmbeddedWallet(ctx context.Context, req *RegisterEmbeddedWalletRequest) (*EmbeddedWalletResponse, error) {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, embeddedWalletsURL)
+	if err != nil {
+		return nil, fmt.Errorf("creating url: %w", err)
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("creating json post body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("creating new request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("SDP-Tenant-Name", sa.TenantName)
+
+	resp, err := sa.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("making request to POST /embedded-wallets: %w", err)
+	}
+
+	if resp.StatusCode/100 != 2 {
+		logErrorResponses(ctx, resp.Body)
+		return nil, fmt.Errorf("error registering embedded wallet (statusCode=%d)", resp.StatusCode)
+	}
+
+	walletResp := &EmbeddedWalletResponse{}
+	if err = json.NewDecoder(resp.Body).Decode(walletResp); err != nil {
+		return nil, fmt.Errorf("decoding response body: %w", err)
+	}
+
+	return walletResp, nil
+}
+
+// GetEmbeddedWallet retrieves an embedded wallet by credential ID using GET /embedded-wallets/{credentialID}.
+// Use this to poll for wallet status until contract is deployed (status=SUCCESS).
+func (sa *ServerAPIIntegrationTests) GetEmbeddedWallet(ctx context.Context, credentialID string) (*EmbeddedWalletResponse, error) {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, embeddedWalletsURL, credentialID)
+	if err != nil {
+		return nil, fmt.Errorf("creating url: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating new request: %w", err)
+	}
+
+	httpReq.Header.Set("SDP-Tenant-Name", sa.TenantName)
+
+	resp, err := sa.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("making request to GET /embedded-wallets/{credentialID}: %w", err)
+	}
+
+	if resp.StatusCode/100 != 2 {
+		logErrorResponses(ctx, resp.Body)
+		return nil, fmt.Errorf("error getting embedded wallet (statusCode=%d)", resp.StatusCode)
+	}
+
+	walletResp := &EmbeddedWalletResponse{}
+	if err = json.NewDecoder(resp.Body).Decode(walletResp); err != nil {
+		return nil, fmt.Errorf("decoding response body: %w", err)
+	}
+
+	return walletResp, nil
 }
 
 // Ensuring that ServerAPIIntegrationTests is implementing ServerAPIIntegrationTestsInterface.
