@@ -1778,6 +1778,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	ctx = sdpcontext.SetTokenInContext(ctx, token)
 	userID := "valid-user-id"
+	ctx = sdpcontext.SetUserIDInContext(ctx, userID)
 	user := &auth.User{
 		ID:    userID,
 		Email: "email@email.com",
@@ -1854,7 +1855,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("cannot get distribution account", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1880,7 +1881,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1912,7 +1913,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		})
 
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1959,8 +1960,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Email: "approver@mail.org",
 		}
 
+		// Create a context with the approver's userID for this test
+		approverCtx := sdpcontext.SetUserIDInContext(ctx, approverUser.ID)
+
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, approverUser.ID).
 			Return(approverUser, nil).
 			Once()
 
@@ -1975,7 +1979,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+		req, err := http.NewRequestWithContext(approverCtx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1987,7 +1991,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement started - then paused", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Twice()
 
@@ -2052,7 +2056,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement can't be paused", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -2071,7 +2075,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement status can't be changed", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -2090,7 +2094,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
