@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"testing"
 
@@ -518,11 +520,15 @@ func createEmbeddedWalletTSSTxs(t *testing.T, testCtx *testContext, walletTokens
 	walletTokensQuantity := len(walletTokens)
 	transactionsToCreate := make([]txSubStore.Transaction, 0, walletTokensQuantity)
 	for _, token := range walletTokens {
+		payload := make([]byte, 32)
+		_, err := rand.Read(payload)
+		require.NoError(t, err)
+		publicKey := hex.EncodeToString(payload)
 		transactionsToCreate = append(transactionsToCreate, txSubStore.Transaction{
 			ExternalID:      token,
 			TransactionType: txSubStore.TransactionTypeWalletCreation,
 			WalletCreation: txSubStore.WalletCreation{
-				PublicKey: testPublicKey,
+				PublicKey: publicKey,
 				WasmHash:  testWasmHash,
 			},
 			TenantID: testCtx.tenantID,
