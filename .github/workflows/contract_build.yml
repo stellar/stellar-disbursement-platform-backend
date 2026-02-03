@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_call: # allows this workflow to be called from another workflow
 
+env:
+  RUST_TOOLCHAIN: 1.92.0
+
 jobs:
   build_and_test:
     name: Build and Test
@@ -22,8 +25,11 @@ jobs:
 
       - name: Setup Rust
         run: |
-          rustup update
-          rustup component add rustfmt clippy
+          rustup toolchain install ${RUST_TOOLCHAIN}
+          rustup default ${RUST_TOOLCHAIN}
+          rustup component add rustfmt clippy --toolchain ${RUST_TOOLCHAIN}
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Cache Rust dependencies
         uses: stellar/actions/rust-cache@main
