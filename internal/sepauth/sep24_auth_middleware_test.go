@@ -203,7 +203,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		require.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: stellar account is invalid: non-canonical strkey; unused leftover character")
+		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: stellar account is invalid")
 	})
 
 	t.Run("returns Unauthorized if the jwt was signed with a different secret", func(t *testing.T) {
@@ -266,9 +266,9 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		require.NotNil(t, contextClaims)
 		require.Equal(t, "test.com", contextClaims.ClientDomain())
 		require.Equal(t, "tenant.test.com:8080", contextClaims.HomeDomain())
-		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.SEP10StellarAccount())
+		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.Account())
 		require.Equal(t, validTransactionID, contextClaims.TransactionID())
-		require.Empty(t, contextClaims.SEP10StellarMemo())
+		require.Empty(t, contextClaims.Memo())
 		require.True(t, contextClaims.ExpiresAt().After(now.Add(4000*time.Millisecond)))
 		require.True(t, contextClaims.ExpiresAt().Before(now.Add(5000*time.Millisecond)))
 	})
@@ -522,7 +522,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		require.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: stellar account is invalid: non-canonical strkey; unused leftover character")
+		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: stellar account is invalid")
 	})
 
 	t.Run("returns Unauthorized if the jwt was signed with a different secret", func(t *testing.T) {
@@ -589,9 +589,9 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		require.NotNil(t, contextClaims)
 		require.Equal(t, "test.com", contextClaims.ClientDomain())
 		require.Equal(t, "tenant.test.com:8080", contextClaims.HomeDomain())
-		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.SEP10StellarAccount())
+		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.Account())
 		require.Equal(t, validTransactionID, contextClaims.TransactionID())
-		require.Empty(t, contextClaims.SEP10StellarMemo())
+		require.Empty(t, contextClaims.Memo())
 		require.True(t, contextClaims.ExpiresAt().After(now.Add(4000*time.Millisecond)))
 		require.True(t, contextClaims.ExpiresAt().Before(now.Add(5000*time.Millisecond)))
 	})

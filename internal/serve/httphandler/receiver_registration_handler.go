@@ -82,8 +82,8 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		ReCAPTCHASiteKey:    h.ReCAPTCHASiteKey,
 	}
 
-	memo := sep24Claims.SEP10StellarMemo()
-	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.ClientDomain(), &memo)
+	memo := sep24Claims.Memo()
+	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.Account(), sep24Claims.ClientDomain(), &memo)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		httperror.InternalError(ctx, "Cannot register receiver wallet", err, nil).WithErrorCode(httperror.Code500_4).Render(w)
 		return

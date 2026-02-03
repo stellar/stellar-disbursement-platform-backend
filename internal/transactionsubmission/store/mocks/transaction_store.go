@@ -76,21 +76,21 @@ func (_m *MockTransactionStore) Get(ctx context.Context, txID string) (*store.Tr
 	return r0, r1
 }
 
-// GetAllByPaymentIDs provides a mock function with given fields: ctx, paymentIDs
-func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentIDs []string) ([]*store.Transaction, error) {
-	ret := _m.Called(ctx, paymentIDs)
+// GetAllByExternalIDs provides a mock function with given fields: ctx, externalIDs
+func (_m *MockTransactionStore) GetAllByExternalIDs(ctx context.Context, externalIDs []string) ([]*store.Transaction, error) {
+	ret := _m.Called(ctx, externalIDs)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetAllByPaymentIDs")
+		panic("no return value specified for GetAllByExternalIDs")
 	}
 
 	var r0 []*store.Transaction
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, []string) ([]*store.Transaction, error)); ok {
-		return rf(ctx, paymentIDs)
+		return rf(ctx, externalIDs)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, []string) []*store.Transaction); ok {
-		r0 = rf(ctx, paymentIDs)
+		r0 = rf(ctx, externalIDs)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*store.Transaction)
@@ -98,7 +98,7 @@ func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentI
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, []string) error); ok {
-		r1 = rf(ctx, paymentIDs)
+		r1 = rf(ctx, externalIDs)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -106,9 +106,9 @@ func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentI
 	return r0, r1
 }
 
-// GetTransactionBatchForUpdate provides a mock function with given fields: ctx, dbTx, batchSize, tenantID
-func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*store.Transaction, error) {
-	ret := _m.Called(ctx, dbTx, batchSize, tenantID)
+// GetTransactionBatchForUpdate provides a mock function with given fields: ctx, dbTx, batchSize, tenantID, transactionType
+func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string, transactionType store.TransactionType) ([]*store.Transaction, error) {
+	ret := _m.Called(ctx, dbTx, batchSize, tenantID, transactionType)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTransactionBatchForUpdate")
@@ -116,19 +116,19 @@ func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context
 
 	var r0 []*store.Transaction
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string) ([]*store.Transaction, error)); ok {
-		return rf(ctx, dbTx, batchSize, tenantID)
+	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string, store.TransactionType) ([]*store.Transaction, error)); ok {
+		return rf(ctx, dbTx, batchSize, tenantID, transactionType)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string) []*store.Transaction); ok {
-		r0 = rf(ctx, dbTx, batchSize, tenantID)
+	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string, store.TransactionType) []*store.Transaction); ok {
+		r0 = rf(ctx, dbTx, batchSize, tenantID, transactionType)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*store.Transaction)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, db.DBTransaction, int, string) error); ok {
-		r1 = rf(ctx, dbTx, batchSize, tenantID)
+	if rf, ok := ret.Get(1).(func(context.Context, db.DBTransaction, int, string, store.TransactionType) error); ok {
+		r1 = rf(ctx, dbTx, batchSize, tenantID, transactionType)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -136,9 +136,9 @@ func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context
 	return r0, r1
 }
 
-// GetTransactionPendingUpdateByID provides a mock function with given fields: ctx, sqlExec, txID
-func (_m *MockTransactionStore) GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (*store.Transaction, error) {
-	ret := _m.Called(ctx, sqlExec, txID)
+// GetTransactionPendingUpdateByID provides a mock function with given fields: ctx, sqlExec, txID, expectedTransactionType
+func (_m *MockTransactionStore) GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string, expectedTransactionType store.TransactionType) (*store.Transaction, error) {
+	ret := _m.Called(ctx, sqlExec, txID, expectedTransactionType)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTransactionPendingUpdateByID")
@@ -146,19 +146,19 @@ func (_m *MockTransactionStore) GetTransactionPendingUpdateByID(ctx context.Cont
 
 	var r0 *store.Transaction
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, db.SQLExecuter, string) (*store.Transaction, error)); ok {
-		return rf(ctx, sqlExec, txID)
+	if rf, ok := ret.Get(0).(func(context.Context, db.SQLExecuter, string, store.TransactionType) (*store.Transaction, error)); ok {
+		return rf(ctx, sqlExec, txID, expectedTransactionType)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, db.SQLExecuter, string) *store.Transaction); ok {
-		r0 = rf(ctx, sqlExec, txID)
+	if rf, ok := ret.Get(0).(func(context.Context, db.SQLExecuter, string, store.TransactionType) *store.Transaction); ok {
+		r0 = rf(ctx, sqlExec, txID, expectedTransactionType)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*store.Transaction)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, db.SQLExecuter, string) error); ok {
-		r1 = rf(ctx, sqlExec, txID)
+	if rf, ok := ret.Get(1).(func(context.Context, db.SQLExecuter, string, store.TransactionType) error); ok {
+		r1 = rf(ctx, sqlExec, txID, expectedTransactionType)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -346,29 +346,29 @@ func (_m *MockTransactionStore) UpdateStatusToSuccess(ctx context.Context, tx st
 	return r0, r1
 }
 
-// UpdateStellarTransactionHashAndXDRSent provides a mock function with given fields: ctx, txID, txHash, txXDRSent, distributionAccount
-func (_m *MockTransactionStore) UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash string, txXDRSent string, distributionAccount string) (*store.Transaction, error) {
+// UpdateStellarTransactionHashXDRSentAndDistributionAccount provides a mock function with given fields: ctx, txID, txHash, txXDRSent, distributionAccount
+func (_m *MockTransactionStore) UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, txHash string, txXDRSent string, distributionAccount string) (*store.Transaction, error) {
 	ret := _m.Called(ctx, txID, txHash, txXDRSent, distributionAccount)
 
 	if len(ret) == 0 {
-		panic("no return value specified for UpdateStellarTransactionHashAndXDRSent")
+		panic("no return value specified for UpdateStellarTransactionHashXDRSentAndDistributionAccount")
 	}
 
 	var r0 *store.Transaction
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string) (*store.Transaction, error)); ok {
-		return rf(ctx, txID, txHash, txXDRSent, distributionAccount)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string, string) (*store.Transaction, error)); ok {
+		return rf(ctx, txID, txHash, txXDRSent, distributionAccount, distributionAccount)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string) *store.Transaction); ok {
-		r0 = rf(ctx, txID, txHash, txXDRSent, distributionAccount)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string, string) *store.Transaction); ok {
+		r0 = rf(ctx, txID, txHash, txXDRSent, distributionAccount, distributionAccount)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*store.Transaction)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, string) error); ok {
-		r1 = rf(ctx, txID, txHash, txXDRSent, distributionAccount)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, string, string) error); ok {
+		r1 = rf(ctx, txID, txHash, txXDRSent, distributionAccount, distributionAccount)
 	} else {
 		r1 = ret.Error(1)
 	}

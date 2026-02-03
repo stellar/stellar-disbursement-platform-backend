@@ -1,0 +1,67 @@
+name: Contract WASM Artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  attestations: write
+  id-token: write
+
+env:
+  RUST_TOOLCHAIN: 1.92.0
+
+jobs:
+  build_and_attest:
+    name: Build and Attest WASMs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install ${RUST_TOOLCHAIN} --profile minimal --target wasm32v1-none
+          rustup default ${RUST_TOOLCHAIN}
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Cache Rust dependencies
+        uses: stellar/actions/rust-cache@main
+
+      - name: Install stellar-cli
+        uses: stellar/stellar-cli@v25.0.0
+        with:
+          version: 25.0.0
+
+      - name: Build contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          contract_manifests=(contracts/*/Cargo.toml)
+          if [ ${#contract_manifests[@]} -eq 0 ]; then
+            echo "No contract Cargo.toml files found under contracts/"
+            exit 1
+          fi
+
+          for cargo_toml in "${contract_manifests[@]}"; do
+            contract_dir=$(dirname "$cargo_toml")
+            echo "Building contract in ${contract_dir}"
+            (
+              cd "$contract_dir"
+              stellar contract build \
+                --optimize \
+                --meta source_repo=github:${{ github.repository }}
+            )
+          done
+
+      - name: Attest contract WASMs
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: contracts/target/wasm32v1-none/release/*.wasm
+
+      - name: Upload contract WASMs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-wasms
+          path: contracts/target/wasm32v1-none/release/*.wasm

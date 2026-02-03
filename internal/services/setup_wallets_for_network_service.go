@@ -33,7 +33,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 	}
 
 	var names, homepages, deepLinkSchemas, sep10ClientDomains []string
-	var userManagedFlags []bool
+	var userManagedFlags, embeddedFlags []bool
 
 	separator := strings.Repeat("-", 20)
 	buf := new(strings.Builder)
@@ -44,6 +44,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 		deepLinkSchemas = append(deepLinkSchemas, wallet.DeepLinkSchema)
 		sep10ClientDomains = append(sep10ClientDomains, wallet.SEP10ClientDomain)
 		userManagedFlags = append(userManagedFlags, wallet.UserManaged)
+		embeddedFlags = append(embeddedFlags, wallet.Embedded)
 
 		fmt.Fprintf(buf, "%s\n%s\n\n", wallet.Name, separator)
 	}
@@ -58,7 +59,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 				SELECT
 					UNNEST($1::text[]) AS name, UNNEST($2::text[]) AS homepage,
 					UNNEST($3::text[]) AS deep_link_schema, UNNEST($4::text[]) AS sep_10_client_domain,
-					UNNEST($5::bool[]) AS user_managed
+					UNNEST($5::bool[]) AS user_managed, UNNEST($6::bool[]) AS embedded
 			),
 			existing_wallets AS (
 				-- gets all wallets that the name appears in the names passed as parameter for the query
@@ -86,16 +87,16 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 			)
 			-- inserts wallets in the database
 			INSERT INTO wallets 
-				(name, homepage, deep_link_schema, sep_10_client_domain, user_managed)
+				(name, homepage, deep_link_schema, sep_10_client_domain, user_managed, embedded)
 			SELECT
-				wtui.name, wtui.homepage, wtui.deep_link_schema, wtui.sep_10_client_domain, wtui.user_managed
+				wtui.name, wtui.homepage, wtui.deep_link_schema, wtui.sep_10_client_domain, wtui.user_managed, wtui.embedded
 			FROM
 				wallets_to_update_or_insert wtui
 			WHERE
 				wtui.name NOT IN (SELECT name FROM existing_wallets)
 		`
 
-		_, err := dbTx.ExecContext(ctx, query, pq.Array(names), pq.Array(homepages), pq.Array(deepLinkSchemas), pq.Array(sep10ClientDomains), pq.Array(userManagedFlags))
+		_, err := dbTx.ExecContext(ctx, query, pq.Array(names), pq.Array(homepages), pq.Array(deepLinkSchemas), pq.Array(sep10ClientDomains), pq.Array(userManagedFlags), pq.Array(embeddedFlags))
 		if err != nil {
 			return fmt.Errorf("error upserting wallets: %w", err)
 		}

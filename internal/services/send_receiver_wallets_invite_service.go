@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -28,6 +29,7 @@ type SendReceiverWalletInviteServiceInterface interface {
 type SendReceiverWalletInviteService struct {
 	messageDispatcher           message.MessageDispatcherInterface
 	Models                      *data.Models
+	embeddedWalletService       EmbeddedWalletServiceInterface
 	maxInvitationResendAttempts int64
 	sep10SigningPrivateKey      string
 	crashTrackerClient          crashtracker.CrashTrackerClient
@@ -119,6 +121,15 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 			AssetCode:        rwa.Asset.Code,
 			AssetIssuer:      rwa.Asset.Issuer,
 			TenantBaseURL:    *currentTenant.BaseURL,
+			TenantUIBaseURL:  *currentTenant.SDPUIBaseURL,
+			SelfHosted:       wallet.IsSelfHosted(),
+		}
+
+		if wallet.Embedded {
+			if err = s.updateEmbeddedWalletDeepLink(ctx, &wdl, rwa.ReceiverWallet.ID, rwa.VerificationField); err != nil {
+				log.Ctx(ctx).Errorf("updating deep link for embedded wallet ID %s: %v", wallet.ID, err)
+				continue
+			}
 		}
 
 		registrationLink, errLink := s.GetRegistrationLink(ctx, wdl, organization.IsLinkShortenerEnabled)
@@ -222,6 +233,53 @@ func (s SendReceiverWalletInviteService) prepareMessage(ctx context.Context, rwa
 	return msgToInsert, nil
 }
 
+func (s SendReceiverWalletInviteService) updateEmbeddedWalletDeepLink(ctx context.Context, wdl *WalletDeepLink, receiverWalletID string, verificationField data.VerificationType) error {
+	if wdl == nil {
+		return fmt.Errorf("wallet deep link cannot be nil")
+	}
+
+	if s.embeddedWalletService == nil {
+		return fmt.Errorf("embedded wallet service is not configured - embedded wallets feature is disabled")
+	}
+
+	if wdl.SelfHosted {
+		wdl.DeepLink = wdl.TenantUIBaseURL
+		wdl.Route = "wallet"
+	}
+
+	reusableStatuses := []data.EmbeddedWalletStatus{
+		data.PendingWalletStatus,
+		data.ProcessingWalletStatus,
+		data.SuccessWalletStatus,
+	}
+	existingWallet, err := s.Models.EmbeddedWallets.GetByReceiverWalletIDAndStatuses(ctx, s.Models.DBConnectionPool, receiverWalletID, reusableStatuses)
+	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
+		return fmt.Errorf("getting existing embedded wallet for receiver wallet %s: %w", receiverWalletID, err)
+	}
+
+	if existingWallet != nil {
+		wdl.Token = existingWallet.Token
+	} else {
+		token, tokenErr := s.embeddedWalletService.CreateInvitationToken(ctx)
+		if tokenErr != nil {
+			return fmt.Errorf("creating embedded wallet invitation token: %w", tokenErr)
+		}
+		wdl.Token = token
+	}
+
+	requiresVerification := verificationField != ""
+	update := data.EmbeddedWalletUpdate{
+		ReceiverWalletID:     receiverWalletID,
+		RequiresVerification: &requiresVerification,
+	}
+
+	if err = s.Models.EmbeddedWallets.Update(ctx, s.Models.DBConnectionPool, wdl.Token, update); err != nil {
+		return fmt.Errorf("linking embedded wallet token to receiver wallet %s: %w", receiverWalletID, err)
+	}
+
+	return nil
+}
+
 func (s SendReceiverWalletInviteService) GetRegistrationLink(ctx context.Context, wdl WalletDeepLink, isLinkShortenerEnabled bool) (string, error) {
 	registrationLink, err := wdl.GetSignedRegistrationLink(s.sep10SigningPrivateKey)
 	if err != nil {
@@ -296,10 +354,11 @@ func (s SendReceiverWalletInviteService) shouldSendInvitation(ctx context.Contex
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messageDispatcher message.MessageDispatcherInterface, sep10SigningPrivateKey string, maxInvitationResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messageDispatcher message.MessageDispatcherInterface, embeddedWalletService EmbeddedWalletServiceInterface, sep10SigningPrivateKey string, maxInvitationResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messageDispatcher:           messageDispatcher,
 		Models:                      models,
+		embeddedWalletService:       embeddedWalletService,
 		maxInvitationResendAttempts: maxInvitationResendAttempts,
 		sep10SigningPrivateKey:      sep10SigningPrivateKey,
 		crashTrackerClient:          crashTrackerClient,
@@ -325,6 +384,12 @@ type WalletDeepLink struct {
 	AssetIssuer string
 	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
 	TenantBaseURL string
+	// TenantUIBaseURL is the base URL for the tenant UI that the receiver wallet belongs to.
+	TenantUIBaseURL string
+	// Token is a unique token that identifies identifies a receiver wallet creation request.
+	Token string
+	// SelfHosted is set to true when the deep link should be set to the tenant base URL, which is the case only for embedded wallets.
+	SelfHosted bool
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
@@ -450,9 +515,16 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	}
 
 	q := u.Query()
-	q.Add("domain", tomlFileDomain)
-	q.Add("name", wdl.OrganizationName)
+
 	q.Add("asset", wdl.assetName())
+
+	if !wdl.SelfHosted {
+		q.Add("domain", tomlFileDomain)
+		q.Add("name", wdl.OrganizationName)
+	}
+	if wdl.Token != "" {
+		q.Add("token", wdl.Token)
+	}
 
 	u.RawQuery = q.Encode()
 

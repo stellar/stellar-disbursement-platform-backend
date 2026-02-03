@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go-stellar-sdk/support/config"
@@ -80,6 +81,8 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 
 	sj := []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
+		scheduler.WithSEPNonceCleanupJobOption(models),
+		scheduler.WithPasskeySessionCleanupJobOption(models),
 		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
 			Models:              models,
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
@@ -113,12 +116,42 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
 			Models:                      models,
 			MessageDispatcher:           serveOpts.MessageDispatcher,
+			EmbeddedWalletService:       serveOpts.EmbeddedWalletService,
 			MaxInvitationResendAttempts: int64(serveOpts.MaxInvitationResendAttempts),
 			Sep10SigningPrivateKey:      serveOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:          serveOpts.CrashTrackerClient.Clone(),
 			JobIntervalSeconds:          schedulerOptions.ReceiverInvitationJobIntervalSeconds,
 		}),
 	)
+
+	// Add embedded wallet sync jobs only if enabled
+	if serveOpts.EnableEmbeddedWallets {
+		sj = append(sj,
+			scheduler.WithWalletCreationToSubmitterJobOption(jobs.WalletCreationToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				TSSDBConnectionPool: tssDBConnectionPool,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			}),
+			scheduler.WithSponsoredTransactionsToSubmitterJobOption(jobs.SponsoredTransactionsToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				TSSDBConnectionPool: tssDBConnectionPool,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			}),
+			scheduler.WithWalletCreationFromSubmitterJobOption(
+				schedulerOptions.PaymentJobIntervalSeconds,
+				models,
+				tssDBConnectionPool,
+				serveOpts.NetworkPassphrase,
+			),
+			scheduler.WithSponsoredTransactionFromSubmitterJobOption(
+				schedulerOptions.PaymentJobIntervalSeconds,
+				models,
+				tssDBConnectionPool,
+			),
+		)
+	}
 
 	return sj, nil
 }
@@ -180,6 +213,45 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
 			ConfigKey:      &serveOpts.Sep10SigningPrivateKey,
 			Required:       true,
+		},
+		{
+			Name:        "enable-embedded-wallets",
+			Usage:       "Enable embedded wallet features that require Stellar RPC integration",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableEmbeddedWallets,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
+			Name:      "embedded-wallets-wasm-hash",
+			Usage:     "The WASM hash of the smart contract for embedded wallets (required when --enable-embedded-wallets is true)",
+			OptType:   types.String,
+			ConfigKey: &serveOpts.EmbeddedWalletsWasmHash,
+			Required:  false,
+		},
+		{
+			Name:        "webauthn-session-ttl-seconds",
+			Usage:       "Duration that WebAuthn sessions remain valid, in seconds",
+			OptType:     types.Int,
+			ConfigKey:   &serveOpts.WebAuthnSessionTTLSeconds,
+			FlagDefault: 300,
+			Required:    false,
+		},
+		{
+			Name:        "enable-sep45",
+			Usage:       "Enable SEP-45 web authentication features that require Stellar RPC integration",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableSep45,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
+			Name:           "sep45-contract-id",
+			Usage:          "The ID of the SEP-45 web authentication contract (required when --enable-sep45 is true)",
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionStellarContractID,
+			ConfigKey:      &serveOpts.Sep45ContractID,
+			Required:       false,
 		},
 		{
 			Name:        "sep10-client-attribution-required",
@@ -269,6 +341,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault:    string(circle.APITypeTransfers),
 		},
 	}
+	// rpc options
+	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&serveOpts.RPCConfig)...)
 
 	// crash tracker options
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
@@ -479,6 +553,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			defer func() {
 				di.CleanupInstanceByValue(ctx, tssDBConnectionPool)
 			}()
+			serveOpts.TSSDBConnectionPool = tssDBConnectionPool
 
 			// Setup the Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
@@ -580,6 +655,33 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				}
 				serveOpts.BridgeService = bridgeService
 				log.Ctx(ctx).Infof("🌉 Bridge integration is enabled for base URL %s", bridgeIntegrationOpts.BridgeBaseURL)
+			}
+
+			// Setup Embedded Wallet Service (only if enabled)
+			if serveOpts.EnableEmbeddedWallets {
+				rpcClient, rpcErr := di.NewRPCClient(context.Background(), serveOpts.RPCConfig)
+				if rpcErr != nil {
+					log.Ctx(ctx).Fatalf("error creating RPC client: %v", rpcErr)
+				}
+
+				serveOpts.EmbeddedWalletService, err = di.NewEmbeddedWalletService(context.Background(), services.EmbeddedWalletServiceOptions{
+					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
+					WasmHash:            serveOpts.EmbeddedWalletsWasmHash,
+					RPCClient:           rpcClient,
+				})
+				log.Info("Embedded wallet features enabled")
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating embedded wallet service: %v", err)
+				}
+
+				serveOpts.WebAuthnService, err = di.NewWebAuthnService(context.Background(), di.WebAuthnServiceOptions{
+					MTNDBConnectionPool: serveOpts.MtnDBConnectionPool,
+					SessionTTL:          time.Duration(serveOpts.WebAuthnSessionTTLSeconds) * time.Second,
+				})
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating WebAuthn service: %v", err)
+				}
+				log.Info("WebAuthn passkey authentication enabled")
 			}
 
 			log.Ctx(ctx).Info("Starting Scheduler Service...")

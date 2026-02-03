@@ -6,6 +6,7 @@
 - Tests are included (if applicable. Certain changes like documentation or config updates may not need tests)
 - `CHANGELOG.md` is updated 
 - CONFIG/SECRETS changes are updated in helmcharts and deployments when we introduce a new configuration to the application. 
+- If contracts changed, run the `Contract WASM Artifacts` workflow on `develop` and submit a PR to update the WASMs on `dev`
 
 ## API Changes
 **If the change affects API signature (endpoints, request/response schemas, parameters), notify the developer to update the API specs at:**

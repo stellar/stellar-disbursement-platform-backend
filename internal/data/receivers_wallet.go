@@ -220,7 +220,7 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"updated_at",
 			"invitation_sent_at",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"sep24_transaction_id",
 			"stellar_address",
 			"stellar_memo",

@@ -16,6 +16,7 @@
 - [ ] PR has a focused scope and doesn't mix features with refactoring
 - [ ] Tests are included (if applicable)
 - [ ] `CHANGELOG.md` is updated (if applicable)
+- [ ] If contracts changed, run the `Contract WASM Artifacts` workflow and open a PR to update the WASMs on `dev`
 - [ ] CONFIG/SECRETS changes are updated in helmcharts and deployments (if applicable)
 - [ ] Preview deployment works as expected
 - [ ] Ready for production

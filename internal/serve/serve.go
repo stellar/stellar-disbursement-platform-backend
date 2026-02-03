@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httprate"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/network"
 	supporthttp "github.com/stellar/go-stellar-sdk/support/http"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -20,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
@@ -31,8 +33,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/sep24frontend"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -59,6 +63,7 @@ type ServeOptions struct {
 	MonitorService                 monitor.MonitorServiceInterface
 	MtnDBConnectionPool            db.DBConnectionPool
 	AdminDBConnectionPool          db.DBConnectionPool
+	TSSDBConnectionPool            db.DBConnectionPool
 	EC256PrivateKey                string
 	Models                         *data.Models
 	CorsAllowedOrigins             []string
@@ -76,6 +81,12 @@ type ServeOptions struct {
 	Sep10SigningPrivateKey         string
 	Sep10ClientAttributionRequired bool
 	Sep10Service                   services.SEP10Service
+	Sep45Service                   services.SEP45Service
+	EnableEmbeddedWallets          bool
+	EmbeddedWalletsWasmHash        string
+	EnableSep45                    bool
+	Sep45ContractID                string
+	RPCConfig                      stellar.RPCOptions
 	CrashTrackerClient             crashtracker.CrashTrackerClient
 	ReCAPTCHASiteKey               string
 	ReCAPTCHASiteSecretKey         string
@@ -94,6 +105,11 @@ type ServeOptions struct {
 	CircleService               circle.ServiceInterface
 	CircleAPIType               circle.APIType
 	BridgeService               bridge.ServiceInterface
+
+	EmbeddedWalletService     services.EmbeddedWalletServiceInterface
+	WebAuthnSessionTTLSeconds int
+	WebAuthnService           wallet.WebAuthnServiceInterface
+	walletJWTManager          wallet.WalletJWTManager
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -126,6 +142,12 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating Stellar Auth manager: %w", err)
 	}
 
+	// Setup Wallet JWT Manager for passkey authentication
+	opts.walletJWTManager, err = wallet.NewWalletJWTManager(opts.EC256PrivateKey)
+	if err != nil {
+		return fmt.Errorf("error creating wallet JWT manager: %w", err)
+	}
+
 	// Setup SEP24 JWT manager
 	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, 300000)
 	if err != nil {
@@ -141,6 +163,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 	// Determine allow retry based on network passphrase
 	allowHTTPRetry := opts.NetworkPassphrase != network.PublicNetworkPassphrase
 
+	sep10NonceStore, err := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP10NonceExpiration)
+	if err != nil {
+		return fmt.Errorf("initializing SEP 10 nonce store: %w", err)
+	}
 	sep10Service, err := services.NewSEP10Service(
 		sep24JWTManager,
 		opts.NetworkPassphrase,
@@ -149,12 +175,46 @@ func (opts *ServeOptions) SetupDependencies() error {
 		allowHTTPRetry,
 		opts.SubmitterEngine.HorizonClient,
 		opts.Sep10ClientAttributionRequired,
+		sep10NonceStore,
 	)
 	if err != nil {
 		return fmt.Errorf("initializing SEP 10 Service: %w", err)
 	}
 
 	opts.Sep10Service = sep10Service
+
+	if opts.EnableSep45 {
+		sep45NonceStore, err := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
+		if err != nil {
+			return fmt.Errorf("initializing SEP 45 nonce store: %w", err)
+		}
+		rpcClient, rpcErr := dependencyinjection.NewRPCClient(context.Background(), opts.RPCConfig)
+		if rpcErr != nil {
+			return fmt.Errorf("initializing RPC client: %w", rpcErr)
+		}
+
+		signingKP, kpErr := keypair.ParseFull(opts.Sep10SigningPrivateKey)
+		if kpErr != nil {
+			return fmt.Errorf("parsing SEP-45 signing key: %w", kpErr)
+		}
+
+		sep45Service, sep45Err := services.NewSEP45Service(services.SEP45ServiceOptions{
+			RPCClient:               rpcClient,
+			TOMLClient:              nil,
+			JWTManager:              sep24JWTManager,
+			NetworkPassphrase:       opts.NetworkPassphrase,
+			WebAuthVerifyContractID: opts.Sep45ContractID,
+			ServerSigningKeypair:    signingKP,
+			BaseURL:                 opts.BaseURL,
+			AllowHTTPRetry:          allowHTTPRetry,
+			NonceStore:              sep45NonceStore,
+		})
+		if sep45Err != nil {
+			return fmt.Errorf("initializing SEP 45 Service: %w", sep45Err)
+		}
+
+		opts.Sep45Service = sep45Service
+	}
 
 	return nil
 }
@@ -179,9 +239,46 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	return nil
 }
 
+// ValidateRPC validates the RPC options.
+func (opts *ServeOptions) ValidateRPC() error {
+	if opts.RPCConfig.RPCUrl == "" && (opts.RPCConfig.RPCRequestAuthHeaderKey != "" || opts.RPCConfig.RPCRequestAuthHeaderValue != "") {
+		return fmt.Errorf("RPC URL must be set when RPC request header key or value is set")
+	}
+
+	if opts.RPCConfig.RPCRequestAuthHeaderKey != "" && opts.RPCConfig.RPCRequestAuthHeaderValue == "" {
+		return fmt.Errorf("RPC request header value must be set when RPC request header key is set")
+	}
+
+	if opts.RPCConfig.RPCRequestAuthHeaderKey == "" && opts.RPCConfig.RPCRequestAuthHeaderValue != "" {
+		return fmt.Errorf("RPC request header key must be set when RPC request header value is set")
+	}
+
+	// RPC-dependent feature validation
+	hasRPCFeatures := opts.EnableEmbeddedWallets || opts.EnableSep45
+	if hasRPCFeatures && opts.RPCConfig.RPCUrl == "" {
+		return fmt.Errorf("RPC URL must be set when RPC-dependent features are enabled")
+	}
+
+	// Embedded wallet feature validation
+	if opts.EnableEmbeddedWallets && opts.EmbeddedWalletsWasmHash == "" {
+		return fmt.Errorf("embedded wallets WASM hash must be set when embedded wallets are enabled")
+	}
+
+	// SEP-45 feature validation
+	if opts.EnableSep45 && opts.Sep45ContractID == "" {
+		return fmt.Errorf("SEP-45 contract ID must be set when SEP-45 is enabled")
+	}
+
+	return nil
+}
+
 func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 	if err := opts.ValidateSecurity(); err != nil {
 		return fmt.Errorf("validating security options: %w", err)
+	}
+
+	if err := opts.ValidateRPC(); err != nil {
+		return fmt.Errorf("validating RPC options: %w", err)
 	}
 
 	if err := opts.SetupDependencies(); err != nil {
@@ -461,9 +558,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{
-				Models:              o.Models,
-				NetworkType:         o.NetworkType,
-				WalletAssetResolver: services.NewWalletAssetResolver(o.Models.Assets),
+				Models:                o.Models,
+				NetworkType:           o.NetworkType,
+				WalletAssetResolver:   services.NewWalletAssetResolver(o.Models.Assets),
+				EnableEmbeddedWallets: o.EnableEmbeddedWallets,
 			}
 
 			// Read operations
@@ -627,6 +725,75 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.ServeHTTP)
 
 		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
+
+		// Embedded wallet routes (only if feature is enabled)
+		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
+			mux.Group(func(r chi.Router) {
+				walletCreationHandler := httphandler.WalletCreationHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+				}
+				embeddedWalletProfileHandler := httphandler.EmbeddedWalletProfileHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+					Models:                o.Models,
+				}
+				sponsoredTransactionHandler := httphandler.SponsoredTransactionHandler{
+					EmbeddedWalletService: o.EmbeddedWalletService,
+					Models:                o.Models,
+					NetworkPassphrase:     o.NetworkPassphrase,
+				}
+				passkeyHandler := &httphandler.PasskeyHandler{
+					WebAuthnService:       o.WebAuthnService,
+					WalletJWTManager:      o.walletJWTManager,
+					EmbeddedWalletService: o.EmbeddedWalletService,
+				}
+
+				r.Route("/embedded-wallets", func(r chi.Router) {
+					// Wallet creation routes
+					r.Post("/", walletCreationHandler.CreateWallet)
+					r.Get("/{credentialID}", walletCreationHandler.GetWallet)
+
+					// Authenticated wallet routes
+					r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).Group(func(r chi.Router) {
+						// Profile routes
+						r.Get("/profile", embeddedWalletProfileHandler.GetProfile)
+
+						// Sponsored transactions
+						r.Route("/sponsored-transactions", func(r chi.Router) {
+							r.Post("/", sponsoredTransactionHandler.CreateSponsoredTransaction)
+							r.Get("/{id}", sponsoredTransactionHandler.GetSponsoredTransaction)
+						})
+					})
+
+					// Passkey registration + authentication routes
+					if passkeyHandler != nil {
+						r.Route("/passkey", func(r chi.Router) {
+							r.Route("/registration", func(r chi.Router) {
+								r.Post("/start", passkeyHandler.StartPasskeyRegistration)
+								r.Post("/finish", passkeyHandler.FinishPasskeyRegistration)
+							})
+							r.Route("/authentication", func(r chi.Router) {
+								r.Post("/start", passkeyHandler.StartPasskeyAuthentication)
+								r.Post("/finish", passkeyHandler.FinishPasskeyAuthentication)
+								r.Post("/refresh", passkeyHandler.RefreshToken)
+							})
+						})
+					}
+				})
+			})
+		}
+
+		// RPC endpoints for wallet and dashboard (only if RPC URL is set)
+		if o.RPCConfig.RPCUrl != "" {
+			rpcProxyHandler := httphandler.RPCProxyHandler{
+				RPCUrl:             o.RPCConfig.RPCUrl,
+				RPCAuthHeaderKey:   o.RPCConfig.RPCRequestAuthHeaderKey,
+				RPCAuthHeaderValue: o.RPCConfig.RPCRequestAuthHeaderValue,
+			}
+			r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).
+				Post("/rpc/wallet", rpcProxyHandler.ServeHTTP)
+			r.With(middleware.AuthenticateMiddleware(o.authManager, o.tenantManager)).
+				Post("/rpc/user", rpcProxyHandler.ServeHTTP)
+		}
 	})
 
 	// SEP-1, SEP-10, SEP-24 and miscellaneous endpoints that are tenant-unaware
@@ -644,6 +811,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkPassphrase:           o.NetworkPassphrase,
 			Models:                      o.Models,
 			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
+			Sep45ContractID:             o.Sep45ContractID,
 			InstanceName:                o.InstanceName,
 			BaseURL:                     o.BaseURL,
 		}.ServeHTTP)
@@ -657,6 +825,18 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/auth", sep10Handler.GetChallenge)
 			r.Post("/auth", sep10Handler.PostChallenge)
 		})
+
+		// SEP-45 endpoints
+		if o.EnableSep45 && o.Sep45Service != nil {
+			r.Route("/sep45", func(r chi.Router) {
+				sep45Handler := httphandler.SEP45Handler{
+					SEP45Service: o.Sep45Service,
+				}
+
+				r.Get("/auth", sep45Handler.GetChallenge)
+				r.Post("/auth", sep45Handler.PostChallenge)
+			})
+		}
 		// SEP-24 endpoints
 		r.Route("/sep24", func(r chi.Router) {
 			sep24Handler := httphandler.SEP24Handler{
@@ -665,11 +845,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				InteractiveBaseURL: o.BaseURL,
 			}
 			r.Get("/info", sep24Handler.GetInfo)
-			// Protect transaction lookup with SEP-10 auth to ensure only authorized clients can access details
-			r.With(sepauth.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
+			// Protect transaction lookup with SEP-10 or SEP-45 auth to ensure only authorized clients can access details
+			r.With(sepauth.WebAuthHeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
 
 			// For initiating interactive deposit, allow either the new middleware (preferred) or legacy header path inside handler
-			r.With(sepauth.SEP10HeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
+			r.With(sepauth.WebAuthHeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Post("/transactions/deposit/interactive", sep24Handler.PostDepositInteractive)
 		})
 
 		sep24QueryTokenAuthenticationMiddleware := sepauth.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)

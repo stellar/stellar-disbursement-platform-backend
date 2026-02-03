@@ -1,4 +1,6 @@
-# Transaction Submission Payments Load Testing Script 
+# Transaction Submission Service (TSS) Load Testing Script 
+
+Supports both payment and wallet creation transaction load testing.
 
 Load Test Flow:
 1) Create N number of Transactions in the database for TSS to process
@@ -7,25 +9,45 @@ Load Test Flow:
 
 ### CLI Flags: 
 ```sh
-    --databaseUrl            Postgres DB URL
+    --type                   Type of load test: 'payment' or 'wallet' (required)
+    --count                  Number of transactions to create (required)  
+    --databaseUrl            Postgres DB URL (required)
+    --tenantId               Tenant ID for multi-tenant testing (required)
     --horizonUrl             Horizon URL (default "https://horizon-testnet.stellar.org")
+    
+    # Payment-specific flags
     --assetCode              Asset code (default "USDC")
     --assetIssuer            Asset issuer (default "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP")
-    --paymentDestination     Destination address to send the payments to
-    --paymentCount           Number of payment Transactions to create
+    --paymentDestination     Destination address to send the payments to (required for payment tests)
+    
+    # Wallet creation-specific flags
+    --wasmHash               WASM hash for contract deployment (default "a5016f845e76fe452de6d3638ac47523b845a813db56de3d713eb7a49276e254")
 ```
 
-### CLI Usage Example: 
+### CLI Usage Examples: 
+
+#### Payment Load Test:
 ```sh
-% go run internal/transactionsubmission/scripts/tss_payments_loadtest.go \
---databaseUrl "postgres://postgres:password@localhost:5432/tss-testing?sslmode=disable" \
---horizonUrl "https://horizon.stellar.org" \
---assetCode "USDS" -assetIssuer "GCDUFCM7HA2AXFPWCXI55MXMCPORHOE42YIIBKN72SAMZ6WBO3G2E5TF" \
---paymentDestination "GAR5YLLLSTPOJGK2T5P5WMSVGEFWQLDMPMZXICURGBUYJOVXARI2ZTXI" \
---paymentCount 3
+go run internal/transactionsubmission/scripts/tss_loadtest.go \
+  --type payment \
+  --count 3 \
+  --databaseUrl "postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable&search_path=tss" \
+  --tenantId "4c8be26b-bdaa-42cb-bdd1-6988ea74810c" \
+  --paymentDestination "GAIEWCHNAB2VTVQZEQ7STONZVTLR5BCDZQTUPFWGTNHLLKR66IB77FXR"
+```
 
+#### Wallet Creation Load Test:
+```sh
+go run internal/transactionsubmission/scripts/tss_loadtest.go \
+  --type wallet \
+  --count 5 \
+  --databaseUrl "postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable&search_path=tss" \
+  --tenantId "4c8be26b-bdaa-42cb-bdd1-6988ea74810c"
+```
 
-All 3 transactions have completed!
+### Example Output:
+```
+All 3 payment transactions have completed!
 Test size: 3 payment(s)
 ==========================================================
 TSS first created payment time:      2023-06-21 11:06:55

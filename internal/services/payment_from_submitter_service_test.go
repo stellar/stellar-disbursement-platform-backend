@@ -153,7 +153,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 			payment, paymentErr := testCtx.sdpModel.Payment.Get(ctx, p.ID, dbConnectionPool)
 			require.NoError(t, paymentErr)
 			require.Equal(t, data.SuccessPaymentStatus, payment.Status)
-			txs, txErr := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{p.ID})
+			txs, txErr := testCtx.tssModel.GetAllByExternalIDs(ctx, []string{p.ID})
 			require.NoError(t, txErr)
 			require.Len(t, txs, 1)
 			require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -164,7 +164,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		payment, paymentErr := testCtx.sdpModel.Payment.Get(ctx, payment4.ID, dbConnectionPool)
 		require.NoError(t, paymentErr)
 		require.Equal(t, data.FailedPaymentStatus, payment.Status)
-		txs, txErr := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment4.ID})
+		txs, txErr := testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment4.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 1)
 		require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -176,7 +176,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		payment, paymentErr = testCtx.sdpModel.Payment.Get(ctx, payment5.ID, dbConnectionPool)
 		require.NoError(t, paymentErr)
 		require.Equal(t, data.FailedPaymentStatus, payment.Status)
-		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment5.ID})
+		txs, txErr = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment5.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 1)
 		require.Equal(t, fmt.Sprintf("test-hash-%s", txs[0].ID), payment.StellarTransactionID)
@@ -185,7 +185,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		require.Equal(t, payment.StatusHistory[2].StatusMessage, "another-test-error")
 
 		// validate transactions synced_at is updated.
-		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
+		txs, txErr = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
 		require.NoError(t, txErr)
 		require.Len(t, txs, 5)
 
@@ -222,12 +222,15 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 
 		tenantID := uuid.NewString()
 		tx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
-			ExternalID:  paymentID,
-			AssetCode:   asset.Code,
-			AssetIssuer: asset.Issuer,
-			Amount:      decimal.NewFromInt(100),
-			Destination: rw1.StellarAddress,
-			TenantID:    tenantID,
+			ExternalID:      paymentID,
+			TransactionType: txSubStore.TransactionTypePayment,
+			Payment: txSubStore.Payment{
+				AssetCode:   asset.Code,
+				AssetIssuer: asset.Issuer,
+				Amount:      decimal.NewFromInt(100),
+				Destination: rw1.StellarAddress,
+			},
+			TenantID: tenantID,
 		})
 		require.NoError(t, err)
 
@@ -244,6 +247,75 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1, tenantID)
 		assert.ErrorContains(t, err, fmt.Sprintf("expected exactly 1 payment for the transaction ID %s but found 0", tx.ID))
 	})
+
+	t.Run("skips wallet creation transactions", func(t *testing.T) {
+		prepareTxsForSync(t, testCtx, transactions)
+
+		// Insert a wallet creation transaction that should be ignored
+		walletToken := "wallet-token-123"
+		tenantID := uuid.NewString()
+		walletTx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
+			ExternalID:      walletToken,
+			TransactionType: txSubStore.TransactionTypeWalletCreation,
+			WalletCreation: txSubStore.WalletCreation{
+				PublicKey: "04f5549c5ef833ab0ade80d9c1f3fb34fb93092503a8ce105773d676288653df384a024a92cc73cb8089c45ed76ed073433b6a72c64a6ed23630b77327beb65f23",
+				WasmHash:  "a5016f845e76fe452de6d3638ac47523b845a813db56de3d713eb7a49276e254",
+			},
+			TenantID: tenantID,
+		})
+		require.NoError(t, err)
+
+		// Update wallet transaction to SUCCESS
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'wallet_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		err = dbConnectionPool.GetContext(ctx, walletTx, q, txSubStore.TransactionStatusProcessing, walletTx.ID)
+		require.NoError(t, err)
+
+		walletTx, err = testCtx.tssModel.UpdateStatusToSuccess(ctx, *walletTx)
+		require.NoError(t, err)
+
+		// Sync should succeed and skip the wallet creation transaction
+		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1, tenantID)
+		require.NoError(t, err)
+
+		// Verify wallet transaction was NOT marked as synced (since it was skipped)
+		updatedWalletTx, err := testCtx.tssModel.GetTransactionPendingUpdateByID(ctx, dbConnectionPool, walletTx.ID, txSubStore.TransactionTypeWalletCreation)
+		require.NoError(t, err)
+		assert.Equal(t, walletTx.ID, updatedWalletTx.ID, "wallet transaction should still be pending sync")
+	})
+
+	t.Run("batch sync filters and ignores invalid wallet creation transactions", func(t *testing.T) {
+		prepareTxsForSync(t, testCtx, transactions)
+
+		// Insert a wallet creation transaction with INVALID stellar hash and status
+		// The batch sync should ignore this and not fail, but a direct SyncTransaction call would error
+		walletToken := "wallet-token-invalid"
+		tenantID := uuid.NewString()
+		invalidWalletTx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
+			ExternalID:      walletToken,
+			TransactionType: txSubStore.TransactionTypeWalletCreation,
+			WalletCreation: txSubStore.WalletCreation{
+				PublicKey: "0404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404",
+				WasmHash:  "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			},
+			TenantID: tenantID,
+		})
+		require.NoError(t, err)
+
+		// Update wallet transaction to SUCCESS but intentionally leave stellar_transaction_hash NULL
+		// This would fail validation for payment transactions, but should be ignored for wallet transactions
+		q := `UPDATE submitter_transactions SET status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		err = dbConnectionPool.GetContext(ctx, invalidWalletTx, q, txSubStore.TransactionStatusSuccess, invalidWalletTx.ID)
+		require.NoError(t, err)
+
+		// Batch sync should succeed by filtering out the wallet creation transaction
+		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1, tenantID)
+		require.NoError(t, err, "Batch sync should filter out and ignore wallet creation transactions")
+
+		// Verify the invalid wallet transaction was NOT marked as synced (correctly ignored)
+		pendingWalletTx, err := testCtx.tssModel.GetTransactionPendingUpdateByID(ctx, dbConnectionPool, invalidWalletTx.ID, txSubStore.TransactionTypeWalletCreation)
+		require.NoError(t, err)
+		assert.Equal(t, invalidWalletTx.ID, pendingWalletTx.ID, "invalid wallet transaction should still be pending since payment batch sync ignores it")
+	})
 }
 
 func createTSSTxs(t *testing.T, testCtx *testContext, payments ...*data.Payment) []*txSubStore.Transaction {
@@ -256,12 +328,15 @@ func createTSSTxs(t *testing.T, testCtx *testContext, payments ...*data.Payment)
 		require.NoError(t, err)
 
 		transactionsToCreate = append(transactionsToCreate, txSubStore.Transaction{
-			ExternalID:  payment.ID,
-			AssetCode:   payment.Asset.Code,
-			AssetIssuer: payment.Asset.Issuer,
-			Amount:      decimal.NewFromFloat(amount),
-			Destination: payment.ReceiverWallet.StellarAddress,
-			TenantID:    testCtx.tenantID,
+			ExternalID:      payment.ID,
+			TransactionType: txSubStore.TransactionTypePayment,
+			Payment: txSubStore.Payment{
+				AssetCode:   payment.Asset.Code,
+				AssetIssuer: payment.Asset.Issuer,
+				Amount:      decimal.NewFromFloat(amount),
+				Destination: payment.ReceiverWallet.StellarAddress,
+			},
+			TenantID: testCtx.tenantID,
 		})
 	}
 
@@ -456,7 +531,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	require.Len(t, transactions, 2)
 
@@ -562,7 +637,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = testCtx.tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	require.Len(t, transactions, 2)
 

@@ -45,8 +45,8 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 	claims, err := jwtManager.ParseSEP24TokenClaims(token)
 	require.NoError(t, err)
 	assert.Equal(t, transactionID, claims.TransactionID())
-	assert.Equal(t, stellarAccount, claims.SEP10StellarAccount())
-	assert.Equal(t, stellarMemo, claims.SEP10StellarMemo())
+	assert.Equal(t, stellarAccount, claims.Account())
+	assert.Equal(t, stellarMemo, claims.Memo())
 	assert.Equal(t, clientDomain, claims.ClientDomain())
 	assert.Equal(t, homeDomain, claims.HomeDomain())
 	assert.NotNil(t, claims.ExpiresAt())
@@ -75,8 +75,8 @@ func Test_JWTManager_GenerateAndParseSEP24MoreInfoToken(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, transactionID, claims.TransactionID())
-	assert.Equal(t, stellarAccount, claims.SEP10StellarAccount())
-	assert.Equal(t, stellarMemo, claims.SEP10StellarMemo())
+	assert.Equal(t, stellarAccount, claims.Account())
+	assert.Equal(t, stellarMemo, claims.Memo())
 	assert.Equal(t, clientDomain, claims.ClientDomain())
 	assert.Equal(t, homeDomain, claims.HomeDomain())
 	assert.NotNil(t, claims.ExpiresAt())
@@ -175,6 +175,166 @@ func Test_JWTManager_GenerateAndParseSEP10Token(t *testing.T) {
 			assert.Equal(t, tc.homeDomain, claims.HomeDomain)
 			assert.Equal(t, jwt.NewNumericDate(tc.iat).Unix(), claims.IssuedAt.Unix())
 			assert.Equal(t, jwt.NewNumericDate(tc.exp).Unix(), claims.ExpiresAt.Unix())
+		})
+	}
+}
+
+func Test_JWTManager_GenerateAndParseSEP45Token(t *testing.T) {
+	jwtManager, err := NewJWTManager("1234567890ab", 5000)
+	require.NoError(t, err)
+
+	iat := time.Now()
+	exp := iat.Add(5 * time.Minute)
+
+	testCases := []struct {
+		name         string
+		issuer       string
+		subject      string
+		jti          string
+		clientDomain string
+		homeDomain   string
+		wantErr      bool
+	}{
+		{
+			name:         "valid SEP-45 token",
+			issuer:       "https://example.com/sep45/auth",
+			subject:      "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R4",
+			jti:          "challenge-123456",
+			clientDomain: "wallet.example.com",
+			homeDomain:   "example.com",
+		},
+		{
+			name:         "SEP-45 token without optional domains",
+			issuer:       "https://example.com/sep45/auth",
+			subject:      "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R4",
+			jti:          "challenge-123456",
+			clientDomain: "",
+			homeDomain:   "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tokenStr, err := jwtManager.GenerateSEP45Token(
+				tc.issuer, tc.subject, tc.jti, tc.clientDomain, tc.homeDomain, iat, exp,
+			)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotEmpty(t, tokenStr)
+
+			claims, err := jwtManager.ParseSEP45TokenClaims(tokenStr)
+			require.NoError(t, err)
+			require.NotNil(t, claims)
+
+			assert.Equal(t, tc.issuer, claims.Issuer)
+			assert.Equal(t, tc.subject, claims.Subject)
+			assert.Equal(t, tc.jti, claims.ID)
+			assert.Equal(t, tc.clientDomain, claims.ClientDomain)
+			assert.Equal(t, tc.homeDomain, claims.HomeDomain)
+			assert.Equal(t, jwt.NewNumericDate(iat).Unix(), claims.IssuedAt.Unix())
+			assert.Equal(t, jwt.NewNumericDate(exp).Unix(), claims.ExpiresAt.Unix())
+		})
+	}
+}
+
+func Test_JWTManager_GenerateSEP45Token_InvalidClaims(t *testing.T) {
+	jwtManager, err := NewJWTManager("1234567890ab", 5000)
+	require.NoError(t, err)
+
+	now := time.Now()
+
+	testCases := []struct {
+		name   string
+		issuer string
+		sub    string
+		jti    string
+		iat    time.Time
+		exp    time.Time
+	}{
+		{"missing issuer", "", "CC...XYZ", "jti", now, now.Add(5 * time.Minute)},
+		{"missing subject", "https://issuer/sep45/auth", "", "jti", now, now.Add(5 * time.Minute)},
+		{"missing jti", "https://issuer/sep45/auth", "CC...XYZ", "", now, now.Add(5 * time.Minute)},
+		{"expired token", "https://issuer/sep45/auth", "CC...XYZ", "jti", now.Add(-10 * time.Minute), now.Add(-5 * time.Minute)},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tokenStr, err := jwtManager.GenerateSEP45Token(tc.issuer, tc.sub, tc.jti, "", "", tc.iat, tc.exp)
+			require.Error(t, err)
+			assert.Empty(t, tokenStr)
+		})
+	}
+}
+
+func Test_JWTManager_ParseSEP45TokenClaims_InvalidTokens(t *testing.T) {
+	jwtManager, err := NewJWTManager("1234567890ab", 5000)
+	require.NoError(t, err)
+
+	differentJWTManager, err := NewJWTManager("different12345", 5000)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name        string
+		token       string
+		setupToken  func() string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty token",
+			token:       "",
+			wantErr:     true,
+			errContains: "parsing SEP45 token",
+		},
+		{
+			name:        "invalid token format",
+			token:       "not.a.jwt",
+			wantErr:     true,
+			errContains: "parsing SEP45 token",
+		},
+		{
+			name: "token signed with different secret",
+			setupToken: func() string {
+				token, err := differentJWTManager.GenerateSEP45Token(
+					"issuer", "subject", "jti", "", "", time.Now(), time.Now().Add(5*time.Minute),
+				)
+				if err != nil {
+					return ""
+				}
+				return token
+			},
+			wantErr:     true,
+			errContains: "parsing SEP45 token",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tokenStr := tc.token
+			if tc.setupToken != nil {
+				tokenStr = tc.setupToken()
+			}
+
+			claims, err := jwtManager.ParseSEP45TokenClaims(tokenStr)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				if tc.errContains != "" {
+					assert.Contains(t, err.Error(), tc.errContains)
+				}
+				assert.Nil(t, claims)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, claims)
 		})
 	}
 }

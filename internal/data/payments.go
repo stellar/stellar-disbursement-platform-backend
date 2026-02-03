@@ -180,7 +180,7 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"stellar_transaction_id",
 			"stellar_operation_id",
 			"external_payment_id",

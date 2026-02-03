@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Add Haitian Creole translations for the SEP-24 interactive deposit flow. [#994](https://github.com/stellar/stellar-disbursement-platform-backend/pull/994)
 - Return `sender_address` in `GET /payments` and `GET /payments/:id` endpoints to identify the distribution account used for each payment. [#1009](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1009)
+- Add embedded wallet provider [#1019](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1019)
 
 ### Changed
 
