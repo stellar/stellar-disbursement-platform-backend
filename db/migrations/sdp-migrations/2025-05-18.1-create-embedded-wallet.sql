@@ -19,11 +19,19 @@ CREATE TABLE embedded_wallets (
     wallet_status embedded_wallet_status NOT NULL DEFAULT 'PENDING'::embedded_wallet_status
 );
 
+CREATE INDEX embedded_wallets_contract_address_idx ON embedded_wallets (contract_address)
+    WHERE contract_address IS NOT NULL;
+
+CREATE INDEX embedded_wallets_status_updated_at_idx ON embedded_wallets (wallet_status, updated_at);
+
 CREATE TRIGGER refresh_embedded_wallets_updated_at BEFORE UPDATE ON embedded_wallets FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 
 -- +migrate Down
 
 DROP TRIGGER refresh_embedded_wallets_updated_at ON embedded_wallets;
+
+DROP INDEX IF EXISTS embedded_wallets_status_updated_at_idx;
+DROP INDEX IF EXISTS embedded_wallets_contract_address_idx;
 
 DROP TABLE embedded_wallets CASCADE;
 
