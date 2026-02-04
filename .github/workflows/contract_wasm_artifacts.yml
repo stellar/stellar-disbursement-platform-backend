@@ -16,7 +16,7 @@ jobs:
     name: Build and Attest WASMs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install pinned Rust toolchain
         run: |
@@ -29,7 +29,7 @@ jobs:
         uses: stellar/actions/rust-cache@main
 
       - name: Install stellar-cli
-        uses: stellar/stellar-cli@v25.0.0
+        uses: stellar/stellar-cli@v25.1.0
         with:
           version: 25.0.0
 
@@ -56,12 +56,12 @@ jobs:
           done
 
       - name: Attest contract WASMs
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: contracts/target/wasm32v1-none/release/*.wasm
 
       - name: Upload contract WASMs as artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: contract-wasms
           path: contracts/target/wasm32v1-none/release/*.wasm
