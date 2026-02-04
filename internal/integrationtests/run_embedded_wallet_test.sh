@@ -12,8 +12,8 @@ source .env
 
 # Override with embedded wallet specific settings
 export DISTRIBUTION_ACCOUNT_TYPE="DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-export DISBURSEMENT_CSV_FILE_NAME="disbursement_instructions_contract_address.csv"
-export REGISTRATION_CONTACT_TYPE="PHONE_NUMBER_AND_WALLET_ADDRESS"
+export DISBURSEMENT_CSV_FILE_NAME="disbursement_instructions_embedded_wallet.csv"
+export REGISTRATION_CONTACT_TYPE="PHONE_NUMBER"
 export DISBURSED_ASSET_CODE="XLM"
 export DISBURSED_ASSET_ISSUER=""
 export USER_EMAIL="integration-test-user@stellar.local"

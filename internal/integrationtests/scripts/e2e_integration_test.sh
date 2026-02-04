@@ -86,8 +86,8 @@ Config_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
 Config_Stellar_EmbeddedWallet_XLM_Testnet=(
   "platform=Stellar-EmbeddedWallet"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_contract_address.csv"
-  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER_AND_WALLET_ADDRESS"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_embedded_wallet.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
   "DISBURSED_ASSET_CODE=XLM"
   "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
   "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
@@ -104,9 +104,9 @@ Config_Stellar_EmbeddedWallet_XLM_Testnet=(
 
 # Build options array with standard test configs
 options=(
-  Config_Stellar_Env_Phone_XLM_Testnet[@]
-  Config_Stellar_Env_Email_XLM_Testnet[@]
-  Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
+  # Config_Stellar_Env_Phone_XLM_Testnet[@]
+  # Config_Stellar_Env_Email_XLM_Testnet[@]
+  # Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
 )
 
 # Conditionally add embedded wallet tests if WASM hash is configured

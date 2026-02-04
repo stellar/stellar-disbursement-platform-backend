@@ -229,12 +229,16 @@ func (it *IntegrationTestsService) createAndValidateDisbursement(ctx context.Con
 	)
 	if !opts.RegistrationContactType.IncludesWalletAddress {
 		log.Ctx(ctx).Infof("Getting test wallet in database...")
-		verificationField = data.VerificationTypeDateOfBirth
 		wallet, err := it.models.Wallets.GetByWalletName(ctx, opts.WalletName)
 		if err != nil {
 			return nil, fmt.Errorf("getting test wallet: %w", err)
 		}
 		walletID = wallet.ID
+
+		// Only set verification field for non-embedded wallets
+		if !wallet.Embedded {
+			verificationField = data.VerificationTypeDateOfBirth
+		}
 	}
 
 	log.Ctx(ctx).Info("Creating disbursement using server API...")
@@ -507,9 +511,18 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		return fmt.Errorf("getting or creating test asset: %w", err)
 	}
 
-	_, err = it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain)
+	wallet, err := it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain)
 	if err != nil {
 		return fmt.Errorf("getting or creating test wallet: %w", err)
+	}
+
+	// Mark wallet as embedded if needed
+	if opts.WalletName == "Embedded Wallet" && !wallet.Embedded {
+		query = `UPDATE wallets SET embedded = true WHERE id = $1`
+		_, err = it.mtnDBConnectionPool.ExecContext(ctx, query, wallet.ID)
+		if err != nil {
+			return fmt.Errorf("marking wallet as embedded: %w", err)
+		}
 	}
 
 	// 4. Provision Circle distribution account if needed
@@ -539,11 +552,14 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 // EMBEDDED WALLET (CONTRACT ACCOUNT) INTEGRATION TESTS
 // ========================================
 
-// StartEmbeddedWalletIntegrationTests runs the full E2E test flow:
-// 1. Create embedded wallet (contract account) via API
-// 2. Wait for contract deployment
-// 3. Create disbursement to the contract address
-// 4. Verify payment reaches the contract via InvokeHostFunction
+// StartEmbeddedWalletIntegrationTests runs the E2E embedded wallet flow:
+//
+//  1. Admin creates disbursement with Embedded Wallet provider (phone + placeholder wallet address)
+//  2. Admin starts disbursement → system sends invitation to receiver → creates embedded_wallet record
+//  3. Receiver registers embedded wallet via API (simulated) → TSS deploys smart contract
+//  4. System detects contract deployment success → auto-registers receiver wallet with C-address
+//  5. Payment scheduler picks up the payment → TSS sends payment to contract
+//  6. Verify payment reached the contract via InvokeHostFunction
 func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx context.Context, opts IntegrationTestsOpts) error {
 	log.Ctx(ctx).Info("Starting embedded wallet (contract account) integration tests...")
 	it.initServices(ctx, opts)
@@ -559,16 +575,8 @@ func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx conte
 	}
 	ctx = sdpcontext.SetTenantInContext(ctx, t)
 
-	// Phase 1: Create embedded wallet and get contract address
-	log.Ctx(ctx).Info("=== Phase 1: Creating embedded wallet (contract account) ===")
-	contractAddress, err := it.createEmbeddedWallet(ctx)
-	if err != nil {
-		return fmt.Errorf("creating embedded wallet: %w", err)
-	}
-	log.Ctx(ctx).Infof("✅ Embedded wallet created with contract address: %s", contractAddress)
-
-	// Phase 2: Run disbursement to contract address
-	log.Ctx(ctx).Info("=== Phase 2: Creating disbursement to contract address ===")
+	// Phase 1: Admin creates and starts disbursement
+	log.Ctx(ctx).Info("=== Phase 1: Admin creates and starts disbursement ===")
 	log.Ctx(ctx).Info("Login user to get server API auth token")
 	authToken, err := it.serverAPI.Login(ctx)
 	if err != nil {
@@ -580,14 +588,53 @@ func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx conte
 		return fmt.Errorf("getting test asset: %w", err)
 	}
 
-	// Create disbursement with contract address
-	disbursement, err := it.createContractDisbursement(ctx, opts, authToken, asset, contractAddress)
+	// Create embedded wallet disbursement
+	disbursement, receiverWalletID, err := it.createEmbeddedWalletDisbursement(ctx, opts, authToken, asset)
 	if err != nil {
-		return fmt.Errorf("creating contract disbursement: %w", err)
+		return fmt.Errorf("creating embedded wallet disbursement: %w", err)
+	}
+	log.Ctx(ctx).Infof("✅ Disbursement created and started: %s", disbursement.ID)
+
+	// Phase 2: System sends invitation → retrieve embedded wallet token
+	log.Ctx(ctx).Info("=== Phase 2: System sent invitation - retrieving embedded wallet token ===")
+	embeddedWallet, err := it.waitForEmbeddedWalletToken(ctx, receiverWalletID)
+	if err != nil {
+		return fmt.Errorf("waiting for embedded wallet token: %w", err)
+	}
+	log.Ctx(ctx).Infof("✅ Retrieved embedded wallet token: %s", embeddedWallet.Token)
+
+	// Phase 3: Simulate receiver creating embedded wallet
+	log.Ctx(ctx).Info("=== Phase 3: Simulating receiver creating embedded wallet ===")
+	if err = it.createEmbeddedWallet(ctx, embeddedWallet.Token); err != nil {
+		return fmt.Errorf("simulating receiver registration: %w", err)
+	}
+	log.Ctx(ctx).Info("✅ Receiver registration API called - waiting for contract deployment")
+
+	// Phase 4: Wait for contract deployment
+	log.Ctx(ctx).Info("=== Phase 4: Waiting for contract deployment ===")
+	contractAddress, err := it.waitForContractDeployment(ctx, embeddedWallet.Token)
+	if err != nil {
+		return fmt.Errorf("waiting for contract deployment: %w", err)
+	}
+	log.Ctx(ctx).Infof("✅ Contract deployed at: %s", contractAddress)
+
+	// Phase 5: Complete verification if required (OTP + DOB)
+	if embeddedWallet.RequiresVerification {
+		log.Ctx(ctx).Info("=== Phase 5: Completing receiver verification (OTP + PII) ===")
+		// TODO: Implement completeEmbeddedWalletVerification
+	} else {
+		log.Ctx(ctx).Info("=== Phase 5: Skipping OTP and PII verification (RequiresVerification=false) ===")
 	}
 
-	// Phase 3: Verify payment reaches contract
-	log.Ctx(ctx).Info("=== Phase 3: Verifying payment to contract ===")
+	// Phase 6: Verify receiver wallet was registered
+	log.Ctx(ctx).Info("=== Phase 6: Verifying receiver wallet registration ===")
+	if err = it.verifyReceiverWalletRegistration(ctx, receiverWalletID, contractAddress); err != nil {
+		return fmt.Errorf("verifying receiver wallet registration: %w", err)
+	}
+	log.Ctx(ctx).Info("✅ Receiver wallet registered with contract address")
+
+	// Phase 7: Verify disbursement reaches contract
+	log.Ctx(ctx).Info("=== Phase 7: Verifying disbursement to contract ===")
 	if err = it.ensureContractTransactionCompletion(ctx, disbursement); err != nil {
 		return fmt.Errorf("ensuring contract transaction completion: %w", err)
 	}
@@ -596,55 +643,120 @@ func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx conte
 	return nil
 }
 
-// createEmbeddedWallet creates an embedded wallet and waits for the contract to be deployed.
-// Returns the contract address (C-address) once deployment is complete.
-func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context) (string, error) {
-	// Step 1: Create invitation token using the service directly
-	// (No HTTP endpoint for this - it's created internally when sending invitations)
-	log.Ctx(ctx).Info("Creating invitation token...")
-	token, err := it.embeddedWalletService.CreateInvitationToken(ctx)
-	if err != nil {
-		return "", fmt.Errorf("creating invitation token: %w", err)
-	}
-	log.Ctx(ctx).Infof("Created invitation token: %s", token)
+// createEmbeddedWalletDisbursement creates a disbursement for embedded wallet flow.
+// Returns the disbursement and the receiver_wallet_id that will be linked to the embedded wallet.
+// This reuses createAndValidateDisbursement by setting the appropriate options.
+func (it *IntegrationTestsService) createEmbeddedWalletDisbursement(
+	ctx context.Context,
+	opts IntegrationTestsOpts,
+	authToken *ServerAPIAuthToken,
+	asset *data.Asset,
+) (*data.Disbursement, string, error) {
+	embeddedOpts := opts
+	embeddedOpts.WalletName = "Embedded Wallet"
+	embeddedOpts.DisbursementName = opts.DisbursementName + "-embedded-" + time.Now().Format("20060102150405")
 
-	// Step 2: Generate P256 key pair and credential ID for wallet registration
+	disbursement, err := it.createAndValidateDisbursement(ctx, embeddedOpts, authToken, asset)
+	if err != nil {
+		return nil, "", fmt.Errorf("creating disbursement: %w", err)
+	}
+
+	// Get the receiverWalletID that was created when the disbursement was processed
+	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDBConnectionPool, &data.QueryParams{}, disbursement.ID)
+	if err != nil {
+		return nil, "", fmt.Errorf("getting receivers: %w", err)
+	}
+	if len(receivers) == 0 {
+		return nil, "", fmt.Errorf("no receivers found for disbursement")
+	}
+	if receivers[0].ReceiverWallet == nil {
+		return nil, "", fmt.Errorf("receiver wallet not found for receiver %s", receivers[0].ID)
+	}
+	receiverWalletID := receivers[0].ReceiverWallet.ID
+	log.Ctx(ctx).Infof("Found receiver wallet: %s for receiver: %s", receiverWalletID, receivers[0].ID)
+
+	return disbursement, receiverWalletID, nil
+}
+
+// waitForEmbeddedWalletToken waits for the embedded wallet record to be created with a token
+func (it *IntegrationTestsService) waitForEmbeddedWalletToken(ctx context.Context, receiverWalletID string) (*data.EmbeddedWallet, error) {
+	var embeddedWallet *data.EmbeddedWallet
+
+	err := retry.Do(
+		func() error {
+			statuses := []data.EmbeddedWalletStatus{
+				data.PendingWalletStatus,
+				data.ProcessingWalletStatus,
+				data.SuccessWalletStatus,
+			}
+			wallet, innerErr := it.models.EmbeddedWallets.GetByReceiverWalletIDAndStatuses(ctx, it.mtnDBConnectionPool, receiverWalletID, statuses)
+			if innerErr != nil {
+				return fmt.Errorf("embedded wallet not yet created for receiver wallet %s: %w", receiverWalletID, innerErr)
+			}
+
+			if wallet.Token == "" {
+				return fmt.Errorf("embedded wallet exists but token is empty")
+			}
+
+			embeddedWallet = wallet
+			return nil
+		},
+		retry.Context(ctx),
+		retry.Attempts(30),
+		retry.Delay(5*time.Second),
+		retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			log.Ctx(ctx).Infof("🔄 Waiting for embedded wallet token, attempt #%d: %v", n+1, err)
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("waiting for embedded wallet token: %w", err)
+	}
+
+	return embeddedWallet, nil
+}
+
+// createEmbeddedWallet simulates a receiver clicks the invitation link and creates embedded wallet.
+func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context, token string) error {
 	publicKeyHex, err := generateP256PublicKeyHex()
 	if err != nil {
-		return "", fmt.Errorf("generating P256 public key: %w", err)
+		return fmt.Errorf("generating P256 public key: %w", err)
 	}
 	credentialID := generateCredentialID()
-	log.Ctx(ctx).Infof("Generated credential ID: %s", credentialID)
+	log.Ctx(ctx).Infof("Generated credential ID: %s for token: %s", credentialID, token)
 
-	// Step 3: Register embedded wallet via HTTP API
-	log.Ctx(ctx).Info("Registering embedded wallet via API...")
 	_, err = it.serverAPI.RegisterEmbeddedWallet(ctx, &RegisterEmbeddedWalletRequest{
 		Token:        token,
 		PublicKey:    publicKeyHex,
 		CredentialID: credentialID,
 	})
 	if err != nil {
-		return "", fmt.Errorf("registering embedded wallet: %w", err)
+		return fmt.Errorf("creating embedded wallet: %w", err)
 	}
-	log.Ctx(ctx).Info("Embedded wallet registered, waiting for contract deployment...")
+	log.Ctx(ctx).Info("Embedded wallet created successfully")
 
-	// Step 4: Poll until contract is deployed (status = SUCCESS)
+	return nil
+}
+
+// waitForContractDeployment waits for the embedded wallet contract to be deployed.
+func (it *IntegrationTestsService) waitForContractDeployment(ctx context.Context, token string) (string, error) {
 	var contractAddress string
-	err = retry.Do(
+
+	err := retry.Do(
 		func() error {
-			wallet, innerErr := it.serverAPI.GetEmbeddedWallet(ctx, credentialID)
+			wallet, innerErr := it.models.EmbeddedWallets.GetByToken(ctx, it.mtnDBConnectionPool, token)
 			if innerErr != nil {
 				return fmt.Errorf("getting embedded wallet: %w", innerErr)
 			}
 
-			log.Ctx(ctx).Infof("Wallet status: %s, contract_address: %s", wallet.Status, wallet.ContractAddress)
+			log.Ctx(ctx).Infof("Wallet status: %s, contract_address: %s", wallet.WalletStatus, wallet.ContractAddress)
 
-			if wallet.Status == data.FailedWalletStatus {
+			if wallet.WalletStatus == data.FailedWalletStatus {
 				return retry.Unrecoverable(fmt.Errorf("wallet deployment failed"))
 			}
 
-			if wallet.Status != data.SuccessWalletStatus || wallet.ContractAddress == "" {
-				return fmt.Errorf("wallet not ready yet, status=%s", wallet.Status)
+			if wallet.WalletStatus != data.SuccessWalletStatus || wallet.ContractAddress == "" {
+				return fmt.Errorf("wallet not ready yet, status=%s", wallet.WalletStatus)
 			}
 
 			if !strkey.IsValidContractAddress(wallet.ContractAddress) {
@@ -655,11 +767,11 @@ func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context) (st
 			return nil
 		},
 		retry.Context(ctx),
-		retry.Attempts(30),          // 30 attempts
-		retry.Delay(10*time.Second), // 10 seconds between attempts
+		retry.Attempts(30),
+		retry.Delay(10*time.Second),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			log.Ctx(ctx).Infof("🔄 Polling wallet status, attempt #%d: %v", n+1, err)
+			log.Ctx(ctx).Infof("🔄 Polling contract deployment, attempt #%d: %v", n+1, err)
 		}),
 	)
 	if err != nil {
@@ -669,104 +781,26 @@ func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context) (st
 	return contractAddress, nil
 }
 
-// createContractDisbursement creates a disbursement targeting the given contract address.
-func (it *IntegrationTestsService) createContractDisbursement(
-	ctx context.Context,
-	opts IntegrationTestsOpts,
-	authToken *ServerAPIAuthToken,
-	asset *data.Asset,
-	contractAddress string,
-) (*data.Disbursement, error) {
-	// Create disbursement with phone_and_wallet_address registration type
-	log.Ctx(ctx).Info("Creating disbursement for contract address...")
-	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &httphandler.PostDisbursementRequest{
-		Name:                    opts.DisbursementName + "-contract-" + time.Now().Format("20060102150405"),
-		AssetID:                 asset.ID,
-		RegistrationContactType: data.RegistrationContactTypePhoneAndWalletAddress,
-	})
+// verifyReceiverWalletRegistration verifies that the receiver wallet was registered.
+func (it *IntegrationTestsService) verifyReceiverWalletRegistration(ctx context.Context, receiverWalletID, expectedContractAddress string) error {
+	receiverWallet, err := it.models.ReceiverWallet.GetByID(ctx, it.mtnDBConnectionPool, receiverWalletID)
 	if err != nil {
-		return nil, fmt.Errorf("creating disbursement: %w", err)
-	}
-	log.Ctx(ctx).Infof("Created disbursement: %s", disbursement.ID)
-
-	// Process disbursement with contract address CSV
-	// We need to create a temporary CSV with the actual contract address
-	log.Ctx(ctx).Info("Processing disbursement with contract address...")
-	if err = it.processContractDisbursement(ctx, authToken, disbursement.ID, contractAddress); err != nil {
-		return nil, fmt.Errorf("processing contract disbursement: %w", err)
+		return fmt.Errorf("getting receiver wallet: %w", err)
 	}
 
-	log.Ctx(ctx).Info("Validating disbursement data after processing...")
-	if err = validateExpectationsAfterProcessDisbursement(ctx, disbursement.ID, it.models, it.mtnDBConnectionPool); err != nil {
-		return nil, fmt.Errorf("validating data after process disbursement: %w", err)
+	if receiverWallet.Status != data.RegisteredReceiversWalletStatus {
+		return fmt.Errorf("receiver wallet not registered, status=%s", receiverWallet.Status)
 	}
 
-	log.Ctx(ctx).Info("Starting disbursement...")
-	if err = it.serverAPI.StartDisbursement(ctx, authToken, disbursement.ID, &httphandler.PatchDisbursementStatusRequest{Status: "STARTED"}); err != nil {
-		return nil, fmt.Errorf("starting disbursement: %w", err)
+	if receiverWallet.StellarAddress != expectedContractAddress {
+		return fmt.Errorf("receiver wallet stellar address mismatch: expected=%s, got=%s", expectedContractAddress, receiverWallet.StellarAddress)
 	}
 
-	log.Ctx(ctx).Info("Validating disbursement data after starting...")
-	if err = validateExpectationsAfterStartDisbursement(ctx, disbursement.ID, it.models, it.mtnDBConnectionPool); err != nil {
-		return nil, fmt.Errorf("validating data after start disbursement: %w", err)
-	}
-
-	return disbursement, nil
+	log.Ctx(ctx).Infof("Receiver wallet %s registered with contract address %s", receiverWalletID, expectedContractAddress)
+	return nil
 }
 
-// processContractDisbursement processes the disbursement with a CSV containing the contract address.
-// This is similar to ProcessDisbursement but uses the contract address instead of reading from file.
-func (it *IntegrationTestsService) processContractDisbursement(
-	ctx context.Context,
-	authToken *ServerAPIAuthToken,
-	disbursementID string,
-	contractAddress string,
-) error {
-	// Get the disbursement from the database
-	disbursement, err := it.models.Disbursements.Get(ctx, it.mtnDBConnectionPool, disbursementID)
-	if err != nil {
-		return fmt.Errorf("getting disbursement: %w", err)
-	}
-
-	// Generate a unique phone number to avoid conflicts with previous test runs
-	// Format: +1202555XXXX where XXXX is random
-	phoneNumber := fmt.Sprintf("+1202555%04d", time.Now().UnixNano()%10000)
-
-	// Create the instruction with the contract address
-	instruction := &data.DisbursementInstruction{
-		Phone:         phoneNumber,
-		ID:            "1",
-		Amount:        "0.1",
-		WalletAddress: contractAddress,
-	}
-
-	log.Ctx(ctx).Infof("Using phone number %s for contract disbursement", phoneNumber)
-
-	// Use the disbursement instructions model to process within a transaction
-	return db.RunInTransaction(ctx, it.mtnDBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		di := data.NewDisbursementInstructionModel(it.mtnDBConnectionPool)
-		opts := data.DisbursementInstructionsOpts{
-			UserID:       authToken.Token, // Using token as user ID for integration tests
-			Instructions: []*data.DisbursementInstruction{instruction},
-			Disbursement: disbursement,
-			DisbursementUpdate: &data.DisbursementUpdate{
-				ID:       disbursementID,
-				FileName: "contract_disbursement.csv",
-				FileContent: []byte(fmt.Sprintf(
-					"phone,id,amount,walletAddress\n%s,1,0.1,%s", phoneNumber, contractAddress,
-				)),
-			},
-			MaxNumberOfInstructions: 1000,
-		}
-		if processErr := di.ProcessAll(ctx, dbTx, opts); processErr != nil {
-			return fmt.Errorf("processing disbursement instructions: %w", processErr)
-		}
-		return nil
-	})
-}
-
-// ensureContractTransactionCompletion waits for the payment to complete and validates it on Horizon.
-// Contract payments show up as InvokeHostFunction operations, not regular Payment operations.
+// ensureContractTransactionCompletion waits for the payment to complete and validates it show up as InvokeHostFunction.
 func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 	ctx context.Context,
 	disbursement *data.Disbursement,
@@ -821,8 +855,7 @@ func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 	return nil
 }
 
-// generateP256PublicKeyHex generates a random P256 key pair and returns the public key
-// as a hex-encoded uncompressed point (65 bytes, starting with 0x04).
+// generateP256PublicKeyHex generates a random P256 key pair and returns the public key.
 func generateP256PublicKeyHex() (string, error) {
 	privateKey, err := ecdh.P256().GenerateKey(rand.Reader)
 	if err != nil {

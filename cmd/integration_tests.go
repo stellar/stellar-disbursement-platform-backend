@@ -333,6 +333,20 @@ func (c *IntegrationTestsCommand) StartEmbeddedWalletTestsCommand(integrationTes
 			ConfigKey:      &integrationTestsOpts.RPCUrl,
 			Required:       true,
 		},
+		{
+			Name:      "disbursement-csv-file-name",
+			Usage:     "File name of the integration test disbursement file.",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.DisbursementCSVFileName,
+			Required:  true,
+		},
+		{
+			Name:      "disbursement-csv-file-path",
+			Usage:     "File path of the integration test disbursement file.",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.DisbursementCSVFilePath,
+			Required:  true,
+		},
 	}
 
 	startEmbeddedWalletTestsCmd := &cobra.Command{
