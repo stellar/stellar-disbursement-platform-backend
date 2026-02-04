@@ -78,13 +78,13 @@ const (
 	summaryHeaderRowHeight = 15.5
 	summaryDataRowHeight    = 14
 	txHeaderRowHeight       = 15.5
-	txDataRowHeight         = 14
+	txDataRowHeight         = 16
 )
 
 // Table cell spacing
 const (
 	cellPaddingX    = 2.115
-	counterpartyGap = 1.5
+	counterpartyGap = 1.0
 )
 
 // Section margins
@@ -501,81 +501,85 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 
 	// Counterparty
-	const bulletChar = "•" // Bullet character
+	const bulletChar = "•"
 	xCP := xStart + txColWidths[0] + txColWidths[1]
 	cpW := txColWidths[2] - 2*cellPaddingX
 	pdf.SetXY(xCP, yStart)
 	pdf.CellFormat(txColWidths[2], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	xTextStart := xCP + cellPaddingX
+
+	// Calculate vertical centering for 2-line content
+	counterpartyBlockHeight := counterpartyLineHeight * 2
+	counterpartyY := yStart + (txDataRowHeight-counterpartyBlockHeight)/2
+
 	pdf.SetFont("Inter", "", txSmallFontSize)
-	walletIDWidth := pdf.GetStringWidth(walletIDLabel)
-	recipientWidth := pdf.GetStringWidth("Recipient")
-	fixedLabelWidth := walletIDWidth
-	if recipientWidth > walletIDWidth {
-		fixedLabelWidth = recipientWidth
-	}
-	bulletWidth := pdf.GetStringWidth(bulletChar)
-	fixedBulletX := xTextStart + fixedLabelWidth + counterpartyGap
-	fixedValueX := fixedBulletX + bulletWidth + counterpartyGap
 
-	if hasName {
-		counterpartyBlockHeight := 2 * counterpartyLineHeight
-		counterpartyY := yStart + (txDataRowHeight-counterpartyBlockHeight)/2
-		// Label
-		pdf.SetFont("Inter", "", txSmallFontSize)
+	if tx.Type == "credit" {
+		// Credit (sender): Line 1 = "Sender Wallet Address" •, Line 2 = wallet address
+		// First line: Label • bullet
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
+		line1Text := "Sender Wallet Address •"
 		pdf.SetXY(xTextStart, counterpartyY)
-		pdf.CellFormat(fixedLabelWidth, counterpartyLineHeight, walletIDLabel, "", 0, "L", false, 0, "")
-		// Bullet
-		pdf.SetXY(fixedBulletX, counterpartyY)
-		pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
-		// Wallet address with underline and link
+		pdf.CellFormat(cpW, counterpartyLineHeight, line1Text, "", 0, "L", false, 0, "")
+
+		// Second line: Wallet address with link
 		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-		pdf.SetXY(fixedValueX, counterpartyY)
-		walletAddrWidth := cpW - (fixedValueX - xTextStart)
+		pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
 		walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
-		pdf.CellFormat(walletAddrWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
-		// Add link over the entire wallet address area
-		pdf.LinkString(fixedValueX, counterpartyY, walletAddrWidth, counterpartyLineHeight, walletURL)
-		// Name
-		pdf.SetFont("Inter", "", txSmallFontSize)
-		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
-
-		if line2Label != "" {
-			// Label
-			pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(fixedLabelWidth, counterpartyLineHeight, line2Label, "", 0, "L", false, 0, "")
-			// Bullet
-			pdf.SetXY(fixedBulletX, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
-			// Name
-			pdf.SetXY(fixedValueX, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(cpW-(fixedValueX-xTextStart), counterpartyLineHeight, line2Value, "", 0, "L", false, 0, "")
-		} else {
-			// Name only
-			pdf.SetXY(fixedValueX, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(cpW-(fixedValueX-xTextStart), counterpartyLineHeight, line2Value, "", 0, "L", false, 0, "")
-		}
+		pdf.CellFormat(cpW, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
+		pdf.LinkString(xTextStart, counterpartyY+counterpartyLineHeight, cpW, counterpartyLineHeight, walletURL)
 	} else {
-		// Label
-		counterpartyY := yStart + (txDataRowHeight-counterpartyLineHeight)/2
-		pdf.SetFont("Inter", "", txSmallFontSize)
-		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
-		pdf.SetXY(xTextStart, counterpartyY)
-		pdf.CellFormat(fixedLabelWidth, counterpartyLineHeight, walletIDLabel, "", 0, "L", false, 0, "")
-		// Bullet
-		pdf.SetXY(fixedBulletX, counterpartyY)
-		pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
-		// Wallet address with underline and link
-		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
-		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-		pdf.SetXY(fixedValueX, counterpartyY)
-		walletAddrWidth := cpW - (fixedValueX - xTextStart)
-		walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
-		pdf.CellFormat(walletAddrWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
-		// Add link over the entire wallet address area
-		pdf.LinkString(fixedValueX, counterpartyY, walletAddrWidth, counterpartyLineHeight, walletURL)
+		// Debit (recipient)
+		if hasName {
+			// First line: Label
+			line1Label := "Wallet Address •"
+			pdf.SetFont("Inter", "", txSmallFontSize)
+			pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
+			labelWidth := pdf.GetStringWidth(line1Label)
+			xLabelStart := xTextStart
+			pdf.SetXY(xLabelStart, counterpartyY)
+			pdf.CellFormat(labelWidth, counterpartyLineHeight, line1Label, "", 0, "L", false, 0, "")
+			
+			// Calculate wallet address position
+			xWalletStart := xLabelStart + labelWidth + counterpartyGap
+			// Wallet address with link
+			pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
+			pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
+			walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
+			walletWidth := cpW - (xWalletStart - xTextStart)
+			pdf.SetXY(xWalletStart, counterpartyY)
+			pdf.CellFormat(walletWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
+			pdf.LinkString(xWalletStart, counterpartyY, walletWidth, counterpartyLineHeight, walletURL)
+
+			// Second line: Recipient name
+			pdf.SetFont("Inter", "", txSmallFontSize)
+			pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
+			line2Text := "Recipient • " + line2Value
+			pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
+			pdf.CellFormat(cpW, counterpartyLineHeight, line2Text, "", 0, "L", false, 0, "")
+		} else {
+			// First line: Label
+			singleLineY := yStart + (txDataRowHeight-counterpartyLineHeight)/2
+			line1Label := "Wallet Address • "
+			pdf.SetFont("Inter", "", txSmallFontSize)
+			pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
+			labelWidth := pdf.GetStringWidth(line1Label)
+			xLabelStart := xTextStart
+			pdf.SetXY(xLabelStart, singleLineY)
+			pdf.CellFormat(labelWidth, counterpartyLineHeight, line1Label, "", 0, "L", false, 0, "")
+			
+			// Calculate wallet address position
+			xWalletStart := xLabelStart + labelWidth
+			// Wallet address with link
+			pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
+			pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
+			walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
+			walletWidth := cpW - (xWalletStart - xTextStart)
+			pdf.SetXY(xWalletStart, singleLineY)
+			pdf.CellFormat(walletWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
+			pdf.LinkString(xWalletStart, singleLineY, walletWidth, counterpartyLineHeight, walletURL)
+		}
 	}
 	// Debits
 	xDebits := xStart + txColWidths[0] + txColWidths[1] + txColWidths[2]
