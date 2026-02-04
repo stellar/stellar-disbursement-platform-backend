@@ -22,14 +22,16 @@ data:
   HORIZON_URL: "https://horizon-testnet.stellar.org"
   {{- end }}
   TSS_METRICS_PORT: {{ include "tss.metricsPort" . | quote }}
-  {{- if .Values.global.rpcRequestAuthHeaderKey }}
-  RPC_REQUEST_AUTH_HEADER_KEY: {{ .Values.global.rpcRequestAuthHeaderKey | quote }}
+  {{- with .Values.global }}
+  {{- if and .rpc (index .rpc "requestAuthHeaderKey") }}
+  RPC_REQUEST_AUTH_HEADER_KEY: {{ .rpc.requestAuthHeaderKey | quote }}
   {{- end }}
-  {{- if .Values.global.distributionPublicKey }}
-  DISTRIBUTION_PUBLIC_KEY: {{ .Values.global.distributionPublicKey | quote }}
+  {{- if .distributionPublicKey }}
+  DISTRIBUTION_PUBLIC_KEY: {{ .distributionPublicKey | quote }}
   {{- end }}
-  {{- if .Values.global.rpcUrl }}
-  RPC_URL: {{ .Values.global.rpcUrl | quote }}
+  {{- if and .rpc (index .rpc "url") }}
+  RPC_URL: {{ .rpc.url | quote }}
+  {{- end }}
   {{- end }}
   {{- /*
   {{- /*
