@@ -717,7 +717,7 @@ func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context, tok
 	credentialID := generateCredentialID()
 	log.Ctx(ctx).Infof("Generated credential ID: %s for token: %s", credentialID, token)
 
-	_, err = it.serverAPI.RegisterEmbeddedWallet(ctx, &RegisterEmbeddedWalletRequest{
+	_, err = it.serverAPI.CreateEmbeddedWallet(ctx, &CreateEmbeddedWalletRequest{
 		Token:        token,
 		PublicKey:    publicKeyHex,
 		CredentialID: credentialID,

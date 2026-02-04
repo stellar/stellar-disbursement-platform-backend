@@ -363,7 +363,7 @@ func Test_RegisterEmbeddedWallet(t *testing.T) {
 
 	ctx := context.Background()
 
-	reqBody := &RegisterEmbeddedWalletRequest{
+	reqBody := &CreateEmbeddedWalletRequest{
 		Token:        "test-token-123",
 		PublicKey:    "04" + strings.Repeat("ab", 64), // 65 bytes hex-encoded P256 public key
 		CredentialID: "credential-id-123",
@@ -371,7 +371,7 @@ func Test_RegisterEmbeddedWallet(t *testing.T) {
 
 	t.Run("error calling httpClient.Do", func(t *testing.T) {
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(nil, fmt.Errorf("error calling the request")).Once()
-		wallet, err := sa.RegisterEmbeddedWallet(ctx, reqBody)
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
 		require.EqualError(t, err, "making request to POST /embedded-wallets: error calling the request")
 		assert.Nil(t, wallet)
 
@@ -386,7 +386,7 @@ func Test_RegisterEmbeddedWallet(t *testing.T) {
 		}
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
-		wallet, err := sa.RegisterEmbeddedWallet(ctx, reqBody)
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
 		require.EqualError(t, err, "error registering embedded wallet (statusCode=400)")
 		assert.Nil(t, wallet)
 
@@ -400,7 +400,7 @@ func Test_RegisterEmbeddedWallet(t *testing.T) {
 		}
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
-		wallet, err := sa.RegisterEmbeddedWallet(ctx, reqBody)
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
 		require.EqualError(t, err, "decoding response body: EOF")
 		assert.Nil(t, wallet)
 
@@ -418,7 +418,7 @@ func Test_RegisterEmbeddedWallet(t *testing.T) {
 		}
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
-		wallet, err := sa.RegisterEmbeddedWallet(ctx, reqBody)
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
 		require.NoError(t, err)
 		assert.Equal(t, data.PendingWalletStatus, wallet.Status)
 		assert.Empty(t, wallet.ContractAddress)

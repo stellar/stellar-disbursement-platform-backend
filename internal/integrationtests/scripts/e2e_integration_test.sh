@@ -102,11 +102,11 @@ Config_Stellar_EmbeddedWallet_XLM_Testnet=(
   "TEST_TYPE=embedded-wallet"
 )
 
-# Build options array with standard test configs
+echo "🔧 Test Mode: Running SEP tests"
 options=(
-  # Config_Stellar_Env_Phone_XLM_Testnet[@]
-  # Config_Stellar_Env_Email_XLM_Testnet[@]
-  # Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
+  Config_Stellar_Env_Phone_XLM_Testnet[@]
+  Config_Stellar_Env_Email_XLM_Testnet[@]
+  Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
 )
 
 # Conditionally add embedded wallet tests if WASM hash is configured

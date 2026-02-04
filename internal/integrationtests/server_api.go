@@ -34,8 +34,7 @@ type ServerAPIIntegrationTestsInterface interface {
 	StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error
 	ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error
-	// Embedded wallet methods for contract account testing
-	RegisterEmbeddedWallet(ctx context.Context, req *RegisterEmbeddedWalletRequest) (*EmbeddedWalletResponse, error)
+	CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*EmbeddedWalletResponse, error)
 }
 
 type ServerAPIIntegrationTests struct {
@@ -306,23 +305,21 @@ func (sa *ServerAPIIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	return nil
 }
 
-// RegisterEmbeddedWalletRequest is the request body for POST /embedded-wallets
-// Used to register a new embedded wallet with a token, P256 public key, and credential ID.
-type RegisterEmbeddedWalletRequest struct {
+// CreateEmbeddedWalletRequest creates a new embedded wallet with a token, P256 public key, and credential ID.
+type CreateEmbeddedWalletRequest struct {
 	Token        string `json:"token"`
-	PublicKey    string `json:"public_key"`    // Hex-encoded uncompressed P256 public key (65 bytes, starts with 0x04)
-	CredentialID string `json:"credential_id"` // WebAuthn credential ID
+	PublicKey    string `json:"public_key"`
+	CredentialID string `json:"credential_id"`
 }
 
-// EmbeddedWalletResponse is the response from embedded wallet endpoints.
-// Contains the contract address (once deployed) and wallet status.
+// EmbeddedWalletResponse contains the contract address (once deployed) and wallet status.
 type EmbeddedWalletResponse struct {
 	ContractAddress string                    `json:"contract_address,omitempty"`
 	Status          data.EmbeddedWalletStatus `json:"status"`
 }
 
-// RegisterEmbeddedWallet registers a new embedded wallet using POST /embedded-wallets.
-func (sa *ServerAPIIntegrationTests) RegisterEmbeddedWallet(ctx context.Context, req *RegisterEmbeddedWalletRequest) (*EmbeddedWalletResponse, error) {
+// CreateEmbeddedWallet creates a new embedded wallet using POST /embedded-wallets.
+func (sa *ServerAPIIntegrationTests) CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*EmbeddedWalletResponse, error) {
 	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, embeddedWalletsURL)
 	if err != nil {
 		return nil, fmt.Errorf("creating url: %w", err)
