@@ -23,6 +23,7 @@ type StellarTomlHandler struct {
 	DistributionAccountResolver signing.DistributionAccountResolver
 	NetworkPassphrase           string
 	Sep10SigningPublicKey       string
+	Sep45ContractID             string
 	InstanceName                string
 	BaseURL                     string
 }
@@ -48,7 +49,11 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.Address, s.Sep10SigningPublicKey)
 	}
 
-	var webAuthEndpoint, transferServerSep0024 string
+	var (
+		webAuthEndpoint             string
+		transferServerSep0024       string
+		webAuthForContractsEndpoint string
+	)
 
 	parsedBaseURL, err := url.Parse(s.BaseURL)
 	if err != nil {
@@ -60,19 +65,31 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	if err != nil {
 		webAuthEndpoint = fmt.Sprintf("%s://%s/sep10/auth", parsedBaseURL.Scheme, req.Host)
 		transferServerSep0024 = fmt.Sprintf("%s://%s/sep24", parsedBaseURL.Scheme, req.Host)
+		webAuthForContractsEndpoint = fmt.Sprintf("%s://%s/sep45/auth", parsedBaseURL.Scheme, req.Host)
 	} else {
 		webAuthEndpoint = *t.BaseURL + "/sep10/auth"
 		transferServerSep0024 = *t.BaseURL + "/sep24"
+		webAuthForContractsEndpoint = *t.BaseURL + "/sep45/auth"
 	}
 
-	return fmt.Sprintf(`
-		ACCOUNTS=%s
-		SIGNING_KEY=%q
-		NETWORK_PASSPHRASE=%q
-		HORIZON_URL=%q
-		WEB_AUTH_ENDPOINT=%q
-		TRANSFER_SERVER_SEP0024=%q
-	`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf(`
+	ACCOUNTS=%s
+	SIGNING_KEY=%q
+	NETWORK_PASSPHRASE=%q
+	HORIZON_URL=%q
+	WEB_AUTH_ENDPOINT=%q
+	TRANSFER_SERVER_SEP0024=%q
+`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024))
+
+	if s.Sep45ContractID != "" {
+		builder.WriteString(fmt.Sprintf(`
+WEB_AUTH_CONTRACT_ID=%q
+WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
+`, s.Sep45ContractID, webAuthForContractsEndpoint))
+	}
+
+	return builder.String()
 }
 
 func (s *StellarTomlHandler) buildOrganizationDocumentation(instanceName string) string {

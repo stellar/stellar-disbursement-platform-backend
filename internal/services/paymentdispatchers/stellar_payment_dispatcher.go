@@ -71,14 +71,17 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 		}
 
 		transaction := txSubStore.Transaction{
-			ExternalID:  payment.ID,
-			AssetCode:   payment.Asset.Code,
-			AssetIssuer: payment.Asset.Issuer,
-			Amount:      decimal.NewFromFloat(amount),
-			Destination: payment.ReceiverWallet.StellarAddress,
-			Memo:        memo.Value,
-			MemoType:    memo.Type,
-			TenantID:    tenantID,
+			ExternalID:      payment.ID,
+			TransactionType: txSubStore.TransactionTypePayment,
+			Payment: txSubStore.Payment{
+				AssetCode:   payment.Asset.Code,
+				AssetIssuer: payment.Asset.Issuer,
+				Amount:      decimal.NewFromFloat(amount),
+				Destination: payment.ReceiverWallet.StellarAddress,
+				Memo:        memo.Value,
+				MemoType:    memo.Type,
+			},
+			TenantID: tenantID,
 		}
 		transactions = append(transactions, transaction)
 	}

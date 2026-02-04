@@ -20,4 +20,11 @@ var FuturenetWallets = []data.Wallet{
 		Assets:      assets.AllAssetsFuturenet,
 		UserManaged: true,
 	},
+	{
+		Name:           "Embedded Wallet",
+		DeepLinkSchema: "SELF",
+		Homepage:       "https://stellar.org",
+		Assets:         assets.AllAssetsFuturenet,
+		Embedded:       true,
+	},
 }

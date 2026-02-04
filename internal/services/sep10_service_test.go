@@ -22,6 +22,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
+	servicesmocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 )
 
 type testKeypairs struct {
@@ -36,6 +37,14 @@ func newTestKeypairs() *testKeypairs {
 		server:       keypair.MustRandom(),
 		clientDomain: keypair.MustRandom(),
 	}
+}
+
+func createMockSEP10NonceStore(t *testing.T) NonceStoreInterface {
+	t.Helper()
+	store := servicesmocks.NewMockNonceStore(t)
+	store.On("Store", mock.Anything, mock.Anything).Return(nil).Maybe()
+	store.On("Consume", mock.Anything, mock.Anything).Return(true, nil).Maybe()
+	return store
 }
 
 func createMockHorizonClient(accountID string, thresholds horizon.AccountThresholds, signers []horizon.Signer) *horizonclient.MockClient {
@@ -79,6 +88,7 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
 		}),
 		true,
+		createMockSEP10NonceStore(t),
 	)
 	if err != nil {
 		return nil, err
@@ -457,6 +467,30 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		assert.NotEmpty(t, validationResp.Token)
 	})
 
+	t.Run("nonce replay", func(t *testing.T) {
+		nonceStore := servicesmocks.NewMockNonceStore(t)
+		nonceStore.On("Store", mock.Anything, mock.Anything).Return(nil).Maybe()
+		nonceStore.On("Consume", mock.Anything, mock.Anything).Return(true, nil).Once()
+		nonceStore.On("Consume", mock.Anything, mock.Anything).Return(false, nil).Once()
+
+		service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
+		require.NoError(t, err)
+		service.nonceStore = nonceStore
+		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		signedTxBase64 := createSignedChallenge(t, service, kps, "stellar.local:8000", "chaos.cadia.com")
+
+		validationReq := ValidationRequest{Transaction: signedTxBase64}
+		validationResp, err := service.ValidateChallenge(context.Background(), validationReq)
+		require.NoError(t, err)
+		assert.NotNil(t, validationResp)
+
+		validationResp, err = service.ValidateChallenge(context.Background(), validationReq)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nonce is invalid or expired")
+		assert.Nil(t, validationResp)
+	})
+
 	t.Run("invalid transaction", func(t *testing.T) {
 		req := ValidationRequest{Transaction: "invalid-transaction"}
 		_, err := service.ValidateChallenge(context.Background(), req)
@@ -638,6 +672,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
+			createMockSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 
@@ -698,6 +733,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
+			createMockSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 
@@ -822,6 +858,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 			true,
 			nil,   // HorizonClient will be set below
 			false, // ClientAttributionRequired = false
+			createMockSEP10NonceStore(t),
 		)
 		require.NoError(t, err)
 

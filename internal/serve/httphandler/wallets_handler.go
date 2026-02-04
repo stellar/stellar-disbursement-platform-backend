@@ -19,13 +19,14 @@ import (
 )
 
 type WalletsHandler struct {
-	Models              *data.Models
-	NetworkType         utils.NetworkType
-	WalletAssetResolver *services.WalletAssetResolver
+	Models                *data.Models
+	NetworkType           utils.NetworkType
+	WalletAssetResolver   *services.WalletAssetResolver
+	EnableEmbeddedWallets bool
 }
 
 // GetWallets returns a list of wallets
-func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
+func (h *WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	filters, err := h.parseFilters(ctx, r)
@@ -33,6 +34,10 @@ func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 		extras := map[string]interface{}{"validation_error": err.Error()}
 		httperror.BadRequest("Error parsing request filters", nil, extras).Render(w)
 		return
+	}
+
+	if !h.EnableEmbeddedWallets {
+		filters = append(filters, data.NewFilter(data.FilterEmbedded, false))
 	}
 
 	wallets, err := h.Models.Wallets.FindWallets(ctx, filters...)
@@ -43,11 +48,12 @@ func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, wallets, httpjson.JSON)
 }
 
-func (h WalletsHandler) parseFilters(ctx context.Context, r *http.Request) ([]data.Filter, error) {
+func (h *WalletsHandler) parseFilters(ctx context.Context, r *http.Request) ([]data.Filter, error) {
 	filters := []data.Filter{}
 	boolFilterParams := map[string]data.FilterKey{
-		"enabled":      data.FilterEnabledWallets,
-		"user_managed": data.FilterUserManaged,
+		"enabled":         data.FilterEnabledWallets,
+		"user_managed":    data.FilterUserManaged,
+		"include_deleted": data.FilterIncludeDeleted,
 	}
 
 	for param, filterType := range boolFilterParams {
@@ -77,7 +83,7 @@ func (h WalletsHandler) parseFilters(ctx context.Context, r *http.Request) ([]da
 const maxSupportedAssets = 20
 
 // parseSupportedAssetsParam parses the supported_assets query parameter, validates it and returns a Filter.
-func (h WalletsHandler) parseSupportedAssetsParam(ctx context.Context, supportedAssetsParam string) (data.Filter, error) {
+func (h *WalletsHandler) parseSupportedAssetsParam(ctx context.Context, supportedAssetsParam string) (data.Filter, error) {
 	if supportedAssetsParam == "" {
 		return data.Filter{}, nil
 	}
@@ -106,7 +112,7 @@ func (h WalletsHandler) parseSupportedAssetsParam(ctx context.Context, supported
 }
 
 // validateAssetReferences validates that asset references (codes or IDs) exist in the database
-func (h WalletsHandler) validateAssetReferences(ctx context.Context, assetReferences []string) error {
+func (h *WalletsHandler) validateAssetReferences(ctx context.Context, assetReferences []string) error {
 	for _, ref := range assetReferences {
 		exists, err := h.Models.Assets.ExistsByCodeOrID(ctx, ref)
 		if err != nil {
@@ -119,7 +125,7 @@ func (h WalletsHandler) validateAssetReferences(ctx context.Context, assetRefere
 	return nil
 }
 
-func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
+func (h *WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	var reqBody *validators.WalletRequest
@@ -177,7 +183,7 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	httpjson.RenderStatus(rw, http.StatusCreated, wallet, httpjson.JSON)
 }
 
-func (h WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request) {
+func (h *WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	walletID := chi.URLParam(req, "id")
@@ -188,6 +194,10 @@ func (h WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request) 
 			httperror.NotFound("", err, nil).Render(rw)
 			return
 		}
+		if errors.Is(err, data.ErrWalletInUse) {
+			httperror.BadRequest("wallet has pending registrations and cannot be deleted", err, nil).Render(rw)
+			return
+		}
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
@@ -195,7 +205,7 @@ func (h WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request) 
 	httpjson.RenderStatus(rw, http.StatusNoContent, nil, httpjson.JSON)
 }
 
-func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) {
+func (h *WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	var reqBody *validators.PatchWalletRequest
@@ -213,6 +223,21 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 
 	walletID := chi.URLParam(req, "id")
 
+	currentWallet, err := h.Models.Wallets.Get(ctx, walletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("", err, nil).Render(rw)
+			return
+		}
+		httperror.InternalError(ctx, "failed to fetch wallet", err, nil).Render(rw)
+		return
+	}
+
+	if currentWallet.Embedded && !h.EnableEmbeddedWallets && reqBody.Enabled != nil && *reqBody.Enabled {
+		httperror.BadRequest("embedded wallet feature is disabled", nil, nil).Render(rw)
+		return
+	}
+
 	update := data.WalletUpdate{
 		Name:              reqBody.Name,
 		Homepage:          reqBody.Homepage,
@@ -222,12 +247,12 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	if reqBody.Assets != nil {
-		assetIDs, err := h.WalletAssetResolver.ResolveAssetReferences(ctx, *reqBody.Assets)
-		if err != nil {
-			httperror.BadRequest("failed to resolve asset references", err, nil).Render(rw)
+		resolvedAssetIDs, assetErr := h.WalletAssetResolver.ResolveAssetReferences(ctx, *reqBody.Assets)
+		if assetErr != nil {
+			httperror.BadRequest("failed to resolve asset references", assetErr, nil).Render(rw)
 			return
 		}
-		update.AssetsIDs = &assetIDs
+		update.AssetsIDs = &resolvedAssetIDs
 	}
 	wallet, err := h.Models.Wallets.Update(ctx, walletID, update)
 	if err != nil {
@@ -238,7 +263,7 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 	httpjson.Render(rw, wallet, httpjson.JSON)
 }
 
-func (h WalletsHandler) handleWalletError(ctx context.Context, rw http.ResponseWriter, err error, defaultMsg string) {
+func (h *WalletsHandler) handleWalletError(ctx context.Context, rw http.ResponseWriter, err error, defaultMsg string) {
 	switch {
 	case errors.Is(err, data.ErrRecordNotFound):
 		httperror.NotFound("", err, nil).Render(rw)

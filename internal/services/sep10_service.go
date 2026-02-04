@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/seputil"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -30,6 +31,12 @@ type SEP10Service interface {
 	CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error)
 	ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error)
 }
+
+// DefaultSEP10AuthTimeout is the default expiration duration for SEP-10 challenge transactions.
+const DefaultSEP10AuthTimeout = 15 * time.Minute
+
+// DefaultSEP10NonceExpiration is the default expiration duration for SEP-10 nonces.
+const DefaultSEP10NonceExpiration = DefaultSEP10AuthTimeout
 
 type sep10Service struct {
 	SEP10SigningKeypair       *keypair.Full
@@ -42,6 +49,7 @@ type sep10Service struct {
 	AuthTimeout               time.Duration
 	AllowHTTPRetry            bool
 	ClientAttributionRequired bool
+	nonceStore                NonceStoreInterface
 }
 
 type ChallengeRequest struct {
@@ -99,6 +107,7 @@ type ChallengeValidationResult struct {
 	HomeDomain      string
 	Memo            *txnbuild.MemoID
 	ClientDomain    string
+	Nonce           string
 }
 
 func NewSEP10Service(
@@ -109,6 +118,7 @@ func NewSEP10Service(
 	allowHTTPRetry bool,
 	horizonClient horizonclient.ClientInterface,
 	clientAttributionRequired bool,
+	nonceStore NonceStoreInterface,
 ) (SEP10Service, error) {
 	kp, err := keypair.ParseFull(sep10SigningPrivateKey)
 	if err != nil {
@@ -120,17 +130,18 @@ func NewSEP10Service(
 		JWTExpiration:             time.Hour * 2,
 		NetworkPassphrase:         networkPassphrase,
 		SEP10SigningKeypair:       kp,
-		AuthTimeout:               time.Minute * 15,
+		AuthTimeout:               DefaultSEP10AuthTimeout,
 		BaseURL:                   baseURL,
 		AllowHTTPRetry:            allowHTTPRetry,
 		HTTPClient:                httpclient.DefaultClient(),
 		HorizonClient:             horizonClient,
 		ClientAttributionRequired: clientAttributionRequired,
+		nonceStore:                nonceStore,
 	}, nil
 }
 
 func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest) (*ChallengeResponse, error) {
-	webAuthDomain := s.getWebAuthDomain(ctx)
+	webAuthDomain := seputil.GetWebAuthDomain(ctx, s.BaseURL)
 
 	req.ClientDomain = strings.TrimSpace(req.ClientDomain)
 	req.HomeDomain = strings.TrimSpace(req.HomeDomain)
@@ -141,14 +152,14 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 	}
 
 	if req.HomeDomain == "" {
-		req.HomeDomain = s.getBaseDomain()
+		req.HomeDomain = seputil.GetBaseDomain(s.BaseURL)
 		if req.HomeDomain == "" {
 			return nil, fmt.Errorf("home_domain is required")
 		}
 	}
 
-	if !s.isValidHomeDomain(req.HomeDomain) {
-		return nil, fmt.Errorf("invalid home_domain must match %s", s.getBaseDomain())
+	if !seputil.IsValidHomeDomain(s.BaseURL, req.HomeDomain) {
+		return nil, fmt.Errorf("invalid home_domain must match %s", seputil.GetBaseDomain(s.BaseURL))
 	}
 
 	if _, err := xdr.AddressToAccountId(req.Account); err != nil {
@@ -178,7 +189,7 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		}
 	}
 
-	tx, err := s.buildChallengeTx(req.Account, webAuthDomain, req.HomeDomain, req.ClientDomain, clientSigningKey, memoParam)
+	tx, err := s.buildChallengeTx(ctx, req.Account, webAuthDomain, req.HomeDomain, req.ClientDomain, clientSigningKey, memoParam)
 	if err != nil {
 		return nil, fmt.Errorf("building challenge transaction %w", err)
 	}
@@ -196,7 +207,7 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequest) (*ValidationResponse, error) {
 	allowedHomeDomains := s.getAllowedHomeDomains(ctx)
-	webAuthDomain := s.getWebAuthDomain(ctx)
+	webAuthDomain := seputil.GetWebAuthDomain(ctx, s.BaseURL)
 
 	result, err := s.validateChallengeCustom(
 		req.Transaction,
@@ -222,6 +233,16 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 			); verifyErr != nil {
 				return nil, verifyErr
 			}
+
+			// Check and consume nonce
+			validNonce, consumeErr := s.nonceStore.Consume(ctx, result.Nonce)
+			if consumeErr != nil {
+				return nil, fmt.Errorf("consuming nonce: %w", consumeErr)
+			}
+			if !validNonce {
+				return nil, fmt.Errorf("nonce is invalid or expired")
+			}
+
 			// Generate token without threshold check for non-existent account
 			return s.generateToken(result.Transaction, result.ClientAccountID, result.HomeDomain, result.Memo, result.ClientDomain)
 		}
@@ -235,6 +256,15 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 		account,
 	); err != nil {
 		return nil, err
+	}
+
+	// Check and consume nonce
+	validNonce, err := s.nonceStore.Consume(ctx, result.Nonce)
+	if err != nil {
+		return nil, fmt.Errorf("consuming nonce: %w", err)
+	}
+	if !validNonce {
+		return nil, fmt.Errorf("nonce is invalid or expired")
 	}
 
 	return s.generateToken(result.Transaction, result.ClientAccountID, result.HomeDomain, result.Memo, result.ClientDomain)
@@ -366,6 +396,7 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 		HomeDomain:      matchedHomeDomain,
 		Memo:            memo,
 		ClientDomain:    clientDomain,
+		Nonce:           nonceB64,
 	}, nil
 }
 
@@ -551,7 +582,7 @@ func (s *sep10Service) generateToken(
 }
 
 func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) []string {
-	baseDomain := s.getBaseDomain()
+	baseDomain := seputil.GetBaseDomain(s.BaseURL)
 	if baseDomain == "" {
 		return []string{}
 	}
@@ -569,43 +600,7 @@ func (s *sep10Service) getAllowedHomeDomains(ctx context.Context) []string {
 	return allowedDomains
 }
 
-func (s *sep10Service) getWebAuthDomain(ctx context.Context) string {
-	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
-	if err == nil && currentTenant != nil && currentTenant.BaseURL != nil {
-		parsedURL, parseErr := url.Parse(*currentTenant.BaseURL)
-		if parseErr == nil {
-			return parsedURL.Host
-		}
-	}
-
-	return s.getBaseDomain()
-}
-
-func (s *sep10Service) getBaseDomain() string {
-	parsedURL, err := url.Parse(s.BaseURL)
-	if err != nil {
-		return ""
-	}
-	return parsedURL.Host
-}
-
-func (s *sep10Service) isValidHomeDomain(homeDomain string) bool {
-	baseDomain := s.getBaseDomain()
-	if baseDomain == "" || homeDomain == "" {
-		return false
-	}
-
-	baseDomainLower := strings.ToLower(baseDomain)
-	homeDomainLower := strings.ToLower(homeDomain)
-
-	if homeDomainLower == baseDomainLower {
-		return true
-	}
-
-	return strings.HasSuffix(homeDomainLower, "."+baseDomainLower)
-}
-
-func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDomain, clientDomain string, clientDomainAccountID string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
+func (s *sep10Service) buildChallengeTx(ctx context.Context, clientAccountID, webAuthDomain, homeDomain, clientDomain string, clientDomainAccountID string, memo *txnbuild.MemoID) (*txnbuild.Transaction, error) {
 	if s.AuthTimeout < time.Second {
 		return nil, fmt.Errorf("provided timebound must be at least 1s (300s is recommended)")
 	}
@@ -627,6 +622,10 @@ func (s *sep10Service) buildChallengeTx(clientAccountID, webAuthDomain, homeDoma
 		if _, parseErr := keypair.ParseAddress(clientDomainAccountID); parseErr != nil {
 			return nil, fmt.Errorf("invalid client domain account ID: %s is not a valid Stellar account ID", clientDomainAccountID)
 		}
+	}
+
+	if err := s.nonceStore.Store(ctx, randomNonceToString); err != nil {
+		return nil, fmt.Errorf("storing nonce: %w", err)
 	}
 
 	sa := txnbuild.SimpleAccount{

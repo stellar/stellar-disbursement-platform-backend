@@ -36,9 +36,9 @@ func NewPaymentFromSubmitterService(models *data.Models, tssDBConnectionPool db.
 func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
 		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize, tenantID)
+			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize, tenantID, txSubStore.TransactionTypePayment)
 			if err != nil {
-				return fmt.Errorf("getting transactions for update: %w", err)
+				return fmt.Errorf("getting payment transactions for update: %w", err)
 			}
 			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, transactions)
 		})
@@ -62,8 +62,7 @@ func (s PaymentFromSubmitterService) syncTransactions(ctx context.Context, sdpDB
 		return nil
 	}
 
-	// 1. Sync payments with Transactions
-	transactionIDs := make([]string, 0, len(transactions))
+	// 1. Validate all transactions
 	for _, transaction := range transactions {
 		if !transaction.StellarTransactionHash.Valid {
 			return fmt.Errorf("expected transaction %s to have a stellar transaction hash", transaction.ID)
@@ -71,7 +70,11 @@ func (s PaymentFromSubmitterService) syncTransactions(ctx context.Context, sdpDB
 		if transaction.Status != txSubStore.TransactionStatusSuccess && transaction.Status != txSubStore.TransactionStatusError {
 			return fmt.Errorf("transaction id %s is in an unexpected status %s", transaction.ID, transaction.Status)
 		}
+	}
 
+	// 2. Sync payments with transactions
+	transactionIDs := make([]string, 0, len(transactions))
+	for _, transaction := range transactions {
 		errPayments := s.syncPaymentWithTransaction(ctx, sdpDBTx, transaction)
 		if errPayments != nil {
 			return fmt.Errorf("syncing payments for transaction ID %s: %w", transaction.ID, errPayments)
@@ -79,7 +82,7 @@ func (s PaymentFromSubmitterService) syncTransactions(ctx context.Context, sdpDB
 		transactionIDs = append(transactionIDs, transaction.ID)
 	}
 
-	// 2. Set synced_at for all synced transactions
+	// 3. Set synced_at for all synced payment transactions
 	err := s.tssModel.UpdateSyncedTransactions(ctx, tssDBTx, transactionIDs)
 	if err != nil {
 		return fmt.Errorf("updating transactions as synced: %w", err)
@@ -116,6 +119,10 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 		Status:               toStatus,
 		StatusMessage:        transaction.StatusMessage.String,
 		StellarTransactionID: transaction.StellarTransactionHash.String,
+	}
+	// Update the sender address if available
+	if transaction.DistributionAccount.Valid {
+		paymentUpdate.SenderAddress = transaction.DistributionAccount.String
 	}
 	err = s.sdpModels.Payment.Update(ctx, sdpDBTx, &payment, paymentUpdate)
 	if err != nil {

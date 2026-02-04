@@ -271,8 +271,8 @@ func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
 		AttemptTS:     time.Now(),
 		ClientDomain:  claims.ClientDomain(),
 		TransactionID: claims.TransactionID(),
-		WalletAddress: claims.SEP10StellarAccount(),
-		WalletMemo:    claims.SEP10StellarMemo(),
+		WalletAddress: claims.Account(),
+		WalletMemo:    claims.Memo(),
 	}
 
 	switch contactType {

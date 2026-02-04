@@ -49,3 +49,17 @@ func TrimAndLower(str string) string {
 func Humanize(str string) string {
 	return strings.ToLower(strings.ReplaceAll(str, "_", " "))
 }
+
+// ContainsAny returns true if message contains any of the given substrings.
+func ContainsAny(message string, substrings ...string) bool {
+	if message == "" || len(substrings) == 0 {
+		return false
+	}
+
+	for _, substr := range substrings {
+		if substr != "" && strings.Contains(message, substr) {
+			return true
+		}
+	}
+	return false
+}

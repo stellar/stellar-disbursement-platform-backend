@@ -32,6 +32,7 @@ type Payment struct {
 	UpdatedAt               time.Time            `json:"updated_at" db:"updated_at"`
 	ExternalPaymentID       string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
 	CircleTransferRequestID *string              `json:"circle_transfer_request_id,omitempty"`
+	SenderAddress           string               `json:"sender_address,omitempty" db:"sender_address"`
 }
 
 type PaymentType string
@@ -81,6 +82,7 @@ type PaymentUpdate struct {
 	Status               PaymentStatus `db:"status"`
 	StatusMessage        string
 	StellarTransactionID string `db:"stellar_transaction_id"`
+	SenderAddress        string `db:"sender_address"`
 }
 
 type PaymentStatusHistory []PaymentStatusHistoryEntry
@@ -178,10 +180,11 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"created_at",
 			"updated_at",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"stellar_transaction_id",
 			"stellar_operation_id",
 			"external_payment_id",
+			"sender_address",
 		},
 	}.Build()
 
@@ -546,11 +549,12 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 		UPDATE payments
 		SET status = $1,
 			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2)),
-			stellar_transaction_id = COALESCE($3, stellar_transaction_id)
-		WHERE id = $4
+			stellar_transaction_id = COALESCE($3, stellar_transaction_id),
+			sender_address = COALESCE(NULLIF($4, ''), sender_address)
+		WHERE id = $5
 	`
 
-	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, payment.ID)
+	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, update.SenderAddress, payment.ID)
 	if err != nil {
 		return fmt.Errorf("error updating payment with id %s: %w", payment.ID, err)
 	}

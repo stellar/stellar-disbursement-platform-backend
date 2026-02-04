@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
@@ -344,6 +345,8 @@ func Test_NewManager(t *testing.T) {
 
 					crashTrackerClient: wantCrashTrackerClient,
 					monitorService:     submitterOptions.MonitorService,
+
+					txHandlerFactory: gotManager.txHandlerFactory,
 				}
 				assert.Equal(t, wantManager, gotManager)
 
@@ -370,7 +373,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 	// Signature service
 	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
-	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	processingTestPassphrase := keypair.MustRandom().Seed()
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
@@ -384,7 +387,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 		NetworkPassphrase:         network.TestNetworkPassphrase,
 		DistributionPrivateKey:    distributionKP.Seed(),
 		DBConnectionPool:          dbConnectionPool,
-		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		ChAccEncryptionPassphrase: processingTestPassphrase,
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 		Encrypter:                 encrypter,
 
@@ -421,7 +424,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			defer tenant.DeleteAllTenantsFixture(t, rawCtx, dbConnectionPool)
 
 			// Create channel accounts to be used by the tx submitter
-			channelAccounts := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 2)
+			channelAccounts := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, processingTestPassphrase, 2)
 			assert.Len(t, channelAccounts, 2)
 			channelAccountsMap := map[string]*store.ChannelAccount{}
 			for _, ca := range channelAccounts {
@@ -431,6 +434,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			// Create transactions to be used by the tx submitter
 			tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
 			transactions := store.CreateTransactionFixtures(t, ctx, dbConnectionPool, 10, store.TransactionFixture{
+				TransactionType:    store.TransactionTypePayment,
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: keypair.MustRandom().Address(),
@@ -476,6 +480,21 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			mMonitorClient := monitor.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
 
+			monitorService := tssMonitor.TSSMonitorService{
+				Client:        mMonitorClient,
+				GitCommitHash: "gitCommitHash0x",
+				Version:       "version123",
+			}
+
+			mockRPCClient := &mocks.MockRPCClient{}
+
+			handlerFactory := NewTransactionHandlerFactory(
+				submitterEngine,
+				store.NewTransactionModel(dbConnectionPool),
+				monitorService,
+				mockRPCClient,
+			)
+
 			manager := &Manager{
 				dbConnectionPool: dbConnectionPool,
 				chAccModel:       store.NewChannelAccountModel(dbConnectionPool),
@@ -493,6 +512,8 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
+
+				txHandlerFactory: handlerFactory,
 			}
 
 			go manager.ProcessTransactions(ctx)

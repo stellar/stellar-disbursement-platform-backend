@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stretchr/testify/require"
@@ -104,7 +105,8 @@ func CreateDefaultWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQ
 	return CreateWalletFixture(t, ctx, sqlExec, "Demo Wallet",
 		"https://demo-wallet.stellar.org",
 		"https://demo-wallet.stellar.org",
-		"demo-wallet-server.stellar.org")
+		"demo-wallet-server.stellar.org",
+	)
 }
 
 func CreateWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name, homepage, sep10ClientDomain, deepLinkSchema string) *Wallet {
@@ -190,11 +192,15 @@ func GetWalletAssetsFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExe
 
 // DeleteAllWalletFixtures deletes all wallets in the database
 func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	query := "DELETE FROM wallets_assets"
+	query := "DELETE FROM receiver_wallets"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 
-	query = "DELETE FROM wallets"
+	query = "DELETE FROM wallets_assets"
+	_, err = sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+
+	query = "DELETE FROM wallets CASCADE"
 	_, err = sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
@@ -234,6 +240,20 @@ func MakeWalletUserManaged(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 			wallets
 		SET
 			user_managed = true
+		WHERE
+			id = $1
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, walletID)
+	require.NoError(t, err)
+}
+
+func MakeWalletEmbedded(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			embedded = true
 		WHERE
 			id = $1
 	`
@@ -436,8 +456,10 @@ $7, $8, $9, $10 ,$11, $12)
 }
 
 func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM receiver_wallets"
-	_, err := sqlExec.ExecContext(ctx, query)
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, sqlExec)
+
+	const deleteReceiverWallets = "DELETE FROM receiver_wallets"
+	_, err := sqlExec.ExecContext(ctx, deleteReceiverWallets)
 	require.NoError(t, err)
 }
 
@@ -507,9 +529,9 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 	const query = `
 		INSERT INTO payments
 			(receiver_id, disbursement_id, receiver_wallet_id, asset_id, amount, status, status_history,
-			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type)
+			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type, sender_address)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING
 			id
 	`
@@ -528,6 +550,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.UpdatedAt,
 		p.ExternalPaymentID,
 		p.Type,
+		p.SenderAddress,
 	)
 	require.NoError(t, err)
 
@@ -687,6 +710,38 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 func DeleteAllDisbursementFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	const query = "DELETE FROM disbursements"
 	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
+func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, token, wasmHash, contractAddress, credentialID, publicKey string, status EmbeddedWalletStatus) *EmbeddedWallet {
+	t.Helper()
+
+	if token == "" {
+		randomToken, err := utils.RandomString(32)
+		require.NoError(t, err)
+		token = randomToken
+	}
+	if wasmHash == "" {
+		wasmHash = "6223a23026480644055230783215652de8695abc8a9dbb56a94972eb341a4663"
+	}
+
+	q := fmt.Sprintf(`
+		INSERT INTO embedded_wallets
+			(token, wasm_hash, contract_address, credential_id, public_key, wallet_status, receiver_wallet_id)
+		VALUES
+			($1, $2, $3, $4, $5, $6, $7)
+		RETURNING %s
+	`, EmbeddedWalletColumnNames("", ""))
+	wallet := EmbeddedWallet{}
+
+	err := sqlExec.GetContext(ctx, &wallet, q, token, utils.SQLNullString(wasmHash), utils.SQLNullString(contractAddress), utils.SQLNullString(credentialID), utils.SQLNullString(publicKey), status, utils.SQLNullString(""))
+	require.NoError(t, err)
+	return &wallet
+}
+
+func DeleteAllEmbeddedWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM embedded_wallets")
 	require.NoError(t, err)
 }
 
@@ -850,6 +905,35 @@ func CleanupBridgeIntegration(t *testing.T, ctx context.Context, sqlExec db.SQLE
 	require.NoError(t, err)
 }
 
+func CreateSponsoredTransactionFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, account, operationXDR string) *SponsoredTransaction {
+	t.Helper()
+
+	if account == "" {
+		account = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQAUHKENYZCH"
+	}
+
+	if operationXDR == "" {
+		operationXDR = "AAAAAAAAAAEAAAAAQrZOIEmLI5hkv4bb5sP0YyQTpFyEczBBOgXW3/8B372/AAAAAVVTREMAAAAArO0NsVxEmdYQr+xYr9XlsQIpT2xH5jPTGI0twLPplJYAAAAABfXhAA=="
+	}
+
+	model := &SponsoredTransactionModel{}
+	insert := SponsoredTransactionInsert{
+		ID:           uuid.New().String(),
+		Account:      account,
+		OperationXDR: operationXDR,
+		Status:       PendingSponsoredTransactionStatus,
+	}
+	transaction, err := model.Insert(ctx, sqlExec, insert)
+	require.NoError(t, err)
+	return transaction
+}
+
+func DeleteAllSponsoredTransactionsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM sponsored_transactions")
+	require.NoError(t, err)
+}
+
 func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	DeleteAllMessagesFixtures(t, ctx, sqlExec)
 	DeleteAllPaymentsFixtures(t, ctx, sqlExec)
@@ -858,6 +942,8 @@ func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter
 	DeleteAllReceiverWalletsFixtures(t, ctx, sqlExec)
 	DeleteAllReceiversFixtures(t, ctx, sqlExec)
 	DeleteAllDisbursementFixtures(t, ctx, sqlExec)
+	DeleteAllEmbeddedWalletsFixtures(t, ctx, sqlExec)
+	DeleteAllSponsoredTransactionsFixtures(t, ctx, sqlExec)
 	DeleteAllWalletFixtures(t, ctx, sqlExec)
 	DeleteAllAssetFixtures(t, ctx, sqlExec)
 	DeleteAllCircleRecipientsFixtures(t, ctx, sqlExec)

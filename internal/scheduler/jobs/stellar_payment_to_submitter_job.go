@@ -37,7 +37,7 @@ type StellarPaymentToSubmitterJobOptions struct {
 
 func NewStellarPaymentToSubmitterJob(opts StellarPaymentToSubmitterJobOptions) Job {
 	if opts.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", stellarPaymentToSubmitterJobName)
+		log.Fatalf("job interval for %s is set below the minimum %d. Instantiation failed", stellarPaymentToSubmitterJobName, DefaultMinimumJobIntervalSeconds)
 	}
 
 	stellarPaymentDispatcher := paymentdispatchers.NewStellarPaymentDispatcher(

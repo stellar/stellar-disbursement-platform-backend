@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
@@ -61,7 +62,7 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 				MaxInvitationResendAttempts: 3,
 			}
 			_ = NewSendReceiverWalletsInvitationJob(o)
-		}, "job interval is not set")
+		}, "job interval for send_receiver_wallets_invitation_job is set below the minimum")
 	})
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {
@@ -98,10 +99,12 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	require.NoError(t, err)
 
 	tenantBaseURL := "http://localhost:8000"
+	tenantUIBaseURL := "http://localhost:3000"
 	tenantInfo := &schema.Tenant{
-		ID:      uuid.NewString(),
-		Name:    "TestTenant",
-		BaseURL: &tenantBaseURL,
+		ID:           uuid.NewString(),
+		Name:         "TestTenant",
+		BaseURL:      &tenantBaseURL,
+		SDPUIBaseURL: &tenantUIBaseURL,
 	}
 	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
 
@@ -109,11 +112,13 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	var maxInvitationSMSResendAttempts int64 = 3
 
 	messageDispatcherMock := message.NewMockMessageDispatcher(t)
+	embeddedWalletServiceMock := &mocks.MockEmbeddedWalletService{}
 	crashTrackerClientMock := &crashtracker.MockCrashTrackerClient{}
 
 	s, err := services.NewSendReceiverWalletInviteService(
 		models,
 		messageDispatcherMock,
+		embeddedWalletServiceMock,
 		stellarSecretKey,
 		maxInvitationSMSResendAttempts,
 		crashTrackerClientMock,
@@ -165,6 +170,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	walletDeepLink1 := services.WalletDeepLink{
 		DeepLink:         wallet1.DeepLinkSchema,
 		TenantBaseURL:    tenantBaseURL,
+		TenantUIBaseURL:  tenantUIBaseURL,
 		OrganizationName: "MyCustomAid",
 		AssetCode:        asset1.Code,
 		AssetIssuer:      asset1.Issuer,
@@ -177,6 +183,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	walletDeepLink2 := services.WalletDeepLink{
 		DeepLink:         wallet2.DeepLinkSchema,
 		TenantBaseURL:    tenantBaseURL,
+		TenantUIBaseURL:  tenantUIBaseURL,
 		OrganizationName: "MyCustomAid",
 		AssetCode:        asset2.Code,
 		AssetIssuer:      asset2.Issuer,

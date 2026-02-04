@@ -166,6 +166,17 @@ Dashboard port
 {{- .Values.dashboard.route.port | default "80" }}
 {{- end }}
 
+{{/*
+RPC enabled
+*/}}
+{{- define "sdp.rpcEnabled" -}}
+{{- if and .Values.global.rpc (index .Values.global.rpc "url") -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end }}
+
 
 {{/*
 Is Pubnet?
@@ -271,4 +282,3 @@ https://api.bridge.xyz
 https://api.sandbox.bridge.xyz
 {{- end -}}
 {{- end -}}
-

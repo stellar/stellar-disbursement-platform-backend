@@ -19,6 +19,7 @@ var (
 	ErrWalletHomepageAlreadyExists       = errors.New("a wallet with this homepage already exists")
 	ErrWalletDeepLinkSchemaAlreadyExists = errors.New("a wallet with this deep link schema already exists")
 	ErrInvalidAssetID                    = errors.New("invalid asset ID")
+	ErrWalletInUse                       = errors.New("wallet has pending registrations and cannot be deleted")
 )
 
 type Wallet struct {
@@ -29,10 +30,15 @@ type Wallet struct {
 	DeepLinkSchema    string       `json:"deep_link_schema,omitempty" csv:"-" db:"deep_link_schema"`
 	Enabled           bool         `json:"enabled" csv:"-" db:"enabled"`
 	UserManaged       bool         `json:"user_managed,omitempty" csv:"-" db:"user_managed"`
+	Embedded          bool         `json:"embedded,omitempty" csv:"-" db:"embedded"`
 	Assets            WalletAssets `json:"assets,omitempty" csv:"-" db:"assets"`
 	CreatedAt         *time.Time   `json:"created_at,omitempty" csv:"-" db:"created_at"`
 	UpdatedAt         *time.Time   `json:"updated_at,omitempty" csv:"-" db:"updated_at"`
 	DeletedAt         *time.Time   `json:"-" csv:"-" db:"deleted_at"`
+}
+
+func (w *Wallet) IsSelfHosted() bool {
+	return w.DeepLinkSchema == "SELF"
 }
 
 type WalletInsert struct {
@@ -85,6 +91,7 @@ func WalletColumnNames(tableReference, resultAlias string, includeDates bool) st
 		"enabled",
 		"deep_link_schema",
 		"user_managed",
+		"embedded",
 	}
 	if includeDates {
 		colNames = append(colNames, "created_at", "updated_at", "deleted_at")
@@ -144,6 +151,8 @@ const (
 	FilterEnabledWallets  FilterKey = "enabled"
 	FilterUserManaged     FilterKey = "user_managed"
 	FilterSupportedAssets FilterKey = "supported_assets"
+	FilterIncludeDeleted  FilterKey = "include_deleted"
+	FilterEmbedded        FilterKey = "embedded"
 )
 
 // FindWallets returns wallets filtering by enabled status.
@@ -160,6 +169,7 @@ func (wm *WalletModel) FindWallets(ctx context.Context, filters ...Filter) ([]Wa
 
 func newWalletQuery(baseQuery string, sqlExec db.SQLExecuter, filters ...Filter) (string, []any) {
 	qb := NewQueryBuilder(baseQuery)
+	includeDeleted := false
 
 	for _, filter := range filters {
 		switch filter.Key {
@@ -167,22 +177,33 @@ func newWalletQuery(baseQuery string, sqlExec db.SQLExecuter, filters ...Filter)
 			qb.AddCondition("w.enabled = ?", filter.Value)
 		case FilterUserManaged:
 			qb.AddCondition("w.user_managed = ?", filter.Value)
+		case FilterEmbedded:
+			qb.AddCondition("w.embedded = ?", filter.Value)
 		case FilterSupportedAssets:
 			if assets, ok := filter.Value.([]string); ok && len(assets) > 0 {
 				// Filter wallets that support all specified assets
 				assetCondition := `w.id IN (
-					SELECT wa.wallet_id 
-					FROM wallets_assets wa 
-					JOIN assets a ON wa.asset_id = a.id 
+					SELECT wa.wallet_id
+					FROM wallets_assets wa
+					JOIN assets a ON wa.asset_id = a.id
 					WHERE a.code = ANY(?) OR a.id = ANY(?)
-					GROUP BY wa.wallet_id 
+					GROUP BY wa.wallet_id
 					HAVING COUNT(DISTINCT a.id) = ?
 				)`
 				qb.AddCondition(assetCondition, pq.Array(assets), pq.Array(assets), len(assets))
 			}
+		case FilterIncludeDeleted:
+			if include, ok := filter.Value.(bool); ok {
+				includeDeleted = include
+			}
 		default:
 			qb.AddCondition(filter.Key.Equals(), filter.Value)
 		}
+	}
+
+	// By default, exclude deleted wallets unless explicitly requested
+	if !includeDeleted {
+		qb.AddCondition("w.deleted_at IS NULL")
 	}
 
 	qb.AddGroupBy("w.id")
@@ -302,15 +323,42 @@ func (wm *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset,
 	return assets, nil
 }
 
+// HasPendingReceiverWallets checks if a wallet has any receiver_wallets in DRAFT or READY status.
+func (wm *WalletModel) HasPendingReceiverWallets(ctx context.Context, walletID string) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM receiver_wallets
+			WHERE wallet_id = $1
+			AND status IN ('DRAFT', 'READY')
+		)
+	`
+
+	var exists bool
+	err := wm.dbConnectionPool.GetContext(ctx, &exists, query, walletID)
+	if err != nil {
+		return false, fmt.Errorf("checking pending receiver wallets for wallet %s: %w", walletID, err)
+	}
+
+	return exists, nil
+}
+
+// SoftDelete marks a wallet as deleted if it has no pending receiver_wallets in DRAFT or READY status.
 func (wm *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
 	const query = `
-		UPDATE
-			wallets
-		SET
-			deleted_at = NOW()
-		WHERE
-			id = $1
+		WITH pending_check AS (
+			SELECT EXISTS (
+				SELECT 1
+				FROM receiver_wallets
+				WHERE wallet_id = $1
+				AND status IN ('DRAFT', 'READY')
+			) AS has_pending
+		)
+		UPDATE wallets
+		SET deleted_at = NOW()
+		WHERE id = $1
 			AND deleted_at IS NULL
+			AND NOT (SELECT has_pending FROM pending_check)
 		RETURNING *
 	`
 
@@ -318,6 +366,14 @@ func (wm *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet
 	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Check if wallet exists but has pending receiver_wallets, or if it simply doesn't exist
+			hasPending, checkErr := wm.HasPendingReceiverWallets(ctx, walletID)
+			if checkErr != nil {
+				return nil, fmt.Errorf("checking wallet usage after failed delete: %w", checkErr)
+			}
+			if hasPending {
+				return nil, ErrWalletInUse
+			}
 			return nil, ErrRecordNotFound
 		}
 		return nil, fmt.Errorf("soft deleting wallet ID %s: %w", walletID, err)
