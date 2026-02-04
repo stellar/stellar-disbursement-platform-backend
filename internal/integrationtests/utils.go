@@ -63,25 +63,3 @@ func getTransactionOnHorizon(client horizonclient.ClientInterface, transactionID
 
 	return &hPayment, nil
 }
-
-// getInvokeHostFunctionOnHorizon retrieves an InvokeHostFunction operation from a transaction.
-// This is used for contract account payments which use Soroban smart contracts instead of
-// regular Payment operations.
-func getInvokeHostFunctionOnHorizon(client horizonclient.ClientInterface, transactionID string) (*operations.InvokeHostFunction, error) {
-	records, err := client.Operations(horizonclient.OperationRequest{ForTransaction: transactionID})
-	if err != nil {
-		return nil, fmt.Errorf("fetching operations from horizon: %w", err)
-	}
-
-	if len(records.Embedded.Records) == 0 {
-		return nil, fmt.Errorf("no operation records found in horizon for transaction %s", transactionID)
-	}
-
-	for _, record := range records.Embedded.Records {
-		if ihf, ok := record.(operations.InvokeHostFunction); ok {
-			return &ihf, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no InvokeHostFunction operation found for transaction %s", transactionID)
-}

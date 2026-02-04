@@ -17,7 +17,6 @@ env:
   SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
   CIRCLE_API_KEY: ${{ vars.CIRCLE_API_KEY }}
   CIRCLE_USDC_WALLET_ID: ${{ vars.CIRCLE_USDC_WALLET_ID }}
-  EMBEDDED_WALLETS_WASM_HASH: ${{ vars.EMBEDDED_WALLETS_WASM_HASH }}
 
 permissions:
   contents: read
@@ -92,6 +91,7 @@ jobs:
             HORIZON_URL: "https://horizon-testnet.stellar.org"
             RPC_URL: "https://soroban-testnet.stellar.org"
             ENABLE_EMBEDDED_WALLETS: "true"
+            EMBEDDED_WALLETS_WASM_HASH: "6223a23026480644055230783215652de8695abc8a9dbb56a94972eb341a4663"
             TEST_TYPE: "embedded-wallet"
     environment: ${{ matrix.environment }}
     env:
@@ -105,6 +105,7 @@ jobs:
       CIRCLE_API_TYPE: ${{ matrix.CIRCLE_API_TYPE || 'TRANSFERS' }}
       RPC_URL: ${{ matrix.RPC_URL }}
       ENABLE_EMBEDDED_WALLETS: ${{ matrix.ENABLE_EMBEDDED_WALLETS || 'false' }}
+      EMBEDDED_WALLETS_WASM_HASH: ${{ matrix.EMBEDDED_WALLETS_WASM_HASH }}
       TEST_TYPE: ${{ matrix.TEST_TYPE }}
     steps:
       - name: Checkout

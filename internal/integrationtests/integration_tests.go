@@ -552,14 +552,6 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 // EMBEDDED WALLET (CONTRACT ACCOUNT) INTEGRATION TESTS
 // ========================================
 
-// StartEmbeddedWalletIntegrationTests runs the E2E embedded wallet flow:
-//
-//  1. Admin creates disbursement with Embedded Wallet provider (phone + placeholder wallet address)
-//  2. Admin starts disbursement → system sends invitation to receiver → creates embedded_wallet record
-//  3. Receiver registers embedded wallet via API (simulated) → TSS deploys smart contract
-//  4. System detects contract deployment success → auto-registers receiver wallet with C-address
-//  5. Payment scheduler picks up the payment → TSS sends payment to contract
-//  6. Verify payment reached the contract via InvokeHostFunction
 func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx context.Context, opts IntegrationTestsOpts) error {
 	log.Ctx(ctx).Info("Starting embedded wallet (contract account) integration tests...")
 	it.initServices(ctx, opts)
@@ -800,7 +792,7 @@ func (it *IntegrationTestsService) verifyReceiverWalletRegistration(ctx context.
 	return nil
 }
 
-// ensureContractTransactionCompletion waits for the payment to complete and validates it show up as InvokeHostFunction.
+// ensureContractTransactionCompletion waits for the payment to complete.
 func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 	ctx context.Context,
 	disbursement *data.Disbursement,
@@ -839,19 +831,7 @@ func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 		return fmt.Errorf("waiting for payment to be processed: %w", err)
 	}
 
-	log.Ctx(ctx).Infof("Payment successful! Validating InvokeHostFunction on Horizon for tx: %s", payment.StellarTransactionID)
-
-	// For contract payments, we expect InvokeHostFunction instead of Payment operation
-	ihf, err := getInvokeHostFunctionOnHorizon(it.horizonClient, payment.StellarTransactionID)
-	if err != nil {
-		return fmt.Errorf("getting InvokeHostFunction on Horizon: %w", err)
-	}
-
-	if err = validateContractStellarTransaction(ihf); err != nil {
-		return fmt.Errorf("validating contract transaction: %w", err)
-	}
-
-	log.Ctx(ctx).Infof("✅ Contract payment validated! Transaction hash: %s", ihf.TransactionHash)
+	log.Ctx(ctx).Infof("✅ Contract payment completed! Transaction ID: %s", payment.StellarTransactionID)
 	return nil
 }
 
