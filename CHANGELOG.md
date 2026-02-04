@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## [6.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.1...6.1.0))
 
 ### Fixed
 
@@ -26,6 +26,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Security and Dependencies
 
 - Upgrade React to 19.2.3 and @stellar/design-system to 3.2.7 in SEP-24 frontend to address CVE-2025-55184 denial of service and source code exposure vulnerability in React Server Components [#988](https://github.com/stellar/stellar-disbursement-platform-backend/pull/988)
+- Bump soroban-sdk from 22.0.7 to 22.0.9 in /contracts [#1036](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1036)
+- Bump lodash from 4.17.21 to 4.17.23 in /internal/serve/sep24frontend/app [#1022](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1022)
+- Bump golang from 1.25.5-alpine to 1.26rc2-alpine in the all-docker group [#1013](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1013)
+- Bump the all-actions group across 1 directory with 5 updates [#1038](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1038)
+- Bump the minor-and-patch group with 5 updates [#1012](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1012)
+- Bump the minor-and-patch group with 7 updates [#1004](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1004)
+- Bump the minor-and-patch group with 8 updates [#990](https://github.com/stellar/stellar-disbursement-platform-backend/pull/990)
+- Bump the minor-and-patch group with 3 updates [#993](https://github.com/stellar/stellar-disbursement-platform-backend/pull/993)
 
 ## [6.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.0.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.0...6.0.1))
 
