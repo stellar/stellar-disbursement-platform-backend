@@ -166,6 +166,8 @@ func Test_IntegrationTestsCommand_StartEmbeddedWalletTestsCommand(t *testing.T) 
 		EnableEmbeddedWallets:   true,
 		EmbeddedWalletsWasmHash: "0123456789abcdef",
 		RPCUrl:                  "https://rpc.test",
+		DisbursementCSVFileName: "disbursement.csv",
+		DisbursementCSVFilePath: "/tmp",
 	}
 
 	cmd := command.StartEmbeddedWalletTestsCommand(integrationTestsOpts)
@@ -174,6 +176,8 @@ func Test_IntegrationTestsCommand_StartEmbeddedWalletTestsCommand(t *testing.T) 
 	t.Setenv("ENABLE_EMBEDDED_WALLETS", "true")
 	t.Setenv("EMBEDDED_WALLETS_WASM_HASH", "0123456789abcdef")
 	t.Setenv("RPC_URL", "https://rpc.test")
+	t.Setenv("DISBURSEMENT_CSV_FILE_NAME", "disbursement.csv")
+	t.Setenv("DISBURSEMENT_CSV_FILE_PATH", "/tmp")
 
 	parentCmdMock.SetArgs([]string{
 		"start-embedded-wallet",
