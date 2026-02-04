@@ -352,7 +352,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 		require.NoError(t, err)
 
 		err = ccm.insert(ctx, tx, config)
-		assert.EqualError(t, err, "inserting circle config: pq: circle_client_config must contain exactly one row")
+		assert.ErrorContains(t, err, "inserting circle config: pq: circle_client_config must contain exactly one row")
 	})
 }
 

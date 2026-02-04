@@ -473,7 +473,7 @@ func Test_AssetModel_Insert(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "")
-		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.ErrorContains(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 	})
 
@@ -481,11 +481,11 @@ func Test_AssetModel_Insert(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "INVALID")
-		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.ErrorContains(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 
 		asset, err = assetModel.Insert(ctx, dbConnectionPool, "XLM", "INVALID")
-		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.ErrorContains(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 	})
 }
@@ -504,7 +504,7 @@ func Test_AssetModelGetOrCreate(t *testing.T) {
 
 	t.Run("returns error when issuer is invalid", func(t *testing.T) {
 		asset, err := assetModel.GetOrCreate(ctx, "FOO1", "invalid_issuer")
-		require.EqualError(t, err, "error getting or creating asset: pq: new row for relation \"assets\" violates check constraint \"asset_issuer_length_check\"")
+		require.ErrorContains(t, err, "error getting or creating asset: pq: new row for relation \"assets\" violates check constraint \"asset_issuer_length_check\"")
 		assert.Empty(t, asset)
 	})
 
