@@ -9,6 +9,8 @@ global:
   autoGenerateSecrets: true
   ## global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
   singleTenantMode: true
+  ## global.rpcUrl Shared RPC URL for SDP/TSS/dashboard.
+  rpcUrl: "https://soroban-testnet.stellar.org"
 
 # =========================== START sdp ===========================
 sdp:

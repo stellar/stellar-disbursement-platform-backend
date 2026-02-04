@@ -22,11 +22,14 @@ data:
   HORIZON_URL: "https://horizon-testnet.stellar.org"
   {{- end }}
   TSS_METRICS_PORT: {{ include "tss.metricsPort" . | quote }}
+  {{- if .Values.global.rpcRequestAuthHeaderKey }}
+  RPC_REQUEST_AUTH_HEADER_KEY: {{ .Values.global.rpcRequestAuthHeaderKey | quote }}
+  {{- end }}
   {{- if .Values.global.distributionPublicKey }}
   DISTRIBUTION_PUBLIC_KEY: {{ .Values.global.distributionPublicKey | quote }}
   {{- end }}
-  {{- if ne (include "isPubnet" .) "true" }}
-  RPC_URL: "https://soroban-testnet.stellar.org"
+  {{- if .Values.global.rpcUrl }}
+  RPC_URL: {{ .Values.global.rpcUrl | quote }}
   {{- end }}
   {{- /*
   {{- /*

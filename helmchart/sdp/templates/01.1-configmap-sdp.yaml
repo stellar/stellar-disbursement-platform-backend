@@ -29,6 +29,9 @@ Values from the `global` section
   */}}
   {{- with .Values.global }}
   SINGLE_TENANT_MODE: {{ .singleTenantMode | quote }}
+  {{- if .rpcRequestAuthHeaderKey }}
+  RPC_REQUEST_AUTH_HEADER_KEY: {{ .rpcRequestAuthHeaderKey | quote }}
+  {{- end }}
   {{- if .distributionPublicKey }}
   DISTRIBUTION_PUBLIC_KEY: {{ .distributionPublicKey | quote }}
   {{- end }}
@@ -53,8 +56,8 @@ Values from the `global` section
   {{- else }}
   SEP45_CONTRACT_ID: "CDY4CS2VWHAZOMYVTKUFKGNZKIVFBCXUFNFQ5KSXOTAHKL5H5ZRTAUTH"
   {{- end }}
-  {{- if ne (include "isPubnet" .) "true" }}
-  RPC_URL: "https://soroban-testnet.stellar.org"
+  {{- if .Values.global.rpcUrl }}
+  RPC_URL: {{ .Values.global.rpcUrl | quote }}
   {{- end }}
   {{- /*
 Values from the sdp configmap section - These will override the global values

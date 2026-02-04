@@ -11,6 +11,12 @@
 global:
   ## @param global.isPubnet Determines if the network is public. Set this to true for public networks.
   isPubnet: false
+  ## @param global.rpcUrl The URL of the Stellar RPC server for embedded wallets and SEP-45 features. When set, templates use this value and enable RPC in the dashboard.
+  rpcUrl: ""
+  ## @param global.rpcRequestAuthHeaderKey The name of the HTTP header to include when authenticating requests to a protected RPC server.
+  rpcRequestAuthHeaderKey: ""
+  ## @param global.rpcRequestAuthHeaderValue he value of the HTTP header used for authenticating requests to a protected RPC server.
+  rpcRequestAuthHeaderValue: ""
 
   ## @param global.replicaCount Number of replicas for the application.
   replicaCount: 1
@@ -193,8 +199,6 @@ sdp:
   ## @param sdp.configMap.data.EMBEDDED_WALLETS_WASM_HASH The WASM hash of the smart contract for embedded wallets. Required when ENABLE_EMBEDDED_WALLETS is "true". Defaults to the official embedded wallets WASM hash.
   ## @param sdp.configMap.data.ENABLE_SEP45 Determines if SEP-45 web authentication features are enabled ("true" or "false").
   ## @extra sdp.configMap.data.SEP45_CONTRACT_ID The ID of the SEP-45 web authentication contract. Required when ENABLE_SEP45 is "true". Defaults to the pubnet/testnet contract ID based on global.isPubnet.
-  ## @extra sdp.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true". Defaults to the public Soroban RPC URL on testnet only.
-  ## @extra sdp.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_VALUE.
   configMap:
     annotations:
     data:
@@ -245,10 +249,6 @@ sdp:
       ENABLE_SEP45: "false"
 #     SEP45_CONTRACT_ID: #required when ENABLE_SEP45 is "true" (defaults based on global.isPubnet)
 
-      ## RPC configuration
-#     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true" (defaults to public Soroban RPC on testnet)
-#     RPC_REQUEST_AUTH_HEADER_KEY: #optional
-
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
   ## @param sdp.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
@@ -279,7 +279,6 @@ sdp:
   ## @extra sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   ## @extra sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   ## @extra sdp.kubeSecrets.data.BRIDGE_API_KEY The API key for the bridge integration. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
-  ## @extra sdp.kubeSecrets.data.RPC_REQUEST_AUTH_HEADER_VALUE The value of the HTTP header used for authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_KEY.
   kubeSecrets:
     secretName: "sdp-backend-secret-name"
     create: false
@@ -333,7 +332,6 @@ sdp:
 #      BRIDGE_API_KEY: #optional, depends on the value of ENABLE_BRIDGE_INTEGRATION.
 
       ## RPC configuration
-#      RPC_REQUEST_AUTH_HEADER_VALUE: #optional, depends on value of RPC_REQUEST_AUTH_HEADER_KEY
 
   ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
   ## @param sdp.ingress.enabled If true, an ingress controller will be created for the SDP service.
@@ -414,8 +412,6 @@ tss:
   ## @param tss.configMap.data.DB_MAX_IDLE_CONNS Maximum idle connections retained in the pool.
   ## @param tss.configMap.data.DB_CONN_MAX_IDLE_TIME_SECONDS Close idle connections after N seconds.
   ## @param tss.configMap.data.DB_CONN_MAX_LIFETIME_SECONDS Recycle connections after N seconds.
-  ## @extra tss.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Required when ENABLE_EMBEDDED_WALLETS or ENABLE_SEP45 is "true". Defaults to the public Soroban RPC URL on testnet only.
-  ## @extra tss.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_VALUE.
   configMap:
     annotations:
     data:
@@ -443,10 +439,6 @@ tss:
       DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
       DB_CONN_MAX_LIFETIME_SECONDS: "300"
 
-      ## RPC configuration
-#     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS is "true"
-#     RPC_REQUEST_AUTH_HEADER_KEY: #optional
-
   ## @extra tss.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param tss.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
   ## @param tss.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
@@ -457,7 +449,6 @@ tss:
   ## @extra tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
   ## @extra tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.
   ## @extra tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
-  ## @extra tss.kubeSecrets.data.RPC_REQUEST_AUTH_HEADER_VALUE The value of the HTTP header used for authenticating requests to a protected RPC server. Used together with RPC_REQUEST_AUTH_HEADER_KEY.
   kubeSecrets:
     secretName: "tss-secret-name"
     create: false
@@ -475,7 +466,6 @@ tss:
 #      SENTRY_DSN: #optional
 
       ## RPC configuration
-#      RPC_REQUEST_AUTH_HEADER_VALUE: #optional, depends on value of RPC_REQUEST_AUTH_HEADER_KEY
 
 
       # =========================== START dashboard ===========================
@@ -535,6 +525,7 @@ dashboard:
   ## @param dashboard.configMap.annotations Annotations to be added to the ConfigMap.
   ## @param dashboard.configMap.data Used to inject non-sensitive environment variables into the Dashboard deployment.
   ## @extra dashboard.configMap.data.RECAPTCHA_SITE_KEY The site key for Google reCAPTCHA service.
+  ## @extra dashboard.configMap.data.RPC_ENABLED Enables RPC features in the Dashboard; defaults based on global.rpcUrl.
   configMap:
     annotations: {}
     data: {}

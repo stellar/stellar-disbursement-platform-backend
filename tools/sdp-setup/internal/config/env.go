@@ -262,7 +262,7 @@ func Write(cfg Config, path string) error {
 		configMap["TENANT_XLM_BOOTSTRAP_AMOUNT"] = "1"
 		configMap["NUM_CHANNEL_ACCOUNTS"] = "1"
 		configMap["SEP45_CONTRACT_ID"] = "CALI6JC3MSNDGFRP7Z2OKUEPREHOJRRXKMJEWQDEFZPFGXALA45RAUTH"
-		configMap["RPC_URL"] = "https://rpc.lightsail.network/"
+		configMap["RPC_URL"] = "https://rpc.lightsail.network"
 	case "testnet":
 		configMap["SEP45_CONTRACT_ID"] = "CDY4CS2VWHAZOMYVTKUFKGNZKIVFBCXUFNFQ5KSXOTAHKL5H5ZRTAUTH"
 		configMap["RPC_URL"] = "https://soroban-testnet.stellar.org"
