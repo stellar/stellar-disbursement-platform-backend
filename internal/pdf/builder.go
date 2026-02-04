@@ -55,16 +55,16 @@ const (
 
 // Table row heights
 const (
-	summaryHeaderRowHeight = 16.5
+	summaryHeaderRowHeight = 15.5
 	summaryHeaderLineHeight = 5.0
-	summaryDataRowHeight    = 14.5
-	txHeaderRowHeight       = 16.5
-	txDataRowHeight         = 14.5
+	summaryDataRowHeight    = 14
+	txHeaderRowHeight       = 15.5
+	txDataRowHeight         = 14
 )
 
 // Table cell spacing
 const (
-	cellPaddingH    = 2.115
+	cellPaddingX    = 2.115
 	counterpartyGap = 1.5
 )
 
@@ -123,8 +123,8 @@ var summaryValueColor    = []int{16, 24, 40}   // #101828
 var sectionTitleColor    = []int{30, 41, 57}   // #1E2939
 
 // Border and background colors (RGB)
-var headerBorderColor = []int{209, 213, 220}   // #D1D5DC
-var defaultBorderColor = []int{229, 231, 232}     // #E5E7EB
+var headerBorderColor = []int{203, 207, 215}   // #CBCFD7
+var defaultBorderColor = []int{240, 241, 243}     // #F0F1F3
 var totalsRowBgColor = []int{249, 250, 251}   // #F9FAFB
 
 
@@ -143,7 +143,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		// Position at top of footer area; add margin, then top border).
 		pdf.SetY(pageHeight - marginBottom)
 		pdf.Ln(footerMarginTop)
-		pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
+		pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 		pdf.SetLineWidth(headerSeparatorLineWidth)
 		y := pdf.GetY()
 		pdf.Line(marginLR, y, mmPerPage-marginLR, y)
@@ -197,9 +197,9 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		w := summaryColWidths[i]
 		pdf.SetXY(xPos, ySummaryHeaderStart)
 		pdf.CellFormat(w, summaryHeaderRowHeight, "", "B", 0, "L", false, 0, "")
-		textW := w - 2*cellPaddingH
+		textW := w - 2*cellPaddingX
 		if i == 0 {
-			pdf.SetXY(xPos+cellPaddingH, ySummaryHeaderStart)
+			pdf.SetXY(xPos+cellPaddingX, ySummaryHeaderStart)
 			pdf.CellFormat(textW, summaryHeaderRowHeight, h.text, "", 0, h.align, false, 0, "")
 		} else {
 			lines := strings.Split(breakHeaderWords(h.text), "\n")
@@ -207,7 +207,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 			blockHeight := lineHeight * float64(len(lines))
 			lineY := ySummaryHeaderStart + (summaryHeaderRowHeight-blockHeight)/2
 			for _, line := range lines {
-				pdf.SetXY(xPos+cellPaddingH, lineY)
+				pdf.SetXY(xPos+cellPaddingX, lineY)
 				pdf.CellFormat(textW, summaryHeaderLineHeight, line, "", 0, "R", false, 0, "")
 				lineY += lineHeight
 			}
@@ -239,12 +239,12 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	}
 	pdf.SetXY(xSummaryLeft, pdf.GetY())
 	ySummaryData := pdf.GetY()
-	textW0 := summaryColWidths[0] - 2*cellPaddingH
-	pdf.SetXY(xSummaryLeft+cellPaddingH, ySummaryData)
+	textW0 := summaryColWidths[0] - 2*cellPaddingX
+	pdf.SetXY(xSummaryLeft+cellPaddingX, ySummaryData)
 	pdf.CellFormat(textW0, summaryDataRowHeight, walletAddr, "", 0, "L", false, 0, "")
 	xPos = xSummaryLeft + summaryColWidths[0]
 	for i, w := range summaryColWidths[1:] {
-		textW := w - 2*cellPaddingH
+		textW := w - 2*cellPaddingX
 		var text string
 		switch i {
 		case 0:
@@ -261,7 +261,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 			pdf.SetFont("Inter", "emi", bodyFontSize)
 			pdf.SetTextColor(activeColor[0], activeColor[1], activeColor[2])
 		}
-		pdf.SetXY(xPos+cellPaddingH, ySummaryData)
+		pdf.SetXY(xPos+cellPaddingX, ySummaryData)
 		pdf.CellFormat(textW, summaryDataRowHeight, text, "", 0, "R", false, 0, "")
 		// Reset font weight to regular and color back to defaultCellColor after ending balance
 		if i == 3 {
@@ -322,8 +322,8 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 	pdf.SetFont("Inter", "emi", tableHeaderSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
-	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
-	pdf.SetLineWidth(0.53)
+	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
+	pdf.SetLineWidth(0.4)
 	yStart := pdf.GetY()
 	xPos := pdf.GetX()
 	txHeaders := []struct {
@@ -341,9 +341,9 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 		w := txColWidths[i]
 		pdf.SetXY(xPos, yStart)
 		pdf.CellFormat(w, txHeaderRowHeight, "", "B", 0, "L", false, 0, "")
-		textW := w - 2*cellPaddingH
+		textW := w - 2*cellPaddingX
 		if h.align == "L" {
-			pdf.SetXY(xPos+cellPaddingH, yStart)
+			pdf.SetXY(xPos+cellPaddingX, yStart)
 			pdf.CellFormat(textW, txHeaderRowHeight, h.text, "", 0, h.align, false, 0, "")
 		} else {
 			lines := strings.Split(breakHeaderWords(h.text), "\n")
@@ -351,7 +351,7 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 			blockHeight := lineHeight * float64(len(lines))
 			lineY := yStart + (txHeaderRowHeight-blockHeight)/2
 			for _, line := range lines {
-				pdf.SetXY(xPos+cellPaddingH, lineY)
+				pdf.SetXY(xPos+cellPaddingX, lineY)
 				pdf.CellFormat(textW, 4, line, "", 0, "R", false, 0, "")
 				lineY += lineHeight
 			}
@@ -427,25 +427,25 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.SetFont("Inter", "", txCellFontSize)
 	pdf.SetXY(xStart, yStart)
 	pdf.CellFormat(txColWidths[0], txDataRowHeight, "", "B", 0, "L", false, 0, "")
-	pdf.SetXY(xStart+cellPaddingH, yStart)
-	pdf.CellFormat(txColWidths[0]-2*cellPaddingH, txDataRowHeight, dateStr, "", 0, "L", false, 0, "")
+	pdf.SetXY(xStart+cellPaddingX, yStart)
+	pdf.CellFormat(txColWidths[0]-2*cellPaddingX, txDataRowHeight, dateStr, "", 0, "L", false, 0, "")
 
 	// Transaction ID
 	pdf.SetFont("Inter", "", txSmallFontSize)
 	xID := xStart + txColWidths[0]
 	pdf.SetXY(xID, yStart)
 	pdf.CellFormat(txColWidths[1], txDataRowHeight, "", "B", 0, "L", false, 0, "")
-	pdf.SetXY(xID+cellPaddingH, yStart)
-	pdf.CellFormat(txColWidths[1]-2*cellPaddingH, txDataRowHeight, opID, "", 0, "L", false, 0, "")
+	pdf.SetXY(xID+cellPaddingX, yStart)
+	pdf.CellFormat(txColWidths[1]-2*cellPaddingX, txDataRowHeight, opID, "", 0, "L", false, 0, "")
 
 	// Counterparty
 	const counterpartyLineHeight = 4.0
 	const bulletChar = "•" // Bullet character
 	xCP := xStart + txColWidths[0] + txColWidths[1]
-	cpW := txColWidths[2] - 2*cellPaddingH
+	cpW := txColWidths[2] - 2*cellPaddingX
 	pdf.SetXY(xCP, yStart)
 	pdf.CellFormat(txColWidths[2], txDataRowHeight, "", "B", 0, "L", false, 0, "")
-	xTextStart := xCP + cellPaddingH
+	xTextStart := xCP + cellPaddingX
 	pdf.SetFont("Inter", "", txSmallFontSize)
 	walletIDWidth := pdf.GetStringWidth(walletIDLabel)
 	recipientWidth := pdf.GetStringWidth("Recipient")
@@ -511,7 +511,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	// Debits
 	xDebits := xStart + txColWidths[0] + txColWidths[1] + txColWidths[2]
 	if debitsAmount != "" {
-		drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, debitsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingH)
+		drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, debitsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingX)
 	} else {
 		pdf.SetXY(xDebits, yStart)
 		pdf.CellFormat(txColWidths[3], txDataRowHeight, "", "B", 0, "R", false, 0, "")
@@ -519,14 +519,14 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	// Credits
 	xCredits := xDebits + txColWidths[3]
 	if creditsAmount != "" {
-		drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, creditsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingH)
+		drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, creditsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingX)
 	} else {
 		pdf.SetXY(xCredits, yStart)
 		pdf.CellFormat(txColWidths[4], txDataRowHeight, "", "B", 0, "R", false, 0, "")
 	}
 	// Balance
 	xBalance := xCredits + txColWidths[4]
-	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, balanceAmountStr, assetCode, "B", false, amountCellOpts{}}, cellPaddingH)
+	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, balanceAmountStr, assetCode, "B", false, amountCellOpts{}}, cellPaddingX)
 
 	pdf.SetXY(xStart, yStart+txDataRowHeight)
 	pdf.SetLineWidth(0.25)
@@ -553,8 +553,8 @@ func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode
 		pdf.SetXY(xStart, yStart)
 		pdf.CellFormat(w, txDataRowHeight, "", "T", 0, "L", true, 0, "")
 		if i == 2 {
-			textW := w - 2*cellPaddingH
-			pdf.SetXY(xStart+cellPaddingH, yStart)
+			textW := w - 2*cellPaddingX
+			pdf.SetXY(xStart+cellPaddingX, yStart)
 			pdf.CellFormat(textW, txDataRowHeight, "Totals:", "", 0, "R", false, 0, "")
 		}
 		xStart += w
@@ -564,9 +564,9 @@ func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode
 	xCredits := xDebits + txColWidths[3]
 	xBalance := xCredits + txColWidths[4]
 
-	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalDebits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingH)
-	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalCredits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingH)
-	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.Balance), assetCode, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}}, cellPaddingH)
+	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalDebits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
+	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalCredits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
+	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.Balance), assetCode, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}}, cellPaddingX)
 
 	pdf.SetXY(xRowStart, yStart+txDataRowHeight)
 	pdf.SetLineWidth(0.25)
@@ -712,7 +712,7 @@ func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.Imag
 
 // drawHeaderSeparatorLine draws a horizontal line below the title section
 func drawHeaderSeparatorLine(pdf *gofpdf.Fpdf) {
-	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
+	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 	pdf.SetLineWidth(headerSeparatorLineWidth)
 	y := pdf.GetY()
 	pdf.Line(marginLR, y, mmPerPage-marginLR, y)
