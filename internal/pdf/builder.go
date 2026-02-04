@@ -56,10 +56,26 @@ const (
 	titleFontSize         = 23.4
 )
 
+// Line heights
+const (
+	summaryHeaderLineHeight  = 4.0
+	headerLeftColLineHeight  = 6.0
+	headerRightColLineHeight = 5.0
+	footerLineHeight         = 4.0
+	titleSectionLine1Height  = 6.0
+	titleSectionLine2Height  = 9.0
+	titleSectionLine3Height  = 6.0
+	dateLineHeight           = 4.0
+	counterpartyLineHeight   = 4.0
+	txIDLineHeight           = 4.0
+	txHeaderLineHeight       = 4.0
+	amountLineHeight         = 4.0
+	currencyLineHeight       = 4.0
+)
+
 // Table row heights
 const (
 	summaryHeaderRowHeight = 15.5
-	summaryHeaderLineHeight = 5.0
 	summaryDataRowHeight    = 14
 	txHeaderRowHeight       = 15.5
 	txDataRowHeight         = 14
@@ -81,8 +97,6 @@ const (
 	headerBottomMargin       = 5.0
 	headerSeparatorLineWidth = 0.26
 	headerLogoToOrgNameGap   = 3.0
-	headerLeftColLineHeight  = 6.0
-	headerRightColLineHeight = 5.0
 	logoOffsetX              = 1.0
 	walletAddressLabelGap    = 0.3
 )
@@ -90,14 +104,10 @@ const (
 // Title section spacing
 const (
 	titleSectionBottomMargin = 5.0
-	titleSectionLine1Height  = 6.0
-	titleSectionLine2Height  = 9.0
-	titleSectionLine3Height  = 6.0
 )
 
 // Footer section spacing
 const (
-	footerLineHeight          = 4.0
 	footerMarginTop           = 1.5
 	footerContentGap          = 3.5
 	footerDisclaimerToPageGap = 2.0
@@ -158,9 +168,23 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		pdf.SetDrawColor(0, 0, 0)
 
 		// Disclaimer and page count fit within marginBottom (same as marginTop).
+		// Disclaimer label and text using absolute positioning
+		yDisclaimerLine := pdf.GetY()
+		disclaimerLabel := "Disclaimer:"
+		disclaimerText := " This report is generated from SDP records. Blockchain confirmations reflect public ledger data."
+		// Draw label in bold
+		pdf.SetFont("Inter", "B", bodyFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
+		labelWidth := pdf.GetStringWidth(disclaimerLabel)
+		xLabelStart := pdf.GetX()
+		pdf.SetXY(xLabelStart, yDisclaimerLine)
+		pdf.CellFormat(labelWidth, footerLineHeight, disclaimerLabel, "", 0, "L", false, 0, "")
+		// Calculate text position
+		xTextStart := xLabelStart + labelWidth
+		// Draw text in regular font
 		pdf.SetFont("Inter", "", bodyFontSize)
-		pdf.CellFormat(0, footerLineHeight, "Disclaimer: This report is generated from SDP records. Blockchain confirmations reflect public ledger data.", "", 1, "L", false, 0, "")
+		pdf.SetXY(xTextStart, yDisclaimerLine)
+		pdf.CellFormat(0, footerLineHeight, disclaimerText, "", 1, "L", false, 0, "")
 		pdf.Ln(footerDisclaimerToPageGap)
 		pdf.CellFormat(0, footerLineHeight, fmt.Sprintf("Page %d of %d", pdf.PageNo(), pdf.PageCount()), "", 0, "R", false, 0, "")
 		pdf.SetTextColor(0, 0, 0)
@@ -354,13 +378,12 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 			pdf.CellFormat(textW, txHeaderRowHeight, h.text, "", 0, h.align, false, 0, "")
 		} else {
 			lines := strings.Split(breakHeaderWords(h.text), "\n")
-			lineHeight := 4.0
-			blockHeight := lineHeight * float64(len(lines))
+			blockHeight := txHeaderLineHeight * float64(len(lines))
 			lineY := yStart + (txHeaderRowHeight-blockHeight)/2
 			for _, line := range lines {
 				pdf.SetXY(xPos+cellPaddingX, lineY)
-				pdf.CellFormat(textW, 4, line, "", 0, "R", false, 0, "")
-				lineY += lineHeight
+				pdf.CellFormat(textW, txHeaderLineHeight, line, "", 0, "R", false, 0, "")
+				lineY += txHeaderLineHeight
 			}
 		}
 		xPos += w
@@ -374,9 +397,20 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 
 // drawTxRow draws one transaction row and returns the new running balance after this transaction.
 func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode string, runningBalance decimal.Decimal) decimal.Decimal {
-	dateStr := tx.CreatedAt
-	if len(dateStr) >= 10 {
-		dateStr = dateStr[:10]
+	var dateLine1, dateLine2 string
+	parsedTime, err := time.Parse(time.RFC3339, tx.CreatedAt)
+	if err == nil {
+		utcTime := parsedTime.UTC()
+		dateLine1 = utcTime.Format("2006-01-02")
+		dateLine2 = utcTime.Format("15:04 UTC")
+	} else {
+		// Fallback: try to extract date from string
+		if len(tx.CreatedAt) >= 10 {
+			dateLine1 = tx.CreatedAt[:10]
+		} else {
+			dateLine1 = tx.CreatedAt
+		}
+		dateLine2 = ""
 	}
 	// Use full transaction ID (will wrap if needed)
 	opID := tx.ID
@@ -435,30 +469,38 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.SetFont("Inter", "", txSmallFontSize)
 	pdf.SetXY(xStart, yStart)
 	pdf.CellFormat(txColWidths[0], txDataRowHeight, "", "B", 0, "L", false, 0, "")
-	pdf.SetXY(xStart+cellPaddingX, yStart)
-	pdf.CellFormat(txColWidths[0]-2*cellPaddingX, txDataRowHeight, dateStr, "", 0, "L", false, 0, "")
+	dateCellWidth := txColWidths[0] - 2*cellPaddingX
+	dateBlockHeight := dateLineHeight * 2
+	dateY := yStart + (txDataRowHeight-dateBlockHeight)/2
+	// First line: date
+	pdf.SetXY(xStart+cellPaddingX, dateY)
+	pdf.CellFormat(dateCellWidth, dateLineHeight, dateLine1, "", 0, "L", false, 0, "")
+	// Second line: time and UTC
+	if dateLine2 != "" {
+		pdf.SetXY(xStart+cellPaddingX, dateY+dateLineHeight)
+		pdf.CellFormat(dateCellWidth, dateLineHeight, dateLine2, "", 0, "L", false, 0, "")
+	}
 
 	// Transaction ID
 	xID := xStart + txColWidths[0]
 	pdf.SetXY(xID, yStart)
 	pdf.CellFormat(txColWidths[1], txDataRowHeight, "", "B", 0, "L", false, 0, "")
-	pdf.SetXY(xID+cellPaddingX, yStart)
-	// Create clickable link to Stellar Expert explorer with highlight color and underline
+	// Create clickable link to Stellar Expert
 	pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
-	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 	txURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/tx/%s", tx.ID)
 	cellWidth := txColWidths[1] - 2*cellPaddingX
-	lineHeight := 4.0
 	lines := pdf.SplitText(opID, cellWidth)
-	actualHeight := float64(len(lines)) * lineHeight
-	currentY := pdf.GetY()
-	pdf.MultiCell(cellWidth, lineHeight, opID, "", "L", false)
-	pdf.LinkString(xID+cellPaddingX, currentY, cellWidth, actualHeight, txURL)
+	actualHeight := float64(len(lines)) * txIDLineHeight
+	// Center vertically: calculate Y position to center the text block in the cell
+	centeredY := yStart + (txDataRowHeight-actualHeight)/2
+	pdf.SetXY(xID+cellPaddingX, centeredY)
+	pdf.MultiCell(cellWidth, txIDLineHeight, opID, "", "C", false)
+	pdf.LinkString(xID+cellPaddingX, centeredY, cellWidth, actualHeight, txURL)
 	pdf.SetY(yStart)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 
 	// Counterparty
-	const counterpartyLineHeight = 4.0
 	const bulletChar = "•" // Bullet character
 	xCP := xStart + txColWidths[0] + txColWidths[1]
 	cpW := txColWidths[2] - 2*cellPaddingX
@@ -483,19 +525,19 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		pdf.SetFont("Inter", "", txSmallFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
 		pdf.SetXY(xTextStart, counterpartyY)
-		pdf.CellFormat(fixedLabelWidth, 4, walletIDLabel, "", 0, "L", false, 0, "")
+		pdf.CellFormat(fixedLabelWidth, counterpartyLineHeight, walletIDLabel, "", 0, "L", false, 0, "")
 		// Bullet
 		pdf.SetXY(fixedBulletX, counterpartyY)
-		pdf.CellFormat(bulletWidth, 4, bulletChar, "", 0, "L", false, 0, "")
+		pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
 		// Wallet address with underline and link
 		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
-		pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 		pdf.SetXY(fixedValueX, counterpartyY)
 		walletAddrWidth := cpW - (fixedValueX - xTextStart)
 		walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
-		pdf.CellFormat(walletAddrWidth, 4, walletAddr, "", 0, "L", false, 0, walletURL)
+		pdf.CellFormat(walletAddrWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
 		// Add link over the entire wallet address area
-		pdf.LinkString(fixedValueX, counterpartyY, walletAddrWidth, 4, walletURL)
+		pdf.LinkString(fixedValueX, counterpartyY, walletAddrWidth, counterpartyLineHeight, walletURL)
 		// Name
 		pdf.SetFont("Inter", "", txSmallFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
@@ -503,17 +545,17 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		if line2Label != "" {
 			// Label
 			pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(fixedLabelWidth, 4, line2Label, "", 0, "L", false, 0, "")
+			pdf.CellFormat(fixedLabelWidth, counterpartyLineHeight, line2Label, "", 0, "L", false, 0, "")
 			// Bullet
 			pdf.SetXY(fixedBulletX, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(bulletWidth, 4, bulletChar, "", 0, "L", false, 0, "")
+			pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
 			// Name
 			pdf.SetXY(fixedValueX, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, line2Value, "", 0, "L", false, 0, "")
+			pdf.CellFormat(cpW-(fixedValueX-xTextStart), counterpartyLineHeight, line2Value, "", 0, "L", false, 0, "")
 		} else {
 			// Name only
 			pdf.SetXY(fixedValueX, counterpartyY+counterpartyLineHeight)
-			pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, line2Value, "", 0, "L", false, 0, "")
+			pdf.CellFormat(cpW-(fixedValueX-xTextStart), counterpartyLineHeight, line2Value, "", 0, "L", false, 0, "")
 		}
 	} else {
 		// Label
@@ -527,7 +569,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
 		// Wallet address with underline and link
 		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
-		pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 		pdf.SetXY(fixedValueX, counterpartyY)
 		walletAddrWidth := cpW - (fixedValueX - xTextStart)
 		walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
@@ -628,7 +670,7 @@ func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs, paddingH float64
 	textW := w - 2*paddingH
 	textX := x + paddingH
 	// Amount + currency
-	const amountCurrencyBlockHeight = 9.0
+	amountCurrencyBlockHeight := amountLineHeight + currencyLineHeight
 	amountY := y + (h-amountCurrencyBlockHeight)/2
 	if opts.forTotals {
 		pdf.SetFont("Inter", "emi", txCellFontSize)
@@ -639,7 +681,7 @@ func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs, paddingH float64
 		pdf.SetTextColor(opts.amountColor[0], opts.amountColor[1], opts.amountColor[2])
 	}
 	pdf.SetXY(textX, amountY)
-	pdf.CellFormat(textW, 5, a.amountStr, "", 0, "R", false, 0, "")
+	pdf.CellFormat(textW, amountLineHeight, a.amountStr, "", 0, "R", false, 0, "")
 	if opts.amountColor != nil {
 		pdf.SetTextColor(0, 0, 0)
 	}
@@ -650,8 +692,8 @@ func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs, paddingH float64
 	} else {
 		pdf.SetFont("Inter", "", txSmallFontSize)
 	}
-	pdf.SetXY(textX, amountY+5)
-	pdf.CellFormat(textW, 4, a.currencyCode, "", 0, "R", false, 0, "")
+	pdf.SetXY(textX, amountY+amountLineHeight)
+	pdf.CellFormat(textW, currencyLineHeight, a.currencyCode, "", 0, "R", false, 0, "")
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Inter", "", bodyFontSize)
 }
@@ -777,7 +819,7 @@ func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
 	xValueStart := xLabelStart + labelWidth + walletAddressLabelGap
 	// Draw value at absolute position with different font
 	pdf.SetFont("GoogleSansCode", "U", organizationNameFontSize)
-	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 	pdf.SetXY(xValueStart, yWalletLine)
 	walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", walletAddr)
 	walletAddrWidth := pdf.GetStringWidth(walletAddr)
