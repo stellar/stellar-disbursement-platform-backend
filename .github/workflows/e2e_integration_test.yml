@@ -1,10 +1,6 @@
 name: Integration Tests
 
 on:
-  pull_request:
-    branches:
-      - develop
-      - 'feature/**'
   workflow_call: # allows this workflow to be called from another workflow, like `docker_image_public_release`
 
 env:
