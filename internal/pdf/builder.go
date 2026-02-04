@@ -29,8 +29,11 @@ var interMediumFont []byte
 //go:embed assets/fonts/Inter_24pt-SemiBold.ttf
 var interSemiBoldFont []byte
 
+//go:embed assets/fonts/GoogleSansCode-Regular.ttf
+var googleSansCodeRegularFont []byte
+
 // useMockTransactions enables mock transaction data for PDF testing. Set to false for production.
-const useMockTransactions = true
+const useMockTransactions = false
 
 // Page dimensions and margins
 const (
@@ -43,11 +46,11 @@ const (
 
 // Font sizes
 const (
-	bodyFontSize          = 8.7
-	tableHeaderSize       = 8.7
+	bodyFontSize          = 8.0
+	tableHeaderSize       = 8.0
 	sectionTitleSize      = 12.0
-	txCellFontSize        = 8.7
-	txSmallFontSize       = 7.5
+	txCellFontSize        = 8.0
+	txSmallFontSize       = 6.7
 	organizationNameFontSize = 9.2
 	dateRangeFontSize     = 10.0
 	titleFontSize         = 23.4
@@ -81,6 +84,7 @@ const (
 	headerLeftColLineHeight  = 6.0
 	headerRightColLineHeight = 5.0
 	logoOffsetX              = 1.0
+	walletAddressLabelGap    = 0.3
 )
 
 // Title section spacing
@@ -102,7 +106,7 @@ const (
 // Other constants
 const (
 	walletIDLabel             = "Wallet ID"
-	maxCounterpartyTextLength = 32
+	maxCounterpartyTextLength = 35
 )
 
 // tableWidth is full content width between left and right margins (both = marginLR).
@@ -112,14 +116,14 @@ const tableWidth = mmPerPage - 2*marginLR
 var summaryColWidths = []float64{52, 32, 32, 32, 32}
 
 // txColWidths: Date | Transaction ID | Counterparty | Debits | Credits | Balance (sum = tableWidth)
-var txColWidths = []float64{23, 29, 44, 28, 28, 28}
+var txColWidths = []float64{17, 52, 51, 21, 21, 21}
 
 // Text colors (RGB)
 var headerAndTotalsColor = []int{54, 65, 83}   // #364153
 var defaultCellColor      = []int{74, 85, 101}  // #4A5565
 var noteColor = []int{106, 114, 130} // #6A7282
 var activeColor    = []int{20, 71, 230}  // #1447E6
-var summaryValueColor    = []int{16, 24, 40}   // #101828
+var highlightColor    = []int{16, 24, 40}   // #101828
 var sectionTitleColor    = []int{30, 41, 57}   // #1E2939
 
 // Border and background colors (RGB)
@@ -136,6 +140,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	pdf.AddUTF8FontFromBytes("Inter", "B", interBoldFont)
 	pdf.AddUTF8FontFromBytes("Inter", "M", interMediumFont)
 	pdf.AddUTF8FontFromBytes("Inter", "emi", interSemiBoldFont) // SemiBold: register as "emi" (no "S") to avoid gofpdf strikethrough
+	pdf.AddUTF8FontFromBytes("GoogleSansCode", "", googleSansCodeRegularFont)
 
 	pdf.SetMargins(marginLR, marginTop, marginLR)
 	pdf.SetAutoPageBreak(true, marginBottom)
@@ -241,7 +246,9 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	ySummaryData := pdf.GetY()
 	textW0 := summaryColWidths[0] - 2*cellPaddingX
 	pdf.SetXY(xSummaryLeft+cellPaddingX, ySummaryData)
+	pdf.SetFont("GoogleSansCode", "", bodyFontSize)
 	pdf.CellFormat(textW0, summaryDataRowHeight, walletAddr, "", 0, "L", false, 0, "")
+	pdf.SetFont("Inter", "", bodyFontSize)
 	xPos = xSummaryLeft + summaryColWidths[0]
 	for i, w := range summaryColWidths[1:] {
 		textW := w - 2*cellPaddingX
@@ -371,7 +378,8 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	if len(dateStr) >= 10 {
 		dateStr = dateStr[:10]
 	}
-	opID := utils.TruncateToMaxLength(tx.ID, 16)
+	// Use full transaction ID (will wrap if needed)
+	opID := tx.ID
 
 	// Counterparty: Recipient/sender wallet information
 	walletAddr := utils.TruncateString(tx.CounterpartyAddress, 5)
@@ -423,20 +431,31 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	xStart := pdf.GetX()
 	yStart := pdf.GetY()
 
-	// Date: border then text with padding
-	pdf.SetFont("Inter", "", txCellFontSize)
+	// Date
+	pdf.SetFont("Inter", "", txSmallFontSize)
 	pdf.SetXY(xStart, yStart)
 	pdf.CellFormat(txColWidths[0], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	pdf.SetXY(xStart+cellPaddingX, yStart)
 	pdf.CellFormat(txColWidths[0]-2*cellPaddingX, txDataRowHeight, dateStr, "", 0, "L", false, 0, "")
 
 	// Transaction ID
-	pdf.SetFont("Inter", "", txSmallFontSize)
 	xID := xStart + txColWidths[0]
 	pdf.SetXY(xID, yStart)
 	pdf.CellFormat(txColWidths[1], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	pdf.SetXY(xID+cellPaddingX, yStart)
-	pdf.CellFormat(txColWidths[1]-2*cellPaddingX, txDataRowHeight, opID, "", 0, "L", false, 0, "")
+	// Create clickable link to Stellar Expert explorer with highlight color and underline
+	pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
+	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+	txURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/tx/%s", tx.ID)
+	cellWidth := txColWidths[1] - 2*cellPaddingX
+	lineHeight := 4.0
+	lines := pdf.SplitText(opID, cellWidth)
+	actualHeight := float64(len(lines)) * lineHeight
+	currentY := pdf.GetY()
+	pdf.MultiCell(cellWidth, lineHeight, opID, "", "L", false)
+	pdf.LinkString(xID+cellPaddingX, currentY, cellWidth, actualHeight, txURL)
+	pdf.SetY(yStart)
+	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 
 	// Counterparty
 	const counterpartyLineHeight = 4.0
@@ -468,11 +487,15 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		// Bullet
 		pdf.SetXY(fixedBulletX, counterpartyY)
 		pdf.CellFormat(bulletWidth, 4, bulletChar, "", 0, "L", false, 0, "")
-		// Wallet address
-		pdf.SetFont("Inter", "M", txSmallFontSize)
-		pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
+		// Wallet address with underline and link
+		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
+		pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
 		pdf.SetXY(fixedValueX, counterpartyY)
-		pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, walletAddr, "", 0, "L", false, 0, "")
+		walletAddrWidth := cpW - (fixedValueX - xTextStart)
+		walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
+		pdf.CellFormat(walletAddrWidth, 4, walletAddr, "", 0, "L", false, 0, walletURL)
+		// Add link over the entire wallet address area
+		pdf.LinkString(fixedValueX, counterpartyY, walletAddrWidth, 4, walletURL)
 		// Name
 		pdf.SetFont("Inter", "", txSmallFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
@@ -488,7 +511,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 			pdf.SetXY(fixedValueX, counterpartyY+counterpartyLineHeight)
 			pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, line2Value, "", 0, "L", false, 0, "")
 		} else {
-			// Just the name, but align it with the value position
+			// Name only
 			pdf.SetXY(fixedValueX, counterpartyY+counterpartyLineHeight)
 			pdf.CellFormat(cpW-(fixedValueX-xTextStart), 4, line2Value, "", 0, "L", false, 0, "")
 		}
@@ -502,16 +525,20 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		// Bullet
 		pdf.SetXY(fixedBulletX, counterpartyY)
 		pdf.CellFormat(bulletWidth, counterpartyLineHeight, bulletChar, "", 0, "L", false, 0, "")
-		// Wallet address
-		pdf.SetFont("Inter", "M", txSmallFontSize)
-		pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
+		// Wallet address with underline and link
+		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
+		pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
 		pdf.SetXY(fixedValueX, counterpartyY)
-		pdf.CellFormat(cpW-(fixedValueX-xTextStart), counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, "")
+		walletAddrWidth := cpW - (fixedValueX - xTextStart)
+		walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", tx.CounterpartyAddress)
+		pdf.CellFormat(walletAddrWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
+		// Add link over the entire wallet address area
+		pdf.LinkString(fixedValueX, counterpartyY, walletAddrWidth, counterpartyLineHeight, walletURL)
 	}
 	// Debits
 	xDebits := xStart + txColWidths[0] + txColWidths[1] + txColWidths[2]
 	if debitsAmount != "" {
-		drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, debitsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingX)
+		drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, debitsAmount, assetCode, "B", false, amountCellOpts{amountColor: highlightColor}}, cellPaddingX)
 	} else {
 		pdf.SetXY(xDebits, yStart)
 		pdf.CellFormat(txColWidths[3], txDataRowHeight, "", "B", 0, "R", false, 0, "")
@@ -519,7 +546,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	// Credits
 	xCredits := xDebits + txColWidths[3]
 	if creditsAmount != "" {
-		drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, creditsAmount, assetCode, "B", false, amountCellOpts{amountColor: summaryValueColor}}, cellPaddingX)
+		drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, creditsAmount, assetCode, "B", false, amountCellOpts{amountColor: highlightColor}}, cellPaddingX)
 	} else {
 		pdf.SetXY(xCredits, yStart)
 		pdf.CellFormat(txColWidths[4], txDataRowHeight, "", "B", 0, "R", false, 0, "")
@@ -655,7 +682,7 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 	}
 	if organizationName != "" {
 		pdf.SetFont("Inter", "B", organizationNameFontSize)
-		pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
+		pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
 		pdf.SetXY(xLeft, yLeftBottom)
 		pdf.CellFormat(halfWidth, headerLeftColLineHeight, strings.ToUpper(organizationName), "", 0, "L", false, 0, "")
 		yLeftBottom += headerLeftColLineHeight
@@ -669,12 +696,12 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 	pdf.CellFormat(halfWidth, headerRightColLineHeight, genStr, "", 0, "R", false, 0, "")
 	pdf.SetXY(rightColX, yStart+headerRightColLineHeight)
 	pdf.SetFont("Inter", "emi", bodyFontSize)
-	pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
+	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
 	pdf.CellFormat(halfWidth, headerRightColLineHeight, "Statement Period:", "", 0, "R", false, 0, "")
 	periodStr := fmt.Sprintf("%s to %s", fromDate.Format("2006-01-02"), toDate.Format("2006-01-02"))
 	pdf.SetXY(rightColX, yStart+2*headerRightColLineHeight)
 	pdf.SetFont("Inter", "B", dateRangeFontSize)
-	pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
+	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
 	pdf.CellFormat(halfWidth, headerRightColLineHeight, periodStr, "", 0, "R", false, 0, "")
 	yRightBottom := yStart + 3*headerRightColLineHeight
 
@@ -734,12 +761,32 @@ func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
 	pdf.CellFormat(0, titleSectionLine1Height, "REPORT", "", 1, "L", false, 0, "")
 
 	pdf.SetFont("Inter", "B", titleFontSize)
-	pdf.SetTextColor(summaryValueColor[0], summaryValueColor[1], summaryValueColor[2])
+	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
 	pdf.CellFormat(0, titleSectionLine2Height, "Wallet Statement", "", 1, "L", false, 0, "")
 
+	// Wallet Address label and value using absolute positioning
+	yWalletLine := pdf.GetY()
 	pdf.SetFont("Inter", "", organizationNameFontSize)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-	pdf.CellFormat(0, titleSectionLine3Height, "Wallet Address: "+walletAddr, "", 1, "L", false, 0, "")
+	labelText := "Wallet Address: "
+	labelWidth := pdf.GetStringWidth(labelText)
+	xLabelStart := pdf.GetX()
+	// Draw label at absolute position
+	pdf.SetXY(xLabelStart, yWalletLine)
+	pdf.CellFormat(labelWidth, titleSectionLine3Height, labelText, "", 0, "L", false, 0, "")
+	xValueStart := xLabelStart + labelWidth + walletAddressLabelGap
+	// Draw value at absolute position with different font
+	pdf.SetFont("GoogleSansCode", "U", organizationNameFontSize)
+	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+	pdf.SetXY(xValueStart, yWalletLine)
+	walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", walletAddr)
+	walletAddrWidth := pdf.GetStringWidth(walletAddr)
+	pdf.CellFormat(walletAddrWidth, titleSectionLine3Height, walletAddr, "", 0, "L", false, 0, walletURL)
+	// Add link over the entire wallet address area
+	pdf.LinkString(xValueStart, yWalletLine, walletAddrWidth, titleSectionLine3Height, walletURL)
+	pdf.SetFont("Inter", "", organizationNameFontSize)
+	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
+	pdf.Ln(titleSectionLine3Height)
 
 	pdf.Ln(titleSectionBottomMargin)
 	pdf.SetTextColor(0, 0, 0)
@@ -764,7 +811,7 @@ func generateMockTransactions(count int) []services.StatementTransaction {
 			ID:                  "7cb4a68dc164ad69c6121086cf3aef0cec0d78634f60e1a1e23e4637b1f082e2",
 			CreatedAt:           createdAt,
 			Type:                txType,
-			Amount:              "0.1000000",
+			Amount:              "100.1000000",
 			CounterpartyAddress: "GAHSWJ2ANIFE3ZEWM4EN7WKLC2F4OCLS2O4QQQJSADYHOXZDA3EZNJ2M",
 			CounterpartyName:     "owner@bluecorp.local",
 			WalletID:            "07815404-eb0d-4188-a362-38a90aae185c",
