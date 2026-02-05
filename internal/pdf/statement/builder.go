@@ -8,71 +8,72 @@ import (
 	"github.com/jung-kurt/gofpdf/v2"
 	"github.com/shopspring/decimal"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 )
 
 // BuildPDF generates a multi-page PDF from a StatementResult and returns the bytes.
 func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte) ([]byte, error) {
-	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdfDoc := gofpdf.New("P", "mm", "A4", "")
 
-	pdf.AddUTF8FontFromBytes("Inter", "", interRegularFont)
-	pdf.AddUTF8FontFromBytes("Inter", "B", interBoldFont)
-	pdf.AddUTF8FontFromBytes("Inter", "M", interMediumFont)
-	pdf.AddUTF8FontFromBytes("Inter", "emi", interSemiBoldFont)
-	pdf.AddUTF8FontFromBytes("GoogleSansCode", "", googleSansCodeRegularFont)
+	pdfDoc.AddUTF8FontFromBytes("Inter", "", shared.InterRegularFont)
+	pdfDoc.AddUTF8FontFromBytes("Inter", "B", shared.InterBoldFont)
+	pdfDoc.AddUTF8FontFromBytes("Inter", "M", shared.InterMediumFont)
+	pdfDoc.AddUTF8FontFromBytes("Inter", "emi", shared.InterSemiBoldFont)
+	pdfDoc.AddUTF8FontFromBytes("GoogleSansCode", "", shared.GoogleSansCodeRegularFont)
 
-	pdf.SetMargins(marginLR, marginTop, marginLR)
-	pdf.SetAutoPageBreak(true, marginBottom)
-	setupFooter(pdf)
-	pdf.AddPage()
+	pdfDoc.SetMargins(marginLR, marginTop, marginLR)
+	pdfDoc.SetAutoPageBreak(true, marginBottom)
+	setupFooter(pdfDoc)
+	pdfDoc.AddPage()
 
 	walletAccount := result.Summary.Account
-	drawHeader(pdf, organizationName, organizationLogo, fromDate, toDate)
-	drawTitleSection(pdf, walletAccount)
-	drawHeaderSeparatorLine(pdf, headerSeparatorBottomMargin)
+	drawHeader(pdfDoc, organizationName, organizationLogo, fromDate, toDate)
+	drawTitleSection(pdfDoc, walletAccount)
+	drawHeaderSeparatorLine(pdfDoc, headerSeparatorBottomMargin)
 
-	drawSummaryTable(pdf, result)
+	drawSummaryTable(pdfDoc, result)
 
 	pageBottom := pageHeight - marginBottom
 	for _, asset := range result.Summary.Assets {
 		if len(asset.Transactions) == 0 {
 			continue
 		}
-		pdf.SetFont("Inter", "B", sectionTitleSize)
-		pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
-		pdf.CellFormat(0, 8, "Transactions - "+asset.Code, "", 1, "L", false, 0, "")
-		pdf.SetTextColor(0, 0, 0)
-		pdf.Ln(1)
+		pdfDoc.SetFont("Inter", "B", sectionTitleSize)
+		pdfDoc.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
+		pdfDoc.CellFormat(0, 8, "Transactions - "+asset.Code, "", 1, "L", false, 0, "")
+		pdfDoc.SetTextColor(0, 0, 0)
+		pdfDoc.Ln(1)
 
-		drawTxTableHeader(pdf)
+		drawTxTableHeader(pdfDoc)
 		runningBalance, err := decimal.NewFromString(asset.BeginningBalance)
 		if err != nil {
 			runningBalance = decimal.Zero
 		}
 		transactions := asset.Transactions
 		for i := range transactions {
-			if pdf.GetY()+txDataRowHeight > pageBottom {
-				pdf.AddPage()
-				if pdf.PageNo() > 1 {
-					drawMiniHeader(pdf, organizationName, organizationLogo, fromDate, toDate, walletAccount)
+			if pdfDoc.GetY()+txDataRowHeight > pageBottom {
+				pdfDoc.AddPage()
+				if pdfDoc.PageNo() > 1 {
+					drawMiniHeader(pdfDoc, organizationName, organizationLogo, fromDate, toDate, walletAccount)
 				}
-				drawTxTableHeader(pdf)
+				drawTxTableHeader(pdfDoc)
 			}
-			runningBalance = drawTxRow(pdf, &transactions[i], asset.Code, runningBalance)
+			runningBalance = drawTxRow(pdfDoc, &transactions[i], asset.Code, runningBalance)
 		}
-		if pdf.GetY()+txDataRowHeight > pageBottom {
-			pdf.AddPage()
-			if pdf.PageNo() > 1 {
-				drawMiniHeader(pdf, organizationName, organizationLogo, fromDate, toDate, walletAccount)
+		if pdfDoc.GetY()+txDataRowHeight > pageBottom {
+			pdfDoc.AddPage()
+			if pdfDoc.PageNo() > 1 {
+				drawMiniHeader(pdfDoc, organizationName, organizationLogo, fromDate, toDate, walletAccount)
 			}
-			drawTxTableHeader(pdf)
+			drawTxTableHeader(pdfDoc)
 		}
-		drawTotalsRowForAsset(pdf, &asset)
-		pdf.Ln(sectionBottomMargin)
+		drawTotalsRowForAsset(pdfDoc, &asset)
+		pdfDoc.Ln(sectionBottomMargin)
 	}
 
 	var buf bytes.Buffer
-	if err := pdf.Output(&buf); err != nil {
+	if err := pdfDoc.Output(&buf); err != nil {
 		return nil, fmt.Errorf("writing PDF: %w", err)
 	}
 	return buf.Bytes(), nil

@@ -5,6 +5,7 @@ import (
 
 	"github.com/jung-kurt/gofpdf/v2"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -42,7 +43,7 @@ func drawSummaryTable(pdf *gofpdf.Fpdf, result *services.StatementResult) {
 			pdf.SetXY(xPos+cellPaddingX, ySummaryHeaderStart)
 			pdf.CellFormat(textW, summaryHeaderRowHeight, h.text, "", 0, h.align, false, 0, "")
 		} else {
-			lines := strings.Split(breakHeaderWords(h.text), "\n")
+			lines := strings.Split(shared.BreakHeaderWords(h.text), "\n")
 			lineHeight := summaryHeaderLineHeight
 			blockHeight := lineHeight * float64(len(lines))
 			lineY := ySummaryHeaderStart + (summaryHeaderRowHeight-blockHeight)/2
