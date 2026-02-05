@@ -30,7 +30,7 @@ func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
 	pdf.SetFont("GoogleSansCode", "U", organizationNameFontSize)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 	pdf.SetXY(xValueStart, yWalletLine)
-	walletURL := fmt.Sprintf("%saccount/%s", stellar_expert_testnet_base_url, walletAddr)
+	walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, walletAddr)
 	walletAddrWidth := pdf.GetStringWidth(walletAddr)
 	pdf.CellFormat(walletAddrWidth, titleSectionLine3Height, walletAddr, "", 0, "L", false, 0, walletURL)
 	pdf.LinkString(xValueStart, yWalletLine, walletAddrWidth, titleSectionLine3Height, walletURL)

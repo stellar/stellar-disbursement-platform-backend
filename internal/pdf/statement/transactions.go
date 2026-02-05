@@ -106,7 +106,11 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	}
 
 	var debitsAmount, creditsAmount string
-	amount, _ := decimal.NewFromString(tx.Amount)
+	amount, err := decimal.NewFromString(tx.Amount)
+	if err != nil {
+		// If amount parsing fails, use zero as fallback
+		amount = decimal.Zero
+	}
 	amountStr := utils.FormatAmountTo2Decimals(tx.Amount)
 	if tx.Type == "debit" {
 		debitsAmount = amountStr
@@ -140,7 +144,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.SetXY(xID, yStart)
 	pdf.CellFormat(txColWidths[1], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	cellWidth := txColWidths[1] - 2*cellPaddingX
-	txURL := fmt.Sprintf("%stx/%s", stellar_expert_testnet_base_url, tx.ID)
+	txURL := fmt.Sprintf("%stx/%s", stellarExpertTestnetBaseURL, tx.ID)
 	pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 	idLines := pdf.SplitText(opID, cellWidth)
@@ -182,7 +186,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 		pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
-		walletURL := fmt.Sprintf("%saccount/%s", stellar_expert_testnet_base_url, tx.CounterpartyAddress)
+		walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, tx.CounterpartyAddress)
 		pdf.CellFormat(cpW, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
 		pdf.LinkString(xTextStart, counterpartyY+counterpartyLineHeight, cpW, counterpartyLineHeight, walletURL)
 	} else {
@@ -198,7 +202,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 			xWalletStart := xLabelStart + labelWidth + counterpartyGap
 			pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 			pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-			walletURL := fmt.Sprintf("%saccount/%s", stellar_expert_testnet_base_url, tx.CounterpartyAddress)
+			walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, tx.CounterpartyAddress)
 			walletWidth := cpW - (xWalletStart - xTextStart)
 			pdf.SetXY(xWalletStart, counterpartyY)
 			pdf.CellFormat(walletWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
@@ -227,7 +231,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 			xWalletStart := xLabelStart + labelWidth
 			pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 			pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-			walletURL := fmt.Sprintf("%saccount/%s", stellar_expert_testnet_base_url, tx.CounterpartyAddress)
+			walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, tx.CounterpartyAddress)
 			walletWidth := cpW - (xWalletStart - xTextStart)
 			pdf.SetXY(xWalletStart, singleLineY)
 			pdf.CellFormat(walletWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
@@ -236,20 +240,20 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	}
 	xDebits := xStart + txColWidths[0] + txColWidths[1] + txColWidths[2]
 	if debitsAmount != "" {
-		drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, debitsAmount, assetCode, "B", false, amountCellOpts{amountColor: highlightColor}}, cellPaddingX)
+		drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, debitsAmount, assetCode, "B", false, amountCellOpts{amountColor: highlightColor}})
 	} else {
 		pdf.SetXY(xDebits, yStart)
 		pdf.CellFormat(txColWidths[3], txDataRowHeight, "", "B", 0, "R", false, 0, "")
 	}
 	xCredits := xDebits + txColWidths[3]
 	if creditsAmount != "" {
-		drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, creditsAmount, assetCode, "B", false, amountCellOpts{amountColor: highlightColor}}, cellPaddingX)
+		drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, creditsAmount, assetCode, "B", false, amountCellOpts{amountColor: highlightColor}})
 	} else {
 		pdf.SetXY(xCredits, yStart)
 		pdf.CellFormat(txColWidths[4], txDataRowHeight, "", "B", 0, "R", false, 0, "")
 	}
 	xBalance := xCredits + txColWidths[4]
-	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, balanceAmountStr, assetCode, "B", false, amountCellOpts{}}, cellPaddingX)
+	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, balanceAmountStr, assetCode, "B", false, amountCellOpts{}})
 
 	pdf.SetXY(xStart, yStart+txDataRowHeight)
 	pdf.SetLineWidth(0.25)
@@ -286,9 +290,9 @@ func drawTotalsRowForAsset(pdf *gofpdf.Fpdf, asset *services.StatementAssetSumma
 	xCredits := xDebits + txColWidths[3]
 	xBalance := xCredits + txColWidths[4]
 
-	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalDebits), asset.Code, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
-	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalCredits), asset.Code, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
-	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.EndingBalance), asset.Code, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}}, cellPaddingX)
+	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalDebits), asset.Code, "T", true, amountCellOpts{forTotals: true}})
+	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalCredits), asset.Code, "T", true, amountCellOpts{forTotals: true}})
+	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.EndingBalance), asset.Code, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}})
 
 	pdf.SetXY(xRowStart, yStart+txDataRowHeight)
 	pdf.SetLineWidth(0.25)
