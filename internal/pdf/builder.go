@@ -32,7 +32,7 @@ var interSemiBoldFont []byte
 //go:embed assets/fonts/GoogleSansCode-Regular.ttf
 var googleSansCodeRegularFont []byte
 
-// useMockTransactions enables mock transaction data for PDF testing. Set to false for production.
+// useMockTransactions enables mock statement data (multiple currencies + transactions) for PDF testing. Set to false for production.
 const useMockTransactions = false
 
 // Page dimensions and margins
@@ -75,7 +75,7 @@ const (
 
 // Table row heights
 const (
-	summaryHeaderRowHeight = 15.5
+	summaryHeaderRowHeight  = 15.5
 	summaryDataRowHeight    = 14
 	txHeaderRowHeight       = 15.5
 	txDataRowHeight         = 16
@@ -89,16 +89,19 @@ const (
 
 // Section margins
 const (
-	summarySectionBottomMargin = 15.0
+	sectionBottomMargin = 12.0
 )
 
 // Header section spacing
 const (
-	headerBottomMargin       = 5.0
-	headerSeparatorLineWidth = 0.26
-	headerLogoToOrgNameGap   = 3.0
-	logoOffsetX              = 1.0
-	walletAddressLabelGap    = 0.3
+	headerBottomMargin              = 5.0
+	miniHeaderBottomMargin          = 5.0
+	headerSeparatorBottomMargin     = 6.0
+	miniHeaderSeparatorBottomMargin = 3.0
+	headerSeparatorLineWidth        = 0.26
+	headerLogoToOrgNameGap          = 3.0
+	logoOffsetX                     = 1.0
+	walletAddressLabelGap           = 0.3
 )
 
 // Title section spacing
@@ -123,10 +126,10 @@ const (
 const tableWidth = mmPerPage - 2*marginLR
 
 // summaryColWidths: Wallet Address | Beginning Balance | Total Credits | Total Debits | Ending Balance (sum = tableWidth)
-var summaryColWidths = []float64{52, 32, 32, 32, 32}
+var summaryColWidths = []float64{44, 34, 34, 34, 34}
 
 // txColWidths: Date | Transaction ID | Counterparty | Debits | Credits | Balance (sum = tableWidth)
-var txColWidths = []float64{17, 52, 51, 21, 21, 21}
+var txColWidths = []float64{16, 52, 49, 21, 21, 21}
 
 // Text colors (RGB)
 var headerAndTotalsColor = []int{54, 65, 83}   // #364153
@@ -191,20 +194,20 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	})
 	pdf.AddPage()
 
+	if useMockTransactions {
+		result = getMockStatementResult()
+	}
+	walletAccount := result.Summary.Account
 	drawHeader(pdf, organizationName, organizationLogo, fromDate, toDate)
-	drawTitleSection(pdf, result.Summary.Account)
-	drawHeaderSeparatorLine(pdf)
+	drawTitleSection(pdf, walletAccount)
+	drawHeaderSeparatorLine(pdf, headerSeparatorBottomMargin)
 
-	assetCode := result.Summary.Asset.Code
-
-	// --- ACCOUNT SUMMARY SECTION ---
 	pdf.SetFont("Inter", "B", sectionTitleSize)
 	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
 	pdf.CellFormat(0, 8, "Account Summary", "", 1, "L", false, 0, "")
 	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(1)
 
-	// Summary table header
 	pdf.SetFont("Inter", "emi", tableHeaderSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
 	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
@@ -216,7 +219,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		text  string
 		align string
 	}{
-		{"Wallet Address", "L"},
+		{"Currency", "L"},
 		{"Beginning Balance", "R"},
 		{"Total Credits", "R"},
 		{"Total Debits", "R"},
@@ -249,99 +252,92 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Inter", "", bodyFontSize)
 
-	// Summary table data row: regular font weight for all cells except ending balance (SemiBold)
-	pdf.SetFont("Inter", "", bodyFontSize)
-	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-	walletAddr := result.Summary.Account
-	if strings.HasPrefix(walletAddr, "stellar:") {
-		walletAddr = walletAddr[8:]
-	}
-	walletAddr = utils.TruncateString(walletAddr, 5)
-
 	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 	pdf.SetLineWidth(0.26)
-	xPos = xSummaryLeft
-	for _, w := range summaryColWidths {
-		pdf.SetXY(xPos, pdf.GetY())
-		pdf.CellFormat(w, summaryDataRowHeight, "", "B", 0, "L", false, 0, "")
-		xPos += w
+	for _, asset := range result.Summary.Assets {
+		xPos = xSummaryLeft
+		for _, w := range summaryColWidths {
+			pdf.SetXY(xPos, pdf.GetY())
+			pdf.CellFormat(w, summaryDataRowHeight, "", "B", 0, "L", false, 0, "")
+			xPos += w
+		}
+		ySummaryData := pdf.GetY()
+		textW0 := summaryColWidths[0] - 2*cellPaddingX
+		pdf.SetXY(xSummaryLeft+cellPaddingX, ySummaryData)
+		pdf.SetFont("Inter", "B", bodyFontSize)
+		pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+		pdf.CellFormat(textW0, summaryDataRowHeight, asset.Code, "", 0, "L", false, 0, "")
+		xPos = xSummaryLeft + summaryColWidths[0]
+		for i, w := range summaryColWidths[1:] {
+			textW := w - 2*cellPaddingX
+			var text string
+			switch i {
+			case 0:
+				text = utils.FormatAmountTo2Decimals(asset.BeginningBalance)
+			case 1:
+				text = utils.FormatAmountTo2Decimals(asset.TotalCredits)
+			case 2:
+				text = utils.FormatAmountTo2Decimals(asset.TotalDebits)
+			case 3:
+				text = utils.FormatAmountTo2Decimals(asset.EndingBalance)
+			}
+			if i < 3 {
+				pdf.SetFont("Inter", "", bodyFontSize)
+				pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+			} else {
+				pdf.SetFont("Inter", "emi", bodyFontSize)
+				pdf.SetTextColor(activeColor[0], activeColor[1], activeColor[2])
+			}
+			pdf.SetXY(xPos+cellPaddingX, ySummaryData)
+			pdf.CellFormat(textW, summaryDataRowHeight, text, "", 0, "R", false, 0, "")
+			xPos += w
+		}
+		pdf.SetFont("Inter", "", bodyFontSize)
+		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
+		pdf.SetXY(xSummaryLeft, ySummaryData+summaryDataRowHeight)
 	}
-	pdf.SetXY(xSummaryLeft, pdf.GetY())
-	ySummaryData := pdf.GetY()
-	textW0 := summaryColWidths[0] - 2*cellPaddingX
-	pdf.SetXY(xSummaryLeft+cellPaddingX, ySummaryData)
-	pdf.SetFont("GoogleSansCode", "", bodyFontSize)
-	pdf.CellFormat(textW0, summaryDataRowHeight, walletAddr, "", 0, "L", false, 0, "")
-	pdf.SetFont("Inter", "", bodyFontSize)
-	xPos = xSummaryLeft + summaryColWidths[0]
-	for i, w := range summaryColWidths[1:] {
-		textW := w - 2*cellPaddingX
-		var text string
-		switch i {
-		case 0:
-			text = utils.FormatAmountTo2Decimals(result.Summary.BeginningBalance) + " " + assetCode
-		case 1:
-			text = utils.FormatAmountTo2Decimals(result.Summary.TotalCredits) + " " + assetCode
-		case 2:
-			text = utils.FormatAmountTo2Decimals(result.Summary.TotalDebits) + " " + assetCode
-		case 3:
-			text = utils.FormatAmountTo2Decimals(result.Summary.EndingBalance) + " " + assetCode
-		}
-		// Set font weight to SemiBold and color to activeColor for ending balance cell
-		if i == 3 {
-			pdf.SetFont("Inter", "emi", bodyFontSize)
-			pdf.SetTextColor(activeColor[0], activeColor[1], activeColor[2])
-		}
-		pdf.SetXY(xPos+cellPaddingX, ySummaryData)
-		pdf.CellFormat(textW, summaryDataRowHeight, text, "", 0, "R", false, 0, "")
-		// Reset font weight to regular and color back to defaultCellColor after ending balance
-		if i == 3 {
-			pdf.SetFont("Inter", "", bodyFontSize)
-			pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-		}
-		xPos += w
-	}
-	pdf.SetXY(xSummaryLeft, ySummaryData+summaryDataRowHeight)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetLineWidth(0.25)
 	pdf.SetDrawColor(0, 0, 0)
-
-	pdf.Ln(summarySectionBottomMargin)
-
-	// --- TRANSACTIONS SECTION ---
-	pdf.SetFont("Inter", "B", sectionTitleSize)
-	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
-	pdf.CellFormat(0, 8, "Transactions", "", 1, "L", false, 0, "")
-	pdf.SetTextColor(0, 0, 0)
-	pdf.Ln(1)
+	pdf.Ln(sectionBottomMargin)
 
 	pageBottom := pageHeight - marginBottom
-	drawTxTableHeader(pdf)
+	for _, asset := range result.Summary.Assets {
+		if len(asset.Transactions) == 0 {
+			continue
+		}
+		pdf.SetFont("Inter", "B", sectionTitleSize)
+		pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
+		pdf.CellFormat(0, 8, "Transactions - "+asset.Code, "", 1, "L", false, 0, "")
+		pdf.SetTextColor(0, 0, 0)
+		pdf.Ln(1)
 
-	// Running balance: parse beginning balance once
-	runningBalance, err := decimal.NewFromString(result.Summary.BeginningBalance)
-	if err != nil {
-		runningBalance = decimal.Zero
-	}
-
-	transactions := result.Transactions
-	if useMockTransactions {
-		transactions = generateMockTransactions(20)
-	}
-	for _, tx := range transactions {
+		drawTxTableHeader(pdf)
+		runningBalance, err := decimal.NewFromString(asset.BeginningBalance)
+		if err != nil {
+			runningBalance = decimal.Zero
+		}
+		transactions := asset.Transactions
+		for i := range transactions {
+			if pdf.GetY()+txDataRowHeight > pageBottom {
+				pdf.AddPage()
+				if pdf.PageNo() > 1 {
+					drawMiniHeader(pdf, organizationName, organizationLogo, fromDate, toDate, walletAccount)
+				}
+				drawTxTableHeader(pdf)
+			}
+			runningBalance = drawTxRow(pdf, &transactions[i], asset.Code, runningBalance)
+		}
 		if pdf.GetY()+txDataRowHeight > pageBottom {
 			pdf.AddPage()
+			if pdf.PageNo() > 1 {
+				drawMiniHeader(pdf, organizationName, organizationLogo, fromDate, toDate, walletAccount)
+			}
 			drawTxTableHeader(pdf)
 		}
-		runningBalance = drawTxRow(pdf, &tx, assetCode, runningBalance)
+		drawTotalsRowForAsset(pdf, &asset)
+		pdf.Ln(sectionBottomMargin)
 	}
-
-	// Totals row
-	if pdf.GetY()+txDataRowHeight > pageBottom {
-		pdf.AddPage()
-		drawTxTableHeader(pdf)
-	}
-	drawTotalsRow(pdf, result, assetCode)
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
@@ -398,21 +394,23 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 // drawTxRow draws one transaction row and returns the new running balance after this transaction.
 func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode string, runningBalance decimal.Decimal) decimal.Decimal {
 	var dateLine1, dateLine2 string
-	parsedTime, err := time.Parse(time.RFC3339, tx.CreatedAt)
+	dateStr := tx.UpdatedAt
+	if dateStr == "" {
+		dateStr = tx.CreatedAt
+	}
+	parsedTime, err := time.Parse(time.RFC3339, dateStr)
 	if err == nil {
 		utcTime := parsedTime.UTC()
 		dateLine1 = utcTime.Format("2006-01-02")
 		dateLine2 = utcTime.Format("15:04 UTC")
 	} else {
-		// Fallback: try to extract date from string
-		if len(tx.CreatedAt) >= 10 {
-			dateLine1 = tx.CreatedAt[:10]
+		if len(dateStr) >= 10 {
+			dateLine1 = dateStr[:10]
 		} else {
-			dateLine1 = tx.CreatedAt
+			dateLine1 = dateStr
 		}
 		dateLine2 = ""
 	}
-	// Use full transaction ID (will wrap if needed)
 	opID := tx.ID
 
 	// Counterparty: Recipient/sender wallet information
@@ -481,22 +479,29 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		pdf.CellFormat(dateCellWidth, dateLineHeight, dateLine2, "", 0, "L", false, 0, "")
 	}
 
-	// Transaction ID
 	xID := xStart + txColWidths[0]
 	pdf.SetXY(xID, yStart)
 	pdf.CellFormat(txColWidths[1], txDataRowHeight, "", "B", 0, "L", false, 0, "")
-	// Create clickable link to Stellar Expert
+	cellWidth := txColWidths[1] - 2*cellPaddingX
+	txURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/tx/%s", tx.ID)
 	pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-	txURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/tx/%s", tx.ID)
-	cellWidth := txColWidths[1] - 2*cellPaddingX
-	lines := pdf.SplitText(opID, cellWidth)
-	actualHeight := float64(len(lines)) * txIDLineHeight
-	// Center vertically: calculate Y position to center the text block in the cell
-	centeredY := yStart + (txDataRowHeight-actualHeight)/2
-	pdf.SetXY(xID+cellPaddingX, centeredY)
-	pdf.MultiCell(cellWidth, txIDLineHeight, opID, "", "C", false)
-	pdf.LinkString(xID+cellPaddingX, centeredY, cellWidth, actualHeight, txURL)
+	idLines := pdf.SplitText(opID, cellWidth)
+	idBlockHeight := float64(len(idLines)) * txIDLineHeight
+	var extBlockHeight float64
+	if tx.ExternalPaymentID != "" {
+		extBlockHeight = txIDLineHeight
+	}
+	totalBlockHeight := idBlockHeight + extBlockHeight
+	blockY := yStart + (txDataRowHeight-totalBlockHeight)/2
+	pdf.SetXY(xID+cellPaddingX, blockY)
+	pdf.MultiCell(cellWidth, txIDLineHeight, opID, "", "L", false)
+	pdf.LinkString(xID+cellPaddingX, blockY, cellWidth, idBlockHeight, txURL)
+	if tx.ExternalPaymentID != "" {
+		pdf.SetFont("Inter", "", txSmallFontSize)
+		pdf.SetXY(xID+cellPaddingX, blockY+idBlockHeight)
+		pdf.CellFormat(cellWidth, txIDLineHeight, tx.ExternalPaymentID, "", 0, "L", false, 0, "")
+	}
 	pdf.SetY(yStart)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 
@@ -610,7 +615,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	return runningBalance
 }
 
-func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode string) {
+func drawTotalsRowForAsset(pdf *gofpdf.Fpdf, asset *services.StatementAssetSummary) {
 	pdf.SetFillColor(totalsRowBgColor[0], totalsRowBgColor[1], totalsRowBgColor[2])
 	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
 	pdf.SetLineWidth(0.53)
@@ -620,7 +625,6 @@ func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode
 	pdf.SetFont("Inter", "emi", txCellFontSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
 	xRowStart := xStart
-	// First three cells
 	for i := 0; i < 3; i++ {
 		w := txColWidths[i]
 		pdf.SetXY(xStart, yStart)
@@ -637,9 +641,9 @@ func drawTotalsRow(pdf *gofpdf.Fpdf, result *services.StatementResult, assetCode
 	xCredits := xDebits + txColWidths[3]
 	xBalance := xCredits + txColWidths[4]
 
-	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalDebits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
-	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.TotalCredits), assetCode, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
-	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(result.Totals.Balance), assetCode, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}}, cellPaddingX)
+	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalDebits), asset.Code, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
+	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalCredits), asset.Code, "T", true, amountCellOpts{forTotals: true}}, cellPaddingX)
+	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.EndingBalance), asset.Code, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}}, cellPaddingX)
 
 	pdf.SetXY(xRowStart, yStart+txDataRowHeight)
 	pdf.SetLineWidth(0.25)
@@ -760,6 +764,98 @@ func drawHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []by
 	pdf.SetTextColor(0, 0, 0)
 }
 
+// drawMiniHeader draws a compact header for pages 2+
+func drawMiniHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo []byte, fromDate, toDate time.Time, walletAccount string) {
+	xLeft := pdf.GetX()
+	yStart := pdf.GetY()
+	contentWidth := tableWidth
+	halfWidth := contentWidth / 2
+	rightColX := xLeft + halfWidth
+
+	var yLeftBottom float64 = yStart
+	var logoWidth float64
+
+	// Left side, first column
+	if len(organizationLogo) > 0 {
+		imgName, imgInfo := registerLogoImage(pdf, organizationLogo)
+		if imgName != "" && imgInfo != nil {
+			const logoMaxHeight = 10.0
+			imgW, imgH := imgInfo.Width(), imgInfo.Height()
+			if imgH > logoMaxHeight {
+				imgW = imgW * (logoMaxHeight / imgH)
+				imgH = logoMaxHeight
+			}
+			pdf.ImageOptions(imgName, xLeft+logoOffsetX, yStart, imgW, imgH, false, gofpdf.ImageOptions{}, 0, "")
+			logoWidth = imgW + logoOffsetX
+			yLeftBottom = yStart + imgH + headerLogoToOrgNameGap
+		}
+	}
+
+	// Left side, second column
+	col2X := xLeft + logoWidth + headerLogoToOrgNameGap
+	col2Width := halfWidth - logoWidth - headerLogoToOrgNameGap
+	if col2Width > 0 {
+		walletAddr := walletAccount
+		if strings.HasPrefix(walletAddr, "stellar:") {
+			walletAddr = walletAddr[8:]
+		}
+		truncatedAddr := utils.TruncateString(walletAddr, 5)
+
+		// Line 1
+		if organizationName != "" {
+			pdf.SetFont("Inter", "B", organizationNameFontSize)
+			pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+			pdf.SetXY(col2X, yStart)
+			pdf.CellFormat(col2Width, headerLeftColLineHeight, strings.ToUpper(organizationName), "", 0, "L", false, 0, "")
+		}
+		// Line 2
+		yLine2 := yStart + headerLeftColLineHeight
+		pdf.SetFont("Inter", "", organizationNameFontSize)
+		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
+		labelText := "Wallet Address: "
+		labelWidth := pdf.GetStringWidth(labelText)
+		pdf.SetXY(col2X, yLine2)
+		pdf.CellFormat(labelWidth, titleSectionLine3Height, labelText, "", 0, "L", false, 0, "")
+		xValueStart := col2X + labelWidth + walletAddressLabelGap
+		pdf.SetFont("GoogleSansCode", "U", organizationNameFontSize)
+		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
+		walletURL := fmt.Sprintf("https://stellar.expert/explorer/testnet/account/%s", walletAddr)
+		truncatedWidth := pdf.GetStringWidth(truncatedAddr)
+		pdf.SetXY(xValueStart, yLine2)
+		pdf.CellFormat(truncatedWidth, titleSectionLine3Height, truncatedAddr, "", 0, "L", false, 0, walletURL)
+		pdf.LinkString(xValueStart, yLine2, truncatedWidth, titleSectionLine3Height, walletURL)
+		textBlockBottom := yLine2 + titleSectionLine3Height
+		if textBlockBottom > yLeftBottom {
+			yLeftBottom = textBlockBottom
+		}
+	}
+
+	// Right column
+	pdf.SetFont("Inter", "", bodyFontSize)
+	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
+	genStr := fmt.Sprintf("Generated on %s", time.Now().UTC().Format("2006-01-02 15:04 UTC"))
+	pdf.SetXY(rightColX, yStart)
+	pdf.CellFormat(halfWidth, headerRightColLineHeight, genStr, "", 0, "R", false, 0, "")
+	pdf.SetXY(rightColX, yStart+headerRightColLineHeight)
+	pdf.SetFont("Inter", "emi", bodyFontSize)
+	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+	pdf.CellFormat(halfWidth, headerRightColLineHeight, "Statement Period:", "", 0, "R", false, 0, "")
+	periodStr := fmt.Sprintf("%s to %s", fromDate.Format("2006-01-02"), toDate.Format("2006-01-02"))
+	pdf.SetXY(rightColX, yStart+2*headerRightColLineHeight)
+	pdf.SetFont("Inter", "B", dateRangeFontSize)
+	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
+	pdf.CellFormat(halfWidth, headerRightColLineHeight, periodStr, "", 0, "R", false, 0, "")
+	yRightBottom := yStart + 3*headerRightColLineHeight
+
+	if yRightBottom > yLeftBottom {
+		yLeftBottom = yRightBottom
+	}
+	pdf.SetXY(xLeft, yLeftBottom)
+	pdf.Ln(miniHeaderBottomMargin)
+	pdf.SetTextColor(0, 0, 0)
+	drawHeaderSeparatorLine(pdf, miniHeaderSeparatorBottomMargin)
+}
+
 // registerLogoImage registers logo bytes with the PDF
 func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.ImageInfoType) {
 	_, format, err := image.Decode(bytes.NewReader(logoBytes))
@@ -783,14 +879,14 @@ func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.Imag
 	return "orglogo", info
 }
 
-// drawHeaderSeparatorLine draws a horizontal line below the title section
-func drawHeaderSeparatorLine(pdf *gofpdf.Fpdf) {
+// drawHeaderSeparatorLine draws a horizontal line below the title/mini header and adds bottomMargin space below it.
+func drawHeaderSeparatorLine(pdf *gofpdf.Fpdf, bottomMargin float64) {
 	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 	pdf.SetLineWidth(headerSeparatorLineWidth)
 	y := pdf.GetY()
 	pdf.Line(marginLR, y, mmPerPage-marginLR, y)
-	pdf.SetY(y + 1.0)
-	pdf.Ln(titleSectionBottomMargin)
+	pdf.SetY(y)
+	pdf.Ln(bottomMargin)
 	pdf.SetLineWidth(0.25)
 	pdf.SetDrawColor(0, 0, 0)
 }
@@ -843,6 +939,41 @@ func breakHeaderWords(s string) string {
 	return strings.ReplaceAll(s, " ", "\n")
 }
 
+// getMockStatementResult returns a full statement with multiple currencies and mock transactions (for PDF testing).
+func getMockStatementResult() *services.StatementResult {
+	return &services.StatementResult{
+		Summary: services.StatementSummary{
+			Account: "stellar:GDNRRK5EXMZ4STV7UTO3CW4LSVNY5KYWTM3J7BM5SQNA7KE2RYX55IYV",
+			Assets: []services.StatementAssetSummary{
+				{
+					Code:             "XLM",
+					BeginningBalance: "4999.8900000",
+					TotalCredits:     "6000.0000000",
+					TotalDebits:      "1200.5000000",
+					EndingBalance:    "9799.3900000",
+					Transactions:     generateMockTransactions(8),
+				},
+				{
+					Code:             "USDC",
+					BeginningBalance: "10000.0000000",
+					TotalCredits:     "2500.5000000",
+					TotalDebits:      "3500.2500000",
+					EndingBalance:    "9000.2500000",
+					Transactions:     generateMockTransactions(12),
+				},
+				{
+					Code:             "EURT",
+					BeginningBalance: "500.0000000",
+					TotalCredits:     "150.7500000",
+					TotalDebits:      "200.0000000",
+					EndingBalance:    "450.7500000",
+					Transactions:     generateMockTransactions(5),
+				},
+			},
+		},
+	}
+}
+
 // generateMockTransactions returns count copies of a template transaction with slight variations (for testing).
 func generateMockTransactions(count int) []services.StatementTransaction {
 	baseTime, _ := time.Parse(time.RFC3339, "2026-01-29T15:00:10Z")
@@ -856,11 +987,12 @@ func generateMockTransactions(count int) []services.StatementTransaction {
 		out = append(out, services.StatementTransaction{
 			ID:                  "7cb4a68dc164ad69c6121086cf3aef0cec0d78634f60e1a1e23e4637b1f082e2",
 			CreatedAt:           createdAt,
+			UpdatedAt:           createdAt,
 			Type:                txType,
 			Amount:              "100.1000000",
 			CounterpartyAddress: "GAHSWJ2ANIFE3ZEWM4EN7WKLC2F4OCLS2O4QQQJSADYHOXZDA3EZNJ2M",
-			CounterpartyName:     "owner@bluecorp.local",
-			WalletID:            "07815404-eb0d-4188-a362-38a90aae185c",
+			CounterpartyName:    "owner@bluecorp.local",
+			ExternalPaymentID:   "ext-payment-001",
 		})
 	}
 	return out
