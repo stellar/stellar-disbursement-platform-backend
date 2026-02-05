@@ -114,16 +114,22 @@ var stellarExpertTestnetBaseURL = getStellarExpertBaseURL()
 
 const tableWidth = mmPerPage - 2*marginLR
 
-var summaryColWidths = []float64{44, 34, 34, 34, 34}
-var txColWidths = []float64{16, 52, 49, 21, 21, 21}
+var (
+	summaryColWidths = []float64{44, 34, 34, 34, 34}
+	txColWidths      = []float64{16, 52, 49, 21, 21, 21}
+)
 
-var headerAndTotalsColor = []int{54, 65, 83}
-var defaultCellColor = []int{74, 85, 101}
-var noteColor = []int{106, 114, 130}
-var activeColor = []int{20, 71, 230}
-var highlightColor = []int{16, 24, 40}
-var sectionTitleColor = []int{30, 41, 57}
+var (
+	headerAndTotalsColor = []int{54, 65, 83}
+	defaultCellColor     = []int{74, 85, 101}
+	noteColor            = []int{106, 114, 130}
+	activeColor          = []int{20, 71, 230}
+	highlightColor       = []int{16, 24, 40}
+	sectionTitleColor    = []int{30, 41, 57}
+)
 
-var headerBorderColor = []int{203, 207, 215}
-var defaultBorderColor = []int{240, 241, 243}
-var totalsRowBgColor = []int{249, 250, 251}
+var (
+	headerBorderColor  = []int{203, 207, 215}
+	defaultBorderColor = []int{240, 241, 243}
+	totalsRowBgColor   = []int{249, 250, 251}
+)
