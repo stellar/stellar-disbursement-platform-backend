@@ -104,10 +104,10 @@ func TestBuildPDF(t *testing.T) {
 						EndingBalance:    testAmount100,
 						Transactions: []services.StatementTransaction{
 							{
-								ID:       "tx1",
+								ID:        "tx1",
 								CreatedAt: testTimestamp1,
-								Type:     "credit",
-								Amount:   testAmount100,
+								Type:      "credit",
+								Amount:    testAmount100,
 							},
 						},
 					},
@@ -119,10 +119,10 @@ func TestBuildPDF(t *testing.T) {
 						EndingBalance:    testAmount50,
 						Transactions: []services.StatementTransaction{
 							{
-								ID:       "tx2",
+								ID:        "tx2",
 								CreatedAt: "2026-01-16T10:00:00Z",
-								Type:     "credit",
-								Amount:   testAmount50,
+								Type:      "credit",
+								Amount:    testAmount50,
 							},
 						},
 					},
@@ -178,10 +178,10 @@ func TestBuildPDF(t *testing.T) {
 						EndingBalance:    testAmount100,
 						Transactions: []services.StatementTransaction{
 							{
-								ID:       "tx1",
+								ID:        "tx1",
 								CreatedAt: testTimestamp1,
-								Type:     "credit",
-								Amount:   testAmount100,
+								Type:      "credit",
+								Amount:    testAmount100,
 							},
 						},
 					},
