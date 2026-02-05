@@ -18,13 +18,13 @@ type amountCellArgs struct {
 	opts         amountCellOpts
 }
 
-func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs, paddingH float64) {
+func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs) {
 	x, y, w, h := a.x, a.y, a.w, a.h
 	opts := a.opts
 	pdf.SetXY(x, y)
 	pdf.CellFormat(w, h, "", a.border, 0, "R", a.fill, 0, "")
-	textW := w - 2*paddingH
-	textX := x + paddingH
+	textW := w - 2*cellPaddingX
+	textX := x + cellPaddingX
 	amountCurrencyBlockHeight := amountLineHeight + currencyLineHeight
 	amountY := y + (h-amountCurrencyBlockHeight)/2
 	if opts.forTotals {
