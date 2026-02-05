@@ -8,10 +8,7 @@ import (
 )
 
 func drawTitleSection(pdf *gofpdf.Fpdf, walletAccount string) {
-	walletAddr := walletAccount
-	if strings.HasPrefix(walletAddr, "stellar:") {
-		walletAddr = walletAddr[8:]
-	}
+	walletAddr := strings.TrimPrefix(walletAccount, "stellar:")
 
 	pdf.SetFont("Inter", "", bodyFontSize)
 	pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])

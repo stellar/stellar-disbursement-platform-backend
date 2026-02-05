@@ -206,7 +206,12 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 
 			pdf.SetFont("Inter", "", txSmallFontSize)
 			pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
-			line2Text := "Recipient • " + line2Value
+			var line2Text string
+			if line2Label != "" {
+				line2Text = line2Label + " • " + line2Value
+			} else {
+				line2Text = line2Value
+			}
 			pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
 			pdf.CellFormat(cpW, counterpartyLineHeight, line2Text, "", 0, "L", false, 0, "")
 		} else {

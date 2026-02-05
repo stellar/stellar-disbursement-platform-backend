@@ -98,10 +98,7 @@ func drawMiniHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo 
 	col2X := xLeft + logoWidth + headerLogoToOrgNameGap
 	col2Width := halfWidth - logoWidth - headerLogoToOrgNameGap
 	if col2Width > 0 {
-		walletAddr := walletAccount
-		if strings.HasPrefix(walletAddr, "stellar:") {
-			walletAddr = walletAddr[8:]
-		}
+		walletAddr := strings.TrimPrefix(walletAccount, "stellar:")
 		truncatedAddr := utils.TruncateString(walletAddr, 5)
 
 		if organizationName != "" {
