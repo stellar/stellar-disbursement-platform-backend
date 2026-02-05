@@ -8,6 +8,7 @@ import (
 	"github.com/jung-kurt/gofpdf/v2"
 	"github.com/shopspring/decimal"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -39,7 +40,7 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 			pdf.SetXY(xPos+cellPaddingX, yStart)
 			pdf.CellFormat(textW, txHeaderRowHeight, h.text, "", 0, h.align, false, 0, "")
 		} else {
-			lines := strings.Split(breakHeaderWords(h.text), "\n")
+			lines := strings.Split(shared.BreakHeaderWords(h.text), "\n")
 			blockHeight := txHeaderLineHeight * float64(len(lines))
 			lineY := yStart + (txHeaderRowHeight-blockHeight)/2
 			for _, line := range lines {
