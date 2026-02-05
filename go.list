@@ -121,6 +121,7 @@ github.com/joho/godotenv v1.5.1
 github.com/jpillora/backoff v1.0.0
 github.com/json-iterator/go v1.1.12
 github.com/julienschmidt/httprouter v1.3.0
+github.com/jung-kurt/gofpdf/v2 v2.17.3
 github.com/klauspost/compress v1.18.0
 github.com/klauspost/cpuid/v2 v2.2.10
 github.com/kr/pretty v0.3.1
