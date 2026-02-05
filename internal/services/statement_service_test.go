@@ -188,7 +188,6 @@ func TestStatementService_resolveAsset(t *testing.T) {
 		assert.Nil(t, asset)
 		assert.Equal(t, ErrStatementAssetNotFound, err)
 	})
-
 }
 
 func TestStatementService_resolveCounterparty(t *testing.T) {
