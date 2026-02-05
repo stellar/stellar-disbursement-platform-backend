@@ -176,10 +176,10 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 func CorsMiddleware(corsAllowedOrigins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		cors := cors.New(cors.Options{
-			AllowedOrigins:   corsAllowedOrigins,
-			AllowedHeaders:  []string{"*"},
-			AllowedMethods:  []string{"GET", "PUT", "POST", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-			ExposedHeaders:   []string{"Content-Disposition"},
+			AllowedOrigins: corsAllowedOrigins,
+			AllowedHeaders: []string{"*"},
+			AllowedMethods: []string{"GET", "PUT", "POST", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+			ExposedHeaders: []string{"Content-Disposition"},
 		})
 
 		return cors.Handler(next)
