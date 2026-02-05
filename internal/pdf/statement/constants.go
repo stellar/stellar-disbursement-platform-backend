@@ -1,5 +1,10 @@
 package statement
 
+import (
+	"os"
+	"strings"
+)
+
 // Page dimensions and margins (statement-specific copy for package isolation)
 const (
 	mmPerPage    = 210.0
@@ -86,10 +91,21 @@ const (
 	maxCounterpartyTextLength = 35
 )
 
-// Stellar Expert Explorer URL
-const (
-	stellar_expert_testnet_base_url = "https://stellar.expert/explorer/public/"
-)
+// getStellarExpertBaseURL returns the Stellar Expert Explorer base URL from the STELLAR_EXPERT_URL
+// environment variable, or defaults to testnet if not set. Ensures the URL ends with a trailing slash.
+func getStellarExpertBaseURL() string {
+	url := os.Getenv("STELLAR_EXPERT_URL")
+	if url == "" {
+		url = "https://stellar.expert/explorer/testnet"
+	}
+	// Ensure URL ends with "/" for proper concatenation
+	if !strings.HasSuffix(url, "/") {
+		url += "/"
+	}
+	return url
+}
+
+var stellar_expert_testnet_base_url = getStellarExpertBaseURL()
 
 const tableWidth = mmPerPage - 2*marginLR
 
