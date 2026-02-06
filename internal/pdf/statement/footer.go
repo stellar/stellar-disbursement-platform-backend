@@ -21,8 +21,9 @@ func setupFooter(pdf *gofpdf.Fpdf) {
 		pdf.SetDrawColor(0, 0, 0)
 
 		yDisclaimerLine := pdf.GetY()
-		disclaimerLabel := "Disclaimer:"
-		disclaimerText := " This report is generated from SDP records. Blockchain confirmations reflect public ledger data."
+		disclaimerLabel := "Disclaimer: "
+		disclaimerTextLine1 := "This report is generated from publicly available blockchain ledger data and records"
+		disclaimerTextLine2 := "maintained by the Stellar Disbursement Platform."
 		pdf.SetFont("Inter", "B", bodyFontSize)
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
 		labelWidth := pdf.GetStringWidth(disclaimerLabel)
@@ -32,8 +33,10 @@ func setupFooter(pdf *gofpdf.Fpdf) {
 		xTextStart := xLabelStart + labelWidth
 		pdf.SetFont("Inter", "", bodyFontSize)
 		pdf.SetXY(xTextStart, yDisclaimerLine)
-		pdf.CellFormat(0, footerLineHeight, disclaimerText, "", 1, "L", false, 0, "")
-		pdf.Ln(footerDisclaimerToPageGap)
+		pdf.CellFormat(0, footerLineHeight, disclaimerTextLine1, "", 1, "L", false, 0, "")
+		pdf.SetXY(xTextStart, pdf.GetY())
+		pdf.CellFormat(0, footerLineHeight, disclaimerTextLine2, "", 1, "L", false, 0, "")
+		pdf.Ln(footerDisclaimerToPageGap * 0.5)
 		pdf.CellFormat(0, footerLineHeight, fmt.Sprintf("Page %d of %d", pdf.PageNo(), pdf.PageCount()), "", 0, "R", false, 0, "")
 		pdf.SetTextColor(0, 0, 0)
 	})
