@@ -117,7 +117,7 @@ func drawMiniHeader(pdf *gofpdf.Fpdf, organizationName string, organizationLogo 
 		xValueStart := col2X + labelWidth + walletAddressLabelGap
 		pdf.SetFont("GoogleSansCode", "U", organizationNameFontSize)
 		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-		walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, walletAddr)
+		walletURL := fmt.Sprintf("%saccount/%s", stellarExpertBaseURL, walletAddr)
 		truncatedWidth := pdf.GetStringWidth(truncatedAddr)
 		pdf.SetXY(xValueStart, yLine2)
 		pdf.CellFormat(truncatedWidth, titleSectionLine3Height, truncatedAddr, "", 0, "L", false, 0, walletURL)
