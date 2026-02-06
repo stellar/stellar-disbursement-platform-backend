@@ -145,7 +145,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	pdf.SetXY(xID, yStart)
 	pdf.CellFormat(txColWidths[1], txDataRowHeight, "", "B", 0, "L", false, 0, "")
 	cellWidth := txColWidths[1] - 2*cellPaddingX
-	txURL := fmt.Sprintf("%stx/%s", stellarExpertTestnetBaseURL, tx.ID)
+	txURL := fmt.Sprintf("%stx/%s", stellarExpertBaseURL, tx.ID)
 	pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 	idLines := pdf.SplitText(opID, cellWidth)
@@ -187,7 +187,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 		pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
 		pdf.SetXY(xTextStart, counterpartyY+counterpartyLineHeight)
-		walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, tx.CounterpartyAddress)
+		walletURL := fmt.Sprintf("%saccount/%s", stellarExpertBaseURL, tx.CounterpartyAddress)
 		pdf.CellFormat(cpW, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
 		pdf.LinkString(xTextStart, counterpartyY+counterpartyLineHeight, cpW, counterpartyLineHeight, walletURL)
 	} else {
@@ -203,7 +203,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 			xWalletStart := xLabelStart + labelWidth + counterpartyGap
 			pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 			pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-			walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, tx.CounterpartyAddress)
+			walletURL := fmt.Sprintf("%saccount/%s", stellarExpertBaseURL, tx.CounterpartyAddress)
 			walletWidth := cpW - (xWalletStart - xTextStart)
 			pdf.SetXY(xWalletStart, counterpartyY)
 			pdf.CellFormat(walletWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)
@@ -232,7 +232,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 			xWalletStart := xLabelStart + labelWidth
 			pdf.SetFont("GoogleSansCode", "U", txSmallFontSize)
 			pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])
-			walletURL := fmt.Sprintf("%saccount/%s", stellarExpertTestnetBaseURL, tx.CounterpartyAddress)
+			walletURL := fmt.Sprintf("%saccount/%s", stellarExpertBaseURL, tx.CounterpartyAddress)
 			walletWidth := cpW - (xWalletStart - xTextStart)
 			pdf.SetXY(xWalletStart, singleLineY)
 			pdf.CellFormat(walletWidth, counterpartyLineHeight, walletAddr, "", 0, "L", false, 0, walletURL)

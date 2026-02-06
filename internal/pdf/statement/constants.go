@@ -92,25 +92,15 @@ const (
 )
 
 // Stellar Expert Explorer URL
-const (
-	defaultStellarExpertBaseURL = "https://stellar.expert/explorer/public/"
-)
-
-// getStellarExpertBaseURL returns the Stellar Expert Explorer base URL from the STELLAR_EXPERT_URL
-// environment variable, or defaults to public if not set. Ensures the URL ends with a trailing slash.
-func getStellarExpertBaseURL() string {
+// Gets the base URL from STELLAR_EXPERT_URL environment variable and ensures it ends with a trailing slash.
+var stellarExpertBaseURL = func() string {
 	url := os.Getenv("STELLAR_EXPERT_URL")
-	if url == "" {
-		url = defaultStellarExpertBaseURL
-	}
 	// Ensure URL ends with "/" for proper concatenation
-	if !strings.HasSuffix(url, "/") {
+	if url != "" && !strings.HasSuffix(url, "/") {
 		url += "/"
 	}
 	return url
-}
-
-var stellarExpertTestnetBaseURL = getStellarExpertBaseURL()
+}()
 
 const tableWidth = mmPerPage - 2*marginLR
 
