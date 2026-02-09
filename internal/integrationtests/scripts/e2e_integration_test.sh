@@ -107,15 +107,8 @@ options=(
   Config_Stellar_Env_Phone_XLM_Testnet[@]
   Config_Stellar_Env_Email_XLM_Testnet[@]
   Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
+  Config_Stellar_EmbeddedWallet_XLM_Testnet[@]
 )
-
-# Conditionally add embedded wallet tests if WASM hash is configured
-if [ -n "${EMBEDDED_WALLETS_WASM_HASH:-}" ]; then
-  echo "🔧 Embedded wallet WASM hash found - including embedded wallet tests"
-  options+=(Config_Stellar_EmbeddedWallet_XLM_Testnet[@])
-else
-  echo "ℹ️  Skipping embedded wallet tests (EMBEDDED_WALLETS_WASM_HASH not set)"
-fi
 
 echo "📋 Running ${#options[@]} test configuration(s)"
 

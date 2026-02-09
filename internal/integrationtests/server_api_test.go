@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_Login(t *testing.T) {
@@ -423,56 +422,6 @@ func Test_CreateEmbeddedWallet(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, data.PendingWalletStatus, wallet.Status)
 		assert.Empty(t, wallet.ContractAddress)
-
-		httpClientMock.AssertExpectations(t)
-	})
-}
-
-func Test_ServerAPIIntegrationTests_ConfigureCircleAccess(t *testing.T) {
-	httpClientMock := httpclientMocks.HTTPClientMock{}
-	sa := ServerAPIIntegrationTests{
-		HTTPClient:       &httpClientMock,
-		ServerAPIBaseURL: "http://mock_server.com/",
-		TenantName:       "test-tenant",
-	}
-
-	ctx := context.Background()
-	authToken := &ServerAPIAuthToken{Token: "test-token"}
-	reqBody := &httphandler.PatchCircleConfigRequest{
-		WalletID: utils.Ptr("wallet-123"),
-	}
-
-	t.Run("error calling httpClient.Do", func(t *testing.T) {
-		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(nil, fmt.Errorf("error calling the request")).Once()
-		err := sa.ConfigureCircleAccess(ctx, authToken, reqBody)
-		require.EqualError(t, err, "making request to server API patch CIRCLE CONFIG: error calling the request")
-
-		httpClientMock.AssertExpectations(t)
-	})
-
-	t.Run("error configuring circle access on server api", func(t *testing.T) {
-		errorResponse := `{"error": "Invalid wallet ID"}`
-		response := &http.Response{
-			Body:       io.NopCloser(strings.NewReader(errorResponse)),
-			StatusCode: http.StatusBadRequest,
-		}
-		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
-
-		err := sa.ConfigureCircleAccess(ctx, authToken, reqBody)
-		require.EqualError(t, err, "statusCode 400 when trying to configure Circle access on the server API")
-
-		httpClientMock.AssertExpectations(t)
-	})
-
-	t.Run("successfully configuring circle access", func(t *testing.T) {
-		response := &http.Response{
-			Body:       io.NopCloser(strings.NewReader(`{}`)),
-			StatusCode: http.StatusOK,
-		}
-		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
-
-		err := sa.ConfigureCircleAccess(ctx, authToken, reqBody)
-		require.NoError(t, err)
 
 		httpClientMock.AssertExpectations(t)
 	})

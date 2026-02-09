@@ -34,7 +34,7 @@ type ServerAPIIntegrationTestsInterface interface {
 	StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error
 	ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error
-	CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*EmbeddedWalletResponse, error)
+	CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*httphandler.WalletResponse, error)
 }
 
 type ServerAPIIntegrationTests struct {
@@ -312,14 +312,8 @@ type CreateEmbeddedWalletRequest struct {
 	CredentialID string `json:"credential_id"`
 }
 
-// EmbeddedWalletResponse contains the contract address (once deployed) and wallet status.
-type EmbeddedWalletResponse struct {
-	ContractAddress string                    `json:"contract_address,omitempty"`
-	Status          data.EmbeddedWalletStatus `json:"status"`
-}
-
 // CreateEmbeddedWallet creates a new embedded wallet using POST /embedded-wallets.
-func (sa *ServerAPIIntegrationTests) CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*EmbeddedWalletResponse, error) {
+func (sa *ServerAPIIntegrationTests) CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*httphandler.WalletResponse, error) {
 	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, embeddedWalletsURL)
 	if err != nil {
 		return nil, fmt.Errorf("creating url: %w", err)
@@ -348,7 +342,7 @@ func (sa *ServerAPIIntegrationTests) CreateEmbeddedWallet(ctx context.Context, r
 		return nil, fmt.Errorf("error registering embedded wallet (statusCode=%d)", resp.StatusCode)
 	}
 
-	walletResp := &EmbeddedWalletResponse{}
+	walletResp := &httphandler.WalletResponse{}
 	if err = json.NewDecoder(resp.Body).Decode(walletResp); err != nil {
 		return nil, fmt.Errorf("decoding response body: %w", err)
 	}

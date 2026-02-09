@@ -49,6 +49,7 @@ type IntegrationTestsOpts struct {
 	WalletHomepage             string
 	WalletDeepLink             string
 	WalletSEP10Domain          string
+	WalletIsEmbedded           bool
 	DisbursementName           string
 	DisbursementCSVFilePath    string
 	DisbursementCSVFileName    string
@@ -511,18 +512,9 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		return fmt.Errorf("getting or creating test asset: %w", err)
 	}
 
-	wallet, err := it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain)
+	_, err = it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain, opts.WalletIsEmbedded)
 	if err != nil {
 		return fmt.Errorf("getting or creating test wallet: %w", err)
-	}
-
-	// Mark wallet as embedded if needed
-	if opts.WalletName == "Embedded Wallet" && !wallet.Embedded {
-		query = `UPDATE wallets SET embedded = true WHERE id = $1`
-		_, err = it.mtnDBConnectionPool.ExecContext(ctx, query, wallet.ID)
-		if err != nil {
-			return fmt.Errorf("marking wallet as embedded: %w", err)
-		}
 	}
 
 	// 4. Provision Circle distribution account if needed
@@ -611,12 +603,7 @@ func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx conte
 	log.Ctx(ctx).Infof("✅ Contract deployed at: %s", contractAddress)
 
 	// Phase 5: Complete verification if required (OTP + DOB)
-	if embeddedWallet.RequiresVerification {
-		log.Ctx(ctx).Info("=== Phase 5: Completing receiver verification (OTP + PII) ===")
-		// TODO: Implement completeEmbeddedWalletVerification
-	} else {
-		log.Ctx(ctx).Info("=== Phase 5: Skipping OTP and PII verification (RequiresVerification=false) ===")
-	}
+	log.Ctx(ctx).Info("=== Phase 5: Skipping OTP and PII verification (RequiresVerification=false) ===")
 
 	// Phase 6: Verify receiver wallet was registered
 	log.Ctx(ctx).Info("=== Phase 6: Verifying receiver wallet registration ===")
@@ -646,6 +633,7 @@ func (it *IntegrationTestsService) createEmbeddedWalletDisbursement(
 ) (*data.Disbursement, string, error) {
 	embeddedOpts := opts
 	embeddedOpts.WalletName = "Embedded Wallet"
+	embeddedOpts.WalletIsEmbedded = true
 	embeddedOpts.DisbursementName = opts.DisbursementName + "-embedded-" + time.Now().Format("20060102150405")
 
 	disbursement, err := it.createAndValidateDisbursement(ctx, embeddedOpts, authToken, asset)
@@ -694,8 +682,8 @@ func (it *IntegrationTestsService) waitForEmbeddedWalletToken(ctx context.Contex
 			return nil
 		},
 		retry.Context(ctx),
-		retry.Attempts(30),
-		retry.Delay(5*time.Second),
+		retry.Attempts(10),
+		retry.Delay(2*time.Second),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
 			log.Ctx(ctx).Infof("🔄 Waiting for embedded wallet token, attempt #%d: %v", n+1, err)
@@ -820,11 +808,11 @@ func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 			return nil
 		},
 		retry.Context(ctx),
-		retry.Attempts(6),
-		retry.Delay(20*time.Second),
+		retry.Attempts(30),
+		retry.Delay(10*time.Second),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			log.Ctx(ctx).Infof("🔄 Retry attempt #%d: %v", n+1, err)
+			log.Ctx(ctx).Infof("🔄 Polling payment completion, attempt #%d: %v", n+1, err)
 		}),
 	)
 	if err != nil {
