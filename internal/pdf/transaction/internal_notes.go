@@ -11,7 +11,7 @@ const (
 	internalNotesDisclaimer = "This note is manually entered by the user for internal reference only. It is not part of the official transaction record."
 	internalNotesPadding    = 4.0
 	internalNotesLineHeight = 4.5
-	internalNotesItalicSize = 7.5
+	internalNotesDisclaimerToValueGap = 2.0
 )
 
 // drawInternalNotes draws the grey area above the footer when internalNotes is non-empty.
@@ -35,30 +35,42 @@ func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 		return
 	}
 
-	yStart := pdf.GetY()
-	pdf.SetFillColor(greyAreaBgColor[0], greyAreaBgColor[1], greyAreaBgColor[2])
-	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
+	// Content-height box placed at bottom: bottom edge = page bottom minus footer margin minus 3mm
+	boxHeight := internalNotesPadding*2 + internalNotesLineHeight*3 + 2.0 + internalNotesDisclaimerToValueGap // title + disclaimer + gap + user text + gaps
+	boxBottom := pageHeight - marginBottom - internalNotesMarginBottom
+	yStart := boxBottom - boxHeight
+
+	pdf.SetFillColor(internalNotesBgColor[0], internalNotesBgColor[1], internalNotesBgColor[2])
+	pdf.SetDrawColor(internalNotesBorderColor[0], internalNotesBorderColor[1], internalNotesBorderColor[2])
 	pdf.SetLineWidth(0.2)
 
 	contentWidth := tableWidth
-	boxHeight := internalNotesPadding*2 + internalNotesLineHeight*3 + 2.0 // title + disclaimer + user text + gaps
-	pdf.Rect(marginLR, yStart, contentWidth, boxHeight, "FD")
-	pdf.SetY(yStart + internalNotesPadding)
-	pdf.SetX(marginLR + internalNotesPadding)
+	pdf.RoundedRect(marginLR, yStart, contentWidth, boxHeight, internalNotesCornerRadius, "1234", "FD")
 
-	pdf.SetFont("Inter", "I", sectionTitleSize-1)
-	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
-	pdf.CellFormat(contentWidth-2*internalNotesPadding, internalNotesLineHeight, internalNotesTitle, "", 1, "L", false, 0, "")
-	pdf.SetFont("Inter", "I", internalNotesItalicSize)
+	textLeft := marginLR + internalNotesPadding
+	textWidth := contentWidth - 2*internalNotesPadding
+
+	// Title
+	pdf.SetY(yStart + internalNotesPadding)
+	pdf.SetX(textLeft)
+	pdf.SetFont("Inter", "emi", internalNotesSmallFontSize)
+	pdf.SetTextColor(internalNotesTitleColor[0], internalNotesTitleColor[1], internalNotesTitleColor[2])
+	pdf.CellFormat(textWidth, internalNotesLineHeight, internalNotesTitle, "", 1, "L", false, 0, "")
+	// Disclaimer
+	pdf.SetX(textLeft)
+	pdf.SetFont("Inter", "I", internalNotesSmallFontSize)
 	pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
-	pdf.CellFormat(contentWidth-2*internalNotesPadding, internalNotesLineHeight, internalNotesDisclaimer, "", 1, "L", false, 0, "")
-	pdf.SetFont("Inter", "I", bodyFontSize)
-	pdf.SetTextColor(0, 0, 0)
-	pdf.CellFormat(contentWidth-2*internalNotesPadding, internalNotesLineHeight, notes, "", 1, "L", false, 0, "")
+	pdf.CellFormat(textWidth, internalNotesLineHeight, internalNotesDisclaimer, "", 1, "L", false, 0, "")
+	pdf.SetY(pdf.GetY() + internalNotesDisclaimerToValueGap)
+	// User note
+	pdf.SetX(textLeft)
+	pdf.SetFont("Inter", "", bodyFontSize)
+	pdf.SetTextColor(internalNotesValueColor[0], internalNotesValueColor[1], internalNotesValueColor[2])
+	pdf.CellFormat(textWidth, internalNotesLineHeight, notes, "", 1, "L", false, 0, "")
 
 	pdf.SetY(yStart + boxHeight)
 	pdf.SetX(marginLR)
-	pdf.Ln(internalNotesPadding)
+	pdf.Ln(internalNotesMarginBottom)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Inter", "", bodyFontSize)
 }

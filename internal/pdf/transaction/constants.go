@@ -79,9 +79,12 @@ const (
 	footerDisclaimerToPageGap = 2.0
 )
 
-// Internal notes (grey area)
+// Internal notes
 const (
-	internalNotesMaxLength = 100
+	internalNotesMaxLength      = 100
+	internalNotesCornerRadius   = 1.5
+	internalNotesMarginBottom   = 3.0
+	internalNotesSmallFontSize = 7.0
 )
 
 // Stellar Expert Explorer URL
@@ -121,7 +124,10 @@ var (
 )
 
 var (
-	headerBorderColor  = []int{203, 207, 215}
-	defaultBorderColor = []int{240, 241, 243}
-	greyAreaBgColor    = []int{245, 245, 245}
+	headerBorderColor       = []int{203, 207, 215}
+	defaultBorderColor     = []int{240, 241, 243}
+	internalNotesTitleColor  = []int{74, 85, 101}
+	internalNotesValueColor  = []int{54, 65, 83}
+	internalNotesBgColor     = []int{249, 250, 251}
+	internalNotesBorderColor = []int{209, 213, 220}
 )
