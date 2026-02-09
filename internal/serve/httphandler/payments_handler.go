@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
@@ -15,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/transaction"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
@@ -33,6 +37,7 @@ type PaymentsHandler struct {
 	CrashTrackerClient          crashtracker.CrashTrackerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
 	DirectPaymentService        *services.DirectPaymentService
+	HorizonClient               horizonclient.ClientInterface
 }
 
 type RetryPaymentsRequest struct {
@@ -106,6 +111,213 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, payments[0], httpjson.JSON)
+}
+
+const internalNotesMaxLength = 100
+
+// GetPaymentExport returns the Transaction Notice PDF for a single payment.
+func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	paymentID := chi.URLParam(r, "id")
+
+	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", paymentID)
+			httperror.NotFound(errorResponse, err, nil).Render(w)
+			return
+		}
+		msg := fmt.Sprintf("Cannot retrieve payment with id %s", paymentID)
+		httperror.InternalError(ctx, msg, err, nil).Render(w)
+		return
+	}
+
+	internalNotes := strings.TrimSpace(r.URL.Query().Get("internal_notes"))
+	if idx := strings.IndexAny(internalNotes, "\r\n"); idx >= 0 {
+		internalNotes = internalNotes[:idx]
+	}
+	if len(internalNotes) > internalNotesMaxLength {
+		internalNotes = internalNotes[:internalNotesMaxLength]
+	}
+	var internalNotesPtr *string
+	if internalNotes != "" {
+		internalNotesPtr = &internalNotes
+	}
+
+	var orgName string
+	var orgLogo []byte
+	if p.Models != nil {
+		if org, err := p.Models.Organizations.Get(ctx); err == nil {
+			orgName = org.Name
+			orgLogo = org.Logo
+		}
+	}
+
+	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		log.Ctx(ctx).Warnf("resolving distribution account for export: %v", err)
+	}
+	senderWalletAddress := ""
+	if err == nil && distAccount.IsStellar() {
+		senderWalletAddress = distAccount.Address
+	}
+
+	feeCharged := "—"
+	if payment.StellarTransactionID != "" && p.HorizonClient != nil {
+		hTx, err := p.HorizonClient.TransactionDetail(payment.StellarTransactionID)
+		if err == nil {
+			// FeeCharged is in stroops (1 XLM = 10^7 stroops)
+			feeCharged = fmt.Sprintf("%.4f XLM", float64(hTx.FeeCharged)/1e7)
+		}
+	}
+
+	enrichment := &transaction.Enrichment{
+		SenderName:            orgName,
+		SenderWalletAddress:   senderWalletAddress,
+		FeeCharged:            feeCharged,
+		StellarExpertBaseURL:  transaction.GetStellarExpertBaseURL(),
+	}
+	if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil && len(payment.Disbursement.StatusHistory) > 0 {
+		populateDisbursementCreatedApprovedBy(ctx, p.AuthManager, payment.Disbursement.StatusHistory, enrichment)
+	}
+
+	pdfBytes, err := transaction.BuildPDF(payment, orgName, orgLogo, enrichment, internalNotesPtr)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot generate transaction notice PDF", err, nil).Render(w)
+		return
+	}
+
+	filename := fmt.Sprintf("transaction_notice_%s.pdf", paymentID)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	if _, err := w.Write(pdfBytes); err != nil {
+		httperror.InternalError(ctx, "Cannot write transaction notice PDF", err, nil).Render(w)
+		return
+	}
+}
+
+const disbursementTimestampFormat = "Jan 2, 2006 · 15:04:05 UTC"
+
+// populateDisbursementCreatedApprovedBy fills enrichment with Created by / Approved by from disbursement status_history (DRAFT/READY).
+func populateDisbursementCreatedApprovedBy(ctx context.Context, authManager auth.AuthManager, history data.DisbursementStatusHistory, enrichment *transaction.Enrichment) {
+	var draftEntry, readyEntry *data.DisbursementStatusHistoryEntry
+	for i := range history {
+		e := &history[i]
+		if e.Status == data.DraftDisbursementStatus {
+			draftEntry = e
+		}
+		if e.Status == data.ReadyDisbursementStatus {
+			readyEntry = e
+		}
+	}
+	userIDs := make(map[string]struct{})
+	if draftEntry != nil && draftEntry.UserID != "" {
+		userIDs[draftEntry.UserID] = struct{}{}
+	}
+	if readyEntry != nil && readyEntry.UserID != "" {
+		userIDs[readyEntry.UserID] = struct{}{}
+	}
+	if len(userIDs) == 0 {
+		if draftEntry != nil {
+			enrichment.DisbursementCreatedByTimestamp = draftEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+		}
+		if readyEntry != nil {
+			enrichment.DisbursementApprovedByTimestamp = readyEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+		}
+		return
+	}
+	ids := make([]string, 0, len(userIDs))
+	for id := range userIDs {
+		ids = append(ids, id)
+	}
+	users, err := authManager.GetUsersByID(ctx, ids, false)
+	if err != nil {
+		log.Ctx(ctx).Warnf("getting users for disbursement created/approved by: %v", err)
+		if draftEntry != nil {
+			enrichment.DisbursementCreatedByTimestamp = draftEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+		}
+		if readyEntry != nil {
+			enrichment.DisbursementApprovedByTimestamp = readyEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+		}
+		return
+	}
+	idToName := make(map[string]string)
+	for _, u := range users {
+		name := strings.TrimSpace(u.FirstName + " " + u.LastName)
+		if name == "" {
+			name = u.Email
+		}
+		idToName[u.ID] = name
+	}
+	if draftEntry != nil {
+		enrichment.DisbursementCreatedByUserName = idToName[draftEntry.UserID]
+		enrichment.DisbursementCreatedByTimestamp = draftEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+	}
+	if readyEntry != nil {
+		enrichment.DisbursementApprovedByUserName = idToName[readyEntry.UserID]
+		enrichment.DisbursementApprovedByTimestamp = readyEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+	}
+}
+
+// userIDFromStatusMessage extracts user ID from messages like "Payment submitted by user_id <id>".
+var userIDFromStatusMessageRegex = regexp.MustCompile(`user_id\s+(\S+)`)
+
+func buildStatusHistoryUserNames(ctx context.Context, authManager auth.AuthManager, history data.PaymentStatusHistory) []string {
+	if len(history) == 0 {
+		return nil
+	}
+	userIDs := make(map[string]struct{})
+	var orderedIDs []string
+	for _, entry := range history {
+		msg := entry.StatusMessage
+		matches := userIDFromStatusMessageRegex.FindStringSubmatch(msg)
+		if len(matches) < 2 {
+			orderedIDs = append(orderedIDs, "")
+			continue
+		}
+		uid := strings.TrimSpace(matches[1])
+		orderedIDs = append(orderedIDs, uid)
+		if uid != "" {
+			userIDs[uid] = struct{}{}
+		}
+	}
+	ids := make([]string, 0, len(userIDs))
+	for id := range userIDs {
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		names := make([]string, len(history))
+		for i := range history {
+			names[i] = ""
+		}
+		return names
+	}
+	users, err := authManager.GetUsersByID(ctx, ids, false)
+	if err != nil {
+		log.Ctx(ctx).Warnf("getting users for status history: %v", err)
+		names := make([]string, len(history))
+		for i := range history {
+			names[i] = ""
+		}
+		return names
+	}
+	idToName := make(map[string]string)
+	for _, u := range users {
+		name := strings.TrimSpace(u.FirstName + " " + u.LastName)
+		if name == "" {
+			name = u.Email
+		}
+		idToName[u.ID] = name
+	}
+	names := make([]string, len(orderedIDs))
+	for i, id := range orderedIDs {
+		if id == "" {
+			names[i] = ""
+			continue
+		}
+		names[i] = idToName[id]
+	}
+	return names
 }
 
 func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
