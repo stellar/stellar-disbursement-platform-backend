@@ -364,6 +364,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					o.DistributionAccountService,
 					o.SubmitterEngine,
 				),
+				HorizonClient: o.SubmitterEngine.HorizonClient,
 			}
 
 			// Read operations
@@ -373,6 +374,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			)).Group(func(r chi.Router) {
 				r.Get("/", paymentsHandler.GetPayments)
 				r.Get("/{id}", paymentsHandler.GetPayment)
+				r.Get("/{id}/export", paymentsHandler.GetPaymentExport)
 			})
 
 			// Write operations with different role permissions
