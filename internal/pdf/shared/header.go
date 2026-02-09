@@ -63,6 +63,7 @@ type HeaderParams struct {
 	WalletAccount        string
 	WalletAccountDisplay string // optional truncated display for mini header; if empty use WalletAccount
 	StellarExpertBaseURL string
+	OperatedByBaseURL string
 }
 
 // DrawHeader draws the full header: logo + left column (org name; if WalletAccount set, add wallet address line);
@@ -140,25 +141,35 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 		}
 	}
 
-	// Right column: "Generated on"
+	// Right column
+	yRightCurrent := yStart
+	if params.OperatedByBaseURL != "" {
+		pdf.SetFont("Inter", "M", layout.OrganizationNameFontSize)
+		pdf.SetTextColor(layout.DefaultCellColor[0], layout.DefaultCellColor[1], layout.DefaultCellColor[2])
+		operatedByStr := fmt.Sprintf("Operated by: %s", params.OperatedByBaseURL)
+		pdf.SetXY(rightColX, yRightCurrent)
+		pdf.CellFormat(halfWidth, layout.HeaderRightColLineHeight, operatedByStr, "", 0, "R", false, 0, "")
+		yRightCurrent += layout.HeaderRightColLineHeight
+	}
+
 	pdf.SetFont("Inter", "", layout.BodyFontSize)
 	pdf.SetTextColor(layout.DefaultCellColor[0], layout.DefaultCellColor[1], layout.DefaultCellColor[2])
 	genStr := fmt.Sprintf("Generated on %s", time.Now().UTC().Format("2006-01-02 15:04 UTC"))
-	pdf.SetXY(rightColX, yStart)
+	pdf.SetXY(rightColX, yRightCurrent)
 	pdf.CellFormat(halfWidth, layout.HeaderRightColLineHeight, genStr, "", 0, "R", false, 0, "")
 
-	yRightBottom := yStart + layout.HeaderRightColLineHeight
+	yRightBottom := yRightCurrent + layout.HeaderRightColLineHeight
 	if params.StatementPeriod != nil {
-		pdf.SetXY(rightColX, yStart+layout.HeaderRightColLineHeight)
+		pdf.SetXY(rightColX, yRightCurrent+layout.HeaderRightColLineHeight)
 		pdf.SetFont("Inter", "emi", layout.BodyFontSize)
 		pdf.SetTextColor(layout.HighlightColor[0], layout.HighlightColor[1], layout.HighlightColor[2])
 		pdf.CellFormat(halfWidth, layout.HeaderRightColLineHeight, "Statement Period:", "", 0, "R", false, 0, "")
 		periodStr := fmt.Sprintf("%s to %s", params.StatementPeriod.From.Format("2006-01-02"), params.StatementPeriod.To.Format("2006-01-02"))
-		pdf.SetXY(rightColX, yStart+2*layout.HeaderRightColLineHeight)
+		pdf.SetXY(rightColX, yRightCurrent+2*layout.HeaderRightColLineHeight)
 		pdf.SetFont("Inter", "B", layout.DateRangeFontSize)
 		pdf.SetTextColor(layout.HighlightColor[0], layout.HighlightColor[1], layout.HighlightColor[2])
 		pdf.CellFormat(halfWidth, layout.HeaderRightColLineHeight, periodStr, "", 0, "R", false, 0, "")
-		yRightBottom = yStart + 3*layout.HeaderRightColLineHeight
+		yRightBottom = yRightCurrent + 3*layout.HeaderRightColLineHeight
 	}
 
 	if yRightBottom > yLeftBottom {

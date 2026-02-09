@@ -144,6 +144,8 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 		internalNotesPtr = &internalNotes
 	}
 
+	operatedByBaseURL := strings.TrimSpace(r.URL.Query().Get("base_url"))
+
 	var orgName string
 	var orgLogo []byte
 	if p.Models != nil {
@@ -187,7 +189,7 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 		populateDisbursementCreatedApprovedBy(ctx, p.AuthManager, payment.Disbursement.StatusHistory, enrichment)
 	}
 
-	pdfBytes, err := transaction.BuildPDF(payment, orgName, orgLogo, enrichment, internalNotesPtr)
+	pdfBytes, err := transaction.BuildPDF(payment, orgName, orgLogo, enrichment, internalNotesPtr, operatedByBaseURL)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot generate transaction notice PDF", err, nil).Render(w)
 		return
