@@ -363,7 +363,7 @@ func Test_CreateEmbeddedWallet(t *testing.T) {
 
 	ctx := context.Background()
 
-	reqBody := &CreateEmbeddedWalletRequest{
+	reqBody := &httphandler.CreateWalletRequest{
 		Token:        "test-token-123",
 		PublicKey:    "04" + strings.Repeat("ab", 64), // 65 bytes hex-encoded P256 public key
 		CredentialID: "credential-id-123",

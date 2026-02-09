@@ -145,5 +145,4 @@ func isResourceError(err string) bool {
 type RPCClient interface {
 	SimulateTransaction(ctx context.Context, request protocol.SimulateTransactionRequest) (*SimulationResult, *SimulationError)
 	GetLatestLedgerSequence(ctx context.Context) (uint32, error)
-	GetLedgerEntries(ctx context.Context, request protocol.GetLedgerEntriesRequest) (protocol.GetLedgerEntriesResponse, error)
 }

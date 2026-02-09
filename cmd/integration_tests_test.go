@@ -45,7 +45,7 @@ func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
 		UserEmail:                  "mockemail@test.com",
 		UserPassword:               "mockPassword123!",
 		DisbursedAssetCode:         "USDC",
-		DisbursetAssetIssuer:       "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
+		DisbursedAssetIssuer:       "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 		WalletName:                 "walletTest",
 		DisbursementCSVFilePath:    "mockPath",
 		DisbursementCSVFileName:    "file.csv",
@@ -111,7 +111,7 @@ func Test_IntegrationTestsCommand_CreateIntegrationTestsDataCommand(t *testing.T
 	integrationTestsOpts := &integrationtests.IntegrationTestsOpts{
 		DatabaseDSN:          "randomDatabaseDSN",
 		DisbursedAssetCode:   "USDC",
-		DisbursetAssetIssuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
+		DisbursedAssetIssuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 		WalletName:           "walletTest",
 		WalletHomepage:       "https://www.test_wallet.com",
 		WalletDeepLink:       "test-wallet://sdp",
@@ -163,7 +163,6 @@ func Test_IntegrationTestsCommand_StartEmbeddedWalletTestsCommand(t *testing.T) 
 	}
 
 	integrationTestsOpts := &integrationtests.IntegrationTestsOpts{
-		EnableEmbeddedWallets:   true,
 		EmbeddedWalletsWasmHash: "0123456789abcdef",
 		RPCUrl:                  "https://rpc.test",
 		DisbursementCSVFileName: "disbursement.csv",

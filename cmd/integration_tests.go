@@ -32,7 +32,7 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Name:      "disbursed-asset-issuer",
 			Usage:     "Issuer if the asset to be disbursed",
 			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.DisbursetAssetIssuer,
+			ConfigKey: &integrationTestsOpts.DisbursedAssetIssuer,
 			Required:  false,
 		},
 		{
@@ -311,13 +311,6 @@ func (c *IntegrationTestsCommand) CreateIntegrationTestsDataCommand(integrationT
 
 func (c *IntegrationTestsCommand) StartEmbeddedWalletTestsCommand(integrationTestsOpts *integrationtests.IntegrationTestsOpts) *cobra.Command {
 	configOpts := config.ConfigOptions{
-		{
-			Name:        "enable-embedded-wallets",
-			Usage:       "Enable embedded wallet features required for contract account integration tests",
-			OptType:     types.Bool,
-			ConfigKey:   &integrationTestsOpts.EnableEmbeddedWallets,
-			FlagDefault: true,
-		},
 		{
 			Name:      "embedded-wallets-wasm-hash",
 			Usage:     "The WASM hash of the embedded wallet smart contract",

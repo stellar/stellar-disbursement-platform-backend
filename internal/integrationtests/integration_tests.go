@@ -6,14 +6,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/amount"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
-	"github.com/stellar/go-stellar-sdk/ingest/sac"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -50,7 +50,7 @@ type IntegrationTestsOpts struct {
 	RegistrationContactType    data.RegistrationContactType
 	DistributionAccountType    string
 	DisbursedAssetCode         string
-	DisbursetAssetIssuer       string
+	DisbursedAssetIssuer       string
 	WalletName                 string
 	WalletHomepage             string
 	WalletDeepLink             string
@@ -71,12 +71,10 @@ type IntegrationTestsOpts struct {
 	CircleUSDCWalletID         string
 	CircleAPIKey               string
 	HorizonURL                 string
+	RPCUrl                     string
 	NetworkPassphrase          string
 	SingleTenantMode           bool
-	// Embedded wallet options for contract account testing
-	EnableEmbeddedWallets   bool
-	EmbeddedWalletsWasmHash string
-	RPCUrl                  string
+	EmbeddedWalletsWasmHash    string
 }
 
 type IntegrationTestsService struct {
@@ -88,11 +86,10 @@ type IntegrationTestsService struct {
 	serverAPI             ServerAPIIntegrationTestsInterface
 	adminAPI              AdminAPIIntegrationTestsInterface
 	horizonClient         horizonclient.ClientInterface
-	sdpSepServices        SDPSepServicesIntegrationTestsInterface
-	// Embedded wallet service for contract account testing
-	embeddedWalletService services.EmbeddedWalletServiceInterface
 	rpcClient             stellar.RPCClient
 	networkPassphrase     string
+	sdpSepServices        SDPSepServicesIntegrationTestsInterface
+	embeddedWalletService services.EmbeddedWalletServiceInterface
 }
 
 // NewIntegrationTestsService is a function that create a new IntegrationTestsService instance.
@@ -172,23 +169,20 @@ func (it *IntegrationTestsService) initServices(ctx context.Context, opts Integr
 		DisbursementCSVFileName: opts.DisbursementCSVFileName,
 	}
 
-	// initialize embedded wallet service if enabled
-	if opts.EnableEmbeddedWallets && opts.RPCUrl != "" && opts.EmbeddedWalletsWasmHash != "" {
-		rpcClient, err := dependencyinjection.NewRPCClient(ctx, stellar.RPCOptions{RPCUrl: opts.RPCUrl})
-		if err != nil {
-			log.Ctx(ctx).Warnf("Failed to initialize RPC client for embedded wallets: %v", err)
-			return
-		}
-		it.rpcClient = rpcClient
-		it.networkPassphrase = opts.NetworkPassphrase
-		embeddedWalletService, err := services.NewEmbeddedWalletService(it.models, opts.EmbeddedWalletsWasmHash, rpcClient)
-		if err != nil {
-			log.Ctx(ctx).Warnf("Failed to initialize embedded wallet service: %v", err)
-			return
-		}
-		it.embeddedWalletService = embeddedWalletService
-		log.Ctx(ctx).Info("Embedded wallet service initialized successfully")
+	rpcClient, err := dependencyinjection.NewRPCClient(ctx, stellar.RPCOptions{RPCUrl: opts.RPCUrl})
+	if err != nil {
+		log.Ctx(ctx).Warnf("Failed to initialize RPC client for embedded wallets: %v", err)
+		return
 	}
+	it.rpcClient = rpcClient
+	it.networkPassphrase = opts.NetworkPassphrase
+	embeddedWalletService, err := services.NewEmbeddedWalletService(it.models, opts.EmbeddedWalletsWasmHash, rpcClient)
+	if err != nil {
+		log.Ctx(ctx).Warnf("Failed to initialize embedded wallet service: %v", err)
+		return
+	}
+	it.embeddedWalletService = embeddedWalletService
+	log.Ctx(ctx).Info("Embedded wallet service initialized successfully")
 }
 
 func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, opts IntegrationTestsOpts) error {
@@ -209,7 +203,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	}
 	log.Ctx(ctx).Infof("User logged in with server API auth token %q", authToken)
 
-	asset, err := it.models.Assets.GetByCodeAndIssuer(ctx, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer)
+	asset, err := it.models.Assets.GetByCodeAndIssuer(ctx, opts.DisbursedAssetCode, opts.DisbursedAssetIssuer)
 	if err != nil {
 		return fmt.Errorf("getting test asset: %w", err)
 	}
@@ -431,7 +425,7 @@ func (it *IntegrationTestsService) ensureTransactionCompletion(ctx context.Conte
 		}
 		intendedPaymentDestination = disbursementInstructions[0].WalletAddress
 	}
-	err = validateStellarTransaction(hPayment, intendedPaymentDestination, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer, receivers[0].Payment.Amount)
+	err = validateStellarTransaction(hPayment, intendedPaymentDestination, opts.DisbursedAssetCode, opts.DisbursedAssetIssuer, receivers[0].Payment.Amount)
 	if err != nil {
 		return fmt.Errorf("validating stellar transaction: %w", err)
 	}
@@ -517,7 +511,7 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 	}
 
 	// 3. Create test asset and wallet
-	_, err = it.models.Assets.GetOrCreate(ctx, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer)
+	_, err = it.models.Assets.GetOrCreate(ctx, opts.DisbursedAssetCode, opts.DisbursedAssetIssuer)
 	if err != nil {
 		return fmt.Errorf("getting or creating test asset: %w", err)
 	}
@@ -577,7 +571,7 @@ func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx conte
 		return fmt.Errorf("trying to login in server API: %w", err)
 	}
 
-	asset, err := it.models.Assets.GetByCodeAndIssuer(ctx, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer)
+	asset, err := it.models.Assets.GetByCodeAndIssuer(ctx, opts.DisbursedAssetCode, opts.DisbursedAssetIssuer)
 	if err != nil {
 		return fmt.Errorf("getting test asset: %w", err)
 	}
@@ -715,7 +709,7 @@ func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context, tok
 	credentialID := generateCredentialID()
 	log.Ctx(ctx).Infof("Generated credential ID: %s for token: %s", credentialID, token)
 
-	_, err = it.serverAPI.CreateEmbeddedWallet(ctx, &CreateEmbeddedWalletRequest{
+	_, err = it.serverAPI.CreateEmbeddedWallet(ctx, &httphandler.CreateWalletRequest{
 		Token:        token,
 		PublicKey:    publicKeyHex,
 		CredentialID: credentialID,
@@ -870,7 +864,7 @@ func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 	return nil
 }
 
-// getContractTokenBalance queries the SAC balance for a contract address using RPC GetLedgerEntries.
+// getContractTokenBalance queries the SAC balance for a contract address by simulating a SEP-41 balance() call.
 func (it *IntegrationTestsService) getContractTokenBalance(
 	ctx context.Context,
 	contractAddress string,
@@ -887,97 +881,105 @@ func (it *IntegrationTestsService) getContractTokenBalance(
 		}
 	}
 
-	// Convert to xdr.Asset to get ContractID
 	xdrAsset, err := txnAsset.ToXDR()
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("converting asset to XDR: %w", err)
 	}
 
-	sacContractID, err := xdrAsset.ContractID(it.networkPassphrase)
+	sacContractIDBytes, err := xdrAsset.ContractID(it.networkPassphrase)
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("getting SAC contract ID: %w", err)
 	}
+	sacContractID := xdr.ContractId(sacContractIDBytes)
 
 	// Parse the receiver contract address
 	receiverContractIDBytes, err := strkey.Decode(strkey.VersionByteContract, contractAddress)
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("decoding contract address: %w", err)
 	}
-	var receiverContractID [32]byte
+	var receiverContractID xdr.ContractId
 	copy(receiverContractID[:], receiverContractIDBytes)
 
-	// Build the ledger key for the SAC balance entry
-	ledgerKey := sac.ContractBalanceLedgerKey(sacContractID, receiverContractID)
-
-	// Convert ledger key to base64 for RPC request
-	ledgerKeyBase64, err := xdr.MarshalBase64(ledgerKey)
-	if err != nil {
-		return decimal.Zero, fmt.Errorf("marshaling ledger key to base64: %w", err)
+	// Build the SEP-41 balance() invocation
+	hostFunction := xdr.HostFunction{
+		Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
+		InvokeContract: &xdr.InvokeContractArgs{
+			ContractAddress: xdr.ScAddress{
+				Type:       xdr.ScAddressTypeScAddressTypeContract,
+				ContractId: &sacContractID,
+			},
+			FunctionName: "balance",
+			Args: xdr.ScVec{
+				xdr.ScVal{
+					Type: xdr.ScValTypeScvAddress,
+					Address: &xdr.ScAddress{
+						Type:       xdr.ScAddressTypeScAddressTypeContract,
+						ContractId: &receiverContractID,
+					},
+				},
+			},
+		},
 	}
 
-	// Query RPC for the balance entry
-	resp, err := it.rpcClient.GetLedgerEntries(ctx, protocol.GetLedgerEntriesRequest{
-		Keys: []string{ledgerKeyBase64},
+	// Build transaction for simulation
+	txParams := txnbuild.TransactionParams{
+		SourceAccount: &txnbuild.SimpleAccount{
+			AccountID: keypair.MustRandom().Address(),
+			Sequence:  0,
+		},
+		BaseFee: int64(txnbuild.MinBaseFee),
+		Preconditions: txnbuild.Preconditions{
+			TimeBounds: txnbuild.NewTimeout(300),
+		},
+		Operations: []txnbuild.Operation{&txnbuild.InvokeHostFunction{
+			HostFunction: hostFunction,
+		}},
+	}
+
+	tx, err := txnbuild.NewTransaction(txParams)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("building simulation transaction: %w", err)
+	}
+
+	txEnvelope, err := tx.Base64()
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("encoding simulation transaction: %w", err)
+	}
+
+	// Simulate the transaction
+	result, simErr := it.rpcClient.SimulateTransaction(ctx, protocol.SimulateTransactionRequest{
+		Transaction: txEnvelope,
 	})
+	if simErr != nil {
+		return decimal.Zero, fmt.Errorf("simulating balance call: %w", simErr)
+	}
+
+	if len(result.Response.Results) == 0 {
+		return decimal.Zero, fmt.Errorf("no results from balance simulation")
+	}
+
+	returnValueXDR := result.Response.Results[0].ReturnValueXDR
+	if returnValueXDR == nil {
+		return decimal.Zero, fmt.Errorf("no return value from balance simulation")
+	}
+
+	var returnValue xdr.ScVal
+	err = xdr.SafeUnmarshalBase64(*returnValueXDR, &returnValue)
 	if err != nil {
-		return decimal.Zero, fmt.Errorf("getting ledger entries from RPC: %w", err)
+		return decimal.Zero, fmt.Errorf("unmarshaling return value: %w", err)
 	}
 
-	if len(resp.Entries) == 0 {
-		return decimal.Zero, fmt.Errorf("no balance entry found for contract %s and asset %s:%s", contractAddress, asset.Code, asset.Issuer)
-	}
-
-	// Parse the balance from the ledger entry
-	var ledgerEntry xdr.LedgerEntryData
-	err = xdr.SafeUnmarshalBase64(resp.Entries[0].DataXDR, &ledgerEntry)
-	if err != nil {
-		return decimal.Zero, fmt.Errorf("unmarshaling ledger entry: %w", err)
-	}
-
-	// Extract balance from contract data
-	contractData, ok := ledgerEntry.GetContractData()
+	i128, ok := returnValue.GetI128()
 	if !ok {
-		return decimal.Zero, fmt.Errorf("ledger entry is not contract data")
+		return decimal.Zero, fmt.Errorf("return value is not i128")
 	}
 
-	// The balance is stored as a map with "amount" key containing an i128
-	balanceAmount, err := extractBalanceFromContractData(contractData)
+	balanceStr := amount.String128(i128)
+	balance, err := decimal.NewFromString(balanceStr)
 	if err != nil {
-		return decimal.Zero, fmt.Errorf("extracting balance from contract data: %w", err)
+		return decimal.Zero, fmt.Errorf("parsing balance string: %w", err)
 	}
-
-	// SAC stores amounts with 7 decimal places (stroops)
-	balance := decimal.NewFromBigInt(balanceAmount, -7)
 	return balance, nil
-}
-
-// extractBalanceFromContractData extracts the balance amount from SAC contract data.
-func extractBalanceFromContractData(contractData xdr.ContractDataEntry) (*big.Int, error) {
-	// The balance entry value is a map with "amount" and other fields
-	scMap, ok := contractData.Val.GetMap()
-	if !ok {
-		return nil, fmt.Errorf("contract data value is not a map")
-	}
-
-	for _, entry := range *scMap {
-		sym, ok := entry.Key.GetSym()
-		if !ok {
-			continue
-		}
-		if string(sym) == "amount" {
-			i128, ok := entry.Val.GetI128()
-			if !ok {
-				return nil, fmt.Errorf("amount value is not i128")
-			}
-			// Convert i128 to big.Int
-			hi := new(big.Int).SetInt64(int64(i128.Hi))
-			lo := new(big.Int).SetUint64(uint64(i128.Lo))
-			result := hi.Lsh(hi, 64).Add(hi, lo)
-			return result, nil
-		}
-	}
-
-	return nil, fmt.Errorf("amount field not found in balance entry")
 }
 
 // generateP256PublicKeyHex generates a random P256 key pair and returns the public key.

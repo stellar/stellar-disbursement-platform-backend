@@ -34,7 +34,7 @@ type ServerAPIIntegrationTestsInterface interface {
 	StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error
 	ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error
-	CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*httphandler.WalletResponse, error)
+	CreateEmbeddedWallet(ctx context.Context, req *httphandler.CreateWalletRequest) (*httphandler.WalletResponse, error)
 }
 
 type ServerAPIIntegrationTests struct {
@@ -305,15 +305,8 @@ func (sa *ServerAPIIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	return nil
 }
 
-// CreateEmbeddedWalletRequest creates a new embedded wallet with a token, P256 public key, and credential ID.
-type CreateEmbeddedWalletRequest struct {
-	Token        string `json:"token"`
-	PublicKey    string `json:"public_key"`
-	CredentialID string `json:"credential_id"`
-}
-
 // CreateEmbeddedWallet creates a new embedded wallet using POST /embedded-wallets.
-func (sa *ServerAPIIntegrationTests) CreateEmbeddedWallet(ctx context.Context, req *CreateEmbeddedWalletRequest) (*httphandler.WalletResponse, error) {
+func (sa *ServerAPIIntegrationTests) CreateEmbeddedWallet(ctx context.Context, req *httphandler.CreateWalletRequest) (*httphandler.WalletResponse, error) {
 	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, embeddedWalletsURL)
 	if err != nil {
 		return nil, fmt.Errorf("creating url: %w", err)

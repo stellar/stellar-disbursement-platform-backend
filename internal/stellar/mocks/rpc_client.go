@@ -80,34 +80,6 @@ func (_m *MockRPCClient) GetLatestLedgerSequence(ctx context.Context) (uint32, e
 	return r0, r1
 }
 
-// GetLedgerEntries provides a mock function with given fields: ctx, request
-func (_m *MockRPCClient) GetLedgerEntries(ctx context.Context, request protocol.GetLedgerEntriesRequest) (protocol.GetLedgerEntriesResponse, error) {
-	ret := _m.Called(ctx, request)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetLedgerEntries")
-	}
-
-	var r0 protocol.GetLedgerEntriesResponse
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, protocol.GetLedgerEntriesRequest) (protocol.GetLedgerEntriesResponse, error)); ok {
-		return rf(ctx, request)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, protocol.GetLedgerEntriesRequest) protocol.GetLedgerEntriesResponse); ok {
-		r0 = rf(ctx, request)
-	} else {
-		r0 = ret.Get(0).(protocol.GetLedgerEntriesResponse)
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, protocol.GetLedgerEntriesRequest) error); ok {
-		r1 = rf(ctx, request)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // NewMockRPCClient creates a new instance of MockRPCClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockRPCClient(t interface {

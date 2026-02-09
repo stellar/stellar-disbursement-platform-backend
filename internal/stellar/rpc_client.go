@@ -60,19 +60,6 @@ func (w *RPCClientWrapper) GetLatestLedgerSequence(ctx context.Context) (uint32,
 	return resp.Sequence, nil
 }
 
-func (w *RPCClientWrapper) GetLedgerEntries(ctx context.Context, request protocol.GetLedgerEntriesRequest) (protocol.GetLedgerEntriesResponse, error) {
-	if w.client == nil {
-		return protocol.GetLedgerEntriesResponse{}, errors.New("RPC client not initialized")
-	}
-
-	resp, err := w.client.GetLedgerEntries(ctx, request)
-	if err != nil {
-		return protocol.GetLedgerEntriesResponse{}, fmt.Errorf("getting ledger entries: %w", err)
-	}
-
-	return resp, nil
-}
-
 func NewHTTPClientWithAuth(authHeaderKey, authHeaderValue string) (*http.Client, error) {
 	if authHeaderKey == "" && authHeaderValue == "" {
 		return http.DefaultClient, nil
