@@ -92,11 +92,16 @@ const (
 )
 
 // Stellar Expert Explorer URL
-// Gets the base URL from STELLAR_EXPERT_URL environment variable and ensures it ends with a trailing slash.
+// Gets the base URL from STELLAR_EXPERT_URL environment variable; defaults to testnet if not set.
+// Ensures the URL ends with a trailing slash for proper concatenation.
+const stellarExpertTestnetDefault = "https://stellar.expert/explorer/testnet/"
+
 var stellarExpertBaseURL = func() string {
 	url := os.Getenv("STELLAR_EXPERT_URL")
-	// Ensure URL ends with "/" for proper concatenation
-	if url != "" && !strings.HasSuffix(url, "/") {
+	if url == "" {
+		return stellarExpertTestnetDefault
+	}
+	if !strings.HasSuffix(url, "/") {
 		url += "/"
 	}
 	return url
