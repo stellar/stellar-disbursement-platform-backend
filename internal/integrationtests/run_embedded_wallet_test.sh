@@ -20,6 +20,8 @@ export USER_EMAIL="integration-test-user@stellar.local"
 export USER_PASSWORD="Password123!"
 export ENABLE_EMBEDDED_WALLETS="true"
 export TEST_TYPE="embedded-wallet"
+export RPC_URL="${RPC_URL:-https://soroban-testnet.stellar.org}"
+export EMBEDDED_WALLETS_WASM_HASH="${EMBEDDED_WALLETS_WASM_HASH:-9b784817dff1620a3e2b223fe1eb8dac56e18980dea9726f692847ccbbd3a853}"
 
 # Cleanup
 echo "====> Step 1: Cleanup"
