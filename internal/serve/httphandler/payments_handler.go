@@ -162,12 +162,18 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 		senderWalletAddress = distAccount.Address
 	}
 
-	feeCharged := "—"
-	if payment.StellarTransactionID != "" && p.HorizonClient != nil {
-		hTx, err := p.HorizonClient.TransactionDetail(payment.StellarTransactionID)
-		if err == nil {
-			// FeeCharged is in stroops (1 XLM = 10^7 stroops)
-			feeCharged = fmt.Sprintf("%.4f XLM", float64(hTx.FeeCharged)/1e7)
+	var feeCharged string
+	if payment.StellarTransactionID != "" {
+		if p.HorizonClient == nil {
+			log.Ctx(ctx).Warnf("Horizon client not configured; cannot fetch fee for transaction %s", payment.StellarTransactionID)
+		} else {
+			hTx, hErr := p.HorizonClient.TransactionDetail(payment.StellarTransactionID)
+			if hErr != nil {
+				log.Ctx(ctx).Warnf("fetching transaction fee from Horizon for %s: %v", payment.StellarTransactionID, hErr)
+			} else {
+				// FeeCharged is in stroops (1 XLM = 10^7 stroops)
+				feeCharged = fmt.Sprintf("%.5f XLM", float64(hTx.FeeCharged)/1e7)
+			}
 		}
 	}
 
@@ -198,7 +204,7 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 
 const disbursementTimestampFormat = "Jan 2, 2006 · 15:04:05 UTC"
 
-// populateDisbursementCreatedApprovedBy fills enrichment with Created by / Approved by from disbursement status_history (DRAFT/READY).
+// Fills enrichment with Created by / Approved by from disbursement status_history.
 func populateDisbursementCreatedApprovedBy(ctx context.Context, authManager auth.AuthManager, history data.DisbursementStatusHistory, enrichment *transaction.Enrichment) {
 	var draftEntry, readyEntry *data.DisbursementStatusHistoryEntry
 	for i := range history {
