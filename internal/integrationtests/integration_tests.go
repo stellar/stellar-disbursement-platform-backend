@@ -6,13 +6,19 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/ingest/sac"
+	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
+	"github.com/stellar/go-stellar-sdk/xdr"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -85,6 +91,8 @@ type IntegrationTestsService struct {
 	sdpSepServices        SDPSepServicesIntegrationTestsInterface
 	// Embedded wallet service for contract account testing
 	embeddedWalletService services.EmbeddedWalletServiceInterface
+	rpcClient             stellar.RPCClient
+	networkPassphrase     string
 }
 
 // NewIntegrationTestsService is a function that create a new IntegrationTestsService instance.
@@ -171,6 +179,8 @@ func (it *IntegrationTestsService) initServices(ctx context.Context, opts Integr
 			log.Ctx(ctx).Warnf("Failed to initialize RPC client for embedded wallets: %v", err)
 			return
 		}
+		it.rpcClient = rpcClient
+		it.networkPassphrase = opts.NetworkPassphrase
 		embeddedWalletService, err := services.NewEmbeddedWalletService(it.models, opts.EmbeddedWalletsWasmHash, rpcClient)
 		if err != nil {
 			log.Ctx(ctx).Warnf("Failed to initialize embedded wallet service: %v", err)
@@ -787,11 +797,13 @@ func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 ) error {
 	log.Ctx(ctx).Info("Waiting for payment to contract to be processed...")
 	var payment *data.Payment
+	var receivers []*data.DisbursementReceiver
 
 	time.Sleep(paymentProcessTimeSeconds * time.Second)
 	err := retry.Do(
 		func() error {
-			receivers, innerErr := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDBConnectionPool, &data.QueryParams{}, disbursement.ID)
+			var innerErr error
+			receivers, innerErr = it.models.DisbursementReceivers.GetAll(ctx, it.mtnDBConnectionPool, &data.QueryParams{}, disbursement.ID)
 			if innerErr != nil {
 				return fmt.Errorf("getting receivers: %w", innerErr)
 			}
@@ -820,7 +832,152 @@ func (it *IntegrationTestsService) ensureContractTransactionCompletion(
 	}
 
 	log.Ctx(ctx).Infof("✅ Contract payment completed! Transaction ID: %s", payment.StellarTransactionID)
+
+	// Verify on-chain balance
+	if it.rpcClient == nil {
+		log.Ctx(ctx).Warn("RPC client not available, skipping on-chain balance verification")
+		return nil
+	}
+
+	if len(receivers) == 0 {
+		return fmt.Errorf("no receivers found for balance verification")
+	}
+	if receivers[0].ReceiverWallet == nil {
+		return fmt.Errorf("receiver wallet is nil")
+	}
+	receiverContractAddress := receivers[0].ReceiverWallet.StellarAddress
+	if receiverContractAddress == "" {
+		return fmt.Errorf("receiver wallet has no stellar address")
+	}
+
+	log.Ctx(ctx).Infof("Verifying on-chain balance for contract %s...", receiverContractAddress)
+
+	actualBalance, err := it.getContractTokenBalance(ctx, receiverContractAddress, disbursement.Asset)
+	if err != nil {
+		return fmt.Errorf("getting contract token balance: %w", err)
+	}
+
+	expectedAmount, err := decimal.NewFromString(payment.Amount)
+	if err != nil {
+		return fmt.Errorf("parsing payment amount: %w", err)
+	}
+
+	if actualBalance.LessThan(expectedAmount) {
+		return fmt.Errorf("on-chain balance %s is less than expected %s", actualBalance, expectedAmount)
+	}
+
+	log.Ctx(ctx).Infof("✅ On-chain balance verified: %s %s", actualBalance, disbursement.Asset.Code)
 	return nil
+}
+
+// getContractTokenBalance queries the SAC balance for a contract address using RPC GetLedgerEntries.
+func (it *IntegrationTestsService) getContractTokenBalance(
+	ctx context.Context,
+	contractAddress string,
+	asset *data.Asset,
+) (decimal.Decimal, error) {
+	// Get the SAC contract ID from the asset
+	var txnAsset txnbuild.Asset
+	if asset.IsNative() {
+		txnAsset = txnbuild.NativeAsset{}
+	} else {
+		txnAsset = txnbuild.CreditAsset{
+			Code:   asset.Code,
+			Issuer: asset.Issuer,
+		}
+	}
+
+	// Convert to xdr.Asset to get ContractID
+	xdrAsset, err := txnAsset.ToXDR()
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("converting asset to XDR: %w", err)
+	}
+
+	sacContractID, err := xdrAsset.ContractID(it.networkPassphrase)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("getting SAC contract ID: %w", err)
+	}
+
+	// Parse the receiver contract address
+	receiverContractIDBytes, err := strkey.Decode(strkey.VersionByteContract, contractAddress)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("decoding contract address: %w", err)
+	}
+	var receiverContractID [32]byte
+	copy(receiverContractID[:], receiverContractIDBytes)
+
+	// Build the ledger key for the SAC balance entry
+	ledgerKey := sac.ContractBalanceLedgerKey(sacContractID, receiverContractID)
+
+	// Convert ledger key to base64 for RPC request
+	ledgerKeyBase64, err := xdr.MarshalBase64(ledgerKey)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("marshaling ledger key to base64: %w", err)
+	}
+
+	// Query RPC for the balance entry
+	resp, err := it.rpcClient.GetLedgerEntries(ctx, protocol.GetLedgerEntriesRequest{
+		Keys: []string{ledgerKeyBase64},
+	})
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("getting ledger entries from RPC: %w", err)
+	}
+
+	if len(resp.Entries) == 0 {
+		return decimal.Zero, fmt.Errorf("no balance entry found for contract %s and asset %s:%s", contractAddress, asset.Code, asset.Issuer)
+	}
+
+	// Parse the balance from the ledger entry
+	var ledgerEntry xdr.LedgerEntryData
+	err = xdr.SafeUnmarshalBase64(resp.Entries[0].DataXDR, &ledgerEntry)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("unmarshaling ledger entry: %w", err)
+	}
+
+	// Extract balance from contract data
+	contractData, ok := ledgerEntry.GetContractData()
+	if !ok {
+		return decimal.Zero, fmt.Errorf("ledger entry is not contract data")
+	}
+
+	// The balance is stored as a map with "amount" key containing an i128
+	balanceAmount, err := extractBalanceFromContractData(contractData)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("extracting balance from contract data: %w", err)
+	}
+
+	// SAC stores amounts with 7 decimal places (stroops)
+	balance := decimal.NewFromBigInt(balanceAmount, -7)
+	return balance, nil
+}
+
+// extractBalanceFromContractData extracts the balance amount from SAC contract data.
+func extractBalanceFromContractData(contractData xdr.ContractDataEntry) (*big.Int, error) {
+	// The balance entry value is a map with "amount" and other fields
+	scMap, ok := contractData.Val.GetMap()
+	if !ok {
+		return nil, fmt.Errorf("contract data value is not a map")
+	}
+
+	for _, entry := range *scMap {
+		sym, ok := entry.Key.GetSym()
+		if !ok {
+			continue
+		}
+		if string(sym) == "amount" {
+			i128, ok := entry.Val.GetI128()
+			if !ok {
+				return nil, fmt.Errorf("amount value is not i128")
+			}
+			// Convert i128 to big.Int
+			hi := new(big.Int).SetInt64(int64(i128.Hi))
+			lo := new(big.Int).SetUint64(uint64(i128.Lo))
+			result := hi.Lsh(hi, 64).Add(hi, lo)
+			return result, nil
+		}
+	}
+
+	return nil, fmt.Errorf("amount field not found in balance entry")
 }
 
 // generateP256PublicKeyHex generates a random P256 key pair and returns the public key.
