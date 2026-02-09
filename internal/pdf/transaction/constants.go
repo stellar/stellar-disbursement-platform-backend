@@ -32,16 +32,14 @@ const (
 	titleSectionLine1Height  = 6.0
 	titleSectionLine2Height  = 9.0
 	titleSectionLine3Height  = 6.0
-	detailLabelLineHeight     = 4.0
-	detailValueLineHeight     = 4.0
+	detailLabelLineHeight    = 4.0
+	detailValueLineHeight    = 4.0
 )
 
 // Table row heights
 const (
 	summaryHeaderRowHeight = 15.5
 	summaryDataRowHeight   = 14
-	historyHeaderRowHeight = 15.5
-	historyDataRowHeight   = 14
 )
 
 // Table cell spacing
@@ -49,12 +47,12 @@ const (
 	cellPaddingX = 2.115
 )
 
-// Section margins (gap between Transaction Summary, Details, and History)
+// Section margins
 const (
 	sectionBottomMargin = 4.0
 )
 
-// Row gap between label+value rows in Transaction Details and Disbursement Details
+// Row gap between label+value rows
 const (
 	detailRowGap = 3.0
 )
@@ -77,7 +75,7 @@ const (
 // Footer section spacing
 const (
 	footerMarginTop           = 1.5
-	footerContentGap         = 3.5
+	footerContentGap          = 3.5
 	footerDisclaimerToPageGap = 2.0
 )
 
