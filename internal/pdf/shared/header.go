@@ -16,29 +16,29 @@ const logoMaxHeight = 10.0
 
 // HeaderLayout holds dimensions and colors for the PDF header.
 type HeaderLayout struct {
-	MmPerPage                    float64
-	MarginLR                     float64
-	TableWidth                   float64
-	HeaderLeftColLineHeight      float64
-	HeaderRightColLineHeight     float64
-	HeaderBottomMargin           float64
-	TitleSectionLine1Height      float64
-	TitleSectionLine2Height     float64
-	TitleSectionLine3Height     float64
-	TitleSectionBottomMargin    float64
-	MiniHeaderBottomMargin      float64
-	BodyFontSize                 float64
-	OrganizationNameFontSize     float64
-	DateRangeFontSize            float64
-	TitleFontSize                float64
-	HeaderLogoToOrgNameGap       float64
-	LogoOffsetX                  float64
-	WalletAddressLabelGap        float64
-	DefaultCellColor             []int
-	HighlightColor               []int
-	NoteColor                    []int
-	DefaultBorderColor           []int
-	HeaderSeparatorLineWidth     float64
+	MmPerPage                float64
+	MarginLR                 float64
+	TableWidth               float64
+	HeaderLeftColLineHeight  float64
+	HeaderRightColLineHeight float64
+	HeaderBottomMargin       float64
+	TitleSectionLine1Height  float64
+	TitleSectionLine2Height  float64
+	TitleSectionLine3Height  float64
+	TitleSectionBottomMargin float64
+	MiniHeaderBottomMargin   float64
+	BodyFontSize             float64
+	OrganizationNameFontSize float64
+	DateRangeFontSize        float64
+	TitleFontSize            float64
+	HeaderLogoToOrgNameGap   float64
+	LogoOffsetX              float64
+	WalletAddressLabelGap    float64
+	DefaultCellColor         []int
+	HighlightColor           []int
+	NoteColor                []int
+	DefaultBorderColor       []int
+	HeaderSeparatorLineWidth float64
 }
 
 // StatementPeriod holds the date range for the right column (statement PDF only).
@@ -56,11 +56,11 @@ type TitleSection struct {
 
 // HeaderParams holds data and mode for the header.
 type HeaderParams struct {
-	OrganizationName    string
-	OrganizationLogo    []byte
-	StatementPeriod     *StatementPeriod
-	TitleSection        *TitleSection
-	WalletAccount       string
+	OrganizationName     string
+	OrganizationLogo     []byte
+	StatementPeriod      *StatementPeriod
+	TitleSection         *TitleSection
+	WalletAccount        string
 	WalletAccountDisplay string // optional truncated display for mini header; if empty use WalletAccount
 	StellarExpertBaseURL string
 }

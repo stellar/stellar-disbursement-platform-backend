@@ -9,17 +9,17 @@ import (
 // FooterConfig holds layout values for the PDF footer.
 type FooterConfig struct {
 	PageHeight                float64
-	MarginBottom               float64
-	MarginLR                   float64
-	MmPerPage                  float64
-	FooterMarginTop            float64
-	FooterContentGap           float64
-	FooterDisclaimerToPageGap  float64
-	FooterLineHeight           float64
-	BodyFontSize               float64
-	NoteColor                  []int
-	DefaultBorderColor         []int
-	HeaderSeparatorLineWidth   float64
+	MarginBottom              float64
+	MarginLR                  float64
+	MmPerPage                 float64
+	FooterMarginTop           float64
+	FooterContentGap          float64
+	FooterDisclaimerToPageGap float64
+	FooterLineHeight          float64
+	BodyFontSize              float64
+	NoteColor                 []int
+	DefaultBorderColor        []int
+	HeaderSeparatorLineWidth  float64
 }
 
 // SetupFooter sets the PDF footer function.

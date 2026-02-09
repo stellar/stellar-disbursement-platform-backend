@@ -29,18 +29,18 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	pdfDoc.SetAutoPageBreak(true, marginBottom)
 
 	footerConfig := shared.FooterConfig{
-		PageHeight:               pageHeight,
-		MarginBottom:             marginBottom,
-		MarginLR:                 marginLR,
-		MmPerPage:                mmPerPage,
-		FooterMarginTop:          footerMarginTop,
-		FooterContentGap:         footerContentGap,
+		PageHeight:                pageHeight,
+		MarginBottom:              marginBottom,
+		MarginLR:                  marginLR,
+		MmPerPage:                 mmPerPage,
+		FooterMarginTop:           footerMarginTop,
+		FooterContentGap:          footerContentGap,
 		FooterDisclaimerToPageGap: footerDisclaimerToPageGap,
-		FooterLineHeight:         footerLineHeight,
-		BodyFontSize:             bodyFontSize,
-		NoteColor:                noteColor,
-		DefaultBorderColor:       defaultBorderColor,
-		HeaderSeparatorLineWidth: headerSeparatorLineWidth,
+		FooterLineHeight:          footerLineHeight,
+		BodyFontSize:              bodyFontSize,
+		NoteColor:                 noteColor,
+		DefaultBorderColor:        defaultBorderColor,
+		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
 	}
 	shared.SetupFooter(pdfDoc, footerConfig)
 	pdfDoc.AddPage()
@@ -52,10 +52,10 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 
 	// First page header with title section (Wallet Statement + Wallet Address link)
 	shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-		OrganizationName:     organizationName,
-		OrganizationLogo:     organizationLogo,
-		StatementPeriod:      &shared.StatementPeriod{From: fromDate, To: toDate},
-		TitleSection:         &shared.TitleSection{
+		OrganizationName: organizationName,
+		OrganizationLogo: organizationLogo,
+		StatementPeriod:  &shared.StatementPeriod{From: fromDate, To: toDate},
+		TitleSection: &shared.TitleSection{
 			Title:      "Wallet Statement",
 			TitleLabel: "Wallet Address: ",
 			TitleValue: walletAddr,
@@ -90,13 +90,13 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 				pdfDoc.AddPage()
 				if pdfDoc.PageNo() > 1 {
 					shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-						OrganizationName:      organizationName,
-						OrganizationLogo:      organizationLogo,
-						StatementPeriod:       &shared.StatementPeriod{From: fromDate, To: toDate},
-						TitleSection:          nil,
-						WalletAccount:         walletAccount,
+						OrganizationName:     organizationName,
+						OrganizationLogo:     organizationLogo,
+						StatementPeriod:      &shared.StatementPeriod{From: fromDate, To: toDate},
+						TitleSection:         nil,
+						WalletAccount:        walletAccount,
 						WalletAccountDisplay: utils.TruncateString(walletAddr, 5),
-						StellarExpertBaseURL:  stellarExpertBaseURL,
+						StellarExpertBaseURL: stellarExpertBaseURL,
 					})
 					shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
 				}
@@ -108,13 +108,13 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 			pdfDoc.AddPage()
 			if pdfDoc.PageNo() > 1 {
 				shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-					OrganizationName:      organizationName,
-					OrganizationLogo:      organizationLogo,
-					StatementPeriod:       &shared.StatementPeriod{From: fromDate, To: toDate},
-					TitleSection:          nil,
-					WalletAccount:         walletAccount,
+					OrganizationName:     organizationName,
+					OrganizationLogo:     organizationLogo,
+					StatementPeriod:      &shared.StatementPeriod{From: fromDate, To: toDate},
+					TitleSection:         nil,
+					WalletAccount:        walletAccount,
 					WalletAccountDisplay: utils.TruncateString(walletAddr, 5),
-					StellarExpertBaseURL:  stellarExpertBaseURL,
+					StellarExpertBaseURL: stellarExpertBaseURL,
 				})
 				shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
 			}
@@ -133,28 +133,28 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 
 func statementHeaderLayout() *shared.HeaderLayout {
 	return &shared.HeaderLayout{
-		MmPerPage:                 mmPerPage,
-		MarginLR:                  marginLR,
-		TableWidth:                tableWidth,
-		HeaderLeftColLineHeight:   headerLeftColLineHeight,
-		HeaderRightColLineHeight:  headerRightColLineHeight,
-		HeaderBottomMargin:        headerBottomMargin,
-		TitleSectionLine1Height:   titleSectionLine1Height,
-		TitleSectionLine2Height:   titleSectionLine2Height,
-		TitleSectionLine3Height:   titleSectionLine3Height,
-		TitleSectionBottomMargin:  titleSectionBottomMargin,
-		MiniHeaderBottomMargin:    miniHeaderBottomMargin,
-		BodyFontSize:              bodyFontSize,
-		OrganizationNameFontSize:  organizationNameFontSize,
-		DateRangeFontSize:         dateRangeFontSize,
-		TitleFontSize:             titleFontSize,
-		HeaderLogoToOrgNameGap:    headerLogoToOrgNameGap,
-		LogoOffsetX:               logoOffsetX,
-		WalletAddressLabelGap:     walletAddressLabelGap,
-		DefaultCellColor:          defaultCellColor,
-		HighlightColor:            highlightColor,
-		NoteColor:                 noteColor,
-		DefaultBorderColor:        defaultBorderColor,
-		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
+		MmPerPage:                mmPerPage,
+		MarginLR:                 marginLR,
+		TableWidth:               tableWidth,
+		HeaderLeftColLineHeight:  headerLeftColLineHeight,
+		HeaderRightColLineHeight: headerRightColLineHeight,
+		HeaderBottomMargin:       headerBottomMargin,
+		TitleSectionLine1Height:  titleSectionLine1Height,
+		TitleSectionLine2Height:  titleSectionLine2Height,
+		TitleSectionLine3Height:  titleSectionLine3Height,
+		TitleSectionBottomMargin: titleSectionBottomMargin,
+		MiniHeaderBottomMargin:   miniHeaderBottomMargin,
+		BodyFontSize:             bodyFontSize,
+		OrganizationNameFontSize: organizationNameFontSize,
+		DateRangeFontSize:        dateRangeFontSize,
+		TitleFontSize:            titleFontSize,
+		HeaderLogoToOrgNameGap:   headerLogoToOrgNameGap,
+		LogoOffsetX:              logoOffsetX,
+		WalletAddressLabelGap:    walletAddressLabelGap,
+		DefaultCellColor:         defaultCellColor,
+		HighlightColor:           highlightColor,
+		NoteColor:                noteColor,
+		DefaultBorderColor:       defaultBorderColor,
+		HeaderSeparatorLineWidth: headerSeparatorLineWidth,
 	}
 }
