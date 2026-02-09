@@ -12,7 +12,7 @@ import (
 
 // BuildPDF generates a single-page Transaction Notice PDF from a payment and returns the bytes.
 // enrichment can be nil; internalNotes is optional (grey area omitted when empty).
-func BuildPDF(payment *data.Payment, organizationName string, organizationLogo []byte, enrichment *Enrichment, internalNotes *string) ([]byte, error) {
+func BuildPDF(payment *data.Payment, organizationName string, organizationLogo []byte, enrichment *Enrichment, internalNotes *string, operatedByBaseURL string) ([]byte, error) {
 	pdfDoc := gofpdf.New("P", "mm", "A4", "")
 
 	pdfDoc.AddUTF8FontFromBytes("Inter", "", shared.InterRegularFont)
@@ -60,6 +60,7 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 		},
 		WalletAccount:        "",
 		StellarExpertBaseURL: stellarExpertBaseURL,
+		OperatedByBaseURL:    operatedByBaseURL,
 	})
 	shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, headerSeparatorBottomMargin)
 

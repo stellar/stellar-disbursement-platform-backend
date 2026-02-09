@@ -15,7 +15,7 @@ import (
 )
 
 // BuildPDF generates a multi-page PDF from a StatementResult and returns the bytes.
-func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte) ([]byte, error) {
+func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte, operatedByBaseURL string) ([]byte, error) {
 	pdfDoc := gofpdf.New("P", "mm", "A4", "")
 
 	pdfDoc.AddUTF8FontFromBytes("Inter", "", shared.InterRegularFont)
@@ -63,6 +63,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		},
 		WalletAccount:        "",
 		StellarExpertBaseURL: stellarExpertBaseURL,
+		OperatedByBaseURL:    operatedByBaseURL,
 	})
 	shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, headerSeparatorBottomMargin)
 
@@ -97,6 +98,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 						WalletAccount:        walletAccount,
 						WalletAccountDisplay: utils.TruncateString(walletAddr, 5),
 						StellarExpertBaseURL: stellarExpertBaseURL,
+						OperatedByBaseURL:    operatedByBaseURL,
 					})
 					shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
 				}
@@ -115,6 +117,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 					WalletAccount:        walletAccount,
 					WalletAccountDisplay: utils.TruncateString(walletAddr, 5),
 					StellarExpertBaseURL: stellarExpertBaseURL,
+					OperatedByBaseURL:    operatedByBaseURL,
 				})
 				shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
 			}
