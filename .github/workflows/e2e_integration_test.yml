@@ -87,7 +87,7 @@ jobs:
             HORIZON_URL: "https://horizon-testnet.stellar.org"
             RPC_URL: "https://soroban-testnet.stellar.org"
             ENABLE_EMBEDDED_WALLETS: "true"
-            EMBEDDED_WALLETS_WASM_HASH: "6223a23026480644055230783215652de8695abc8a9dbb56a94972eb341a4663"
+            EMBEDDED_WALLETS_WASM_HASH: "9b784817dff1620a3e2b223fe1eb8dac56e18980dea9726f692847ccbbd3a853"
             TEST_TYPE: "embedded-wallet"
     environment: ${{ matrix.environment }}
     env:
