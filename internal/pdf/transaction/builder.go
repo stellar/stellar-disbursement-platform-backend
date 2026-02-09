@@ -27,18 +27,18 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 	pdfDoc.SetAutoPageBreak(true, marginBottom)
 
 	footerConfig := shared.FooterConfig{
-		PageHeight:               pageHeight,
-		MarginBottom:             marginBottom,
-		MarginLR:                 marginLR,
-		MmPerPage:                mmPerPage,
-		FooterMarginTop:          footerMarginTop,
-		FooterContentGap:         footerContentGap,
+		PageHeight:                pageHeight,
+		MarginBottom:              marginBottom,
+		MarginLR:                  marginLR,
+		MmPerPage:                 mmPerPage,
+		FooterMarginTop:           footerMarginTop,
+		FooterContentGap:          footerContentGap,
 		FooterDisclaimerToPageGap: footerDisclaimerToPageGap,
-		FooterLineHeight:         footerLineHeight,
-		BodyFontSize:             bodyFontSize,
-		NoteColor:                noteColor,
-		DefaultBorderColor:       defaultBorderColor,
-		HeaderSeparatorLineWidth: headerSeparatorLineWidth,
+		FooterLineHeight:          footerLineHeight,
+		BodyFontSize:              bodyFontSize,
+		NoteColor:                 noteColor,
+		DefaultBorderColor:        defaultBorderColor,
+		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
 	}
 	shared.SetupFooter(pdfDoc, footerConfig)
 	pdfDoc.AddPage()
@@ -49,10 +49,10 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 		titleURL = stellarExpertBaseURL + "tx/" + payment.StellarTransactionID
 	}
 	shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-		OrganizationName:     organizationName,
-		OrganizationLogo:     organizationLogo,
-		StatementPeriod:      nil,
-		TitleSection:         &shared.TitleSection{
+		OrganizationName: organizationName,
+		OrganizationLogo: organizationLogo,
+		StatementPeriod:  nil,
+		TitleSection: &shared.TitleSection{
 			Title:      "Transaction Notice",
 			TitleLabel: "Stellar Transaction ID: ",
 			TitleValue: payment.StellarTransactionID,
@@ -84,28 +84,28 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 
 func transactionHeaderLayout() *shared.HeaderLayout {
 	return &shared.HeaderLayout{
-		MmPerPage:                 mmPerPage,
-		MarginLR:                  marginLR,
-		TableWidth:                tableWidth,
-		HeaderLeftColLineHeight:   headerLeftColLineHeight,
-		HeaderRightColLineHeight:  headerRightColLineHeight,
-		HeaderBottomMargin:        headerBottomMargin,
-		TitleSectionLine1Height:   titleSectionLine1Height,
-		TitleSectionLine2Height:   titleSectionLine2Height,
-		TitleSectionLine3Height:   titleSectionLine3Height,
-		TitleSectionBottomMargin:  titleSectionBottomMargin,
-		MiniHeaderBottomMargin:    headerBottomMargin,
-		BodyFontSize:              bodyFontSize,
-		OrganizationNameFontSize:  organizationNameFontSize,
-		DateRangeFontSize:         dateRangeFontSize,
-		TitleFontSize:             titleFontSize,
-		HeaderLogoToOrgNameGap:    headerLogoToOrgNameGap,
-		LogoOffsetX:               logoOffsetX,
-		WalletAddressLabelGap:     walletAddressLabelGap,
-		DefaultCellColor:          defaultCellColor,
-		HighlightColor:            highlightColor,
-		NoteColor:                 noteColor,
-		DefaultBorderColor:        defaultBorderColor,
-		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
+		MmPerPage:                mmPerPage,
+		MarginLR:                 marginLR,
+		TableWidth:               tableWidth,
+		HeaderLeftColLineHeight:  headerLeftColLineHeight,
+		HeaderRightColLineHeight: headerRightColLineHeight,
+		HeaderBottomMargin:       headerBottomMargin,
+		TitleSectionLine1Height:  titleSectionLine1Height,
+		TitleSectionLine2Height:  titleSectionLine2Height,
+		TitleSectionLine3Height:  titleSectionLine3Height,
+		TitleSectionBottomMargin: titleSectionBottomMargin,
+		MiniHeaderBottomMargin:   headerBottomMargin,
+		BodyFontSize:             bodyFontSize,
+		OrganizationNameFontSize: organizationNameFontSize,
+		DateRangeFontSize:        dateRangeFontSize,
+		TitleFontSize:            titleFontSize,
+		HeaderLogoToOrgNameGap:   headerLogoToOrgNameGap,
+		LogoOffsetX:              logoOffsetX,
+		WalletAddressLabelGap:    walletAddressLabelGap,
+		DefaultCellColor:         defaultCellColor,
+		HighlightColor:           highlightColor,
+		NoteColor:                noteColor,
+		DefaultBorderColor:       defaultBorderColor,
+		HeaderSeparatorLineWidth: headerSeparatorLineWidth,
 	}
 }

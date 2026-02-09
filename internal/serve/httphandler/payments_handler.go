@@ -172,10 +172,10 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 	}
 
 	enrichment := &transaction.Enrichment{
-		SenderName:            orgName,
-		SenderWalletAddress:   senderWalletAddress,
-		FeeCharged:            feeCharged,
-		StellarExpertBaseURL:  transaction.GetStellarExpertBaseURL(),
+		SenderName:           orgName,
+		SenderWalletAddress:  senderWalletAddress,
+		FeeCharged:           feeCharged,
+		StellarExpertBaseURL: transaction.GetStellarExpertBaseURL(),
 	}
 	if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil && len(payment.Disbursement.StatusHistory) > 0 {
 		populateDisbursementCreatedApprovedBy(ctx, p.AuthManager, payment.Disbursement.StatusHistory, enrichment)

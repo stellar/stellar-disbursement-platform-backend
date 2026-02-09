@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	internalNotesTitle       = "Internal Reference Notes (User-entered)"
-	internalNotesDisclaimer  = "This note is manually entered by the user for internal reference only. It is not part of the official transaction record."
-	internalNotesPadding     = 4.0
-	internalNotesLineHeight  = 4.5
-	internalNotesItalicSize  = 7.5
+	internalNotesTitle      = "Internal Reference Notes (User-entered)"
+	internalNotesDisclaimer = "This note is manually entered by the user for internal reference only. It is not part of the official transaction record."
+	internalNotesPadding    = 4.0
+	internalNotesLineHeight = 4.5
+	internalNotesItalicSize = 7.5
 )
 
 // drawInternalNotes draws the grey area above the footer when internalNotes is non-empty.
