@@ -58,7 +58,7 @@ func TestBuildPDF(t *testing.T) {
 		orgName := "Test Organization"
 		orgLogo := []byte{}
 
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, orgName, orgLogo)
+		pdfBytes, err := BuildPDF(result, fromDate, toDate, orgName, orgLogo, "")
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, pdfBytes)
@@ -85,7 +85,7 @@ func TestBuildPDF(t *testing.T) {
 		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
 
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil)
+		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "")
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, pdfBytes)
@@ -133,7 +133,7 @@ func TestBuildPDF(t *testing.T) {
 		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
 
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil)
+		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "")
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, pdfBytes)
@@ -159,7 +159,7 @@ func TestBuildPDF(t *testing.T) {
 		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
 
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil)
+		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "")
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, pdfBytes)
@@ -192,7 +192,7 @@ func TestBuildPDF(t *testing.T) {
 		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
 
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil)
+		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "")
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, pdfBytes)
@@ -219,7 +219,7 @@ func TestBuildPDF(t *testing.T) {
 		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
 		orgLogo := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header
 
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, orgLogo)
+		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, orgLogo, "")
 
 		require.NoError(t, err)
 		assert.NotEmpty(t, pdfBytes)
