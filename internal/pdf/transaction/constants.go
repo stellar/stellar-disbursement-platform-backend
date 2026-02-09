@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// Page dimensions and margins (same as statement for visual consistency)
+// Page dimensions and margins
 const (
 	mmPerPage    = 210.0
 	pageHeight   = 297.0
