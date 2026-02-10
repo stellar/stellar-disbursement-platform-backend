@@ -81,9 +81,9 @@ const (
 
 // Internal notes
 const (
-	internalNotesMaxLength      = 100
-	internalNotesCornerRadius   = 1.5
-	internalNotesMarginBottom   = 3.0
+	internalNotesMaxLength     = 100
+	internalNotesCornerRadius  = 1.5
+	internalNotesMarginBottom  = 3.0
 	internalNotesSmallFontSize = 7.0
 )
 
@@ -117,15 +117,14 @@ var (
 	defaultCellColor     = []int{74, 85, 101}
 	noteColor            = []int{106, 114, 130}
 	detailLabelColor     = []int{106, 114, 130}
-	activeColor          = []int{20, 71, 230}
 	highlightColor       = []int{16, 24, 40}
 	sectionTitleColor    = []int{30, 41, 57}
 	successGreen         = []int{34, 139, 34}
 )
 
 var (
-	headerBorderColor       = []int{203, 207, 215}
-	defaultBorderColor     = []int{240, 241, 243}
+	headerBorderColor        = []int{203, 207, 215}
+	defaultBorderColor       = []int{240, 241, 243}
 	internalNotesTitleColor  = []int{74, 85, 101}
 	internalNotesValueColor  = []int{54, 65, 83}
 	internalNotesBgColor     = []int{249, 250, 251}

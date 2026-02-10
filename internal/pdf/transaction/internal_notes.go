@@ -7,10 +7,10 @@ import (
 )
 
 const (
-	internalNotesTitle      = "Internal Reference Notes (User-entered)"
-	internalNotesDisclaimer = "This note is manually entered by the user for internal reference only. It is not part of the official transaction record."
-	internalNotesPadding    = 4.0
-	internalNotesLineHeight = 4.5
+	internalNotesTitle                = "Internal Reference Notes (User-entered)"
+	internalNotesDisclaimer           = "This note is manually entered by the user for internal reference only. It is not part of the official transaction record."
+	internalNotesPadding              = 4.0
+	internalNotesLineHeight           = 4.5
 	internalNotesDisclaimerToValueGap = 2.0
 )
 
