@@ -520,7 +520,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.Len(t, receiverWallets, 2)
 		for _, receiverWallet := range receiverWallets {
 			assert.Equal(t, ReadyReceiversWalletStatus, receiverWallet.Status)
-			assert.Nil(t, receiverWallet.InvitationSentAt)
+			assert.NotNil(t, receiverWallet.InvitationSentAt)
 		}
 
 		receiverWallets, err = di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbTx, []string{receivers[2].ID}, wallet.ID)
