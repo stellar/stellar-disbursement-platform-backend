@@ -95,48 +95,48 @@ type getPaymentReceiver struct {
 
 // getPaymentReceiverWallet is receiver_wallet in GET payment response (receiver is id + external_id only).
 type getPaymentReceiverWallet struct {
-	ID                string                              `json:"id"`
-	Receiver          getPaymentReceiver                   `json:"receiver"`
-	Wallet            data.Wallet                          `json:"wallet"`
-	Status            data.ReceiversWalletStatus          `json:"status"`
-	StatusHistory     data.ReceiversWalletStatusHistory    `json:"status_history,omitempty"`
-	CreatedAt         time.Time                            `json:"created_at"`
-	UpdatedAt         time.Time                            `json:"updated_at"`
-	InvitationSentAt  *time.Time                           `json:"invitation_sent_at"`
+	ID               string                            `json:"id"`
+	Receiver         getPaymentReceiver                `json:"receiver"`
+	Wallet           data.Wallet                       `json:"wallet"`
+	Status           data.ReceiversWalletStatus        `json:"status"`
+	StatusHistory    data.ReceiversWalletStatusHistory `json:"status_history,omitempty"`
+	CreatedAt        time.Time                         `json:"created_at"`
+	UpdatedAt        time.Time                         `json:"updated_at"`
+	InvitationSentAt *time.Time                        `json:"invitation_sent_at"`
 }
 
 // getPaymentResponse is the response body for GET /payments/:id.
 type getPaymentResponse struct {
-	ID                    string                     `json:"id"`
-	Amount                string                     `json:"amount"`
-	StellarTransactionID  string                     `json:"stellar_transaction_id"`
-	StellarOperationID    string                     `json:"stellar_operation_id"`
-	Status                data.PaymentStatus         `json:"status"`
-	Type                  data.PaymentType           `json:"type"`
-	StatusHistory         data.PaymentStatusHistory  `json:"status_history,omitempty"`
-	Disbursement          *data.Disbursement         `json:"disbursement,omitempty"`
-	Asset                 data.Asset                 `json:"asset"`
-	ReceiverWallet        *getPaymentReceiverWallet   `json:"receiver_wallet,omitempty"`
-	CreatedAt             time.Time                  `json:"created_at"`
-	UpdatedAt             time.Time                  `json:"updated_at"`
-	ExternalPaymentID     string                     `json:"external_payment_id,omitempty"`
-	CircleTransferRequestID *string                  `json:"circle_transfer_request_id,omitempty"`
+	ID                      string                    `json:"id"`
+	Amount                  string                    `json:"amount"`
+	StellarTransactionID    string                    `json:"stellar_transaction_id"`
+	StellarOperationID      string                    `json:"stellar_operation_id"`
+	Status                  data.PaymentStatus        `json:"status"`
+	Type                    data.PaymentType          `json:"type"`
+	StatusHistory           data.PaymentStatusHistory `json:"status_history,omitempty"`
+	Disbursement            *data.Disbursement        `json:"disbursement,omitempty"`
+	Asset                   data.Asset                `json:"asset"`
+	ReceiverWallet          *getPaymentReceiverWallet `json:"receiver_wallet,omitempty"`
+	CreatedAt               time.Time                 `json:"created_at"`
+	UpdatedAt               time.Time                 `json:"updated_at"`
+	ExternalPaymentID       string                    `json:"external_payment_id,omitempty"`
+	CircleTransferRequestID *string                   `json:"circle_transfer_request_id,omitempty"`
 }
 
 func paymentToGetPaymentResponse(p data.Payment) getPaymentResponse {
 	resp := getPaymentResponse{
-		ID:                   p.ID,
-		Amount:               p.Amount,
-		StellarTransactionID:  p.StellarTransactionID,
-		StellarOperationID:    p.StellarOperationID,
-		Status:               p.Status,
-		Type:                 p.Type,
-		StatusHistory:        p.StatusHistory,
-		Disbursement:         p.Disbursement,
-		Asset:                p.Asset,
-		CreatedAt:            p.CreatedAt,
-		UpdatedAt:            p.UpdatedAt,
-		ExternalPaymentID:   p.ExternalPaymentID,
+		ID:                      p.ID,
+		Amount:                  p.Amount,
+		StellarTransactionID:    p.StellarTransactionID,
+		StellarOperationID:      p.StellarOperationID,
+		Status:                  p.Status,
+		Type:                    p.Type,
+		StatusHistory:           p.StatusHistory,
+		Disbursement:            p.Disbursement,
+		Asset:                   p.Asset,
+		CreatedAt:               p.CreatedAt,
+		UpdatedAt:               p.UpdatedAt,
+		ExternalPaymentID:       p.ExternalPaymentID,
 		CircleTransferRequestID: p.CircleTransferRequestID,
 	}
 	if p.ReceiverWallet != nil {
