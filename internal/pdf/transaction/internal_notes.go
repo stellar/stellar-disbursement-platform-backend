@@ -15,6 +15,7 @@ const (
 )
 
 // drawInternalNotes draws the grey area above the footer when internalNotes is non-empty.
+// The note section is anchored at the bottom and grows upward as more lines are added.
 func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 	if internalNotes == "" {
 		return
@@ -22,10 +23,6 @@ func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 	notes := strings.TrimSpace(internalNotes)
 	if notes == "" {
 		return
-	}
-	// Single line: take first line, truncate to max length
-	if idx := strings.IndexAny(notes, "\n\r"); idx >= 0 {
-		notes = notes[:idx]
 	}
 	if len(notes) > internalNotesMaxLength {
 		notes = notes[:internalNotesMaxLength]
@@ -35,20 +32,23 @@ func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 		return
 	}
 
-	// Content-height box placed at bottom: bottom edge = page bottom minus footer margin minus 3mm
-	boxHeight := internalNotesPadding*2 + internalNotesLineHeight*3 + 2.0 + internalNotesDisclaimerToValueGap // title + disclaimer + gap + user text + gaps
+	contentWidth := tableWidth
+	textLeft := marginLR + internalNotesPadding
+	textWidth := contentWidth - 2*internalNotesPadding
+
+	pdf.SetFont("Inter", "", bodyFontSize)
+	noteLines := splitNoteIntoLines(pdf, notes, textWidth)
+
+	fixedPartHeight := internalNotesPadding*2 + internalNotesLineHeight*2 + internalNotesDisclaimerToValueGap
+	userNoteHeight := float64(len(noteLines)) * internalNotesLineHeight
+	boxHeight := fixedPartHeight + userNoteHeight
 	boxBottom := pageHeight - marginBottom - internalNotesMarginBottom
 	yStart := boxBottom - boxHeight
 
 	pdf.SetFillColor(internalNotesBgColor[0], internalNotesBgColor[1], internalNotesBgColor[2])
 	pdf.SetDrawColor(internalNotesBorderColor[0], internalNotesBorderColor[1], internalNotesBorderColor[2])
 	pdf.SetLineWidth(0.2)
-
-	contentWidth := tableWidth
 	pdf.RoundedRect(marginLR, yStart, contentWidth, boxHeight, internalNotesCornerRadius, "1234", "FD")
-
-	textLeft := marginLR + internalNotesPadding
-	textWidth := contentWidth - 2*internalNotesPadding
 
 	// Title
 	pdf.SetY(yStart + internalNotesPadding)
@@ -63,14 +63,31 @@ func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 	pdf.CellFormat(textWidth, internalNotesLineHeight, internalNotesDisclaimer, "", 1, "L", false, 0, "")
 	pdf.SetY(pdf.GetY() + internalNotesDisclaimerToValueGap)
 	// User note
-	pdf.SetX(textLeft)
 	pdf.SetFont("Inter", "", bodyFontSize)
 	pdf.SetTextColor(internalNotesValueColor[0], internalNotesValueColor[1], internalNotesValueColor[2])
-	pdf.CellFormat(textWidth, internalNotesLineHeight, notes, "", 1, "L", false, 0, "")
+	for _, line := range noteLines {
+		pdf.SetX(textLeft)
+		pdf.CellFormat(textWidth, internalNotesLineHeight, line, "", 1, "L", false, 0, "")
+	}
 
 	pdf.SetY(yStart + boxHeight)
 	pdf.SetX(marginLR)
 	pdf.Ln(internalNotesMarginBottom)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Inter", "", bodyFontSize)
+}
+
+// splitNoteIntoLines splits the note into display lines, respecting explicit newlines and wrapping to textWidth.
+func splitNoteIntoLines(pdf *gofpdf.Fpdf, notes string, textWidth float64) []string {
+	paragraphs := strings.Split(notes, "\n")
+	var lines []string
+	for _, para := range paragraphs {
+		para = strings.TrimSpace(para)
+		if para == "" {
+			continue
+		}
+		wrapped := pdf.SplitText(para, textWidth)
+		lines = append(lines, wrapped...)
+	}
+	return lines
 }

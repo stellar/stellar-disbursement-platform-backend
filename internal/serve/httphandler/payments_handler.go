@@ -180,7 +180,7 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, paymentToGetPaymentResponse(payments[0]), httpjson.JSON)
 }
 
-const internalNotesMaxLength = 100
+const internalNotesMaxLength = 900
 
 // GetPaymentExport returns the Transaction Notice PDF for a single payment.
 func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request) {
@@ -200,9 +200,6 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 	}
 
 	internalNotes := strings.TrimSpace(r.URL.Query().Get("internal_notes"))
-	if idx := strings.IndexAny(internalNotes, "\r\n"); idx >= 0 {
-		internalNotes = internalNotes[:idx]
-	}
 	if len(internalNotes) > internalNotesMaxLength {
 		internalNotes = internalNotes[:internalNotesMaxLength]
 	}
