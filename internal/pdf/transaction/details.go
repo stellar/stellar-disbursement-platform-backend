@@ -191,31 +191,6 @@ func enrichmentValue(e *Enrichment, ok bool, v string) string {
 	return v
 }
 
-func operationTypeDisplay(t data.PaymentType) string {
-	switch t {
-	case data.PaymentTypeDisbursement:
-		return "Disbursement"
-	case data.PaymentTypeDirect:
-		return "Direct"
-	default:
-		return string(t)
-	}
-}
-
-func disbursementID(p *data.Payment) string {
-	if p.Disbursement != nil {
-		return p.Disbursement.ID
-	}
-	return ""
-}
-
-func disbursementName(p *data.Payment) string {
-	if p.Disbursement != nil {
-		return p.Disbursement.Name
-	}
-	return ""
-}
-
 func memoDisplay(p *data.Payment) string {
 	if p.ReceiverWallet != nil && p.ReceiverWallet.StellarMemo != "" {
 		return p.ReceiverWallet.StellarMemo
