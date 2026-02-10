@@ -66,9 +66,12 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 	shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, headerSeparatorBottomMargin)
 
 	drawSummaryTable(pdfDoc, payment)
-	drawDetailsTable(pdfDoc, payment, enrichment)
-	if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil {
+	hasDisbursementDetails := payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil
+	if hasDisbursementDetails {
+		drawDetailsTable(pdfDoc, payment, enrichment, sectionBottomMargin/2)
 		drawDisbursementDetailsSection(pdfDoc, payment, enrichment)
+	} else {
+		drawDetailsTable(pdfDoc, payment, enrichment, sectionBottomMargin)
 	}
 
 	notesStr := ""
