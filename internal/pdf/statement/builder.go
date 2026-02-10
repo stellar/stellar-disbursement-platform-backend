@@ -41,6 +41,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		NoteColor:                 noteColor,
 		DefaultBorderColor:        defaultBorderColor,
 		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
+		OperatedByBaseURL:         operatedByBaseURL,
 	}
 	shared.SetupFooter(pdfDoc, footerConfig)
 	pdfDoc.AddPage()
