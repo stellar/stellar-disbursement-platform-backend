@@ -117,12 +117,12 @@ func TestBuildPDF(t *testing.T) {
 			UpdatedAt:            time.Now(),
 		}
 
-		// Build a note longer than 100 chars but within max (900)
+		// Build a note longer than 100 chars but within max (500)
 		internalNotes := "This is an internal reference note that exceeds one hundred characters. " +
 			"It is used to verify that the transaction notice PDF still generates correctly when " +
 			"the user enters a longer note for internal reference only."
 		require.Greater(t, len(internalNotes), 100, "test note should exceed 100 chars")
-		require.LessOrEqual(t, len(internalNotes), 900, "test note should be at most 900 chars")
+		require.LessOrEqual(t, len(internalNotes), 500, "test note should be at most 500 chars")
 
 		pdfBytes, err := BuildPDF(payment, orgName, orgLogo, nil, &internalNotes, operatedByBaseURL)
 
