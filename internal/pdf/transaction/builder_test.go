@@ -104,6 +104,52 @@ func TestBuildPDF(t *testing.T) {
 		assert.NotEmpty(t, pdfBytes)
 	})
 
+	t.Run("successfully generates PDF with internal notes over 100 chars up to max", func(t *testing.T) {
+		payment := &data.Payment{
+			ID:                   "pay-3a",
+			Amount:               "25.0000000",
+			StellarTransactionID: "tx-notes-long",
+			Status:               data.SuccessPaymentStatus,
+			Type:                 data.PaymentTypeDisbursement,
+			Asset:                data.Asset{Code: "USDC"},
+			ExternalPaymentID:    "ext-3a",
+			CreatedAt:            time.Now(),
+			UpdatedAt:            time.Now(),
+		}
+
+		// Build a note longer than 100 chars but within max (900)
+		internalNotes := "This is an internal reference note that exceeds one hundred characters. " +
+			"It is used to verify that the transaction notice PDF still generates correctly when " +
+			"the user enters a longer note for internal reference only."
+		require.Greater(t, len(internalNotes), 100, "test note should exceed 100 chars")
+		require.LessOrEqual(t, len(internalNotes), 900, "test note should be at most 900 chars")
+
+		pdfBytes, err := BuildPDF(payment, orgName, orgLogo, nil, &internalNotes, operatedByBaseURL)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, pdfBytes)
+	})
+
+	t.Run("successfully generates PDF with internal notes containing newlines", func(t *testing.T) {
+		payment := &data.Payment{
+			ID:                   "pay-3b",
+			Amount:               "25.0000000",
+			StellarTransactionID: "tx-notes-multiline",
+			Status:               data.SuccessPaymentStatus,
+			Type:                 data.PaymentTypeDisbursement,
+			Asset:                data.Asset{Code: "USDC"},
+			ExternalPaymentID:    "ext-3b",
+			CreatedAt:            time.Now(),
+			UpdatedAt:            time.Now(),
+		}
+
+		internalNotes := "First paragraph for internal reference.\n\nSecond paragraph with more details.\nThird line in same block."
+		pdfBytes, err := BuildPDF(payment, orgName, orgLogo, nil, &internalNotes, operatedByBaseURL)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, pdfBytes)
+	})
+
 	t.Run("successfully generates PDF with disbursement details section", func(t *testing.T) {
 		payment := &data.Payment{
 			ID:                   "pay-4",
