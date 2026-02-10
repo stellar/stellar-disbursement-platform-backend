@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/transaction"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -2286,4 +2287,40 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 			assert.JSONEq(t, tc.expectedError, rr.Body.String())
 		})
 	}
+}
+
+func Test_populateDisbursementCreatedApprovedBy(t *testing.T) {
+	ctx := context.Background()
+	draftTime := time.Date(2026, 1, 9, 10, 0, 0, 0, time.UTC)
+	readyTime := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	startedTime := time.Date(2026, 1, 10, 14, 30, 0, 0, time.UTC)
+
+	userA := "user-draft-id"
+	userB := "user-ready-id"
+	userC := "user-started-id"
+
+	history := data.DisbursementStatusHistory{
+		{UserID: userA, Status: data.DraftDisbursementStatus, Timestamp: draftTime},
+		{UserID: userB, Status: data.ReadyDisbursementStatus, Timestamp: readyTime},
+		{UserID: userC, Status: data.StartedDisbursementStatus, Timestamp: startedTime},
+	}
+
+	authManagerMock := auth.NewAuthManagerMock(t)
+	authManagerMock.
+		On("GetUsersByID", ctx, mock.MatchedBy(func(ids []string) bool {
+			return len(ids) == 2 && (ids[0] == userA || ids[1] == userA) && (ids[0] == userC || ids[1] == userC)
+		}), false).
+		Return([]*auth.User{
+			{ID: userA, FirstName: "Alice", LastName: "Creator", Email: "alice@test.com"},
+			{ID: userC, FirstName: "Bob", LastName: "Starter", Email: "bob@test.com"},
+		}, nil).
+		Once()
+
+	enrichment := &transaction.Enrichment{}
+	populateDisbursementCreatedApprovedBy(ctx, authManagerMock, history, enrichment)
+
+	assert.Equal(t, "Alice Creator", enrichment.DisbursementCreatedByUserName)
+	assert.Equal(t, "Jan 9, 2026 · 10:00:00 UTC", enrichment.DisbursementCreatedByTimestamp)
+	assert.Equal(t, "Bob Starter", enrichment.DisbursementApprovedByUserName)
+	assert.Equal(t, "Jan 10, 2026 · 14:30:00 UTC", enrichment.DisbursementApprovedByTimestamp)
 }
