@@ -86,15 +86,19 @@ func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enric
 	halfWidth := tableWidth / 2
 	labelWidth := 55.0
 	baseURL := ""
+	var senderName, senderWalletAddr, feeCharged string
 	if enrichment != nil {
 		baseURL = enrichment.StellarExpertBaseURL
+		senderName = enrichment.SenderName
+		senderWalletAddr = enrichment.SenderWalletAddress
+		feeCharged = enrichment.FeeCharged
 	}
 
 	leftRows := []detailRow{
-		{"Sender Name", orDash(enrichmentValue(enrichment, enrichment != nil, enrichment.SenderName)), false},
-		{"Sender Wallet Address", orDash(enrichmentValue(enrichment, enrichment != nil, enrichment.SenderWalletAddress)), true},
+		{"Sender Name", orDash(senderName), false},
+		{"Sender Wallet Address", orDash(senderWalletAddr), true},
 		{"MEMO (TEXT)", orDash(truncateWithEllipsis(memoDisplay(payment), memoMaxChars)), false},
-		{"Fee Charged", orDash(enrichmentValue(enrichment, enrichment != nil, enrichment.FeeCharged)), false},
+		{"Fee Charged", orDash(feeCharged), false},
 	}
 	rightRows := []detailRow{
 		{"Recipient Org ID", orDash(recipientOrgID(payment)), false},
