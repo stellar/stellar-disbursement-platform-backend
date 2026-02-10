@@ -180,7 +180,7 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, paymentToGetPaymentResponse(payments[0]), httpjson.JSON)
 }
 
-const internalNotesMaxLength = 900
+const internalNotesMaxLength = 500
 
 // GetPaymentExport returns the Transaction Notice PDF for a single payment.
 func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request) {
