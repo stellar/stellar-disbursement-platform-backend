@@ -60,7 +60,7 @@ func drawSummaryTable(pdf *gofpdf.Fpdf, payment *data.Payment) {
 	currencyCode := payment.Asset.Code
 	statusStr := string(payment.Status)
 	externalPaymentID := payment.ExternalPaymentID
-	updatedAtStr := payment.UpdatedAt.UTC().Format("2006-01-02 15:04 UTC")
+	updatedAtStr := payment.UpdatedAt.UTC().Format("2006-01-02 15:04:05 UTC")
 
 	pdf.SetXY(xSummaryLeft+cellPaddingX, ySummaryData)
 	pdf.SetTextColor(highlightColor[0], highlightColor[1], highlightColor[2])
