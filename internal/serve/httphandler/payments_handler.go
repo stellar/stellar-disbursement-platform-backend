@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -265,67 +264,6 @@ func populateDisbursementCreatedApprovedBy(ctx context.Context, authManager auth
 		enrichment.DisbursementApprovedByUserName = idToName[readyEntry.UserID]
 		enrichment.DisbursementApprovedByTimestamp = readyEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
 	}
-}
-
-// userIDFromStatusMessage extracts user ID from messages like "Payment submitted by user_id <id>".
-var userIDFromStatusMessageRegex = regexp.MustCompile(`user_id\s+(\S+)`)
-
-func buildStatusHistoryUserNames(ctx context.Context, authManager auth.AuthManager, history data.PaymentStatusHistory) []string {
-	if len(history) == 0 {
-		return nil
-	}
-	userIDs := make(map[string]struct{})
-	var orderedIDs []string
-	for _, entry := range history {
-		msg := entry.StatusMessage
-		matches := userIDFromStatusMessageRegex.FindStringSubmatch(msg)
-		if len(matches) < 2 {
-			orderedIDs = append(orderedIDs, "")
-			continue
-		}
-		uid := strings.TrimSpace(matches[1])
-		orderedIDs = append(orderedIDs, uid)
-		if uid != "" {
-			userIDs[uid] = struct{}{}
-		}
-	}
-	ids := make([]string, 0, len(userIDs))
-	for id := range userIDs {
-		ids = append(ids, id)
-	}
-	if len(ids) == 0 {
-		names := make([]string, len(history))
-		for i := range history {
-			names[i] = ""
-		}
-		return names
-	}
-	users, err := authManager.GetUsersByID(ctx, ids, false)
-	if err != nil {
-		log.Ctx(ctx).Warnf("getting users for status history: %v", err)
-		names := make([]string, len(history))
-		for i := range history {
-			names[i] = ""
-		}
-		return names
-	}
-	idToName := make(map[string]string)
-	for _, u := range users {
-		name := strings.TrimSpace(u.FirstName + " " + u.LastName)
-		if name == "" {
-			name = u.Email
-		}
-		idToName[u.ID] = name
-	}
-	names := make([]string, len(orderedIDs))
-	for i, id := range orderedIDs {
-		if id == "" {
-			names[i] = ""
-			continue
-		}
-		names[i] = idToName[id]
-	}
-	return names
 }
 
 func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {

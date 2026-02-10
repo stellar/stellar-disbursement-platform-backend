@@ -63,7 +63,7 @@ type HeaderParams struct {
 	WalletAccount        string
 	WalletAccountDisplay string // optional truncated display for mini header; if empty use WalletAccount
 	StellarExpertBaseURL string
-	OperatedByBaseURL string
+	OperatedByBaseURL    string
 }
 
 // DrawHeader draws the full header: logo + left column (org name; if WalletAccount set, add wallet address line);

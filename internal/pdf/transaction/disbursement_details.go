@@ -64,18 +64,18 @@ func drawDisbursementDetailsSection(pdf *gofpdf.Fpdf, payment *data.Payment, enr
 	// Column 1: Disbursement ID, Created by
 	drawDisbursementDetailRowAt(pdf, xLeft, yStart, "Disbursement ID", d.ID)
 	yCreated := yStart + block1Height
-	var createdByName, createdByTs, approvedByName, approvedByTs string
+	var createdByName, createdByTS, approvedByName, approvedByTS string
 	if enrichment != nil {
 		createdByName = enrichment.DisbursementCreatedByUserName
-		createdByTs = enrichment.DisbursementCreatedByTimestamp
+		createdByTS = enrichment.DisbursementCreatedByTimestamp
 		approvedByName = enrichment.DisbursementApprovedByUserName
-		approvedByTs = enrichment.DisbursementApprovedByTimestamp
+		approvedByTS = enrichment.DisbursementApprovedByTimestamp
 	}
-	drawDisbursementDetailCreatedApprovedAt(pdf, xLeft, yCreated, "Created by", createdByName, createdByTs)
+	drawDisbursementDetailCreatedApprovedAt(pdf, xLeft, yCreated, "Created by", createdByName, createdByTS)
 
 	// Column 2: Disbursement Name, Approved by
 	drawDisbursementDetailRowAt(pdf, xRight, yStart, "Disbursement Name", d.Name)
-	drawDisbursementDetailCreatedApprovedAt(pdf, xRight, yCreated, "Approved by", approvedByName, approvedByTs)
+	drawDisbursementDetailCreatedApprovedAt(pdf, xRight, yCreated, "Approved by", approvedByName, approvedByTS)
 
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Inter", "", bodyFontSize)
