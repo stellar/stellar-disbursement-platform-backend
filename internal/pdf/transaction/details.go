@@ -77,7 +77,8 @@ type detailRow struct {
 	isWalletAddress bool
 }
 
-func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enrichment) {
+// drawDetailsTable draws the Transaction Details section.
+func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enrichment, bottomMargin float64) {
 	pdf.SetFont("Inter", "B", sectionTitleSize)
 	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
 	pdf.CellFormat(0, 8, "Transaction Details", "", 1, "L", false, 0, "")
@@ -187,7 +188,7 @@ func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enric
 	pdf.SetXY(xLeft, leftBottom)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Inter", "", bodyFontSize)
-	pdf.Ln(sectionBottomMargin)
+	pdf.Ln(bottomMargin)
 }
 
 func enrichmentValue(e *Enrichment, ok bool, v string) string {

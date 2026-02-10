@@ -45,9 +45,9 @@ func drawDisbursementDetailsSection(pdf *gofpdf.Fpdf, payment *data.Payment, enr
 	}
 	d := payment.Disbursement
 
-	pdf.SetFont("Inter", "B", sectionTitleSize)
+	pdf.SetFont("Inter", "B", organizationNameFontSize)
 	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
-	pdf.CellFormat(0, 8, "Disbursement Details", "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 6, "Disbursement Details", "", 1, "L", false, 0, "")
 	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(1)
 
