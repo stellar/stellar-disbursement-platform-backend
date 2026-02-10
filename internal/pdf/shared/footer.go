@@ -6,6 +6,8 @@ import (
 	"github.com/jung-kurt/gofpdf/v2"
 )
 
+const footerDisclaimerMaintainedBy = "maintained by the Stellar Disbursement Platform"
+
 // FooterConfig holds layout values for the PDF footer.
 type FooterConfig struct {
 	PageHeight                float64
@@ -20,6 +22,7 @@ type FooterConfig struct {
 	NoteColor                 []int
 	DefaultBorderColor        []int
 	HeaderSeparatorLineWidth  float64
+	OperatedByBaseURL         string // optional
 }
 
 // SetupFooter sets the PDF footer function.
@@ -40,6 +43,9 @@ func SetupFooter(pdf *gofpdf.Fpdf, cfg FooterConfig) {
 		disclaimerLabel := "Disclaimer: "
 		disclaimerTextLine1 := "This report is generated from publicly available blockchain ledger data and records"
 		disclaimerTextLine2 := "maintained by the Stellar Disbursement Platform."
+		if cfg.OperatedByBaseURL != "" {
+			disclaimerTextLine2 = footerDisclaimerMaintainedBy + " operated by " + cfg.OperatedByBaseURL + "."
+		}
 		pdf.SetFont("Inter", "B", cfg.BodyFontSize)
 		pdf.SetTextColor(cfg.NoteColor[0], cfg.NoteColor[1], cfg.NoteColor[2])
 		labelWidth := pdf.GetStringWidth(disclaimerLabel)
