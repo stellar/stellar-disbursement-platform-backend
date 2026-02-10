@@ -17,6 +17,7 @@ type Enrichment struct {
 	SenderName                      string
 	SenderWalletAddress             string
 	FeeCharged                      string
+	MemoText                        string
 	StellarExpertBaseURL            string
 	DisbursementCreatedByUserName   string
 	DisbursementCreatedByTimestamp  string
@@ -94,10 +95,11 @@ func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enric
 		feeCharged = enrichment.FeeCharged
 	}
 
+	memoValue := memoForDisplay(payment, enrichment)
 	leftRows := []detailRow{
 		{"Sender Name", orDash(senderName), false},
 		{"Sender Wallet Address", orDash(senderWalletAddr), true},
-		{"MEMO (TEXT)", orDash(truncateWithEllipsis(memoDisplay(payment), memoMaxChars)), false},
+		{"MEMO (TEXT)", orDash(truncateWithEllipsis(memoValue, memoMaxChars)), false},
 		{"Fee Charged", orDash(feeCharged), false},
 	}
 	rightRows := []detailRow{
@@ -193,6 +195,13 @@ func enrichmentValue(e *Enrichment, ok bool, v string) string {
 		return ""
 	}
 	return v
+}
+
+func memoForDisplay(p *data.Payment, e *Enrichment) string {
+	if e != nil && e.MemoText != "" {
+		return e.MemoText
+	}
+	return memoDisplay(p)
 }
 
 func memoDisplay(p *data.Payment) string {
