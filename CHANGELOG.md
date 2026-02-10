@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- Add integration tests for embedded wallets. [1041](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1041)
+
 ## [6.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.1...6.1.0))
 
 ### Fixed
