@@ -273,31 +273,31 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 
 const disbursementTimestampFormat = "Jan 2, 2006 · 15:04:05 UTC"
 
-// Fills enrichment with Created by / Approved by from disbursement status_history.
+// Fills enrichment with Created by / Approved by from the disbursement's status_history.
 func populateDisbursementCreatedApprovedBy(ctx context.Context, authManager auth.AuthManager, history data.DisbursementStatusHistory, enrichment *transaction.Enrichment) {
-	var draftEntry, readyEntry *data.DisbursementStatusHistoryEntry
+	var draftEntry, startedEntry *data.DisbursementStatusHistoryEntry
 	for i := range history {
 		e := &history[i]
 		if e.Status == data.DraftDisbursementStatus {
 			draftEntry = e
 		}
-		if e.Status == data.ReadyDisbursementStatus {
-			readyEntry = e
+		if e.Status == data.StartedDisbursementStatus {
+			startedEntry = e
 		}
 	}
 	userIDs := make(map[string]struct{})
 	if draftEntry != nil && draftEntry.UserID != "" {
 		userIDs[draftEntry.UserID] = struct{}{}
 	}
-	if readyEntry != nil && readyEntry.UserID != "" {
-		userIDs[readyEntry.UserID] = struct{}{}
+	if startedEntry != nil && startedEntry.UserID != "" {
+		userIDs[startedEntry.UserID] = struct{}{}
 	}
 	if len(userIDs) == 0 {
 		if draftEntry != nil {
 			enrichment.DisbursementCreatedByTimestamp = draftEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
 		}
-		if readyEntry != nil {
-			enrichment.DisbursementApprovedByTimestamp = readyEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+		if startedEntry != nil {
+			enrichment.DisbursementApprovedByTimestamp = startedEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
 		}
 		return
 	}
@@ -311,8 +311,8 @@ func populateDisbursementCreatedApprovedBy(ctx context.Context, authManager auth
 		if draftEntry != nil {
 			enrichment.DisbursementCreatedByTimestamp = draftEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
 		}
-		if readyEntry != nil {
-			enrichment.DisbursementApprovedByTimestamp = readyEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+		if startedEntry != nil {
+			enrichment.DisbursementApprovedByTimestamp = startedEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
 		}
 		return
 	}
@@ -328,9 +328,9 @@ func populateDisbursementCreatedApprovedBy(ctx context.Context, authManager auth
 		enrichment.DisbursementCreatedByUserName = idToName[draftEntry.UserID]
 		enrichment.DisbursementCreatedByTimestamp = draftEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
 	}
-	if readyEntry != nil {
-		enrichment.DisbursementApprovedByUserName = idToName[readyEntry.UserID]
-		enrichment.DisbursementApprovedByTimestamp = readyEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
+	if startedEntry != nil {
+		enrichment.DisbursementApprovedByUserName = idToName[startedEntry.UserID]
+		enrichment.DisbursementApprovedByTimestamp = startedEntry.Timestamp.UTC().Format(disbursementTimestampFormat)
 	}
 }
 
