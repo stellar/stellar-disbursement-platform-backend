@@ -232,6 +232,7 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 	}
 
 	var feeCharged string
+	var memoText string
 	if payment.StellarTransactionID != "" {
 		if p.HorizonClient == nil {
 			log.Ctx(ctx).Warnf("Horizon client not configured; cannot fetch fee for transaction %s", payment.StellarTransactionID)
@@ -242,6 +243,7 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 			} else {
 				// FeeCharged is in stroops (1 XLM = 10^7 stroops)
 				feeCharged = fmt.Sprintf("%.5f XLM", float64(hTx.FeeCharged)/1e7)
+				memoText = hTx.Memo
 			}
 		}
 	}
@@ -250,6 +252,7 @@ func (p PaymentsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request
 		SenderName:           orgName,
 		SenderWalletAddress:  senderWalletAddress,
 		FeeCharged:           feeCharged,
+		MemoText:             memoText,
 		StellarExpertBaseURL: transaction.GetStellarExpertBaseURL(),
 	}
 	if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil && len(payment.Disbursement.StatusHistory) > 0 {

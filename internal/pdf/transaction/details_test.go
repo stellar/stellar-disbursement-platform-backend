@@ -138,6 +138,43 @@ func TestMemoDisplay(t *testing.T) {
 	})
 }
 
+const testDBMemo = "db-memo"
+
+func TestMemoForDisplay(t *testing.T) {
+	t.Run("enrichment nil uses payment memo", func(t *testing.T) {
+		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}
+		got := memoForDisplay(p, nil)
+		assert.Equal(t, testDBMemo, got)
+	})
+
+	t.Run("enrichment MemoText empty uses payment memo", func(t *testing.T) {
+		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}
+		e := &Enrichment{MemoText: ""}
+		got := memoForDisplay(p, e)
+		assert.Equal(t, testDBMemo, got)
+	})
+
+	t.Run("enrichment MemoText set returns Horizon memo", func(t *testing.T) {
+		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}
+		e := &Enrichment{MemoText: "horizon-memo"}
+		got := memoForDisplay(p, e)
+		assert.Equal(t, "horizon-memo", got)
+	})
+
+	t.Run("enrichment MemoText set and payment has no memo returns Horizon memo", func(t *testing.T) {
+		p := &data.Payment{}
+		e := &Enrichment{MemoText: "from-horizon"}
+		got := memoForDisplay(p, e)
+		assert.Equal(t, "from-horizon", got)
+	})
+
+	t.Run("enrichment nil and payment has no memo returns empty", func(t *testing.T) {
+		p := &data.Payment{}
+		got := memoForDisplay(p, nil)
+		assert.Empty(t, got)
+	})
+}
+
 func TestWalletProvider(t *testing.T) {
 	t.Run(msgNilReceiverWalletReturnsEmpty, func(t *testing.T) {
 		p := &data.Payment{}
