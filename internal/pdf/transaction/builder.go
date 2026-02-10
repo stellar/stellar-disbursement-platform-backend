@@ -39,6 +39,7 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 		NoteColor:                 noteColor,
 		DefaultBorderColor:        defaultBorderColor,
 		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
+		OperatedByBaseURL:         operatedByBaseURL,
 	}
 	shared.SetupFooter(pdfDoc, footerConfig)
 	pdfDoc.AddPage()
