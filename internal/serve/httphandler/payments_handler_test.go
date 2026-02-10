@@ -106,15 +106,6 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		// assert response
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		receiverCreatedAt := ""
-		if receiver.CreatedAt != nil {
-			receiverCreatedAt = receiver.CreatedAt.Format(time.RFC3339Nano)
-		}
-		receiverUpdatedAt := ""
-		if receiver.UpdatedAt != nil {
-			receiverUpdatedAt = receiver.UpdatedAt.Format(time.RFC3339Nano)
-		}
-
 		wantJSON := `{
 			"id": "` + payment.ID + `",
 			"amount": "50.0000000",
@@ -156,11 +147,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"id": "` + receiverWallet.ID + `",
 				"receiver": {
 					"id": "` + receiver.ID + `",
-					"created_at": "` + receiverCreatedAt + `",
-					"email": "` + receiver.Email + `",
-					"external_id": "` + receiver.ExternalID + `",
-					"phone_number": "` + receiver.PhoneNumber + `",
-					"updated_at": "` + receiverUpdatedAt + `"
+					"external_id": "` + receiver.ExternalID + `"
 				},
 				"wallet": {
 					"id": "` + wallet.ID + `",
