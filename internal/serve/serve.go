@@ -810,6 +810,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:            o.Models,
 			CAPTCHAType:       o.CAPTCHAType,
 			ReCAPTCHADisabled: o.DisableReCAPTCHA,
+			SingleTenantMode:  o.SingleTenantMode,
 		}.ServeHTTP)
 
 		// SEP 1 TOML file endpoint

@@ -32,13 +32,15 @@ func Test_CAPTCHAConfigHandler_ServeHTTP(t *testing.T) {
 
 	ctx := context.Background()
 
-	t.Run("returns 400 when organization_name is missing", func(t *testing.T) {
+	t.Run("returns 400 when organization_name is missing in multi-tenant mode", func(t *testing.T) {
 		mTenantManager := tenant.NewTenantManagerMock(t)
+
 		handler := CAPTCHAConfigHandler{
 			TenantManager:     mTenantManager,
 			Models:            models,
 			CAPTCHAType:       validators.GoogleReCAPTCHAV2,
 			ReCAPTCHADisabled: false,
+			SingleTenantMode:  false, // Multi-tenant mode
 		}
 
 		r := chi.NewRouter()
@@ -47,6 +49,33 @@ func Test_CAPTCHAConfigHandler_ServeHTTP(t *testing.T) {
 		rr := testutils.Request(t, ctx, r, "/organization/captcha-config", http.MethodGet, nil)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.JSONEq(t, `{"error":"organization_name query parameter is required"}`, rr.Body.String())
+	})
+
+	t.Run("returns correct captcha config in single-tenant mode without organization_name", func(t *testing.T) {
+		tnt := &schema.Tenant{ID: "tenant-id-1", Name: "default-org"}
+		mTenantManager := tenant.NewTenantManagerMock(t)
+		mTenantManager.
+			On("GetDefault", mock.Anything).
+			Return(tnt, nil).
+			Once()
+
+		handler := CAPTCHAConfigHandler{
+			TenantManager:     mTenantManager,
+			Models:            models,
+			CAPTCHAType:       validators.GoogleReCAPTCHAV2,
+			ReCAPTCHADisabled: false,
+			SingleTenantMode:  true, // Single-tenant mode
+		}
+
+		r := chi.NewRouter()
+		r.Get("/organization/captcha-config", handler.ServeHTTP)
+
+		rr := testutils.Request(t, ctx, r, "/organization/captcha-config", http.MethodGet, nil)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.JSONEq(t, `{
+			"captcha_type": "GOOGLE_RECAPTCHA_V2",
+			"captcha_disabled": false
+		}`, rr.Body.String())
 	})
 
 	t.Run("returns 404 when organization is not found", func(t *testing.T) {
@@ -61,6 +90,7 @@ func Test_CAPTCHAConfigHandler_ServeHTTP(t *testing.T) {
 			Models:            models,
 			CAPTCHAType:       validators.GoogleReCAPTCHAV2,
 			ReCAPTCHADisabled: false,
+			SingleTenantMode:  false,
 		}
 
 		r := chi.NewRouter()
@@ -84,6 +114,7 @@ func Test_CAPTCHAConfigHandler_ServeHTTP(t *testing.T) {
 			Models:            models,
 			CAPTCHAType:       validators.GoogleReCAPTCHAV2,
 			ReCAPTCHADisabled: false,
+			SingleTenantMode:  false,
 		}
 
 		r := chi.NewRouter()
@@ -110,6 +141,7 @@ func Test_CAPTCHAConfigHandler_ServeHTTP(t *testing.T) {
 			Models:            models,
 			CAPTCHAType:       validators.GoogleReCAPTCHAV3,
 			ReCAPTCHADisabled: true,
+			SingleTenantMode:  false,
 		}
 
 		r := chi.NewRouter()
@@ -143,6 +175,7 @@ func Test_CAPTCHAConfigHandler_ServeHTTP(t *testing.T) {
 			Models:            models,
 			CAPTCHAType:       validators.GoogleReCAPTCHAV2,
 			ReCAPTCHADisabled: true,
+			SingleTenantMode:  false,
 		}
 
 		r := chi.NewRouter()

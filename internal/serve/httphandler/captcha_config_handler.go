@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -17,6 +18,7 @@ type CAPTCHAConfigHandler struct {
 	Models            *data.Models
 	CAPTCHAType       validators.CAPTCHAType
 	ReCAPTCHADisabled bool
+	SingleTenantMode  bool
 }
 
 type CAPTCHAConfigResponse struct {
@@ -28,15 +30,28 @@ func (h CAPTCHAConfigHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 
 	orgName := r.URL.Query().Get("organization_name")
-	if orgName == "" {
-		httperror.BadRequest("organization_name query parameter is required", nil, nil).Render(w)
-		return
-	}
 
-	tnt, err := h.TenantManager.GetTenantByName(ctx, orgName)
-	if err != nil {
-		httperror.NotFound("organization not found", err, nil).Render(w)
-		return
+	var tnt *schema.Tenant
+	var err error
+
+	if h.SingleTenantMode {
+		// In single-tenant mode, get the default tenant
+		tnt, err = h.TenantManager.GetDefault(ctx)
+		if err != nil {
+			httperror.InternalError(ctx, "cannot get default tenant", err, nil).Render(w)
+			return
+		}
+	} else {
+		// In multi-tenant mode, organization_name is required
+		if orgName == "" {
+			httperror.BadRequest("organization_name query parameter is required", nil, nil).Render(w)
+			return
+		}
+		tnt, err = h.TenantManager.GetTenantByName(ctx, orgName)
+		if err != nil {
+			httperror.NotFound("organization not found", err, nil).Render(w)
+			return
+		}
 	}
 
 	ctx = sdpcontext.SetTenantInContext(ctx, tnt)
