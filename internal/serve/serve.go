@@ -805,6 +805,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			DBConnectionPool: o.AdminDBConnectionPool,
 		}.ServeHTTP)
 
+		r.Get("/organization/captcha-config", httphandler.CAPTCHAConfigHandler{
+			TenantManager:     o.tenantManager,
+			Models:            o.Models,
+			CAPTCHAType:       o.CAPTCHAType,
+			ReCAPTCHADisabled: o.DisableReCAPTCHA,
+		}.ServeHTTP)
+
 		// SEP 1 TOML file endpoint
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
