@@ -20,10 +20,11 @@ import (
 )
 
 const (
-	loginURL        = "login"
-	disbursementURL = "disbursements"
-	organizationURL = "organization"
-	registrationURL = "sep24-interactive-deposit"
+	loginURL           = "login"
+	disbursementURL    = "disbursements"
+	organizationURL    = "organization"
+	registrationURL    = "sep24-interactive-deposit"
+	embeddedWalletsURL = "embedded-wallets"
 )
 
 type ServerAPIIntegrationTestsInterface interface {
@@ -33,6 +34,7 @@ type ServerAPIIntegrationTestsInterface interface {
 	StartDisbursement(ctx context.Context, authToken *ServerAPIAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *SEP24AuthToken, body *data.ReceiverRegistrationRequest) error
 	ConfigureCircleAccess(ctx context.Context, authToken *ServerAPIAuthToken, body *httphandler.PatchCircleConfigRequest) error
+	CreateEmbeddedWallet(ctx context.Context, req *httphandler.CreateWalletRequest) (*httphandler.WalletResponse, error)
 }
 
 type ServerAPIIntegrationTests struct {
@@ -301,6 +303,44 @@ func (sa *ServerAPIIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	}
 
 	return nil
+}
+
+// CreateEmbeddedWallet creates a new embedded wallet using POST /embedded-wallets.
+func (sa *ServerAPIIntegrationTests) CreateEmbeddedWallet(ctx context.Context, req *httphandler.CreateWalletRequest) (*httphandler.WalletResponse, error) {
+	reqURL, err := url.JoinPath(sa.ServerAPIBaseURL, embeddedWalletsURL)
+	if err != nil {
+		return nil, fmt.Errorf("creating url: %w", err)
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("creating json post body: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return nil, fmt.Errorf("creating new request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("SDP-Tenant-Name", sa.TenantName)
+
+	resp, err := sa.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("making request to POST /embedded-wallets: %w", err)
+	}
+
+	if resp.StatusCode/100 != 2 {
+		logErrorResponses(ctx, resp.Body)
+		return nil, fmt.Errorf("error registering embedded wallet (statusCode=%d)", resp.StatusCode)
+	}
+
+	walletResp := &httphandler.WalletResponse{}
+	if err = json.NewDecoder(resp.Body).Decode(walletResp); err != nil {
+		return nil, fmt.Errorf("decoding response body: %w", err)
+	}
+
+	return walletResp, nil
 }
 
 // Ensuring that ServerAPIIntegrationTests is implementing ServerAPIIntegrationTestsInterface.
