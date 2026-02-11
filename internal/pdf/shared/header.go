@@ -154,7 +154,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 
 	pdf.SetFont("Inter", "", layout.BodyFontSize)
 	pdf.SetTextColor(layout.DefaultCellColor[0], layout.DefaultCellColor[1], layout.DefaultCellColor[2])
-	genStr := fmt.Sprintf("Generated on %s", time.Now().UTC().Format("2006-01-02 15:04 UTC"))
+	genStr := fmt.Sprintf("Generated on %s", time.Now().UTC().Format("2006-01-02 15:04:05 UTC"))
 	pdf.SetXY(rightColX, yRightCurrent)
 	pdf.CellFormat(halfWidth, layout.HeaderRightColLineHeight, genStr, "", 0, "R", false, 0, "")
 
