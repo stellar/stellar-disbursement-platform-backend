@@ -100,9 +100,11 @@ func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enric
 	leftRows := []detailRow{
 		{"Sender Name", orDash(senderName), false},
 		{"Sender Wallet Address", orDash(senderWalletAddr), true},
-		{"MEMO (TEXT)", orDash(truncateWithEllipsis(memoValue, memoMaxChars)), false},
-		{"Fee Charged", orDash(feeCharged), false},
 	}
+	if memoValue != "" {
+		leftRows = append(leftRows, detailRow{"MEMO (Text)", orDash(truncateWithEllipsis(memoValue, memoMaxChars)), false})
+	}
+	leftRows = append(leftRows, detailRow{"Fee Charged", orDash(feeCharged), false})
 	rightRows := []detailRow{
 		{"Recipient Org ID", orDash(recipientOrgID(payment)), false},
 		{"Recipient Wallet Address", orDash(recipientWalletAddress(payment)), true},
