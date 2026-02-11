@@ -304,12 +304,11 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		return fmt.Errorf("running setup wallets for proper network: %w", err)
 	}
 
-	isLinkShortenerEnabled := true
 	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
 		Name:                   pt.OrgName,
 		MFADisabled:            pt.MFADisabled,
 		CAPTCHADisabled:        pt.CAPTCHADisabled,
-		IsLinkShortenerEnabled: &isLinkShortenerEnabled,
+		IsLinkShortenerEnabled: utils.Ptr(true),
 	})
 	if err != nil {
 		return fmt.Errorf("updating organization's name and settings: %w", err)
