@@ -26,6 +26,7 @@ import { Routes } from "@/config/settings";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 
 import { useStore } from "@/store/useStore";
+import { useCaptcha } from "@/hooks/useCaptcha";
 import { VerificationMethod } from "@/types/types";
 
 export const SelectVerificationMethod: FC = () => {
@@ -45,13 +46,16 @@ export const SelectVerificationMethod: FC = () => {
   const [iti, setIti] = useState<Iti | null>(null);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
 
-  const reCaptchaRef = useRef<ReCaptcha>(null);
-  const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
-
-  const isRecaptchaPending = () => {
-    const res = !org.is_recaptcha_disabled && !reCaptchaToken;
-    return res;
-  };
+  const {
+    reCaptchaRef,
+    setReCaptchaToken,
+    isV3,
+    siteKey,
+    isDisabled: isCaptchaDisabled,
+    isRecaptchaPending,
+    executeV3,
+    resetCaptcha,
+  } = useCaptcha();
 
   // Redirect to /already-registered if user is registered
   useEffect(() => {
@@ -142,21 +146,23 @@ export const SelectVerificationMethod: FC = () => {
         verification_field: otpData.verification_field,
       });
       navigate({ pathname: Routes.ENTER_PASSCODE, search: searchParams });
-      reCaptchaRef?.current?.reset();
+      resetCaptcha();
     }
     // Not including iti and inputEmail
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otpData, navigate, searchParams, updateUser]);
+  }, [otpData, navigate, searchParams, updateUser, resetCaptcha]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!jwtToken || isRecaptchaPending()) {
       return;
     }
 
+    const token = await executeV3("submit_otp");
+
     const submitData = {
       phone_number: iti?.getNumber() || undefined,
       email: inputEmail || undefined,
-      recaptcha_token: reCaptchaToken || undefined,
+      recaptcha_token: token || undefined,
     };
 
     otpSubmit({ token: jwtToken, ...submitData });
@@ -169,7 +175,7 @@ export const SelectVerificationMethod: FC = () => {
 
     const isValid = iti?.isValidNumber();
     setInputPhoneError(
-      isValid ? false : t("selectVerification.phoneErrorMessage")
+      isValid ? false : t("selectVerification.phoneErrorMessage"),
     );
   };
 
@@ -180,7 +186,7 @@ export const SelectVerificationMethod: FC = () => {
 
     const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputEmail);
     setInputEmailError(
-      isValid ? false : t("selectVerification.emailErrorMessage")
+      isValid ? false : t("selectVerification.emailErrorMessage"),
     );
   };
 
@@ -230,12 +236,12 @@ export const SelectVerificationMethod: FC = () => {
           ) : null}
         </div>
 
-        {/* TODO: match recaptcha theme */}
-        {!org.is_recaptcha_disabled && org.recaptcha_site_key && (
+        {/* Only render v2 widget - v3 is invisible and handled programmatically */}
+        {!isCaptchaDisabled && siteKey && !isV3 && (
           <ReCaptcha
             ref={reCaptchaRef}
             size="normal"
-            sitekey={org.recaptcha_site_key}
+            sitekey={siteKey}
             onChange={(token) => {
               setReCaptchaToken(token);
             }}

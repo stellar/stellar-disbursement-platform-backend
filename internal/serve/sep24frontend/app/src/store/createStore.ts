@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { VerificationField } from "@/types/types";
+import { CaptchaType, VerificationField } from "@/types/types";
 
 // Types
 export interface Store {
@@ -22,6 +22,7 @@ type StoreOrg = {
   truncated_contact_info?: string;
   is_recaptcha_disabled: boolean;
   recaptcha_site_key?: string;
+  captcha_type?: CaptchaType;
 };
 
 type StoreUser = {

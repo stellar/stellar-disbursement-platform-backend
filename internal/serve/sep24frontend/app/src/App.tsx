@@ -76,6 +76,7 @@ const App: FC = () => {
         truncated_contact_info,
         is_recaptcha_disabled,
         recaptcha_site_key,
+        captcha_type,
       } = orgData;
 
       updateOrg({
@@ -85,6 +86,7 @@ const App: FC = () => {
         truncated_contact_info,
         is_recaptcha_disabled: Boolean(is_recaptcha_disabled),
         recaptcha_site_key,
+        captcha_type,
       });
     }
   }, [orgData, updateOrg]);

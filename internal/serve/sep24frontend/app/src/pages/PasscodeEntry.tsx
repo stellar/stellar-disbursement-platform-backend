@@ -1,4 +1,4 @@
-import { FC, useEffect, useRef, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -16,6 +16,7 @@ import { Box } from "@/components/Box";
 import { ContentLayout } from "@/components/ContentLayout";
 
 import { useStore } from "@/store/useStore";
+import { useCaptcha } from "@/hooks/useCaptcha";
 import { Routes } from "@/config/settings";
 import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
 import { getSearchParams } from "@/helpers/getSearchParams";
@@ -27,17 +28,22 @@ export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const searchParams = getSearchParams().toString();
-  const { user, jwtToken, org } = useStore();
+  const { user, jwtToken } = useStore();
   useIsEmptyUser();
 
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
 
-  const reCaptchaRef = useRef<ReCaptcha>(null);
-  const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
-
-  const isRecaptchaPending = () =>
-    !org.is_recaptcha_disabled && !reCaptchaToken;
+  const {
+    reCaptchaRef,
+    setReCaptchaToken,
+    isV3,
+    siteKey,
+    isDisabled: isCaptchaDisabled,
+    isRecaptchaPending,
+    executeV3,
+    resetCaptcha,
+  } = useCaptcha();
 
   type ViewMessage = {
     type: "error" | "success";
@@ -83,9 +89,9 @@ export const PasscodeEntry: FC = () => {
       });
 
       scrollToTop();
-      reCaptchaRef.current?.reset();
+      resetCaptcha();
     }
-  }, [isOtpSuccess, t]);
+  }, [isOtpSuccess, t, resetCaptcha]);
 
   // OTP error
   useEffect(() => {
@@ -98,17 +104,17 @@ export const PasscodeEntry: FC = () => {
       });
 
       scrollToTop();
-      reCaptchaRef.current?.reset();
+      resetCaptcha();
     }
-  }, [otpError, t]);
+  }, [otpError, t, resetCaptcha]);
 
   // Verify success
   useEffect(() => {
     if (isVerifySuccess) {
       navigate({ pathname: Routes.SUCCESS, search: searchParams });
-      reCaptchaRef.current?.reset();
+      resetCaptcha();
     }
-  }, [isVerifySuccess, navigate, searchParams]);
+  }, [isVerifySuccess, navigate, searchParams, resetCaptcha]);
 
   // Verify error
   useEffect(() => {
@@ -120,17 +126,19 @@ export const PasscodeEntry: FC = () => {
         timestamp: new Date().getTime(),
       });
 
-      reCaptchaRef.current?.reset();
+      resetCaptcha();
     }
-  }, [verifyError, t]);
+  }, [verifyError, t, resetCaptcha]);
 
-  const handleVerification = () => {
+  const handleVerification = async () => {
     if (
       !(otp && verification && user.verification_field) ||
       isRecaptchaPending()
     ) {
       return;
     }
+
+    const token = await executeV3("verify_registration");
 
     const formattedVerification =
       user.verification_field === "YEAR_MONTH"
@@ -143,12 +151,12 @@ export const PasscodeEntry: FC = () => {
       otp,
       verification: formattedVerification,
       verification_field: user.verification_field,
-      recaptcha_token: reCaptchaToken || undefined,
+      recaptcha_token: token || undefined,
       token: jwtToken,
     });
   };
 
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     if (!jwtToken) {
       return;
     }
@@ -166,10 +174,12 @@ export const PasscodeEntry: FC = () => {
       return;
     }
 
+    const token = await executeV3("resend_otp");
+
     const submitData = {
       phone_number: user.phone_number,
       email: user.email,
-      recaptcha_token: reCaptchaToken || undefined,
+      recaptcha_token: token || undefined,
     };
 
     otpSubmit({ token: jwtToken, ...submitData });
@@ -341,11 +351,12 @@ export const PasscodeEntry: FC = () => {
 
           {renderVerificationInput()}
 
-          {!org.is_recaptcha_disabled && org.recaptcha_site_key && (
+          {/* Only render v2 widget - v3 is invisible and handled programmatically */}
+          {!isCaptchaDisabled && siteKey && !isV3 && (
             <ReCaptcha
               ref={reCaptchaRef}
               size="normal"
-              sitekey={org.recaptcha_site_key}
+              sitekey={siteKey}
               onChange={(token) => {
                 clearMessages();
                 setReCaptchaToken(token);
