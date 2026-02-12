@@ -693,6 +693,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.EnsureTenantMiddleware)
 
+		r.Get("/app-config", httphandler.AppConfigHandler{
+			Models:            o.Models,
+			CAPTCHAType:       o.CAPTCHAType,
+			ReCAPTCHASiteKey:  o.ReCAPTCHASiteKey,
+			ReCAPTCHADisabled: o.DisableReCAPTCHA,
+		}.ServeHTTP)
+
 		r.Get("/organization/logo", httphandler.OrganizationLogoHandler{
 			Models:        o.Models,
 			PublicFilesFS: publicfiles.PublicFiles,
@@ -803,14 +810,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			ServiceID:        ServiceID,
 			Version:          o.Version,
 			DBConnectionPool: o.AdminDBConnectionPool,
-		}.ServeHTTP)
-
-		r.Get("/organization/captcha-config", httphandler.CAPTCHAConfigHandler{
-			TenantManager:     o.tenantManager,
-			Models:            o.Models,
-			CAPTCHAType:       o.CAPTCHAType,
-			ReCAPTCHADisabled: o.DisableReCAPTCHA,
-			SingleTenantMode:  o.SingleTenantMode,
 		}.ServeHTTP)
 
 		// SEP 1 TOML file endpoint
