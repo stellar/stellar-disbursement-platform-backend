@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import ReCaptcha from "react-google-recaptcha";
 import { useStore } from "@/store/useStore";
 
@@ -10,91 +10,116 @@ declare global {
         siteKey: string,
         options: { action: string },
       ) => Promise<string>;
-      render?: (container: string | HTMLElement, options: object) => number;
-      reset?: (widgetId?: number) => void;
     };
   }
 }
 
-export const useCaptcha = () => {
-  const { org } = useStore();
+let scriptLoadingPromise: Promise<void> | null = null;
 
-  const reCaptchaRef = useRef<ReCaptcha>(null);
-  const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
-  const [isV3ScriptLoaded, setIsV3ScriptLoaded] = useState(false);
+const isV3ScriptLoaded = (): boolean => {
+  return !!document.querySelector(`script[src*="recaptcha/api.js?render="]`);
+};
 
-  const isV3 = org.captcha_type === "GOOGLE_RECAPTCHA_V3";
-  const isDisabled = org.is_recaptcha_disabled;
-  const siteKey = org.recaptcha_site_key;
+const loadRecaptchaV3Script = (siteKey: string): Promise<void> => {
+  if (isV3ScriptLoaded()) {
+    return Promise.resolve();
+  }
 
-  useEffect(() => {
-    if (!isV3 || !siteKey || isDisabled) {
-      return;
-    }
+  if (scriptLoadingPromise) {
+    return scriptLoadingPromise;
+  }
 
-    const scriptId = "recaptcha-v3-script";
-    if (document.getElementById(scriptId)) {
-      setIsV3ScriptLoaded(true);
-      return;
-    }
-
+  scriptLoadingPromise = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
-    script.id = scriptId;
     script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
     script.async = true;
     script.onload = () => {
-      window.grecaptcha.ready(() => {
-        setIsV3ScriptLoaded(true);
-      });
+      window.grecaptcha.ready(() => resolve());
+    };
+    script.onerror = () => {
+      scriptLoadingPromise = null;
+      reject(new Error("Failed to load reCAPTCHA v3 script"));
     };
     document.head.appendChild(script);
+  });
 
-    return () => {
-      const existingScript = document.getElementById(scriptId);
-      if (existingScript) {
-        existingScript.remove();
-      }
-    };
-  }, [isV3, siteKey, isDisabled]);
+  return scriptLoadingPromise;
+};
 
-  const isRecaptchaPending = useCallback(() => {
-    if (isDisabled) {
-      return false;
+const executeRecaptchaV3 = async (
+  siteKey: string,
+  action: string,
+): Promise<string> => {
+  await loadRecaptchaV3Script(siteKey);
+  return new Promise((resolve, reject) => {
+    window.grecaptcha.ready(() => {
+      window.grecaptcha.execute(siteKey, { action }).then(resolve).catch(reject);
+    });
+  });
+};
+
+export const useCaptcha = (
+  recaptchaRef: React.RefObject<ReCaptcha | null>,
+) => {
+  const { org } = useStore();
+
+  const [recaptchaToken, setRecaptchaToken] = useState("");
+
+  const isCaptchaDisabled = org.is_recaptcha_disabled;
+  const siteKey = org.recaptcha_site_key ?? "";
+  const isV3 =
+    !isCaptchaDisabled && org.captcha_type === "GOOGLE_RECAPTCHA_V3";
+  const isV2 = !isCaptchaDisabled && !isV3;
+
+  // Load v3 script when needed
+  useEffect(() => {
+    if (isV3 && siteKey) {
+      loadRecaptchaV3Script(siteKey).catch((err) => {
+        console.error("Failed to load reCAPTCHA v3:", err);
+      });
     }
-    if (isV3) {
-      return !isV3ScriptLoaded;
-    }
-    return !reCaptchaToken;
-  }, [isDisabled, isV3, isV3ScriptLoaded, reCaptchaToken]);
+  }, [isV3, siteKey]);
 
-  const executeV3 = useCallback(
-    async (action: string): Promise<string | null> => {
-      if (!isV3 || isDisabled || !siteKey) {
-        return reCaptchaToken;
+  const onRecaptchaV2Change = (token: string | null) => {
+    if (token) {
+      setRecaptchaToken(token);
+    }
+  };
+
+  /** Get the recaptcha token for form submission. For v3, executes at call time. */
+  const getToken = useCallback(
+    async (action: string): Promise<string> => {
+      if (isCaptchaDisabled) {
+        return "";
       }
-      try {
-        return await window.grecaptcha.execute(siteKey, { action });
-      } catch (error) {
-        console.error("reCAPTCHA v3 execution failed:", error);
-        return null;
+
+      if (isV3 && siteKey) {
+        return executeRecaptchaV3(siteKey, action);
       }
+
+      return recaptchaToken;
     },
-    [isV3, isDisabled, siteKey, reCaptchaToken],
+    [isCaptchaDisabled, isV3, siteKey, recaptchaToken],
   );
 
   const resetCaptcha = useCallback(() => {
-    reCaptchaRef.current?.reset();
-  }, []);
+    if (isV2) {
+      recaptchaRef.current?.reset();
+    }
+    setRecaptchaToken("");
+  }, [isV2, recaptchaRef]);
+
+  const isPending = isV2 && !recaptchaToken;
 
   return {
-    reCaptchaRef,
-    reCaptchaToken,
-    setReCaptchaToken,
+    isV2,
     isV3,
-    isDisabled,
+    isCaptchaDisabled,
+    isPending,
+    recaptchaToken,
     siteKey,
-    isRecaptchaPending,
-    executeV3,
+    onRecaptchaV2Change,
+    getToken,
     resetCaptcha,
   };
 };

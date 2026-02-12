@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -34,16 +34,8 @@ export const PasscodeEntry: FC = () => {
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
 
-  const {
-    reCaptchaRef,
-    setReCaptchaToken,
-    isV3,
-    siteKey,
-    isDisabled: isCaptchaDisabled,
-    isRecaptchaPending,
-    executeV3,
-    resetCaptcha,
-  } = useCaptcha();
+  const reCaptchaRef = useRef<ReCaptcha>(null);
+  const captcha = useCaptcha(reCaptchaRef);
 
   type ViewMessage = {
     type: "error" | "success";
@@ -89,9 +81,10 @@ export const PasscodeEntry: FC = () => {
       });
 
       scrollToTop();
-      resetCaptcha();
+      captcha.resetCaptcha();
     }
-  }, [isOtpSuccess, t, resetCaptcha]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOtpSuccess, t]);
 
   // OTP error
   useEffect(() => {
@@ -104,17 +97,19 @@ export const PasscodeEntry: FC = () => {
       });
 
       scrollToTop();
-      resetCaptcha();
+      captcha.resetCaptcha();
     }
-  }, [otpError, t, resetCaptcha]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpError, t]);
 
   // Verify success
   useEffect(() => {
     if (isVerifySuccess) {
       navigate({ pathname: Routes.SUCCESS, search: searchParams });
-      resetCaptcha();
+      captcha.resetCaptcha();
     }
-  }, [isVerifySuccess, navigate, searchParams, resetCaptcha]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVerifySuccess, navigate, searchParams]);
 
   // Verify error
   useEffect(() => {
@@ -126,19 +121,23 @@ export const PasscodeEntry: FC = () => {
         timestamp: new Date().getTime(),
       });
 
-      resetCaptcha();
+      captcha.resetCaptcha();
     }
-  }, [verifyError, t, resetCaptcha]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verifyError, t]);
 
   const handleVerification = async () => {
-    if (
-      !(otp && verification && user.verification_field) ||
-      isRecaptchaPending()
-    ) {
+    if (!(otp && verification && user.verification_field) || captcha.isPending) {
       return;
     }
 
-    const token = await executeV3("verify_registration");
+    let recaptchaToken = "";
+    try {
+      recaptchaToken = await captcha.getToken("verify_registration");
+    } catch (err) {
+      console.error("reCAPTCHA failed:", err);
+      return;
+    }
 
     const formattedVerification =
       user.verification_field === "YEAR_MONTH"
@@ -151,7 +150,7 @@ export const PasscodeEntry: FC = () => {
       otp,
       verification: formattedVerification,
       verification_field: user.verification_field,
-      recaptcha_token: token || undefined,
+      recaptcha_token: recaptchaToken || undefined,
       token: jwtToken,
     });
   };
@@ -161,7 +160,7 @@ export const PasscodeEntry: FC = () => {
       return;
     }
 
-    if (isRecaptchaPending()) {
+    if (captcha.isPending) {
       setViewMessage({
         type: "error",
         title: t("generic.error"),
@@ -174,12 +173,18 @@ export const PasscodeEntry: FC = () => {
       return;
     }
 
-    const token = await executeV3("resend_otp");
+    let recaptchaToken = "";
+    try {
+      recaptchaToken = await captcha.getToken("resend_otp");
+    } catch (err) {
+      console.error("reCAPTCHA failed:", err);
+      return;
+    }
 
     const submitData = {
       phone_number: user.phone_number,
       email: user.email,
-      recaptcha_token: token || undefined,
+      recaptcha_token: recaptchaToken || undefined,
     };
 
     otpSubmit({ token: jwtToken, ...submitData });
@@ -240,18 +245,6 @@ export const PasscodeEntry: FC = () => {
     );
   };
 
-  const isSubmitDisabled = () => {
-    if (!(otp && verification)) {
-      return true;
-    }
-
-    if (isRecaptchaPending()) {
-      return true;
-    }
-
-    return false;
-  };
-
   return (
     <ContentLayout
       footer={
@@ -300,7 +293,7 @@ export const PasscodeEntry: FC = () => {
                 clearMessages();
                 handleVerification();
               }}
-              disabled={isSubmitDisabled()}
+              disabled={!(otp && verification) || captcha.isPending}
               isLoading={isVerifyPending}
             >
               {t("generic.continue")}
@@ -351,19 +344,14 @@ export const PasscodeEntry: FC = () => {
 
           {renderVerificationInput()}
 
-          {/* Only render v2 widget - v3 is invisible and handled programmatically */}
-          {!isCaptchaDisabled && siteKey && !isV3 && (
+          {captcha.isV2 && captcha.siteKey && (
             <ReCaptcha
               ref={reCaptchaRef}
               size="normal"
-              sitekey={siteKey}
+              sitekey={captcha.siteKey}
               onChange={(token) => {
                 clearMessages();
-                setReCaptchaToken(token);
-
-                if (viewMessage) {
-                  setViewMessage(null);
-                }
+                captcha.onRecaptchaV2Change(token);
               }}
             />
           )}
