@@ -16,6 +16,7 @@ import { Box } from "@/components/Box";
 import { ContentLayout } from "@/components/ContentLayout";
 
 import { useStore } from "@/store/useStore";
+import { useCaptcha } from "@/hooks/useCaptcha";
 import { Routes } from "@/config/settings";
 import { translatedApiErrorMessage } from "@/helpers/translatedApiErrorMessage";
 import { getSearchParams } from "@/helpers/getSearchParams";
@@ -27,17 +28,14 @@ export const PasscodeEntry: FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const searchParams = getSearchParams().toString();
-  const { user, jwtToken, org } = useStore();
+  const { user, jwtToken } = useStore();
   useIsEmptyUser();
 
   const [otp, setOtp] = useState("");
   const [verification, setVerification] = useState("");
 
   const reCaptchaRef = useRef<ReCaptcha>(null);
-  const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
-
-  const isRecaptchaPending = () =>
-    !org.is_recaptcha_disabled && !reCaptchaToken;
+  const captcha = useCaptcha(reCaptchaRef);
 
   type ViewMessage = {
     type: "error" | "success";
@@ -83,8 +81,9 @@ export const PasscodeEntry: FC = () => {
       });
 
       scrollToTop();
-      reCaptchaRef.current?.reset();
+      captcha.resetCaptcha();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOtpSuccess, t]);
 
   // OTP error
@@ -98,16 +97,18 @@ export const PasscodeEntry: FC = () => {
       });
 
       scrollToTop();
-      reCaptchaRef.current?.reset();
+      captcha.resetCaptcha();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otpError, t]);
 
   // Verify success
   useEffect(() => {
     if (isVerifySuccess) {
       navigate({ pathname: Routes.SUCCESS, search: searchParams });
-      reCaptchaRef.current?.reset();
+      captcha.resetCaptcha();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVerifySuccess, navigate, searchParams]);
 
   // Verify error
@@ -120,15 +121,21 @@ export const PasscodeEntry: FC = () => {
         timestamp: new Date().getTime(),
       });
 
-      reCaptchaRef.current?.reset();
+      captcha.resetCaptcha();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verifyError, t]);
 
-  const handleVerification = () => {
-    if (
-      !(otp && verification && user.verification_field) ||
-      isRecaptchaPending()
-    ) {
+  const handleVerification = async () => {
+    if (!(otp && verification && user.verification_field) || captcha.isPending) {
+      return;
+    }
+
+    let recaptchaToken = "";
+    try {
+      recaptchaToken = await captcha.getToken("verify_registration");
+    } catch (err) {
+      console.error("reCAPTCHA failed:", err);
       return;
     }
 
@@ -143,17 +150,17 @@ export const PasscodeEntry: FC = () => {
       otp,
       verification: formattedVerification,
       verification_field: user.verification_field,
-      recaptcha_token: reCaptchaToken || undefined,
+      recaptcha_token: recaptchaToken || undefined,
       token: jwtToken,
     });
   };
 
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     if (!jwtToken) {
       return;
     }
 
-    if (isRecaptchaPending()) {
+    if (captcha.isPending) {
       setViewMessage({
         type: "error",
         title: t("generic.error"),
@@ -166,10 +173,18 @@ export const PasscodeEntry: FC = () => {
       return;
     }
 
+    let recaptchaToken = "";
+    try {
+      recaptchaToken = await captcha.getToken("resend_otp");
+    } catch (err) {
+      console.error("reCAPTCHA failed:", err);
+      return;
+    }
+
     const submitData = {
       phone_number: user.phone_number,
       email: user.email,
-      recaptcha_token: reCaptchaToken || undefined,
+      recaptcha_token: recaptchaToken || undefined,
     };
 
     otpSubmit({ token: jwtToken, ...submitData });
@@ -230,18 +245,6 @@ export const PasscodeEntry: FC = () => {
     );
   };
 
-  const isSubmitDisabled = () => {
-    if (!(otp && verification)) {
-      return true;
-    }
-
-    if (isRecaptchaPending()) {
-      return true;
-    }
-
-    return false;
-  };
-
   return (
     <ContentLayout
       footer={
@@ -290,7 +293,7 @@ export const PasscodeEntry: FC = () => {
                 clearMessages();
                 handleVerification();
               }}
-              disabled={isSubmitDisabled()}
+              disabled={!(otp && verification) || captcha.isPending}
               isLoading={isVerifyPending}
             >
               {t("generic.continue")}
@@ -341,18 +344,14 @@ export const PasscodeEntry: FC = () => {
 
           {renderVerificationInput()}
 
-          {!org.is_recaptcha_disabled && org.recaptcha_site_key && (
+          {captcha.isV2 && captcha.siteKey && (
             <ReCaptcha
               ref={reCaptchaRef}
               size="normal"
-              sitekey={org.recaptcha_site_key}
+              sitekey={captcha.siteKey}
               onChange={(token) => {
                 clearMessages();
-                setReCaptchaToken(token);
-
-                if (viewMessage) {
-                  setViewMessage(null);
-                }
+                captcha.onRecaptchaV2Change(token);
               }}
             />
           )}

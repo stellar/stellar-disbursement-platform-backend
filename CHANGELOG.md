@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Add integration tests for embedded wallets. [1041](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1041)
 - Add endpoint for fetch captcha config. [1052](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1052)
+- Implement reCAPTCHA v3 for receiver registration page. [1053](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1053)
 
 ### Fixed
 

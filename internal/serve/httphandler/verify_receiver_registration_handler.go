@@ -88,7 +88,10 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 	}
 
 	// STEP 3: Validate reCAPTCHA Token
-	if !v.ReCAPTCHADisabled {
+	if !IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            v.Models,
+		ReCAPTCHADisabled: v.ReCAPTCHADisabled,
+	}) {
 		isValid, tokenErr := v.ReCAPTCHAValidator.IsTokenValid(ctx, receiverRegistrationRequest.ReCAPTCHAToken)
 		if tokenErr != nil {
 			tokenErr = fmt.Errorf("validating reCAPTCHA token: %w", tokenErr)

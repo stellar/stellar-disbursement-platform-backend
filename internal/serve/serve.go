@@ -872,6 +872,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReceiverWalletModel: o.Models.ReceiverWallet,
 				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
 				ReCAPTCHADisabled:   o.DisableReCAPTCHA,
+				CAPTCHAType:         o.CAPTCHAType,
 			}.ServeHTTP)
 
 			r.Post("/otp", httphandler.ReceiverSendOTPHandler{
