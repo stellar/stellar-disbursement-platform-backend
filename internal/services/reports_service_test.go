@@ -23,12 +23,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-func TestNewStatementService(t *testing.T) {
+func TestNewReportsService(t *testing.T) {
 	horizonClient := &horizonclient.MockClient{}
 	distSvc := mocks.NewMockDistributionAccountService(t)
 	models := &data.Models{}
 
-	service := NewStatementService(horizonClient, distSvc, models)
+	service := NewReportsService(horizonClient, distSvc, models)
 
 	require.NotNil(t, service)
 	assert.Equal(t, horizonClient, service.HorizonClient)
@@ -36,7 +36,7 @@ func TestNewStatementService(t *testing.T) {
 	assert.Equal(t, models, service.Models)
 }
 
-func TestStatementServiceGetStatement(t *testing.T) {
+func TestReportsServiceGetStatement(t *testing.T) {
 	ctx := context.Background()
 	accountAddress := keypair.MustRandom().Address()
 	stellarAccount := schema.NewStellarEnvTransactionAccount(accountAddress)
@@ -48,7 +48,7 @@ func TestStatementServiceGetStatement(t *testing.T) {
 		distSvc := mocks.NewMockDistributionAccountService(t)
 		models := &data.Models{}
 
-		service := NewStatementService(horizonClient, distSvc, models)
+		service := NewReportsService(horizonClient, distSvc, models)
 		nonStellarAccount := schema.TransactionAccount{
 			Address: "circle:123",
 			Type:    schema.DistributionAccountCircleDBVault,
@@ -68,7 +68,7 @@ func TestStatementServiceGetStatement(t *testing.T) {
 		models, err := data.NewModels(dbPool)
 		require.NoError(t, err)
 
-		service := NewStatementService(horizonClient, distSvc, models)
+		service := NewReportsService(horizonClient, distSvc, models)
 
 		result, err := service.GetStatement(ctx, &stellarAccount, "NONEXISTENT", fromDate, toDate)
 
@@ -96,7 +96,7 @@ func TestStatementServiceGetStatement(t *testing.T) {
 		horizonClient.On("Transactions", mock.AnythingOfType("horizonclient.TransactionRequest")).
 			Return(emptyPage, nil).Twice()
 
-		service := NewStatementService(horizonClient, distSvc, models)
+		service := NewReportsService(horizonClient, distSvc, models)
 
 		result, err := service.GetStatement(ctx, &stellarAccount, "XLM", fromDate, toDate)
 
@@ -132,7 +132,7 @@ func TestStatementServiceGetStatement(t *testing.T) {
 		horizonClient.On("Transactions", mock.AnythingOfType("horizonclient.TransactionRequest")).
 			Return(emptyPage, nil).Twice()
 
-		service := NewStatementService(horizonClient, distSvc, models)
+		service := NewReportsService(horizonClient, distSvc, models)
 
 		result, err := service.GetStatement(ctx, &stellarAccount, "", fromDate, toDate)
 
@@ -143,7 +143,7 @@ func TestStatementServiceGetStatement(t *testing.T) {
 	})
 }
 
-func TestStatementService_resolveAsset(t *testing.T) {
+func TestReportsService_resolveAsset(t *testing.T) {
 	ctx := context.Background()
 	horizonClient := &horizonclient.MockClient{}
 	distSvc := mocks.NewMockDistributionAccountService(t)
@@ -151,7 +151,7 @@ func TestStatementService_resolveAsset(t *testing.T) {
 	models, err := data.NewModels(dbPool)
 	require.NoError(t, err)
 
-	service := NewStatementService(horizonClient, distSvc, models)
+	service := NewReportsService(horizonClient, distSvc, models)
 
 	t.Run("resolves XLM alias", func(t *testing.T) {
 		asset, err := service.resolveAsset(ctx, assets.XLMAssetCodeAlias)
@@ -190,7 +190,7 @@ func TestStatementService_resolveAsset(t *testing.T) {
 	})
 }
 
-func TestStatementService_resolveCounterparty(t *testing.T) {
+func TestReportsService_resolveCounterparty(t *testing.T) {
 	ctx := context.Background()
 	horizonClient := &horizonclient.MockClient{}
 	distSvc := mocks.NewMockDistributionAccountService(t)
@@ -198,7 +198,7 @@ func TestStatementService_resolveCounterparty(t *testing.T) {
 	models, err := data.NewModels(dbPool)
 	require.NoError(t, err)
 
-	service := NewStatementService(horizonClient, distSvc, models)
+	service := NewReportsService(horizonClient, distSvc, models)
 
 	t.Run("returns empty string when wallet not found", func(t *testing.T) {
 		address := keypair.MustRandom().Address()
@@ -376,7 +376,7 @@ func TestExtractPaymentOperation(t *testing.T) {
 	})
 }
 
-func TestStatementService_GetStatement_ErrorCases(t *testing.T) {
+func TestReportsService_GetStatement_ErrorCases(t *testing.T) {
 	ctx := context.Background()
 	accountAddress := keypair.MustRandom().Address()
 	stellarAccount := schema.NewStellarEnvTransactionAccount(accountAddress)
@@ -393,7 +393,7 @@ func TestStatementService_GetStatement_ErrorCases(t *testing.T) {
 		distSvc.On("GetBalances", ctx, &stellarAccount).
 			Return(nil, errors.New("horizon error")).Once()
 
-		service := NewStatementService(horizonClient, distSvc, models)
+		service := NewReportsService(horizonClient, distSvc, models)
 
 		result, err := service.GetStatement(ctx, &stellarAccount, "", fromDate, toDate)
 
@@ -419,7 +419,7 @@ func TestStatementService_GetStatement_ErrorCases(t *testing.T) {
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).
 			Return(decimal.Zero, ErrNoBalanceForAsset).Once()
 
-		service := NewStatementService(horizonClient, distSvc, models)
+		service := NewReportsService(horizonClient, distSvc, models)
 
 		result, err := service.GetStatement(ctx, &stellarAccount, "", fromDate, toDate)
 
