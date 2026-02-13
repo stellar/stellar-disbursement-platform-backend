@@ -434,9 +434,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
-		// Statements
-		{http.MethodGet, "/statements"},
-		{http.MethodGet, "/statements/export"},
+		// Reports
+		{http.MethodGet, "/reports/statement"},
+		{http.MethodGet, "/reports/payment/1234"},
 		// Exports
 		{http.MethodGet, "/exports/disbursements"},
 		{http.MethodGet, "/exports/payments"},
