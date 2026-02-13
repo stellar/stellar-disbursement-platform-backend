@@ -14,7 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- Fix short linking is not enabled by default [#1051](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1051)
+- Fix short linking is not enabled by default. [#1051](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1051)
+- Fix Docker Compose build racing for e2e integration tests. [#1054](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1054)
 
 
 ## [6.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.1...6.1.0))
