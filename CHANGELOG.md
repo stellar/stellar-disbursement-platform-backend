@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+
 ### Added
 
 - Add integration tests for embedded wallets. [1041](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1041)
@@ -16,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Fix short linking is not enabled by default. [#1051](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1051)
 - Fix Docker Compose build racing for e2e integration tests. [#1054](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1054)
-
+- Make Circle Transfer Request Insert operation atomic. [#1050](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1050)
 
 ## [6.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.1...6.1.0))
 

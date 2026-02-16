@@ -29,14 +29,14 @@ func Test_CircleTransferRequestModel_Insert(t *testing.T) {
 	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns error if paymentID is empty", func(t *testing.T) {
-		circleEntry, err := m.Insert(ctx, "")
+		circleEntry, err := m.Insert(ctx, dbConnectionPool, "")
 		require.EqualError(t, err, "paymentID is required")
 		require.Nil(t, circleEntry)
 	})
 
 	t.Run("🎉 successfully inserts a circle transfer request", func(t *testing.T) {
 		paymentID := "payment-id"
-		circleEntry, err := m.Insert(ctx, paymentID)
+		circleEntry, err := m.Insert(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 		require.NotNil(t, circleEntry)
 
@@ -49,10 +49,10 @@ func Test_CircleTransferRequestModel_Insert(t *testing.T) {
 
 	t.Run("database constraint that prevents repeated rows with the same paymentID and status!=failed", func(t *testing.T) {
 		paymentID := "payment-id-2"
-		circleEntry, err := m.Insert(ctx, paymentID)
+		circleEntry, err := m.Insert(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 
-		_, err = m.Insert(ctx, paymentID)
+		_, err = m.Insert(ctx, dbConnectionPool, paymentID)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "duplicate key value violates unique constraint")
 
@@ -65,7 +65,7 @@ func Test_CircleTransferRequestModel_Insert(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		_, err = m.Insert(ctx, paymentID)
+		_, err = m.Insert(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 	})
 }
@@ -104,7 +104,7 @@ func Test_CircleTransferRequestModel_Update(t *testing.T) {
 
 	t.Run("🎉 successfully updates a circle transfer request (completedAt==nil)", func(t *testing.T) {
 		paymentID := "payment-id"
-		circleEntry, err := m.Insert(ctx, paymentID)
+		circleEntry, err := m.Insert(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 
 		updatedCircleEntry, err := m.Update(ctx, dbConnectionPool, circleEntry.IdempotencyKey, updateRequest)
@@ -122,7 +122,7 @@ func Test_CircleTransferRequestModel_Update(t *testing.T) {
 
 	t.Run("🎉 successfully updates a circle transfer request(completedAt!=nil)", func(t *testing.T) {
 		paymentID := "payment-id2"
-		circleEntry, err := m.Insert(ctx, paymentID)
+		circleEntry, err := m.Insert(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 
 		updateRequest2 := updateRequest
@@ -152,7 +152,7 @@ func Test_CircleTransferRequestModel_Get_and_GetAll(t *testing.T) {
 	now := time.Now()
 	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
 
-	circleEntry1, outerErr := m.Insert(ctx, "payment-id-1")
+	circleEntry1, outerErr := m.Insert(ctx, dbConnectionPool, "payment-id-1")
 	require.NoError(t, outerErr)
 	circleEntry1, outerErr = m.Update(ctx, dbConnectionPool, circleEntry1.IdempotencyKey, CircleTransferRequestUpdate{
 		CircleTransferID: "circle-transfer-id-1",
@@ -160,7 +160,7 @@ func Test_CircleTransferRequestModel_Get_and_GetAll(t *testing.T) {
 		SyncAttempts:     10,
 	})
 	require.NoError(t, outerErr)
-	circleEntry2, outerErr := m.Insert(ctx, "payment-id-2")
+	circleEntry2, outerErr := m.Insert(ctx, dbConnectionPool, "payment-id-2")
 	require.NoError(t, outerErr)
 	circleEntry2, outerErr = m.Update(ctx, dbConnectionPool, circleEntry2.IdempotencyKey, CircleTransferRequestUpdate{
 		CircleTransferID: "circle-transfer-id-2",
@@ -304,7 +304,7 @@ func Test_CircleTransferRequestModel_GetIncompleteByPaymentID(t *testing.T) {
 
 	t.Run("return nil if the existing circle transfer is in completed_at state", func(t *testing.T) {
 		paymentID := "payment-id"
-		circleEntry, err := m.Insert(ctx, paymentID)
+		circleEntry, err := m.Insert(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 
 		_, err = m.Update(ctx, dbConnectionPool, circleEntry.IdempotencyKey, CircleTransferRequestUpdate{
@@ -323,7 +323,7 @@ func Test_CircleTransferRequestModel_GetIncompleteByPaymentID(t *testing.T) {
 
 	t.Run("🎉 successfully finds an incomplete circle transfer request", func(t *testing.T) {
 		paymentID := "payment-id"
-		_, err := m.Insert(ctx, paymentID)
+		_, err := m.Insert(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 
 		circleEntry, err := m.GetIncompleteByPaymentID(ctx, dbConnectionPool, paymentID)
@@ -378,7 +378,7 @@ func Test_CircleTransferRequestModel_GetOrInsert(t *testing.T) {
 	})
 
 	t.Run("🎉 successfully finds an existing circle transfer request", func(t *testing.T) {
-		insertedEntry, err := m.Insert(ctx, payment1.ID)
+		insertedEntry, err := m.Insert(ctx, dbConnectionPool, payment1.ID)
 		require.NoError(t, err)
 
 		gotEntry, err := m.GetOrInsert(ctx, payment1.ID)
@@ -533,11 +533,7 @@ func Test_buildCircleTransferRequestQuery(t *testing.T) {
 }
 
 func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
 	ctx := context.Background()
 	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
@@ -594,17 +590,21 @@ func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing
 			paymentIDs: []string{payment3.ID},
 			initFn: func(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 				// insert a transfer for payment 3
-				tr, err := m.Insert(ctx, payment3.ID)
+				tr, err := m.Insert(ctx, sqlExec, payment3.ID)
 				require.NoError(t, err)
 
-				_, err = m.Update(ctx, dbConnectionPool, tr.IdempotencyKey, CircleTransferRequestUpdate{
+				_, err = m.Update(ctx, sqlExec, tr.IdempotencyKey, CircleTransferRequestUpdate{
 					CircleTransferID: "circle-transfer-id-3",
 					Status:           CircleTransferStatusFailed,
 				})
 				require.NoError(t, err)
 
 				// insert another transfer for payment 3
-				tr2, err := m.Insert(ctx, payment3.ID)
+				tr2, err := m.Insert(ctx, sqlExec, payment3.ID)
+				require.NoError(t, err)
+
+				// updated the created_at of the second transfer to be later than the first transfer, so that the second transfer is returned by GetCurrentTransfersForPaymentIDs
+				_, err = sqlExec.ExecContext(ctx, `UPDATE circle_transfer_requests SET created_at = created_at + INTERVAL '1 second' WHERE idempotency_key = $1`, tr2.IdempotencyKey)
 				require.NoError(t, err)
 
 				_, err = m.Update(ctx, sqlExec, tr2.IdempotencyKey, CircleTransferRequestUpdate{
@@ -625,19 +625,19 @@ func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing
 			name:       "🎉 successfully finds circle transfer requests for multiple payments",
 			paymentIDs: []string{payment1.ID, payment2.ID},
 			initFn: func(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-				transfer1, err := m.Insert(ctx, payment1.ID)
+				transfer1, err := m.Insert(ctx, sqlExec, payment1.ID)
 				require.NoError(t, err)
 
-				_, err = m.Update(ctx, dbConnectionPool, transfer1.IdempotencyKey, CircleTransferRequestUpdate{
+				_, err = m.Update(ctx, sqlExec, transfer1.IdempotencyKey, CircleTransferRequestUpdate{
 					CircleTransferID: "circle-transfer-id-1",
 					Status:           CircleTransferStatusFailed,
 				})
 				require.NoError(t, err)
 
-				transfer2, err := m.Insert(ctx, payment2.ID)
+				transfer2, err := m.Insert(ctx, sqlExec, payment2.ID)
 				require.NoError(t, err)
 
-				_, err = m.Update(ctx, dbConnectionPool, transfer2.IdempotencyKey, CircleTransferRequestUpdate{
+				_, err = m.Update(ctx, sqlExec, transfer2.IdempotencyKey, CircleTransferRequestUpdate{
 					CircleTransferID: "circle-transfer-id-2",
 					Status:           CircleTransferStatusPending,
 				})
@@ -674,7 +674,7 @@ func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing
 				assert.Equal(t, len(tc.expectedResult), len(result))
 				for expectedPaymentID, expectedResult := range tc.expectedResult {
 					assert.NotNil(t, result[expectedPaymentID])
-					assert.Equal(t, expectedResult.CircleTransferID, result[expectedPaymentID].CircleTransferID)
+					assert.Equal(t, *expectedResult.CircleTransferID, *result[expectedPaymentID].CircleTransferID)
 					assert.Equal(t, expectedResult.PaymentID, result[expectedPaymentID].PaymentID)
 				}
 			}
@@ -714,7 +714,7 @@ func Test_CircleTransferRequestModel_GetPendingReconciliation(t *testing.T) {
 
 		for groupIdx, tt := range transferTypes {
 			for i := 0; i < tt.count; i++ {
-				transfer, err := m.Insert(ctx, fmt.Sprintf("payment-id-g%d-%d", groupIdx, i))
+				transfer, err := m.Insert(ctx, dbConnectionPool, fmt.Sprintf("payment-id-g%d-%d", groupIdx, i))
 				require.NoError(t, err)
 
 				_, err = m.Update(ctx, dbConnectionPool, transfer.IdempotencyKey, CircleTransferRequestUpdate{
