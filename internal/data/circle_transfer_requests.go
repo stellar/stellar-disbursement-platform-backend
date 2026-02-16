@@ -75,7 +75,7 @@ func (m CircleTransferRequestModel) GetOrInsert(ctx context.Context, paymentID s
 			return nil, fmt.Errorf("payment with ID %s does not exist: %w", paymentID, ErrRecordNotFound)
 		}
 
-		circleTransferRequest, err := m.GetIncompleteByPaymentID(ctx, m.dbConnectionPool, paymentID)
+		circleTransferRequest, err := m.GetIncompleteByPaymentID(ctx, dbTx, paymentID)
 		if err != nil && !errors.Is(err, ErrRecordNotFound) {
 			return nil, fmt.Errorf("finding incomplete circle transfer by payment ID: %w", err)
 		}
@@ -84,11 +84,11 @@ func (m CircleTransferRequestModel) GetOrInsert(ctx context.Context, paymentID s
 			return circleTransferRequest, nil
 		}
 
-		return m.Insert(ctx, paymentID)
+		return m.Insert(ctx, dbTx, paymentID)
 	})
 }
 
-func (m CircleTransferRequestModel) Insert(ctx context.Context, paymentID string) (*CircleTransferRequest, error) {
+func (m CircleTransferRequestModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, paymentID string) (*CircleTransferRequest, error) {
 	if paymentID == "" {
 		return nil, fmt.Errorf("paymentID is required")
 	}
@@ -103,7 +103,7 @@ func (m CircleTransferRequestModel) Insert(ctx context.Context, paymentID string
 	`
 
 	var circleTransferRequest CircleTransferRequest
-	err := m.dbConnectionPool.GetContext(ctx, &circleTransferRequest, query, paymentID)
+	err := sqlExec.GetContext(ctx, &circleTransferRequest, query, paymentID)
 	if err != nil {
 		return nil, fmt.Errorf("inserting circle transfer request: %w", err)
 	}
@@ -120,7 +120,7 @@ func (m CircleTransferRequestModel) GetIncompleteByPaymentID(ctx context.Context
 		SortBy:    "created_at",
 		SortOrder: SortOrderDESC,
 	}
-	return m.Get(ctx, m.dbConnectionPool, queryParams)
+	return m.Get(ctx, sqlExec, queryParams)
 }
 
 const (
