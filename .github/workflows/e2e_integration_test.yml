@@ -98,7 +98,7 @@ jobs:
       HORIZON_URL: ${{ matrix.HORIZON_URL }}
       CIRCLE_API_TYPE: ${{ matrix.CIRCLE_API_TYPE || 'TRANSFERS' }}
       RPC_URL: ${{ matrix.RPC_URL }}
-      ENABLE_EMBEDDED_WALLETS: ${{ matrix.ENABLE_EMBEDDED_WALLETS || 'false' }}
+      ENABLE_EMBEDDED_WALLETS: ${{ matrix.ENABLE_EMBEDDED_WALLETS}}
       EMBEDDED_WALLETS_WASM_HASH: ${{ matrix.EMBEDDED_WALLETS_WASM_HASH }}
       TEST_TYPE: ${{ matrix.TEST_TYPE }}
     steps:
