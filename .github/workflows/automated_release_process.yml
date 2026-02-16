@@ -48,10 +48,149 @@ jobs:
       - name: Create release/${{ inputs.version }} branch
         run: |
           git checkout -b release/${{ inputs.version }} origin/${{ github.ref_name }}
-          sed -i 's/const Version = ".*"/const Version = "${{ inputs.version }}"/' main.go
-          git add main.go
-          git commit -m "chore: bump version to ${{ inputs.version }}"
-          git push origin release/${{ inputs.version }}
+
+      - name: Install Node.js for tooling
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
+      - name: Bump all version references
+        run: |
+          VERSION="${{ inputs.version }}"
+          sed -i "s/^const Version = \".*\"/const Version = \"$VERSION\"/" main.go
+          sed -i "s/^version: \".*\"/version: \"$VERSION\"/" helmchart/sdp/Chart.yaml
+          sed -i "s/^appVersion: \".*\"/appVersion: \"$VERSION\"/" helmchart/sdp/Chart.yaml
+          sed -i "/^  image:/,/^  [a-z]/ { s|^    tag: \".*\"|    tag: \"$VERSION\"| }" helmchart/sdp/values.yaml
+          sed -i "s|fullName: stellar/stellar-disbursement-platform-frontend:.*|fullName: stellar/stellar-disbursement-platform-frontend:$VERSION|" helmchart/sdp/values.yaml
+          git add main.go helmchart/sdp/Chart.yaml helmchart/sdp/values.yaml
+
+      - name: Generate CHANGELOG entry
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ inputs.version }}"
+          REPO="${{ github.repository }}"
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          BASE="${LAST_TAG:-$(git rev-list --max-parents=0 HEAD)}"
+          RELEASE_URL="https://github.com/${REPO}/releases/tag/${VERSION}"
+          COMPARE_URL="https://github.com/${REPO}/compare/${BASE}...${VERSION}"
+          VERSION_HEADER="## [${VERSION}](${RELEASE_URL}) ([diff](${COMPARE_URL}))"
+
+          if ! grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "CHANGELOG.md is missing the '## [Unreleased]' section"
+            exit 1
+          fi
+
+          git log "$BASE"..HEAD --pretty=format:"%h %s" --no-merges > /tmp/commits.txt
+          awk '
+            /^## \[Unreleased\]/ { in_section=1; next }
+            /^## \[/ { if (in_section) exit }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/unreleased-body.md
+
+          : > /tmp/new-entries.md
+          if [ -s /tmp/commits.txt ] && [ -n "${GH_TOKEN:-}" ]; then
+            copilot -sp "$(cat <<PROMPT
+          You are a CHANGELOG generator for ${REPO}.
+
+          Below are git commits since the last release (${BASE}):
+          $(cat /tmp/commits.txt)
+
+          The current Unreleased section of CHANGELOG.md is:
+          $(cat /tmp/unreleased-body.md)
+
+          Your job:
+          1. Identify commits NOT already covered in the Unreleased section above.
+          2. For each missing commit, categorize it: Added, Changed, Fixed, or Security and Dependencies.
+          3. Format: - Description [#PR](https://github.com/${REPO}/pull/PR)
+          4. Extract PR numbers from subjects (e.g. (#1049) -> 1049).
+          5. Skip merge commits and chore-only commits that don't add functionality.
+          6. Output ONLY the new entries grouped by category (### Added, ### Changed, etc). No header, no explanation, no code blocks.
+          7. If all commits are already covered, output nothing.
+          PROMPT
+          )" > /tmp/new-entries.md 2>/dev/null || true
+          else
+            echo "Skipping Copilot changelog gap fill (no commits or missing COPILOT_GITHUB_TOKEN)"
+          fi
+
+          cp /tmp/unreleased-body.md /tmp/release-body.md
+          if [ -s /tmp/new-entries.md ]; then
+            if grep -q '[^[:space:]]' /tmp/release-body.md; then
+              printf "\n\n" >> /tmp/release-body.md
+            fi
+            cat /tmp/new-entries.md >> /tmp/release-body.md
+          fi
+          if ! grep -q '[^[:space:]]' /tmp/release-body.md; then
+            echo "- Release ${VERSION}" > /tmp/release-body.md
+          fi
+
+          {
+            awk '
+              BEGIN { found=0 }
+              /^## \[Unreleased\]/ {
+                print "## [Unreleased]"
+                print ""
+                found=1
+                exit
+              }
+              { print }
+              END { if (!found) exit 1 }
+            ' CHANGELOG.md
+
+            echo "${VERSION_HEADER}"
+            echo
+            cat /tmp/release-body.md
+            echo
+
+            awk '
+              BEGIN { in_unreleased=0; print_rest=0 }
+              /^## \[Unreleased\]/ { in_unreleased=1; next }
+              in_unreleased && /^## \[/ { print_rest=1 }
+              print_rest { print }
+            ' CHANGELOG.md
+          } > /tmp/changelog-updated.md
+
+          mv /tmp/changelog-updated.md CHANGELOG.md
+
+          if ! git diff --quiet CHANGELOG.md 2>/dev/null; then
+            git add CHANGELOG.md
+          fi
+        continue-on-error: true
+
+      - name: Regenerate Helm README
+        run: |
+          npm install -g @bitnami/readme-generator-for-helm@2.7.0 2>/dev/null
+          readme-generator -v helmchart/sdp/values.yaml -r helmchart/sdp/README.md
+          if ! git diff --quiet helmchart/sdp/README.md; then
+            git add helmchart/sdp/README.md
+          fi
+
+      - name: Detect contract changes
+        id: detect_contracts
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          BASE="${LAST_TAG:-origin/main}"
+          CHANGED=$(git diff --name-only "$BASE"...HEAD -- contracts/ wasms/ 2>/dev/null || true)
+          if [ -n "$CHANGED" ]; then
+            echo "contracts_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "contracts_changed=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Commit automated changes
+        run: |
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: automated release preparation for ${{ inputs.version }}"
+            git push origin release/${{ inputs.version }}
+          else
+            echo "No changes to commit"
+          fi
 
       - name: Create main PR
         id: create_main_pr
@@ -74,8 +213,16 @@ jobs:
       - name: Create develop PR
         id: create_dev_pr
         run: |
+          CONTRACTS_STATUS="${{ steps.detect_contracts.outputs.contracts_changed }}"
+          if [ "$CONTRACTS_STATUS" = "true" ]; then
+            CONTRACTS_MSG="⚠️ **Contracts changed** - WASM artifacts need to be updated"
+          else
+            CONTRACTS_MSG="✅ No contract changes detected"
+          fi
+
           DEV_PR_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
               -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
+              -e "s|{{contracts_changed}}|${CONTRACTS_MSG}|g" \
               .github/workflows/templates/release-pr-dev.md | \
           gh pr create --repo ${{ env.REPO_ORG }}/${{ env.REPO_NAME }} \
             --base develop \
@@ -86,17 +233,32 @@ jobs:
             --reviewer "${{ env.REVIEWER }}")
           echo "dev_pr_url=${DEV_PR_URL}" >> $GITHUB_OUTPUT
 
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${{ inputs.version }}"
+          python3 -c "
+          import re, sys
+          text = open('CHANGELOG.md').read()
+          m = re.search(r'(## \[' + re.escape('$VERSION') + r'\].*?)(?=\n## \[|\Z)', text, re.DOTALL)
+          sys.stdout.write(m.group(1) if m else '')
+          " > /tmp/release-notes.md
+
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "Initial draft for release \`$VERSION\`" > /tmp/release-notes.md
+          fi
+
       - name: Create Draft Release
         id: create_release
         run: |
-          RELEASE_URL=$(gh release create ${{ inputs.version }} \
+          RELEASE_URL=$(gh release create "${{ inputs.version }}" \
             --title "${{ inputs.version }}" \
             --draft \
-            --notes "Initial draft for release \`${{ inputs.version }}\`")
+            --notes-file /tmp/release-notes.md)
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
 
       - name: Create Issue
         id: create_issue
+        if: ${{ false }} # Disabled for workflow testing; re-enable after validation.
         run: |
           ISSUE_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
               -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \

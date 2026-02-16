@@ -20,5 +20,6 @@ Release `{{version}}`
 ### Publishing the Release
 
 - [ ] After the main PR is merged, publish the draft release: {{ release_url }} -> [Release Page](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/{{version}})
+  - Release notes have been pre-populated from CHANGELOG.md — review before publishing
   - [ ] Verify the Docker image is published to [Docker Hub](https://hub.docker.com/r/stellar/stellar-disbursement-platform-backend/tags)
 - [ ] Propagate the helmchart version update to the [stellar/helm-charts](https://github.com/stellar/helm-charts) repository
