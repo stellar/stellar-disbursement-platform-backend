@@ -12,6 +12,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
+// MaxRPCRequestBodySize is the maximum allowed size for RPC proxy request bodies (512 KB).
+const MaxRPCRequestBodySize = 512 * 1024
+
 // RPCProxyHandler proxies JSON-RPC requests to the underlying Stellar RPC instance, allowing embedded
 // wallets and the SDP frontends to interact with the Stellar network.
 type RPCProxyHandler struct {
@@ -40,9 +43,12 @@ func (h RPCProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, MaxRPCRequestBodySize)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		httperror.BadRequest("Failed to read request body", err, nil).Render(w)
+		httperror.BadRequest("Failed to read request body", err, map[string]interface{}{
+			"details": "request body too large or unreadable",
+		}).Render(w)
 		return
 	}
 	defer func(body io.ReadCloser) {
