@@ -36,6 +36,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Bump the minor-and-patch group across 1 directory with 10 updates [#1069](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1069)
 - Bump time from 0.3.41 to 0.3.47 in /contracts in the cargo group [#1045](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1045)
 
+### Security
+
+- Add global `MaxBodySize` middleware (10 MB) to all routes on both the SDP and admin servers to prevent unbounded request body sizes (CWE-770). [#1066](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1066)
+
 ## [6.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.1...6.1.0))
 
 ### Fixed

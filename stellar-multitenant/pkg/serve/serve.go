@@ -129,6 +129,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 	mux.Use(chimiddleware.RealIP)
 	mux.Use(supporthttp.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
+	mux.Use(middleware.MaxBodySize(middleware.DefaultMaxRequestBodySize))
 
 	mux.Get("/health", httphandler.HealthHandler{
 		GitCommit: opts.GitCommit,
