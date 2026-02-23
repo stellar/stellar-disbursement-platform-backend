@@ -44,7 +44,7 @@ type DisbursementHandler struct {
 	DistributionAccountResolver   signing.DistributionAccountResolver
 }
 
-const DefaultMaxCSVUploadSizeBytes = 10 * 1024 * 1024 // 10 MB
+const DefaultMaxCSVUploadSizeBytes = 500 * data.MaxInstructionsPerDisbursement // 500 bytes per instruction.
 
 type PostDisbursementRequest struct {
 	Name                                string                       `json:"name"`
