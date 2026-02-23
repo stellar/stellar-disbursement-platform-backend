@@ -749,7 +749,7 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 		sep10ClientDomain := "www.test_wallet.com"
 
 		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain, false)
-		require.EqualError(t, err, "error getting or creating wallet: pq: duplicate key value violates unique constraint \"wallets_name_key\"")
+		require.ErrorContains(t, err, "error getting or creating wallet: pq: duplicate key value violates unique constraint \"wallets_name_key\"")
 		assert.Empty(t, wallet)
 	})
 

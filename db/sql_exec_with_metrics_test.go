@@ -166,7 +166,7 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
 		err = sqlExecWithMetrics.SelectContext(ctx, &mDest, mQuery)
-		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
+		require.ErrorContains(t, err, `pq: syntax error at or near "invalid"`)
 	})
 }
 
@@ -236,7 +236,7 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
 		rows, err := sqlExecWithMetrics.QueryContext(ctx, mQuery)
-		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
+		require.ErrorContains(t, err, `pq: syntax error at or near "invalid"`)
 
 		assert.Nil(t, rows)
 		if rows != nil {
@@ -310,7 +310,7 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
 		rows, err := sqlExecWithMetrics.QueryxContext(ctx, mQuery)
-		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
+		require.ErrorContains(t, err, `pq: syntax error at or near "invalid"`)
 
 		assert.Nil(t, rows)
 	})
@@ -373,7 +373,7 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 
 		var code string
 		err = sqlExecWithMetrics.QueryRowxContext(ctx, mQuery).Scan(&code)
-		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
+		require.ErrorContains(t, err, `pq: syntax error at or near "invalid"`)
 	})
 }
 
@@ -432,7 +432,7 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
 		_, err = sqlExecWithMetrics.ExecContext(ctx, mQuery, "EURT")
-		require.EqualError(t, err, `pq: relation "invalid_table" does not exist`)
+		require.ErrorContains(t, err, `pq: relation "invalid_table" does not exist`)
 	})
 }
 

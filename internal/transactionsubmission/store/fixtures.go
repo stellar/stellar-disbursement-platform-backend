@@ -3,15 +3,15 @@ package store
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"math/big"
 	"testing"
 	"time"
 
-	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/keypair"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -66,12 +66,12 @@ func CreateTransactionFixture(
 		txFixture.DestinationAddress = keypair.MustRandom().Address()
 	}
 
-	completedAt := pq.NullTime{}
+	completedAt := sql.NullTime{}
 	if txFixture.Status == TransactionStatusSuccess || txFixture.Status == TransactionStatusError {
 		timeElapsed, err := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
 		require.NoError(t, err)
 		randomCompletedAt := time.Unix(timeElapsed.Int64(), 0)
-		completedAt = pq.NullTime{Time: randomCompletedAt, Valid: true}
+		completedAt = sql.NullTime{Time: randomCompletedAt, Valid: true}
 	}
 
 	query := `
