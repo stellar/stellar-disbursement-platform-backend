@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,6 +50,34 @@ func Test_RPCProxyHandler_ServeHTTP(t *testing.T) {
 			setupMockRPC:      nil,
 			expectedStatus:    http.StatusBadRequest,
 			expectedBodyMatch: "",
+		},
+		{
+			name:              "returns error when request body exceeds max size",
+			rpcURL:            "https://rpc.example.com",
+			requestMethod:     http.MethodPost,
+			requestBody:       strings.Repeat("x", MaxRPCRequestBodySize+1),
+			setupMockRPC:      nil,
+			expectedStatus:    http.StatusBadRequest,
+			expectedBodyMatch: "request body too large or unreadable",
+		},
+		{
+			name:          "accepts request body at the max size limit",
+			requestMethod: http.MethodPost,
+			requestBody:   `{"jsonrpc":"2.0","method":"getHealth","id":1,"params":"` + strings.Repeat("x", MaxRPCRequestBodySize-57) + `"}`,
+			setupMockRPC: func(t *testing.T) *httptest.Server {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					body, err := io.ReadAll(r.Body)
+					require.NoError(t, err)
+					assert.Equal(t, MaxRPCRequestBodySize, len(body))
+
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusOK)
+					_, err = w.Write([]byte(`{"jsonrpc":"2.0","result":{"status":"healthy"},"id":1}`))
+					require.NoError(t, err)
+				}))
+			},
+			expectedStatus:    http.StatusOK,
+			expectedBodyMatch: "healthy",
 		},
 		{
 			name:          "proxies request to RPC without auth headers",
