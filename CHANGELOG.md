@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [UNRELEASED]
 
+### Fixed
+
+- Fix unbounded CSV upload size and pagination `page_limit` allowing resource exhaustion. [#1064](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1064)
+
 ### Added
 
 - Added Bridge Integration API endpoints to the backend:

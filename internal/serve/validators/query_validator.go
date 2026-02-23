@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -18,10 +19,15 @@ type QueryValidator struct {
 	AllowedFilters    []data.FilterKey
 }
 
+const (
+	DefaultPageLimit = 20
+	MaxPageLimit     = 100
+)
+
 // ParseParametersFromRequest parses query parameters from the request and returns a QueryParams struct.
 func (qv *QueryValidator) ParseParametersFromRequest(r *http.Request) *data.QueryParams {
 	page := qv.validateAndGetIntParams(r, "page", 1)
-	pageLimit := qv.validateAndGetIntParams(r, "page_limit", 20)
+	pageLimit := qv.validateAndGetIntParams(r, "page_limit", DefaultPageLimit)
 
 	query := r.URL.Query()
 	sortBy := data.SortField(query.Get("sort"))
@@ -76,6 +82,16 @@ func (qv *QueryValidator) validateAndGetIntParams(r *http.Request, param string,
 	intValue, err := strconv.Atoi(value)
 	if err != nil {
 		qv.CheckError(err, param, "parameter must be an integer")
+		return defaultValue
+	}
+
+	if intValue <= 0 {
+		qv.AddError(param, "parameter must be a positive integer")
+		return defaultValue
+	}
+
+	if param == "page_limit" && intValue > MaxPageLimit {
+		qv.AddError(param, fmt.Sprintf("parameter must be less than or equal to %d", MaxPageLimit))
 		return defaultValue
 	}
 

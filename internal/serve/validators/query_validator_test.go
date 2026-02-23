@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,7 +31,7 @@ func Test_QueryValidator_ParseQueryParameters(t *testing.T) {
 			expectedParams: &data.QueryParams{
 				Query:     "",
 				Page:      1,
-				PageLimit: 20,
+				PageLimit: DefaultPageLimit,
 				SortBy:    data.SortFieldName,
 				SortOrder: data.SortOrderASC,
 				Filters:   map[data.FilterKey]interface{}{},
@@ -83,6 +84,33 @@ func Test_QueryValidator_ParseQueryParameters(t *testing.T) {
 			hasErrors:      true,
 			expectedErrors: map[string]interface{}{
 				"page_limit": "parameter must be an integer",
+			},
+		},
+		{
+			name:           "page must be positive",
+			url:            "http://example.com/test?page=0",
+			expectedParams: &data.QueryParams{},
+			hasErrors:      true,
+			expectedErrors: map[string]interface{}{
+				"page": "parameter must be a positive integer",
+			},
+		},
+		{
+			name:           "page_limit must be positive",
+			url:            "http://example.com/test?page_limit=0",
+			expectedParams: &data.QueryParams{},
+			hasErrors:      true,
+			expectedErrors: map[string]interface{}{
+				"page_limit": "parameter must be a positive integer",
+			},
+		},
+		{
+			name:           "page_limit must be under max",
+			url:            fmt.Sprintf("http://example.com/test?page_limit=%d", MaxPageLimit+1),
+			expectedParams: &data.QueryParams{},
+			hasErrors:      true,
+			expectedErrors: map[string]interface{}{
+				"page_limit": fmt.Sprintf("parameter must be less than or equal to %d", MaxPageLimit),
 			},
 		},
 		{
@@ -155,6 +183,22 @@ func Test_QueryValidator_ValidateAndGetIntParams(t *testing.T) {
 			name:         "invalid parameter",
 			param:        "limit",
 			url:          "http://example.com/test?limit=abc",
+			defaultValue: 10,
+			expected:     10,
+			hasError:     true,
+		},
+		{
+			name:         "invalid parameter - zero",
+			param:        "limit",
+			url:          "http://example.com/test?limit=0",
+			defaultValue: 10,
+			expected:     10,
+			hasError:     true,
+		},
+		{
+			name:         "invalid parameter - negative",
+			param:        "limit",
+			url:          "http://example.com/test?limit=-1",
 			defaultValue: 10,
 			expected:     10,
 			hasError:     true,
