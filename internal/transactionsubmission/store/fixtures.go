@@ -11,10 +11,10 @@ import (
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/keypair"
-	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 // CreateTransactionFixtures creates count number submitter transactions
