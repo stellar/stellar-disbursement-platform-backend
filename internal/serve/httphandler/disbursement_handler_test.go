@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -632,6 +634,22 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be an integer"}}`,
 		},
 		{
+			name: "returns error when page_limit is zero",
+			queryParams: map[string]string{
+				"page_limit": "0",
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be a positive integer"}}`,
+		},
+		{
+			name: "returns error when page_limit exceeds max",
+			queryParams: map[string]string{
+				"page_limit": fmt.Sprintf("%d", validators.MaxPageLimit+1),
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   fmt.Sprintf(`{"error":"request invalid", "extras":{"page_limit":"parameter must be less than or equal to %d"}}`, validators.MaxPageLimit),
+		},
+		{
 			name: "returns error when status is invalid",
 			queryParams: map[string]string{
 				"status": "invalid_status",
@@ -1190,6 +1208,16 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			},
 			expectedStatus:  http.StatusOK,
 			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           "🔴 csv upload too large",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{strings.Repeat("a", int(DefaultMaxCSVUploadSizeBytes)+1024*1024), "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "request too large",
 		},
 		{
 			name:           "🔴 .bat is rejected",

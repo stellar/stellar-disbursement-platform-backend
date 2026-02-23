@@ -18,6 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Fix short linking is not enabled by default. [#1051](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1051)
 - Fix Docker Compose build racing for e2e integration tests. [#1054](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1054)
 - Make Circle Transfer Request Insert operation atomic. [#1050](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1050)
+- Fix unbounded CSV upload size and pagination page_limit allowing resource exhaustion. [#1064](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1064)
+
+### Security
+
+- Add request body size limit to RPC proxy handler to prevent unbounded memory allocation (CWE-770). [#1065](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1065)
 
 ## [6.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.1...6.1.0))
 
