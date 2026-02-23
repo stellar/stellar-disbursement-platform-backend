@@ -414,6 +414,138 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 			assert.Nil(t, tx)
 		})
 
+		t.Run("rejects operation requiring auth from channel muxed account", func(t *testing.T) {
+			channelAccountID := xdr.MustAddress(channelAccount)
+			authEntry := xdr.SorobanAuthorizationEntry{
+				Credentials: xdr.SorobanCredentials{
+					Type: xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
+					Address: &xdr.SorobanAddressCredentials{
+						Address: xdr.ScAddress{
+							Type: xdr.ScAddressTypeScAddressTypeMuxedAccount,
+							MuxedAccount: &xdr.MuxedEd25519Account{
+								Id:      1,
+								Ed25519: channelAccountID.MustEd25519(),
+							},
+						},
+						Nonce:                     1,
+						SignatureExpirationLedger: 100,
+						Signature:                 xdr.ScVal{Type: xdr.ScValTypeScvVoid},
+					},
+				},
+				RootInvocation: xdr.SorobanAuthorizedInvocation{
+					Function: xdr.SorobanAuthorizedFunction{
+						Type: xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn,
+						ContractFn: &xdr.InvokeContractArgs{
+							ContractAddress: contractAddress,
+							FunctionName:    functionSymbol,
+							Args:            []xdr.ScVal{},
+						},
+					},
+					SubInvocations: []xdr.SorobanAuthorizedInvocation{},
+				},
+			}
+
+			opWithChannelMuxedAuth := xdr.InvokeHostFunctionOp{
+				HostFunction: xdr.HostFunction{
+					Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
+					InvokeContract: &xdr.InvokeContractArgs{
+						ContractAddress: contractAddress,
+						FunctionName:    functionSymbol,
+						Args:            []xdr.ScVal{},
+					},
+				},
+				Auth: []xdr.SorobanAuthorizationEntry{authEntry},
+			}
+
+			opXDRBytes, err := opWithChannelMuxedAuth.MarshalBinary()
+			require.NoError(t, err)
+			opXDR := base64.StdEncoding.EncodeToString(opXDRBytes)
+
+			txJob := &TxJob{
+				Transaction: store.Transaction{
+					Sponsored: store.Sponsored{
+						SponsoredAccount:      sponsoredAccount,
+						SponsoredOperationXDR: opXDR,
+					},
+				},
+				ChannelAccount: store.ChannelAccount{
+					PublicKey: channelAccount,
+				},
+				LockedUntilLedgerNumber: 12345,
+			}
+
+			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "sponsored operation cannot require authorization from channel account")
+			assert.Nil(t, tx)
+		})
+
+		t.Run("rejects operation requiring auth from distribution muxed account", func(t *testing.T) {
+			distributionAccountID := xdr.MustAddress(distributionAccount)
+			authEntry := xdr.SorobanAuthorizationEntry{
+				Credentials: xdr.SorobanCredentials{
+					Type: xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
+					Address: &xdr.SorobanAddressCredentials{
+						Address: xdr.ScAddress{
+							Type: xdr.ScAddressTypeScAddressTypeMuxedAccount,
+							MuxedAccount: &xdr.MuxedEd25519Account{
+								Id:      2,
+								Ed25519: distributionAccountID.MustEd25519(),
+							},
+						},
+						Nonce:                     1,
+						SignatureExpirationLedger: 100,
+						Signature:                 xdr.ScVal{Type: xdr.ScValTypeScvVoid},
+					},
+				},
+				RootInvocation: xdr.SorobanAuthorizedInvocation{
+					Function: xdr.SorobanAuthorizedFunction{
+						Type: xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn,
+						ContractFn: &xdr.InvokeContractArgs{
+							ContractAddress: contractAddress,
+							FunctionName:    functionSymbol,
+							Args:            []xdr.ScVal{},
+						},
+					},
+					SubInvocations: []xdr.SorobanAuthorizedInvocation{},
+				},
+			}
+
+			opWithDistributionMuxedAuth := xdr.InvokeHostFunctionOp{
+				HostFunction: xdr.HostFunction{
+					Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract,
+					InvokeContract: &xdr.InvokeContractArgs{
+						ContractAddress: contractAddress,
+						FunctionName:    functionSymbol,
+						Args:            []xdr.ScVal{},
+					},
+				},
+				Auth: []xdr.SorobanAuthorizationEntry{authEntry},
+			}
+
+			opXDRBytes, err := opWithDistributionMuxedAuth.MarshalBinary()
+			require.NoError(t, err)
+			opXDR := base64.StdEncoding.EncodeToString(opXDRBytes)
+
+			txJob := &TxJob{
+				Transaction: store.Transaction{
+					Sponsored: store.Sponsored{
+						SponsoredAccount:      sponsoredAccount,
+						SponsoredOperationXDR: opXDR,
+					},
+				},
+				ChannelAccount: store.ChannelAccount{
+					PublicKey: channelAccount,
+				},
+				LockedUntilLedgerNumber: 12345,
+			}
+
+			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "sponsored operation cannot require authorization from distribution account")
+			assert.Nil(t, tx)
+		})
+
 		t.Run("accepts operation requiring auth from other accounts", func(t *testing.T) {
 			otherAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
 			otherAccountID := xdr.MustAddress(otherAccount)
