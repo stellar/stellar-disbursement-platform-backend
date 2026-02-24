@@ -37,13 +37,13 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 			)
 		`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, "pq: organizations can must contain exactly one row")
+		require.ErrorContains(t, err, "pq: organizations can must contain exactly one row")
 	})
 
 	t.Run("SQL query will trigger an error if you try to delete the one organization you must have", func(t *testing.T) {
 		q := "DELETE FROM organizations"
 		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, "pq: organizations can must contain exactly one row")
+		require.ErrorContains(t, err, "pq: organizations can must contain exactly one row")
 	})
 
 	t.Run("updating receiver_registration_message_template with the tags {{.OrganizationName}} and {{.RegistrationLink}} will succeed 🎉", func(t *testing.T) {
