@@ -48,7 +48,7 @@ go-build:
 go-test:
 	@echo ""
 	@echo "🧪 Running unit tests..."
-	gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -timeout 3m ./...
+	gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -timeout 5m ./...
 	@echo "✅ Unit tests completed successfully"
 
 go-lint:

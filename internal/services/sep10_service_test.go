@@ -473,19 +473,19 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		nonceStore.On("Consume", mock.Anything, mock.Anything).Return(true, nil).Once()
 		nonceStore.On("Consume", mock.Anything, mock.Anything).Return(false, nil).Once()
 
-		service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
+		svc, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
 		require.NoError(t, err)
-		service.nonceStore = nonceStore
-		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+		svc.nonceStore = nonceStore
+		svc.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
 
-		signedTxBase64 := createSignedChallenge(t, service, kps, "stellar.local:8000", "chaos.cadia.com")
+		signedTxBase64 := createSignedChallenge(t, svc, kps, "stellar.local:8000", "chaos.cadia.com")
 
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
-		validationResp, err := service.ValidateChallenge(context.Background(), validationReq)
+		validationResp, err := svc.ValidateChallenge(context.Background(), validationReq)
 		require.NoError(t, err)
 		assert.NotNil(t, validationResp)
 
-		validationResp, err = service.ValidateChallenge(context.Background(), validationReq)
+		validationResp, err = svc.ValidateChallenge(context.Background(), validationReq)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "nonce is invalid or expired")
 		assert.Nil(t, validationResp)
