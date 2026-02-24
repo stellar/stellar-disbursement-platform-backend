@@ -9,7 +9,7 @@ TAG ?= stellar/stellar-disbursement-platform:$(LABEL)
 BUILD_DATE := $(shell date -u +%FT%TZ)
 
 LOCAL_MODULE := github.com/stellar/stellar-disbursement-platform-backend
-GOPATH_BIN := $(shell go env GOPATH)/bin
+GOPATH_BIN := $(or $(shell go env GOBIN),$(firstword $(subst :, ,$(shell go env GOPATH)))/bin)
 export PATH := $(GOPATH_BIN):$(PATH)
 
 # Always run these targets (they don't create files named after the target)
@@ -92,7 +92,7 @@ go-exhaustive:
 go-goimports:
 	@echo ""
 	@echo "📐 Checking goimports compliance..."
-	@non_compliant=$$(find . -type f -name "*.go" ! -path "*mock*" | xargs goimports -local "$(LOCAL_MODULE)" -l); \
+	@non_compliant=$$(find . -type f -name "*.go" ! -path "*mock*" | xargs goimports -local "$(LOCAL_MODULE)" -l) && \
 	if [ -n "$$non_compliant" ]; then \
 		echo "🚨 The following files are not compliant with goimports:"; \
 		echo "$$non_compliant"; \
