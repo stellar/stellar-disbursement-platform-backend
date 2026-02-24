@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add endpoint for fetch captcha config. [1052](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1052)
 - Implement reCAPTCHA v3 for receiver registration page. [1053](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1053)
 
+### Changed
+
+- Mirror CI checks in Makefile for local development parity. [#1070](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1070)
+
 ### Fixed
 
 - Fix short linking is not enabled by default. [#1051](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1051)
