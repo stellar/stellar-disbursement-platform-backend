@@ -263,25 +263,25 @@ func (p *PaymentModel) GetByStellarTransactionID(ctx context.Context, sqlExec db
 		return nil, ErrRecordNotFound
 	}
 	query := `
-SELECT
-    ` + PaymentColumnNames("p", "") + `,
-    ` + DisbursementColumnNames("d", "disbursement") + `,
-    ` + AssetColumnNames("a", "asset", false) + `,
-    ` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
-    ` + ReceiverColumnNames("r", "receiver_wallet.receiver") + `,
-    ` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
-FROM
-    payments p
-    LEFT JOIN disbursements d ON p.disbursement_id = d.id
-    JOIN assets a ON p.asset_id = a.id
-    JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
-    JOIN receivers r ON rw.receiver_id = r.id
-    JOIN wallets w ON w.id = rw.wallet_id
-WHERE
-    p.stellar_transaction_id = $1
-    AND p.status = $2
-LIMIT 1
-`
+		SELECT
+    	` + PaymentColumnNames("p", "") + `,
+    	` + DisbursementColumnNames("d", "disbursement") + `,
+    	` + AssetColumnNames("a", "asset", false) + `,
+    	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+    	` + ReceiverColumnNames("r", "receiver_wallet.receiver") + `,
+    	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
+		FROM
+    	payments p
+    	LEFT JOIN disbursements d ON p.disbursement_id = d.id
+    	JOIN assets a ON p.asset_id = a.id
+    	JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+    	JOIN receivers r ON rw.receiver_id = r.id
+    	JOIN wallets w ON w.id = rw.wallet_id
+		WHERE
+    	p.stellar_transaction_id = $1
+    	AND p.status = $2
+		LIMIT 1
+	`
 	var payment Payment
 	err := sqlExec.GetContext(ctx, &payment, query, stellarTransactionID, SuccessPaymentStatus)
 	if err != nil {
@@ -301,26 +301,26 @@ func (p *PaymentModel) GetByStellarTransactionIDAndOperationID(ctx context.Conte
 		return nil, ErrRecordNotFound
 	}
 	query := `
-SELECT
-    ` + PaymentColumnNames("p", "") + `,
-    ` + DisbursementColumnNames("d", "disbursement") + `,
-    ` + AssetColumnNames("a", "asset", false) + `,
-    ` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
-    ` + ReceiverColumnNames("r", "receiver_wallet.receiver") + `,
-    ` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
-FROM
-    payments p
-    LEFT JOIN disbursements d ON p.disbursement_id = d.id
-    JOIN assets a ON p.asset_id = a.id
-    JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
-    JOIN receivers r ON rw.receiver_id = r.id
-    JOIN wallets w ON w.id = rw.wallet_id
-WHERE
-    p.stellar_transaction_id = $1
-    AND p.stellar_operation_id = $2
-    AND p.status = $3
-LIMIT 1
-`
+		SELECT
+    	` + PaymentColumnNames("p", "") + `,
+    	` + DisbursementColumnNames("d", "disbursement") + `,
+    	` + AssetColumnNames("a", "asset", false) + `,
+    	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+    	` + ReceiverColumnNames("r", "receiver_wallet.receiver") + `,
+    	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
+		FROM
+    	payments p
+    	LEFT JOIN disbursements d ON p.disbursement_id = d.id
+    	JOIN assets a ON p.asset_id = a.id
+    	JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+    	JOIN receivers r ON rw.receiver_id = r.id
+    	JOIN wallets w ON w.id = rw.wallet_id
+		WHERE
+    	p.stellar_transaction_id = $1
+    	AND p.stellar_operation_id = $2
+    	AND p.status = $3
+		LIMIT 1
+	`
 	var payment Payment
 	err := sqlExec.GetContext(ctx, &payment, query, stellarTransactionID, stellarOperationID, SuccessPaymentStatus)
 	if err != nil {
