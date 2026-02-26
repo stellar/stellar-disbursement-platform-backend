@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -40,6 +41,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		ReceiverWalletModel: receiverWalletModel,
 		ReCAPTCHASiteKey:    reCAPTCHASiteKey,
 		ReCAPTCHADisabled:   true,
+		CAPTCHAType:         validators.GoogleReCAPTCHAV2,
 	}.ServeHTTP)
 
 	t.Run("returns 401 - Unauthorized if the token is not in the request context", func(t *testing.T) {
@@ -114,7 +116,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			"organization_logo": "%s/organization/logo",
 			"is_registered": false,
 			"is_recaptcha_disabled": true,
-			"recaptcha_site_key": "reCAPTCHASiteKey"
+			"recaptcha_site_key": "reCAPTCHASiteKey",
+			"captcha_type": "GOOGLE_RECAPTCHA_V2"
 		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
@@ -159,7 +162,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			"truncated_contact_info": "`+truncatedContactInfo+`",
 			"is_registered": true,
 			"is_recaptcha_disabled": true,
-			"recaptcha_site_key": "reCAPTCHASiteKey"
+			"recaptcha_site_key": "reCAPTCHASiteKey",
+			"captcha_type": "GOOGLE_RECAPTCHA_V2"
 		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
@@ -189,7 +193,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 			"organization_logo": "%s/organization/logo",
 			"is_registered": false,
 			"is_recaptcha_disabled": true,
-			"recaptcha_site_key": "reCAPTCHASiteKey"
+			"recaptcha_site_key": "reCAPTCHASiteKey",
+			"captcha_type": "GOOGLE_RECAPTCHA_V2"
 		}`, *currentTenant.BaseURL)
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})

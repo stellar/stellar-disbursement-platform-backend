@@ -250,7 +250,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 	}
 
 	// Account exists - verify with threshold
-	if err := s.verifySignaturesWithThreshold(
+	if err = s.verifySignaturesWithThreshold(
 		result.Transaction,
 		result.ClientDomain,
 		account,
@@ -624,7 +624,7 @@ func (s *sep10Service) buildChallengeTx(ctx context.Context, clientAccountID, we
 		}
 	}
 
-	if err := s.nonceStore.Store(ctx, randomNonceToString); err != nil {
+	if err = s.nonceStore.Store(ctx, randomNonceToString); err != nil {
 		return nil, fmt.Errorf("storing nonce: %w", err)
 	}
 

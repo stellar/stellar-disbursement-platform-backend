@@ -26,6 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -386,6 +387,22 @@ func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusBadRequest,
 			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be an integer"}}`,
+		},
+		{
+			name: "returns error when page_limit is zero",
+			queryParams: map[string]string{
+				"page_limit": "0",
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be a positive integer"}}`,
+		},
+		{
+			name: "returns error when page_limit exceeds max",
+			queryParams: map[string]string{
+				"page_limit": fmt.Sprintf("%d", validators.MaxPageLimit+1),
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   fmt.Sprintf(`{"error":"request invalid", "extras":{"page_limit":"parameter must be less than or equal to %d"}}`, validators.MaxPageLimit),
 		},
 		{
 			name: "returns error when status is invalid",

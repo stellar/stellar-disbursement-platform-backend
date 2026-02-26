@@ -214,7 +214,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 	if err != nil {
 		return nil, fmt.Errorf("%w: generating nonce: %w", ErrSEP45Internal, err)
 	}
-	if err := s.nonceStore.Store(ctx, nonce); err != nil {
+	if err = s.nonceStore.Store(ctx, nonce); err != nil {
 		return nil, fmt.Errorf("%w: storing nonce: %w", ErrSEP45Internal, err)
 	}
 
@@ -393,7 +393,7 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 	}
 
 	var entries xdr.SorobanAuthorizationEntries
-	if err := entries.UnmarshalBinary(rawEntries); err != nil {
+	if err = entries.UnmarshalBinary(rawEntries); err != nil {
 		return nil, fmt.Errorf("%w: unmarshalling authorization entries: %w", ErrSEP45Validation, err)
 	}
 	if len(entries) == 0 {
@@ -403,10 +403,11 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 	var (
 		parsedArgs *webAuthVerifyArgs
 		tracker    authEntryTracker
+		contractFn *xdr.InvokeContractArgs
 	)
 
 	for _, entry := range entries {
-		contractFn, err := s.ensureWebAuthInvocation(entry)
+		contractFn, err = s.ensureWebAuthInvocation(entry)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 		}
@@ -417,7 +418,7 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 		}
 
 		// Check that we have the expected authorization entries
-		if err := tracker.processEntry(entry, parsedArgs, s); err != nil {
+		if err = tracker.processEntry(entry, parsedArgs, s); err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 		}
 	}
@@ -425,7 +426,7 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 	if parsedArgs == nil {
 		return nil, fmt.Errorf("%w: missing authorization arguments", ErrSEP45Validation)
 	}
-	if err := tracker.validate(parsedArgs.clientDomainAccount != ""); err != nil {
+	if err = tracker.validate(parsedArgs.clientDomainAccount != ""); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrSEP45Validation, err)
 	}
 	validNonce, err := s.nonceStore.Consume(ctx, parsedArgs.raw["nonce"])

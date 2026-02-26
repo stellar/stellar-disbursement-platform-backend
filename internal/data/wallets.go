@@ -273,13 +273,13 @@ func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wal
 	return wallet, nil
 }
 
-func (wm *WalletModel) GetOrCreate(ctx context.Context, name, homepage, deepLink, sep10Domain string) (*Wallet, error) {
+func (wm *WalletModel) GetOrCreate(ctx context.Context, name, homepage, deepLink, sep10Domain string, embedded bool) (*Wallet, error) {
 	const query = `
 	WITH create_wallet AS(
 		INSERT INTO wallets
-			(name, homepage, deep_link_schema, sep_10_client_domain)
+			(name, homepage, deep_link_schema, sep_10_client_domain, embedded)
 		VALUES
-			($1, $2, $3, $4)
+			($1, $2, $3, $4, $5)
 		ON CONFLICT (name, homepage, deep_link_schema) DO NOTHING
 		RETURNING
 			*
@@ -293,7 +293,7 @@ func (wm *WalletModel) GetOrCreate(ctx context.Context, name, homepage, deepLink
 	`
 
 	var wallet Wallet
-	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, name, homepage, deepLink, sep10Domain)
+	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, name, homepage, deepLink, sep10Domain, embedded)
 	if err != nil {
 		return nil, fmt.Errorf("error getting or creating wallet: %w", err)
 	}

@@ -748,8 +748,8 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 		deepLinkSchema := "test-wallet://sdp"
 		sep10ClientDomain := "www.test_wallet.com"
 
-		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain)
-		require.EqualError(t, err, "error getting or creating wallet: pq: duplicate key value violates unique constraint \"wallets_name_key\"")
+		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain, false)
+		require.ErrorContains(t, err, "error getting or creating wallet: pq: duplicate key value violates unique constraint \"wallets_name_key\"")
 		assert.Empty(t, wallet)
 	})
 
@@ -760,7 +760,7 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 		deepLinkSchema := "test-wallet://sdp"
 		sep10ClientDomain := "www.test_wallet.com"
 
-		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain)
+		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain, false)
 		require.NoError(t, err)
 		assert.Equal(t, "test_wallet", wallet.Name)
 		assert.Equal(t, "https://www.test_wallet.com", wallet.Homepage)
@@ -781,7 +781,7 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 		deepLinkSchema := "test-wallet://sdp"
 		sep10ClientDomain := "www.test_wallet.com"
 
-		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain)
+		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deepLinkSchema, sep10ClientDomain, false)
 		require.NoError(t, err)
 		assert.Equal(t, expected.ID, wallet.ID)
 	})

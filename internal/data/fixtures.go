@@ -722,7 +722,7 @@ func CreateEmbeddedWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		token = randomToken
 	}
 	if wasmHash == "" {
-		wasmHash = "6223a23026480644055230783215652de8695abc8a9dbb56a94972eb341a4663"
+		wasmHash = "9b784817dff1620a3e2b223fe1eb8dac56e18980dea9726f692847ccbbd3a853"
 	}
 
 	q := fmt.Sprintf(`

@@ -66,7 +66,7 @@ func Test_CirclePaymentTransferDispatcher_DispatchPayments_failure(t *testing.T)
 			paymentToDispatch: payment,
 			wantErr:           nil,
 			fnSetup: func(t *testing.T, m *circle.MockService) {
-				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, payment.ID)
+				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, dbConnectionPool, payment.ID)
 				require.NoError(t, setupErr)
 
 				m.On("SendTransfer", ctx, circle.PaymentRequest{

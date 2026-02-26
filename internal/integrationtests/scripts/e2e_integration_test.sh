@@ -83,12 +83,34 @@ Config_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
   "BASE_URL=http://stellar.local:8000"
 )
 
+Config_Stellar_EmbeddedWallet_XLM_Testnet=(
+  "platform=Stellar-EmbeddedWallet"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_embedded_wallet.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "DISBURSED_ASSET_CODE=XLM"
+  "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
+  "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
+  "HORIZON_URL=https://horizon-testnet.stellar.org"
+  "USER_EMAIL=integration-test-user@stellar.local"
+  "USER_PASSWORD=Password123!"
+  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+  "BASE_URL=http://stellar.local:8000"
+  "RPC_URL=https://soroban-testnet.stellar.org"
+  "ENABLE_EMBEDDED_WALLETS=true"
+  # EMBEDDED_WALLETS_WASM_HASH is loaded from .env file - don't override here
+  "TEST_TYPE=embedded-wallet"
+)
+
 echo "🔧 Test Mode: Running SEP tests"
 options=(
   Config_Stellar_Env_Phone_XLM_Testnet[@]
   Config_Stellar_Env_Email_XLM_Testnet[@]
   Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
+  Config_Stellar_EmbeddedWallet_XLM_Testnet[@]
 )
+
+echo "📋 Running ${#options[@]} test configuration(s)"
 
 # Iterate over each configuration
 for config_name in "${options[@]}"; do
@@ -96,6 +118,7 @@ for config_name in "${options[@]}"; do
 
   echo -e "\n====> 👀 Starting e2e setup and integration test for ${config_name}"
   export CIRCLE_API_TYPE=""
+  export TEST_TYPE=""
 
   # Parse and export key-value pairs
   for pair in "${config[@]}"; do
@@ -131,7 +154,11 @@ for config_name in "${options[@]}"; do
   # Run integration tests
   echo $DIVIDER
   echo "====> 👀Step 4: run integration tests command"
-  docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
+  if [ "${TEST_TYPE:-}" = "embedded-wallet" ]; then
+    docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start-embedded-wallet"
+  else
+    docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
+  fi
   echo "====> ✅Step 4: finish running integration test data ($DESCRIPTION)"
 
   # Cleanup container and volumes

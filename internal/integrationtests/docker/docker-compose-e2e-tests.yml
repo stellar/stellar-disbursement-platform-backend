@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   db:
     container_name: e2e-sdp-v2-database
@@ -35,7 +34,7 @@ services:
       HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
       RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
       SEP10_SIGNING_PUBLIC_KEY: ${SEP10_SIGNING_PUBLIC_KEY}
-      SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID}
+      SEP45_CONTRACT_ID: ${SEP45_CONTRACT_ID:-CDY4CS2VWHAZOMYVTKUFKGNZKIVFBCXUFNFQ5KSXOTAHKL5H5ZRTAUTH}
       SEP10_SIGNING_PRIVATE_KEY: ${SEP10_SIGNING_PRIVATE_KEY}
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
@@ -71,6 +70,10 @@ services:
       ADMIN_SERVER_API_KEY: api_key_1234567890
       CIRCLE_USDC_WALLET_ID: ${CIRCLE_USDC_WALLET_ID}
 
+      # embedded wallet integration tests
+      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-true}
+      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-9b784817dff1620a3e2b223fe1eb8dac56e18980dea9726f692847ccbbd3a853}
+
       # secrets:
       AWS_ACCESS_KEY_ID: MY_AWS_ACCESS_KEY_ID
       AWS_REGION: MY_AWS_REGION
@@ -105,9 +108,6 @@ services:
   tss:
     container_name: e2e-sdp-tss
     image: stellar/sdp-v2:latest
-    build:
-      context: ../../../
-      dockerfile: Dockerfile
     ports:
       - "9000:9000"
     environment:
@@ -123,6 +123,10 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_SEED}
+      # Embedded wallet support - required for Soroban contract deployment
+      RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
+      ENABLE_EMBEDDED_WALLETS: ${ENABLE_EMBEDDED_WALLETS:-true}
+      EMBEDDED_WALLETS_WASM_HASH: ${EMBEDDED_WALLETS_WASM_HASH:-9b784817dff1620a3e2b223fe1eb8dac56e18980dea9726f692847ccbbd3a853}
     depends_on:
       - db
       - sdp-api

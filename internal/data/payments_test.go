@@ -1698,7 +1698,7 @@ func Test_PaymentModel_GetBatchForUpdate(t *testing.T) {
 		_, err = dbTx2.ExecContext(ctx, "SET LOCAL lock_timeout = '1s'")
 		require.NoError(t, err)
 		_, err = dbTx2.ExecContext(ctx, "UPDATE payments SET status = 'FAILED' WHERE id = $1", paymentReady.ID)
-		assert.EqualError(t, err, "pq: canceling statement due to lock timeout")
+		assert.ErrorContains(t, err, "pq: canceling statement due to lock timeout")
 	})
 }
 

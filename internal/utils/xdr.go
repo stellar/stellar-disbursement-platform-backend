@@ -102,7 +102,7 @@ func SignAuthEntry(entry xdr.SorobanAuthorizationEntry, validUntil uint32, signi
 	}
 
 	var clone xdr.SorobanAuthorizationEntry
-	if err := clone.UnmarshalBinary(encoded); err != nil {
+	if err = clone.UnmarshalBinary(encoded); err != nil {
 		return entry, fmt.Errorf("cloning authorization entry: %w", err)
 	}
 
@@ -117,7 +117,7 @@ func SignAuthEntry(entry xdr.SorobanAuthorizationEntry, validUntil uint32, signi
 	if err != nil {
 		return entry, fmt.Errorf("signing authorization entry: %w", err)
 	}
-	if err := signingKP.Verify(payload[:], signature); err != nil {
+	if err = signingKP.Verify(payload[:], signature); err != nil {
 		return entry, fmt.Errorf("signature verification failed: %w", err)
 	}
 

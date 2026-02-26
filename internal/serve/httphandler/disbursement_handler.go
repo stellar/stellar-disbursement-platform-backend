@@ -44,6 +44,8 @@ type DisbursementHandler struct {
 	DistributionAccountResolver   signing.DistributionAccountResolver
 }
 
+const DefaultMaxCSVUploadSizeBytes = 500 * data.MaxInstructionsPerDisbursement // 500 bytes per instruction.
+
 type PostDisbursementRequest struct {
 	Name                                string                       `json:"name"`
 	WalletID                            string                       `json:"wallet_id"`
@@ -104,15 +106,19 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if httpErr := d.limitCSVUploadRequestSize(w, r); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
 	// Handle request based on content type.
 	var disbursement *data.Disbursement
 	var httpErr *httperror.HTTPError
-	contentType := r.Header.Get("Content-Type")
-	if strings.HasPrefix(contentType, "multipart/form-data") {
+	if utils.IsMultipartFormData(r) {
 		disbursement, httpErr = d.postDisbursementWithInstructions(ctx, r, user)
 	} else {
 		var req PostDisbursementRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 			httperror.BadRequest(err.Error(), err, nil).Render(w)
 			return
 		}
@@ -303,7 +309,12 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	if err := db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+	if httpErr := d.limitCSVUploadRequestSize(w, r); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
+	if err = db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// check if disbursement exists
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if getErr != nil {
@@ -323,6 +334,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		} else {
 			httperror.InternalError(ctx, "Cannot process instructions for disbursement", err, nil).Render(w)
 		}
+		return
 	}
 
 	response := map[string]string{
@@ -330,6 +342,29 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 
 	httpjson.Render(w, response, httpjson.JSON)
+}
+
+func (d DisbursementHandler) limitCSVUploadRequestSize(w http.ResponseWriter, r *http.Request) *httperror.HTTPError {
+	if !utils.IsMultipartFormData(r) {
+		return nil
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, DefaultMaxCSVUploadSizeBytes)
+	if err := r.ParseMultipartForm(DefaultMaxCSVUploadSizeBytes); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			err = fmt.Errorf("request body too large: %w", err)
+			log.Ctx(r.Context()).Error(err)
+			return httperror.BadRequest("could not parse multipart form data", err, map[string]interface{}{
+				"details": fmt.Sprintf("request too large. Max size %d bytes.", DefaultMaxCSVUploadSizeBytes),
+			})
+		}
+
+		err = fmt.Errorf("parsing multipart form: %w", err)
+		return httperror.BadRequest("could not parse multipart form data", err, nil)
+	}
+
+	return nil
 }
 
 func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) error {

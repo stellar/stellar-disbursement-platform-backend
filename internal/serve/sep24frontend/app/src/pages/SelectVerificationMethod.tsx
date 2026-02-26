@@ -26,6 +26,7 @@ import { Routes } from "@/config/settings";
 import { useSep24DepositOtp } from "@/query/useSep24DepositOtp";
 
 import { useStore } from "@/store/useStore";
+import { useCaptcha } from "@/hooks/useCaptcha";
 import { VerificationMethod } from "@/types/types";
 
 export const SelectVerificationMethod: FC = () => {
@@ -46,12 +47,7 @@ export const SelectVerificationMethod: FC = () => {
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
 
   const reCaptchaRef = useRef<ReCaptcha>(null);
-  const [reCaptchaToken, setReCaptchaToken] = useState<string | null>(null);
-
-  const isRecaptchaPending = () => {
-    const res = !org.is_recaptcha_disabled && !reCaptchaToken;
-    return res;
-  };
+  const captcha = useCaptcha(reCaptchaRef);
 
   // Redirect to /already-registered if user is registered
   useEffect(() => {
@@ -142,21 +138,29 @@ export const SelectVerificationMethod: FC = () => {
         verification_field: otpData.verification_field,
       });
       navigate({ pathname: Routes.ENTER_PASSCODE, search: searchParams });
-      reCaptchaRef?.current?.reset();
+      captcha.resetCaptcha();
     }
     // Not including iti and inputEmail
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otpData, navigate, searchParams, updateUser]);
 
-  const handleSubmit = () => {
-    if (!jwtToken || isRecaptchaPending()) {
+  const handleSubmit = async () => {
+    if (!jwtToken || captcha.isPending) {
+      return;
+    }
+
+    let recaptchaToken = "";
+    try {
+      recaptchaToken = await captcha.getToken("submit_otp");
+    } catch (err) {
+      console.error("reCAPTCHA failed:", err);
       return;
     }
 
     const submitData = {
       phone_number: iti?.getNumber() || undefined,
       email: inputEmail || undefined,
-      recaptcha_token: reCaptchaToken || undefined,
+      recaptcha_token: recaptchaToken || undefined,
     };
 
     otpSubmit({ token: jwtToken, ...submitData });
@@ -169,7 +173,7 @@ export const SelectVerificationMethod: FC = () => {
 
     const isValid = iti?.isValidNumber();
     setInputPhoneError(
-      isValid ? false : t("selectVerification.phoneErrorMessage")
+      isValid ? false : t("selectVerification.phoneErrorMessage"),
     );
   };
 
@@ -180,7 +184,7 @@ export const SelectVerificationMethod: FC = () => {
 
     const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inputEmail);
     setInputEmailError(
-      isValid ? false : t("selectVerification.emailErrorMessage")
+      isValid ? false : t("selectVerification.emailErrorMessage"),
     );
   };
 
@@ -230,14 +234,13 @@ export const SelectVerificationMethod: FC = () => {
           ) : null}
         </div>
 
-        {/* TODO: match recaptcha theme */}
-        {!org.is_recaptcha_disabled && org.recaptcha_site_key && (
+        {captcha.isV2 && captcha.siteKey && (
           <ReCaptcha
             ref={reCaptchaRef}
             size="normal"
-            sitekey={org.recaptcha_site_key}
+            sitekey={captcha.siteKey}
             onChange={(token) => {
-              setReCaptchaToken(token);
+              captcha.onRecaptchaV2Change(token);
             }}
           />
         )}
@@ -246,27 +249,29 @@ export const SelectVerificationMethod: FC = () => {
   };
 
   const isSubmitDisabled = () => {
-    let isDisabled = false;
-
     if (!selectedMethod) {
-      isDisabled = true;
+      return true;
     }
 
     if (selectedMethod === "email") {
-      isDisabled = inputEmailError !== false || !inputEmail;
+      if (inputEmailError !== false || !inputEmail) {
+        return true;
+      }
     } else if (selectedMethod === "phone") {
-      isDisabled = inputPhoneError !== false || !iti?.isValidNumber();
+      if (inputPhoneError !== false || !iti?.isValidNumber()) {
+        return true;
+      }
     }
 
-    if (isRecaptchaPending()) {
-      isDisabled = true;
+    if (captcha.isPending) {
+      return true;
     }
 
     if (!jwtToken) {
-      isDisabled = true;
+      return true;
     }
 
-    return isDisabled;
+    return false;
   };
 
   return (
