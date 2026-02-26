@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [6.2.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.2.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.1.0...6.2.0))
 
 ### Added
 
@@ -23,10 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Fix Docker Compose build racing for e2e integration tests. [#1054](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1054)
 - Make Circle Transfer Request Insert operation atomic. [#1050](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1050)
 - Fix unbounded CSV upload size and pagination page_limit allowing resource exhaustion. [#1064](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1064)
+- Check muxed account auth is not infra account in sponsored transaction worker. [#1068](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1068)
+- Remove the default "false" value for ENABLE_EMBEDDED_WALLETS. [#1049](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1049)
 
 ### Security
 
 - Add request body size limit to RPC proxy handler to prevent unbounded memory allocation (CWE-770). [#1065](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1065)
+- Bump golang from 1.26rc2-alpine to 1.26rc3-alpine in the all-docker group [#1047](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1047)
+- Bump docker/build-push-action from 6.18.0 to 6.19.2 in the all-actions group [#1056](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1056)
+- Bump the cargo group across 1 directory with 2 updates [#1067](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1067)
+- Bump the minor-and-patch group across 1 directory with 10 updates [#1069](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1069)
+- Bump time from 0.3.41 to 0.3.47 in /contracts in the cargo group [#1045](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1045)
 
 ## [6.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.0.1...6.1.0))
 
