@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [UNRELEASED]
 
+### Security
+
+- Add global `MaxBodySize` middleware (10 MB) to all routes on both the SDP and admin servers to prevent unbounded request body sizes (CWE-770). [#1066](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1066)
+
 ### Fixed
 
 - Fix unbounded CSV upload size and pagination `page_limit` allowing resource exhaustion. [#1064](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1064)
