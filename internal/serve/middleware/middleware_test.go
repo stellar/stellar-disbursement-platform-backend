@@ -1165,6 +1165,85 @@ func Test_BasicAuthMiddleware(t *testing.T) {
 	})
 }
 
+func Test_MaxBodySize(t *testing.T) {
+	testCases := []struct {
+		name           string
+		maxBytes       int64
+		bodySize       int
+		expectedStatus int
+	}{
+		{
+			name:           "rejects body exceeding limit",
+			maxBytes:       100,
+			bodySize:       200,
+			expectedStatus: http.StatusRequestEntityTooLarge,
+		},
+		{
+			name:           "allows body at exactly the limit",
+			maxBytes:       100,
+			bodySize:       100,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "allows body under the limit",
+			maxBytes:       100,
+			bodySize:       50,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "allows empty body",
+			maxBytes:       100,
+			bodySize:       0,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "rejects when limit is zero and body is non-empty",
+			maxBytes:       0,
+			bodySize:       1,
+			expectedStatus: http.StatusRequestEntityTooLarge,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := chi.NewRouter()
+			r.Use(MaxBodySize(tc.maxBytes))
+			r.Post("/", func(w http.ResponseWriter, r *http.Request) {
+				_, err := io.ReadAll(r.Body)
+				if err != nil {
+					http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+
+			body := strings.NewReader(strings.Repeat("x", tc.bodySize))
+			req, err := http.NewRequest(http.MethodPost, "/", body)
+			require.NoError(t, err)
+
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+		})
+	}
+
+	t.Run("GET requests with no body are unaffected", func(t *testing.T) {
+		r := chi.NewRouter()
+		r.Use(MaxBodySize(100))
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+}
+
 func Test_ExtractTenantNameFromRequest(t *testing.T) {
 	t.Run("extract tenant name from header", func(t *testing.T) {
 		expectedTenant := "tenant123"

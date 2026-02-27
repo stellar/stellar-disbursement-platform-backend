@@ -337,6 +337,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Use(middleware.CSPMiddleware())
 	mux.Use(chimiddleware.CleanPath)
 	mux.Use(chimiddleware.Compress(5))
+	mux.Use(middleware.MaxBodySize(middleware.DefaultMaxRequestBodySize))
 
 	// Create a route along /static that will serve contents from the ./public_files folder.
 	staticFileServer(mux, publicfiles.PublicFiles)
