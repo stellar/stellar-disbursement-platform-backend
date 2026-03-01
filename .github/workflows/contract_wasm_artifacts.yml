@@ -56,12 +56,12 @@ jobs:
           done
 
       - name: Attest contract WASMs
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: contracts/target/wasm32v1-none/release/*.wasm
 
       - name: Upload contract WASMs as artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: contract-wasms
           path: contracts/target/wasm32v1-none/release/*.wasm
