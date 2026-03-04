@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -121,4 +122,75 @@ func Test_SEP24JWTClaims_valid(t *testing.T) {
 		}
 		require.NoError(t, claims.Valid())
 	})
+}
+
+func Test_ParseAccountAndMemo(t *testing.T) {
+	testCases := []struct {
+		name            string
+		subject         string
+		expectedAccount string
+		expectedMemo    string
+	}{
+		{
+			name:            "account only",
+			subject:         "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			expectedAccount: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			expectedMemo:    "",
+		},
+		{
+			name:            "account with memo",
+			subject:         "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU:12345",
+			expectedAccount: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			expectedMemo:    "12345",
+		},
+		{
+			name:            "empty string",
+			subject:         "",
+			expectedAccount: "",
+			expectedMemo:    "",
+		},
+		{
+			name:            "trailing colon",
+			subject:         "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU:",
+			expectedAccount: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			expectedMemo:    "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			account, memo := ParseAccountAndMemo(tc.subject)
+			assert.Equal(t, tc.expectedAccount, account)
+			assert.Equal(t, tc.expectedMemo, memo)
+		})
+	}
+}
+
+func Test_FormatSubject(t *testing.T) {
+	testCases := []struct {
+		name     string
+		account  string
+		memo     string
+		expected string
+	}{
+		{
+			name:     "account only",
+			account:  "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			memo:     "",
+			expected: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+		},
+		{
+			name:     "account with memo",
+			account:  "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			memo:     "12345",
+			expected: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU:12345",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := FormatSubject(tc.account, tc.memo)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
 }

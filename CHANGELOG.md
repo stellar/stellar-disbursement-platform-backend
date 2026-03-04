@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed memo not being parsed from the SEP-10 token subject when generating SEP-24 tokens, causing it to be
+  silently dropped. [#1077](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1077)
+  
 ### Security
 
 - Add global `MaxBodySize` middleware (10 MB) to all routes on both the SDP and admin servers to prevent unbounded request body sizes (CWE-770). [#1066](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1066)
