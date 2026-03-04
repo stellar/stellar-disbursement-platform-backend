@@ -22,23 +22,31 @@ func (c *SEP24JWTClaims) TransactionID() string {
 	return c.ID
 }
 
+// ParseAccountAndMemo splits a SEP-10/45 subject into Stellar account and memo.
+// accounts with memo use the format "account:memo".
+func ParseAccountAndMemo(subject string) (account, memo string) {
+	if before, after, found := strings.Cut(subject, ":"); found && before != "" {
+		return before, after
+	}
+	return subject, ""
+}
+
+// FormatSubject constructs a SEP-10/45 subject from account and optional memo.
+func FormatSubject(stellarAccount, stellarMemo string) string {
+	if stellarMemo != "" {
+		return stellarAccount + ":" + stellarMemo
+	}
+	return stellarAccount
+}
+
 func (c *SEP24JWTClaims) Account() string {
-	// The SEP-10 or SEP-45 account will be in the format "account:memo", in case there's a memo.
-	// That's why we'll split the string on ":" and get the first element.
-	// ref: https://github.com/stellar/java-stellar-anchor-sdk/blob/bfa9b1d735f099bc6a21f0b9c55bd381a50c16b8/platform/src/main/java/org/stellar/anchor/platform/service/SimpleInteractiveUrlConstructor.java#L47-L50
-	splits := strings.Split(c.Subject, ":")
-	return splits[0]
+	account, _ := ParseAccountAndMemo(c.Subject)
+	return account
 }
 
 func (c *SEP24JWTClaims) Memo() string {
-	// The SEP-10 account will be in the format "account:memo", in case there's a memo.
-	// That's why we'll split the string on ":" and get the second element.
-	// ref: https://github.com/stellar/java-stellar-anchor-sdk/blob/bfa9b1d735f099bc6a21f0b9c55bd381a50c16b8/platform/src/main/java/org/stellar/anchor/platform/service/SimpleInteractiveUrlConstructor.java#L47-L50
-	splits := strings.Split(c.Subject, ":")
-	if len(splits) > 1 {
-		return splits[1]
-	}
-	return ""
+	_, memo := ParseAccountAndMemo(c.Subject)
+	return memo
 }
 
 func (c *SEP24JWTClaims) ExpiresAt() *time.Time {

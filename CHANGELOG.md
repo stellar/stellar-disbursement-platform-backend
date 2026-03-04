@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed memo not being parsed from the SEP-10/45 token subject when generating SEP-24 tokens, causing it to be
+  silently dropped. [#1077](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1077)
+
 ## [6.2.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.2.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.1.0...6.2.0))
 
 ### Added

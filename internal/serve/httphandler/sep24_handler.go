@@ -88,9 +88,10 @@ type SEP24InteractiveResponse struct {
 
 // generateMoreInfoURL creates a secure more_info_url with JWT token for SEP-24 transactions
 func (h SEP24Handler) generateMoreInfoURL(webAuthClaims *sepauth.WebAuthClaims, transactionID, status string) (string, error) {
+	account, memo := sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24MoreInfoToken(
-		webAuthClaims.Subject,
-		"",
+		account,
+		memo,
 		webAuthClaims.ClientDomain,
 		webAuthClaims.HomeDomain,
 		transactionID,
@@ -238,7 +239,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var assetCode, account, lang string
+	var assetCode, account, memo, lang string
 	contentType := r.Header.Get("Content-Type")
 
 	if strings.Contains(contentType, "application/json") {
@@ -262,10 +263,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	}
 
 	if account == "" {
-		account = webAuthClaims.Subject
-		if idx := strings.Index(account, ":"); idx > 0 {
-			account = account[:idx]
-		}
+		account, memo = sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
 	}
 
 	if lang == "" {
@@ -276,7 +274,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24Token(
 		account,
-		"",
+		memo,
 		webAuthClaims.ClientDomain,
 		webAuthClaims.HomeDomain,
 		txnID,
